@@ -1,0 +1,16 @@
+{
+  "name": "mautrix-telegram",
+  "version": "0.1.0",
+  "description": "A Matrix-Telegram puppeting bridge",
+  "author": "Tulir Asokan <tulir@maunium.net>",
+  "license": "GPL-3.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/tulir/mautrix-telegram.git"
+  },
+  "dependencies": {
+    "telegram-mtproto": "2.x.x",
+    "matrix-js-sdk": "0.x.x",
+    "matrix-appservice-bridge": "1.x.x"
+  }
+}
