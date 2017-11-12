@@ -1,16 +1,22 @@
 {
-  "name": "mautrix-telegram",
-  "version": "0.1.0",
-  "description": "A Matrix-Telegram puppeting bridge",
-  "author": "Tulir Asokan <tulir@maunium.net>",
-  "license": "GPL-3.0",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/tulir/mautrix-telegram.git"
-  },
-  "dependencies": {
-    "telegram-mtproto": "2.x.x",
-    "matrix-js-sdk": "0.x.x",
-    "matrix-appservice-bridge": "1.x.x"
-  }
+	"name": "mautrix-telegram",
+	"version": "0.1.0",
+	"description": "A Matrix-Telegram puppeting bridge",
+	"author": "Tulir Asokan <tulir@maunium.net>",
+	"license": "GPL-3.0",
+	"main": "index.js",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/tulir/mautrix-telegram.git"
+	},
+	"dependencies": {
+		"telegram-mtproto": "2.x.x",
+		"matrix-js-sdk": "0.x.x",
+		"matrix-appservice-bridge": "1.x.x"
+	},
+	"devDependencies": {
+		"eslint": "4.11.x",
+		"eslint-config-airbnb-base": "12.1.x",
+		"eslint-plugin-import": "2.8.x"
+	}
 }

@@ -1,0 +1,86 @@
+{
+	"env": {
+		"browser": false,
+		"node": true,
+		"es6": true
+	},
+	"extends": "airbnb-base",
+	"parserOptions": {
+		"sourceType": "module",
+		"ecmaVersion": 8
+	},
+	"plugins": [
+		"import"
+	],
+	"rules": {
+		"indent": ["error", "tab", {
+			"FunctionDeclaration": {
+				"parameters": 2,
+				"body": 1
+			},
+			"FunctionExpression": {
+				"parameters": 2,
+				"body": 1
+			},
+			"VariableDeclarator": 2,
+			"CallExpression": {
+				"arguments": 2
+			},
+			"MemberExpression": "off",
+			"ImportDeclaration": "first"
+		}],
+		"object-curly-newline": ["error", {
+			"minProperties": 5,
+			"consistent": true
+		}],
+		"one-var": ["error", {
+			"initialized": "never",
+			"uninitialized": "always"
+		}],
+		"one-var-declaration-per-line": ["error", "initializations"],
+		"quotes": ["error", "double"],
+		"semi": ["error", "never"],
+		"comma-dangle": ["error", "always-multiline"],
+		"max-len": ["warn", 80],
+		"camelcase": ["error", {"properties": "always"}],
+		"space-before-function-paren": ["error", "never"],
+		"func-style": ["warn", "declaration", {"allowArrowFunctions": true}],
+		"id-length": ["warn", {"max": 25, "exceptions": ["i", "x", "y", "$"]}],
+		"import/no-nodejs-modules": "error",
+		"import/order": ["warn", {
+			"groups": ["builtin", "external", "internal", "parent", "sibling",
+				"index"],
+			"newlines-between": "never"
+		}],
+		"arrow-body-style": ["error", "as-needed"],
+		"complexity": ["warn", 11],
+		"new-cap": ["warn", {
+			"newIsCap": true,
+			"capIsNew": true
+		}],
+		"no-empty": ["error", {
+			"allowEmptyCatch": true
+		}],
+
+		"function-paren-newline": "off",
+		"no-labels": "off",
+		"no-control-regex": "off",
+		"no-void": "off",
+		"func-names": "off",
+		"no-continue": "off",
+		"default-case": "off",
+		"no-plusplus": "off",
+		"no-use-before-define": "off",
+		"no-restricted-syntax": "off",
+		"no-return-assign": "off",
+		"no-param-reassign": "off",
+		"arrow-parens": "off",
+		"no-nested-ternary": "off",
+		"no-new": "off",
+		"no-tabs": "off",
+		"no-prototype-builtins": "off",
+		"no-console": "off",
+		"class-methods-use-this": "off",
+		"prefer-destructuring": "off"
+	}
+}
