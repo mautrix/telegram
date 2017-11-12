@@ -1,0 +1,40 @@
+# Homeserver details
+homeserver:
+    address: https://matrix.org
+    domain: matrix.org
+
+# Application service host/registration related details
+appservice:
+    # The protocol the homeserver should use when connecting to the appservice.
+    # Usually "http" or "https".
+    protocol: http
+    hostname: localhost
+    port: 8080
+    id: telegram
+
+    # Path to the registration file. This is automatically updated when generating a registration.
+    registration: ./registration.yaml
+
+# Bridge config
+bridge:
+    # ${ID} is replaced with the user ID of the Telegram user.
+    username_template: "telegram_${ID}"
+    bot_username: telegrambot
+    # The displayname to set to the bot automatically.
+    bot_displayname: Telegram Bridge
+
+    command_prefix: "!tg"
+
+    # Whitelist of user IDs that are allowed to use this bridge. Leave empty to disable.
+    # You can enter a domain without the localpart to allow all users from that homeserver to use the bridge.
+    whitelist:
+    - "internal-hs.example.com"
+    - "@user:public.example.com"
+
+# Telegram app config. Generate your own keys at https://my.telegram.org/apps
+telegram:
+    server_config:
+        dev: false
+    api_config:
+        api_id: 12345
+        api_hash: tjyd5yge35lbodk1xwzw2jstp90k55qz

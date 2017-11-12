@@ -4,15 +4,18 @@
 	"description": "A Matrix-Telegram puppeting bridge",
 	"author": "Tulir Asokan <tulir@maunium.net>",
 	"license": "GPL-3.0",
-	"main": "index.js",
+	"main": "src/index.js",
 	"repository": {
 		"type": "git",
 		"url": "https://github.com/tulir/mautrix-telegram.git"
 	},
 	"dependencies": {
-		"telegram-mtproto": "2.x.x",
+		"telegram-mtproto": "3.2.x",
 		"matrix-js-sdk": "0.x.x",
-		"matrix-appservice-bridge": "1.x.x"
+		"matrix-appservice-bridge": "1.x.x",
+		"commander": "2.11.x",
+		"yamljs": "0.3.x",
+		"colors": "1.1.x"
 	},
 	"devDependencies": {
 		"eslint": "4.11.x",
