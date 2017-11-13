@@ -42,8 +42,8 @@ class MatrixUser {
 	}
 
 	toEntry() {
-		if (this.puppet) {
-			this.puppetData = this.puppet.toSubentry()
+		if (this._telegramPuppet) {
+			this.puppetData = this.telegramPuppet.toSubentry()
 		}
 		return {
 			type: "matrix",
@@ -72,32 +72,37 @@ class MatrixUser {
 		throw new Error(message)
 	}
 
-	sendTelegramCode(phoneNumber) {
+	async sendTelegramCode(phoneNumber) {
 		// TODO handle existing login?
-
-		return this.telegramPuppet.sendCode(phoneNumber)
-			.then(result => {
-				this.phoneNumber = phoneNumber
-				this.phoneCodeHash = result.phone_code_hash
-				this.app.putUser(this)
-				return result
-			}, err => this.parseTelegramError(err))
+		try {
+			const result = await this.telegramPuppet.sendCode(phoneNumber)
+			this.phoneNumber = phoneNumber
+			this.phoneCodeHash = result.phone_code_hash
+			await this.saveChanges()
+			return result
+		} catch (err) {
+			return this.parseTelegramError(err)
+		}
 	}
 
-	signInToTelegram(phoneCode) {
+	async signInToTelegram(phoneCode) {
 		if (!this.phoneNumber) throw new Error("Phone number not set")
 		if (!this.phoneCodeHash) throw new Error("Phone code not sent")
 
-		return this.telegramPuppet.signIn(this.phoneNumber, this.phoneCodeHash, phoneCode)
-			.then(result => {
-				this.phoneCodeHash = undefined
-				return this.app.putUser(this).then(() => result)
-			})
+		const result = await this.telegramPuppet.signIn(this.phoneNumber, this.phoneCodeHash, phoneCode)
+		this.phoneCodeHash = undefined
+		await this.saveChanges()
+		return result
 	}
 
-	checkPassword(password_hash) {
-		return this.telegramPuppet.checkPassword(password_hash)
-			.then(() => this.app.putUser(this))
+	async checkPassword(password_hash) {
+		const result = await this.telegramPuppet.checkPassword(password_hash)
+		await this.saveChanges()
+		return result
+	}
+
+	saveChanges() {
+		return this.app.putUser(this)
 	}
 }
 

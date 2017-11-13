@@ -14,8 +14,10 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 const {Bridge} = require("matrix-appservice-bridge")
+const crypto = require("crypto")
 const commands = require("./commands")
 const MatrixUser = require("./matrix-user")
+const YAML = require("yamljs")
 
 class MautrixTelegram {
 	constructor(config) {
@@ -40,10 +42,18 @@ class MautrixTelegram {
 		})
 	}
 
-	run() {
+	async run() {
 		console.log("Appservice listening on port %s", this.config.appservice.port)
-		this.bridge.run(this.config.appservice.port, {})
-		//this.botIntent.setDisplayName(this.config.bridge.bot_displayname)
+		await this.bridge.run(this.config.appservice.port, {})
+		const userEntries = await this.bridge.getUserStore().select({
+			type: "matrix",
+		})
+		for (const entry of userEntries) {
+			const user = MatrixUser.fromEntry(this, entry)
+			this.matrixUsersByID.set(entry.id, user)
+		}
+		//	.then(() =>
+		//		this.botIntent.setDisplayName(this.config.bridge.bot_displayname))
 	}
 
 	get bot() {
@@ -57,7 +67,6 @@ class MautrixTelegram {
 	getMatrixUser(id) {
 		let user = this.matrixUsersByID.get(id)
 		if (user) {
-			console.log(id, "found in cache")
 			return Promise.resolve(user)
 		}
 
@@ -67,16 +76,13 @@ class MautrixTelegram {
 		}).then(entries => {
 			this.matrixUsersByID.get(id)
 			if (user) {
-				console.log(id, "found in cache (after race)")
 				return Promise.resolve(user)
 			}
 
 			if (entries.length) {
 				user = MatrixUser.fromEntry(this, entries[0])
-				console.log(id, "loaded from database")
 			} else {
 				user = new MatrixUser(this, id)
-				console.log(id, "created")
 			}
 			this.matrixUsersByID.set(id, user)
 			return user
@@ -85,10 +91,11 @@ class MautrixTelegram {
 
 	putUser(user) {
 		const entry = user.toEntry()
-		return this.bridge.getUserStore().upsert({
+		const query = {
 			type: entry.type,
 			id: entry.id,
-		}, entry)
+		}
+		return this.bridge.getUserStore().upsert(query, entry)
 	}
 
 	handleMatrixEvent(evt) {
@@ -124,7 +131,8 @@ class MautrixTelegram {
 				commands.run(user, command, args, reply =>
 					this.botIntent.sendText(
 						evt.room_id,
-						reply.replace("$cmdprefix", cmdprefix)))
+						reply.replace("$cmdprefix", cmdprefix)),
+					this)
 			})
 			return
 		}
@@ -146,6 +154,25 @@ class MautrixTelegram {
 		}
 		return false
 	}
+
+	encrypt(value) {
+		var cipher = crypto.createCipher("aes-256-gcm", this.config.bridge.auth_key_password);
+		var ret = cipher.update(Buffer.from(value), "hex", "base64");
+		ret += cipher.final("base64");
+
+		return [ret, cipher.getAuthTag().toString("base64")];
+	}
+
+	decrypt(value) {
+		if(!value) return value;
+
+		var decipher = crypto.createDecipher("aes-256-gcm", this.config.bridge.auth_key_password);
+		decipher.setAuthTag(new Buffer(value[1], "base64"));
+		var ret = decipher.update(value[0], "base64", "hex");
+		ret += decipher.final("hex");
+
+		return ret;
+	};
 }
 
 module.exports = MautrixTelegram

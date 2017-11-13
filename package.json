@@ -10,7 +10,7 @@
 		"url": "https://github.com/tulir/mautrix-telegram.git"
 	},
 	"dependencies": {
-		"telegram-mtproto": "3.2.x",
+		"telegram-mtproto": "3.x.x",
 		"matrix-js-sdk": "0.x.x",
 		"matrix-appservice-bridge": "1.x.x",
 		"commander": "2.11.x",

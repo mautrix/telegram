@@ -15,22 +15,9 @@
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 const makePasswordHash = require("telegram-mtproto").plugins.makePasswordHash
 
-class Command {
-	constructor(description, usage, func) {
-		this.description = description
-		this.usage = usage
-		this.func = func
-	}
-
-	run(app, roomID, args) {
-		this.func(args, message =>
-			app.botIntent.sendText(roomID, message))
-	}
-}
-
 const commands = {}
 
-function run(sender, command, args, reply) {
+function run(sender, command, args, reply, app) {
 	if (sender.commandStatus) {
 		if (command === "cancel") {
 			sender.commandStatus = undefined
@@ -38,14 +25,15 @@ function run(sender, command, args, reply) {
 			return
 		}
 		args.unshift(command)
-		sender.commandStatus.next(sender, args, reply)
+		sender.commandStatus.next(sender, args, reply, app)
 		return
 	}
 	command = this.commands[command]
 	if (!command) {
 		reply("Unknown command. Try \"$cmdprefix help\" for help.")
+		return
 	}
-	command(sender, args, reply)
+	command(sender, args, reply, app)
 }
 
 commands.cancel = () => "Nothing to cancel."
@@ -60,7 +48,7 @@ const enterPassword = (sender, args, reply) => {
 	sender.checkPassword(hash)
 		.then(() => {
 			// TODO show who the user logged in as
-			reply(`Logged in successfully.`)
+			reply(`Logged in successfully as @${sender.telegramPuppet.getDisplayName()}.`)
 			sender.commandStatus = undefined
 		}, err => {
 			reply(`Login failed: ${err}`)
@@ -78,7 +66,7 @@ const enterCode = (sender, args, reply) => {
 		.then(data => {
 			if (data.status === "ok") {
 				// TODO show who the user logged in as
-				reply(`Logged in successfully.`)
+				reply(`Logged in successfully as @${sender.telegramPuppet.getDisplayName()}.`)
 				sender.commandStatus = undefined
 			} else if (data.status === "need-password") {
 				reply(`You have two-factor authentication enabled. Password hint: ${data.hint} \nEnter your password using "$cmdprefix <password>"`)
@@ -114,6 +102,28 @@ commands.login = (sender, args, reply) => {
 			reply(`Failed to send code: ${err}`)
 			console.log(err)
 		})
+}
+
+commands.api = async (sender, args, reply, app) => {
+	if (!app.config.telegram.allow_direct_api_calls) {
+		reply("Direct API calls are forbidden on this mautrix-telegram instance.")
+		return
+	}
+	const apiMethod = args.shift()
+	let apiArgs
+	try {
+		apiArgs = JSON.parse(args.join(" "))
+	} catch (err) {
+		reply("Invalid API method parameters. Usage: $cmdprefix api <method> <json data>")
+		return
+	}
+	try {
+		reply(`Calling ${apiMethod} with the following arguments:\n${JSON.stringify(apiArgs, "", "  ")}`)
+		const response = await sender.telegramPuppet.client(apiMethod, apiArgs)
+		reply(`API call successful. Response:\n${JSON.stringify(response, "", "  ")}`)
+	} catch (err) {
+		reply(`API call errored. Response:\n${JSON.stringify(err, "", "  ")}`)
+	}
 }
 
 commands.help = (sender, args, reply) => {
