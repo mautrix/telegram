@@ -17,33 +17,29 @@ const pkg = require("../package.json")
 const os = require("os")
 const telegram = require("telegram-mtproto")
 
+/**
+ * TelegramPuppet represents a Telegram account being controlled from Matrix.
+ */
 class TelegramPuppet {
-	constructor(opts) {
+	constructor(app, {userID, matrixUser, data, api_hash, api_id, server_config, api_config}) {
 		this._client = undefined
-		this.userID = opts.userID
-		this.matrixUser = opts.matrixUser
-		this.data = opts.data
+		this.userID = userID
+		this.matrixUser = matrixUser
+		this.data = data
 
-		this.app = opts.app
+		this.app = app
 
-		this.serverConfig = Object.assign({}, opts.server_config)
+		this.serverConfig = Object.assign({}, server_config)
 
-		this.api_hash = opts.api_hash
-		this.api_id = opts.api_id
+		this.apiHash = api_hash
+		this.apiID = api_id
 
 		this.puppetStorage = {
 			get: async (key) => {
 				let value = this.data[key]
-				/*if (value && key.match(/_auth_key$/)) {
-					value = this.app.decrypt(value)
-				}*/
 				return value
 			},
 			set: async (key, value) => {
-				/*if (value && key.match(/_auth_key$/)) {
-					value = this.app.encrypt(value)
-				}*/
-
 				if (this.data[key] === value) return Promise.resolve()
 
 				this.data[key] = value
@@ -62,11 +58,11 @@ class TelegramPuppet {
 		this.apiConfig = Object.assign({}, {
 			app_version: pkg.version,
 			lang_code: "en",
-			api_id: opts.api_id,
+			api_id: api_id,
 			initConnection : 0x69796de9,
 			layer: 57,
 			invokeWithLayer: 0xda9b0d0d,
-		}, opts.api_config)
+		}, api_config)
 
 		if (this.data.dc && this.data[`dc${this.data.dc}_auth_key`]) {
 			this.listen()
@@ -74,19 +70,18 @@ class TelegramPuppet {
 	}
 
 	static fromSubentry(app, matrixUser, data) {
-		const userID = data.user_id
-		delete data.user_id
-		return new TelegramPuppet(Object.assign({
+		const userID = data.userID
+		delete data.userID
+		return new TelegramPuppet(app, Object.assign({
 			userID,
 			matrixUser,
 			data,
-			app,
 		}, app.config.telegram))
 	}
 
 	toSubentry() {
 		return Object.assign({
-			user_id: this.userID,
+			userID: this.userID,
 		}, this.data)
 	}
 
@@ -106,8 +101,8 @@ class TelegramPuppet {
 		return this.client("auth.sendCode", {
 			phone_number,
 			current_number: true,
-			api_id: this.api_id,
-			api_hash: this.api_hash,
+			api_id: this.apiID,
+			api_hash: this.apiHash,
 		})
 	}
 
@@ -138,8 +133,8 @@ class TelegramPuppet {
 	}
 
 	getDisplayName() {
-		if (this.data.first_name || this.data.last_name) {
-			return `${this.data.first_name} ${this.data.last_name}`
+		if (this.data.firstName || this.data.lastName) {
+			return `${this.data.firstName} ${this.data.lastName}`
 		} else if (this.data.username) {
 			return this.data.username
 		}
@@ -149,9 +144,9 @@ class TelegramPuppet {
 	signInComplete(data) {
 		this.userID = data.user.id
 		this.data.username = data.user.username
-		this.data.first_name = data.user.first_name
-		this.data.last_name = data.user.last_name
-		this.data.phone_number = data.user.phone_number
+		this.data.firstName = data.user.first_name
+		this.data.lastName = data.user.last_name
+		this.data.phoneNumber = data.user.phone_number
 		this.matrixUser.saveChanges()
 		this.listen()
 		return {
@@ -159,21 +154,39 @@ class TelegramPuppet {
 		}
 	}
 
+	onUpdate(update) {
+		console.log("Update received:", update)
+	}
+
 	handleUpdate(data) {
-		console.log(data)
+		switch(data._) {
+			case "updateShort":
+				this.onUpdate(data.update)
+				break
+			case "updates":
+				for (const update of data.updates) {
+					this.onUpdate(update)
+				}
+				break
+			case "updateShortChatMessage":
+				this.onUpdate(update)
+				break
+			default:
+				console.log("Unrecognized update type:", data._)
+		}
 	}
 
 	async listen() {
 		const client = this.client
 		client.on("update", data => this.handleUpdate(data))
 		if (client.bus) {
-			client.bus.untypedMessage.observe(data => this.handleUpdate(data))
+			client.bus.untypedMessage.observe(data => this.handleUpdate(data.message))
 		}
 
 		try {
 			console.log("Updating online status...")
-			//const statusUpdate = await client("account.updateStatus", { offline: false })
-			//console.log(statusUpdate)
+			const statusUpdate = await client("account.updateStatus", { offline: false })
+			console.log(statusUpdate)
 			console.log("Fetching initial state...")
 			const state = await client("updates.getState", {})
 			console.log("Initial state:", state)

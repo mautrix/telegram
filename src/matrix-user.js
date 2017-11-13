@@ -15,6 +15,10 @@
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 const TelegramPuppet = require("./telegram-puppet")
 
+/**
+ * MatrixUser represents a Matrix user who probably wants to control their
+ * Telegram account from Matrix.
+ */
 class MatrixUser {
 	constructor(app, userID) {
 		this.app = app
@@ -32,8 +36,8 @@ class MatrixUser {
 		}
 
 		const user = new MatrixUser(app, entry.id)
-		user.phoneNumber = entry.data.phone_number
-		user.phoneCodeHash = entry.data.phone_code_hash
+		user.phoneNumber = entry.data.phoneNumber
+		user.phoneCodeHash = entry.data.phoneCodeHash
 		if (entry.data.puppet) {
 			user.puppetData = entry.data.puppet
 			user.telegramPuppet
@@ -49,8 +53,8 @@ class MatrixUser {
 			type: "matrix",
 			id: this.userID,
 			data: {
-				phone_number: this.phoneNumber,
-				phone_code_hash: this.phoneCodeHash,
+				phoneNumber: this.phoneNumber,
+				phoneCodeHash: this.phoneCodeHash,
 				puppet: this.puppetData,
 			},
 		}

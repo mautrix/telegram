@@ -64,6 +64,11 @@ class MautrixTelegram {
 		return this.bridge.getIntent()
 	}
 
+	getIntentForTelegramUser(id) {
+		return this.bridge.getIntentFromLocalpart(
+			this.config.bridge.username_template.replace("${ID}", id))
+	}
+
 	getMatrixUser(id) {
 		let user = this.matrixUsersByID.get(id)
 		if (user) {
@@ -155,7 +160,7 @@ class MautrixTelegram {
 		return false
 	}
 
-	encrypt(value) {
+	/*encrypt(value) {
 		var cipher = crypto.createCipher("aes-256-gcm", this.config.bridge.auth_key_password);
 		var ret = cipher.update(Buffer.from(value), "hex", "base64");
 		ret += cipher.final("base64");
@@ -172,7 +177,7 @@ class MautrixTelegram {
 		ret += decipher.final("hex");
 
 		return ret;
-	};
+	};*/
 }
 
 module.exports = MautrixTelegram
