@@ -13,6 +13,7 @@
 //
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
+const TelegramPeer = require("./telegram-peer")
 
 /**
  * TelegramUser represents a Telegram user who probably has an
@@ -22,9 +23,10 @@ class TelegramUser {
 	constructor(app, id, user) {
 		this.app = app
 		this.id = id
+		this.accessHashes = new Map()
 		this._intent = undefined
 		if (user) {
-			this.updateInfo(user)
+			this.updateInfo(undefined, user)
 		}
 	}
 
@@ -41,6 +43,12 @@ class TelegramUser {
 		user.phoneNumber = data.phoneNumber
 		user.photo = data.photo
 		user.avatarURL = data.avatarURL
+		user.accessHashes = new Map(data.accessHashes)
+		return user
+	}
+
+	toPeer(telegramPOV) {
+		return new TelegramPeer("user", this.id, this.accessHashes.get(telegramPOV.userID))
 	}
 
 	toEntry() {
@@ -54,18 +62,27 @@ class TelegramUser {
 				phoneNumber: this.phoneNumber,
 				photo: this.photo,
 				avatarURL: this.avatarURL,
+				accessHashes: Array.from(this.accessHashes),
 			},
 		}
 	}
 
-	updateFrom(user) {
+	updateInfo(telegramPOV, user) {
 		let changed = false
+		if (telegramPOV && this.accessHashes.get(telegramPOV.userID) !== +user.access_hash) {
+			this.accessHashes.set(telegramPOV.userID, +user.access_hash)
+			changed = true
+		}
 		if (this.firstName !== user.first_name) {
 			this.firstName = user.first_name
 			changed = true
 		}
 		if (this.lastName !== user.last_name) {
 			this.lastName = user.last_name
+			changed = true
+		}
+		if (this.username !== user.username) {
+			this.username = user.username
 			changed = true
 		}
 		return changed
@@ -92,6 +109,10 @@ class TelegramUser {
 			return this.phoneNumber
 		}
 		return this.id
+	}
+
+	save() {
+		return this.app.putUser(this)
 	}
 
 	sendText(roomID, text) {
@@ -122,18 +143,20 @@ class TelegramUser {
 			})
 	}
 
-	async updateAvatarImageFrom(user, puppet) {
-		if (!user.photo) return Promise.resolve()
+	async updateAvatarImageFrom(telegramPOV, user) {
+		if (!user.photo) {
+			return
+		}
 
 		const photo = user.photo.photo_big
 		if (this.photo && this.avatarURL &&
 			this.photo.dc_id === photo.dc_id &&
 			this.photo.volume_id === photo.volume_id &&
 			this.photo.local_id === photo.local_id) {
-			return Promise.resolve(this.avatarURL)
+			return this.avatarURL
 		}
 
-		const file = await puppet.getFile(photo)
+		const file = await telegramPOV.getFile(photo)
 		const name = `${photo.volume_id}_${photo.local_id}.${file.extension}`
 
 		const uploaded = await this.uploadContent({
@@ -153,3 +176,5 @@ class TelegramUser {
 		return this.avatarURL
 	}
 }
+
+module.exports = TelegramUser

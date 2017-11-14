@@ -13,7 +13,9 @@
 //
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
+const md5 = require("md5")
 const TelegramPuppet = require("./telegram-puppet")
+const TelegramPeer = require("./telegram-peer")
 
 /**
  * MatrixUser represents a Matrix user who probably wants to control their
@@ -27,6 +29,7 @@ class MatrixUser {
 		this.phoneNumber = undefined
 		this.phoneCodeHash = undefined
 		this.commandStatus = undefined
+		this.contacts = []
 		this._telegramPuppet = undefined
 	}
 
@@ -38,8 +41,10 @@ class MatrixUser {
 		const user = new MatrixUser(app, entry.id)
 		user.phoneNumber = entry.data.phoneNumber
 		user.phoneCodeHash = entry.data.phoneCodeHash
+		user.contactIDs = entry.data.contactIDs
 		if (entry.data.puppet) {
 			user.puppetData = entry.data.puppet
+			// Create the telegram puppet instance
 			user.telegramPuppet
 		}
 		return user
@@ -47,7 +52,7 @@ class MatrixUser {
 
 	toEntry() {
 		if (this._telegramPuppet) {
-			this.puppetData = this.telegramPuppet.toSubentry()
+			this.puppetData = this._telegramPuppet.toSubentry()
 		}
 		return {
 			type: "matrix",
@@ -55,6 +60,7 @@ class MatrixUser {
 			data: {
 				phoneNumber: this.phoneNumber,
 				phoneCodeHash: this.phoneCodeHash,
+				contactIDs: this.contactIDs,
 				puppet: this.puppetData,
 			},
 		}
@@ -76,17 +82,79 @@ class MatrixUser {
 		throw new Error(message)
 	}
 
+	get contactIDs() {
+		return this.contacts.map(contact => contact.id)
+	}
+
+	set contactIDs(list) {
+		// FIXME This is somewhat dangerous
+		setTimeout(async () => {
+			if (list) {
+				this.contacts = await Promise.all(list.map(id => this.app.getTelegramUser(id)))
+			}
+		}, 0)
+	}
+
+	async syncContacts() {
+		const contacts = await this.telegramPuppet.client("contacts.getContacts", {
+			hash: md5(this.contactIDs.join(","))
+		})
+		if (contacts._ === "contacts.contactsNotModified") {
+			return false
+		}
+		for (const [index, contact] of Object.entries(contacts.users)) {
+			const telegramUser = await this.app.getTelegramUser(contact.id)
+			if (telegramUser.updateInfo(this.telegramPuppet, contact)) {
+				telegramUser.save()
+			}
+			contacts.users[index] = telegramUser
+		}
+		this.contacts = contacts.users
+		await this.save()
+		return true
+	}
+
+	async syncDialogs() {
+		const dialogs = await this.telegramPuppet.client("messages.getDialogs", {})
+		for (const dialog of dialogs.chats) {
+			const peer = new TelegramPeer(dialog._, dialog.id)
+			const portal = await this.app.getPortalByPeer(peer)
+			if (portal.updateInfo(this.telegramPuppet, dialog)) {
+				portal.save()
+			}
+		}
+	}
+
 	async sendTelegramCode(phoneNumber) {
-		// TODO handle existing login?
+		if (this._telegramPuppet && this._telegramPuppet.userID) {
+			throw new Error("You are already logged in. Please log out before logging in again.")
+		}
+		switch(this.telegramPuppet.checkPhone(phoneNumber)) {
+			case "unregistered":
+				throw new Error("That number has not been registered. Please register it first.")
+			case "invalid":
+				throw new Error("Invalid phone number.")
+		}
 		try {
 			const result = await this.telegramPuppet.sendCode(phoneNumber)
 			this.phoneNumber = phoneNumber
 			this.phoneCodeHash = result.phone_code_hash
-			await this.saveChanges()
+			await this.save()
 			return result
 		} catch (err) {
 			return this.parseTelegramError(err)
 		}
+	}
+
+	async logOutFromTelegram() {
+		const ok = await this.telegramPuppet.logOut()
+		if (!ok) {
+			return false
+		}
+		this._telegramPuppet = undefined
+		this.puppetData = undefined
+		await this.save()
+		return true
 	}
 
 	async signInToTelegram(phoneCode) {
@@ -95,17 +163,17 @@ class MatrixUser {
 
 		const result = await this.telegramPuppet.signIn(this.phoneNumber, this.phoneCodeHash, phoneCode)
 		this.phoneCodeHash = undefined
-		await this.saveChanges()
+		await this.save()
 		return result
 	}
 
 	async checkPassword(password_hash) {
 		const result = await this.telegramPuppet.checkPassword(password_hash)
-		await this.saveChanges()
+		await this.save()
 		return result
 	}
 
-	saveChanges() {
+	save() {
 		return this.app.putUser(this)
 	}
 }

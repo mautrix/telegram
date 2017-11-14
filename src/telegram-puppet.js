@@ -16,6 +16,7 @@
 const pkg = require("../package.json")
 const os = require("os")
 const telegram = require("telegram-mtproto")
+const TelegramPeer = require("./telegram-peer")
 
 /**
  * TelegramPuppet represents a Telegram account being controlled from Matrix.
@@ -40,18 +41,20 @@ class TelegramPuppet {
 				return value
 			},
 			set: async (key, value) => {
-				if (this.data[key] === value) return Promise.resolve()
+				if (this.data[key] === value) {
+					return
+				}
 
 				this.data[key] = value
-				await this.matrixUser.saveChanges()
+				await this.matrixUser.save()
 			},
 			remove: async (...keys) => {
 				keys.forEach((key) => delete this.data[key])
-				await this.matrixUser.saveChanges()
+				await this.matrixUser.save()
 			},
 			clear: async () => {
 				this.data = {}
-				await this.matrixUser.saveChanges()
+				await this.matrixUser.save()
 			},
 		}
 
@@ -97,6 +100,21 @@ class TelegramPuppet {
 		return this._client
 	}
 
+	async checkPhone(phone_number) {
+		try {
+			const status = this.client("auth.checkPhone", { phone_number })
+			if (status.phone_registered) {
+				return "registered"
+			}
+			return "unregistered"
+		} catch (err) {
+			if (err.message === "PHONE_NUMBER_INVALID") {
+				return "invalid"
+			}
+			throw err
+		}
+	}
+
 	sendCode(phone_number) {
 		return this.client("auth.sendCode", {
 			phone_number,
@@ -106,13 +124,17 @@ class TelegramPuppet {
 		})
 	}
 
+	logOut() {
+		return this.client("auth.logOut")
+	}
+
 	async signIn(phone_number, phone_code_hash, phone_code) {
 		try {
 			const result = await
 				this.client("auth.signIn", {
 					phone_number, phone_code, phone_code_hash,
 				})
-			this.signInComplete(result)
+			return this.signInComplete(result)
 		} catch (err) {
 			if (err.message !== "SESSION_PASSWORD_NEEDED") {
 				throw err
@@ -147,32 +169,90 @@ class TelegramPuppet {
 		this.data.firstName = data.user.first_name
 		this.data.lastName = data.user.last_name
 		this.data.phoneNumber = data.user.phone_number
-		this.matrixUser.saveChanges()
+		this.matrixUser.save()
 		this.listen()
 		return {
 			status: "ok",
 		}
 	}
 
+	async sendMessage(peer, message) {
+		const result = await this.client("messages.sendMessage", {
+			peer: peer.toInputPeer(),
+			message,
+			random_id: ~~(Math.random() * (1<<30)),
+		})
+		return result
+	}
+
+	handleMessage(message) {
+		console.log(
+			`Received message from ${message.from.id} to ${message.to.type.replace("user", "1-1 chat")}${message.to.type === "user" ? "" : " " + message.to.id}: ${message.text}`)
+	}
+
 	onUpdate(update) {
-		console.log("Update received:", update)
+		if (!update) {
+			console.log("Oh noes! Empty update")
+			return
+		}
+		switch(update._) {
+			case "updateUserStatus":
+				console.log(update.user_id, "is now", update.status._.substr("userStatus".length))
+				break
+			case "updateUserTyping":
+				console.log(update.user_id, "is typing in a 1-1 chat")
+				break
+			case "updateChatUserTyping":
+				console.log(update.user_id, "is typing in", update.chat_id)
+				break
+			case "updateShortMessage":
+				this.handleMessage({
+					from: this.app.getTelegramUser(update.user_id),
+					to: new TelegramPeer("user", update.user_id),
+					text: update.message,
+				})
+				break
+			case "updateShortChatMessage":
+				this.handleMessage({
+					from: this.app.getTelegramUser(update.user_id),
+					to: new TelegramPeer("chat", update.chat_id),
+					text: update.message,
+				})
+				break
+			case "updateNewMessage":
+				update = update.message // Message defined at message#90dddc11 in layer 71
+				this.handleMessage({
+					from: update.from_id,
+					to: TelegramPeer.fromTelegramData(update.to_id),
+					text: update.message,
+				})
+				break
+			default:
+				console.log(`Update of type ${update._} received:\n${JSON.stringify(update, "", "  ")}`)
+		}
 	}
 
 	handleUpdate(data) {
-		switch(data._) {
-			case "updateShort":
-				this.onUpdate(data.update)
-				break
-			case "updates":
-				for (const update of data.updates) {
-					this.onUpdate(update)
-				}
-				break
-			case "updateShortChatMessage":
-				this.onUpdate(update)
-				break
-			default:
-				console.log("Unrecognized update type:", data._)
+		try {
+			switch (data._) {
+				case "updateShort":
+					this.onUpdate(data.update)
+					break
+				case "updates":
+					for (const update of data.updates) {
+						this.onUpdate(update)
+					}
+					break
+				case "updateShortMessage":
+				case "updateShortChatMessage":
+					this.onUpdate(data)
+					break
+				default:
+					console.log("Unrecognized update type:", data._)
+			}
+		} catch (err) {
+			console.error("Error handling update:", err)
+			console.log(e.stack)
 		}
 	}
 
@@ -185,18 +265,35 @@ class TelegramPuppet {
 
 		try {
 			console.log("Updating online status...")
-			const statusUpdate = await client("account.updateStatus", { offline: false })
-			console.log(statusUpdate)
+			//const statusUpdate = await client("account.updateStatus", { offline: false })
+			//console.log(statusUpdate)
 			console.log("Fetching initial state...")
 			const state = await client("updates.getState", {})
 			console.log("Initial state:", state)
 		} catch (err) {
 			console.error("Error getting initial state:", err)
 		}
+		try {
+			console.log("Updating contact list...")
+			const changed = await this.matrixUser.syncContacts()
+			if (!changed) {
+				console.log("Contacts were up-to-date")
+			} else {
+				console.log("Contacts updated")
+			}
+		} catch (err) {
+			console.error("Failed to update contacts:", err)
+		}
+		try {
+			console.log("Syncing dialogs...")
+			await this.matrixUser.syncDialogs()
+		} catch (err) {
+			console.error("Failed to sync dialogs:", err)
+		}
 		setInterval(async () => {
 			try {
 				const state = client("updates.getState", {})
-				console.log("New state received")
+				// TODO use state?
 			} catch (err) {
 				console.error("Error updating state:", err)
 			}

@@ -20,8 +20,8 @@ const commands = {}
 function run(sender, command, args, reply, app) {
 	if (sender.commandStatus) {
 		if (command === "cancel") {
-			sender.commandStatus = undefined
 			reply(`${sender.commandStatus.action} cancelled.`)
+			sender.commandStatus = undefined
 			return
 		}
 		args.unshift(command)
@@ -78,7 +78,6 @@ const enterCode = async (sender, args, reply) => {
 	try {
 		const data = await sender.signInToTelegram(args[0])
 		if (data.status === "ok") {
-			// TODO show who the user logged in as
 			reply(`Logged in successfully as @${sender.telegramPuppet.getDisplayName()}.`)
 			sender.commandStatus = undefined
 		} else if (data.status === "need-password") {
@@ -92,8 +91,9 @@ const enterCode = async (sender, args, reply) => {
 			reply(`Unexpected sign in response, status=${data.status}`)
 		}
 	} catch (err) {
+		// TODO login fails somewhere with TypeError: Cannot read property 'status' of undefined
 		reply(`Login failed: ${err}`)
-		console.log(err)
+		console.error(err.stack)
 	}
 }
 
@@ -118,6 +118,29 @@ commands.login = async (sender, args, reply) => {
 		reply(`Failed to send code: ${err}`)
 		console.log(err)
 	}
+}
+
+commands.register = async (sender, args, reply) => {
+	reply("Registration has not yet been implemented. Please use the offical apps for now.")
+}
+
+commands.logout = async (sender, args, reply) => {
+	try {
+		sender.logOutFromTelegram()
+		reply("Logged out successfully.")
+	} catch (err) {
+		reply(`Failed to log out: ${err}`)
+	}
+}
+
+const TelegramPeer = require("./telegram-peer")
+const Portal = require("./portal")
+
+commands.test = async (sender, args, reply, app) => {
+	const peer = new TelegramPeer(args[0], +args[1])
+	const hashFound = await peer.getAccessHash(app, sender.telegramPuppet)
+	reply("Access hash found: " + hashFound)
+	new Portal(app, "", peer).createMatrixRoom(sender.telegramPuppet)
 }
 
   //////////////////////////////

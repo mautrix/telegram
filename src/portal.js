@@ -18,9 +18,11 @@ const TelegramPeer = require("./telegram-peer")
 class Portal {
 	constructor(app, roomID, peer) {
 		this.app = app
+		this.type = "portal"
 
 		this.roomID = roomID
 		this.peer = peer
+		this.accessHashes = new Map()
 	}
 
 	static fromEntry(app, entry) {
@@ -28,6 +30,56 @@ class Portal {
 			throw new Error("MatrixUser can only be created from entry type \"portal\"")
 		}
 
-		return new Portal(app, entry.data.roomID, TelegramPeer.fromSubentry(entry.data.peer))
+		const portal = new Portal(app, entry.data.roomID, TelegramPeer.fromSubentry(entry.data.peer))
+		if (portal.peer.type === "channel") {
+			portal.accessHashes = new Map(entry.data.accessHashes)
+		}
+		return portal
+	}
+
+	async createMatrixRoom(telegramPOV) {
+		if (this.roomID) {
+			return
+		}
+
+		try {
+			await this.peer.getInfo(telegramPOV)
+		} catch (err) {
+			console.error(err)
+			console.error(err.stack)
+		}
+	}
+
+	updateInfo(telegramPOV, dialog) {
+		let changed = false
+		if (this.peer.type === "channel") {
+
+		}
+		if (telegramPOV && this.accessHashes.get(telegramPOV.userID) !== +dialog.access_hash) {
+			this.accessHashes.set(telegramPOV.userID, +dialog.access_hash)
+			changed = true
+		}
+		if (this.title !== dialog.title) {
+			this.title = dialog.title
+			changed = true
+		}
+		return changed
+	}
+
+	toEntry() {
+		return {
+			type: this.type,
+			id: this.roomID,
+			peer: this.peer.toSubentry(),
+			accessHashes: this.peer.type === "channel"
+				? Array.from(this.accessHashes)
+				: undefined,
+		}
+	}
+
+	save() {
+		return this.app.putRoom(this)
 	}
 }
+
+module.exports = Portal

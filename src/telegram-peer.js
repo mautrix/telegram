@@ -18,20 +18,70 @@ class TelegramPeer {
 	constructor(type, id, accessHash) {
 		this.type = type
 		this.id = id
-		this.accessHash = accessHash
+		this.accessHash = +(accessHash || 0)
 	}
 
 	static fromTelegramData(peer) {
 		switch(peer._) {
 			case "peerChat":
-				return new Peer("chat", peer.chat_id)
+				return new TelegramPeer("chat", peer.chat_id)
 			case "peerUser":
-				return new Peer("user", peer.user_id, peer.access_hash)
+				return new TelegramPeer("user", peer.user_id, peer.access_hash || 0)
 			case "peerChannel":
-				return new Peer("channel", peer.channel_id, peer.access_hash)
+				return new TelegramPeer("channel", peer.channel_id, peer.access_hash || 0)
 			default:
 				throw new Error(`Unrecognized peer type ${peer._}`)
 		}
+	}
+
+	async getAccessHash(app, telegramPOV) {
+		if (this.type === "chat" || this.accessHash > 0) {
+			return true
+		} else if (this.type === "user") {
+			const user = await app.getTelegramUser(this.id)
+			if (user.accessHashes.has(telegramPOV.userID)) {
+				this.accessHash = user.accessHashes.get(telegramPOV.userID)
+				return true
+			}
+			return false
+		} else if (this.type === "channel") {
+			const portal = await app.getPortalByPeer(this)
+			if (portal.accessHashes.has(telegramPOV.userID)) {
+				this.accessHash = portal.accessHashes.get(telegramPOV.userID)
+				return true
+			}
+			return false
+		}
+
+	}
+
+	async getInfo(telegramPOV) {
+		let info, participants
+		switch(this.type) {
+			case "user":
+				throw new Error("Can't get chat info of user")
+			case "chat":
+				info = await telegramPOV.client("messages.getFullChat", {
+					chat_id: this.id,
+				})
+				break
+			case "channel":
+				// FIXME I'm broken (Error: CHANNEL_INVALID)
+				info = await telegramPOV.client("channels.getFullChannel", {
+					channel: this.toInputChannel(),
+				})
+				participants = await telegramPOV.client("channels.getParticipants", {
+					channel: this.toInputChannel(),
+					filter: { _: "channelParticipantsRecent" },
+					offset: 0,
+					limit: 1000,
+				})
+			break
+			default:
+				throw new Error(`Unknown peer type ${this.type}`)
+		}
+		console.log(JSON.stringify(info, "", "  "))
+		console.log(JSON.stringify(participants, "", "  "))
 	}
 
 	toInputPeer() {
@@ -71,15 +121,13 @@ class TelegramPeer {
 	}
 
 	static fromSubentry(entry) {
-		const accessHash = entry.accessHash ? new Buffer(entry.accessHash) : undefined
-		return new Peer(entry.type, entry.id, accessHash)
+		return new TelegramPeer(entry.type, entry.id)
 	}
 
 	toSubentry() {
 		return {
 			type: this.type,
 			id: this.id,
-			accessHash: this.accessHash.toString(),
 		}
 	}
 
@@ -87,3 +135,5 @@ class TelegramPeer {
 		return `${this.type} ${this.id}`
 	}
 }
+
+module.exports = TelegramPeer
