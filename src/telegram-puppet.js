@@ -136,7 +136,8 @@ class TelegramPuppet {
 				})
 			return this.signInComplete(result)
 		} catch (err) {
-			if (err.message !== "SESSION_PASSWORD_NEEDED") {
+			if (err.type !== "SESSION_PASSWORD_NEEDED" && err.message !== "SESSION_PASSWORD_NEEDED") {
+				console.error("Unknown login error:", JSON.stringify(err, "", "  "))
 				throw err
 			}
 			const password = await
@@ -156,7 +157,8 @@ class TelegramPuppet {
 
 	getDisplayName() {
 		if (this.data.firstName || this.data.lastName) {
-			return `${this.data.firstName} ${this.data.lastName}`
+			return [this.firstName, this.lastName].filter(s => !!s)
+				.join(" ")
 		} else if (this.data.username) {
 			return this.data.username
 		}
@@ -285,10 +287,15 @@ class TelegramPuppet {
 			console.error("Failed to update contacts:", err)
 		}
 		try {
-			console.log("Syncing dialogs...")
-			await this.matrixUser.syncDialogs()
+			console.log("Updating dialogs...")
+			const changed = await this.matrixUser.syncDialogs()
+			if (!changed) {
+				console.log("Dialogs were up-to-date")
+			} else {
+				console.log("Dialogs updated")
+			}
 		} catch (err) {
-			console.error("Failed to sync dialogs:", err)
+			console.error("Failed to update dialogs:", err)
 		}
 		setInterval(async () => {
 			try {

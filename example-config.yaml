@@ -19,6 +19,8 @@ appservice:
 bridge:
     # ${ID} is replaced with the user ID of the Telegram user.
     username_template: "telegram_${ID}"
+    # ${DISPLAYNAME} is replaced with the display name of the Telegram user.
+    displayname_template: "${DISPLAYNAME} (Telegram)"
     bot_username: telegrambot
     # The displayname to set to the bot automatically.
     bot_displayname: Telegram Bridge

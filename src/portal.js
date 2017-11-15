@@ -25,6 +25,10 @@ class Portal {
 		this.accessHashes = new Map()
 	}
 
+	get id() {
+		return this.peer.id
+	}
+
 	static fromEntry(app, entry) {
 		if (entry.type !== "portal") {
 			throw new Error("MatrixUser can only be created from entry type \"portal\"")
@@ -37,43 +41,74 @@ class Portal {
 		return portal
 	}
 
+	async syncParticipants(participants) {
+		for (const participant of participants) {
+			const user = this.app.getTelegramUser(participant.id)
+			if (user.updateInfo(participant)) {
+				user.save()
+			}
+			user.intent.join(this.roomID)
+		}
+	}
+
+	handleMatrixEvent(evt) {
+		console.log("Received message from Matrix to portal with room ID", this.roomID)
+		console.log(evt)
+	}
+
 	async createMatrixRoom(telegramPOV) {
 		if (this.roomID) {
-			return
+			return this.roomID
 		}
 
 		try {
-			await this.peer.getInfo(telegramPOV)
+			const {info, participants} = await this.peer.getInfo(telegramPOV)
+			console.log(JSON.stringify(info, "", "  "))
+			console.log(JSON.stringify(participants, "", "  "))
+
+			const room = await this.app.botIntent.createRoom({
+				options: {
+					name: info.title,
+					visibility: "private",
+				}
+			})
+
+			this.roomID = room.room_id
+			this.app.portalsByRoomID.set(this.roomID, this)
+			await this.save()
+
+			// TODO other things?
+
+			return this.roomID
 		} catch (err) {
 			console.error(err)
 			console.error(err.stack)
+			return undefined
 		}
 	}
 
 	updateInfo(telegramPOV, dialog) {
 		let changed = false
 		if (this.peer.type === "channel") {
-
+			if (telegramPOV && this.accessHashes.get(telegramPOV.userID) !== +dialog.access_hash) {
+				this.accessHashes.set(telegramPOV.userID, +dialog.access_hash)
+				changed = true
+			}
 		}
-		if (telegramPOV && this.accessHashes.get(telegramPOV.userID) !== +dialog.access_hash) {
-			this.accessHashes.set(telegramPOV.userID, +dialog.access_hash)
-			changed = true
-		}
-		if (this.title !== dialog.title) {
-			this.title = dialog.title
-			changed = true
-		}
-		return changed
+		return this.peer.updateInfo(dialog) || changed
 	}
 
 	toEntry() {
 		return {
 			type: this.type,
-			id: this.roomID,
-			peer: this.peer.toSubentry(),
-			accessHashes: this.peer.type === "channel"
-				? Array.from(this.accessHashes)
-				: undefined,
+			id: this.id,
+			data: {
+				roomID: this.roomID,
+				peer: this.peer.toSubentry(),
+				accessHashes: this.peer.type === "channel"
+					? Array.from(this.accessHashes)
+					: undefined,
+			}
 		}
 	}
 

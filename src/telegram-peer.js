@@ -19,6 +19,8 @@ class TelegramPeer {
 		this.type = type
 		this.id = id
 		this.accessHash = +(accessHash || 0)
+		this.username = undefined
+		this.title = undefined
 	}
 
 	static fromTelegramData(peer) {
@@ -52,7 +54,21 @@ class TelegramPeer {
 			}
 			return false
 		}
+	}
 
+	updateInfo(dialog) {
+		let changed = false
+		if (this.type === "channel") {
+			if (this.username !== dialog.username) {
+				this.username = dialog.username
+				changed = true
+			}
+		}
+		if (this.title !== dialog.title) {
+			this.title = dialog.title
+			changed = true
+		}
+		return changed
 	}
 
 	async getInfo(telegramPOV) {
@@ -64,6 +80,7 @@ class TelegramPeer {
 				info = await telegramPOV.client("messages.getFullChat", {
 					chat_id: this.id,
 				})
+				participants = info.users
 				break
 			case "channel":
 				// FIXME I'm broken (Error: CHANNEL_INVALID)
@@ -80,8 +97,7 @@ class TelegramPeer {
 			default:
 				throw new Error(`Unknown peer type ${this.type}`)
 		}
-		console.log(JSON.stringify(info, "", "  "))
-		console.log(JSON.stringify(participants, "", "  "))
+		return { info, participants }
 	}
 
 	toInputPeer() {
@@ -121,13 +137,18 @@ class TelegramPeer {
 	}
 
 	static fromSubentry(entry) {
-		return new TelegramPeer(entry.type, entry.id)
+		const peer = new TelegramPeer(entry.type, entry.id)
+		peer.username = entry.username
+		peer.title = entry.title
+		return peer
 	}
 
 	toSubentry() {
 		return {
 			type: this.type,
 			id: this.id,
+			username: this.username,
+			title: this.title,
 		}
 	}
 

@@ -113,7 +113,6 @@ commands.login = async (sender, args, reply) => {
 			action: "Phone code authentication",
 			next: enterCode,
 		}
-		console.log(data)
 	} catch (err) {
 		reply(`Failed to send code: ${err}`)
 		console.log(err)

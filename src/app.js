@@ -56,6 +56,7 @@ class MautrixTelegram {
 			const user = MatrixUser.fromEntry(this, entry)
 			this.matrixUsersByID.set(entry.id, user)
 		}
+		// FIXME this doesn't work for setting the displayname of the bot.
 		//	.then(() =>
 		//		this.botIntent.setDisplayName(this.config.bridge.bot_displayname))
 	}
@@ -198,13 +199,13 @@ class MautrixTelegram {
 
 	putRoom(room) {
 		const entry = room.toEntry()
-		return this.bridge.getUserStore().upsert({
+		return this.bridge.getRoomStore().upsert({
 			type: entry.type,
 			id: entry.id,
 		}, entry)
 	}
 
-	handleMatrixEvent(evt) {
+	async handleMatrixEvent(evt) {
 		const asBotID = this.bridge.getBot().getUserId()
 		if (evt.type === "m.room.member" && evt.state_key === asBotID) {
 			if (evt.content.membership === "invite") {
@@ -219,27 +220,34 @@ class MautrixTelegram {
 			}
 			return
 		}
+
 		if (evt.sender === asBotID || evt.type !== "m.room.message" || !evt.content) {
 			// Ignore own messages and non-message events.
 			return;
 		}
+
 		const cmdprefix = this.config.bridge.command_prefix
 		if (evt.content.body.startsWith(cmdprefix + " ")) {
-			this.getMatrixUser(evt.sender).then(user => {
-				if (!user.whitelisted) {
-					this.botIntent.sendText(evt.room_id, "You are not authorized to use this bridge.")
-					return
-				}
+			const user = await this.getMatrixUser(evt.sender)
+			if (!user.whitelisted) {
+				this.botIntent.sendText(evt.room_id, "You are not authorized to use this bridge.")
+				return
+			}
 
-				const prefixLength = cmdprefix.length + 1
-				const args = evt.content.body.substr(prefixLength).split(" ")
-				const command = args.shift()
-				commands.run(user, command, args, reply =>
+			const prefixLength = cmdprefix.length + 1
+			const args = evt.content.body.substr(prefixLength).split(" ")
+			const command = args.shift()
+			commands.run(user, command, args, reply =>
 					this.botIntent.sendText(
 						evt.room_id,
 						reply.replace("$cmdprefix", cmdprefix)),
-					this)
-			})
+				this)
+			return
+		}
+
+		const portal = await this.getPortalByRoomID(evt.room_id)
+		if (portal) {
+			portal.handleMatrixEvent(evt)
 			return
 		}
 	}

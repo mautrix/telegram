@@ -116,13 +116,19 @@ class MatrixUser {
 
 	async syncDialogs() {
 		const dialogs = await this.telegramPuppet.client("messages.getDialogs", {})
+		let changed = false
 		for (const dialog of dialogs.chats) {
+			if (dialog._ === "chatForbidden" || dialog.deactivated) {
+				continue
+			}
 			const peer = new TelegramPeer(dialog._, dialog.id)
 			const portal = await this.app.getPortalByPeer(peer)
 			if (portal.updateInfo(this.telegramPuppet, dialog)) {
 				portal.save()
+				changed = true
 			}
 		}
+		return changed
 	}
 
 	async sendTelegramCode(phoneNumber) {
