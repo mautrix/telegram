@@ -38,7 +38,18 @@ function run(sender, command, args, reply, app) {
 commands.cancel = () => "Nothing to cancel."
 
 commands.help = (sender, args, reply) => {
-	reply("Help not yet implemented 3:")
+	reply(`All commands are prefixed with $cmdprefix.
+
+help - Show this help message.
+cancel - Cancel an ongoing action (such as login).
+login <phone> - Request an authentication code.
+logout - Log out from Telegram.
+
+api <method> <args> - Call a Telegram API method. Args is always a JSON object. Disabled by default.
+
+Temporary commands that will be replaced with better commands in the future:
+createRoom <type> <id> - Create a portal room. <type> is user, chat or channel and <id> is the numeric ID of the Telegram chat.
+syncUsers <type> <id> - Sync user info and join status in the given portal. Same arguments as createRoom.`)
 }
 
 
