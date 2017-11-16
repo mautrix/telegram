@@ -1,5 +1,5 @@
 # mautrix-telegram
-**Not yet functional.**
+**Only the very basic functionality has been implemented.**
 
 A Matrix-Telegram puppeting bridge.
 
@@ -8,5 +8,5 @@ A Matrix-Telegram puppeting bridge.
 2. Generate the appservice registration with `./mautrix-telegram -g`.
    You can use the `-c` and `-r` flags to change the location of the config and registration files.
    They default to `config.yaml` and `registration.yaml` respectively.
-3. Run the bridge `./mautrix-telegram`. You can also use forever: `forever start mautrix-telegram`.
-4. Invite the appservice bot to a private room and view the commands with `!help`.
+3. Run the bridge `./mautrix-telegram`. You can also use forever: `forever start mautrix-telegram` (probably, I didn't actually test it).
+4. Invite the appservice bot to a private room and view the commands with `!tg help`.
