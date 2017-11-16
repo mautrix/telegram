@@ -61,9 +61,25 @@ class Portal {
 		return this.peer.loadAccessHash(this.app, telegramPOV, {portal: this})
 	}
 
-	handleMatrixEvent(evt) {
-		console.log("Received message from Matrix to portal with room ID", this.roomID)
-		console.log(evt)
+	async handleTelegramEvent(sender, evt) {
+		// TODO handle other content types
+		sender.sendText(this.roomID, evt.text)
+	}
+
+	async handleMatrixEvent(sender, evt) {
+		switch(evt.content.msgtype) {
+			case "m.notice":
+			case "m.text":
+				await this.loadAccessHash(sender.telegramPuppet)
+				sender.telegramPuppet.sendMessage(this.peer, evt.content.body)
+				break
+			default:
+				console.log("Unhandled event:", evt)
+		}
+	}
+
+	isMatrixRoomCreated() {
+		return !!this.roomID
 	}
 
 	async createMatrixRoom(telegramPOV) {

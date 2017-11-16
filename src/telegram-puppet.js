@@ -202,9 +202,22 @@ class TelegramPuppet {
 		return result
 	}
 
+	async sendMedia(peer, media) {
+		const result = await this.client("messages.sendMedia", {
+			peer: peer.toInputPeer(),
+			media: media,
+			random_id: ~~(Math.random() * (1<<30)),
+		})
+		// TODO use result? (maybe the ID)
+		return result
+	}
+
 	async handleMessage(message) {
-		console.log(
-			`Received message from ${message.from.id} to ${message.to.type.replace("user", "1-1 chat")}${message.to.type === "user" ? "" : " " + message.to.id}: ${message.text}`)
+		const portal = await this.app.getPortalByPeer(message.to)
+		if (portal.isMatrixRoomCreated()) {
+			const sender = await this.app.getTelegramUser(message.from)
+			await portal.handleTelegramEvent(sender, message)
+		}
 	}
 
 	async onUpdate(update) {
@@ -234,19 +247,21 @@ class TelegramPuppet {
 				break
 			case "updateShortMessage":
 				await this.handleMessage({
-					from: this.app.getTelegramUser(update.user_id),
+					from: update.user_id,
 					to: new TelegramPeer("user", update.user_id),
 					text: update.message,
 				})
 				break
 			case "updateShortChatMessage":
 				await this.handleMessage({
-					from: this.app.getTelegramUser(update.user_id),
+					from: update.user_id,
 					to: new TelegramPeer("chat", update.chat_id),
 					text: update.message,
 				})
 				break
+			case "updateNewChannelMessage":
 			case "updateNewMessage":
+				// TODO handle other content types
 				update = update.message // Message defined at message#90dddc11 in layer 71
 				await this.handleMessage({
 					from: update.from_id,

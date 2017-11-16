@@ -39,8 +39,13 @@ class MautrixTelegram {
 				onUserQuery(user) {
 					return {}
 				},
-				onEvent(request, context) {
-					self.handleMatrixEvent(request.getData())
+				async onEvent(request, context) {
+					try {
+						await self.handleMatrixEvent(request.getData())
+					} catch (err) {
+						console.error("Matrix event handling failed:", err)
+						console.error(err.stack)
+					}
 				},
 			},
 		})
@@ -123,7 +128,7 @@ class MautrixTelegram {
 		})
 
 		// Handle possible db query race conditions
-		let portal = this.portalsByRoomID.get(id)
+		portal = this.portalsByRoomID.get(id)
 		if (portal) {
 			return portal
 		}
@@ -226,9 +231,10 @@ class MautrixTelegram {
 			return;
 		}
 
+		const user = await this.getMatrixUser(evt.sender)
+
 		const cmdprefix = this.config.bridge.command_prefix
 		if (evt.content.body.startsWith(cmdprefix + " ")) {
-			const user = await this.getMatrixUser(evt.sender)
 			if (!user.whitelisted) {
 				this.botIntent.sendText(evt.room_id, "You are not authorized to use this bridge.")
 				return
@@ -245,9 +251,14 @@ class MautrixTelegram {
 			return
 		}
 
+		if (!user.whitelisted) {
+			// Non-management command from non-whitelisted user -> fail silently.
+			return
+		}
+
 		const portal = await this.getPortalByRoomID(evt.room_id)
 		if (portal) {
-			portal.handleMatrixEvent(evt)
+			portal.handleMatrixEvent(user, evt)
 			return
 		}
 	}
