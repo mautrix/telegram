@@ -18,17 +18,17 @@ const makePasswordHash = require("telegram-mtproto").plugins.makePasswordHash
 const commands = {}
 
 function run(sender, command, args, reply, app) {
-	if (sender.commandStatus) {
-		if (command === "cancel") {
-			reply(`${sender.commandStatus.action} cancelled.`)
-			sender.commandStatus = undefined
-			return
-		}
-		args.unshift(command)
-		return sender.commandStatus.next(sender, args, reply, app)
-	}
 	command = this.commands[command]
 	if (!command) {
+		if (sender.commandStatus) {
+			if (command === "cancel") {
+				reply(`${sender.commandStatus.action} cancelled.`)
+				sender.commandStatus = undefined
+				return
+			}
+			args.unshift(command)
+			return sender.commandStatus.next(sender, args, reply, app)
+		}
 		reply("Unknown command. Try \"$cmdprefix help\" for help.")
 		return
 	}
@@ -60,7 +60,7 @@ syncUsers <type> <id> - Sync user info and join status in the given portal. Same
 /**
  * Two-factor authentication handler.
  */
-const enterPassword = async (sender, args, reply) => {
+commands.enterPassword = async (sender, args, reply) => {
 	if (args.length === 0) {
 		reply("Usage: $cmdprefix <password>")
 		return
@@ -80,7 +80,7 @@ const enterPassword = async (sender, args, reply) => {
 /*
  * Login code send handler.
  */
-const enterCode = async (sender, args, reply) => {
+commands.enterCode = async (sender, args, reply) => {
 	if (args.length === 0) {
 		reply("Usage: $cmdprefix <authentication code>")
 		return
@@ -95,7 +95,7 @@ const enterCode = async (sender, args, reply) => {
 			reply(`You have two-factor authentication enabled. Password hint: ${data.hint}\nEnter your password using "$cmdprefix <password>"`)
 			sender.commandStatus = {
 				action: "Two-factor authentication",
-				next: enterPassword,
+				next: commands.enterPassword,
 				salt: data.salt,
 			}
 		} else {
@@ -122,7 +122,7 @@ commands.login = async (sender, args, reply) => {
 		reply(`Login code sent to ${args[0]}.\nEnter the code using "$cmdprefix <code>"`)
 		sender.commandStatus = {
 			action: "Phone code authentication",
-			next: enterCode,
+			next: commands.enterCode ,
 		}
 	} catch (err) {
 		reply(`Failed to send code: ${err}`)

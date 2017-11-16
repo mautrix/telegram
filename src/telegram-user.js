@@ -88,10 +88,8 @@ class TelegramUser {
 
 		const userInfo = await this.intent.getProfileInfo(this.mxid, "displayname")
 		if (userInfo.displayname !== this.getDisplayName()) {
-			console.log(userInfo.displayname)
 			this.intent.setDisplayName(
 				this.app.config.bridge.displayname_template.replace("${DISPLAYNAME}", this.getDisplayName()))
-			console.log((await this.intent.getProfileInfo(this.mxid, "displayname")).displayname)
 		}
 		if (!dontUpdateAvatar && this.updateAvatarImageFrom(telegramPOV, user)) {
 			changed = true

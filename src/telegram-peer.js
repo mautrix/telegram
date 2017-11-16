@@ -15,20 +15,21 @@
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 class TelegramPeer {
-	constructor(type, id, accessHash) {
+	constructor(type, id, accessHash, receiverID) {
 		this.type = type
 		this.id = id
 		this.accessHash = accessHash
+		this.receiverID = receiverID
 		this.username = undefined
 		this.title = undefined
 	}
 
-	static fromTelegramData(peer) {
+	static fromTelegramData(peer, receiverID) {
 		switch(peer._) {
 			case "peerChat":
 				return new TelegramPeer("chat", peer.chat_id)
 			case "peerUser":
-				return new TelegramPeer("user", peer.user_id, peer.access_hash)
+				return new TelegramPeer("user", peer.user_id, peer.access_hash, receiverID)
 			case "peerChannel":
 				return new TelegramPeer("channel", peer.channel_id, peer.access_hash)
 			default:
@@ -86,7 +87,11 @@ class TelegramPeer {
 		let info, users
 		switch(this.type) {
 			case "user":
-				throw new Error("Can't get chat info of user")
+				info = await telegramPOV.client("users.getFullUser", {
+					id: this.toInputObject()
+				})
+				users = [info.user]
+				info = info.user
 			case "chat":
 				info = await telegramPOV.client("messages.getFullChat", {
 					chat_id: this.id,
@@ -95,10 +100,10 @@ class TelegramPeer {
 				break
 			case "channel":
 				info = await telegramPOV.client("channels.getFullChannel", {
-					channel: this.toInputChannel(),
+					channel: this.toInputObject(),
 				})
 				const participants = await telegramPOV.client("channels.getParticipants", {
-					channel: this.toInputChannel(),
+					channel: this.toInputObject(),
 					filter: { _: "channelParticipantsRecent" },
 					offset: 0,
 					limit: 1000,
@@ -138,15 +143,22 @@ class TelegramPeer {
 		}
 	}
 
-	toInputChannel() {
-		if (this.type !== "channel") {
-			throw new Error(`Cannot convert peer of type ${this.type} into an inputChannel`)
-		}
-
-		return {
-			_: "inputChannel",
-			channel_id: this.id,
-			access_hash: this.accessHash,
+	toInputObject() {
+		switch(this.type) {
+			case "user":
+				return {
+					_: "inputUser",
+					user_id: this.id,
+					access_hash: this.accessHash,
+				}
+			case "channel":
+				return {
+					_: "inputChannel",
+					channel_id: this.id,
+					access_hash: this.accessHash,
+				}
+			default:
+				throw new Error(`Unrecognized type ${this.type}`)
 		}
 	}
 
@@ -154,6 +166,7 @@ class TelegramPeer {
 		const peer = new TelegramPeer(entry.type, entry.id)
 		peer.username = entry.username
 		peer.title = entry.title
+		peer.receiverID = entry.receiverID
 		return peer
 	}
 
@@ -163,6 +176,7 @@ class TelegramPeer {
 			id: this.id,
 			username: this.username,
 			title: this.title,
+			receiverID: this.receiverID,
 		}
 	}
 

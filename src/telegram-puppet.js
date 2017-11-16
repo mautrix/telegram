@@ -56,6 +56,7 @@ class TelegramPuppet {
 				return value
 			},
 			set: async (key, value) => {
+				console.warn("SET", key, "=", JSON.stringify(value))
 				if (this.data[key] === value) {
 					return
 				}
@@ -64,10 +65,12 @@ class TelegramPuppet {
 				await this.matrixUser.save()
 			},
 			remove: async (...keys) => {
+				console.warn("DEL", JSON.stringify(value))
 				keys.forEach((key) => delete this.data[key])
 				await this.matrixUser.save()
 			},
 			clear: async () => {
+				console.warn("CLR")
 				this.data = {}
 				await this.matrixUser.save()
 			},
@@ -225,6 +228,7 @@ class TelegramPuppet {
 			console.log("Oh noes! Empty update")
 			return
 		}
+		let peer, portal
 		switch(update._) {
 			case "updateUserStatus":
 				const user = await this.app.getTelegramUser(update.user_id)
@@ -237,25 +241,29 @@ class TelegramPuppet {
 					default:
 						status = "offline"
 				}
-				user.intent.getClient().setPresence({presence: status})
+
+				await user.intent.getClient().setPresence({presence: status})
 				break
 			case "updateUserTyping":
-				console.log(update.user_id, "is typing in a 1-1 chat")
-				break
+				peer = new TelegramPeer("user", update.user_id, undefined, this.userID)
 			case "updateChatUserTyping":
-				console.log(update.user_id, "is typing in", update.chat_id)
+				peer = peer || new TelegramPeer("chat", update.chat_id)
+				portal = await this.app.getPortalByPeer(peer)
+				if (portal.isMatrixRoomCreated()) {
+					const sender = await this.app.getTelegramUser(update.user_id)
+					// The Intent API currently doesn't allow you to set the
+					// typing timeout. If it does, we should set it to ~5.5s as
+					// Telegram resends typing notifications every 5 seconds.
+					await sender.intent.sendTyping(portal.roomID, true/*, 5500*/)
+				}
 				break
 			case "updateShortMessage":
-				await this.handleMessage({
-					from: update.user_id,
-					to: new TelegramPeer("user", update.user_id),
-					text: update.message,
-				})
-				break
+				peer = new TelegramPeer("user", update.user_id, undefined, this.userID)
 			case "updateShortChatMessage":
+				peer = peer || new TelegramPeer("chat", update.chat_id)
 				await this.handleMessage({
 					from: update.user_id,
-					to: new TelegramPeer("chat", update.chat_id),
+					to: peer,
 					text: update.message,
 				})
 				break
@@ -265,7 +273,7 @@ class TelegramPuppet {
 				update = update.message // Message defined at message#90dddc11 in layer 71
 				await this.handleMessage({
 					from: update.from_id,
-					to: TelegramPeer.fromTelegramData(update.to_id),
+					to: TelegramPeer.fromTelegramData(update.to_id, this.userID),
 					text: update.message,
 				})
 				break
@@ -275,6 +283,7 @@ class TelegramPuppet {
 	}
 
 	handleUpdate(data) {
+		console.log("UPDATE", data)
 		try {
 			switch (data._) {
 				case "updateShort":

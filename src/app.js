@@ -82,10 +82,14 @@ class MautrixTelegram {
 			return portal
 		}
 
-		const entries = await this.bridge.getRoomStore().select({
+		const query = {
 			type: "portal",
 			id: peer.id,
-		})
+		}
+		if (peer.type === "user") {
+			query.receiverID = peer.receiverID
+		}
+		const entries = await this.bridge.getRoomStore().select(query)
 
 		// Handle possible db query race conditions
 		portal = this.portalsByPeerID.get(peer.id)

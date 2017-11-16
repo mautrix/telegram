@@ -29,6 +29,10 @@ class Portal {
 		return this.peer.id
 	}
 
+	get receiverID() {
+		return this.peer.receiverID
+	}
+
 	static fromEntry(app, entry) {
 		if (entry.type !== "portal") {
 			throw new Error("MatrixUser can only be created from entry type \"portal\"")
@@ -51,7 +55,7 @@ class Portal {
 		}
 		for (const userData of users) {
 			const user = await this.app.getTelegramUser(userData.id)
-			await user.updateInfo(telegramPOV, userData)
+			await user.updateInfo(telegramPOV, userData, true)
 			await user.intent.join(this.roomID)
 		}
 		return true
@@ -92,11 +96,20 @@ class Portal {
 				return undefined
 			}
 
-			const {info, users} = await this.peer.getInfo(telegramPOV)
+			let title, info, users
+			if (this.peer.type !== "user") {
+				({info, users} = await this.peer.getInfo(telegramPOV))
+				title = info.title
+			} else {
+				({info} = await this.peer.getInfo(telegramPOV))
+				users = await this.app.getTelegramUser(info.id)
+				await users.updateInfo(telegramPOV, info)
+				title = users.getDisplayName()
+			}
 
 			const room = await this.app.botIntent.createRoom({
 				options: {
-					name: info.title,
+					name: title,
 					visibility: "private",
 				}
 			})
@@ -104,9 +117,11 @@ class Portal {
 			this.roomID = room.room_id
 			this.app.portalsByRoomID.set(this.roomID, this)
 			await this.save()
-
-			await this.syncTelegramUsers(telegramPOV, users)
-
+			if (this.peer.type !== "user") {
+				await this.syncTelegramUsers(telegramPOV, users)
+			} else {
+				await users.intent.join(this.roomID)
+			}
 			return this.roomID
 		} catch (err) {
 			console.error(err)
@@ -134,6 +149,7 @@ class Portal {
 		return {
 			type: this.type,
 			id: this.id,
+			receiverID: this.receiverID,
 			data: {
 				roomID: this.roomID,
 				peer: this.peer.toSubentry(),
