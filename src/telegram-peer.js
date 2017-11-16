@@ -79,9 +79,6 @@ class TelegramPeer {
 			this.title = dialog.title
 			changed = true
 		}
-		if (changed) {
-			this.save()
-		}
 		return changed
 	}
 

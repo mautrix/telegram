@@ -107,7 +107,11 @@ class Portal {
 				changed = true
 			}
 		}
-		return this.peer.updateInfo(dialog) || changed
+		changed = this.peer.updateInfo(dialog) || changed
+		if (changed) {
+			this.save()
+		}
+		return changed
 	}
 
 	toEntry() {

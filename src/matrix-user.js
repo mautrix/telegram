@@ -104,7 +104,7 @@ class MatrixUser {
 		}
 		for (const [index, contact] of Object.entries(contacts.users)) {
 			const telegramUser = await this.app.getTelegramUser(contact.id)
-			await telegramUser.updateInfo(this.telegramPuppet, contact)
+			await telegramUser.updateInfo(this.telegramPuppet, contact, true)
 			contacts.users[index] = telegramUser
 		}
 		this.contacts = contacts.users

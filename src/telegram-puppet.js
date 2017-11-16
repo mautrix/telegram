@@ -202,19 +202,29 @@ class TelegramPuppet {
 		return result
 	}
 
-	handleMessage(message) {
+	async handleMessage(message) {
 		console.log(
 			`Received message from ${message.from.id} to ${message.to.type.replace("user", "1-1 chat")}${message.to.type === "user" ? "" : " " + message.to.id}: ${message.text}`)
 	}
 
-	onUpdate(update) {
+	async onUpdate(update) {
 		if (!update) {
 			console.log("Oh noes! Empty update")
 			return
 		}
 		switch(update._) {
 			case "updateUserStatus":
-				console.log(update.user_id, "is now", update.status._.substr("userStatus".length))
+				const user = await this.app.getTelegramUser(update.user_id)
+				let status
+				switch(update.status._) {
+					case "userStatusOnline":
+						status = "online"
+						break
+					case "userStatusOffline":
+					default:
+						status = "offline"
+				}
+				user.intent.getClient().setPresence({presence: status})
 				break
 			case "updateUserTyping":
 				console.log(update.user_id, "is typing in a 1-1 chat")
@@ -223,14 +233,14 @@ class TelegramPuppet {
 				console.log(update.user_id, "is typing in", update.chat_id)
 				break
 			case "updateShortMessage":
-				this.handleMessage({
+				await this.handleMessage({
 					from: this.app.getTelegramUser(update.user_id),
 					to: new TelegramPeer("user", update.user_id),
 					text: update.message,
 				})
 				break
 			case "updateShortChatMessage":
-				this.handleMessage({
+				await this.handleMessage({
 					from: this.app.getTelegramUser(update.user_id),
 					to: new TelegramPeer("chat", update.chat_id),
 					text: update.message,
@@ -238,7 +248,7 @@ class TelegramPuppet {
 				break
 			case "updateNewMessage":
 				update = update.message // Message defined at message#90dddc11 in layer 71
-				this.handleMessage({
+				await this.handleMessage({
 					from: update.from_id,
 					to: TelegramPeer.fromTelegramData(update.to_id),
 					text: update.message,
