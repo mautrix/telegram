@@ -41,14 +41,24 @@ class Portal {
 		return portal
 	}
 
-	async syncParticipants(participants) {
-		for (const participant of participants) {
-			const user = this.app.getTelegramUser(participant.id)
-			if (user.updateInfo(participant)) {
-				user.save()
+	async syncTelegramUsers(telegramPOV, users) {
+		if (!users) {
+			if (! await this.loadAccessHash(telegramPOV)) {
+				return false
 			}
-			user.intent.join(this.roomID)
+			const data = await this.peer.getInfo(telegramPOV)
+			users = data.users
 		}
+		for (const userData of users) {
+			const user = await this.app.getTelegramUser(userData.id)
+			await user.updateInfo(telegramPOV, userData)
+			await user.intent.join(this.roomID)
+		}
+		return true
+	}
+
+	loadAccessHash(telegramPOV) {
+		return this.peer.loadAccessHash(this.app, telegramPOV, {portal: this})
 	}
 
 	handleMatrixEvent(evt) {
@@ -62,9 +72,11 @@ class Portal {
 		}
 
 		try {
-			const {info, participants} = await this.peer.getInfo(telegramPOV)
-			console.log(JSON.stringify(info, "", "  "))
-			console.log(JSON.stringify(participants, "", "  "))
+			if (! await this.loadAccessHash(telegramPOV)) {
+				return undefined
+			}
+
+			const {info, users} = await this.peer.getInfo(telegramPOV)
 
 			const room = await this.app.botIntent.createRoom({
 				options: {
@@ -77,7 +89,7 @@ class Portal {
 			this.app.portalsByRoomID.set(this.roomID, this)
 			await this.save()
 
-			// TODO other things?
+			await this.syncTelegramUsers(telegramPOV, users)
 
 			return this.roomID
 		} catch (err) {
@@ -90,8 +102,8 @@ class Portal {
 	updateInfo(telegramPOV, dialog) {
 		let changed = false
 		if (this.peer.type === "channel") {
-			if (telegramPOV && this.accessHashes.get(telegramPOV.userID) !== +dialog.access_hash) {
-				this.accessHashes.set(telegramPOV.userID, +dialog.access_hash)
+			if (telegramPOV && this.accessHashes.get(telegramPOV.userID) !== dialog.access_hash) {
+				this.accessHashes.set(telegramPOV.userID, dialog.access_hash)
 				changed = true
 			}
 		}

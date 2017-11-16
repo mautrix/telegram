@@ -104,9 +104,7 @@ class MatrixUser {
 		}
 		for (const [index, contact] of Object.entries(contacts.users)) {
 			const telegramUser = await this.app.getTelegramUser(contact.id)
-			if (telegramUser.updateInfo(this.telegramPuppet, contact)) {
-				telegramUser.save()
-			}
+			await telegramUser.updateInfo(this.telegramPuppet, contact)
 			contacts.users[index] = telegramUser
 		}
 		this.contacts = contacts.users
@@ -123,8 +121,7 @@ class MatrixUser {
 			}
 			const peer = new TelegramPeer(dialog._, dialog.id)
 			const portal = await this.app.getPortalByPeer(peer)
-			if (portal.updateInfo(this.telegramPuppet, dialog)) {
-				portal.save()
+			if (await portal.updateInfo(this.telegramPuppet, dialog)) {
 				changed = true
 			}
 		}

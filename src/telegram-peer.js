@@ -18,7 +18,7 @@ class TelegramPeer {
 	constructor(type, id, accessHash) {
 		this.type = type
 		this.id = id
-		this.accessHash = +(accessHash || 0)
+		this.accessHash = accessHash
 		this.username = undefined
 		this.title = undefined
 	}
@@ -28,26 +28,37 @@ class TelegramPeer {
 			case "peerChat":
 				return new TelegramPeer("chat", peer.chat_id)
 			case "peerUser":
-				return new TelegramPeer("user", peer.user_id, peer.access_hash || 0)
+				return new TelegramPeer("user", peer.user_id, peer.access_hash)
 			case "peerChannel":
-				return new TelegramPeer("channel", peer.channel_id, peer.access_hash || 0)
+				return new TelegramPeer("channel", peer.channel_id, peer.access_hash)
 			default:
 				throw new Error(`Unrecognized peer type ${peer._}`)
 		}
 	}
 
-	async getAccessHash(app, telegramPOV) {
-		if (this.type === "chat" || this.accessHash > 0) {
+	/**
+	 * Load the access hash for a specific puppeted Telegram user from the channel portal or TelegramUser info.
+	 *
+	 * @param {MautrixTelegram} app         The instance of {@link MautrixTelegram} to use.
+	 * @param {TelegramPuppet}  telegramPOV The puppeted Telegram user for whom the access hash is needed.
+	 * @param {Portal}          [portal]    Optional channel {@link Portal} instance to avoid calling {@link app#getPortalByPeer(peer)}.
+	 *                                      Only used if {@link #type} is {@linkplain user}.
+	 * @param {TelegramUser}    [user]      Optional {@link TelegramUser} instance to avoid calling {@link app#getTelegramUser(id)}.
+	 *                                      Only used if {@link #type} is {@linkplain channel}.
+	 * @returns {Promise<boolean>}          Whether or not the access hash was found and loaded.
+	 */
+	async loadAccessHash(app, telegramPOV, { portal, user }) {
+		if (this.type === "chat") {
 			return true
 		} else if (this.type === "user") {
-			const user = await app.getTelegramUser(this.id)
+			user = user || await app.getTelegramUser(this.id)
 			if (user.accessHashes.has(telegramPOV.userID)) {
 				this.accessHash = user.accessHashes.get(telegramPOV.userID)
 				return true
 			}
 			return false
 		} else if (this.type === "channel") {
-			const portal = await app.getPortalByPeer(this)
+			portal = portal || await app.getPortalByPeer(this)
 			if (portal.accessHashes.has(telegramPOV.userID)) {
 				this.accessHash = portal.accessHashes.get(telegramPOV.userID)
 				return true
@@ -56,7 +67,7 @@ class TelegramPeer {
 		}
 	}
 
-	updateInfo(dialog) {
+	async updateInfo(dialog) {
 		let changed = false
 		if (this.type === "channel") {
 			if (this.username !== dialog.username) {
@@ -68,11 +79,14 @@ class TelegramPeer {
 			this.title = dialog.title
 			changed = true
 		}
+		if (changed) {
+			this.save()
+		}
 		return changed
 	}
 
 	async getInfo(telegramPOV) {
-		let info, participants
+		let info, users
 		switch(this.type) {
 			case "user":
 				throw new Error("Can't get chat info of user")
@@ -80,24 +94,27 @@ class TelegramPeer {
 				info = await telegramPOV.client("messages.getFullChat", {
 					chat_id: this.id,
 				})
-				participants = info.users
+				users = info.users
 				break
 			case "channel":
-				// FIXME I'm broken (Error: CHANNEL_INVALID)
 				info = await telegramPOV.client("channels.getFullChannel", {
 					channel: this.toInputChannel(),
 				})
-				participants = await telegramPOV.client("channels.getParticipants", {
+				const participants = await telegramPOV.client("channels.getParticipants", {
 					channel: this.toInputChannel(),
 					filter: { _: "channelParticipantsRecent" },
 					offset: 0,
 					limit: 1000,
 				})
-			break
+				users = participants.users
+				break
 			default:
 				throw new Error(`Unknown peer type ${this.type}`)
 		}
-		return { info, participants }
+		return {
+			info: info.chats[0],
+			users
+		}
 	}
 
 	toInputPeer() {

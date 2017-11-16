@@ -18,6 +18,21 @@ const os = require("os")
 const telegram = require("telegram-mtproto")
 const TelegramPeer = require("./telegram-peer")
 
+const META_FROM_FILETYPE = {
+	"storage.fileGif": {
+		mimetype: "image/gif",
+		extension: "gif",
+	},
+	"storage.fileJpeg": {
+		mimetype: "image/jpeg",
+		extension: "jpeg",
+	},
+	"storage.filePng": {
+		mimetype: "image/png",
+		extension: "png",
+	},
+}
+
 /**
  * TelegramPuppet represents a Telegram account being controlled from Matrix.
  */
@@ -305,6 +320,22 @@ class TelegramPuppet {
 				console.error("Error updating state:", err)
 			}
 		}, 5000)
+	}
+
+	async getFile(location) {
+		location = Object.assign({}, location, {_: "inputFileLocation"})
+		delete location.dc_id
+		const file = await this.client("upload.getFile", {
+			location,
+			offset: 0,
+			limit: 100*1024*1024,
+		})
+		const meta = META_FROM_FILETYPE[file.type._]
+		if (meta) {
+			file.mimetype = meta.mimetype
+			file.extension = meta.extension
+		}
+		return file
 	}
 }
 

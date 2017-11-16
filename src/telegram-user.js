@@ -67,12 +67,8 @@ class TelegramUser {
 		}
 	}
 
-	updateInfo(telegramPOV, user) {
+	async updateInfo(telegramPOV, user) {
 		let changed = false
-		if (telegramPOV && this.accessHashes.get(telegramPOV.userID) !== +user.access_hash) {
-			this.accessHashes.set(telegramPOV.userID, +user.access_hash)
-			changed = true
-		}
 		if (this.firstName !== user.first_name) {
 			this.firstName = user.first_name
 			changed = true
@@ -85,12 +81,31 @@ class TelegramUser {
 			this.username = user.username
 			changed = true
 		}
+		if (await this.updateAvatarImageFrom(telegramPOV, user)) {
+			changed = true
+		}
+		if (telegramPOV && this.accessHashes.get(telegramPOV.userID) !== user.access_hash) {
+			this.accessHashes.set(telegramPOV.userID, user.access_hash)
+			changed = true
+		}
+
+		const userInfo = await this.intent.getProfileInfo(this.mxid, "displayname")
+		if (userInfo.displayname !== this.getDisplayName()) {
+			console.log(userInfo.displayname)
+			this.intent.setDisplayName(
+				this.app.config.bridge.displayname_template.replace("${DISPLAYNAME}", this.getDisplayName()))
+			console.log((await this.intent.getProfileInfo(this.mxid, "displayname")).displayname)
+		}
+
+		if (changed) {
+			this.save()
+		}
 		return changed
 	}
 
 	get intent() {
 		if (!this._intent) {
-			this._intent = this.app.getIntentForTelegramID(this.id)
+			this._intent = this.app.getIntentForTelegramUser(this.id)
 		}
 		return this._intent
 	}
@@ -145,7 +160,7 @@ class TelegramUser {
 
 	async updateAvatarImageFrom(telegramPOV, user) {
 		if (!user.photo) {
-			return
+			return false
 		}
 
 		const photo = user.photo.photo_big
@@ -153,7 +168,7 @@ class TelegramUser {
 			this.photo.dc_id === photo.dc_id &&
 			this.photo.volume_id === photo.volume_id &&
 			this.photo.local_id === photo.local_id) {
-			return this.avatarURL
+			return false
 		}
 
 		const file = await telegramPOV.getFile(photo)
@@ -165,15 +180,15 @@ class TelegramUser {
 			type: file.mimetype,
 		})
 
-		this.avatarURL = response.content_uri
+		this.avatarURL = uploaded.content_uri
 		this.photo = {
 			dc_id: photo.dc_id,
 			volume_id: photo.volume_id,
 			local_id: photo.local_id,
 		}
 
-		await this.app.putUser(this)
-		return this.avatarURL
+		await this.intent.setAvatarUrl(this.avatarURL)
+		return true
 	}
 }
 

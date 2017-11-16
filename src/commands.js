@@ -135,11 +135,29 @@ commands.logout = async (sender, args, reply) => {
 const TelegramPeer = require("./telegram-peer")
 const Portal = require("./portal")
 
-commands.test = async (sender, args, reply, app) => {
-	const peer = new TelegramPeer(args[0], +args[1])
-	const hashFound = await peer.getAccessHash(app, sender.telegramPuppet)
-	reply("Access hash found: " + hashFound)
-	new Portal(app, "", peer).createMatrixRoom(sender.telegramPuppet)
+commands.createRoom = async (sender, args, reply, app) => {
+	let peer = new TelegramPeer(args[0], +args[1])
+	const portal = await app.getPortalByPeer(peer)
+	const roomID = await portal.createMatrixRoom(sender.telegramPuppet)
+	if (!roomID) {
+		reply("Failed to create room.")
+		return
+	}
+	await app.botIntent.invite(roomID, sender.userID)
+	reply(`Created room ${roomID} and invited ${sender.userID}`)
+}
+
+commands.syncUsers = async (sender, args, reply, app) => {
+	let peer = new TelegramPeer(args[0], +args[1])
+	const portal = await app.getPortalByPeer(peer)
+	try {
+		await portal.syncTelegramUsers(sender.telegramPuppet)
+		reply("Users synchronized successfully.")
+	} catch (err) {
+		reply(`Failed to sync users: ${err}`)
+		console.error(err)
+		console.error(err.stack)
+	}
 }
 
   //////////////////////////////
