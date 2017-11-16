@@ -61,9 +61,6 @@ class MautrixTelegram {
 			const user = MatrixUser.fromEntry(this, entry)
 			this.matrixUsersByID.set(entry.id, user)
 		}
-		// FIXME this doesn't work for setting the displayname of the bot.
-		//	.then(() =>
-		//		this.botIntent.setDisplayName(this.config.bridge.bot_displayname))
 	}
 
 	get bot() {

@@ -22,8 +22,6 @@ bridge:
     # ${DISPLAYNAME} is replaced with the display name of the Telegram user.
     displayname_template: "${DISPLAYNAME} (Telegram)"
     bot_username: telegrambot
-    # The displayname to set to the bot automatically.
-    bot_displayname: Telegram Bridge
 
     command_prefix: "!tg"
 
