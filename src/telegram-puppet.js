@@ -283,7 +283,6 @@ class TelegramPuppet {
 	}
 
 	handleUpdate(data) {
-		console.log("UPDATE", data)
 		try {
 			switch (data._) {
 				case "updateShort":
@@ -308,18 +307,14 @@ class TelegramPuppet {
 	}
 
 	async listen() {
-		const client = this.client
-		client.on("update", data => this.handleUpdate(data))
-		if (client.bus) {
-			client.bus.untypedMessage.observe(data => this.handleUpdate(data.message))
-		}
+		this.client.bus.untypedMessage.observe(data => this.handleUpdate(data.message))
 
 		try {
 			console.log("Updating online status...")
-			//const statusUpdate = await client("account.updateStatus", { offline: false })
+			//const statusUpdate = await this.client("account.updateStatus", { offline: false })
 			//console.log(statusUpdate)
 			console.log("Fetching initial state...")
-			const state = await client("updates.getState", {})
+			const state = await this.client("updates.getState", {})
 			console.log("Initial state:", state)
 		} catch (err) {
 			console.error("Error getting initial state:", err)
@@ -348,7 +343,7 @@ class TelegramPuppet {
 		}
 		setInterval(async () => {
 			try {
-				const state = client("updates.getState", {})
+				const state = this.client("updates.getState", {})
 				// TODO use state?
 			} catch (err) {
 				console.error("Error updating state:", err)
