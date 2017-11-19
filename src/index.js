@@ -53,7 +53,8 @@ if (commander.generateRegistration) {
 	fs.writeFileSync(commander.registration, YAML.stringify(registration, 10))
 	config.appservice.registration = commander.registration
 	fs.writeFileSync(commander.config, YAML.stringify(config, 10))
-	return
+	console.log("Registration generated and saved to", commander.registration)
+	process.exit()
 }
 
 const app = new MautrixTelegram(config)
