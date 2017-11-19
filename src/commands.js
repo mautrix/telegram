@@ -18,8 +18,8 @@ const makePasswordHash = require("telegram-mtproto").plugins.makePasswordHash
 const commands = {}
 
 function run(sender, command, args, reply, app) {
-	command = this.commands[command]
-	if (!command) {
+	const commandFunc = this.commands[command]
+	if (!commandFunc) {
 		if (sender.commandStatus) {
 			if (command === "cancel") {
 				reply(`${sender.commandStatus.action} cancelled.`)
@@ -32,7 +32,7 @@ function run(sender, command, args, reply, app) {
 		reply("Unknown command. Try \"$cmdprefix help\" for help.")
 		return
 	}
-	return command(sender, args, reply, app)
+	return commandFunc(sender, args, reply, app)
 }
 
 commands.cancel = () => "Nothing to cancel."
