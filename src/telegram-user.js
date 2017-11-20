@@ -67,7 +67,7 @@ class TelegramUser {
 		}
 	}
 
-	async updateInfo(telegramPOV, user, dontUpdateAvatar) {
+	async updateInfo(telegramPOV, user, { updateAvatar }) {
 		let changed = false
 		if (this.firstName !== user.first_name) {
 			this.firstName = user.first_name
@@ -91,7 +91,7 @@ class TelegramUser {
 			this.intent.setDisplayName(
 				this.app.config.bridge.displayname_template.replace("${DISPLAYNAME}", this.getDisplayName()))
 		}
-		if (!dontUpdateAvatar && this.updateAvatarImageFrom(telegramPOV, user)) {
+		if (updateAvatar && this.updateAvatar(telegramPOV, user)) {
 			changed = true
 		}
 
@@ -156,7 +156,7 @@ class TelegramUser {
 			})
 	}
 
-	async updateAvatarImageFrom(telegramPOV, user) {
+	async updateAvatar(telegramPOV, user) {
 		if (!user.photo) {
 			return false
 		}

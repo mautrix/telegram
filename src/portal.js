@@ -47,7 +47,7 @@ class Portal {
 
 	async syncTelegramUsers(telegramPOV, users) {
 		if (!users) {
-			if (! await this.loadAccessHash(telegramPOV)) {
+			if (!await this.loadAccessHash(telegramPOV)) {
 				return false
 			}
 			const data = await this.peer.getInfo(telegramPOV)
@@ -55,14 +55,48 @@ class Portal {
 		}
 		for (const userData of users) {
 			const user = await this.app.getTelegramUser(userData.id)
-			await user.updateInfo(telegramPOV, userData, true)
+			await user.updateInfo(telegramPOV, userData, { updateAvatar: false })
 			await user.intent.join(this.roomID)
 		}
 		return true
 	}
 
+	async updateAvatar(telegramPOV, chat) {
+		if (!chat.photo) {
+			return false
+		}
+
+		const photo = chat.photo.photo_big
+		if (this.photo && this.avatarURL &&
+			this.photo.dc_id === photo.dc_id &&
+			this.photo.volume_id === photo.volume_id &&
+			this.photo.local_id === photo.local_id) {
+			return false
+		}
+
+		const file = await telegramPOV.getFile(photo)
+		const name = `${photo.volume_id}_${photo.local_id}.${file.extension}`
+
+		const uploaded = await this.app.botIntent.getClient()
+			.uploadContent({
+				stream: new Buffer(file.bytes),
+				name: name,
+				type: file.mimetype,
+			}, { rawResponse: false })
+
+		this.avatarURL = uploaded.content_uri
+		this.photo = {
+			dc_id: photo.dc_id,
+			volume_id: photo.volume_id,
+			local_id: photo.local_id,
+		}
+
+		await this.app.botIntent.setRoomAvatar(this.roomID, this.avatarURL)
+		return true
+	}
+
 	loadAccessHash(telegramPOV) {
-		return this.peer.loadAccessHash(this.app, telegramPOV, {portal: this})
+		return this.peer.loadAccessHash(this.app, telegramPOV, { portal: this })
 	}
 
 	async handleTelegramEvent(sender, evt) {
@@ -71,7 +105,7 @@ class Portal {
 	}
 
 	async handleMatrixEvent(sender, evt) {
-		switch(evt.content.msgtype) {
+		switch (evt.content.msgtype) {
 			case "m.notice":
 			case "m.text":
 				await this.loadAccessHash(sender.telegramPuppet)
@@ -92,18 +126,20 @@ class Portal {
 		}
 
 		try {
-			if (! await this.loadAccessHash(telegramPOV)) {
+			if (!await this.loadAccessHash(telegramPOV)) {
 				return undefined
 			}
 
-			let title, info, users
+			let title,
+				info,
+				users
 			if (this.peer.type !== "user") {
-				({info, users} = await this.peer.getInfo(telegramPOV))
+				({ info, users } = await this.peer.getInfo(telegramPOV))
 				title = info.title
 			} else {
-				({info} = await this.peer.getInfo(telegramPOV))
+				({ info } = await this.peer.getInfo(telegramPOV))
 				users = await this.app.getTelegramUser(info.id)
-				await users.updateInfo(telegramPOV, info)
+				await users.updateInfo(telegramPOV, info, { updateAvatar: true })
 				title = users.getDisplayName()
 			}
 
@@ -111,13 +147,14 @@ class Portal {
 				options: {
 					name: title,
 					visibility: "private",
-				}
+				},
 			})
 
 			this.roomID = room.room_id
 			this.app.portalsByRoomID.set(this.roomID, this)
 			await this.save()
 			if (this.peer.type !== "user") {
+				await this.updateAvatar(telegramPOV, info)
 				await this.syncTelegramUsers(telegramPOV, users)
 			} else {
 				await users.intent.join(this.roomID)
@@ -156,7 +193,7 @@ class Portal {
 				accessHashes: this.peer.type === "channel"
 					? Array.from(this.accessHashes)
 					: undefined,
-			}
+			},
 		}
 	}
 
