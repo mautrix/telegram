@@ -22,5 +22,8 @@
 		"eslint": "4.11.x",
 		"eslint-config-airbnb-base": "12.1.x",
 		"eslint-plugin-import": "2.8.x"
+	},
+	"scripts": {
+		"fix-auth-renewal": "./scripts/fix-auth-renewal"
 	}
 }

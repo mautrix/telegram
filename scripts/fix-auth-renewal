@@ -1,0 +1,30 @@
+#!/bin/bash
+cd node_modules/
+
+echo "=== Removing telegram-mtproto installed by npm ==="
+rm -rf telegram-mtproto
+
+echo
+echo "=== Cloning telegram-mtproto monorepo ==="
+git clone https://github.com/zerobias/telegram-mtproto.git telegram-mtproto-monorepo
+
+cd telegram-mtproto-monorepo
+
+echo
+echo "=== Checking out non-broken commit ==="
+git checkout 083d8c4cd096502e9c347eb1f4a4191ca939842a
+
+cd packages/telegram-mtproto
+
+echo
+echo "=== Installing npm dependencies ==="
+npm install
+
+cd ../../..
+
+echo
+echo "=== Linking package from monorepo to node_modules ==="
+ln -s telegram-mtproto-monorepo/packages/telegram-mtproto
+
+echo
+echo "=== All done! Authentication should now be indefinitely persistent ==="
