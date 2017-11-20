@@ -53,9 +53,21 @@ class TelegramPuppet {
 		this.puppetStorage = {
 			get: async (key) => {
 				let value = this.data[key]
+				// TODO test and (enable or remove)
+				/*if (typeof(value) === "string" && value.startsWith("b64:")) {
+					value = Array.from(new Buffer(value.substr("b64:".length), "base64"))
+				}*/
 				return value
 			},
 			set: async (key, value) => {
+				// TODO test and (enable or remove)
+				/*if (Array.isArray(value)) {
+					console.log("Non-buffer array")
+					value = `b64:${new Buffer(value).toString("base64")}`
+				} else if (value instanceof Buffer) {
+					console.log("Buffer array")
+					value = `b64:${value.toString("base64")}`
+				}*/
 				console.warn("SET", key, "=", JSON.stringify(value))
 				if (this.data[key] === value) {
 					return
