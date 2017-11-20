@@ -21,13 +21,19 @@ bridge:
     username_template: "telegram_${ID}"
     # ${DISPLAYNAME} is replaced with the display name of the Telegram user.
     displayname_template: "${DISPLAYNAME} (Telegram)"
+    # ${NAME} is replaced with the name part of the public channel/group invite link ( https://t.me/${NAME} )
+    alias_template: "telegram_${NAME}"
+    # Username of the bot. The registration must be regenerated to change this.
     bot_username: telegrambot
 
-    command_prefix: "!tg"
+    # Bridge management command configuration
+    commands:
+        # The prefix for all management commands.
+        prefix: "!tg"
 
-    # The key used to encrypt Telegram authentication tokens
-    # You can generate a new key using `pwgen 32`.
-    auth_key_password: long_string_to_encrypt_telegram_auth_keys
+        # Enables the !tg api ... commands for debugging.
+        # Do not enable this in production, it allows all whitelisted users to call any Telegram API methods freely.
+        allow_direct_api_calls: false
 
     # Whitelist of user IDs that are allowed to use this bridge. Leave empty to disable.
     # You can enter a domain without the localpart to allow all users from that homeserver to use the bridge.
@@ -35,12 +41,8 @@ bridge:
     - "internal-hs.example.com"
     - "@user:public.example.com"
 
-# Telegram app config. Generate your own keys at https://my.telegram.org/apps
+# Telegram config
 telegram:
-    # Enables the !tg api ... commands for debugging.
-    # Do not enable this in production, it allows all whitelisted users to call any Telegram API methods freely.
-    allow_direct_api_calls: false
-    server_config:
-        dev: false
+    # Get your own API keys at https://my.telegram.org/apps
     api_id: 12345
     api_hash: tjyd5yge35lbodk1xwzw2jstp90k55qz

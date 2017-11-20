@@ -257,20 +257,20 @@ class TelegramPuppet {
 				await user.intent.getClient().setPresence({presence: status})
 				break
 			case "updateUserTyping":
-				peer = new TelegramPeer("user", update.user_id, undefined, this.userID)
+				peer = new TelegramPeer("user", update.user_id, { receiverID: this.userID })
 			case "updateChatUserTyping":
 				peer = peer || new TelegramPeer("chat", update.chat_id)
 				portal = await this.app.getPortalByPeer(peer)
 				if (portal.isMatrixRoomCreated()) {
 					const sender = await this.app.getTelegramUser(update.user_id)
 					// The Intent API currently doesn't allow you to set the
-					// typing timeout. If it does, we should set it to ~5.5s as
-					// Telegram resends typing notifications every 5 seconds.
+					// typing timeout. Once it does, we should set it to ~5.5s
+					// as Telegram resends typing notifications every 5 seconds.
 					await sender.intent.sendTyping(portal.roomID, true/*, 5500*/)
 				}
 				break
 			case "updateShortMessage":
-				peer = new TelegramPeer("user", update.user_id, undefined, this.userID)
+				peer = new TelegramPeer("user", update.user_id, { receiverID: this.userID })
 			case "updateShortChatMessage":
 				peer = peer || new TelegramPeer("chat", update.chat_id)
 				await this.handleMessage({
@@ -285,7 +285,7 @@ class TelegramPuppet {
 				update = update.message // Message defined at message#90dddc11 in layer 71
 				await this.handleMessage({
 					from: update.from_id,
-					to: TelegramPeer.fromTelegramData(update.to_id, this.userID),
+					to: TelegramPeer.fromTelegramData(update.to_id, update.from_id, this.userID),
 					text: update.message,
 				})
 				break
@@ -322,7 +322,7 @@ class TelegramPuppet {
 		this.client.bus.untypedMessage.observe(data => this.handleUpdate(data.message))
 
 		try {
-			console.log("Updating online status...")
+			//console.log("Updating online status...")
 			//const statusUpdate = await this.client("account.updateStatus", { offline: false })
 			//console.log(statusUpdate)
 			console.log("Fetching initial state...")

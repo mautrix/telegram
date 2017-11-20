@@ -43,7 +43,10 @@ if (commander.generateRegistration) {
 				exclusive: true,
 				regex: `@${config.bridge.username_template.replace("${ID}", ".+")}:${config.homeserver.domain}`
 			}],
-			aliases: [],
+			aliases: [{
+				exclusive: true,
+				regex: `#${config.bridge.alias_template.replace("${NAME}", ".+")}:${config.homeserver.domain}`
+			}],
 			rooms: [],
 		},
 		url: `${config.appservice.protocol}://${config.appservice.hostname}:${config.appservice.port}`,

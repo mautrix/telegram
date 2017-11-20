@@ -112,17 +112,44 @@ class MatrixUser {
 		return true
 	}
 
-	async syncDialogs() {
+	async syncDialogs({createRooms=true} = {}) {
 		const dialogs = await this.telegramPuppet.client("messages.getDialogs", {})
 		let changed = false
-		for (const dialog of dialogs.chats) {
+		for (const dialog of dialogs.chats.concat(dialogs.users)) {
 			if (dialog._ === "chatForbidden" || dialog.deactivated) {
 				continue
 			}
-			const peer = new TelegramPeer(dialog._, dialog.id)
+			const peer = new TelegramPeer(dialog._, dialog.id, {
+				receiverID: dialog._ === "user"
+					? this.telegramPuppet.userID
+					: undefined
+			})
 			const portal = await this.app.getPortalByPeer(peer)
 			if (await portal.updateInfo(this.telegramPuppet, dialog)) {
 				changed = true
+			}
+			if (createRooms) {
+				try {
+					const {roomID, created} = await portal.createMatrixRoom(this.telegramPuppet, {
+						invite: [this.userID],
+					})
+					if (!created) {
+						// Make sure the user is invited, since the room already exists.
+						const intent = await (dialog._ === "user"
+							? this.app.getTelegramUser(peer.id)
+							: this.app.botIntent)
+						// FIXME check membership before re-inviting
+						//const membership = intent.getClient().getRoom(roomID).getMember(this.userID).membership
+						//if (membership !== "join") {
+						try {
+							await intent.invite(roomID, this.userID)
+						} catch (_) {}
+						//}
+					}
+				} catch (err) {
+					console.error(err)
+					console.error(err.stack)
+				}
 			}
 		}
 		return changed

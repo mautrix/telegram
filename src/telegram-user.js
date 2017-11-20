@@ -48,7 +48,10 @@ class TelegramUser {
 	}
 
 	toPeer(telegramPOV) {
-		return new TelegramPeer("user", this.id, this.accessHashes.get(telegramPOV.userID))
+		return new TelegramPeer("user", this.id, {
+			accessHash: this.accessHashes.get(telegramPOV.userID),
+			receiverID: telegramPOV.userID,
+		})
 	}
 
 	toEntry() {
@@ -67,7 +70,7 @@ class TelegramUser {
 		}
 	}
 
-	async updateInfo(telegramPOV, user, { updateAvatar }) {
+	async updateInfo(telegramPOV, user, { updateAvatar } = {}) {
 		let changed = false
 		if (this.firstName !== user.first_name) {
 			this.firstName = user.first_name
@@ -139,10 +142,6 @@ class TelegramUser {
 			body: opts.name,
 			info: opts.info,
 		})
-	}
-
-	sendSelfStateEvent(roomID, type, content) {
-		return this.intent.sendStateEvent(roomID, type, this.getMxid(), content)
 	}
 
 	uploadContent(opts) {

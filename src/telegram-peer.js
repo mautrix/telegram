@@ -15,23 +15,28 @@
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 class TelegramPeer {
-	constructor(type, id, accessHash, receiverID) {
+	constructor(type, id, { accessHash, receiverID, username, title } = {}) {
 		this.type = type
 		this.id = id
 		this.accessHash = accessHash
 		this.receiverID = receiverID
-		this.username = undefined
-		this.title = undefined
+		this.username = username
+		this.title = title
 	}
 
-	static fromTelegramData(peer, receiverID) {
-		switch(peer._) {
+	static fromTelegramData(peer, sender, receiverID) {
+		switch (peer._) {
 			case "peerChat":
 				return new TelegramPeer("chat", peer.chat_id)
 			case "peerUser":
-				return new TelegramPeer("user", peer.user_id, peer.access_hash, receiverID)
+				return new TelegramPeer("user", sender, {
+					accessHash: peer.access_hash,
+					receiverID,
+				})
 			case "peerChannel":
-				return new TelegramPeer("channel", peer.channel_id, peer.access_hash)
+				return new TelegramPeer("channel", peer.channel_id, {
+					accessHash: peer.access_hash,
+				})
 			default:
 				throw new Error(`Unrecognized peer type ${peer._}`)
 		}
@@ -48,7 +53,7 @@ class TelegramPeer {
 	 *                                      Only used if {@link #type} is {@linkplain channel}.
 	 * @returns {Promise<boolean>}          Whether or not the access hash was found and loaded.
 	 */
-	async loadAccessHash(app, telegramPOV, { portal, user }) {
+	async loadAccessHash(app, telegramPOV, { portal, user } = {}) {
 		if (this.type === "chat") {
 			return true
 		} else if (this.type === "user") {
@@ -70,7 +75,7 @@ class TelegramPeer {
 
 	async updateInfo(dialog) {
 		let changed = false
-		if (this.type === "channel") {
+		if (this.type === "channel" || this.type === "user") {
 			if (this.username !== dialog.username) {
 				this.username = dialog.username
 				changed = true
@@ -84,24 +89,28 @@ class TelegramPeer {
 	}
 
 	async getInfo(telegramPOV) {
-		let info, users
-		switch(this.type) {
+		let info,
+			users
+		switch (this.type) {
 			case "user":
 				info = await telegramPOV.client("users.getFullUser", {
-					id: this.toInputObject()
+					id: this.toInputObject(),
 				})
 				users = [info.user]
 				info = info.user
+				break
 			case "chat":
 				info = await telegramPOV.client("messages.getFullChat", {
 					chat_id: this.id,
 				})
 				users = info.users
+				info = info.chats[0]
 				break
 			case "channel":
 				info = await telegramPOV.client("channels.getFullChannel", {
 					channel: this.toInputObject(),
 				})
+				info = info.chats[0]
 				const participants = await telegramPOV.client("channels.getParticipants", {
 					channel: this.toInputObject(),
 					filter: { _: "channelParticipantsRecent" },
@@ -114,13 +123,13 @@ class TelegramPeer {
 				throw new Error(`Unknown peer type ${this.type}`)
 		}
 		return {
-			info: info.chats[0],
-			users
+			info: info,
+			users,
 		}
 	}
 
 	toInputPeer() {
-		switch(this.type) {
+		switch (this.type) {
 			case "chat":
 				return {
 					_: "inputPeerChat",
@@ -144,7 +153,7 @@ class TelegramPeer {
 	}
 
 	toInputObject() {
-		switch(this.type) {
+		switch (this.type) {
 			case "user":
 				return {
 					_: "inputUser",
@@ -163,11 +172,7 @@ class TelegramPeer {
 	}
 
 	static fromSubentry(entry) {
-		const peer = new TelegramPeer(entry.type, entry.id)
-		peer.username = entry.username
-		peer.title = entry.title
-		peer.receiverID = entry.receiverID
-		return peer
+		return new TelegramPeer(entry.type, entry.id, entry)
 	}
 
 	toSubentry() {

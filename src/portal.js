@@ -120,60 +120,85 @@ class Portal {
 		return !!this.roomID
 	}
 
-	async createMatrixRoom(telegramPOV) {
+	async createMatrixRoom(telegramPOV, {invite = []} = {}) {
 		if (this.roomID) {
-			return this.roomID
+			return {
+				created: false,
+				roomID: this.roomID,
+			}
 		}
 
-		try {
-			if (!await this.loadAccessHash(telegramPOV)) {
-				return undefined
-			}
+		if (!await this.loadAccessHash(telegramPOV)) {
+			throw new Error("Failed to load access hash.")
+		}
 
-			let title,
-				info,
-				users
-			if (this.peer.type !== "user") {
-				({ info, users } = await this.peer.getInfo(telegramPOV))
-				title = info.title
-			} else {
-				({ info } = await this.peer.getInfo(telegramPOV))
-				users = await this.app.getTelegramUser(info.id)
-				await users.updateInfo(telegramPOV, info, { updateAvatar: true })
-				title = users.getDisplayName()
-			}
-
-			const room = await this.app.botIntent.createRoom({
+		let room
+		const { info, users } = await this.peer.getInfo(telegramPOV)
+		if (this.peer.type === "chat") {
+			room = await this.app.botIntent.createRoom({
 				options: {
-					name: title,
+					name: info.title,
+					topic: info.about,
 					visibility: "private",
+					invite,
 				},
 			})
+		} else if (this.peer.type === "channel") {
+			room = await this.app.botIntent.createRoom({
+				options: {
+					name: info.title,
+					topic: info.about,
+					visibility: info.username ? "public" : "private",
+					room_alias_name: info.username
+						? this.app.config.bridge.alias_template.replace("${NAME}", info.username)
+						: "",
+					invite,
+				},
+			})
+		} else if (this.peer.type === "user") {
+			const user = await this.app.getTelegramUser(info.id)
+			await user.updateInfo(telegramPOV, info, { updateAvatar: true })
+			room = await user.intent.createRoom({
+				createAsClient: true,
+				options: {
+					name: user.getDisplayName(),
+					topic: "Telegram private chat",
+					visibility: "private",
+					invite,
+				},
+			})
+		} else {
+			throw new Error(`Unrecognized peer type: ${this.peer.type}`)
+		}
 
-			this.roomID = room.room_id
-			this.app.portalsByRoomID.set(this.roomID, this)
-			await this.save()
-			if (this.peer.type !== "user") {
-				await this.updateAvatar(telegramPOV, info)
+		this.roomID = room.room_id
+		this.app.portalsByRoomID.set(this.roomID, this)
+		await this.save()
+		if (this.peer.type !== "user") {
+			try {
 				await this.syncTelegramUsers(telegramPOV, users)
-			} else {
-				await users.intent.join(this.roomID)
+				await this.updateAvatar(telegramPOV, info)
+			} catch (err) {
+				console.error(err)
+				console.error(err.stack)
 			}
-			return this.roomID
-		} catch (err) {
-			console.error(err)
-			console.error(err.stack)
-			return undefined
+		}
+		return {
+			created: true,
+			roomID: this.roomID,
 		}
 	}
 
-	updateInfo(telegramPOV, dialog) {
+	async updateInfo(telegramPOV, dialog) {
 		let changed = false
 		if (this.peer.type === "channel") {
 			if (telegramPOV && this.accessHashes.get(telegramPOV.userID) !== dialog.access_hash) {
 				this.accessHashes.set(telegramPOV.userID, dialog.access_hash)
 				changed = true
 			}
+		} else if (this.peer.type === "user") {
+			const user = await this.app.getTelegramUser(this.peer.id)
+			await user.updateInfo(telegramPOV, dialog)
 		}
 		changed = this.peer.updateInfo(dialog) || changed
 		if (changed) {

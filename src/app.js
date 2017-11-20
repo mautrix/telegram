@@ -234,7 +234,7 @@ class MautrixTelegram {
 
 		const user = await this.getMatrixUser(evt.sender)
 
-		const cmdprefix = this.config.bridge.command_prefix
+		const cmdprefix = this.config.bridge.commands.prefix
 		if (evt.content.body.startsWith(cmdprefix + " ")) {
 			if (!user.whitelisted) {
 				this.botIntent.sendText(evt.room_id, "You are not authorized to use this bridge.")
