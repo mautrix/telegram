@@ -151,7 +151,7 @@ class Portal {
 					visibility: info.username ? "public" : "private",
 					room_alias_name: info.username
 						? this.app.config.bridge.alias_template.replace("${NAME}", info.username)
-						: "",
+						: undefined,
 					invite,
 				},
 			})
