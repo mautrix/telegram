@@ -15,25 +15,26 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 const { AppServiceRegistration } = require("matrix-appservice-bridge")
-const commander = require("commander")
+const program = require("commander")
 const YAML = require("yamljs")
 const fs = require("fs")
 const MautrixTelegram = require("./app")
 const pkg = require("../package.json")
 
-commander
+program
 	.version(pkg.version)
 	.option("-c, --config <path>", "the file to load the config from. defaults to ./config.yaml")
 	.option("-g, --generate-registration", "generate a registration based on the config")
 	.option("-r, --registration <path>", "the file to save the registration to. defaults to ./registration.yaml")
 	.parse(process.argv)
 
-commander.registration = commander.registration || "./registration.yaml"
-commander.config = commander.config || "./config.yaml"
+// commander doesn't seem to set default values automatically.
+program.registration = program.registration || "./registration.yaml"
+program.config = program.config || "./config.yaml"
 
-const config = YAML.load(commander.config)
+const config = YAML.load(program.config)
 
-if (commander.generateRegistration) {
+if (program.generateRegistration) {
 	const registration = {
 		id: config.appservice.id,
 		hs_token: AppServiceRegistration.generateToken(),
@@ -53,10 +54,12 @@ if (commander.generateRegistration) {
 		sender_localpart: config.bridge.bot_username,
 		rate_limited: false,
 	}
-	fs.writeFileSync(commander.registration, YAML.stringify(registration, 10))
-	config.appservice.registration = commander.registration
-	fs.writeFileSync(commander.config, YAML.stringify(config, 10))
-	console.log("Registration generated and saved to", commander.registration)
+
+	fs.writeFileSync(program.registration, YAML.stringify(registration, 10))
+	config.appservice.registration = program.registration
+	fs.writeFileSync(program.config, YAML.stringify(config, 10))
+
+	console.log("Registration generated and saved to", program.registration)
 	process.exit()
 }
 
