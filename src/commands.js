@@ -24,13 +24,13 @@ function run(sender, command, args, reply, app) {
 			if (command === "cancel") {
 				reply(`${sender.commandStatus.action} cancelled.`)
 				sender.commandStatus = undefined
-				return
+				return undefined
 			}
 			args.unshift(command)
 			return sender.commandStatus.next(sender, args, reply, app)
 		}
 		reply("Unknown command. Try \"$cmdprefix help\" for help.")
-		return
+		return undefined
 	}
 	return commandFunc(sender, args, reply, app)
 }
@@ -49,8 +49,8 @@ api <method> <args> - Call a Telegram API method. Args is always a JSON object. 
 }
 
 
-  /////////////////////////////
- // Authentication handlers //
+/////////////////////////////
+// Authentication handlers //
 /////////////////////////////
 
 /**
@@ -88,7 +88,8 @@ commands.enterCode = async (sender, args, reply) => {
 			reply(`Logged in successfully as @${sender.telegramPuppet.getDisplayName()}.`)
 			sender.commandStatus = undefined
 		} else if (data.status === "need-password") {
-			reply(`You have two-factor authentication enabled. Password hint: ${data.hint}\nEnter your password using "$cmdprefix <password>"`)
+			reply(`You have two-factor authentication enabled. Password hint: ${data.hint}
+Enter your password using "$cmdprefix <password>"`)
 			sender.commandStatus = {
 				action: "Two-factor authentication",
 				next: commands.enterPassword,
@@ -114,11 +115,12 @@ commands.login = async (sender, args, reply) => {
 	}
 
 	try {
-		const data = await sender.sendTelegramCode(args[0])
+		/*const data = */
+		await sender.sendTelegramCode(args[0])
 		reply(`Login code sent to ${args[0]}.\nEnter the code using "$cmdprefix <code>"`)
 		sender.commandStatus = {
 			action: "Phone code authentication",
-			next: commands.enterCode ,
+			next: commands.enterCode,
 		}
 	} catch (err) {
 		reply(`Failed to send code: ${err}`)
@@ -139,13 +141,13 @@ commands.logout = async (sender, args, reply) => {
 	}
 }
 
-  //////////////////////////////
- // General command handlers //
+//////////////////////////////
+// General command handlers //
 //////////////////////////////
 
 
-  ////////////////////////////
- // Debug command handlers //
+////////////////////////////
+// Debug command handlers //
 ////////////////////////////
 
 commands.api = async (sender, args, reply, app) => {

@@ -97,7 +97,7 @@ class MatrixUser {
 
 	async syncContacts() {
 		const contacts = await this.telegramPuppet.client("contacts.getContacts", {
-			hash: md5(this.contactIDs.join(","))
+			hash: md5(this.contactIDs.join(",")),
 		})
 		if (contacts._ === "contacts.contactsNotModified") {
 			return false
@@ -112,7 +112,7 @@ class MatrixUser {
 		return true
 	}
 
-	async syncDialogs({createRooms=true} = {}) {
+	async syncDialogs({ createRooms = true } = {}) {
 		const dialogs = await this.telegramPuppet.client("messages.getDialogs", {})
 		let changed = false
 		for (const dialog of dialogs.chats.concat(dialogs.users)) {
@@ -122,7 +122,7 @@ class MatrixUser {
 			const peer = new TelegramPeer(dialog._, dialog.id, {
 				receiverID: dialog._ === "user"
 					? this.telegramPuppet.userID
-					: undefined
+					: undefined,
 			})
 			const portal = await this.app.getPortalByPeer(peer)
 			if (await portal.updateInfo(this.telegramPuppet, dialog)) {
@@ -130,7 +130,7 @@ class MatrixUser {
 			}
 			if (createRooms) {
 				try {
-					const {roomID, created} = await portal.createMatrixRoom(this.telegramPuppet, {
+					const { roomID, created } = await portal.createMatrixRoom(this.telegramPuppet, {
 						invite: [this.userID],
 					})
 					if (!created) {
@@ -143,7 +143,8 @@ class MatrixUser {
 						//if (membership !== "join") {
 						try {
 							await intent.invite(roomID, this.userID)
-						} catch (_) {}
+						} catch (_) {
+						}
 						//}
 					}
 				} catch (err) {
@@ -159,11 +160,11 @@ class MatrixUser {
 		if (this._telegramPuppet && this._telegramPuppet.userID) {
 			throw new Error("You are already logged in. Please log out before logging in again.")
 		}
-		switch(this.telegramPuppet.checkPhone(phoneNumber)) {
-			case "unregistered":
-				throw new Error("That number has not been registered. Please register it first.")
-			case "invalid":
-				throw new Error("Invalid phone number.")
+		switch (this.telegramPuppet.checkPhone(phoneNumber)) {
+		case "unregistered":
+			throw new Error("That number has not been registered. Please register it first.")
+		case "invalid":
+			throw new Error("Invalid phone number.")
 		}
 		try {
 			const result = await this.telegramPuppet.sendCode(phoneNumber)

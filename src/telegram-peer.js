@@ -26,19 +26,19 @@ class TelegramPeer {
 
 	static fromTelegramData(peer, sender, receiverID) {
 		switch (peer._) {
-			case "peerChat":
-				return new TelegramPeer("chat", peer.chat_id)
-			case "peerUser":
-				return new TelegramPeer("user", sender, {
-					accessHash: peer.access_hash,
-					receiverID,
-				})
-			case "peerChannel":
-				return new TelegramPeer("channel", peer.channel_id, {
-					accessHash: peer.access_hash,
-				})
-			default:
-				throw new Error(`Unrecognized peer type ${peer._}`)
+		case "peerChat":
+			return new TelegramPeer("chat", peer.chat_id)
+		case "peerUser":
+			return new TelegramPeer("user", sender, {
+				accessHash: peer.access_hash,
+				receiverID,
+			})
+		case "peerChannel":
+			return new TelegramPeer("channel", peer.channel_id, {
+				accessHash: peer.access_hash,
+			})
+		default:
+			throw new Error(`Unrecognized peer type ${peer._}`)
 		}
 	}
 
@@ -71,6 +71,7 @@ class TelegramPeer {
 			}
 			return false
 		}
+		return false
 	}
 
 	async updateInfo(dialog) {
@@ -92,82 +93,82 @@ class TelegramPeer {
 		let info,
 			users
 		switch (this.type) {
-			case "user":
-				info = await telegramPOV.client("users.getFullUser", {
-					id: this.toInputObject(),
-				})
-				users = [info.user]
-				info = info.user
-				break
-			case "chat":
-				info = await telegramPOV.client("messages.getFullChat", {
-					chat_id: this.id,
-				})
-				users = info.users
-				info = info.chats[0]
-				break
-			case "channel":
-				info = await telegramPOV.client("channels.getFullChannel", {
-					channel: this.toInputObject(),
-				})
-				info = info.chats[0]
-				const participants = await telegramPOV.client("channels.getParticipants", {
-					channel: this.toInputObject(),
-					filter: { _: "channelParticipantsRecent" },
-					offset: 0,
-					limit: 1000,
-				})
-				users = participants.users
-				break
-			default:
-				throw new Error(`Unknown peer type ${this.type}`)
+		case "user":
+			info = await telegramPOV.client("users.getFullUser", {
+				id: this.toInputObject(),
+			})
+			users = [info.user]
+			info = info.user
+			break
+		case "chat":
+			info = await telegramPOV.client("messages.getFullChat", {
+				chat_id: this.id,
+			})
+			users = info.users
+			info = info.chats[0]
+			break
+		case "channel":
+			info = await telegramPOV.client("channels.getFullChannel", {
+				channel: this.toInputObject(),
+			})
+			info = info.chats[0]
+			const participants = await telegramPOV.client("channels.getParticipants", {
+				channel: this.toInputObject(),
+				filter: { _: "channelParticipantsRecent" },
+				offset: 0,
+				limit: 1000,
+			})
+			users = participants.users
+			break
+		default:
+			throw new Error(`Unknown peer type ${this.type}`)
 		}
 		return {
-			info: info,
+			info,
 			users,
 		}
 	}
 
 	toInputPeer() {
 		switch (this.type) {
-			case "chat":
-				return {
-					_: "inputPeerChat",
-					chat_id: this.id,
-				}
-			case "user":
-				return {
-					_: "inputPeerUser",
-					user_id: this.id,
-					access_hash: this.accessHash,
-				}
-			case "channel":
-				return {
-					_: "inputPeerChannel",
-					channel_id: this.id,
-					access_hash: this.accessHash,
-				}
-			default:
-				throw new Error(`Unrecognized peer type ${this.type}`)
+		case "chat":
+			return {
+				_: "inputPeerChat",
+				chat_id: this.id,
+			}
+		case "user":
+			return {
+				_: "inputPeerUser",
+				user_id: this.id,
+				access_hash: this.accessHash,
+			}
+		case "channel":
+			return {
+				_: "inputPeerChannel",
+				channel_id: this.id,
+				access_hash: this.accessHash,
+			}
+		default:
+			throw new Error(`Unrecognized peer type ${this.type}`)
 		}
 	}
 
 	toInputObject() {
 		switch (this.type) {
-			case "user":
-				return {
-					_: "inputUser",
-					user_id: this.id,
-					access_hash: this.accessHash,
-				}
-			case "channel":
-				return {
-					_: "inputChannel",
-					channel_id: this.id,
-					access_hash: this.accessHash,
-				}
-			default:
-				throw new Error(`Unrecognized type ${this.type}`)
+		case "user":
+			return {
+				_: "inputUser",
+				user_id: this.id,
+				access_hash: this.accessHash,
+			}
+		case "channel":
+			return {
+				_: "inputChannel",
+				channel_id: this.id,
+				access_hash: this.accessHash,
+			}
+		default:
+			throw new Error(`Unrecognized type ${this.type}`)
 		}
 	}
 

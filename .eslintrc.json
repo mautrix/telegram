@@ -1,6 +1,5 @@
 {
 	"env": {
-		"browser": false,
 		"node": true,
 		"es6": true
 	},
@@ -36,7 +35,6 @@
 		"object-curly-newline": [
 			"error",
 			{
-				"minProperties": 5,
 				"consistent": true
 			}
 		],
@@ -65,17 +63,29 @@
 		],
 		"max-len": [
 			"warn",
-			80
+			120
 		],
-		"camelcase": [
+		"no-underscore-dangle": [
 			"error",
 			{
-				"properties": "always"
+				"allowAfterThis": true
+			}
+		],
+		"no-unused-vars": [
+			"error",
+			{
+				"vars": "all",
+				"args": "after-used",
+				"varsIgnorePattern": "_"
 			}
 		],
 		"space-before-function-paren": [
 			"error",
-			"never"
+			{
+				"anonymous": "never",
+				"named": "never",
+				"asyncArrow": "always"
+			}
 		],
 		"func-style": [
 			"warn",
@@ -92,11 +102,11 @@
 					"i",
 					"x",
 					"y",
-					"$"
+					"$",
+					"_"
 				]
 			}
 		],
-		"import/no-nodejs-modules": "error",
 		"import/order": [
 			"warn",
 			{
@@ -123,7 +133,8 @@
 			"warn",
 			{
 				"newIsCap": true,
-				"capIsNew": true
+				"capIsNew": true,
+				"capIsNewExceptions": ["MTProto"]
 			}
 		],
 		"no-empty": [
@@ -151,6 +162,12 @@
 		"no-prototype-builtins": "off",
 		"no-console": "off",
 		"class-methods-use-this": "off",
-		"prefer-destructuring": "off"
+		"prefer-destructuring": "off",
+		"camelcase": "off",
+		"spaced-comment": "off",
+		"no-bitwise": "off",
+		"no-case-declarations": "off",
+		"no-template-curly-in-string": "off",
+		"no-await-in-loop": "off"
 	}
 }

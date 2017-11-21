@@ -91,8 +91,8 @@ class TelegramUser {
 
 		const userInfo = await this.intent.getProfileInfo(this.mxid, "displayname")
 		if (userInfo.displayname !== this.getDisplayName()) {
-			this.intent.setDisplayName(
-				this.app.config.bridge.displayname_template.replace("${DISPLAYNAME}", this.getDisplayName()))
+			this.intent.setDisplayName(this.app.config.bridge.displayname_template
+				.replace("${DISPLAYNAME}", this.getDisplayName()))
 		}
 		if (updateAvatar && this.updateAvatar(telegramPOV, user)) {
 			changed = true
@@ -172,8 +172,8 @@ class TelegramUser {
 		const name = `${photo.volume_id}_${photo.local_id}.${file.extension}`
 
 		const uploaded = await this.uploadContent({
-			stream: new Buffer(file.bytes),
-			name: name,
+			stream: Buffer.from(file.bytes),
+			name,
 			type: file.mimetype,
 		})
 

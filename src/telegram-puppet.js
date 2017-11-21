@@ -13,9 +13,8 @@
 //
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
-const pkg = require("../package.json")
-const os = require("os")
 const telegram = require("telegram-mtproto")
+const pkg = require("../package.json")
 const TelegramPeer = require("./telegram-peer")
 
 const META_FROM_FILETYPE = {
@@ -37,7 +36,7 @@ const META_FROM_FILETYPE = {
  * TelegramPuppet represents a Telegram account being controlled from Matrix.
  */
 class TelegramPuppet {
-	constructor(app, {userID, matrixUser, data, api_hash, api_id, server_config, api_config}) {
+	constructor(app, { userID, matrixUser, data, api_hash, api_id, server_config, api_config }) {
 		this._client = undefined
 		this.userID = userID
 		this.matrixUser = matrixUser
@@ -54,20 +53,20 @@ class TelegramPuppet {
 			get: async (key) => {
 				let value = this.data[key]
 				// TODO test and (enable or remove)
-				/*if (typeof(value) === "string" && value.startsWith("b64:")) {
-					value = Array.from(new Buffer(value.substr("b64:".length), "base64"))
-				}*/
+				if (typeof value === "string" && value.startsWith("b64:")) {
+					value = Array.from(Buffer.from(value.substr("b64:".length), "base64"))
+				}
 				return value
 			},
 			set: async (key, value) => {
 				// TODO test and (enable or remove)
-				/*if (Array.isArray(value)) {
+				if (Array.isArray(value)) {
 					console.log("Non-buffer array")
-					value = `b64:${new Buffer(value).toString("base64")}`
+					value = `b64:${Buffer.from(value).toString("base64")}`
 				} else if (value instanceof Buffer) {
 					console.log("Buffer array")
 					value = `b64:${value.toString("base64")}`
-				}*/
+				}
 				console.warn("SET", key, "=", JSON.stringify(value))
 				if (this.data[key] === value) {
 					return
@@ -77,7 +76,7 @@ class TelegramPuppet {
 				await this.matrixUser.save()
 			},
 			remove: async (...keys) => {
-				console.warn("DEL", JSON.stringify(value))
+				console.warn("DEL", JSON.stringify(keys))
 				keys.forEach((key) => delete this.data[key])
 				await this.matrixUser.save()
 			},
@@ -91,8 +90,8 @@ class TelegramPuppet {
 		this.apiConfig = Object.assign({}, {
 			app_version: pkg.version,
 			lang_code: "en",
-			api_id: api_id,
-			initConnection : 0x69796de9,
+			api_id,
+			initConnection: 0x69796de9,
 			layer: 57,
 			invokeWithLayer: 0xda9b0d0d,
 		}, api_config)
@@ -120,7 +119,6 @@ class TelegramPuppet {
 
 	get client() {
 		if (!this._client) {
-			const self = this
 			this._client = telegram.MTProto({
 				api: this.apiConfig,
 				server: this.serverConfig,
@@ -212,7 +210,7 @@ class TelegramPuppet {
 		const result = await this.client("messages.sendMessage", {
 			peer: peer.toInputPeer(),
 			message,
-			random_id: ~~(Math.random() * (1<<30)),
+			random_id: ~~(Math.random() * (1 << 30)),
 		})
 		return result
 	}
@@ -220,8 +218,8 @@ class TelegramPuppet {
 	async sendMedia(peer, media) {
 		const result = await this.client("messages.sendMedia", {
 			peer: peer.toInputPeer(),
-			media: media,
-			random_id: ~~(Math.random() * (1<<30)),
+			media,
+			random_id: ~~(Math.random() * (1 << 30)),
 		})
 		// TODO use result? (maybe the ID)
 		return result
@@ -241,80 +239,83 @@ class TelegramPuppet {
 			return
 		}
 		let peer, portal
-		switch(update._) {
-			case "updateUserStatus":
-				const user = await this.app.getTelegramUser(update.user_id)
-				let status
-				switch(update.status._) {
-					case "userStatusOnline":
-						status = "online"
-						break
-					case "userStatusOffline":
-					default:
-						status = "offline"
-				}
-
-				await user.intent.getClient().setPresence({presence: status})
+		switch (update._) {
+		case "updateUserStatus":
+			const user = await this.app.getTelegramUser(update.user_id)
+			let status
+			switch (update.status._) {
+			case "userStatusOnline":
+				status = "online"
 				break
-			case "updateUserTyping":
-				peer = new TelegramPeer("user", update.user_id, { receiverID: this.userID })
-			case "updateChatUserTyping":
-				peer = peer || new TelegramPeer("chat", update.chat_id)
-				portal = await this.app.getPortalByPeer(peer)
-				if (portal.isMatrixRoomCreated()) {
-					const sender = await this.app.getTelegramUser(update.user_id)
-					// The Intent API currently doesn't allow you to set the
-					// typing timeout. Once it does, we should set it to ~5.5s
-					// as Telegram resends typing notifications every 5 seconds.
-					await sender.intent.sendTyping(portal.roomID, true/*, 5500*/)
-				}
-				break
-			case "updateShortMessage":
-				peer = new TelegramPeer("user", update.user_id, { receiverID: this.userID })
-			case "updateShortChatMessage":
-				peer = peer || new TelegramPeer("chat", update.chat_id)
-				await this.handleMessage({
-					from: update.user_id,
-					to: peer,
-					text: update.message,
-				})
-				break
-			case "updateNewChannelMessage":
-			case "updateNewMessage":
-				// TODO handle other content types
-				update = update.message // Message defined at message#90dddc11 in layer 71
-				await this.handleMessage({
-					from: update.from_id,
-					to: TelegramPeer.fromTelegramData(update.to_id, update.from_id, this.userID),
-					text: update.message,
-				})
-				break
+			case "userStatusOffline":
 			default:
-				console.log(`Update of type ${update._} received:\n${JSON.stringify(update, "", "  ")}`)
+				status = "offline"
+			}
+
+			await user.intent.getClient()
+				.setPresence({ presence: status })
+			break
+		case "updateUserTyping":
+			peer = new TelegramPeer("user", update.user_id, { receiverID: this.userID })
+			/* falls through */
+		case "updateChatUserTyping":
+			peer = peer || new TelegramPeer("chat", update.chat_id)
+			portal = await this.app.getPortalByPeer(peer)
+			if (portal.isMatrixRoomCreated()) {
+				const sender = await this.app.getTelegramUser(update.user_id)
+				// The Intent API currently doesn't allow you to set the
+				// typing timeout. Once it does, we should set it to ~5.5s
+				// as Telegram resends typing notifications every 5 seconds.
+				await sender.intent.sendTyping(portal.roomID, true/*, 5500*/)
+			}
+			break
+		case "updateShortMessage":
+			peer = new TelegramPeer("user", update.user_id, { receiverID: this.userID })
+			/* falls through */
+		case "updateShortChatMessage":
+			peer = peer || new TelegramPeer("chat", update.chat_id)
+			await this.handleMessage({
+				from: update.user_id,
+				to: peer,
+				text: update.message,
+			})
+			break
+		case "updateNewChannelMessage":
+		case "updateNewMessage":
+			// TODO handle other content types
+			update = update.message // Message defined at message#90dddc11 in layer 71
+			await this.handleMessage({
+				from: update.from_id,
+				to: TelegramPeer.fromTelegramData(update.to_id, update.from_id, this.userID),
+				text: update.message,
+			})
+			break
+		default:
+			console.log(`Update of type ${update._} received:\n${JSON.stringify(update, "", "  ")}`)
 		}
 	}
 
 	handleUpdate(data) {
 		try {
 			switch (data._) {
-				case "updateShort":
-					this.onUpdate(data.update)
-					break
-				case "updates":
-					for (const update of data.updates) {
-						this.onUpdate(update)
-					}
-					break
-				case "updateShortMessage":
-				case "updateShortChatMessage":
-					this.onUpdate(data)
-					break
-				default:
-					console.log("Unrecognized update type:", data._)
+			case "updateShort":
+				this.onUpdate(data.update)
+				break
+			case "updates":
+				for (const update of data.updates) {
+					this.onUpdate(update)
+				}
+				break
+			case "updateShortMessage":
+			case "updateShortChatMessage":
+				this.onUpdate(data)
+				break
+			default:
+				console.log("Unrecognized update type:", data._)
 			}
 		} catch (err) {
 			console.error("Error handling update:", err)
-			console.log(e.stack)
+			console.log(err.stack)
 		}
 	}
 
@@ -355,8 +356,9 @@ class TelegramPuppet {
 		}
 		setInterval(async () => {
 			try {
-				const state = this.client("updates.getState", {})
 				// TODO use state?
+				/*const state = */
+				this.client("updates.getState", {})
 			} catch (err) {
 				console.error("Error updating state:", err)
 			}
@@ -364,12 +366,12 @@ class TelegramPuppet {
 	}
 
 	async getFile(location) {
-		location = Object.assign({}, location, {_: "inputFileLocation"})
+		location = Object.assign({}, location, { _: "inputFileLocation" })
 		delete location.dc_id
 		const file = await this.client("upload.getFile", {
 			location,
 			offset: 0,
-			limit: 100*1024*1024,
+			limit: 100 * 1024 * 1024,
 		})
 		const meta = META_FROM_FILETYPE[file.type._]
 		if (meta) {

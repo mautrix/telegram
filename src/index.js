@@ -14,7 +14,7 @@
 //
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
-const {AppServiceRegistration} = require("matrix-appservice-bridge")
+const { AppServiceRegistration } = require("matrix-appservice-bridge")
 const commander = require("commander")
 const YAML = require("yamljs")
 const fs = require("fs")
@@ -41,11 +41,11 @@ if (commander.generateRegistration) {
 		namespaces: {
 			users: [{
 				exclusive: true,
-				regex: `@${config.bridge.username_template.replace("${ID}", ".+")}:${config.homeserver.domain}`
+				regex: `@${config.bridge.username_template.replace("${ID}", ".+")}:${config.homeserver.domain}`,
 			}],
 			aliases: [{
 				exclusive: true,
-				regex: `#${config.bridge.alias_template.replace("${NAME}", ".+")}:${config.homeserver.domain}`
+				regex: `#${config.bridge.alias_template.replace("${NAME}", ".+")}:${config.homeserver.domain}`,
 			}],
 			rooms: [],
 		},

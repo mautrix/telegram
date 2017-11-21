@@ -79,8 +79,8 @@ class Portal {
 
 		const uploaded = await this.app.botIntent.getClient()
 			.uploadContent({
-				stream: new Buffer(file.bytes),
-				name: name,
+				stream: Buffer.from(file.bytes),
+				name,
 				type: file.mimetype,
 			}, { rawResponse: false })
 
@@ -106,13 +106,13 @@ class Portal {
 
 	async handleMatrixEvent(sender, evt) {
 		switch (evt.content.msgtype) {
-			case "m.notice":
-			case "m.text":
-				await this.loadAccessHash(sender.telegramPuppet)
-				sender.telegramPuppet.sendMessage(this.peer, evt.content.body)
-				break
-			default:
-				console.log("Unhandled event:", evt)
+		case "m.notice":
+		case "m.text":
+			await this.loadAccessHash(sender.telegramPuppet)
+			sender.telegramPuppet.sendMessage(this.peer, evt.content.body)
+			break
+		default:
+			console.log("Unhandled event:", evt)
 		}
 	}
 
@@ -120,7 +120,7 @@ class Portal {
 		return !!this.roomID
 	}
 
-	async createMatrixRoom(telegramPOV, {invite = []} = {}) {
+	async createMatrixRoom(telegramPOV, { invite = [] } = {}) {
 		if (this.roomID) {
 			return {
 				created: false,

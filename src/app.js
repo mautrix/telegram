@@ -13,9 +13,7 @@
 //
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
-const {Bridge} = require("matrix-appservice-bridge")
-const crypto = require("crypto")
-const YAML = require("yamljs")
+const { Bridge } = require("matrix-appservice-bridge")
 const commands = require("./commands")
 const MatrixUser = require("./matrix-user")
 const TelegramUser = require("./telegram-user")
@@ -54,9 +52,10 @@ class MautrixTelegram {
 	async run() {
 		console.log("Appservice listening on port %s", this.config.appservice.port)
 		await this.bridge.run(this.config.appservice.port, {})
-		const userEntries = await this.bridge.getUserStore().select({
-			type: "matrix",
-		})
+		const userEntries = await this.bridge.getUserStore()
+			.select({
+				type: "matrix",
+			})
 		for (const entry of userEntries) {
 			const user = MatrixUser.fromEntry(this, entry)
 			this.matrixUsersByID.set(entry.id, user)
@@ -89,7 +88,8 @@ class MautrixTelegram {
 		if (peer.type === "user") {
 			query.receiverID = peer.receiverID
 		}
-		const entries = await this.bridge.getRoomStore().select(query)
+		const entries = await this.bridge.getRoomStore()
+			.select(query)
 
 		// Handle possible db query race conditions
 		portal = this.portalsByPeerID.get(peer.id)
@@ -123,10 +123,11 @@ class MautrixTelegram {
 			}
 		}
 
-		const entries = await this.bridge.getRoomStore().select({
-			type: "portal",
-			roomID: id,
-		})
+		const entries = await this.bridge.getRoomStore()
+			.select({
+				type: "portal",
+				roomID: id,
+			})
 
 		// Handle possible db query race conditions
 		portal = this.portalsByRoomID.get(id)
@@ -151,10 +152,11 @@ class MautrixTelegram {
 			return user
 		}
 
-		const entries = await this.bridge.getUserStore().select({
-			type: "remote",
-			id,
-		})
+		const entries = await this.bridge.getUserStore()
+			.select({
+				type: "remote",
+				id,
+			})
 
 		// Handle possible db query race conditions
 		if (this.telegramUsersByID.has(id)) {
@@ -176,10 +178,11 @@ class MautrixTelegram {
 			return user
 		}
 
-		const entries = this.bridge.getUserStore().select({
-			type: "matrix",
-			id,
-		})
+		const entries = this.bridge.getUserStore()
+			.select({
+				type: "matrix",
+				id,
+			})
 
 		// Handle possible db query race conditions
 		if (this.matrixUsersByID.has(id)) {
@@ -197,30 +200,33 @@ class MautrixTelegram {
 
 	putUser(user) {
 		const entry = user.toEntry()
-		return this.bridge.getUserStore().upsert({
-			type: entry.type,
-			id: entry.id,
-		}, entry)
+		return this.bridge.getUserStore()
+			.upsert({
+				type: entry.type,
+				id: entry.id,
+			}, entry)
 	}
 
 	putRoom(room) {
 		const entry = room.toEntry()
-		return this.bridge.getRoomStore().upsert({
-			type: entry.type,
-			id: entry.id,
-		}, entry)
+		return this.bridge.getRoomStore()
+			.upsert({
+				type: entry.type,
+				id: entry.id,
+			}, entry)
 	}
 
 	async handleMatrixEvent(evt) {
-		const asBotID = this.bridge.getBot().getUserId()
+		const asBotID = this.bridge.getBot()
+			.getUserId()
 		if (evt.type === "m.room.member" && evt.state_key === asBotID) {
 			if (evt.content.membership === "invite") {
 				// Accept all invites
 				this.botIntent.join(evt.room_id)
 					.catch(err => {
 						console.warn(`Failed to join room ${evt.room_id}:`, err)
-						if (e instanceof Error) {
-							console.warn(e.stack)
+						if (err instanceof Error) {
+							console.warn(err.stack)
 						}
 					})
 			}
@@ -229,25 +235,27 @@ class MautrixTelegram {
 
 		if (evt.sender === asBotID || evt.type !== "m.room.message" || !evt.content) {
 			// Ignore own messages and non-message events.
-			return;
+			return
 		}
 
 		const user = await this.getMatrixUser(evt.sender)
 
 		const cmdprefix = this.config.bridge.commands.prefix
-		if (evt.content.body.startsWith(cmdprefix + " ")) {
+		if (evt.content.body.startsWith(`${cmdprefix} `)) {
 			if (!user.whitelisted) {
 				this.botIntent.sendText(evt.room_id, "You are not authorized to use this bridge.")
 				return
 			}
 
 			const prefixLength = cmdprefix.length + 1
-			const args = evt.content.body.substr(prefixLength).split(" ")
+			const args = evt.content.body.substr(prefixLength)
+				.split(" ")
 			const command = args.shift()
-			commands.run(user, command, args, reply =>
-					this.botIntent.sendText(
-						evt.room_id,
-						reply.replace("$cmdprefix", cmdprefix)),
+			commands.run(
+				user, command, args,
+				reply => this.botIntent.sendText(
+					evt.room_id,
+					reply.replace("$cmdprefix", cmdprefix)),
 				this)
 			return
 		}
@@ -260,7 +268,6 @@ class MautrixTelegram {
 		const portal = await this.getPortalByRoomID(evt.room_id)
 		if (portal) {
 			portal.handleMatrixEvent(user, evt)
-			return
 		}
 	}
 
@@ -270,7 +277,7 @@ class MautrixTelegram {
 		}
 
 		userID = userID.toLowerCase()
-		const userIDCapture = /\@.+\:(.+)/.exec(userID)
+		const userIDCapture = /@.+:(.+)/.exec(userID)
 		const homeserver = userIDCapture && userIDCapture.length > 1 ? userIDCapture[1] : undefined
 		for (let whitelisted of this.config.bridge.whitelist) {
 			whitelisted = whitelisted.toLowerCase()
@@ -280,25 +287,6 @@ class MautrixTelegram {
 		}
 		return false
 	}
-
-	/*encrypt(value) {
-		var cipher = crypto.createCipher("aes-256-gcm", this.config.bridge.auth_key_password);
-		var ret = cipher.update(Buffer.from(value), "hex", "base64");
-		ret += cipher.final("base64");
-
-		return [ret, cipher.getAuthTag().toString("base64")];
-	}
-
-	decrypt(value) {
-		if(!value) return value;
-
-		var decipher = crypto.createDecipher("aes-256-gcm", this.config.bridge.auth_key_password);
-		decipher.setAuthTag(new Buffer(value[1], "base64"));
-		var ret = decipher.update(value[0], "base64", "hex");
-		ret += decipher.final("hex");
-
-		return ret;
-	};*/
 }
 
 module.exports = MautrixTelegram
