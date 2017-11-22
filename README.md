@@ -3,6 +3,11 @@
 
 A Matrix-Telegram puppeting bridge.
 
+## Discussion
+Matrix room: [`#telegram:maunium.net`](https://matrix.to/#/#telegram:maunium.net)
+
+A Telegram chat will be created once the bridge is stable enough.
+
 ## Usage
 ### Setup
 1. Create a copy of `example-config.yaml` and fill out the fields.
