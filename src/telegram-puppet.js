@@ -61,11 +61,7 @@ class TelegramPuppet {
 			set: async (key, value) => {
 				// TODO test and (enable or remove)
 				if (Array.isArray(value)) {
-					console.log("Non-buffer array")
 					value = `b64:${Buffer.from(value).toString("base64")}`
-				} else if (value instanceof Buffer) {
-					console.log("Buffer array")
-					value = `b64:${value.toString("base64")}`
 				}
 				console.warn("SET", key, "=", JSON.stringify(value))
 				if (this.data[key] === value) {
