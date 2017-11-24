@@ -101,7 +101,9 @@ class Portal {
 
 	async handleTelegramEvent(sender, evt) {
 		// TODO handle other content types
-		sender.sendText(this.roomID, evt.text)
+		if (evt.text.length > 0) {
+			sender.sendText(this.roomID, evt.text)
+		}
 	}
 
 	async handleMatrixEvent(sender, evt) {
