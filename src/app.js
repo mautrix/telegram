@@ -344,26 +344,25 @@ class MautrixTelegram {
 			const args = evt.content.body.substr(prefixLength)
 				.split(" ")
 			const command = args.shift()
-			commands.run(user, command, args,
-				(reply, { allowHTML = false, markdown = true } = {}) => {
-					reply = reply.replace("$cmdprefix", cmdprefix)
-					if (!markdown && !allowHTML) {
-						reply = escapeHTML(reply)
-					}
-					if (markdown) {
-						reply = marked(reply, {
-							sanitize: allowHTML,
-						})
-					}
-					this.botIntent.sendMessage(
+			const replyFunc = (reply, { allowHTML = false, markdown = true } = {}) => {
+				reply = reply.replace("$cmdprefix", cmdprefix)
+				if (!markdown && !allowHTML) {
+					reply = escapeHTML(reply)
+				}
+				if (markdown) {
+					reply = marked(reply, {
+						sanitize: allowHTML,
+					})
+				}
+				this.botIntent.sendMessage(
 						evt.room_id, {
 							body: sanitizeHTML(reply),
 							formatted_body: reply,
 							msgtype: "m.notice",
 							format: "org.matrix.custom.html",
 						})
-				},
-				this)
+			}
+			commands.run(user, command, args, replyFunc, this)
 			return
 		}
 

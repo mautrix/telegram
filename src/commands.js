@@ -174,7 +174,7 @@ commands.search = async (sender, args, reply, app) => {
 		reply("Usage: $cmdprefix search [-r|--remote] <query>")
 		return
 	}
-	let msg = []
+	const msg = []
 	if (args[0] !== "-r" && args[0] !== "--remote") {
 		const contactResults = await sender.searchContacts(args.join(" "))
 		if (contactResults.length > 0) {

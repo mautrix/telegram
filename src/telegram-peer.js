@@ -90,8 +90,7 @@ class TelegramPeer {
 	}
 
 	async getInfo(telegramPOV) {
-		let info,
-			users
+		let info, users
 		switch (this.type) {
 		case "user":
 			info = await telegramPOV.client("users.getFullUser", {
