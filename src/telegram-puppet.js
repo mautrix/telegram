@@ -52,14 +52,12 @@ class TelegramPuppet {
 		this.puppetStorage = {
 			get: async (key) => {
 				let value = this.data[key]
-				// TODO test and (enable or remove)
 				if (typeof value === "string" && value.startsWith("b64:")) {
 					value = Array.from(Buffer.from(value.substr("b64:".length), "base64"))
 				}
 				return value
 			},
 			set: async (key, value) => {
-				// TODO test and (enable or remove)
 				if (Array.isArray(value)) {
 					value = `b64:${Buffer.from(value).toString("base64")}`
 				}
