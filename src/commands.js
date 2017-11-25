@@ -60,14 +60,22 @@ commands.help = (sender, args, reply, app, evt) => {
 **login** &lt;_phone_&gt; - Request an authentication code.<br/>
 **logout** - Log out from Telegram. Currently broken.
 
+**setManagement** - Mark the room as a management room.
+**unsetManagement** - Undo management room marking.
+
 **api** &lt;_method_&gt; &lt;_args_&gt; - Call a Telegram API method. Args is always a JSON object. Disabled by default.
 `
 	reply(replyMsg, { allowHTML: true })
 }
 
-commands.setManagement = async (sender, _, reply, app, evt) => {
+commands.setManagement = (sender, _, reply, app, evt) => {
 	app.managementRooms.push(evt.room_id)
 	reply("Room marked as management room. You can now run commands without the `$cmdprefix` prefix.")
+}
+
+commands.unsetManagement = (sender, _, reply, app, evt) => {
+	app.managementRooms.splice(app.managementRooms.indexOf(evt.room_id), 1)
+	reply("Room unmarked as management room. You must now include the `$cmdprefix` prefix when running commands.")
 }
 
 
