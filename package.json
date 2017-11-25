@@ -25,9 +25,11 @@
 	"devDependencies": {
 		"eslint": "4.11.x",
 		"eslint-config-airbnb-base": "12.1.x",
-		"eslint-plugin-import": "2.8.x"
+		"eslint-plugin-import": "2.8.x",
+		"jsdoc": "3.5.x"
 	},
 	"scripts": {
-		"fix-auth-renewal": "./scripts/fix-auth-renewal"
+		"fix-auth-renewal": "./scripts/fix-auth-renewal",
+		"gen-jsdoc": "./scripts/gen-jsdoc"
 	}
 }

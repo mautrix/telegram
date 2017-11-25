@@ -17,6 +17,22 @@ const makePasswordHash = require("telegram-mtproto").plugins.makePasswordHash
 
 const commands = {}
 
+/**
+ * Module containing all management commands.
+ *
+ * @module commands
+ */
+
+/**
+ * Run management command.
+ *
+ * @param {string}          sender  The MXID of the user who sent the command.
+ * @param {string}          command The command itself.
+ * @param {Array<string>}   args    A list of arguments.
+ * @param {function}        reply   A function that is called to reply to the command.
+ * @param {MautrixTelegram} app     The MautrixTelegram instance.
+ * @param {MatrixEvent}     evt     The event that caused this call.
+ */
 function run(sender, command, args, reply, app, evt) {
 	const commandFunc = this.commands[command]
 	if (!commandFunc) {

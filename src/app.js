@@ -34,13 +34,42 @@ class MautrixTelegram {
 	constructor(config) {
 		this.config = config
 
+		/**
+		 * MXID -> {@link MatrixUser} cache.
+		 * @private
+		 * @type {Map<string, MatrixUser>}
+		 */
 		this.matrixUsersByID = new Map()
+		/**
+		 * Telegram ID -> {@link TelegramUser} cache.
+		 * @private
+		 * @type {Map<number, TelegramUser>}
+		 */
 		this.telegramUsersByID = new Map()
+		/**
+		 * Telegram peer ID -> {@link Portal} cache.
+		 * @private
+		 * @type {Map<number, Portal>}
+		 */
 		this.portalsByPeerID = new Map()
+		/**
+		 * Matrix room ID -> {@link Portal} cache.
+		 * @private
+		 * @type {Map<string, Portal>}
+		 */
 		this.portalsByRoomID = new Map()
+		/**
+		 * List of management rooms.
+		 * @type {Array<string>}
+		 */
 		this.managementRooms = []
 
 		const self = this
+		/**
+		 * The matrix-appservice-bridge Bridge instance.
+		 * @private
+		 * @type {Bridge}
+		 */
 		this.bridge = new Bridge({
 			homeserverUrl: config.homeserver.address,
 			domain: config.homeserver.domain,
@@ -95,17 +124,29 @@ class MautrixTelegram {
 	 * This does not care if a {@link TelegramUser} object for the user ID exists.
 	 * It simply returns an intent for a Matrix puppet user with the correct MXID.
 	 *
-	 * @param {number} id The ID of the Telegram user.
-	 * @returns {Intent} The Matrix puppet intent for the given Telegram user.
+	 * @param   {number} id The ID of the Telegram user.
+	 * @returns {Intent}    The Matrix puppet intent for the given Telegram user.
 	 */
 	getIntentForTelegramUser(id) {
 		return this.bridge.getIntentFromLocalpart(this.getUsernameForTelegramUser(id))
 	}
 
+	/**
+	 * Get the Matrix username localpart for the Telegram user with the given ID.
+	 *
+	 * @param   {number} id The ID of the Telegram user.
+	 * @returns {string}    The Matrix username localpart for the given Telegram user.
+	 */
 	getUsernameForTelegramUser(id) {
 		return this.config.bridge.username_template.replace("${ID}", id)
 	}
 
+	/**
+	 * Get the matrix.to link for the Matrix puppet of the Telegram user with the given ID.
+	 *
+	 * @param   {number} id The ID of the Telegram user.
+	 * @returns {string}    A matrix.to link that points to the Matrix puppet of the given user.
+	 */
 	getMatrixToLinkForTelegramUser(id) {
 		return `https://matrix.to/#/@${this.getUsernameForTelegramUser(id)}:${this.config.homeserver.domain}`
 	}
@@ -116,8 +157,8 @@ class MautrixTelegram {
 	 * This will either get the room from the room cache or the bridge room database.
 	 * If the room is not found, a new {@link Portal} object is created.
 	 *
-	 * @param {TelegramPeer} peer The TelegramPeer object whose portal to get.
-	 * @returns {Promise<Portal>} The Portal object.
+	 * @param   {TelegramPeer} peer The TelegramPeer object whose portal to get.
+	 * @returns {Portal}            The Portal object.
 	 */
 	async getPortalByPeer(peer, { createIfNotFound = true } = {}) {
 		let portal = this.portalsByPeerID.get(peer.id)
@@ -160,10 +201,10 @@ class MautrixTelegram {
 	 *
 	 * This will either get the room from the room cache or the bridge room database.
 	 * If the room is not found, this function WILL NOT create a new room,
-	 * but rather just return {@linkplain undefined}.
+	 * but rather just return {@code undefined}.
 	 *
-	 * @param {string} id The Matrix room ID of the portal to get.
-	 * @returns {Promise<Portal>} The Portal object.
+	 * @param   {string} id The Matrix room ID of the portal to get.
+	 * @returns {Portal}    The Portal object.
 	 */
 	async getPortalByRoomID(id) {
 		let portal = this.portalsByRoomID.get(id)
@@ -209,8 +250,8 @@ class MautrixTelegram {
 	 * This will either get the user from the user cache or the bridge user database.
 	 * If the user is not found, a new {@link TelegramUser} instance is created.
 	 *
-	 * @param {number} id The internal Telegram ID of the user to get.
-	 * @returns {Promise<TelegramUser>} The TelegramUser object.
+	 * @param   {number} id    The internal Telegram ID of the user to get.
+	 * @returns {TelegramUser} The TelegramUser object.
 	 */
 	async getTelegramUser(id, { createIfNotFound = true } = {}) {
 		let user = this.telegramUsersByID.get(id)
@@ -246,8 +287,8 @@ class MautrixTelegram {
 	 * This will either get the user from the user cache or the bridge user database.
 	 * If the user is not found, a new {@link MatrixUser} instance is created.
 	 *
-	 * @param {string} id The MXID of the Matrix user to get.
-	 * @returns {Promise<MatrixUser>} The MatrixUser object.
+	 * @param   {string} id  The MXID of the Matrix user to get.
+	 * @returns {MatrixUser} The MatrixUser object.
 	 */
 	async getMatrixUser(id, { createIfNotFound = true } = {}) {
 		let user = this.matrixUsersByID.get(id)
@@ -305,6 +346,11 @@ class MautrixTelegram {
 			}, entry)
 	}
 
+	/**
+	 * Get the members in the given room.
+	 * @param   {string} roomID The ID of the room to search.
+	 * @returns {Array}         The list of MXIDs who are in the room.
+	 */
 	async getRoomMembers(roomID) {
 		const roomState = await this.botIntent.roomState(roomID)
 		const members = []
@@ -319,7 +365,7 @@ class MautrixTelegram {
 	/**
 	 * Handle a single received Matrix event.
 	 *
-	 * @param evt The Matrix event that occurred.
+	 * @param {MatrixEvent} evt The Matrix event that occurred.
 	 */
 	async handleMatrixEvent(evt) {
 		const user = await this.getMatrixUser(evt.sender)

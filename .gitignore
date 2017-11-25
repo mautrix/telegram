@@ -1,5 +1,6 @@
 node_modules/
 .idea/
+jsdoc/
 config.yaml
 registration.yaml
 *.db

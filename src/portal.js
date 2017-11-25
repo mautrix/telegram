@@ -15,6 +15,9 @@
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 const TelegramPeer = require("./telegram-peer")
 
+/**
+ * Portal represents a portal from a Matrix room to a Telegram chat.
+ */
 class Portal {
 	constructor(app, roomID, peer) {
 		this.app = app

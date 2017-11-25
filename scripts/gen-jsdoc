@@ -1,0 +1,7 @@
+#!/bin/bash
+jsdoc src/ \
+	--private \
+	--recurse \
+	--package package.json \
+	--readme README.md \
+	--destination jsdoc

@@ -14,6 +14,11 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+/**
+ * TelegramPeer represents some Telegram entity that can be messaged.
+ *
+ * The possible peer types are chat (groups), channel (includes supergroups) and user.
+ */
 class TelegramPeer {
 	constructor(type, id, { accessHash, receiverID, username, title } = {}) {
 		this.type = type
@@ -24,6 +29,14 @@ class TelegramPeer {
 		this.title = title
 	}
 
+	/**
+	 * Create a TelegramPeer based on peer data received from Telegram.
+	 *
+	 * @param {Object} peer       The data received from Telegram.
+	 * @param {number} sender     The user ID of the other person, in case the peer is an user referring to the receiver.
+	 * @param {number} receiverID The user ID of the receiver (in case peer type is {@code user})
+	 * @returns {TelegramPeer}
+	 */
 	static fromTelegramData(peer, sender, receiverID) {
 		switch (peer._) {
 		case "peerChat":
@@ -48,9 +61,9 @@ class TelegramPeer {
 	 * @param {MautrixTelegram} app         The instance of {@link MautrixTelegram} to use.
 	 * @param {TelegramPuppet}  telegramPOV The puppeted Telegram user for whom the access hash is needed.
 	 * @param {Portal}          [portal]    Optional channel {@link Portal} instance to avoid calling {@link app#getPortalByPeer(peer)}.
-	 *                                      Only used if {@link #type} is {@linkplain user}.
+	 *                                      Only used if {@link #type} is {@code user}.
 	 * @param {TelegramUser}    [user]      Optional {@link TelegramUser} instance to avoid calling {@link app#getTelegramUser(id)}.
-	 *                                      Only used if {@link #type} is {@linkplain channel}.
+	 *                                      Only used if {@link #type} is {@code channel}.
 	 * @returns {Promise<boolean>}          Whether or not the access hash was found and loaded.
 	 */
 	async loadAccessHash(app, telegramPOV, { portal, user } = {}) {
@@ -74,6 +87,12 @@ class TelegramPeer {
 		return false
 	}
 
+	/**
+	 * Update info based on a Telegram dialog.
+	 *
+	 * @param             dialog The dialog data sent by Telegram.
+	 * @returns {boolean}        Whether or not something was changed.
+	 */
 	async updateInfo(dialog) {
 		let changed = false
 		if (this.type === "channel" || this.type === "user") {
@@ -89,6 +108,13 @@ class TelegramPeer {
 		return changed
 	}
 
+	/**
+	 * Get info about this peer from the Telegram servers.
+	 *
+	 * @param   {TelegramPuppet} telegramPOV           The Telegram user whose point of view the data should be fetched from.
+	 * @returns {{info: Object, users: Array<Object>}} The info sent by Telegram. For user-type peers, the users array
+	 *                                                 is unnecessary.
+	 */
 	async getInfo(telegramPOV) {
 		let info, users
 		switch (this.type) {
@@ -128,6 +154,11 @@ class TelegramPeer {
 		}
 	}
 
+	/**
+	 * Create a Telegram InputPeer object based on the data in this TelegramPeer.
+	 *
+	 * @returns {Object} The Telegram InputPeer object.
+	 */
 	toInputPeer() {
 		switch (this.type) {
 		case "chat":
@@ -152,8 +183,15 @@ class TelegramPeer {
 		}
 	}
 
+	/**
+	 * Create a Telegram input* object (i.e. inputUser or inputChannel) based on the data in this TelegramPeer.
+	 *
+	 * @returns {Object} The Telegram input* object.
+	 */
 	toInputObject() {
 		switch (this.type) {
+		case "chat":
+			throw new Error(`Unsupported type ${this.type}`)
 		case "user":
 			return {
 				_: "inputUser",
@@ -171,10 +209,21 @@ class TelegramPeer {
 		}
 	}
 
+	/**
+	 * Load the data in a database subentry to a new TelegramPeer object.
+	 *
+	 * @param   {Object}       entry The database subentry.
+	 * @returns {TelegramPeer}       The created TelegramPeer object.
+	 */
 	static fromSubentry(entry) {
 		return new TelegramPeer(entry.type, entry.id, entry)
 	}
 
+	/**
+	 * Convert this TelegramPeer into a subentry that can be stored in the database.
+	 *
+	 * @returns {Object} The database-storable subentry.
+	 */
 	toSubentry() {
 		return {
 			type: this.type,
@@ -185,6 +234,7 @@ class TelegramPeer {
 		}
 	}
 
+	// TODO determine if this is useless and remove if it is.
 	get key() {
 		return `${this.type} ${this.id}`
 	}

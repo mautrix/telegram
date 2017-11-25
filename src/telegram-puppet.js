@@ -17,6 +17,9 @@ const telegram = require("telegram-mtproto")
 const pkg = require("../package.json")
 const TelegramPeer = require("./telegram-peer")
 
+/*
+ * Mapping from Telegram file types to MIME types and extensions.
+ */
 const META_FROM_FILETYPE = {
 	"storage.fileGif": {
 		mimetype: "image/gif",
