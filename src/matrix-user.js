@@ -16,7 +16,7 @@
 const md5 = require("md5")
 const TelegramPuppet = require("./telegram-puppet")
 const TelegramPeer = require("./telegram-peer")
-const strSim = require("string-similarity");
+const strSim = require("string-similarity")
 
 /**
  * MatrixUser represents a Matrix user who probably wants to control their
@@ -139,10 +139,12 @@ class MatrixUser {
 		return changed
 	}
 
-	async searchContacts(query, {maxResults=5, minSimilarity = 0.45} = {}) {
+	async searchContacts(query, { maxResults = 5, minSimilarity = 0.45 } = {}) {
 		const results = []
 		for (const contact of this.contacts) {
-			let displaynameSimilarity = 0, usernameSimilarity = 0, numberSimilarity = 0
+			let displaynameSimilarity = 0
+			let usernameSimilarity = 0
+			let numberSimilarity = 0
 			if (contact.firstName || contact.lastName) {
 				displaynameSimilarity = strSim.compareTwoStrings(query, contact.getFirstAndLastName())
 			}
@@ -153,7 +155,6 @@ class MatrixUser {
 				numberSimilarity = strSim.compareTwoStrings(query, contact.phoneNumber)
 			}
 			const similarity = Math.max(displaynameSimilarity, usernameSimilarity, numberSimilarity)
-			console.log(contact.getDisplayName(), similarity, displaynameSimilarity, usernameSimilarity, numberSimilarity)
 			if (similarity >= minSimilarity) {
 				results.push({
 					similarity,
@@ -167,7 +168,7 @@ class MatrixUser {
 			.slice(0, maxResults)
 	}
 
-	async searchTelegram(query, {maxResults=5} = {}) {
+	async searchTelegram(query, { maxResults = 5 } = {}) {
 		const results = await this.telegramPuppet.client("contacts.search", {
 			q: query,
 			limit: maxResults,

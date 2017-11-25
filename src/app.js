@@ -98,8 +98,15 @@ class MautrixTelegram {
 	 * @returns {Intent} The Matrix puppet intent for the given Telegram user.
 	 */
 	getIntentForTelegramUser(id) {
-		return this.bridge.getIntentFromLocalpart(
-			this.config.bridge.username_template.replace("${ID}", id))
+		return this.bridge.getIntentFromLocalpart(this.getUsernameForTelegramUser(id))
+	}
+
+	getUsernameForTelegramUser(id) {
+		return this.config.bridge.username_template.replace("${ID}", id)
+	}
+
+	getMatrixToLinkForTelegramUser(id) {
+		return `https://matrix.to/#/@${this.getUsernameForTelegramUser(id)}:${this.config.homeserver.domain}`
 	}
 
 	/**
@@ -340,11 +347,13 @@ class MautrixTelegram {
 			commands.run(user, command, args,
 				(reply, { allowHTML = false, markdown = true } = {}) => {
 					reply = reply.replace("$cmdprefix", cmdprefix)
-					if (!allowHTML) {
+					if (!markdown && !allowHTML) {
 						reply = escapeHTML(reply)
 					}
 					if (markdown) {
-						reply = marked(reply)
+						reply = marked(reply, {
+							sanitize: allowHTML,
+						})
 					}
 					this.botIntent.sendMessage(
 						evt.room_id, {

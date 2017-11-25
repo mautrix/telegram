@@ -14,7 +14,6 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 const makePasswordHash = require("telegram-mtproto").plugins.makePasswordHash
-const escapeHTML = require("escape-html")
 
 const commands = {}
 
@@ -30,7 +29,7 @@ function run(sender, command, args, reply, app) {
 			args.unshift(command)
 			return sender.commandStatus.next(sender, args, reply, app)
 		}
-		reply("Unknown command. Try \"$cmdprefix help\" for help.")
+		reply("Unknown command. Try `$cmdprefix help` for help.")
 		return undefined
 	}
 	try {
@@ -38,10 +37,11 @@ function run(sender, command, args, reply, app) {
 	} catch (err) {
 		reply(`Error running command: ${err}.`)
 		if (err instanceof Error) {
-			reply("Check bridge console for stack trace")
+			reply(["```", err.stack, "```"].join(""))
 			console.error(err.stack)
 		}
 	}
+	return undefined
 }
 
 commands.cancel = () => "Nothing to cancel."
@@ -56,7 +56,7 @@ commands.help = (sender, args, reply) => {
 **logout** - Log out from Telegram. Currently broken.
 
 **api** <_method_> <_args_> - Call a Telegram API method. Args is always a JSON object. Disabled by default.
-`, {allowHTML: true})
+`, { allowHTML: true })
 }
 
 
@@ -69,7 +69,7 @@ commands.help = (sender, args, reply) => {
  */
 commands.enterPassword = async (sender, args, reply) => {
 	if (args.length === 0) {
-		reply("Usage: $cmdprefix <password>")
+		reply("**Usage:** `$cmdprefix <password>`")
 		return
 	}
 
@@ -79,8 +79,11 @@ commands.enterPassword = async (sender, args, reply) => {
 		reply(`Logged in successfully as @${sender.telegramPuppet.getDisplayName()}.`)
 		sender.commandStatus = undefined
 	} catch (err) {
-		reply(`Login failed: ${err}`)
-		console.log(err)
+		reply(`**Login failed:** ${err}`)
+		if (err instanceof Error) {
+			reply(["```", err.stack, "```"].join(""))
+			console.error(err.stack)
+		}
 	}
 }
 
@@ -89,7 +92,7 @@ commands.enterPassword = async (sender, args, reply) => {
  */
 commands.enterCode = async (sender, args, reply) => {
 	if (args.length === 0) {
-		reply("Usage: $cmdprefix <authentication code>")
+		reply("**Usage:** `$cmdprefix <authentication code>`")
 		return
 	}
 
@@ -100,7 +103,7 @@ commands.enterCode = async (sender, args, reply) => {
 			sender.commandStatus = undefined
 		} else if (data.status === "need-password") {
 			reply(`You have two-factor authentication enabled. Password hint: ${data.hint}
-Enter your password using "$cmdprefix <password>"`)
+Enter your password using \`$cmdprefix <password>\``)
 			sender.commandStatus = {
 				action: "Two-factor authentication",
 				next: commands.enterPassword,
@@ -111,8 +114,11 @@ Enter your password using "$cmdprefix <password>"`)
 		}
 	} catch (err) {
 		// TODO login fails somewhere with TypeError: Cannot read property 'status' of undefined
-		reply(`Login failed: ${err}`)
-		console.error(err.stack)
+		reply(`**Login failed:** ${err}`)
+		if (err instanceof Error) {
+			reply(["```", err.stack, "```"].join(""))
+			console.error(err.stack)
+		}
 	}
 }
 
@@ -121,7 +127,7 @@ Enter your password using "$cmdprefix <password>"`)
  */
 commands.login = async (sender, args, reply) => {
 	if (args.length === 0) {
-		reply("Usage: $cmdprefix login <phone number>")
+		reply("**Usage:** `$cmdprefix login <phone number>`")
 		return
 	}
 
@@ -134,8 +140,11 @@ commands.login = async (sender, args, reply) => {
 			next: commands.enterCode,
 		}
 	} catch (err) {
-		reply(`Failed to send code: ${err}`)
-		console.log(err)
+		reply(`**Failed to send code:** ${err}`)
+		if (err instanceof Error) {
+			reply(["```", err.stack, "```"].join(""))
+			console.error(err.stack)
+		}
 	}
 }
 
@@ -148,7 +157,11 @@ commands.logout = async (sender, args, reply) => {
 		sender.logOutFromTelegram()
 		reply("Logged out successfully.")
 	} catch (err) {
-		reply(`Failed to log out: ${err}`)
+		reply(`**Failed to log out:** ${err}`)
+		if (err instanceof Error) {
+			reply(["```", err.stack, "```"].join(""))
+			console.error(err.stack)
+		}
 	}
 }
 
@@ -165,10 +178,11 @@ commands.search = async (sender, args, reply, app) => {
 	if (args[0] !== "-r" && args[0] !== "--remote") {
 		const contactResults = await sender.searchContacts(args.join(" "))
 		if (contactResults.length > 0) {
-			msg.push("Following results found from local contacts:")
+			msg.push("**Following results found from local contacts:**")
 			msg.push("")
-			for (const {match, contact} of contactResults) {
-				msg.push(`- ${contact.getDisplayName()}: ${contact.id} (${match}% match)`)
+			for (const { match, contact } of contactResults) {
+				msg.push(`- <a href="${
+					app.getMatrixToLinkForTelegramUser(contact.id)}">${contact.getDisplayName()}</a>: ${contact.id} (${match}% match)`)
 			}
 			msg.push("")
 			msg.push("To force searching from Telegram servers, add `-r` before the search query.")
@@ -180,14 +194,20 @@ commands.search = async (sender, args, reply, app) => {
 		msg.push("-r flag found: forcing remote search")
 		msg.push("")
 	}
-	const telegramResults = await sender.searchTelegram(args.join(" "))
+	const query = args.join(" ")
+	if (query.length < 5) {
+		reply("Failed to search server: Query is too short.")
+		return
+	}
+	const telegramResults = await sender.searchTelegram(query)
 	if (telegramResults.length > 0) {
-		msg.push("Following results received from Telegram server:")
+		msg.push("**Following results received from Telegram server:**")
 		for (const user of telegramResults) {
-			msg.push(`- ${user.getDisplayName()}: ${user.id}`)
+			msg.push(`- <a href="${
+				app.getMatrixToLinkForTelegramUser(user.id)}">${user.getDisplayName()}</a>: ${user.id}`)
 		}
 	} else {
-		msg.push("No users found.")
+		msg.push("**No users found.**")
 	}
 	reply(msg.join("\n"))
 }
