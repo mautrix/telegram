@@ -38,6 +38,7 @@ class MautrixTelegram {
 		this.telegramUsersByID = new Map()
 		this.portalsByPeerID = new Map()
 		this.portalsByRoomID = new Map()
+		this.managementRooms = []
 
 		const self = this
 		this.bridge = new Bridge({
@@ -304,45 +305,69 @@ class MautrixTelegram {
 			}, entry)
 	}
 
+	async getRoomMembers(roomID) {
+		const roomState = await this.botIntent.roomState(roomID)
+		const members = []
+		for (const event of roomState) {
+			if (event.type === "m.room.member" && event.membership === "join") {
+				members.push(event.user_id)
+			}
+		}
+		return members
+	}
+
 	/**
 	 * Handle a single received Matrix event.
 	 *
 	 * @param evt The Matrix event that occurred.
 	 */
 	async handleMatrixEvent(evt) {
-		const asBotID = this.bridge.getBot()
-			.getUserId()
-		if (evt.type === "m.room.member" && evt.state_key === asBotID) {
-			if (evt.content.membership === "invite") {
-				// Accept all invites
-				this.botIntent.join(evt.room_id)
-					.catch(err => {
-						console.warn(`Failed to join room ${evt.room_id}:`, err)
-						if (err instanceof Error) {
-							console.warn(err.stack)
-						}
-					})
+		const user = await this.getMatrixUser(evt.sender)
+		if (!user.whitelisted) {
+			return
+		}
+
+		const asBotID = this.bridge.getBot().getUserId()
+		if (evt.type === "m.room.member" && evt.state_key === asBotID && evt.content.membership === "invite") {
+			// Accept all invites
+			try {
+				await this.botIntent.join(evt.room_id)
+			} catch (err) {
+				console.error(`Failed to join room ${evt.room_id}:`, err)
+				if (err instanceof Error) {
+					console.error(err.stack)
+				}
 			}
 			return
 		}
 
+		// TODO to handle joining telegram groups and initiating private chats, we need to handle room member events.
 		if (evt.sender === asBotID || evt.type !== "m.room.message" || !evt.content) {
 			// Ignore own messages and non-message events.
 			return
 		}
 
-		const user = await this.getMatrixUser(evt.sender)
+		const portal = await this.getPortalByRoomID(evt.room_id)
+		if (portal) {
+			portal.handleMatrixEvent(user, evt)
+			return
+		}
 
-		const cmdprefix = this.config.bridge.commands.prefix
-		if (evt.content.body.startsWith(`${cmdprefix} `)) {
-			if (!user.whitelisted) {
-				this.botIntent.sendText(evt.room_id, "You are not authorized to use this bridge.")
-				return
+		let isManagement = this.managementRooms.includes(evt.room_id)
+		if (!isManagement) {
+			const roomMembers = await this.getRoomMembers(evt.room_id)
+			if (roomMembers.length === 2 && roomMembers.includes(asBotID)) {
+				this.managementRooms.push(evt.room_id)
+				isManagement = true
 			}
-
+		}
+		const cmdprefix = this.config.bridge.commands.prefix
+		if (isManagement || evt.content.body.startsWith(`${cmdprefix} `)) {
 			const prefixLength = cmdprefix.length + 1
-			const args = evt.content.body.substr(prefixLength)
-				.split(" ")
+			if (evt.content.body.startsWith(`${cmdprefix} `)) {
+				evt.content.body = evt.content.body.substr(prefixLength)
+			}
+			const args = evt.content.body.split(" ")
 			const command = args.shift()
 			const replyFunc = (reply, { allowHTML = false, markdown = true } = {}) => {
 				reply = reply.replace("$cmdprefix", cmdprefix)
@@ -351,7 +376,7 @@ class MautrixTelegram {
 				}
 				if (markdown) {
 					reply = marked(reply, {
-						sanitize: allowHTML,
+						sanitize: !allowHTML,
 					})
 				}
 				this.botIntent.sendMessage(
@@ -362,18 +387,7 @@ class MautrixTelegram {
 							format: "org.matrix.custom.html",
 						})
 			}
-			commands.run(user, command, args, replyFunc, this)
-			return
-		}
-
-		if (!user.whitelisted) {
-			// Non-management command from non-whitelisted user -> fail silently.
-			return
-		}
-
-		const portal = await this.getPortalByRoomID(evt.room_id)
-		if (portal) {
-			portal.handleMatrixEvent(user, evt)
+			commands.run(user, command, args, replyFunc, this, evt)
 		}
 	}
 

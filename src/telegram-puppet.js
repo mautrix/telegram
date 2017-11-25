@@ -179,8 +179,7 @@ class TelegramPuppet {
 
 	getDisplayName() {
 		if (this.data.firstName || this.data.lastName) {
-			return [this.data.firstName, this.data.lastName].filter(s => !!s)
-				.join(" ")
+			return [this.data.firstName, this.data.lastName].filter(s => !!s).join(" ")
 		} else if (this.data.username) {
 			return this.data.username
 		}

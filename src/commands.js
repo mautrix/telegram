@@ -17,7 +17,7 @@ const makePasswordHash = require("telegram-mtproto").plugins.makePasswordHash
 
 const commands = {}
 
-function run(sender, command, args, reply, app) {
+function run(sender, command, args, reply, app, evt) {
 	const commandFunc = this.commands[command]
 	if (!commandFunc) {
 		if (sender.commandStatus) {
@@ -27,13 +27,13 @@ function run(sender, command, args, reply, app) {
 				return undefined
 			}
 			args.unshift(command)
-			return sender.commandStatus.next(sender, args, reply, app)
+			return sender.commandStatus.next(sender, args, reply, app, evt)
 		}
 		reply("Unknown command. Try `$cmdprefix help` for help.")
 		return undefined
 	}
 	try {
-		return commandFunc(sender, args, reply, app)
+		return commandFunc(sender, args, reply, app, evt)
 	} catch (err) {
 		reply(`Error running command: ${err}.`)
 		if (err instanceof Error) {
@@ -46,17 +46,28 @@ function run(sender, command, args, reply, app) {
 
 commands.cancel = () => "Nothing to cancel."
 
-commands.help = (sender, args, reply) => {
-	reply(`All commands are prefixed with **$cmdprefix**.
-
+commands.help = (sender, args, reply, app, evt) => {
+	let replyMsg = ""
+	if (app.managementRooms.includes(evt.room_id)) {
+		replyMsg += "This is a management room: prefixing commands with `$cmdprefix` is not required.\n"
+	} else {
+		replyMsg += "This is not a management room: you must prefix commands with `$cmdprefix`.\n"
+	}
+	replyMsg += `
 **help** - Show this help message.<br/>
 **cancel** - Cancel an ongoing action (such as login).
 
-**login** <_phone_> - Request an authentication code.<br/>
+**login** &lt;_phone_&gt; - Request an authentication code.<br/>
 **logout** - Log out from Telegram. Currently broken.
 
-**api** <_method_> <_args_> - Call a Telegram API method. Args is always a JSON object. Disabled by default.
-`, { allowHTML: true })
+**api** &lt;_method_&gt; &lt;_args_&gt; - Call a Telegram API method. Args is always a JSON object. Disabled by default.
+`
+	reply(replyMsg, { allowHTML: true })
+}
+
+commands.setManagement = async (sender, _, reply, app, evt) => {
+	app.managementRooms.push(evt.room_id)
+	reply("Room marked as management room. You can now run commands without the `$cmdprefix` prefix.")
 }
 
 
@@ -232,7 +243,6 @@ commands.pm = async (sender, args, reply, app) => {
 		invite: [sender.userID],
 	})
 }
-
 
 ////////////////////////////
 // Debug command handlers //

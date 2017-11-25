@@ -72,19 +72,19 @@ class TelegramUser {
 
 	async updateInfo(telegramPOV, user, { updateAvatar = false } = {}) {
 		let changed = false
-		if (this.firstName !== user.first_name) {
+		if (user.first_name && this.firstName !== user.first_name) {
 			this.firstName = user.first_name
 			changed = true
 		}
-		if (this.lastName !== user.last_name) {
+		if (user.last_name && this.lastName !== user.last_name) {
 			this.lastName = user.last_name
 			changed = true
 		}
-		if (this.username !== user.username) {
+		if (user.username && this.username !== user.username) {
 			this.username = user.username
 			changed = true
 		}
-		if (telegramPOV && this.accessHashes.get(telegramPOV.userID) !== user.access_hash) {
+		if (user.access_hash && telegramPOV && this.accessHashes.get(telegramPOV.userID) !== user.access_hash) {
 			this.accessHashes.set(telegramPOV.userID, user.access_hash)
 			changed = true
 		}
@@ -116,8 +116,7 @@ class TelegramUser {
 	}
 
 	getFirstAndLastName() {
-		return [this.firstName, this.lastName].filter(s => !!s)
-			.join(" ")
+		return [this.firstName, this.lastName].filter(s => !!s).join(" ")
 	}
 
 	getDisplayName() {
