@@ -102,7 +102,13 @@ class Portal {
 		return this.peer.loadAccessHash(this.app, telegramPOV, { portal: this })
 	}
 
-	async handleTelegramEvent(sender, evt) {
+	async handleTelegramEvent(evt) {
+		// FIXME room creation is disabled due to possibility of multiple messages causing duplicate rooms
+		//if (!this.isMatrixRoomCreated()) {
+		//	await this.createMatrixRoom(evt.source, { invite: [evt.source.matrixUser.userID] })
+		//}
+		const sender = await this.app.getTelegramUser(evt.from)
+		await sender.intent.sendTyping(this.roomID, false/*, 5500*/)
 		// TODO handle other content types
 		if (evt.text.length > 0) {
 			sender.sendText(this.roomID, evt.text)

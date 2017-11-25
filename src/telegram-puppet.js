@@ -221,42 +221,24 @@ class TelegramPuppet {
 		return result
 	}
 
-	async handleMessage(message) {
-		const portal = await this.app.getPortalByPeer(message.to)
-		if (portal.isMatrixRoomCreated()) {
-			const sender = await this.app.getTelegramUser(message.from)
-			await portal.handleTelegramEvent(sender, message)
-		}
-	}
-
 	async onUpdate(update) {
 		if (!update) {
 			console.log("Oh noes! Empty update")
 			return
 		}
-		let peer, portal
+		let to, from, portal
 		switch (update._) {
 		case "updateUserStatus":
 			const user = await this.app.getTelegramUser(update.user_id)
-			let status
-			switch (update.status._) {
-			case "userStatusOnline":
-				status = "online"
-				break
-			case "userStatusOffline":
-			default:
-				status = "offline"
-			}
-
-			await user.intent.getClient()
-				.setPresence({ presence: status })
-			break
+			const presence = update.status._ === "userStatusOnline" ? "online" : "offline"
+			await user.intent.getClient().setPresence({ presence })
+			return
 		case "updateUserTyping":
-			peer = new TelegramPeer("user", update.user_id, { receiverID: this.userID })
+			to = new TelegramPeer("user", update.user_id, { receiverID: this.userID })
 			/* falls through */
 		case "updateChatUserTyping":
-			peer = peer || new TelegramPeer("chat", update.chat_id)
-			portal = await this.app.getPortalByPeer(peer)
+			to = to || new TelegramPeer("chat", update.chat_id)
+			portal = await this.app.getPortalByPeer(to)
 			if (portal.isMatrixRoomCreated()) {
 				const sender = await this.app.getTelegramUser(update.user_id)
 				// The Intent API currently doesn't allow you to set the
@@ -264,31 +246,39 @@ class TelegramPuppet {
 				// as Telegram resends typing notifications every 5 seconds.
 				await sender.intent.sendTyping(portal.roomID, true/*, 5500*/)
 			}
-			break
+			return
+
+		//
+		// The following cases are all messages. The actual handling happens after the switch.
+		//
 		case "updateShortMessage":
-			peer = new TelegramPeer("user", update.user_id, { receiverID: this.userID })
-			/* falls through */
+			to = new TelegramPeer("user", update.user_id, { receiverID: this.userID })
+			from = update.user_id
+			break
 		case "updateShortChatMessage":
-			peer = peer || new TelegramPeer("chat", update.chat_id)
-			await this.handleMessage({
-				from: update.user_id,
-				to: peer,
-				text: update.message,
-			})
+			to = new TelegramPeer("chat", update.chat_id)
+			from = update.from_id
 			break
 		case "updateNewChannelMessage":
 		case "updateNewMessage":
-			// TODO handle other content types
 			update = update.message // Message defined at message#90dddc11 in layer 71
-			await this.handleMessage({
-				from: update.from_id,
-				to: TelegramPeer.fromTelegramData(update.to_id, update.from_id, this.userID),
-				text: update.message,
-			})
+			from = update.from_id
+			to = TelegramPeer.fromTelegramData(update.to_id, update.from_id, this.userID)
 			break
+
 		default:
 			console.log(`Update of type ${update._} received:\n${JSON.stringify(update, "", "  ")}`)
+			return
 		}
+		console.log(update)
+		// TODO handle other content types in updateNewMessage
+		portal = await this.app.getPortalByPeer(to)
+		await portal.handleTelegramEvent({
+			from,
+			to,
+			source: this,
+			text: update.message,
+		})
 	}
 
 	handleUpdate(data) {
@@ -319,6 +309,7 @@ class TelegramPuppet {
 		this.client.bus.untypedMessage.observe(data => this.handleUpdate(data.message))
 
 		try {
+			// FIXME updating status crashes or freezes
 			//console.log("Updating online status...")
 			//const statusUpdate = await this.client("account.updateStatus", { offline: false })
 			//console.log(statusUpdate)
@@ -352,13 +343,12 @@ class TelegramPuppet {
 		}
 		setInterval(async () => {
 			try {
-				// TODO use state?
-				/*const state = */
-				this.client("updates.getState", {})
+				await this.client("updates.getState", {})
 			} catch (err) {
 				console.error("Error updating state:", err)
+				console.error(err.stack)
 			}
-		}, 5000)
+		}, 1000)
 	}
 
 	async getFile(location) {

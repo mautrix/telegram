@@ -254,6 +254,12 @@ class MautrixTelegram {
 	 * @returns {TelegramUser} The TelegramUser object.
 	 */
 	async getTelegramUser(id, { createIfNotFound = true } = {}) {
+		// TODO remove this after bugs are fixed
+		if (isNaN(parseInt(id))) {
+			const err = new Error("Fatal: non-int Telegram user ID")
+			console.error(err.stack)
+			throw err
+		}
 		let user = this.telegramUsersByID.get(id)
 		if (user) {
 			return user
