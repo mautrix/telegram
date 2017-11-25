@@ -30,6 +30,7 @@ class MatrixUser {
 		this.phoneNumber = undefined
 		this.phoneCodeHash = undefined
 		this.commandStatus = undefined
+		this.puppetData = undefined
 		this.contacts = []
 		this._telegramPuppet = undefined
 	}
@@ -204,10 +205,8 @@ class MatrixUser {
 	}
 
 	async logOutFromTelegram() {
-		const ok = await this.telegramPuppet.logOut()
-		if (!ok) {
-			return false
-		}
+		this.telegramPuppet.logOut()
+		// TODO kick user from all portals
 		this._telegramPuppet = undefined
 		this.puppetData = undefined
 		await this.save()

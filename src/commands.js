@@ -95,7 +95,7 @@ commands.enterPassword = async (sender, args, reply) => {
 	const hash = makePasswordHash(sender.commandStatus.salt, args[0])
 	try {
 		await sender.checkPassword(hash)
-		reply(`Logged in successfully as @${sender.telegramPuppet.getDisplayName()}.`)
+		reply(`Logged in successfully as ${sender.telegramPuppet.getDisplayName()}.`)
 		sender.commandStatus = undefined
 	} catch (err) {
 		reply(`**Login failed:** ${err}`)
@@ -118,7 +118,7 @@ commands.enterCode = async (sender, args, reply) => {
 	try {
 		const data = await sender.signInToTelegram(args[0])
 		if (data.status === "ok") {
-			reply(`Logged in successfully as @${sender.telegramPuppet.getDisplayName()}.`)
+			reply(`Logged in successfully as ${sender.telegramPuppet.getDisplayName()}.`)
 			sender.commandStatus = undefined
 		} else if (data.status === "need-password") {
 			reply(`You have two-factor authentication enabled. Password hint: ${data.hint}
@@ -132,7 +132,6 @@ Enter your password using \`$cmdprefix <password>\``)
 			reply(`Unexpected sign in response, status=${data.status}`)
 		}
 	} catch (err) {
-		// TODO login fails somewhere with TypeError: Cannot read property 'status' of undefined
 		reply(`**Login failed:** ${err}`)
 		if (err instanceof Error) {
 			reply(["```", err.stack, "```"].join(""))
@@ -153,7 +152,7 @@ commands.login = async (sender, args, reply) => {
 	try {
 		/*const data = */
 		await sender.sendTelegramCode(args[0])
-		reply(`Login code sent to ${args[0]}.\nEnter the code using "$cmdprefix <code>"`)
+		reply(`Login code sent to ${args[0]}.\nEnter the code using \`$cmdprefix <code>\``)
 		sender.commandStatus = {
 			action: "Phone code authentication",
 			next: commands.enterCode,
