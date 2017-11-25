@@ -51,19 +51,25 @@ commands.help = (sender, args, reply, app, evt) => {
 	if (app.managementRooms.includes(evt.room_id)) {
 		replyMsg += "This is a management room: prefixing commands with `$cmdprefix` is not required.\n"
 	} else {
-		replyMsg += "This is not a management room: you must prefix commands with `$cmdprefix`.\n"
+		replyMsg += "**This is not a management room**: you must prefix commands with `$cmdprefix`.\n"
 	}
 	replyMsg += `
+_**Generic bridge commands**: commands for using the bridge that aren't related to Telegram._<br/>
 **help** - Show this help message.<br/>
-**cancel** - Cancel an ongoing action (such as login).
-
-**login** &lt;_phone_&gt; - Request an authentication code.<br/>
-**logout** - Log out from Telegram. Currently broken.
-
-**setManagement** - Mark the room as a management room.
+**cancel** - Cancel an ongoing action (such as login).<br/>
+**setManagement** - Mark the room as a management room.<br/>
 **unsetManagement** - Undo management room marking.
 
-**api** &lt;_method_&gt; &lt;_args_&gt; - Call a Telegram API method. Args is always a JSON object. Disabled by default.
+_**Telegram actions**: commands for using the bridge to interact with Telegram._<br/>
+**login** &lt;_phone_&gt; - Request an authentication code.<br/>
+**logout** - Log out from Telegram.<br/>
+**search** [_-r|--remote_] &lt;_query_&gt; - Search your contacts or the Telegram servers for users.
+
+_**Temporary commands**: commands that will be replaced with more Matrix-y actions later._<br/>
+**pm** &lt;_id_&gt; - Open a private chat with the given Telegram user ID.
+
+_**Debug commands**: commands to help in debugging the bridge. Disabled by default._<br/>
+**api** &lt;_method_&gt; &lt;_args_&gt; - Call a Telegram API method. Args is always a single JSON object.
 `
 	reply(replyMsg, { allowHTML: true })
 }
