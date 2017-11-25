@@ -11,11 +11,14 @@
 	},
 	"dependencies": {
 		"colors": "1.1.x",
-		"commander": "2.11.x",
+		"commander": "2.12.x",
+		"escape-html": "1.0.x",
+		"marked": "0.3.x",
 		"matrix-appservice-bridge": "1.x.x",
 		"matrix-js-sdk": "0.x.x",
 		"md5": "2.2.x",
-		"string-similarity": "^1.2.0",
+		"sanitize-html": "1.16.x",
+		"string-similarity": "1.2.x",
 		"telegram-mtproto": "3.x.x",
 		"yamljs": "0.3.x"
 	},

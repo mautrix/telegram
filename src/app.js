@@ -14,6 +14,9 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 const { Bridge } = require("matrix-appservice-bridge")
+const escapeHTML = require("escape-html")
+const sanitizeHTML = require("sanitize-html")
+const marked = require("marked")
 const commands = require("./commands")
 const MatrixUser = require("./matrix-user")
 const TelegramUser = require("./telegram-user")
@@ -335,9 +338,22 @@ class MautrixTelegram {
 				.split(" ")
 			const command = args.shift()
 			commands.run(user, command, args,
-				reply => this.botIntent.sendText(
-					evt.room_id,
-					reply.replace("$cmdprefix", cmdprefix)),
+				(reply, { allowHTML = false, markdown = true } = {}) => {
+					reply = reply.replace("$cmdprefix", cmdprefix)
+					if (!allowHTML) {
+						reply = escapeHTML(reply)
+					}
+					if (markdown) {
+						reply = marked(reply)
+					}
+					this.botIntent.sendMessage(
+						evt.room_id, {
+							body: sanitizeHTML(reply),
+							formatted_body: reply,
+							msgtype: "m.notice",
+							format: "org.matrix.custom.html",
+						})
+				},
 				this)
 			return
 		}

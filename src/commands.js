@@ -14,6 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 const makePasswordHash = require("telegram-mtproto").plugins.makePasswordHash
+const escapeHTML = require("escape-html")
 
 const commands = {}
 
@@ -46,14 +47,16 @@ function run(sender, command, args, reply, app) {
 commands.cancel = () => "Nothing to cancel."
 
 commands.help = (sender, args, reply) => {
-	reply(`All commands are prefixed with $cmdprefix.
+	reply(`All commands are prefixed with **$cmdprefix**.
 
-help - Show this help message.
-cancel - Cancel an ongoing action (such as login).
-login <phone> - Request an authentication code.
-logout - Log out from Telegram.
+**help** - Show this help message.<br/>
+**cancel** - Cancel an ongoing action (such as login).
 
-api <method> <args> - Call a Telegram API method. Args is always a JSON object. Disabled by default.`)
+**login** <_phone_> - Request an authentication code.<br/>
+**logout** - Log out from Telegram. Currently broken.
+
+**api** <_method_> <_args_> - Call a Telegram API method. Args is always a JSON object. Disabled by default.
+`, {allowHTML: true})
 }
 
 
