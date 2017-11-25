@@ -14,25 +14,56 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 const telegram = require("telegram-mtproto")
+const fileType = require("file-type")
 const pkg = require("../package.json")
 const TelegramPeer = require("./telegram-peer")
-
 /*
  * Mapping from Telegram file types to MIME types and extensions.
  */
-const META_FROM_FILETYPE = {
-	"storage.fileGif": {
-		mimetype: "image/gif",
-		extension: "gif",
-	},
-	"storage.fileJpeg": {
-		mimetype: "image/jpeg",
-		extension: "jpeg",
-	},
-	"storage.filePng": {
-		mimetype: "image/png",
-		extension: "png",
-	},
+function metaFromFileType(type) {
+	const extension = type.substr("storage.file".length).toLowerCase()
+	let fileClass, mimetype, matrixtype
+	/*eslint no-fallthrough: "off"*/
+	switch (type) {
+	case "storage.fileGif":
+	case "storage.fileJpeg":
+	case "storage.filePng":
+	case "storage.fileWebp":
+		fileClass = "image"
+		break
+	case "storage.fileMov":
+		mimetype = "quicktime"
+	case "storage.fileMp4":
+		fileClass = "video"
+		break
+	case "storage.fileMp3":
+		mimetype = "mpeg"
+		fileClass = "audio"
+		break
+	case "storage.filePartial":
+		throw new Error("Partial files should be completed before fetching their type.")
+	case "storage.fileUnknown":
+		fileClass = "application"
+		mimetype = "octet-stream"
+		matrixtype = "m.file"
+		break
+	default:
+		return undefined
+	}
+	mimetype = `${fileClass}/${mimetype || extension}`
+	matrixtype = matrixtype || `m.${fileClass}`
+	return { mimetype, extension, matrixtype }
+}
+
+function matrixFromMime(mime) {
+	if (mime.startsWith("audio/")) {
+		return "m.audio"
+	} else if (mime.startsWith("video/")) {
+		return "m.video"
+	} else if (mime.startsWith("image/")) {
+		return "m.image"
+	}
+	return "m.file"
 }
 
 /**
@@ -278,6 +309,18 @@ class TelegramPuppet {
 			to,
 			source: this,
 			text: update.message,
+			photo: update.media && update.media._ === "messageMediaPhoto"
+				? update.media.photo
+				: undefined,
+			document: update.media && update.media._ === "messageMediaDocument"
+				? update.media.document
+				: undefined,
+			geo: update.media && update.media._ === "messageMediaGeo"
+				? update.media.geo
+				: undefined,
+			caption: update.media ?
+				update.media.caption
+				: undefined,
 		})
 	}
 
@@ -352,17 +395,41 @@ class TelegramPuppet {
 	}
 
 	async getFile(location) {
-		location = Object.assign({}, location, { _: "inputFileLocation" })
-		delete location.dc_id
+		if (location.volume_id && location.local_id) {
+			location = {
+				_: "inputFileLocation",
+				volume_id: location.volume_id,
+				local_id: location.local_id,
+				secret: location.secret,
+			}
+		} else if (location.id && location.access_hash) {
+			location = {
+				_: "inputDocumentFileLocation",
+				id: location.id,
+				access_hash: location.access_hash,
+			}
+		} else {
+			throw new Error("Unrecognized file location type.")
+		}
 		const file = await this.client("upload.getFile", {
 			location,
 			offset: 0,
+			// Max download size: 100mb
 			limit: 100 * 1024 * 1024,
 		})
-		const meta = META_FROM_FILETYPE[file.type._]
-		if (meta) {
-			file.mimetype = meta.mimetype
-			file.extension = meta.extension
+		file.buffer = Buffer.from(file.bytes)
+		if (file.type._ === "storage.filePartial") {
+			const { mime, ext } = fileType(file.buffer)
+			file.mimetype = mime
+			file.extension = ext
+			file.matrixtype = matrixFromMime(mime)
+		} else {
+			const meta = metaFromFileType(file.type._)
+			if (meta) {
+				file.mimetype = meta.mimetype
+				file.extension = meta.extension
+				file.matrixtype = meta.matrixtype
+			}
 		}
 		return file
 	}

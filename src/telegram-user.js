@@ -138,12 +138,20 @@ class TelegramUser {
 		return this.intent.sendText(roomID, text)
 	}
 
-	sendImage(roomID, opts) {
+	sendFile(roomID, file) {
 		return this.intent.sendMessage(roomID, {
-			msgtype: "m.image",
-			url: opts.content_uri,
-			body: opts.name,
-			info: opts.info,
+			msgtype: file.matrixtype || "m.file",
+			url: file.content_uri,
+			body: file.name || "Uploaded file",
+			info: file.info,
+		})
+	}
+
+	sendLocation(roomID, { long = 0.0, lat = 0.0, body = "Location" } = {}) {
+		return this.intent.sendMessage(roomID, {
+			msgtype: "m.location",
+			geo_uri: `geo:${lat},${long}`,
+			body,
 		})
 	}
 

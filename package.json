@@ -13,6 +13,7 @@
 		"colors": "1.1.x",
 		"commander": "2.12.x",
 		"escape-html": "1.0.x",
+		"file-type": "^7.3.0",
 		"marked": "0.3.x",
 		"matrix-appservice-bridge": "1.x.x",
 		"matrix-js-sdk": "0.x.x",

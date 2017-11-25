@@ -64,8 +64,36 @@ class Portal {
 		return true
 	}
 
+
+	async copyPhotoSize(telegramPOV, sender, photo) {
+		const size = photo.sizes.slice(-1)[0]
+		const uploaded = await this.copyFile(telegramPOV, sender, size.location, photo.id)
+		uploaded.info.h = size.h
+		uploaded.info.w = size.w
+		uploaded.info.size = size.size
+		uploaded.info.orientation = 0
+		return uploaded
+	}
+
+	async copyFile(telegramPOV, sender, location, id) {
+		console.log(JSON.stringify(location, "", "  "))
+		id = id || location.id
+		const file = await telegramPOV.getFile(location)
+		const uploaded = await sender.intent.getClient().uploadContent({
+			stream: file.buffer,
+			name: `${id}.${file.extension}`,
+			type: file.mimetype,
+		}, { rawResponse: false })
+		uploaded.matrixtype = file.matrixtype
+		uploaded.info = {
+			mimetype: file.mimetype,
+			size: location.size,
+		}
+		return uploaded
+	}
+
 	async updateAvatar(telegramPOV, chat) {
-		if (!chat.photo) {
+		if (!chat.photo || this.peer.type === "user") {
 			return false
 		}
 
@@ -80,12 +108,11 @@ class Portal {
 		const file = await telegramPOV.getFile(photo)
 		const name = `${photo.volume_id}_${photo.local_id}.${file.extension}`
 
-		const uploaded = await this.app.botIntent.getClient()
-			.uploadContent({
-				stream: Buffer.from(file.bytes),
-				name,
-				type: file.mimetype,
-			}, { rawResponse: false })
+		const uploaded = await this.app.botIntent.getClient().uploadContent({
+			stream: file.buffer,
+			name,
+			type: file.mimetype,
+		}, { rawResponse: false })
 
 		this.avatarURL = uploaded.content_uri
 		this.photo = {
@@ -112,6 +139,17 @@ class Portal {
 		// TODO handle other content types
 		if (evt.text.length > 0) {
 			sender.sendText(this.roomID, evt.text)
+		}
+		if (evt.photo) {
+			const photo = await this.copyPhoto(evt.source, sender, evt.photo)
+			photo.name = evt.caption || "Photo"
+			sender.sendFile(this.roomID, photo)
+		} else if (evt.document) {
+			const file = await this.copyFile(evt.source, sender, evt.document)
+			file.name = evt.caption || "File upload"
+			sender.sendFile(this.roomID, file)
+		} else if (evt.geo) {
+			sender.sendLocation(this.roomID, evt.geo)
 		}
 	}
 
