@@ -122,8 +122,17 @@ class Portal {
 		return !!this.roomID
 	}
 
-	async createMatrixRoom(telegramPOV, { invite = [] } = {}) {
+	async createMatrixRoom(telegramPOV, { invite = [], inviteEvenIfNotCreated = true } = {}) {
 		if (this.roomID) {
+			if (invite && inviteEvenIfNotCreated) {
+				const intent = this.peer.type === "user"
+					? (await this.app.getTelegramUser(this.peer.id)).intent
+					: this.app.botIntent
+				for (const userID of invite) {
+					// TODO check membership before inviting
+					intent.invite(this.roomID, userID)
+				}
+			}
 			return {
 				created: false,
 				roomID: this.roomID,

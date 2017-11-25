@@ -16,6 +16,7 @@
 const md5 = require("md5")
 const TelegramPuppet = require("./telegram-puppet")
 const TelegramPeer = require("./telegram-peer")
+const strSim = require("string-similarity");
 
 /**
  * MatrixUser represents a Matrix user who probably wants to control their
@@ -126,22 +127,9 @@ class MatrixUser {
 			}
 			if (createRooms) {
 				try {
-					const { roomID, created } = await portal.createMatrixRoom(this.telegramPuppet, {
+					await portal.createMatrixRoom(this.telegramPuppet, {
 						invite: [this.userID],
 					})
-					if (!created) {
-						// Make sure the user is invited, since the room already exists.
-
-						const intent = this.app.botIntent
-						// FIXME check membership before re-inviting
-						//const membership = intent.getClient().getRoom(roomID).getMember(this.userID).membership
-						//if (membership !== "join") {
-						try {
-							await intent.invite(roomID, this.userID)
-						} catch (_) {
-						}
-						//}
-					}
 				} catch (err) {
 					console.error(err)
 					console.error(err.stack)
@@ -149,6 +137,48 @@ class MatrixUser {
 			}
 		}
 		return changed
+	}
+
+	async searchContacts(query, {maxResults=5, minSimilarity = 0.45} = {}) {
+		const results = []
+		for (const contact of this.contacts) {
+			let displaynameSimilarity = 0, usernameSimilarity = 0, numberSimilarity = 0
+			if (contact.firstName || contact.lastName) {
+				displaynameSimilarity = strSim.compareTwoStrings(query, contact.getFirstAndLastName())
+			}
+			if (contact.username) {
+				usernameSimilarity = strSim.compareTwoStrings(query, contact.username)
+			}
+			if (contact.phoneNumber) {
+				numberSimilarity = strSim.compareTwoStrings(query, contact.phoneNumber)
+			}
+			const similarity = Math.max(displaynameSimilarity, usernameSimilarity, numberSimilarity)
+			console.log(contact.getDisplayName(), similarity, displaynameSimilarity, usernameSimilarity, numberSimilarity)
+			if (similarity >= minSimilarity) {
+				results.push({
+					similarity,
+					match: Math.round(similarity * 1000) / 10,
+					contact,
+				})
+			}
+		}
+		return results
+			.sort((a, b) => b.similarity - a.similarity)
+			.slice(0, maxResults)
+	}
+
+	async searchTelegram(query, {maxResults=5} = {}) {
+		const results = await this.telegramPuppet.client("contacts.search", {
+			q: query,
+			limit: maxResults,
+		})
+		const resultUsers = []
+		for (const userInfo of results.users) {
+			const user = await this.app.getTelegramUser(userInfo.id)
+			user.updateInfo(this.telegramPuppet, userInfo)
+			resultUsers.push(user)
+		}
+		return resultUsers
 	}
 
 	async sendTelegramCode(phoneNumber) {

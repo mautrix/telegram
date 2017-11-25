@@ -70,7 +70,7 @@ class TelegramUser {
 		}
 	}
 
-	async updateInfo(telegramPOV, user, { updateAvatar } = {}) {
+	async updateInfo(telegramPOV, user, { updateAvatar = false } = {}) {
 		let changed = false
 		if (this.firstName !== user.first_name) {
 			this.firstName = user.first_name
@@ -115,10 +115,14 @@ class TelegramUser {
 		return this.intent.client.credentials.userId
 	}
 
+	getFirstAndLastName() {
+		return [this.firstName, this.lastName].filter(s => !!s)
+			.join(" ")
+	}
+
 	getDisplayName() {
 		if (this.firstName || this.lastName) {
-			return [this.firstName, this.lastName].filter(s => !!s)
-				.join(" ")
+			return this.getFirstAndLastName()
 		} else if (this.username) {
 			return this.username
 		} else if (this.phoneNumber) {

@@ -32,7 +32,15 @@ function run(sender, command, args, reply, app) {
 		reply("Unknown command. Try \"$cmdprefix help\" for help.")
 		return undefined
 	}
-	return commandFunc(sender, args, reply, app)
+	try {
+		return commandFunc(sender, args, reply, app)
+	} catch (err) {
+		reply(`Error running command: ${err}.`)
+		if (err instanceof Error) {
+			reply("Check bridge console for stack trace")
+			console.error(err.stack)
+		}
+	}
 }
 
 commands.cancel = () => "Nothing to cancel."
@@ -129,7 +137,7 @@ commands.login = async (sender, args, reply) => {
 }
 
 commands.register = async (sender, args, reply) => {
-	reply("Registration has not yet been implemented. Please use the offical apps for now.")
+	reply("Registration has not yet been implemented. Please use the official apps for now.")
 }
 
 commands.logout = async (sender, args, reply) => {
@@ -144,6 +152,63 @@ commands.logout = async (sender, args, reply) => {
 //////////////////////////////
 // General command handlers //
 //////////////////////////////
+
+commands.search = async (sender, args, reply, app) => {
+	if (args.length < 1) {
+		reply("Usage: $cmdprefix search [-r|--remote] <query>")
+		return
+	}
+	let msg = []
+	if (args[0] !== "-r" && args[0] !== "--remote") {
+		const contactResults = await sender.searchContacts(args.join(" "))
+		if (contactResults.length > 0) {
+			msg.push("Following results found from local contacts:")
+			msg.push("")
+			for (const {match, contact} of contactResults) {
+				msg.push(`- ${contact.getDisplayName()}: ${contact.id} (${match}% match)`)
+			}
+			msg.push("")
+			msg.push("To force searching from Telegram servers, add `-r` before the search query.")
+			reply(msg.join("\n"))
+			return
+		}
+	} else {
+		args.shift()
+		msg.push("-r flag found: forcing remote search")
+		msg.push("")
+	}
+	const telegramResults = await sender.searchTelegram(args.join(" "))
+	if (telegramResults.length > 0) {
+		msg.push("Following results received from Telegram server:")
+		for (const user of telegramResults) {
+			msg.push(`- ${user.getDisplayName()}: ${user.id}`)
+		}
+	} else {
+		msg.push("No users found.")
+	}
+	reply(msg.join("\n"))
+}
+
+commands.pm = async (sender, args, reply, app) => {
+	if (args.length < 1) {
+		reply("Usage: $cmdprefix pm <id>")
+		return
+	}
+	const user = await app.getTelegramUser(+args[0], { createIfNotFound: false })
+	if (!user) {
+		reply("User info not saved. Try searching for the user first?")
+		return
+	}
+	const peer = user.toPeer(sender.telegramPuppet)
+
+	const userInfo = await peer.getInfo(sender.telegramPuppet)
+	await user.updateInfo(sender.telegramPuppet, userInfo)
+
+	const portal = await app.getPortalByPeer(peer)
+	await portal.createMatrixRoom(sender.telegramPuppet, {
+		invite: [sender.userID],
+	})
+}
 
 
 ////////////////////////////

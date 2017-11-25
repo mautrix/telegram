@@ -108,7 +108,7 @@ class MautrixTelegram {
 	 * @param {TelegramPeer} peer The TelegramPeer object whose portal to get.
 	 * @returns {Promise<Portal>} The Portal object.
 	 */
-	async getPortalByPeer(peer) {
+	async getPortalByPeer(peer, { createIfNotFound = true } = {}) {
 		let portal = this.portalsByPeerID.get(peer.id)
 		if (portal) {
 			return portal
@@ -132,8 +132,10 @@ class MautrixTelegram {
 
 		if (entries.length) {
 			portal = Portal.fromEntry(this, entries[0])
-		} else {
+		} else if (createIfNotFound) {
 			portal = new Portal(this, undefined, peer)
+		} else {
+			return undefined
 		}
 		this.portalsByPeerID.set(peer.id, portal)
 		if (portal.roomID) {
@@ -199,7 +201,7 @@ class MautrixTelegram {
 	 * @param {number} id The internal Telegram ID of the user to get.
 	 * @returns {Promise<TelegramUser>} The TelegramUser object.
 	 */
-	async getTelegramUser(id) {
+	async getTelegramUser(id, { createIfNotFound = true } = {}) {
 		let user = this.telegramUsersByID.get(id)
 		if (user) {
 			return user
@@ -218,8 +220,10 @@ class MautrixTelegram {
 
 		if (entries.length) {
 			user = TelegramUser.fromEntry(this, entries[0])
-		} else {
+		} else if (createIfNotFound) {
 			user = new TelegramUser(this, id)
+		} else {
+			return undefined
 		}
 		this.telegramUsersByID.set(id, user)
 		return user
@@ -234,7 +238,7 @@ class MautrixTelegram {
 	 * @param {string} id The MXID of the Matrix user to get.
 	 * @returns {Promise<MatrixUser>} The MatrixUser object.
 	 */
-	async getMatrixUser(id) {
+	async getMatrixUser(id, { createIfNotFound = true } = {}) {
 		let user = this.matrixUsersByID.get(id)
 		if (user) {
 			return user
@@ -253,8 +257,10 @@ class MautrixTelegram {
 
 		if (entries.length) {
 			user = MatrixUser.fromEntry(this, entries[0])
-		} else {
+		} else if (createIfNotFound) {
 			user = new MatrixUser(this, id)
+		} else {
+			return undefined
 		}
 		this.matrixUsersByID.set(id, user)
 		return user
