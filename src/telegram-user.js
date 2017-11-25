@@ -147,7 +147,14 @@ class TelegramUser {
 		})
 	}
 
-	sendLocation(roomID, { long = 0.0, lat = 0.0, body = "Location" } = {}) {
+	sendLocation(roomID, { long = 0.0, lat = 0.0, body } = {}) {
+		if (!body) {
+			const longChar = long > 0 ? "E" : "W"
+			const latChar = lat > 0 ? "N" : "S"
+			const roundedLong = Math.abs(Math.round(long * 100000) / 100000)
+			const roundedLat = Math.abs(Math.round(lat * 100000) / 100000)
+			body = `Location: ${roundedLat}° ${latChar}, ${roundedLong}° ${longChar}`
+		}
 		return this.intent.sendMessage(roomID, {
 			msgtype: "m.location",
 			geo_uri: `geo:${lat},${long}`,
