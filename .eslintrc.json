@@ -168,6 +168,7 @@
 		"no-bitwise": "off",
 		"no-case-declarations": "off",
 		"no-template-curly-in-string": "off",
-		"no-await-in-loop": "off"
+		"no-await-in-loop": "off",
+		"no-restricted-globals": "off"
 	}
 }

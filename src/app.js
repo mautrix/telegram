@@ -64,6 +64,13 @@ class MautrixTelegram {
 		 */
 		this.managementRooms = []
 
+		this.usernameRegex = new RegExp(
+				`^@${
+					this.config.bridge.username_template.replace("${ID}", "([0-9]+)")
+				}:${
+					this.config.homeserver.domain
+				}$`)
+
 		const self = this
 		/**
 		 * The matrix-appservice-bridge Bridge instance.
@@ -354,11 +361,13 @@ class MautrixTelegram {
 
 	/**
 	 * Get the members in the given room.
-	 * @param   {string} roomID The ID of the room to search.
-	 * @returns {Array}         The list of MXIDs who are in the room.
+	 *
+	 * @param   {string} roomID   The ID of the room to search.
+	 * @param   {Intent} [intent] The Intent object to use when reading the room state.
+	 * @returns {Array}           The list of MXIDs who are in the room.
 	 */
-	async getRoomMembers(roomID) {
-		const roomState = await this.botIntent.roomState(roomID)
+	async getRoomMembers(roomID, intent = this.botIntent) {
+		const roomState = await intent.roomState(roomID)
 		const members = []
 		for (const event of roomState) {
 			if (event.type === "m.room.member" && event.membership === "join") {
@@ -366,6 +375,86 @@ class MautrixTelegram {
 			}
 		}
 		return members
+	}
+
+	async handleInvite(sender, evt) {
+		console.log(evt)
+		const asBotID = this.bridge.getBot().getUserId()
+		if (evt.state_key === asBotID) {
+			// Accept all AS bot invites.
+			try {
+				await this.botIntent.join(evt.room_id)
+			} catch (err) {
+				console.error(`Failed to join room ${evt.room_id}:`, err)
+				if (err instanceof Error) {
+					console.error(err.stack)
+				}
+			}
+			return
+		}
+
+		// Check if the invited user is a Telegram user.
+		const capture = this.usernameRegex.exec(evt.state_key)
+		console.log(capture)
+		if (!capture) {
+			return
+		}
+
+		const telegramID = +capture[1]
+		console.log(telegramID)
+		if (!telegramID || isNaN(telegramID)) {
+			return
+		}
+
+		const intent = this.getIntentForTelegramUser(telegramID)
+		try {
+			await intent.join(evt.room_id)
+			const members = await this.getRoomMembers(evt.room_id, intent)
+			if (members.length < 2) {
+				console.warn(`No members in room ${evt.room_id}`)
+				await intent.leave(evt.room_id)
+			} else if (members.length === 2) {
+				const user = await this.getTelegramUser(telegramID)
+				const peer = user.toPeer(sender.telegramPuppet)
+				const portal = await this.getPortalByPeer(peer)
+				if (portal.roomID) {
+					await intent.sendMessage(evt.room_id, {
+						msgtype: "m.notice",
+						body: "You already have a private chat room with me!\nI'll re-invite you to that room.",
+					})
+					try {
+						await intent.invite(portal.roomID, sender.userID)
+					} catch (_) {}
+					await intent.leave(evt.room_id)
+				} else {
+					portal.roomID = evt.room_id
+					await portal.save()
+					await intent.sendMessage(portal.roomID, {
+						msgtype: "m.notice",
+						body: "Portal to Telegram private chat created.",
+					})
+				}
+			} else {
+				if (!members.includes(asBotID)) {
+					await intent.sendMessage(evt.room_id, {
+						msgtype: "m.notice",
+						body: "Inviting additional Telegram users to private chats or non-portal rooms is not supported.",
+					})
+				} else {
+					// TODO Allow inviting Telegram users to group/channel portal rooms.
+					await intent.sendMessage(evt.room_id, {
+						msgtype: "m.notice",
+						body: "Inviting Telegram users to portal rooms is not (yet) supported.",
+					})
+				}
+				await intent.leave(evt.room_id)
+			}
+		} catch (err) {
+			console.error(`Failed to process invite to room ${evt.room_id} for Telegram user ${telegramID}: ${err}`)
+			if (err instanceof Error) {
+				console.error(err.stack)
+			}
+		}
 	}
 
 	/**
@@ -380,16 +469,8 @@ class MautrixTelegram {
 		}
 
 		const asBotID = this.bridge.getBot().getUserId()
-		if (evt.type === "m.room.member" && evt.state_key === asBotID && evt.content.membership === "invite") {
-			// Accept all invites
-			try {
-				await this.botIntent.join(evt.room_id)
-			} catch (err) {
-				console.error(`Failed to join room ${evt.room_id}:`, err)
-				if (err instanceof Error) {
-					console.error(err.stack)
-				}
-			}
+		if (evt.type === "m.room.member" && evt.content.membership === "invite") {
+			await this.handleInvite(user, evt)
 			return
 		}
 
