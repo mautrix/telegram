@@ -226,7 +226,7 @@ commands.search = async (sender, args, reply, app) => {
 			}
 			msg.push("")
 			msg.push("To force searching from Telegram servers, add `-r` before the search query.")
-			reply(msg.join("\n"))
+			reply(msg.join("\n"), { allowHTML: true })
 			return
 		}
 	} else {
@@ -249,7 +249,7 @@ commands.search = async (sender, args, reply, app) => {
 	} else {
 		msg.push("**No users found.**")
 	}
-	reply(msg.join("\n"))
+	reply(msg.join("\n"), { allowHTML: true })
 }
 
 commands.pm = async (sender, args, reply, app) => {
