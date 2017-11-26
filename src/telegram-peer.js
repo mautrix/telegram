@@ -95,13 +95,13 @@ class TelegramPeer {
 	 */
 	async updateInfo(dialog) {
 		let changed = false
-		if (this.type === "channel" || this.type === "user") {
+		if (dialog.username && (this.type === "channel" || this.type === "user")) {
 			if (this.username !== dialog.username) {
 				this.username = dialog.username
 				changed = true
 			}
 		}
-		if (this.title !== dialog.title) {
+		if (dialog.title && this.title !== dialog.title) {
 			this.title = dialog.title
 			changed = true
 		}

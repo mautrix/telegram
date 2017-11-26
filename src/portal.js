@@ -219,7 +219,7 @@ class Portal {
 			room = await user.intent.createRoom({
 				createAsClient: true,
 				options: {
-					name: user.getDisplayName(),
+					//name: user.getDisplayName(),
 					topic: "Telegram private chat",
 					visibility: "private",
 					invite,
