@@ -24,3 +24,40 @@ A Telegram chat will be created once the bridge is stable enough.
 2. Send your auth code to the management room.
 3. If you have two-factor authentication enabled, send your password to the room.
 4. If all prior steps were executed successfully, the bridge should now create rooms for all your Telegram dialogs and invite you to them.
+
+## Features & Roadmap
+* Matrix → Telegram
+  * [x] Plaintext messages
+  * [ ] Images
+  * [ ] Files
+  * [ ] Message redactions
+  * [ ] Presence (currently always shown as online on Telegram)
+  * [ ] Typing notifications (may not be possible)
+  * [ ] Power level
+* Telegram → Matrix
+  * [x] Plaintext messages
+  * [x] Images
+  * [ ] Stickers (somewhat works through document upload, no preview though)
+  * [x] Audio messages
+  * [ ] Video messages
+  * [x] Documents
+  * [x] Locations
+  * [x] Presence
+  * [x] Typing notifications
+  * [ ] Message edits
+  * [ ] Message deletions
+  * [ ] Admin status
+  * [x] Initial group/channel name/description
+  * [ ] Group/channel name/description changes
+* Initiating chats
+  * [x] Automatic portal creation for groups/channels at startup
+  * [ ] Automatic portal creation for groups/channels when receiving invite/message/etc
+  * [x] Private chat creation by inviting Telegram user to new room
+  * [ ] Inviting Telegram users to group/channel portals
+  * [ ] Joining public channels/supergroups using room aliases
+  * [x] Searching for Telegram users using management commands
+* Misc
+  * [ ] Use optional bot to relay messages for unauthenticated Matrix users
+  * [ ] Properly handle upgrading groups to supergroups
+  * [ ] Creating new Telegram groups from Matrix
+  * [ ] Creating Telegram groups for existing Matrix rooms
