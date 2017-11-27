@@ -28,6 +28,7 @@ A Telegram chat will be created once the bridge is stable enough.
 ## Features & Roadmap
 * Matrix → Telegram
   * [x] Plaintext messages
+  * [x] Formatted messages
   * [ ] Images
   * [ ] Files
   * [ ] Message redactions
@@ -36,6 +37,7 @@ A Telegram chat will be created once the bridge is stable enough.
   * [ ] Power level
 * Telegram → Matrix
   * [x] Plaintext messages
+  * [x] Formatted messages
   * [x] Images
   * [ ] Stickers (somewhat works through document upload, no preview though)
   * [x] Audio messages

@@ -14,6 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 const TelegramPeer = require("./telegram-peer")
+const formatter = require("./formatter")
 
 /**
  * Portal represents a portal from a Matrix room to a Telegram chat.
@@ -65,9 +66,9 @@ class Portal {
 	}
 
 
-	async copyPhotoSize(telegramPOV, sender, photo) {
+	async copyTelegramPhoto(telegramPOV, sender, photo) {
 		const size = photo.sizes.slice(-1)[0]
-		const uploaded = await this.copyFile(telegramPOV, sender, size.location, photo.id)
+		const uploaded = await this.copyTelegramFile(telegramPOV, sender, size.location, photo.id)
 		uploaded.info.h = size.h
 		uploaded.info.w = size.w
 		uploaded.info.size = size.size
@@ -75,7 +76,7 @@ class Portal {
 		return uploaded
 	}
 
-	async copyFile(telegramPOV, sender, location, id) {
+	async copyTelegramFile(telegramPOV, sender, location, id) {
 		console.log(JSON.stringify(location, "", "  "))
 		id = id || location.id
 		const file = await telegramPOV.getFile(location)
@@ -129,24 +130,43 @@ class Portal {
 		return this.peer.loadAccessHash(this.app, telegramPOV, { portal: this })
 	}
 
-	async handleTelegramEvent(evt) {
-		// FIXME room creation is disabled due to possibility of multiple messages causing duplicate rooms
-		//if (!this.isMatrixRoomCreated()) {
-		//	await this.createMatrixRoom(evt.source, { invite: [evt.source.matrixUser.userID] })
-		//}
+	async handleTelegramTyping(evt) {
+		if (!this.isMatrixRoomCreated()) {
+			return
+		}
+		const typer = await this.app.getTelegramUser(evt.from)
+		// The Intent API currently doesn't allow you to set the
+		// typing timeout. Once it does, we should set it to ~5.5s
+		// as Telegram resends typing notifications every 5 seconds.
+		typer.intent.sendTyping(this.roomID, true/*, 5500*/)
+	}
+
+	async handleTelegramMessage(evt) {
+		if (!this.isMatrixRoomCreated()) {
+			// FIXME room creation is disabled due to possibility of multiple messages causing duplicate rooms
+			//	await this.createMatrixRoom(evt.source, { invite: [evt.source.matrixUser.userID] })
+			console.warn("Room not created!", this)
+			return
+		}
 		const sender = await this.app.getTelegramUser(evt.from)
 		await sender.intent.sendTyping(this.roomID, false/*, 5500*/)
 		// TODO handle other content types
 		if (evt.text.length > 0) {
-			sender.sendText(this.roomID, evt.text)
+			if (evt.entities) {
+				evt.html = formatter.telegramToMatrix(evt.text, evt.entities)
+				sender.sendHTML(this.roomID, evt.html)
+			} else {
+				sender.sendText(this.roomID, evt.text)
+			}
 		}
 		if (evt.photo) {
-			const photo = await this.copyPhoto(evt.source, sender, evt.photo)
-			photo.name = evt.caption || "Photo"
+			const photo = await this.copyTelegramPhoto(evt.source, sender, evt.photo)
+			photo.name = evt.caption || "Uploaded photo"
 			sender.sendFile(this.roomID, photo)
 		} else if (evt.document) {
-			const file = await this.copyFile(evt.source, sender, evt.document)
-			file.name = evt.caption || "File upload"
+			// TODO handle stickers better
+			const file = await this.copyTelegramFile(evt.source, sender, evt.document)
+			file.name = evt.caption || "Uploaded document"
 			sender.sendFile(this.roomID, file)
 		} else if (evt.geo) {
 			sender.sendLocation(this.roomID, evt.geo)
@@ -154,11 +174,26 @@ class Portal {
 	}
 
 	async handleMatrixEvent(sender, evt) {
+		await this.loadAccessHash(sender.telegramPuppet)
 		switch (evt.content.msgtype) {
-		case "m.notice":
 		case "m.text":
-			await this.loadAccessHash(sender.telegramPuppet)
-			sender.telegramPuppet.sendMessage(this.peer, evt.content.body)
+			if (evt.content.format === "org.matrix.custom.html") {
+				const { message, entities } = formatter.matrixToTelegram(evt.content.formatted_body)
+				sender.telegramPuppet.sendMessage(this.peer, message, entities)
+			} else {
+				sender.telegramPuppet.sendMessage(this.peer, evt.content.body)
+			}
+			break
+		case "m.video":
+		case "m.audio":
+		case "m.file":
+			// TODO upload document
+			break
+		case "m.image":
+
+			break
+		case "m.geo":
+			// TODO send location
 			break
 		default:
 			console.log("Unhandled event:", evt)

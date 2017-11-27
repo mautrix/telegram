@@ -23,7 +23,6 @@ const TelegramPeer = require("./telegram-peer")
 function metaFromFileType(type) {
 	const extension = type.substr("storage.file".length).toLowerCase()
 	let fileClass, mimetype, matrixtype
-	/*eslint no-fallthrough: "off"*/
 	switch (type) {
 	case "storage.fileGif":
 	case "storage.fileJpeg":
@@ -233,10 +232,11 @@ class TelegramPuppet {
 		}
 	}
 
-	async sendMessage(peer, message) {
+	async sendMessage(peer, message, entities = undefined) {
 		const result = await this.client("messages.sendMessage", {
 			peer: peer.toInputPeer(),
 			message,
+			entities,
 			random_id: ~~(Math.random() * (1 << 30)),
 		})
 		return result
@@ -259,28 +259,31 @@ class TelegramPuppet {
 		}
 		let to, from, portal
 		switch (update._) {
+		// Telegram user status handling.
 		case "updateUserStatus":
 			const user = await this.app.getTelegramUser(update.user_id)
 			const presence = update.status._ === "userStatusOnline" ? "online" : "offline"
 			await user.intent.getClient().setPresence({ presence })
 			return
+		//
+		// Telegram typing event handling
+		//
 		case "updateUserTyping":
 			to = new TelegramPeer("user", update.user_id, { receiverID: this.userID })
 			/* falls through */
 		case "updateChatUserTyping":
 			to = to || new TelegramPeer("chat", update.chat_id)
-			portal = await this.app.getPortalByPeer(to)
-			if (portal.isMatrixRoomCreated()) {
-				const sender = await this.app.getTelegramUser(update.user_id)
-				// The Intent API currently doesn't allow you to set the
-				// typing timeout. Once it does, we should set it to ~5.5s
-				// as Telegram resends typing notifications every 5 seconds.
-				await sender.intent.sendTyping(portal.roomID, true/*, 5500*/)
-			}
-			return
 
+			portal = await this.app.getPortalByPeer(to)
+			await portal.handleTelegramTyping({
+				from: update.user_id,
+				to,
+				source: this,
+			})
+			return
 		//
-		// The following cases are all messages. The actual handling happens after the switch.
+		// Telegram message handling/parsing.
+		// The actual handling happens after the switch.
 		//
 		case "updateShortMessage":
 			to = new TelegramPeer("user", update.user_id, { receiverID: this.userID })
@@ -298,17 +301,19 @@ class TelegramPuppet {
 			break
 
 		default:
-			console.log(`Update of type ${update._} received:\n${JSON.stringify(update, "", "  ")}`)
+			// Unknown update type
+			console.log(`Update of unknown type ${update._} received:\n${JSON.stringify(update, "", "  ")}`)
 			return
 		}
+
 		console.log(update)
-		// TODO handle other content types in updateNewMessage
 		portal = await this.app.getPortalByPeer(to)
-		await portal.handleTelegramEvent({
+		await portal.handleTelegramMessage({
 			from,
 			to,
 			source: this,
 			text: update.message,
+			entities: update.entities,
 			photo: update.media && update.media._ === "messageMediaPhoto"
 				? update.media.photo
 				: undefined,
@@ -392,6 +397,10 @@ class TelegramPuppet {
 				console.error(err.stack)
 			}
 		}, 1000)
+	}
+
+	async uploadFile() {
+
 	}
 
 	async getFile(location) {

@@ -13,6 +13,7 @@
 //
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
+const sanitizeHTML = require("sanitize-html")
 const TelegramPeer = require("./telegram-peer")
 
 /**
@@ -132,6 +133,15 @@ class TelegramUser {
 
 	save() {
 		return this.app.putUser(this)
+	}
+
+	sendHTML(roomID, html) {
+		return this.intent.sendMessage(roomID, {
+			msgtype: "m.text",
+			format: "org.matrix.custom.html",
+			formatted_body: html,
+			body: sanitizeHTML(html),
+		})
 	}
 
 	sendText(roomID, text) {
