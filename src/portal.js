@@ -166,7 +166,15 @@ class Portal {
 		} else if (evt.document) {
 			// TODO handle stickers better
 			const file = await this.copyTelegramFile(evt.source, sender, evt.document)
-			file.name = evt.caption || "Uploaded document"
+			if (evt.caption) {
+				file.name = evt.caption
+			} else if (evt.matrixtype === "m.audio") {
+				file.name = "Uploaded audio"
+			} else if (evt.matrixtype === "m.video") {
+				file.name = "Uploaded video"
+			} else {
+				file.name = "Uploaded document"
+			}
 			sender.sendFile(this.roomID, file)
 		} else if (evt.geo) {
 			sender.sendLocation(this.roomID, evt.geo)
