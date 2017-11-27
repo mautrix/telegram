@@ -364,6 +364,7 @@ class MautrixTelegram {
 	 *
 	 * @param   {string} roomID   The ID of the room to search.
 	 * @param   {Intent} [intent] The Intent object to use when reading the room state.
+	 *                            Uses {@link #botIntent} by default.
 	 * @returns {Array}           The list of MXIDs who are in the room.
 	 */
 	async getRoomMembers(roomID, intent = this.botIntent) {
@@ -377,6 +378,12 @@ class MautrixTelegram {
 		return members
 	}
 
+	/**
+	 * Handle an invite to a Matrix room.
+	 *
+	 * @param {MatrixUser}  sender The user who sent this invite.
+	 * @param {MatrixEvent} evt    The invite event.
+	 */
 	async handleInvite(sender, evt) {
 		console.log(evt)
 		const asBotID = this.bridge.getBot().getUserId()
@@ -474,7 +481,6 @@ class MautrixTelegram {
 			return
 		}
 
-		// TODO to handle joining telegram groups and initiating private chats, we need to handle room member events.
 		if (evt.sender === asBotID || evt.type !== "m.room.message" || !evt.content) {
 			// Ignore own messages and non-message events.
 			return
@@ -527,8 +533,8 @@ class MautrixTelegram {
 	/**
 	 * Check whether the given user ID is allowed to use this bridge.
 	 *
-	 * @param {string} userID The full Matrix ID to check (@user:homeserver.tld)
-	 * @returns {boolean}     Whether or not the user should be allowed to use the bridge.
+	 * @param   {string} userID The full Matrix ID to check (@user:homeserver.tld)
+	 * @returns {boolean}       Whether or not the user should be allowed to use the bridge.
 	 */
 	checkWhitelist(userID) {
 		if (!this.config.bridge.whitelist || this.config.bridge.whitelist.length === 0) {
