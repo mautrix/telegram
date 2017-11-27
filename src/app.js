@@ -501,15 +501,15 @@ class MautrixTelegram {
 			}
 		}
 		const cmdprefix = this.config.bridge.commands.prefix
-		if (isManagement || evt.content.body.startsWith(`${cmdprefix} `)) {
+		if (isManagement || (cmdprefix && evt.content.body.startsWith(`${cmdprefix} `))) {
 			const prefixLength = cmdprefix.length + 1
-			if (evt.content.body.startsWith(`${cmdprefix} `)) {
+			if (cmdprefix && evt.content.body.startsWith(`${cmdprefix} `)) {
 				evt.content.body = evt.content.body.substr(prefixLength)
 			}
 			const args = evt.content.body.split(" ")
 			const command = args.shift()
 			const replyFunc = (reply, { allowHTML = false, markdown = true } = {}) => {
-				reply = reply.replace("$cmdprefix", cmdprefix)
+				reply = reply.replace("$cmdprefix", cmdprefix || "")
 				if (!markdown && !allowHTML) {
 					reply = escapeHTML(reply)
 				}

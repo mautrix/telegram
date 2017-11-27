@@ -29,6 +29,7 @@ bridge:
     # Bridge management command configuration
     commands:
         # The prefix for all management commands.
+        # Can be removed to disable management commands in rooms with more than two users.
         prefix: "!tg"
 
         # Enables the !tg api ... commands for debugging.
