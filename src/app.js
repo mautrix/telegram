@@ -60,7 +60,7 @@ class MautrixTelegram {
 		this.portalsByRoomID = new Map()
 		/**
 		 * List of management rooms.
-		 * @type {Array<string>}
+		 * @type {string[]}
 		 */
 		this.managementRooms = []
 
@@ -365,7 +365,7 @@ class MautrixTelegram {
 	 * @param   {string} roomID   The ID of the room to search.
 	 * @param   {Intent} [intent] The Intent object to use when reading the room state.
 	 *                            Uses {@link #botIntent} by default.
-	 * @returns {Array}           The list of MXIDs who are in the room.
+	 * @returns {string[]}        The list of MXIDs who are in the room.
 	 */
 	async getRoomMembers(roomID, intent = this.botIntent) {
 		const roomState = await intent.roomState(roomID)

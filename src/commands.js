@@ -30,7 +30,7 @@ const commands = {}
  * @param {string}          command The command itself.
  * @param {Array<string>}   args    A list of arguments.
  * @param {function}        reply   A function that is called to reply to the command.
- * @param {MautrixTelegram} app     The MautrixTelegram instance.
+ * @param {MautrixTelegram} app     The app main class instance.
  * @param {MatrixEvent}     evt     The event that caused this call.
  */
 function run(sender, command, args, reply, app, evt) {

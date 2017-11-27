@@ -35,6 +35,13 @@ class MatrixUser {
 		this._telegramPuppet = undefined
 	}
 
+	/**
+	 * Convert a database entry into a MatrixUser.
+	 *
+	 * @param   {MautrixTelegram} app   The app main class instance.
+	 * @param   {Object}          entry The database entry.
+	 * @returns {MatrixUser}            The loaded MatrixUser.
+	 */
 	static fromEntry(app, entry) {
 		if (entry.type !== "matrix") {
 			throw new Error("MatrixUser can only be created from entry type \"matrix\"")
@@ -52,6 +59,11 @@ class MatrixUser {
 		return user
 	}
 
+	/**
+	 * Convert this MatrixUser into a database entry.
+	 *
+	 * @returns {Object} A user store database entry.
+	 */
 	toEntry() {
 		if (this._telegramPuppet) {
 			this.puppetData = this._telegramPuppet.toSubentry()
@@ -68,6 +80,12 @@ class MatrixUser {
 		}
 	}
 
+	/**
+	 * Get the telegram puppet this Matrix user controls.
+	 * If one doesn't exist, it'll be created based on the {@link #puppetData} field.
+	 *
+	 * @returns {TelegramPuppet} The Telegram account controller.
+	 */
 	get telegramPuppet() {
 		if (!this._telegramPuppet) {
 			this._telegramPuppet = TelegramPuppet.fromSubentry(this.app, this, this.puppetData || {})
@@ -75,19 +93,20 @@ class MatrixUser {
 		return this._telegramPuppet
 	}
 
-	parseTelegramError(err) {
-		const message = err.toPrintable ? err.toPrintable() : err.toString()
-
-		if (err instanceof Error) {
-			throw err
-		}
-		throw new Error(message)
-	}
-
+	/**
+	 * Get the IDs of all the Telegram contacts of this user.
+	 *
+	 * @returns {number[]} A list of Telegram user IDs.
+	 */
 	get contactIDs() {
 		return this.contacts.map(contact => contact.id)
 	}
 
+	/**
+	 * Update the contacts of this user based on a list of Telegram user IDs.
+	 *
+	 * @param {number[]} list The list of Telegram user IDs.
+	 */
 	set contactIDs(list) {
 		// FIXME This is somewhat dangerous
 		setTimeout(async () => {
@@ -97,6 +116,11 @@ class MatrixUser {
 		}, 0)
 	}
 
+	/**
+	 * Synchronize the contacts of this user.
+	 *
+	 * @returns {boolean} Whether or not anything changed.
+	 */
 	async syncContacts() {
 		const contacts = await this.telegramPuppet.client("contacts.getContacts", {
 			hash: md5(this.contactIDs.join(",")),
@@ -114,6 +138,14 @@ class MatrixUser {
 		return true
 	}
 
+	/**
+	 * Synchronize the dialogs (groups, channels) of this user.
+	 *
+	 * @param   {object}  [opts]           Additional options.
+	 * @param   {boolean} opts.createRooms Whether or not portal rooms should be automatically created.
+	 *                                     Defaults to {@code true}
+	 * @returns {boolean} Whether or not anything changed.
+	 */
 	async syncDialogs({ createRooms = true } = {}) {
 		const dialogs = await this.telegramPuppet.client("messages.getDialogs", {})
 		let changed = false
@@ -140,6 +172,15 @@ class MatrixUser {
 		return changed
 	}
 
+	/**
+	 * Search for contacts of this user.
+	 *
+	 * @param   {string} query              The search query.
+	 * @param   {object} [opts]             Additional options.
+	 * @param   {number} opts.maxResults    The maximum number of results to show.
+	 * @param   {number} opts.minSimilarity The minimum query similarity, below which results should be ignored.
+	 * @returns {Object[]} The search results.
+	 */
 	async searchContacts(query, { maxResults = 5, minSimilarity = 0.45 } = {}) {
 		const results = []
 		for (const contact of this.contacts) {
@@ -169,6 +210,13 @@ class MatrixUser {
 			.slice(0, maxResults)
 	}
 
+	/**
+	 * Search for non-contact Telegram users from the point of view of this user.
+	 * @param   {string} query           The search query.
+	 * @param   {object} [opts]          Additional options.
+	 * @param   {number} opts.maxResults The maximum number of results to show.
+	 * @returns {Object[]} The search results.
+	 */
 	async searchTelegram(query, { maxResults = 5 } = {}) {
 		const results = await this.telegramPuppet.client("contacts.search", {
 			q: query,
@@ -183,6 +231,12 @@ class MatrixUser {
 		return resultUsers
 	}
 
+	/**
+	 * Request a Telegarm phone code for logging in (or registering)
+	 *
+	 * @param   {string} phoneNumber The phone number.
+	 * @returns {Object}             The code send result as returned by {@link TelegramPuppet#sendCode()}.
+	 */
 	async sendTelegramCode(phoneNumber) {
 		if (this._telegramPuppet && this._telegramPuppet.userID) {
 			throw new Error("You are already logged in. Please log out before logging in again.")
@@ -193,26 +247,30 @@ class MatrixUser {
 		case "invalid":
 			throw new Error("Invalid phone number.")
 		}
-		try {
-			const result = await this.telegramPuppet.sendCode(phoneNumber)
-			this.phoneNumber = phoneNumber
-			this.phoneCodeHash = result.phone_code_hash
-			await this.save()
-			return result
-		} catch (err) {
-			return this.parseTelegramError(err)
-		}
+		const result = await this.telegramPuppet.sendCode(phoneNumber)
+		this.phoneNumber = phoneNumber
+		this.phoneCodeHash = result.phone_code_hash
+		await this.save()
+		return result
 	}
 
+	/**
+	 * Log out from Telegram.
+	 */
 	async logOutFromTelegram() {
 		this.telegramPuppet.logOut()
 		// TODO kick user from all portals
 		this._telegramPuppet = undefined
 		this.puppetData = undefined
 		await this.save()
-		return true
 	}
 
+	/**
+	 * Sign in to Telegram with a phone code sent using {@link #sendTelegramCode()}.
+	 *
+	 * @param   {number} phoneCode The phone code.
+	 * @returns {Object}           The sign in result as returned by {@link TelegramPuppet#signIn()}.
+	 */
 	async signInToTelegram(phoneCode) {
 		if (!this.phoneNumber) throw new Error("Phone number not set")
 		if (!this.phoneCodeHash) throw new Error("Phone code not sent")
@@ -223,12 +281,21 @@ class MatrixUser {
 		return result
 	}
 
+	/**
+	 * Finish signing in to Telegram using the two-factor auth password.
+	 *
+	 * @param   {string} password_hash The salted hash of the password.
+	 * @returns {Object}               The sign in result as returned by {@link TelegramPuppet#checkPassword()}
+	 */
 	async checkPassword(password_hash) {
 		const result = await this.telegramPuppet.checkPassword(password_hash)
 		await this.save()
 		return result
 	}
 
+	/**
+	 * Save this MatrixUser to the database.
+	 */
 	save() {
 		return this.app.putUser(this)
 	}

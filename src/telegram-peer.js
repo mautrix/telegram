@@ -58,7 +58,7 @@ class TelegramPeer {
 	/**
 	 * Load the access hash for a specific puppeted Telegram user from the channel portal or TelegramUser info.
 	 *
-	 * @param {MautrixTelegram} app         The instance of {@link MautrixTelegram} to use.
+	 * @param {MautrixTelegram} app         The app main class instance.
 	 * @param {TelegramPuppet}  telegramPOV The puppeted Telegram user for whom the access hash is needed.
 	 * @param {Portal}          [portal]    Optional channel {@link Portal} instance to avoid calling {@link app#getPortalByPeer(peer)}.
 	 *                                      Only used if {@link #type} is {@code user}.
