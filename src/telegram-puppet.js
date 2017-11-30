@@ -305,9 +305,11 @@ class TelegramPuppet {
 			from = update.from_id
 			break
 		case "updateNewChannelMessage":
+			// TODO figure out how channel message signing works
+			from = -1
 		case "updateNewMessage":
 			update = update.message // Message defined at message#90dddc11 in layer 71
-			from = update.from_id
+			from = update.from_id || from
 			to = TelegramPeer.fromTelegramData(update.to_id, update.from_id, this.userID)
 			break
 
@@ -317,7 +319,6 @@ class TelegramPuppet {
 			return
 		}
 
-		console.log(update)
 		portal = await this.app.getPortalByPeer(to)
 
 		if (update._ === "messageService") {

@@ -34,6 +34,7 @@ class MautrixTelegram {
 	 */
 	constructor(config) {
 		this.config = config
+		this.channelTelegramSender = new TelegramUser(this, -1)
 
 		/**
 		 * MXID -> {@link MatrixUser} cache.
@@ -142,6 +143,9 @@ class MautrixTelegram {
 	 * @returns {Intent}    The Matrix puppet intent for the given Telegram user.
 	 */
 	getIntentForTelegramUser(id) {
+		if (id === -1) {
+			return this.botIntent
+		}
 		return this.bridge.getIntentFromLocalpart(this.getUsernameForTelegramUser(id))
 	}
 
@@ -282,6 +286,9 @@ class MautrixTelegram {
 	 * @returns {TelegramUser} The TelegramUser object.
 	 */
 	async getTelegramUser(id, { createIfNotFound = true } = {}) {
+		if (id === -1) {
+			return this.channelTelegramSender
+		}
 		// TODO remove this after bugs are fixed
 		if (isNaN(parseInt(id, 10))) {
 			const err = new Error("Fatal: non-int Telegram user ID")

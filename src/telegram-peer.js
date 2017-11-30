@@ -137,13 +137,19 @@ class TelegramPeer {
 				channel: this.toInputObject(),
 			})
 			info = info.chats[0]
-			const participants = await telegramPOV.client("channels.getParticipants", {
-				channel: this.toInputObject(),
-				filter: { _: "channelParticipantsRecent" },
-				offset: 0,
-				limit: 1000,
-			})
-			users = participants.users
+			try {
+				const participants = await telegramPOV.client("channels.getParticipants", {
+					channel: this.toInputObject(),
+					filter: { _: "channelParticipantsRecent" },
+					offset: 0,
+					limit: 1000,
+				})
+				users = participants.users
+			} catch (err) {
+				// Getting channel participants apparently requires admin.
+				// TODO figure out what to do about that ^
+				users = []
+			}
 			break
 		default:
 			throw new Error(`Unknown peer type ${this.type}`)

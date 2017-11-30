@@ -210,6 +210,7 @@ class Portal {
 				console.error(err.stack)
 			}
 		}
+
 		const sender = await this.app.getTelegramUser(evt.from)
 		await sender.intent.sendTyping(this.roomID, false)
 
