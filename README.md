@@ -29,32 +29,34 @@ A Telegram chat will be created once the bridge is stable enough.
 * Matrix → Telegram
   * [x] Plaintext messages
   * [x] Formatted messages
+  * [x] Locations
   * [ ] Images
   * [ ] Files
   * [ ] Message redactions
   * [ ] Presence (currently always shown as online on Telegram)
   * [ ] Typing notifications (may not be possible)
-  * [ ] Membership actions (invite, kick, join, leave)
   * [ ] Pinning messages
   * [ ] Power level
+  * [ ] Membership actions (invite, kick, join, leave)
+  * [ ] Group/channel name/description changes
 * Telegram → Matrix
   * [x] Plaintext messages
   * [x] Formatted messages
   * [x] Images
+  * [x] Locations
   * [ ] Stickers (somewhat works through document upload, no preview though)
   * [x] Audio messages
   * [ ] Video messages
   * [x] Documents
-  * [x] Locations
+  * [ ] Message deletions
   * [x] Presence
   * [x] Typing notifications
   * [ ] Pinning messages
-  * [ ] Message edits
-  * [ ] Message deletions
   * [ ] Admin status
-  * [x] Initial group/channel name/description
   * [x] Membership actions (invite, kick, join, leave)
   * [ ] Group/channel name/description changes
+  * [x] Initial group/channel name/description
+  * [ ] Message edits
 * Initiating chats
   * [x] Automatic portal creation for groups/channels at startup
   * [x] Automatic portal creation for groups/channels when receiving invite/message
