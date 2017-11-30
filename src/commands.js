@@ -299,6 +299,22 @@ commands.api = async (sender, args, reply, app) => {
 	}
 }
 
+function timeout(promise, ms = 2500) {
+	return new Promise((resolve, reject) => {
+		promise.then(resolve, reject)
+		setTimeout(() => reject(new Error("API call response not received")), ms)
+	})
+}
+
+commands.ping = async (sender, args, reply) => {
+	try {
+		await timeout(sender.telegramPuppet.client("contacts.getContacts", {}))
+		reply("Connection seems OK.")
+	} catch (err) {
+		reply(`Not connected: ${err}`)
+	}
+}
+
 module.exports = {
 	commands,
 	run,
