@@ -324,6 +324,7 @@ class TelegramPuppet {
 			await portal.handleTelegramServiceMessage({
 				from,
 				to,
+				source: this,
 				action: update.action,
 			})
 			return

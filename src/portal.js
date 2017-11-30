@@ -93,12 +93,13 @@ class Portal {
 		return uploaded
 	}
 
-	async updateAvatar(telegramPOV, chat) {
-		if (!chat.photo || this.peer.type === "user") {
+	async updateAvatar(telegramPOV, photo) {
+		if (!photo || !photo.location || this.peer.type === "user") {
 			return false
 		}
 
-		const photo = chat.photo.photo_big
+		photo = photo.location
+
 		if (this.photo && this.avatarURL &&
 			this.photo.dc_id === photo.dc_id &&
 			this.photo.volume_id === photo.volume_id &&
@@ -170,6 +171,26 @@ class Portal {
 			}
 			telegramUser = await this.app.getTelegramUser(evt.action.user_id)
 			telegramUser.intent.leave(this.roomID)
+			break
+		case "messageActionChatEditPhoto":
+			const sizes = evt.action.photo.sizes
+			let largestSize = sizes[0]
+			let largestSizePixels = largestSize.w * largestSize.h
+			for (const size of sizes) {
+				const pixels = size.w * size.h
+				if (pixels > largestSizePixels) {
+					largestSizePixels = pixels
+					largestSize = size
+				}
+			}
+			// TODO once permissions are synced, make the avatar change event come from the user who changed the avatar
+			await this.updateAvatar(evt.source, largestSize)
+			break
+		case "messageActionChatEditTitle":
+			this.peer.title = evt.action.title
+			await this.save()
+			const intent = await this.getMainIntent()
+			await intent.setRoomName(this.roomID, this.peer.title)
 			break
 		default:
 			console.log("Unhandled service message of type", evt.action._)
@@ -363,7 +384,9 @@ class Portal {
 		if (this.peer.type !== "user") {
 			try {
 				await this.syncTelegramUsers(telegramPOV, users)
-				await this.updateAvatar(telegramPOV, info)
+				if (info.photo && info.photo.photo_big) {
+					await this.updateAvatar(telegramPOV, info.photo.photo_big)
+				}
 			} catch (err) {
 				console.error(err)
 				if (err instanceof Error) {

@@ -38,7 +38,7 @@ A Telegram chat will be created once the bridge is stable enough.
   * [ ] Pinning messages
   * [ ] Power level
   * [ ] Membership actions (invite, kick, join, leave)
-  * [ ] Group/channel name/description changes
+  * [ ] Room metadata changes
 * Telegram → Matrix
   * [x] Plaintext messages
   * [x] Formatted messages
@@ -54,8 +54,8 @@ A Telegram chat will be created once the bridge is stable enough.
   * [ ] Pinning messages
   * [ ] Admin status
   * [x] Membership actions (invite, kick, join, leave)
-  * [ ] Group/channel name/description changes
-  * [x] Initial group/channel name/description
+  * [x] Chat metadata changes
+  * [x] Initial chat metadata
   * [ ] Message edits
 * Initiating chats
   * [x] Automatic portal creation for groups/channels at startup
