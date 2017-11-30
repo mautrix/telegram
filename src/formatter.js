@@ -16,8 +16,8 @@
 
 /**
  * Utility functions to convert between Telegram and Matrix (HTML) formatting.
- *
- * WARNING: This module contains headache-causing regular expressions and other duct tape.
+ * <br><br>
+ * <b>WARNING: This module contains headache-causing regular expressions and other duct tape.</b>
  *
  * @module formatter
  */
@@ -38,10 +38,8 @@ function addTag(tags, entity, tag, attrs, priority = 0) {
 
 /**
  * Convert a Telegram entity-formatted message to a Matrix HTML-formatted message.
- *
- * WARNING: I am not responsible for possible severe headaches caused by reading any part of this function.
- *          While there are a few explaining comments, I haven't even tried to figure out why it works.
- *          The tag priorities are especially non-understandable. You have been warned.
+ * <br><br>
+ * <b>WARNING: I am not responsible for possible severe headaches caused by reading any part of this function.</b>
  *
  * @param {string} message  The plaintext message.
  * @param {Array}  entities The Telegram formatting entities.
