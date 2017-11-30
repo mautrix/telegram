@@ -34,6 +34,8 @@ A Telegram chat will be created once the bridge is stable enough.
   * [ ] Message redactions
   * [ ] Presence (currently always shown as online on Telegram)
   * [ ] Typing notifications (may not be possible)
+  * [ ] Membership actions (invite, kick, join, leave)
+  * [ ] Pinning messages
   * [ ] Power level
 * Telegram → Matrix
   * [x] Plaintext messages
@@ -46,16 +48,17 @@ A Telegram chat will be created once the bridge is stable enough.
   * [x] Locations
   * [x] Presence
   * [x] Typing notifications
+  * [ ] Pinning messages
   * [ ] Message edits
   * [ ] Message deletions
   * [ ] Admin status
   * [x] Initial group/channel name/description
+  * [x] Membership actions (invite, kick, join, leave)
   * [ ] Group/channel name/description changes
 * Initiating chats
   * [x] Automatic portal creation for groups/channels at startup
-  * [ ] Automatic portal creation for groups/channels when receiving invite/message/etc
+  * [x] Automatic portal creation for groups/channels when receiving invite/message
   * [x] Private chat creation by inviting Telegram user to new room
-  * [ ] Inviting Telegram users to group/channel portals
   * [ ] Joining public channels/supergroups using room aliases
   * [x] Searching for Telegram users using management commands
 * Misc

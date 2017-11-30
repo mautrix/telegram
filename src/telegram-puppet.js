@@ -319,6 +319,15 @@ class TelegramPuppet {
 
 		console.log(update)
 		portal = await this.app.getPortalByPeer(to)
+
+		if (update._ === "messageService") {
+			await portal.handleTelegramServiceMessage({
+				from,
+				to,
+				action: update.action,
+			})
+			return
+		}
 		await portal.handleTelegramMessage({
 			from,
 			to,
@@ -334,8 +343,8 @@ class TelegramPuppet {
 			geo: update.media && update.media._ === "messageMediaGeo"
 				? update.media.geo
 				: undefined,
-			caption: update.media ?
-				update.media.caption
+			caption: update.media
+				? update.media.caption
 				: undefined,
 		})
 	}
@@ -391,7 +400,7 @@ class TelegramPuppet {
 		}
 		try {
 			console.log("Updating dialogs...")
-			const changed = await this.matrixUser.syncDialogs()
+			const changed = await this.matrixUser.syncChats()
 			if (!changed) {
 				console.log("Dialogs were up-to-date")
 			} else {

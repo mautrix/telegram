@@ -32,7 +32,14 @@ class MatrixUser {
 		this.commandStatus = undefined
 		this.puppetData = undefined
 		this.contacts = []
+		this.chats = []
 		this._telegramPuppet = undefined
+	}
+
+	get telegramUserID() {
+		return this._telegramPuppet
+			? this._telegramPuppet.userID || undefined
+			: undefined
 	}
 
 	/**
@@ -50,7 +57,8 @@ class MatrixUser {
 		const user = new MatrixUser(app, entry.id)
 		user.phoneNumber = entry.data.phoneNumber
 		user.phoneCodeHash = entry.data.phoneCodeHash
-		user.contactIDs = entry.data.contactIDs
+		user.setContactIDs(entry.data.contactIDs)
+		user.setChatIDs(entry.data.chatIDs)
 		if (entry.data.puppet) {
 			user.puppetData = entry.data.puppet
 			// Create the telegram puppet instance
@@ -71,10 +79,12 @@ class MatrixUser {
 		return {
 			type: "matrix",
 			id: this.userID,
+			telegramID: this.telegramUserID,
 			data: {
 				phoneNumber: this.phoneNumber,
 				phoneCodeHash: this.phoneCodeHash,
 				contactIDs: this.contactIDs,
+				chatIDs: this.chatIDs,
 				puppet: this.puppetData,
 			},
 		}
@@ -103,17 +113,36 @@ class MatrixUser {
 	}
 
 	/**
+	 * Get the IDs of all the Telegram chats this user is in.
+	 *
+	 * @returns {number[]} A list of Telegram chat IDs.
+	 */
+	get chatIDs() {
+		return this.chats.map(chat => chat.id)
+	}
+
+	/**
 	 * Update the contacts of this user based on a list of Telegram user IDs.
 	 *
 	 * @param {number[]} list The list of Telegram user IDs.
 	 */
-	set contactIDs(list) {
-		// FIXME This is somewhat dangerous
-		setTimeout(async () => {
-			if (list) {
-				this.contacts = await Promise.all(list.map(id => this.app.getTelegramUser(id)))
-			}
-		}, 0)
+	async setContactIDs(list) {
+		if (!list) {
+			return
+		}
+		this.contacts = await Promise.all(list.map(id => this.app.getTelegramUser(id)))
+	}
+
+	/**
+	 * Update the chats of this user based on a list of Telegram chat IDs.
+	 *
+	 * @param {number[]} list The list of Telegram chat IDs.
+	 */
+	async setChatIDs(list) {
+		if (!list) {
+			return
+		}
+		this.chats = await Promise.all(list.map(id => this.app.getPortalByPeer(id)))
 	}
 
 	/**
@@ -139,16 +168,17 @@ class MatrixUser {
 	}
 
 	/**
-	 * Synchronize the dialogs (groups, channels) of this user.
+	 * Synchronize the chats (groups, channels) of this user.
 	 *
 	 * @param   {object}  [opts]           Additional options.
 	 * @param   {boolean} opts.createRooms Whether or not portal rooms should be automatically created.
 	 *                                     Defaults to {@code true}
 	 * @returns {boolean} Whether or not anything changed.
 	 */
-	async syncDialogs({ createRooms = true } = {}) {
+	async syncChats({ createRooms = true } = {}) {
 		const dialogs = await this.telegramPuppet.client("messages.getDialogs", {})
 		let changed = false
+		this.chats = []
 		for (const dialog of dialogs.chats) {
 			if (dialog._ === "chatForbidden" || dialog.deactivated) {
 				continue
@@ -158,6 +188,7 @@ class MatrixUser {
 			if (await portal.updateInfo(this.telegramPuppet, dialog)) {
 				changed = true
 			}
+			this.chats.push(portal)
 			if (createRooms) {
 				try {
 					await portal.createMatrixRoom(this.telegramPuppet, {
@@ -169,7 +200,23 @@ class MatrixUser {
 				}
 			}
 		}
+		await this.save()
 		return changed
+	}
+
+	async join(portal) {
+		if (!this.chats.includes(portal.id)) {
+			this.chats.push(portal.id)
+			this.save()
+		}
+	}
+
+	async leave(portal) {
+		const chatIDIndex = this.chats.indexOf(portal.id)
+		if (chatIDIndex > -1) {
+			this.chats.splice(chatIDIndex, 1)
+			this.save()
+		}
 	}
 
 	/**

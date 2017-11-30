@@ -141,6 +141,38 @@ class Portal {
 		typer.intent.sendTyping(this.roomID, true/*, 5500*/)
 	}
 
+	async handleTelegramServiceMessage(evt) {
+		let matrixUser, telegramUser
+		switch (evt.action._) {
+		case "messageActionChatCreate":
+			await this.createMatrixRoom(evt.source, { invite: [evt.source.matrixUser.userID] })
+			break
+		case "messageActionChatDeleteUser":
+			matrixUser = await this.app.getMatrixUserByTelegramID(evt.action.user_id)
+			if (matrixUser) {
+				matrixUser.leave(this)
+				this.kick(matrixUser.userID, "Left Telegram chat")
+			}
+			telegramUser = await this.app.getTelegramUser(evt.action.user_id)
+			telegramUser.intent.leave(this.roomID)
+			break
+		case "messageActionChatAddUser":
+			for (const userID of evt.action.users) {
+				matrixUser = await this.app.getMatrixUserByTelegramID(userID)
+				if (matrixUser) {
+					matrixUser.join(this)
+					this.invite(matrixUser.userID)
+				}
+				telegramUser = await this.app.getTelegramUser(userID)
+				telegramUser.intent.join(this.roomID)
+			}
+			break
+		default:
+			console.log("Unhandled service message of type", evt.action._)
+			console.log(evt.action)
+		}
+	}
+
 	async handleTelegramMessage(evt) {
 		if (!this.isMatrixRoomCreated()) {
 			try {
@@ -156,7 +188,7 @@ class Portal {
 		const sender = await this.app.getTelegramUser(evt.from)
 		await sender.intent.sendTyping(this.roomID, false)
 
-		if (evt.text.length > 0) {
+		if (evt.text && evt.text.length > 0) {
 			if (evt.entities) {
 				evt.html = formatter.telegramToMatrix(evt.text, evt.entities)
 				sender.sendHTML(this.roomID, evt.html)
@@ -218,16 +250,43 @@ class Portal {
 		return !!this.roomID
 	}
 
+	async getMainIntent() {
+		return this.peer.type === "user"
+			? (await this.app.getTelegramUser(this.peer.id)).intent
+			: this.app.botIntent
+	}
+
+	async invite(users) {
+		const intent = await this.getMainIntent()
+		// TODO check membership before inviting?
+		if (Array.isArray(users)) {
+			for (const userID of users) {
+				if (typeof userID === "string") {
+					intent.invite(this.roomID, userID)
+				}
+			}
+		} else if (typeof users === "string") {
+			intent.invite(this.roomID, users)
+		}
+	}
+
+	async kick(users, reason) {
+		const intent = await this.getMainIntent()
+		if (Array.isArray(users)) {
+			for (const userID of users) {
+				if (typeof userID === "string") {
+					intent.kick(this.roomID, users, reason)
+				}
+			}
+		} else if (typeof users === "string") {
+			intent.kick(this.roomID, users, reason)
+		}
+	}
+
 	async createMatrixRoom(telegramPOV, { invite = [], inviteEvenIfNotCreated = true } = {}) {
 		if (this.roomID) {
 			if (invite && inviteEvenIfNotCreated) {
-				const intent = this.peer.type === "user"
-					? (await this.app.getTelegramUser(this.peer.id)).intent
-					: this.app.botIntent
-				for (const userID of invite) {
-					// TODO check membership before inviting?
-					intent.invite(this.roomID, userID)
-				}
+				await this.invite(invite)
 			}
 			return {
 				created: false,
@@ -235,9 +294,7 @@ class Portal {
 			}
 		}
 		if (this.creatingMatrixRoom) {
-			console.log("Ongoing room creation detected!")
 			await new Promise(resolve => setTimeout(resolve, 1000))
-			console.log("Ongoing room creation waited for,", this.roomID)
 			return {
 				created: false,
 				roomID: this.roomID,

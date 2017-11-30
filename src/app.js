@@ -20,6 +20,7 @@ const marked = require("marked")
 const commands = require("./commands")
 const MatrixUser = require("./matrix-user")
 const TelegramUser = require("./telegram-user")
+const TelegramPeer = require("./telegram-peer")
 const Portal = require("./portal")
 
 /**
@@ -40,6 +41,12 @@ class MautrixTelegram {
 		 * @type {Map<string, MatrixUser>}
 		 */
 		this.matrixUsersByID = new Map()
+		/**
+		 * Telegram ID -> {@link MatrixUser} cache.
+		 * @priavte
+		 * @type {Map<number, MatrixUser>}
+		 */
+		this.matrixUsersByTelegramID = new Map()
 		/**
 		 * Telegram ID -> {@link TelegramUser} cache.
 		 * @private
@@ -82,10 +89,10 @@ class MautrixTelegram {
 			domain: config.homeserver.domain,
 			registration: config.appservice.registration,
 			controller: {
-				onUserQuery(user) {
+				onUserQuery(/*user*/) {
 					return {}
 				},
-				async onEvent(request, context) {
+				async onEvent(request/*, context*/) {
 					try {
 						await self.handleMatrixEvent(request.getData())
 					} catch (err) {
@@ -159,15 +166,31 @@ class MautrixTelegram {
 	}
 
 	/**
-	 * Get a {@link Portal} by Telegram peer.
+	 * Get a {@link Portal} by Telegram peer or peer ID.
 	 *
 	 * This will either get the room from the room cache or the bridge room database.
 	 * If the room is not found, a new {@link Portal} object is created.
 	 *
-	 * @param   {TelegramPeer} peer The TelegramPeer object whose portal to get.
-	 * @returns {Portal}            The Portal object.
+	 * You may set the {@code opts.createIfNotFound} parameter to change whether or not to create the Portal
+	 * automatically. However, if the peer is just the ID, a new room will not be created in any case.
+	 *
+	 * @param   {TelegramPeer|number} peer      The TelegramPeer object OR the ID of the peer whose portal to get.
+	 *                                          If only a peer ID is given, it is assumed that the peer is a chat or a
+	 *                                          channel. Searching for user peers requires the receiver ID, thus here it
+	 *                                          requires the full TelegramPeer object.
+	 * @param   {object}              [opts]    Additional options.
+	 * @param   {boolean} opts.createIfNotFound Whether or not to create the room if it is not found
+	 * @returns {Portal}                        The Portal object.
 	 */
 	async getPortalByPeer(peer, { createIfNotFound = true } = {}) {
+		if (typeof peer === "number") {
+			peer = {
+				id: peer,
+			}
+			createIfNotFound = false
+		} else if (!(peer instanceof TelegramPeer)) {
+			throw new Error("Invalid argument: peer is not a number or a TelegramPeer.")
+		}
 		let portal = this.portalsByPeerID.get(peer.id)
 		if (portal) {
 			return portal
@@ -180,8 +203,7 @@ class MautrixTelegram {
 		if (peer.type === "user") {
 			query.receiverID = peer.receiverID
 		}
-		const entries = await this.bridge.getRoomStore()
-			.select(query)
+		const entries = await this.bridge.getRoomStore().select(query)
 
 		// Handle possible db query race conditions
 		portal = this.portalsByPeerID.get(peer.id)
@@ -223,16 +245,15 @@ class MautrixTelegram {
 		// FIXME this is probably useless
 		for (const [_, portalByPeer] of this.portalsByPeerID) {
 			if (portalByPeer.roomID === id) {
-				this.portalsByRoomID.set(id, portal)
+				this.portalsByRoomID.set(id, portalByPeer)
 				return portalByPeer
 			}
 		}
 
-		const entries = await this.bridge.getRoomStore()
-			.select({
-				type: "portal",
-				roomID: id,
-			})
+		const entries = await this.bridge.getRoomStore().select({
+			type: "portal",
+			roomID: id,
+		})
 
 		// Handle possible db query race conditions
 		portal = this.portalsByRoomID.get(id)
@@ -262,7 +283,7 @@ class MautrixTelegram {
 	 */
 	async getTelegramUser(id, { createIfNotFound = true } = {}) {
 		// TODO remove this after bugs are fixed
-		if (isNaN(parseInt(id))) {
+		if (isNaN(parseInt(id, 10))) {
 			const err = new Error("Fatal: non-int Telegram user ID")
 			console.error(err.stack)
 			throw err
@@ -272,11 +293,10 @@ class MautrixTelegram {
 			return user
 		}
 
-		const entries = await this.bridge.getUserStore()
-			.select({
-				type: "remote",
-				id,
-			})
+		const entries = await this.bridge.getUserStore().select({
+			type: "remote",
+			id,
+		})
 
 		// Handle possible db query race conditions
 		if (this.telegramUsersByID.has(id)) {
@@ -295,6 +315,55 @@ class MautrixTelegram {
 	}
 
 	/**
+	 * Get a {@link MatrixUser} by Telegram user ID.
+	 *
+	 * This will either get the user from the user cache or the bridge user database.
+	 *
+	 * @param   {number} id  The Telegram user ID of the Matrix user to get.
+	 * @returns {MatrixUser} The MatrixUser object.
+	 */
+	async getMatrixUserByTelegramID(id) {
+		console.log("Searching for Matrix user by Telegram ID", id)
+		let user = this.matrixUsersByTelegramID.get(id)
+		if (user) {
+			console.log("Found in cache", user.userID)
+			return user
+		}
+
+		// Check if we have the user stored in the by- map
+		// FIXME this should be made useless by making sure we always add to the second map when appropriate
+		for (const [_, userByMXID] of this.matrixUsersByID) {
+			if (userByMXID.telegramUserID === id) {
+				console.log("Found in MXID cache", userByMXID.userID)
+				this.matrixUsersByTelegramID.set(id, userByMXID)
+				return userByMXID
+			}
+		}
+
+		const entries = this.bridge.getUserStore().select({
+			type: "matrix",
+			telegramID: id,
+		})
+
+		// Handle possible db query race conditions
+		if (this.matrixUsersByTelegramID.has(id)) {
+			console.log("Found in cache after race", user.userID)
+			return this.matrixUsersByTelegramID.get(id)
+		}
+
+		if (entries.length) {
+			console.log("Found in db", user.userID)
+			user = MatrixUser.fromEntry(this, entries[0])
+		} else {
+			console.log("Not found :(")
+			return undefined
+		}
+		this.matrixUsersByID.set(user.userID, user)
+		this.matrixUsersByTelegramID.set(id, user)
+		return user
+	}
+
+	/**
 	 * Get a {@link MatrixUser} by ID.
 	 *
 	 * This will either get the user from the user cache or the bridge user database.
@@ -309,11 +378,10 @@ class MautrixTelegram {
 			return user
 		}
 
-		const entries = this.bridge.getUserStore()
-			.select({
-				type: "matrix",
-				id,
-			})
+		const entries = this.bridge.getUserStore().select({
+			type: "matrix",
+			id,
+		})
 
 		// Handle possible db query race conditions
 		if (this.matrixUsersByID.has(id)) {
@@ -328,6 +396,9 @@ class MautrixTelegram {
 			return undefined
 		}
 		this.matrixUsersByID.set(id, user)
+		if (user.telegramUserID) {
+			this.matrixUsersByID.set(user.telegramUserID, user)
+		}
 		return user
 	}
 
@@ -385,7 +456,6 @@ class MautrixTelegram {
 	 * @param {MatrixEvent} evt    The invite event.
 	 */
 	async handleInvite(sender, evt) {
-		console.log(evt)
 		const asBotID = this.bridge.getBot().getUserId()
 		if (evt.state_key === asBotID) {
 			// Accept all AS bot invites.
@@ -399,16 +469,17 @@ class MautrixTelegram {
 			}
 			return
 		}
+		if (evt.sender === asBotID || evt.sender === evt.state_key) {
+			return
+		}
 
 		// Check if the invited user is a Telegram user.
 		const capture = this.usernameRegex.exec(evt.state_key)
-		console.log(capture)
 		if (!capture) {
 			return
 		}
 
 		const telegramID = +capture[1]
-		console.log(telegramID)
 		if (!telegramID || isNaN(telegramID)) {
 			return
 		}
