@@ -146,16 +146,7 @@ class Portal {
 		switch (evt.action._) {
 		case "messageActionChatCreate":
 			await this.createMatrixRoom(evt.source, { invite: [evt.source.matrixUser.userID] })
-			break
-		case "messageActionChatDeleteUser":
-			matrixUser = await this.app.getMatrixUserByTelegramID(evt.action.user_id)
-			if (matrixUser) {
-				matrixUser.leave(this)
-				this.kick(matrixUser.userID, "Left Telegram chat")
-			}
-			telegramUser = await this.app.getTelegramUser(evt.action.user_id)
-			telegramUser.intent.leave(this.roomID)
-			break
+			// Falls through to invite everyone in initial user list
 		case "messageActionChatAddUser":
 			for (const userID of evt.action.users) {
 				matrixUser = await this.app.getMatrixUserByTelegramID(userID)
@@ -166,6 +157,19 @@ class Portal {
 				telegramUser = await this.app.getTelegramUser(userID)
 				telegramUser.intent.join(this.roomID)
 			}
+			break
+		case "messageActionChannelCreate":
+			// Channels don't send initial user lists 3:<
+			await this.createMatrixRoom(evt.source, { invite: [evt.source.matrixUser.userID] })
+			break
+		case "messageActionChatDeleteUser":
+			matrixUser = await this.app.getMatrixUserByTelegramID(evt.action.user_id)
+			if (matrixUser) {
+				matrixUser.leave(this)
+				this.kick(matrixUser.userID, "Left Telegram chat")
+			}
+			telegramUser = await this.app.getTelegramUser(evt.action.user_id)
+			telegramUser.intent.leave(this.roomID)
 			break
 		default:
 			console.log("Unhandled service message of type", evt.action._)
