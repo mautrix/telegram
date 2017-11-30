@@ -20,7 +20,7 @@
 		"md5": "2.2.x",
 		"sanitize-html": "1.16.x",
 		"string-similarity": "1.2.x",
-		"telegram-mtproto": "3.x.x",
+		"telegram-mtproto": "3.2.7",
 		"yamljs": "0.3.x"
 	},
 	"devDependencies": {
@@ -30,7 +30,6 @@
 		"jsdoc": "3.5.x"
 	},
 	"scripts": {
-		"fix-auth-renewal": "./scripts/fix-auth-renewal",
 		"gen-jsdoc": "./scripts/gen-jsdoc"
 	}
 }

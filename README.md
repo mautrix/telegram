@@ -10,7 +10,7 @@ A Telegram chat will be created once the bridge is stable enough.
 
 ## Usage
 ### Setup
-0. Clone the repository and install packages with `npm install`. Also, you'll probably need to run `npm run fix-auth-renewal` to roll back telegram-mtproto to a version where server salt renewal works ([zerobias/telegram-mtproto#99](https://github.com/zerobias/telegram-mtproto/issues/99))
+0. Clone the repository and install packages with `npm install`.
 1. Create a copy of `example-config.yaml` and fill out the fields.
 2. Generate the appservice registration with `./mautrix-telegram -g`.
    You can use the `-c` and `-r` flags to change the location of the config and registration files.
