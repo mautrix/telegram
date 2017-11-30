@@ -213,6 +213,7 @@ class TelegramUser {
 		}
 
 		await this.intent.setAvatarUrl(this.avatarURL)
+		await this.save()
 		return true
 	}
 }
