@@ -143,14 +143,19 @@ class Portal {
 
 	async handleTelegramMessage(evt) {
 		if (!this.isMatrixRoomCreated()) {
-			// FIXME room creation is disabled due to possibility of multiple messages causing duplicate rooms
-			//	await this.createMatrixRoom(evt.source, { invite: [evt.source.matrixUser.userID] })
-			console.warn("Room not created!", this)
-			return
+			try {
+				const result = await this.createMatrixRoom(evt.source, { invite: [evt.source.matrixUser.userID] })
+				if (!result.roomID) {
+					return
+				}
+			} catch (err) {
+				console.error("Error creating room:", err)
+				console.error(err.stack)
+			}
 		}
 		const sender = await this.app.getTelegramUser(evt.from)
-		await sender.intent.sendTyping(this.roomID, false/*, 5500*/)
-		// TODO handle other content types
+		await sender.intent.sendTyping(this.roomID, false)
+
 		if (evt.text.length > 0) {
 			if (evt.entities) {
 				evt.html = formatter.telegramToMatrix(evt.text, evt.entities)
@@ -159,6 +164,7 @@ class Portal {
 				sender.sendText(this.roomID, evt.text)
 			}
 		}
+
 		if (evt.photo) {
 			const photo = await this.copyTelegramPhoto(evt.source, sender, evt.photo)
 			photo.name = evt.caption || "Uploaded photo"
@@ -168,9 +174,9 @@ class Portal {
 			const file = await this.copyTelegramFile(evt.source, sender, evt.document)
 			if (evt.caption) {
 				file.name = evt.caption
-			} else if (evt.matrixtype === "m.audio") {
+			} else if (file.matrixtype === "m.audio") {
 				file.name = "Uploaded audio"
-			} else if (evt.matrixtype === "m.video") {
+			} else if (file.matrixtype === "m.video") {
 				file.name = "Uploaded video"
 			} else {
 				file.name = "Uploaded document"
@@ -219,7 +225,7 @@ class Portal {
 					? (await this.app.getTelegramUser(this.peer.id)).intent
 					: this.app.botIntent
 				for (const userID of invite) {
-					// TODO check membership before inviting
+					// TODO check membership before inviting?
 					intent.invite(this.roomID, userID)
 				}
 			}
@@ -228,51 +234,69 @@ class Portal {
 				roomID: this.roomID,
 			}
 		}
+		if (this.creatingMatrixRoom) {
+			console.log("Ongoing room creation detected!")
+			await new Promise(resolve => setTimeout(resolve, 1000))
+			console.log("Ongoing room creation waited for,", this.roomID)
+			return {
+				created: false,
+				roomID: this.roomID,
+			}
+		}
+		this.creatingMatrixRoom = true
 
 		if (!await this.loadAccessHash(telegramPOV)) {
+			this.creatingMatrixRoom = false
 			throw new Error("Failed to load access hash.")
 		}
 
-		let room
-		const { info, users } = await this.peer.getInfo(telegramPOV)
-		if (this.peer.type === "chat") {
-			room = await this.app.botIntent.createRoom({
-				options: {
-					name: info.title,
-					topic: info.about,
-					visibility: "private",
-					invite,
-				},
-			})
-		} else if (this.peer.type === "channel") {
-			room = await this.app.botIntent.createRoom({
-				options: {
-					name: info.title,
-					topic: info.about,
-					visibility: info.username ? "public" : "private",
-					room_alias_name: info.username
-						? this.app.config.bridge.alias_template.replace("${NAME}", info.username)
-						: undefined,
-					invite,
-				},
-			})
-		} else if (this.peer.type === "user") {
-			const user = await this.app.getTelegramUser(info.id)
-			await user.updateInfo(telegramPOV, info, { updateAvatar: true })
-			room = await user.intent.createRoom({
-				createAsClient: true,
-				options: {
-					//name: user.getDisplayName(),
-					topic: "Telegram private chat",
-					visibility: "private",
-					invite,
-				},
-			})
-		} else {
-			throw new Error(`Unrecognized peer type: ${this.peer.type}`)
+		let room, info, users
+		try {
+			({ info, users } = await this.peer.getInfo(telegramPOV))
+			if (this.peer.type === "chat") {
+				room = await this.app.botIntent.createRoom({
+					options: {
+						name: info.title,
+						topic: info.about,
+						visibility: "private",
+						invite,
+					},
+				})
+			} else if (this.peer.type === "channel") {
+				room = await this.app.botIntent.createRoom({
+					options: {
+						name: info.title,
+						topic: info.about,
+						visibility: info.username ? "public" : "private",
+						room_alias_name: info.username
+							? this.app.config.bridge.alias_template.replace("${NAME}", info.username)
+							: undefined,
+						invite,
+					},
+				})
+			} else if (this.peer.type === "user") {
+				const user = await this.app.getTelegramUser(info.id)
+				await user.updateInfo(telegramPOV, info, { updateAvatar: true })
+				room = await user.intent.createRoom({
+					createAsClient: true,
+					options: {
+						//name: user.getDisplayName(),
+						topic: "Telegram private chat",
+						visibility: "private",
+						invite,
+					},
+				})
+			} else {
+				this.creatingMatrixRoom = false
+				throw new Error(`Unrecognized peer type: ${this.peer.type}`)
+			}
+		} catch (err) {
+			this.creatingMatrixRoom = false
+			throw err instanceof Error ? err : new Error(err)
 		}
 
 		this.roomID = room.room_id
+		this.creatingMatrixRoom = false
 		this.app.portalsByRoomID.set(this.roomID, this)
 		await this.save()
 		if (this.peer.type !== "user") {
@@ -281,7 +305,9 @@ class Portal {
 				await this.updateAvatar(telegramPOV, info)
 			} catch (err) {
 				console.error(err)
-				console.error(err.stack)
+				if (err instanceof Error) {
+					console.error(err.stack)
+				}
 			}
 		}
 		return {

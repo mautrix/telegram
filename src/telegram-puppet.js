@@ -232,17 +232,28 @@ class TelegramPuppet {
 		}
 	}
 
-	async sendMessage(peer, message, entities = undefined) {
-		const result = await this.client("messages.sendMessage", {
+	async sendMessage(peer, message, entities) {
+		if (!message) {
+			throw new Error("Invalid parameter: message is undefined.")
+		}
+		const payload = {
 			peer: peer.toInputPeer(),
 			message,
 			entities,
 			random_id: ~~(Math.random() * (1 << 30)),
-		})
+		}
+		if (!payload.entities) {
+			// Everything breaks if we send undefined things :/
+			delete payload.entities
+		}
+		const result = await this.client("messages.sendMessage", payload)
 		return result
 	}
 
 	async sendMedia(peer, media) {
+		if (!media) {
+			throw new Error("Invalid parameter: media is undefined.")
+		}
 		const result = await this.client("messages.sendMedia", {
 			peer: peer.toInputPeer(),
 			media,
