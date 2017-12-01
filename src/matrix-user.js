@@ -178,6 +178,29 @@ class MatrixUser {
 	async syncChats({ createRooms = true } = {}) {
 		const dialogs = await this.telegramPuppet.client("messages.getDialogs", {})
 		let changed = false
+
+		for (const user of dialogs.users) {
+			if (!user.self) {
+				continue
+			}
+			// Automatically create Saved Messages room
+			const peer = new TelegramPeer("user", user.id, {
+				receiverID: user.id,
+				accessHash: user.access_hash,
+			})
+			const portal = await this.app.getPortalByPeer(peer)
+			if (createRooms) {
+				try {
+					await portal.createMatrixRoom(this.telegramPuppet, {
+						invite: [this.userID],
+					})
+				} catch (err) {
+					console.error(err)
+					console.error(err.stack)
+				}
+			}
+		}
+
 		this.chats = []
 		for (const dialog of dialogs.chats) {
 			if (dialog._ === "chatForbidden" || dialog.deactivated) {

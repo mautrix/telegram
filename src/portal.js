@@ -43,6 +43,8 @@ class Portal {
 		}
 
 		const portal = new Portal(app, entry.data.roomID, TelegramPeer.fromSubentry(entry.data.peer))
+		portal.photo = entry.data.photo
+		portal.avatarURL = entry.data.avatarURL
 		if (portal.peer.type === "channel") {
 			portal.accessHashes = new Map(entry.data.accessHashes)
 		}
@@ -94,11 +96,9 @@ class Portal {
 	}
 
 	async updateAvatar(telegramPOV, photo) {
-		if (!photo || !photo.location || this.peer.type === "user") {
+		if (!photo || this.peer.type === "user") {
 			return false
 		}
-
-		photo = photo.location
 
 		if (this.photo && this.avatarURL &&
 			this.photo.dc_id === photo.dc_id &&
@@ -184,7 +184,7 @@ class Portal {
 				}
 			}
 			// TODO once permissions are synced, make the avatar change event come from the user who changed the avatar
-			await this.updateAvatar(evt.source, largestSize)
+			await this.updateAvatar(evt.source, largestSize.location)
 			break
 		case "messageActionChatEditTitle":
 			this.peer.title = evt.action.title
@@ -363,7 +363,9 @@ class Portal {
 				room = await user.intent.createRoom({
 					createAsClient: true,
 					options: {
-						//name: user.getDisplayName(),
+						name: this.peer.id === this.peer.receiverID
+							? "Saved Messages (Telegram)"
+							: undefined, //user.getDisplayName(),
 						topic: "Telegram private chat",
 						visibility: "private",
 						invite,
@@ -412,6 +414,9 @@ class Portal {
 			const user = await this.app.getTelegramUser(this.peer.id)
 			await user.updateInfo(telegramPOV, dialog)
 		}
+		if (dialog.photo && dialog.photo.photo_big) {
+			changed = await this.updateAvatar(telegramPOV, dialog.photo.photo_big) || changed
+		}
 		changed = this.peer.updateInfo(dialog) || changed
 		if (changed) {
 			this.save()
@@ -427,6 +432,8 @@ class Portal {
 			data: {
 				roomID: this.roomID,
 				peer: this.peer.toSubentry(),
+				photo: this.photo,
+				avatarURL: this.avatarURL,
 				accessHashes: this.peer.type === "channel"
 					? Array.from(this.accessHashes)
 					: undefined,
