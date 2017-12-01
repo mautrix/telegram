@@ -42,7 +42,7 @@ class Portal {
 			throw new Error("MatrixUser can only be created from entry type \"portal\"")
 		}
 
-		const portal = new Portal(app, entry.data.roomID, TelegramPeer.fromSubentry(entry.data.peer))
+		const portal = new Portal(app, entry.roomID || entry.data.roomID, TelegramPeer.fromSubentry(entry.data.peer))
 		portal.photo = entry.data.photo
 		portal.avatarURL = entry.data.avatarURL
 		if (portal.peer.type === "channel") {
@@ -209,6 +209,7 @@ class Portal {
 			} catch (err) {
 				console.error("Error creating room:", err)
 				console.error(err.stack)
+				return
 			}
 		}
 
@@ -450,8 +451,8 @@ class Portal {
 			type: this.type,
 			id: this.id,
 			receiverID: this.receiverID,
+			roomID: this.roomID,
 			data: {
-				roomID: this.roomID,
 				peer: this.peer.toSubentry(),
 				photo: this.photo,
 				avatarURL: this.avatarURL,
