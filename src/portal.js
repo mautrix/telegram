@@ -61,6 +61,7 @@ class Portal {
 		}
 		for (const userData of users) {
 			const user = await this.app.getTelegramUser(userData.id)
+			// We don't want to update avatars here, as it would likely cause a flood error
 			await user.updateInfo(telegramPOV, userData, { updateAvatar: false })
 			await user.intent.join(this.roomID)
 		}
@@ -404,17 +405,25 @@ class Portal {
 	}
 
 	async updateInfo(telegramPOV, dialog) {
+		if (!dialog) {
+			console.log("updateInfo called without dialog data")
+			const { user } = this.peer.getInfo(telegramPOV)
+			if (!user) {
+				throw new Error("Dialog data not given and fetching data failed")
+			}
+			dialog = user
+		}
 		let changed = false
 		if (this.peer.type === "channel") {
 			if (telegramPOV && this.accessHashes.get(telegramPOV.userID) !== dialog.access_hash) {
 				this.accessHashes.set(telegramPOV.userID, dialog.access_hash)
 				changed = true
 			}
-		} else if (this.peer.type === "user") {
+		}
+		if (this.peer.type === "user") {
 			const user = await this.app.getTelegramUser(this.peer.id)
 			await user.updateInfo(telegramPOV, dialog)
-		}
-		if (dialog.photo && dialog.photo.photo_big) {
+		} else if (dialog.photo && dialog.photo.photo_big) {
 			changed = await this.updateAvatar(telegramPOV, dialog.photo.photo_big) || changed
 		}
 		changed = this.peer.updateInfo(dialog) || changed
