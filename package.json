@@ -30,6 +30,6 @@
 		"jsdoc": "3.5.x"
 	},
 	"scripts": {
-		"gen-jsdoc": "./scripts/gen-jsdoc"
+		"gen-jsdoc": "./node_modules/.bin/jsdoc src/ --private --recurse --package package.json --readme README.md --destination jsdoc"
 	}
 }
