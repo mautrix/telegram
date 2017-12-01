@@ -293,7 +293,11 @@ commands.api = async (sender, args, reply, app) => {
 	try {
 		reply(`Calling ${apiMethod} with the following arguments:\n${JSON.stringify(apiArgs, "", "  ")}`)
 		const response = await sender.telegramPuppet.client(apiMethod, apiArgs)
-		reply(`API call successful. Response:\n${JSON.stringify(response, "", "  ")}`)
+		reply(`API call successful. Response:
+
+<pre><code class="language-json">
+  ${JSON.stringify(response, "", "  ")}
+</code></pre>`, { allowHTML: true })
 	} catch (err) {
 		reply(`API call errored. Response:\n${JSON.stringify(err, "", "  ")}`)
 	}
