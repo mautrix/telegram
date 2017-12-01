@@ -252,21 +252,33 @@ class Portal {
 		case "m.text":
 			if (evt.content.format === "org.matrix.custom.html") {
 				const { message, entities } = formatter.matrixToTelegram(evt.content.formatted_body)
-				sender.telegramPuppet.sendMessage(this.peer, message, entities)
+				await sender.telegramPuppet.sendMessage(this.peer, message, entities)
 			} else {
-				sender.telegramPuppet.sendMessage(this.peer, evt.content.body)
+				await sender.telegramPuppet.sendMessage(this.peer, evt.content.body)
 			}
 			break
 		case "m.video":
 		case "m.audio":
 		case "m.file":
 			// TODO upload document
-			break
+			//break
 		case "m.image":
-
+			const intent = await this.getMainIntent()
+			await intent.sendMessage(this.roomID, {
+				msgtype: "m.notice",
+				body: "Sending files is not yet supported.",
+			})
 			break
-		case "m.geo":
-			// TODO send location
+		case "m.location":
+			const [, lat, long] = /geo:([-]?[0-9]+\.[0-9]+)+,([-]?[0-9]+\.[0-9]+)/.exec()
+			await sender.telegramPuppet.sendMedia(this.peer, {
+				_: "inputMediaGeoPoint",
+				geo_point: {
+					_: "inputGeoPoint",
+					lat: +lat,
+					long: +long,
+				},
+			})
 			break
 		default:
 			console.log("Unhandled event:", evt)
