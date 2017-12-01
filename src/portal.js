@@ -218,7 +218,7 @@ class Portal {
 
 		if (evt.text && evt.text.length > 0) {
 			if (evt.entities) {
-				evt.html = formatter.telegramToMatrix(evt.text, evt.entities)
+				evt.html = formatter.telegramToMatrix(evt.text, evt.entities, this.app)
 				sender.sendHTML(this.roomID, evt.html)
 			} else {
 				sender.sendText(this.roomID, evt.text)
@@ -252,7 +252,7 @@ class Portal {
 		switch (evt.content.msgtype) {
 		case "m.text":
 			if (evt.content.format === "org.matrix.custom.html") {
-				const { message, entities } = formatter.matrixToTelegram(evt.content.formatted_body)
+				const { message, entities } = formatter.matrixToTelegram(evt.content.formatted_body, this.app)
 				await sender.telegramPuppet.sendMessage(this.peer, message, entities)
 			} else {
 				await sender.telegramPuppet.sendMessage(this.peer, evt.content.body)

@@ -159,6 +159,10 @@ class MautrixTelegram {
 		return this.config.bridge.username_template.replace("${ID}", id)
 	}
 
+	getMXIDForTelegramUser(id) {
+		return `@${this.getUsernameForTelegramUser(id)}:${this.config.homeserver.domain}`
+	}
+
 	/**
 	 * Get the matrix.to link for the Matrix puppet of the Telegram user with the given ID.
 	 *
@@ -166,7 +170,7 @@ class MautrixTelegram {
 	 * @returns {string}    A matrix.to link that points to the Matrix puppet of the given user.
 	 */
 	getMatrixToLinkForTelegramUser(id) {
-		return `https://matrix.to/#/@${this.getUsernameForTelegramUser(id)}:${this.config.homeserver.domain}`
+		return `https://matrix.to/#/${this.getMXIDForTelegramUser(id)}`
 	}
 
 	/**

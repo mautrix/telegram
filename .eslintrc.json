@@ -65,12 +65,6 @@
 			"warn",
 			120
 		],
-		"no-underscore-dangle": [
-			"error",
-			{
-				"allowAfterThis": true
-			}
-		],
 		"no-unused-vars": [
 			"error",
 			{
@@ -143,6 +137,10 @@
 				"allowEmptyCatch": true
 			}
 		],
+		"no-cond-assign": [
+			"error",
+			"except-parens"
+		],
 		"function-paren-newline": "off",
 		"no-labels": "off",
 		"no-control-regex": "off",
@@ -170,6 +168,7 @@
 		"no-template-curly-in-string": "off",
 		"no-await-in-loop": "off",
 		"no-restricted-globals": "off",
-		"no-fallthrough": "off"
+		"no-fallthrough": "off",
+		"no-underscore-dangle": "off"
 	}
 }

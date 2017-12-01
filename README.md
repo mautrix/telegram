@@ -41,7 +41,7 @@ If you don't know the MXID of the puppet, you can search for users using the `se
 * Matrix → Telegram
   * [x] Plaintext messages
   * [x] Formatted messages
-  * [ ] Non-plaintext mentions
+  * [x] Mentions
   * [x] Locations
   * [ ] Images
   * [ ] Files
@@ -55,7 +55,7 @@ If you don't know the MXID of the puppet, you can search for users using the `se
 * Telegram → Matrix
   * [x] Plaintext messages
   * [x] Formatted messages
-  * [ ] Non-plaintext mentions
+  * [x] Mentions
   * [x] Images
   * [x] Locations
   * [ ] Stickers (somewhat works through document upload, no preview though)
