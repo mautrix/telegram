@@ -41,7 +41,8 @@ If you don't know the MXID of the puppet, you can search for users using the `se
 * Matrix → Telegram
   * [x] Plaintext messages
   * [x] Formatted messages
-  * [x] Mentions
+    * [x] Bot commands (!command -> /command)
+    * [x] Mentions
   * [x] Locations
   * [ ] Images
   * [ ] Files
@@ -55,7 +56,8 @@ If you don't know the MXID of the puppet, you can search for users using the `se
 * Telegram → Matrix
   * [x] Plaintext messages
   * [x] Formatted messages
-  * [x] Mentions
+    * [x] Bot commands (/command -> !command)
+    * [x] Mentions
   * [x] Images
   * [x] Locations
   * [ ] Stickers (somewhat works through document upload, no preview though)
@@ -82,3 +84,4 @@ If you don't know the MXID of the puppet, you can search for users using the `se
 * Misc
   * [ ] Use optional bot to relay messages for unauthenticated Matrix users
   * [ ] Properly handle upgrading groups to supergroups
+  * [ ] Handle public channel username changes
