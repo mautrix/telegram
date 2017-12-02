@@ -251,12 +251,11 @@ class Portal {
 		await this.loadAccessHash(sender.telegramPuppet)
 		switch (evt.content.msgtype) {
 		case "m.text":
-			if (evt.content.format === "org.matrix.custom.html") {
-				const { message, entities } = formatter.matrixToTelegram(evt.content.formatted_body, this.app)
-				await sender.telegramPuppet.sendMessage(this.peer, message, entities)
-			} else {
-				await sender.telegramPuppet.sendMessage(this.peer, evt.content.body)
-			}
+			const { message, entities } = formatter.matrixToTelegram(
+					evt.content.formatted_body || evt.content.body,
+					evt.content.format === "org.matrix.custom.html",
+					this.app)
+			await sender.telegramPuppet.sendMessage(this.peer, message, entities)
 			break
 		case "m.video":
 		case "m.audio":

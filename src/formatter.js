@@ -68,9 +68,10 @@ function telegramToMatrix(message, entities, app) {
 			addSimpleTag(tags, entity, "pre", pc)
 			addTag(tags, entity, "code", `class="language-${entity.language}"`, pc + 1)
 			break
-		case "messageEntityHashtag":
 		case "messageEntityBotCommand":
 			// TODO bridge bot commands differently?
+			message = `${message.substr(0, entity.offset)}!${message.substr(entity.offset + 1)}`
+		case "messageEntityHashtag":
 			addTag(tags, entity, "font", "color=\"blue\"", --pc)
 			break
 		case "messageEntityMentionName":
@@ -153,6 +154,7 @@ const inlineCode = /<(code)>()(.*?)<\/code>/g
 const emailAddresses = /<a href="(mailto):(.*?)">([^]*?)<\/a>/g
 const mentions = /<a href="https:\/\/(matrix\.to)\/#\/(@.+?)">(.*?)<\/a>/g
 const hyperlinks = /<(a href)="(.*?)">([^]*?)<\/a>/g
+const commands = /(\s|^)!([^\s]+)/g
 const REGEX_CAPTURE_GROUP_COUNT = 3
 
 RegExp.any = function(...regexes) {
@@ -263,8 +265,21 @@ function regexMonsterHandler(identifier, arg, text, index, app) {
  * @param   {string}                             message The HTML-formatted message.
  * @returns {{message: string, entities: Array}}         The Telegram entity-formatted message.
  */
-function matrixToTelegram(message, app) {
+function matrixToTelegram(message, isHTML, app) {
 	const entities = []
+
+	message = message.replace(commands, (_, prefix, command, index) => {
+		entities.push({
+			_: "messageEntityBotCommand",
+			offset: index + prefix.length,
+			length: command.length + 1,
+		})
+		return `${prefix}/${command}`
+	})
+
+	if (!isHTML) {
+		return { message, entities }
+	}
 
 	// First replace all the things that don't get converted into Telegram entities
 	message = message.replace(linebreaks, "\n")
