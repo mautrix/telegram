@@ -134,6 +134,7 @@ function telegramToMatrix(message, entities, app) {
 	for (const [index, replacement] of tags) {
 		message = message.insert(index, replacement)
 	}
+	message = message.replace(/\n/g, "<br/>\n")
 	return message
 }
 
