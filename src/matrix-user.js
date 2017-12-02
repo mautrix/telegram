@@ -36,6 +36,11 @@ class MatrixUser {
 		this._telegramPuppet = undefined
 	}
 
+	/**
+	 * Get the user ID of the Telegram user this Matrix user controls.
+	 *
+	 * @returns {number|undefined} The Telegram user ID, or undefined if not logged in.
+	 */
 	get telegramUserID() {
 		return this._telegramPuppet
 			? this._telegramPuppet.userID || undefined
@@ -227,18 +232,32 @@ class MatrixUser {
 		return changed
 	}
 
+	/**
+	 * Add a {@link Portal} to the chat list of this user.
+	 *
+	 * This should only be used for non-private chat portals.
+	 *
+	 * @param {Portal} portal The portal to add.
+	 */
 	async join(portal) {
 		if (!this.chats.includes(portal.id)) {
 			this.chats.push(portal.id)
-			this.save()
+			await this.save()
 		}
 	}
 
+	/**
+	 * Remove a {@link Portal} from the chat list of this user.
+	 *
+	 * This should only be used for non-private chat portals.
+	 *
+	 * @param {Portal} portal The portal to remove.
+	 */
 	async leave(portal) {
 		const chatIDIndex = this.chats.indexOf(portal.id)
 		if (chatIDIndex > -1) {
 			this.chats.splice(chatIDIndex, 1)
-			this.save()
+			await this.save()
 		}
 	}
 

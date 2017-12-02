@@ -33,7 +33,15 @@ class MautrixTelegram {
 	 * @param config The data from the config file.
 	 */
 	constructor(config) {
+		/**
+		 * The app config.
+		 * @type {Object}
+		 */
 		this.config = config
+		/**
+		 * A special-cased {@link TelegramUser} that is used to send broadcasts to a channel.
+		 * @type {TelegramUser}
+		 */
 		this.channelTelegramSender = new TelegramUser(this, -1)
 
 		/**
@@ -72,6 +80,10 @@ class MautrixTelegram {
 		 */
 		this.managementRooms = []
 
+		/**
+		 * A regular expression that matches MXIDs of Telegram user bridged by this bridge.
+		 * @type {RegExp}
+		 */
 		this.usernameRegex = new RegExp(
 				`^@${
 					this.config.bridge.username_template.replace("${ID}", "([0-9]+)")
@@ -111,11 +123,17 @@ class MautrixTelegram {
 	async run() {
 		console.log("Appservice listening on port %s", this.config.appservice.port)
 		await this.bridge.run(this.config.appservice.port, {})
+
+		// Load all Matrix users to cache
 		const userEntries = await this.bridge.getUserStore()
 			.select({ type: "matrix" })
+
 		for (const entry of userEntries) {
 			const user = MatrixUser.fromEntry(this, entry)
 			this.matrixUsersByID.set(entry.id, user)
+			if (user.telegramUserID) {
+				this.matrixUsersByTelegramID.set(user.telegramUserID, user)
+			}
 		}
 	}
 
@@ -159,6 +177,12 @@ class MautrixTelegram {
 		return this.config.bridge.username_template.replace("${ID}", id)
 	}
 
+	/**
+	 * Get the full Matrix ID ({@code @localpart:homeserver.tld}) for the Telegram user with the given ID.
+	 *
+	 * @param   {number} id The ID of the Telegram user.
+	 * @returns {string}    The full Matrix ID for the given Telegram user.
+	 */
 	getMXIDForTelegramUser(id) {
 		return `@${this.getUsernameForTelegramUser(id)}:${this.config.homeserver.domain}`
 	}

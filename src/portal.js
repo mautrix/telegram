@@ -29,14 +29,31 @@ class Portal {
 		this.accessHashes = new Map()
 	}
 
+	/**
+	 * Get the peer ID of this portal.
+	 *
+	 * @returns {number} The ID of the peer of the Telegram side of this portal.
+	 */
 	get id() {
 		return this.peer.id
 	}
 
+	/**
+	 * Get the receiver ID of this portal. Only applicable for private chat portals.
+	 *
+	 * @returns {number} The ID of the receiving user of this portal.
+	 */
 	get receiverID() {
 		return this.peer.receiverID
 	}
 
+	/**
+	 * Convert a database entry into a Portal.
+	 *
+	 * @param   {MautrixTelegram} app   The app main class instance.
+	 * @param   {Object}          entry The database entry.
+	 * @returns {Portal}                The loaded Portal.
+	 */
 	static fromEntry(app, entry) {
 		if (entry.type !== "portal") {
 			throw new Error("MatrixUser can only be created from entry type \"portal\"")
@@ -51,6 +68,16 @@ class Portal {
 		return portal
 	}
 
+	/**
+	 * Synchronize the user list of this portal.
+	 *
+	 * @param {TelegramPuppet} telegramPOV The Telegram account whose point of view the data is/should be fetched from.
+	 * @param {UserFull[]}     [users]     The list of {@link https://tjhorner.com/tl-schema/type/UserFull user info}
+	 *                                     objects.
+	 * @returns {boolean}                  Whether or not syncing was successful. It can only be unsuccessful if the
+	 *                                     user list was not provided and an access hash was not found for the given
+	 *                                     Telegram user.
+	 */
 	async syncTelegramUsers(telegramPOV, users) {
 		if (!users) {
 			if (!await this.loadAccessHash(telegramPOV)) {
@@ -68,7 +95,14 @@ class Portal {
 		return true
 	}
 
-
+	/**
+	 * Copy a photo from Telegram to Matrix.
+	 *
+	 * @param {TelegramPuppet} telegramPOV The Telegram account whose point of view the image should be downloaded from.
+	 * @param {TelegramUser}   sender      The user who sent the photo.
+	 * @param {Photo}          photo       The Telegram {@link https://tjhorner.com/tl-schema/type/Photo Photo} object.
+	 * @returns {Object}                   The uploaded Matrix photo object.
+	 */
 	async copyTelegramPhoto(telegramPOV, sender, photo) {
 		const size = photo.sizes.slice(-1)[0]
 		const uploaded = await this.copyTelegramFile(telegramPOV, sender, size.location, photo.id)
@@ -79,6 +113,16 @@ class Portal {
 		return uploaded
 	}
 
+
+	/**
+	 * Copy a file from Telegram to Matrix.
+	 *
+	 * @param {TelegramPuppet} telegramPOV The Telegram account whose point of view the file should be downloaded from.
+	 * @param {TelegramUser}   sender      The user who sent the file.
+	 * @param {FileLocation}   location    The Telegram {@link https://tjhorner.com/tl-schema/type/FileLocation
+	 *                                     FileLocation}.
+	 * @returns {Object}                   The uploaded Matrix file object.
+	 */
 	async copyTelegramFile(telegramPOV, sender, location, id) {
 		console.log(JSON.stringify(location, "", "  "))
 		id = id || location.id
@@ -96,6 +140,15 @@ class Portal {
 		return uploaded
 	}
 
+	/**
+	 * Update the avatar of this portal to the given photo.
+	 *
+	 * @param {TelegramPuppet} telegramPOV The Telegram account whose point of view the avatar should be downloaded
+	 *                                     from, if necessary.
+	 * @param {ChatPhoto}      photo       The Telegram {@link https://tjhorner.com/tl-schema/type/ChatPhoto ChatPhoto}
+	 *                                     object.
+	 * @returns {boolean}                  Whether or not the photo was updated.
+	 */
 	async updateAvatar(telegramPOV, photo) {
 		if (!photo || this.peer.type === "user") {
 			return false
@@ -128,10 +181,24 @@ class Portal {
 		return true
 	}
 
+	/**
+	 * Load the access hash for the given puppet.
+	 *
+	 * @param {TelegramPuppet} telegramPOV The puppet whose access hash to load.
+	 * @returns {boolean}                  As specified by {@link TelegramPeer#loadAccessHash(app, telegramPOV)}.
+	 */
 	loadAccessHash(telegramPOV) {
 		return this.peer.loadAccessHash(this.app, telegramPOV, { portal: this })
 	}
 
+	/**
+	 * Handle a Telegram typing event.
+	 *
+	 * @param {Object}         evt        The custom event object.
+	 * @param {number}         evt.from   The ID of the Telegram user who is typing.
+	 * @param {TelegramPeer}   evt.to     The peer where the user is typing.
+	 * @param {TelegramPuppet} evt.source The source where this event was captured.
+	 */
 	async handleTelegramTyping(evt) {
 		if (!this.isMatrixRoomCreated()) {
 			return
@@ -143,6 +210,16 @@ class Portal {
 		typer.intent.sendTyping(this.roomID, true/*, 5500*/)
 	}
 
+	/**
+	 * Handle a Telegram service message event.
+	 *
+	 * @param {Object}         evt        The custom event object.
+	 * @param {number}         evt.from   The ID of the Telegram user who caused the service message.
+	 * @param {TelegramPeer}   evt.to     The peer to which the message was sent.
+	 * @param {TelegramPuppet} evt.source The source where this event was captured.
+	 * @param {MessageAction}  evt.action The Telegram {@link https://tjhorner.com/tl-schema/type/MessageAction
+	 *                                    MessageAction} object.
+	 */
 	async handleTelegramServiceMessage(evt) {
 		let matrixUser, telegramUser
 		switch (evt.action._) {
@@ -199,6 +276,22 @@ class Portal {
 		}
 	}
 
+
+	/**
+	 * Handle a Telegram service message event.
+	 *
+	 * @param {Object}          evt            The custom event object.
+	 * @param {number}          evt.from       The ID of the Telegram user who caused the service message.
+	 * @param {TelegramPeer}    evt.to         The peer to which the message was sent.
+	 * @param {TelegramPuppet}  evt.source     The source where this event was captured.
+	 * @param {string}          evt.text       The text in the message.
+	 * @param {string}          [evt.caption]  The image/file caption.
+	 * @param {MessageEntity[]} [evt.entities] The Telegram {@link https://tjhorner.com/tl-schema/type/MessageEntity
+	 *                                         formatting entities} in the message.
+	 * @param {messageMediaPhoto}    [evt.photo]    The Telegram {@link https://tjhorner.com/tl-schema/constructor/messageMediaPhoto Photo} attached to the message.
+	 * @param {messageMediaDocument} [evt.document] The Telegram {@link https://tjhorner.com/tl-schema/constructor/messageMediaDocument Document} attached to the message.
+	 * @param {messageMediaGeo}      [evt.geo]      The Telegram {@link https://tjhorner.com/tl-schema/constructor/messageMediaGeo Location} attached to the message.
+	 */
 	async handleTelegramMessage(evt) {
 		if (!this.isMatrixRoomCreated()) {
 			try {
@@ -247,6 +340,13 @@ class Portal {
 		}
 	}
 
+	/**
+	 * Handle a Matrix event.
+	 *
+	 * @param {MatrixUser} sender The user who sent the message.
+	 * @param {Object}     evt    The {@link https://matrix.org/docs/spec/client_server/r0.3.0.html#event-structure
+	 *                            Matrix event}.
+	 */
 	async handleMatrixEvent(sender, evt) {
 		await this.loadAccessHash(sender.telegramPuppet)
 		switch (evt.content.msgtype) {
@@ -285,16 +385,32 @@ class Portal {
 		}
 	}
 
+	/**
+	 * @returns {boolean} Whether or not a Matrix room has been created for this Portal.
+	 */
 	isMatrixRoomCreated() {
 		return !!this.roomID
 	}
 
+	/**
+	 * Get the primary intent object for this Portal.
+	 *
+	 * For groups and channels, this is always the AS bot intent.
+	 * For private chats, it is the intent of the other user.
+	 *
+	 * @returns {Intent} The primary intent.
+	 */
 	async getMainIntent() {
 		return this.peer.type === "user"
 			? (await this.app.getTelegramUser(this.peer.id)).intent
 			: this.app.botIntent
 	}
 
+	/**
+	 * Invite one or more Matrix users to this Portal.
+	 *
+	 * @param {string[]|string} users The MXID or list of MXIDs to invite.
+	 */
 	async invite(users) {
 		const intent = await this.getMainIntent()
 		// TODO check membership before inviting?
@@ -309,6 +425,12 @@ class Portal {
 		}
 	}
 
+	/**
+	 * Kick one or more Matrix users from this Portal.
+	 *
+	 * @param {string[]|string} users  The MXID or list of MXIDs to kick.
+	 * @param {string}          reason The reason for kicking the user(s).
+	 */
 	async kick(users, reason) {
 		const intent = await this.getMainIntent()
 		if (Array.isArray(users)) {
@@ -322,6 +444,14 @@ class Portal {
 		}
 	}
 
+	/**
+	 * Create a Matrix room for this portal.
+	 *
+	 * @param {TelegramPuppet} telegramPOV
+	 * @param {string|string[] invite
+	 * @param {boolean}        inviteEvenIfNotCreated
+	 * @returns {{created: boolean, roomID: string}}
+	 */
 	async createMatrixRoom(telegramPOV, { invite = [], inviteEvenIfNotCreated = true } = {}) {
 		if (this.roomID) {
 			if (invite && inviteEvenIfNotCreated) {
@@ -445,6 +575,11 @@ class Portal {
 		return changed
 	}
 
+	/**
+	 * Convert this Portal into a database entry.
+	 *
+	 * @returns {Object} A room store database entry.
+	 */
 	toEntry() {
 		return {
 			type: this.type,
@@ -462,6 +597,9 @@ class Portal {
 		}
 	}
 
+	/**
+	 * Save this Portal to the database.
+	 */
 	save() {
 		return this.app.putRoom(this)
 	}

@@ -64,7 +64,7 @@ class TelegramPeer {
 	 *                                      Only used if {@link #type} is {@code user}.
 	 * @param {TelegramUser}    [user]      Optional {@link TelegramUser} instance to avoid calling {@link app#getTelegramUser(id)}.
 	 *                                      Only used if {@link #type} is {@code channel}.
-	 * @returns {Promise<boolean>}          Whether or not the access hash was found and loaded.
+	 * @returns {boolean}                   Whether or not the access hash was found and loaded.
 	 */
 	async loadAccessHash(app, telegramPOV, { portal, user } = {}) {
 		if (this.type === "chat") {
@@ -238,11 +238,6 @@ class TelegramPeer {
 			title: this.title,
 			receiverID: this.receiverID,
 		}
-	}
-
-	// TODO determine if this is useless and remove if it is.
-	get key() {
-		return `${this.type} ${this.id}`
 	}
 }
 
