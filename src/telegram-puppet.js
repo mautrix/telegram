@@ -17,8 +17,15 @@ const telegram = require("telegram-mtproto")
 const fileType = require("file-type")
 const pkg = require("../package.json")
 const TelegramPeer = require("./telegram-peer")
-/*
+
+
+/**
+ * @module telegram-puppet
+ */
+
+/**
  * Mapping from Telegram file types to MIME types and extensions.
+ * @private
  */
 function metaFromFileType(type) {
 	const extension = type.substr("storage.file".length).toLowerCase()
@@ -54,6 +61,13 @@ function metaFromFileType(type) {
 	return { mimetype, extension, matrixtype }
 }
 
+/**
+ * Mapping from MIME type to Matrix file type. Used when determining MIME type and extension using magic numbers.
+ *
+ * @param   {string} mime The MIME type.
+ * @returns {string}      The corresponding Matrix file type.
+ * @private
+ */
 function matrixFromMime(mime) {
 	if (mime.startsWith("audio/")) {
 		return "m.audio"

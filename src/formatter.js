@@ -26,11 +26,35 @@ String.prototype.insert = function(at, str) {
 	return this.slice(0, at) + str + this.slice(at)
 }
 
+/**
+ * Add a simple HTML tag to the given tag list.
+ *
+ * @param {Object[]} tags     The tag list.
+ * @param {Object}   entity   The Telegram format entity.
+ * @param {number}   entity.offset The index where the format entity starts.
+ * @param {number}   entity.length The length of the format entity.
+ * @param {string}   tag      The HTML tag to add.
+ * @param {number}   priority The tag priority to use when sorting tags at the same index.
+ * @private
+ */
 function addSimpleTag(tags, entity, tag, priority = 0) {
 	tags.push([entity.offset, `<${tag}>`, -priority])
 	tags.push([entity.offset + entity.length, `</${tag}>`, priority])
 }
 
+
+/**
+ * Add a HTML tag to the given tag list.
+ *
+ * @param {Object[]} tags     The tag list.
+ * @param {Object}   entity   The Telegram format entity.
+ * @param {number}   entity.offset The index where the format entity starts.
+ * @param {number}   entity.length The length of the format entity.
+ * @param {string}   tag      The HTML tag to add.
+ * @param {string}   attrs    The HTML attributes to add to the tag.
+ * @param {number}   priority The tag priority to use when sorting tags at the same index.
+ * @private
+ */
 function addTag(tags, entity, tag, attrs, priority = 0) {
 	tags.push([entity.offset, `<${tag} ${attrs}>`, -priority])
 	tags.push([entity.offset + entity.length, `</${tag}>`, priority])
@@ -168,9 +192,9 @@ RegExp.any = function(...regexes) {
 	return new RegExp(`(?:${components.join(")|(?:")})`)
 }
 
-const regexMonster = RegExp.any(//"g",
-		boldText, italicText, codeblocks, codeblocksWithSyntaxHighlight,
-		inlineCode, emailAddresses, mentions, hyperlinks)
+const regexMonster = RegExp.any(boldText, italicText, codeblocks,
+		codeblocksWithSyntaxHighlight, inlineCode, emailAddresses,
+		mentions, hyperlinks)
 const NUMBER_OF_REGEXES_EATEN_BY_MONSTER = 8
 
 function regexMonsterMatchParser(match) {
