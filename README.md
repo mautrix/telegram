@@ -100,4 +100,5 @@ does not do this automatically.
 * Misc
   * [ ] Use optional bot to relay messages for unauthenticated Matrix users
   * [x] Properly handle upgrading groups to supergroups
+    * [x] Allow upgrading group to supergroup from Matrix
   * [ ] Handle public channel username changes

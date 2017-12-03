@@ -89,7 +89,8 @@ _**Telegram actions**: commands for using the bridge to interact with Telegram._
 **logout** - Log out from Telegram.<br/>
 **search** [_-r|--remote_] &lt;_query_&gt; - Search your contacts or the Telegram servers for users.<br/>
 **create** &lt;_group/channel_&gt; [_room ID_] - Create a Telegram chat of the given type for a Matrix room.
-                                               If the room ID is not specified, a chat for the current room is created.
+                                           If the room ID is not specified, a chat for the current room is created.<br/>
+**upgrade** - Upgrade a normal Telegram group to a supergroup.
 
 _**Temporary commands**: commands that will be replaced with more Matrix-y actions later._<br/>
 **pm** &lt;_id_&gt; - Open a private chat with the given Telegram user ID.
@@ -285,6 +286,21 @@ commands.create = async (sender, args, reply, { app, roomID }) => {
 	} catch (err) {
 		reply(`Failed to create Telegram chat: ${err}`)
 	}
+}
+
+commands.upgrade = async (sender, args, reply, { app, roomID }) => {
+	if (!sender._telegramPuppet) {
+		reply("This command requires you to be logged in.")
+		return
+	}
+
+	const portal = await app.getPortalByRoomID(roomID)
+	if (!portal) {
+		reply("This is not a portal room.")
+		return
+	}
+
+	await portal.upgradeTelegramChat(sender.telegramPuppet)
 }
 
 commands.search = async (sender, args, reply, { app }) => {

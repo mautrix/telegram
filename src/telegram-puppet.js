@@ -328,6 +328,7 @@ class TelegramPuppet {
 			to = TelegramPeer.fromTelegramData(update.to_id, update.from_id, this.userID)
 			break
 		case "updateReadMessages":
+		case "updateReadHistoryOutbox":
 		case "updateDeleteMessages":
 		case "updateRestoreMessages":
 			this.pts = update.pts
@@ -379,38 +380,40 @@ class TelegramPuppet {
 		})
 	}
 
-	handleUpdate(data) {
+	async handleUpdate(data) {
 		try {
 			switch (data._) {
 			case "updateShort":
 				this.date = data.date
-				this.onUpdate(data.update)
+				await this.onUpdate(data.update)
 				break
 			case "updates":
 				this.date = data.date
+				const updateHandlers = []
 				for (const update of data.updates) {
-					this.onUpdate(update)
+					updateHandlers.push(this.onUpdate(update))
 				}
+				await Promise.all(updateHandlers)
 				break
 			case "updateShortMessage":
 			case "updateShortChatMessage":
-				this.onUpdate(data)
+				await this.onUpdate(data)
 				break
 			case "updatesTooLong":
 				console.log("Handling updatesTooLong")
-				this.client("updates.getDifference", {
+				const dat = await this.client("updates.getDifference", {
 					pts: this.pts,
 					date: this.date,
 					qts: -1,
-				}).then(dat => console.log("getDifference", dat),
-						err => console.error("getDifferenceFail", err))
+				})
+				console.log("updatesTooLong data:", dat)
 				break
 			default:
 				console.log("Unrecognized update type:", data._)
 			}
 		} catch (err) {
 			console.error("Error handling update:", err)
-			console.log(err.stack)
+			console.error(err.stack)
 		}
 	}
 

@@ -541,6 +541,16 @@ class Portal {
 		await this.save()
 	}
 
+	async upgradeTelegramChat(telegramPOV) {
+		if (this.peer.type !== "chat") {
+			throw new Error("Can't upgrade non-chat portal.")
+		}
+		const updates = await telegramPOV.client("messages.migrateChat", {
+			chat_id: this.id,
+		})
+		await telegramPOV.handleUpdate(updates)
+	}
+
 	/**
 	 * Create a Matrix room for this portal.
 	 *
