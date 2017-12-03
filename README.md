@@ -32,10 +32,19 @@ You should be automatically invited into portal rooms for your groups and channe
 2. receive a messages in the chat or
 3. receive an invite to the chat
 
+Support for inviting users both Telegram and Matrix users to Telegram portal rooms is planned, but not yet implemented.
+
 #### Private messaging
 You can start private chats by simply inviting the Matrix puppet of the Telegram user you want to chat with to a private room.
 
 If you don't know the MXID of the puppet, you can search for users using the `search <query>` management command.
+
+#### Bot commands
+Initiating chats with bots is no different from initiating chats with real Telegram users.
+
+The bridge translates `!commands` into `/commands`, which allows you to use Telegram bots without constantly escaping
+the slash. Please note that when messaging a bot for the first time, it may expect you to run `!start` first. The bridge
+does not do this automatically.
 
 ## Features & Roadmap
 * Matrix → Telegram
@@ -53,6 +62,7 @@ If you don't know the MXID of the puppet, you can search for users using the `se
   * [ ] Power level
   * [ ] Membership actions (invite, kick, join, leave)
   * [ ] Room metadata changes
+  * [ ] Room invites
 * Telegram → Matrix
   * [x] Plaintext messages
   * [x] Formatted messages
@@ -73,6 +83,7 @@ If you don't know the MXID of the puppet, you can search for users using the `se
   * [x] Chat metadata changes
   * [x] Initial chat metadata
   * [ ] Message edits
+  * [x] Chat invites
 * Initiating chats
   * [x] Automatic portal creation for groups/channels at startup
   * [x] Automatic portal creation for groups/channels when receiving invite/message
