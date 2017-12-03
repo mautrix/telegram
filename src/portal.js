@@ -448,17 +448,23 @@ class Portal {
 	}
 
 	async kickTelegram(telegramPOV, user) {
+		let updates
 		if (this.peer.type === "chat") {
-			const updates = await telegramPOV.client("messages.deleteChatUser", {
+			updates = await telegramPOV.client("messages.deleteChatUser", {
 				chat_id: this.peer.id,
 				user_id: user.toPeer(telegramPOV).toInputObject(),
 			})
-			console.log("Chat kick result:", updates)
 		} else if (this.peer.type === "channel") {
-			throw new Error("I don't know how to kick users from channels :(")
+			this.loadAccessHash(telegramPOV)
+			updates = await telegramPOV.client("channels.kickFromChannel", {
+				channel: this.peer.toInputObject(),
+				user_id: user.toPeer(telegramPOV).toInputObject(),
+				kicked: true,
+			})
 		} else {
 			throw new Error(`Can't invite user to peer type ${this.peer.type}`)
 		}
+		await telegramPOV.handleUpdate(updates)
 	}
 
 	/**

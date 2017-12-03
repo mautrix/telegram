@@ -62,7 +62,7 @@ does not do this automatically.
   * [ ] Power level
   * [ ] Membership actions
     * [x] Inviting
-    * [ ] Kicking
+    * [x] Kicking
     * [ ] Joining/leaving
   * [ ] Room metadata changes
   * [x] Room invites

@@ -494,6 +494,26 @@ class MautrixTelegram {
 		return undefined
 	}
 
+	async handlePart(sender, evt) {
+		const capture = this.usernameRegex.exec(evt.state_key)
+		if (!capture) {
+			return
+		}
+
+		const telegramID = +capture[1]
+		if (!telegramID || isNaN(telegramID)) {
+			return
+		}
+
+		const user = await this.getTelegramUser(telegramID)
+
+		const portal = await this.getPortalByRoomID(evt.room_id)
+		if (!portal) {
+			return
+		}
+		await portal.kickTelegram(sender.telegramPuppet, user)
+	}
+
 	/**
 	 * Handle an invite to a Matrix room.
 	 *
@@ -590,9 +610,14 @@ class MautrixTelegram {
 		}
 
 		const asBotID = this.bridge.getBot().getUserId()
-		if (evt.type === "m.room.member" && evt.content.membership === "invite") {
-			await this.handleInvite(user, evt)
-			return
+		if (evt.type === "m.room.member") {
+			if (evt.content.membership === "invite") {
+				await this.handleInvite(user, evt)
+				return
+			} else if (evt.content.membership === "leave") {
+				await this.handlePart(user, evt)
+				return
+			}
 		}
 
 		if (evt.sender === asBotID || evt.type !== "m.room.message" || !evt.content) {
