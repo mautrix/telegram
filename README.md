@@ -94,5 +94,5 @@ does not do this automatically.
   * [ ] Creating Telegram chats for existing Matrix rooms
 * Misc
   * [ ] Use optional bot to relay messages for unauthenticated Matrix users
-  * [ ] Properly handle upgrading groups to supergroups
+  * [x] Properly handle upgrading groups to supergroups
   * [ ] Handle public channel username changes

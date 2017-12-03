@@ -221,10 +221,19 @@ class Portal {
 	 *                                    MessageAction} object.
 	 */
 	async handleTelegramServiceMessage(evt) {
+		if (!this.isMatrixRoomCreated()) {
+			if (evt.action._ === "messageActionChatDeleteUser") {
+				// We don't care about user deletions on chats without portals
+				return
+			}
+			console.log("Service message received, creating room for", evt.to.id)
+			await this.createMatrixRoom(evt.source, { invite: [evt.source.matrixUser.userID] })
+			return
+		}
 		let matrixUser, telegramUser
 		switch (evt.action._) {
 		case "messageActionChatCreate":
-			await this.createMatrixRoom(evt.source, { invite: [evt.source.matrixUser.userID] })
+			// Portal gets created at beginning if it doesn't exist
 			// Falls through to invite everyone in initial user list
 		case "messageActionChatAddUser":
 			for (const userID of evt.action.users) {
@@ -238,8 +247,21 @@ class Portal {
 			}
 			break
 		case "messageActionChannelCreate":
+			// Portal gets created at beginning if it doesn't exist
 			// Channels don't send initial user lists 3:<
-			await this.createMatrixRoom(evt.source, { invite: [evt.source.matrixUser.userID] })
+			break
+		case "messageActionChatMigrateTo":
+			this.peer.id = evt.action.channel_id
+			this.peer.type = "channel"
+			const accessHash = await this.peer.fetchAccessHashFromServer(evt.source)
+			if (!accessHash) {
+				console.error("Failed to fetch access hash for mirgrated channel!")
+				break
+			}
+			this.accessHashes.set(evt.source.userID, accessHash)
+			await this.save()
+			const sender = await this.app.getTelegramUser(evt.from)
+			await sender.sendEmote(this.roomID, "upgraded this group to a supergroup.")
 			break
 		case "messageActionChatDeleteUser":
 			matrixUser = await this.app.getMatrixUserByTelegramID(evt.action.user_id)

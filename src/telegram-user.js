@@ -153,6 +153,20 @@ class TelegramUser {
 		})
 	}
 
+	sendNotice(roomID, text) {
+		return this.intent.sendMessage(roomID, {
+			msgtype: "m.notice",
+			body: text,
+		})
+	}
+
+	sendEmote(roomID, text) {
+		return this.intent.sendMessage(roomID, {
+			msgtype: "m.emote",
+			body: text,
+		})
+	}
+
 	sendText(roomID, text) {
 		return this.intent.sendText(roomID, text)
 	}

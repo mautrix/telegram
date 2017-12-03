@@ -96,6 +96,9 @@ class TelegramPuppet {
 		this.apiHash = api_hash
 		this.apiID = api_id
 
+		this.pts = 0
+		this.date = 0
+
 		this.puppetStorage = {
 			get: async (key) => {
 				let value = this.data[key]
@@ -108,7 +111,6 @@ class TelegramPuppet {
 				if (Array.isArray(value)) {
 					value = `b64:${Buffer.from(value).toString("base64")}`
 				}
-				console.warn("SET", key, "=", JSON.stringify(value))
 				if (this.data[key] === value) {
 					return
 				}
@@ -117,12 +119,10 @@ class TelegramPuppet {
 				await this.matrixUser.save()
 			},
 			remove: async (...keys) => {
-				console.warn("DEL", JSON.stringify(keys))
 				keys.forEach((key) => delete this.data[key])
 				await this.matrixUser.save()
 			},
 			clear: async () => {
-				console.warn("CLR")
 				this.data = {}
 				await this.matrixUser.save()
 			},
@@ -322,9 +322,15 @@ class TelegramPuppet {
 			// TODO figure out how channel message signing works
 			from = -1
 		case "updateNewMessage":
+			this.pts = update.pts
 			update = update.message // Message defined at message#90dddc11 in layer 71
 			from = update.from_id || from
 			to = TelegramPeer.fromTelegramData(update.to_id, update.from_id, this.userID)
+			break
+		case "updateReadMessages":
+		case "updateDeleteMessages":
+		case "updateRestoreMessages":
+			this.pts = update.pts
 			break
 
 		default:
@@ -332,9 +338,16 @@ class TelegramPuppet {
 			console.log(`Update of unknown type ${update._} received:\n${JSON.stringify(update, "", "  ")}`)
 			return
 		}
+		if (!to) {
+			// This shouldn't happen
+			console.warn("No target found for update", update)
+			return
+		}
+		if (update._ === "messageService" && update.action._ === "messageActionChannelMigrateFrom") {
+			return
+		}
 
 		portal = await this.app.getPortalByPeer(to)
-
 		if (update._ === "messageService") {
 			await portal.handleTelegramServiceMessage({
 				from,
@@ -344,6 +357,7 @@ class TelegramPuppet {
 			})
 			return
 		}
+		console.log(update)
 		await portal.handleTelegramMessage({
 			from,
 			to,
@@ -369,9 +383,11 @@ class TelegramPuppet {
 		try {
 			switch (data._) {
 			case "updateShort":
+				this.date = data.date
 				this.onUpdate(data.update)
 				break
 			case "updates":
+				this.date = data.date
 				for (const update of data.updates) {
 					this.onUpdate(update)
 				}
@@ -379,6 +395,15 @@ class TelegramPuppet {
 			case "updateShortMessage":
 			case "updateShortChatMessage":
 				this.onUpdate(data)
+				break
+			case "updatesTooLong":
+				console.log("Handling updatesTooLong")
+				this.client("updates.getDifference", {
+					pts: this.pts,
+					date: this.date,
+					qts: -1,
+				}).then(dat => console.log("getDifference", dat),
+						err => console.error("getDifferenceFail", err))
 				break
 			default:
 				console.log("Unrecognized update type:", data._)

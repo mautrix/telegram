@@ -108,6 +108,33 @@ class TelegramPeer {
 		return changed
 	}
 
+	async fetchAccessHashFromServer(telegramPOV) {
+		const data = await this.getInfoFromDialogs(telegramPOV)
+		if (!data) {
+			return undefined
+		}
+		this.accessHash = data.access_hash
+		return this.accessHash
+	}
+
+	async getInfoFromDialogs(telegramPOV) {
+		const dialogs = await telegramPOV.client("messages.getDialogs", {})
+		if (this.type === "user") {
+			for (const user of dialogs.users) {
+				if (user.id === this.id) {
+					return user
+				}
+			}
+		} else {
+			for (const chat of dialogs.chats) {
+				if (chat.id === this.id) {
+					return chat
+				}
+			}
+		}
+		return undefined
+	}
+
 	/**
 	 * Get info about this peer from the Telegram servers.
 	 *
