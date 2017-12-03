@@ -499,6 +499,48 @@ class Portal {
 		}
 	}
 
+	async createTelegramChat(telegramPOV, title) {
+		const members = await this.app.getRoomMembers(this.roomID)
+		const telegramInviteIDs = []
+		const asBotID = this.app.bot.getUserId()
+		for (const member of members) {
+			if (member === asBotID) {
+				continue
+			}
+			const user = await this.app.getMatrixUser(member)
+			if (user._telegramPuppet) {
+				telegramInviteIDs.push(user.telegramPuppet.userID)
+			}
+
+			const match = this.app.usernameRegex.exec(member)
+			if (!match || match.length < 2) {
+				continue
+			}
+			telegramInviteIDs.push(+match[1])
+		}
+		if (telegramInviteIDs.length < 2) {
+			// TODO once we have the option for a bot, this error will need to be changed.
+			throw new Error("Not enough users")
+		}
+
+		const telegramInvites = []
+		for (const userID of telegramInviteIDs) {
+			const user = await this.app.getTelegramUser(userID, { createIfNotFound: false })
+			if (!user) {
+				continue
+			}
+			telegramInvites.push(user.toPeer(telegramPOV).toInputObject())
+		}
+
+		const createUpdates = await telegramPOV.client("messages.createChat", {
+			title,
+			users: telegramInvites,
+		})
+		const chat = createUpdates.chats[0]
+		this.peer = new TelegramPeer("chat", chat.id, { title })
+		await this.save()
+	}
+
 	/**
 	 * Create a Matrix room for this portal.
 	 *

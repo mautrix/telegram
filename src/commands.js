@@ -14,6 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 const makePasswordHash = require("telegram-mtproto").plugins.makePasswordHash
+const Portal = require("./portal")
 
 const commands = {}
 
@@ -30,10 +31,14 @@ const commands = {}
  * @param {string}          command The command itself.
  * @param {Array<string>}   args    A list of arguments.
  * @param {function}        reply   A function that is called to reply to the command.
- * @param {MautrixTelegram} app     The app main class instance.
- * @param {MatrixEvent}     evt     The event that caused this call.
+ * @param {object}          extra   Extra information that the handlers may find useful.
+ * @param {MautrixTelegram} extra.app          The app main class instance.
+ * @param {MatrixEvent}     extra.evt          The event that caused this call.
+ * @param {string}          extra.roomID       The ID of the Matrix room the command was sent to.
+ * @param {boolean}         extra.isManagement Whether or not the Matrix room is a management room.
+ * @param {boolean}         extra.isPortal     Whether or not the Matrix room is a portal to a Telegram chat.
  */
-function run(sender, command, args, reply, app, evt) {
+function run(sender, command, args, reply, extra) {
 	const commandFunc = this.commands[command]
 	if (!commandFunc) {
 		if (sender.commandStatus) {
@@ -43,13 +48,13 @@ function run(sender, command, args, reply, app, evt) {
 				return undefined
 			}
 			args.unshift(command)
-			return sender.commandStatus.next(sender, args, reply, app, evt)
+			return sender.commandStatus.next(sender, args, reply, extra)
 		}
 		reply("Unknown command. Try `$cmdprefix help` for help.")
 		return undefined
 	}
 	try {
-		return commandFunc(sender, args, reply, app, evt)
+		return commandFunc(sender, args, reply, extra)
 	} catch (err) {
 		reply(`Error running command: ${err}.`)
 		if (err instanceof Error) {
@@ -62,10 +67,13 @@ function run(sender, command, args, reply, app, evt) {
 
 commands.cancel = () => "Nothing to cancel."
 
-commands.help = (sender, args, reply, app, evt) => {
+commands.help = (sender, args, reply, { isManagement, isPortal }) => {
 	let replyMsg = ""
-	if (app.managementRooms.includes(evt.room_id)) {
+	if (isManagement) {
 		replyMsg += "This is a management room: prefixing commands with `$cmdprefix` is not required.\n"
+	} else if (isPortal) {
+		replyMsg += "**This is a portal room**: you must always prefix commands with `$cmdprefix`.\n" +
+			"Management commands will not be sent to Telegram.\n"
 	} else {
 		replyMsg += "**This is not a management room**: you must prefix commands with `$cmdprefix`.\n"
 	}
@@ -79,7 +87,9 @@ _**Generic bridge commands**: commands for using the bridge that aren't related 
 _**Telegram actions**: commands for using the bridge to interact with Telegram._<br/>
 **login** &lt;_phone_&gt; - Request an authentication code.<br/>
 **logout** - Log out from Telegram.<br/>
-**search** [_-r|--remote_] &lt;_query_&gt; - Search your contacts or the Telegram servers for users.
+**search** [_-r|--remote_] &lt;_query_&gt; - Search your contacts or the Telegram servers for users.<br/>
+**create** &lt;_group/channel_&gt; [_room ID_] - Create a Telegram chat of the given type for a Matrix room.
+                                               If the room ID is not specified, a chat for the current room is created.
 
 _**Temporary commands**: commands that will be replaced with more Matrix-y actions later._<br/>
 **pm** &lt;_id_&gt; - Open a private chat with the given Telegram user ID.
@@ -90,13 +100,17 @@ _**Debug commands**: commands to help in debugging the bridge. Disabled by defau
 	reply(replyMsg, { allowHTML: true })
 }
 
-commands.setManagement = (sender, _, reply, app, evt) => {
-	app.managementRooms.push(evt.room_id)
+commands.setManagement = (sender, _, reply, { app, roomID, isPortal }) => {
+	if (isPortal) {
+		reply("You may not mark portal rooms as management rooms.")
+		return
+	}
+	app.managementRooms.push(roomID)
 	reply("Room marked as management room. You can now run commands without the `$cmdprefix` prefix.")
 }
 
-commands.unsetManagement = (sender, _, reply, app, evt) => {
-	app.managementRooms.splice(app.managementRooms.indexOf(evt.room_id), 1)
+commands.unsetManagement = (sender, _, reply, { app, roomID }) => {
+	app.managementRooms.splice(app.managementRooms.indexOf(roomID), 1)
 	reply("Room unmarked as management room. You must now include the `$cmdprefix` prefix when running commands.")
 }
 
@@ -108,13 +122,29 @@ commands.unsetManagement = (sender, _, reply, app, evt) => {
 /**
  * Two-factor authentication handler.
  */
-commands.enterPassword = async (sender, args, reply) => {
-	if (args.length === 0) {
-		reply("**Usage:** `$cmdprefix <password>`")
+commands.enterPassword = async (sender, args, reply, { isManagement }) => {
+	if (!isManagement) {
+		reply("Logging in is considered a confidential action, and thus is only allowed in management rooms.")
+		return
+	} else if (args.length === 0) {
+		reply("**Usage:** `$cmdprefix <password> [salt]`")
 		return
 	}
 
-	const hash = makePasswordHash(sender.commandStatus.salt, args[0])
+	let salt
+
+	if (!sender.commandStatus || !sender.commandStatus.salt) {
+		if (args.length > 1) {
+			salt = args[1]
+		} else {
+			reply("No password salt found. Did you enter your phone code already?")
+			return
+		}
+	} else {
+		salt = sender.commandStatus.salt
+	}
+
+	const hash = makePasswordHash(salt, args[0])
 	try {
 		await sender.checkPassword(hash)
 		reply(`Logged in successfully as ${sender.telegramPuppet.getDisplayName()}.`)
@@ -131,8 +161,11 @@ commands.enterPassword = async (sender, args, reply) => {
 /*
  * Login code send handler.
  */
-commands.enterCode = async (sender, args, reply) => {
-	if (args.length === 0) {
+commands.enterCode = async (sender, args, reply, { isManagement }) => {
+	if (!isManagement) {
+		reply("Logging in is considered a confidential action, and thus is only allowed in management rooms.")
+		return
+	} else 	if (args.length === 0) {
 		reply("**Usage:** `$cmdprefix <authentication code>`")
 		return
 	}
@@ -165,8 +198,11 @@ Enter your password using \`$cmdprefix <password>\``)
 /*
  * Login code request handler.
  */
-commands.login = async (sender, args, reply) => {
-	if (args.length === 0) {
+commands.login = async (sender, args, reply, { isManagement }) => {
+	if (!isManagement) {
+		reply("Logging in is considered a confidential action, and thus is only allowed in management rooms.")
+		return
+	} else if (args.length === 0) {
 		reply("**Usage:** `$cmdprefix login <phone number>`")
 		return
 	}
@@ -209,9 +245,54 @@ commands.logout = async (sender, args, reply) => {
 // General command handlers //
 //////////////////////////////
 
-commands.search = async (sender, args, reply, app) => {
+commands.create = async (sender, args, reply, { app, roomID }) => {
+	if (args.length < 1 || (args[0] !== "group" && args[0] !== "channel")) {
+		reply("**Usage:** `$cmdprefix create <group/channel>`")
+		return
+	} else if (!sender._telegramPuppet) {
+		reply("This command requires you to be logged in.")
+		return
+	} else if (args[0] === "channel") {
+		reply("Creating channels is not yet supported.")
+		return
+	}
+
+	if (args.length > 1) {
+		roomID = args[1]
+	}
+
+	// TODO make sure that the AS bot is in the room.
+
+	const title = await app.getRoomTitle(roomID)
+	if (!title) {
+		reply("Please set a room name before creating a Telegram chat.")
+		return
+	}
+
+	let portal = await app.getPortalByRoomID(roomID)
+	if (portal) {
+		reply("This is already a portal room.")
+		return
+	}
+
+	portal = new Portal(app, roomID)
+	try {
+		await portal.createTelegramChat(sender.telegramPuppet, title)
+		reply(`Telegram chat created. ID: ${portal.id}`)
+		if (app.managementRooms.includes(roomID)) {
+			app.managementRooms.splice(app.managementRooms.indexOf(roomID), 1)
+		}
+	} catch (err) {
+		reply(`Failed to create Telegram chat: ${err}`)
+	}
+}
+
+commands.search = async (sender, args, reply, { app }) => {
 	if (args.length < 1) {
-		reply("Usage: $cmdprefix search [-r|--remote] <query>")
+		reply("**Usage:** `$cmdprefix search [-r|--remote] <query>`")
+		return
+	} else if (!sender._telegramPuppet) {
+		reply("This command requires you to be logged in.")
 		return
 	}
 	const msg = []
@@ -252,9 +333,12 @@ commands.search = async (sender, args, reply, app) => {
 	reply(msg.join("\n"), { allowHTML: true })
 }
 
-commands.pm = async (sender, args, reply, app) => {
+commands.pm = async (sender, args, reply, { app }) => {
 	if (args.length < 1) {
-		reply("Usage: $cmdprefix pm <id>")
+		reply("**Usage:** `$cmdprefix pm <id>`")
+		return
+	} else if (!sender._telegramPuppet) {
+		reply("This command requires you to be logged in.")
 		return
 	}
 	const user = await app.getTelegramUser(+args[0], { createIfNotFound: false })
@@ -277,7 +361,7 @@ commands.pm = async (sender, args, reply, app) => {
 // Debug command handlers //
 ////////////////////////////
 
-commands.api = async (sender, args, reply, app) => {
+commands.api = async (sender, args, reply, { app }) => {
 	if (!app.config.bridge.commands.allow_direct_api_calls) {
 		reply("Direct API calls are forbidden on this mautrix-telegram instance.")
 		return

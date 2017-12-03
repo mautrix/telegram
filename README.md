@@ -95,8 +95,8 @@ does not do this automatically.
   * [x] Private chat creation by inviting Telegram user to new room
   * [ ] Joining public channels/supergroups using room aliases
   * [x] Searching for Telegram users using management commands
-  * [ ] Creating new Telegram chats from Matrix
-  * [ ] Creating Telegram chats for existing Matrix rooms
+  * [x] Creating new Telegram chats from Matrix
+  * [x] Creating Telegram chats for existing Matrix rooms
 * Misc
   * [ ] Use optional bot to relay messages for unauthenticated Matrix users
   * [x] Properly handle upgrading groups to supergroups

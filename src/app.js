@@ -484,6 +484,16 @@ class MautrixTelegram {
 		return members
 	}
 
+	async getRoomTitle(roomID, intent = this.botIntent) {
+		const roomState = await intent.roomState(roomID)
+		for (const event of roomState) {
+			if (event.type === "m.room.name") {
+				return event.content.name
+			}
+		}
+		return undefined
+	}
+
 	/**
 	 * Handle an invite to a Matrix room.
 	 *
@@ -556,15 +566,9 @@ class MautrixTelegram {
 				await intent.leave(evt.room_id)
 			} else {
 				const portal = await this.getPortalByRoomID(evt.room_id)
-				if (!portal) {
-					await intent.sendMessage(evt.room_id, {
-						msgtype: "m.notice",
-						body: "Inviting additional Telegram users to private chats or non-portal rooms is not supported.",
-					})
-					await intent.leave(evt.room_id)
-					return
+				if (portal) {
+					await portal.inviteTelegram(sender.telegramPuppet, user)
 				}
-				await portal.inviteTelegram(sender.telegramPuppet, user)
 			}
 		} catch (err) {
 			console.error(`Failed to process invite to room ${evt.room_id} for Telegram user ${telegramID}: ${err}`)
@@ -596,13 +600,16 @@ class MautrixTelegram {
 			return
 		}
 
+		const cmdprefix = this.config.bridge.commands.prefix
+		const hasCommandPrefix = cmdprefix && evt.content.body.startsWith(`${cmdprefix} `)
+
 		const portal = await this.getPortalByRoomID(evt.room_id)
-		if (portal) {
+		if (portal && !hasCommandPrefix) {
 			portal.handleMatrixEvent(user, evt)
 			return
 		}
 
-		let isManagement = this.managementRooms.includes(evt.room_id)
+		let isManagement = this.managementRooms.includes(evt.room_id) || hasCommandPrefix
 		if (!isManagement) {
 			const roomMembers = await this.getRoomMembers(evt.room_id)
 			if (roomMembers.length === 2 && roomMembers.includes(asBotID)) {
@@ -610,8 +617,7 @@ class MautrixTelegram {
 				isManagement = true
 			}
 		}
-		const cmdprefix = this.config.bridge.commands.prefix
-		if (isManagement || (cmdprefix && evt.content.body.startsWith(`${cmdprefix} `))) {
+		if (isManagement) {
 			const prefixLength = cmdprefix.length + 1
 			if (cmdprefix && evt.content.body.startsWith(`${cmdprefix} `)) {
 				evt.content.body = evt.content.body.substr(prefixLength)
@@ -636,7 +642,13 @@ class MautrixTelegram {
 							format: "org.matrix.custom.html",
 						})
 			}
-			commands.run(user, command, args, replyFunc, this, evt)
+			commands.run(user, command, args, replyFunc, {
+				app: this,
+				evt,
+				roomID: evt.room_id,
+				isManagement,
+				isPortal: !!portal,
+			})
 		}
 	}
 
