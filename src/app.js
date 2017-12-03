@@ -358,10 +358,8 @@ class MautrixTelegram {
 	 * @returns {MatrixUser} The MatrixUser object.
 	 */
 	async getMatrixUserByTelegramID(id) {
-		console.log("Searching for Matrix user by Telegram ID", id)
 		let user = this.matrixUsersByTelegramID.get(id)
 		if (user) {
-			console.log("Found in cache", user.userID)
 			return user
 		}
 
@@ -369,7 +367,6 @@ class MautrixTelegram {
 		// FIXME this should be made useless by making sure we always add to the second map when appropriate
 		for (const [_, userByMXID] of this.matrixUsersByID) {
 			if (userByMXID.telegramUserID === id) {
-				console.log("Found in MXID cache", userByMXID.userID)
 				this.matrixUsersByTelegramID.set(id, userByMXID)
 				return userByMXID
 			}
@@ -382,15 +379,12 @@ class MautrixTelegram {
 
 		// Handle possible db query race conditions
 		if (this.matrixUsersByTelegramID.has(id)) {
-			console.log("Found in cache after race", user.userID)
 			return this.matrixUsersByTelegramID.get(id)
 		}
 
 		if (entries.length) {
-			console.log("Found in db", user.userID)
 			user = MatrixUser.fromEntry(this, entries[0])
 		} else {
-			console.log("Not found :(")
 			return undefined
 		}
 		this.matrixUsersByID.set(user.userID, user)
@@ -495,6 +489,7 @@ class MautrixTelegram {
 	}
 
 	async handlePart(sender, evt) {
+		// TODO handle kicking real Matrix users who have logged in with Telegram?
 		const capture = this.usernameRegex.exec(evt.state_key)
 		if (!capture) {
 			return
