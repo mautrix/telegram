@@ -240,7 +240,7 @@ class Portal {
 				matrixUser = await this.app.getMatrixUserByTelegramID(userID)
 				if (matrixUser) {
 					matrixUser.join(this)
-					this.invite(matrixUser.userID)
+					this.inviteMatrix(matrixUser.userID)
 				}
 				telegramUser = await this.app.getTelegramUser(userID)
 				telegramUser.intent.join(this.roomID)
@@ -267,7 +267,7 @@ class Portal {
 			matrixUser = await this.app.getMatrixUserByTelegramID(evt.action.user_id)
 			if (matrixUser) {
 				matrixUser.leave(this)
-				this.kick(matrixUser.userID, "Left Telegram chat")
+				this.kickMatrix(matrixUser.userID, "Left Telegram chat")
 			}
 			telegramUser = await this.app.getTelegramUser(evt.action.user_id)
 			telegramUser.intent.leave(this.roomID)
@@ -428,12 +428,45 @@ class Portal {
 			: this.app.botIntent
 	}
 
+	async inviteTelegram(telegramPOV, user) {
+		if (this.peer.type === "chat") {
+			const updates = await telegramPOV.client("messages.addChatUser", {
+				chat_id: this.peer.id,
+				user_id: user.toPeer(telegramPOV).toInputObject(),
+				fwd_limit: 50,
+			})
+			console.log("Chat invite result:", updates)
+		} else if (this.peer.type === "channel") {
+			const updates = await telegramPOV.client("channels.inviteToChannel", {
+				channel: this.peer.toInputObject(),
+				users: [user.toPeer(telegramPOV).toInputObject()],
+			})
+			console.log("Channel invite result:", updates)
+		} else {
+			throw new Error(`Can't invite user to peer type ${this.peer.type}`)
+		}
+	}
+
+	async kickTelegram(telegramPOV, user) {
+		if (this.peer.type === "chat") {
+			const updates = await telegramPOV.client("messages.deleteChatUser", {
+				chat_id: this.peer.id,
+				user_id: user.toPeer(telegramPOV).toInputObject(),
+			})
+			console.log("Chat kick result:", updates)
+		} else if (this.peer.type === "channel") {
+			throw new Error("I don't know how to kick users from channels :(")
+		} else {
+			throw new Error(`Can't invite user to peer type ${this.peer.type}`)
+		}
+	}
+
 	/**
 	 * Invite one or more Matrix users to this Portal.
 	 *
 	 * @param {string[]|string} users The MXID or list of MXIDs to invite.
 	 */
-	async invite(users) {
+	async inviteMatrix(users) {
 		const intent = await this.getMainIntent()
 		// TODO check membership before inviting?
 		if (Array.isArray(users)) {
@@ -453,7 +486,7 @@ class Portal {
 	 * @param {string[]|string} users  The MXID or list of MXIDs to kick.
 	 * @param {string}          reason The reason for kicking the user(s).
 	 */
-	async kick(users, reason) {
+	async kickMatrix(users, reason) {
 		const intent = await this.getMainIntent()
 		if (Array.isArray(users)) {
 			for (const userID of users) {
@@ -477,7 +510,7 @@ class Portal {
 	async createMatrixRoom(telegramPOV, { invite = [], inviteEvenIfNotCreated = true } = {}) {
 		if (this.roomID) {
 			if (invite && inviteEvenIfNotCreated) {
-				await this.invite(invite)
+				await this.inviteMatrix(invite)
 			}
 			return {
 				created: false,

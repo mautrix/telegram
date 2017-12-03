@@ -60,9 +60,12 @@ does not do this automatically.
   * [ ] Typing notifications (may not be possible)
   * [ ] Pinning messages
   * [ ] Power level
-  * [ ] Membership actions (invite, kick, join, leave)
+  * [ ] Membership actions
+    * [x] Inviting
+    * [ ] Kicking
+    * [ ] Joining/leaving
   * [ ] Room metadata changes
-  * [ ] Room invites
+  * [x] Room invites
 * Telegram → Matrix
   * [x] Plaintext messages
   * [x] Formatted messages
@@ -79,11 +82,13 @@ does not do this automatically.
   * [x] Typing notifications
   * [ ] Pinning messages
   * [ ] Admin status
-  * [x] Membership actions (invite, kick, join, leave)
+  * [x] Membership actions
+    * [x] Inviting
+    * [x] Kicking
+    * [x] Joining/leaving
   * [x] Chat metadata changes
   * [x] Initial chat metadata
   * [ ] Message edits
-  * [x] Chat invites
 * Initiating chats
   * [x] Automatic portal creation for groups/channels at startup
   * [x] Automatic portal creation for groups/channels when receiving invite/message

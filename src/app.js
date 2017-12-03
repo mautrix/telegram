@@ -523,11 +523,11 @@ class MautrixTelegram {
 		try {
 			await intent.join(evt.room_id)
 			const members = await this.getRoomMembers(evt.room_id, intent)
+			const user = await this.getTelegramUser(telegramID)
 			if (members.length < 2) {
 				console.warn(`No members in room ${evt.room_id}`)
 				await intent.leave(evt.room_id)
 			} else if (members.length === 2) {
-				const user = await this.getTelegramUser(telegramID)
 				const peer = user.toPeer(sender.telegramPuppet)
 				const portal = await this.getPortalByPeer(peer)
 				if (portal.roomID) {
@@ -546,21 +546,25 @@ class MautrixTelegram {
 						msgtype: "m.notice",
 						body: "Portal to Telegram private chat created.",
 					})
+					await user.updateInfo(sender.telegramPuppet, undefined, { updateAvatar: true })
 				}
+			} else if (!members.includes(asBotID)) {
+				await intent.sendMessage(evt.room_id, {
+					msgtype: "m.notice",
+					body: "Inviting additional Telegram users to private chats or non-portal rooms is not supported.",
+				})
+				await intent.leave(evt.room_id)
 			} else {
-				if (!members.includes(asBotID)) {
+				const portal = await this.getPortalByRoomID(evt.room_id)
+				if (!portal) {
 					await intent.sendMessage(evt.room_id, {
 						msgtype: "m.notice",
 						body: "Inviting additional Telegram users to private chats or non-portal rooms is not supported.",
 					})
-				} else {
-					// TODO Allow inviting Telegram users to group/channel portal rooms.
-					await intent.sendMessage(evt.room_id, {
-						msgtype: "m.notice",
-						body: "Inviting Telegram users to portal rooms is not (yet) supported.",
-					})
+					await intent.leave(evt.room_id)
+					return
 				}
-				await intent.leave(evt.room_id)
+				await portal.inviteTelegram(sender.telegramPuppet, user)
 			}
 		} catch (err) {
 			console.error(`Failed to process invite to room ${evt.room_id} for Telegram user ${telegramID}: ${err}`)
