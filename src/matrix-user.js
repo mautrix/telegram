@@ -208,7 +208,7 @@ class MatrixUser {
 
 		this.chats = []
 		for (const dialog of dialogs.chats) {
-			if (dialog._ === "chatForbidden" || dialog.deactivated) {
+			if (dialog._ === "chatForbidden" || dialog._ === "channelForbidden" || dialog.deactivated) {
 				continue
 			}
 			const peer = new TelegramPeer(dialog._, dialog.id)
