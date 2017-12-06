@@ -82,17 +82,19 @@ class TelegramUser {
 			}
 		}
 		let changed = false
-		if (user.first_name && this.firstName !== user.first_name) {
-			this.firstName = user.first_name
-			changed = true
-		}
-		if (user.last_name && this.lastName !== user.last_name) {
-			this.lastName = user.last_name
-			changed = true
-		}
-		if (user.username && this.username !== user.username) {
-			this.username = user.username
-			changed = true
+		if (user.first_name || user.last_name || user.username) {
+			if (this.firstName !== user.first_name) {
+				this.firstName = user.first_name
+				changed = true
+			}
+			if (this.lastName !== user.last_name) {
+				this.lastName = user.last_name
+				changed = true
+			}
+			if (user.username && this.username !== user.username) {
+				this.username = user.username
+				changed = true
+			}
 		}
 		if (user.access_hash && telegramPOV && this.accessHashes.get(telegramPOV.userID) !== user.access_hash) {
 			this.accessHashes.set(telegramPOV.userID, user.access_hash)
@@ -129,13 +131,23 @@ class TelegramUser {
 		return [this.firstName, this.lastName].filter(s => !!s).join(" ")
 	}
 
+	getLastAndFirstName() {
+		return [this.lastName, this.firstName].filter(s => !!s).join(" ")
+	}
+
 	getDisplayName() {
-		if (this.firstName || this.lastName) {
-			return this.getFirstAndLastName()
-		} else if (this.username) {
-			return this.username
-		} else if (this.phoneNumber) {
-			return this.phoneNumber
+		for (const preference of this.app.config.bridge.displayname_preference) {
+			if (preference === "fullName") {
+				if (this.firstName || this.lastName) {
+					return this.getFirstAndLastName()
+				}
+			} else if (preference === "fullNameReversed") {
+				if (this.firstName || this.lastName) {
+					return this.getLastAndFirstName()
+				}
+			} else if (this[preference]) {
+				return this[preference]
+			}
 		}
 		return this.id
 	}

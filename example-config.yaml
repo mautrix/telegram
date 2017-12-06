@@ -21,6 +21,23 @@ bridge:
     username_template: "telegram_${ID}"
     # ${DISPLAYNAME} is replaced with the display name of the Telegram user.
     displayname_template: "${DISPLAYNAME} (Telegram)"
+    # Set the preferred order of user identifiers which to use in the Matrix puppet display name.
+    # In the (hopefully unlikely) scenario that none of the given keys are found, the numeric user ID is used.
+    #
+    # If the bridge is working properly, a phone number or an username should always be known, but the other one can
+    # very well be empty.
+    #
+    # Valid keys:
+    #   fullName         (First and/or last name)
+    #   fullNameReversed (Last and/or first name)
+    #   firstName
+    #   lastName
+    #   username
+    #   phoneNumber
+    displayname_preference:
+    - fullName
+    - username
+    - phoneNumber
     # ${NAME} is replaced with the name part of the public channel/group invite link ( https://t.me/${NAME} )
     alias_template: "telegram_${NAME}"
     # Username of the bot. The registration must be regenerated to change this.
