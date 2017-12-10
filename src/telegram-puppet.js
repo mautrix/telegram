@@ -388,6 +388,9 @@ class TelegramPuppet {
 				await this.onUpdate(data.update)
 				break
 			case "updates":
+				// TODO use data.users and data.chats
+				console.log("Received updates users:", data.users)
+				console.log("Received updates chats:", data.chats)
 				this.date = data.date
 				const updateHandlers = []
 				for (const update of data.updates) {
@@ -400,13 +403,14 @@ class TelegramPuppet {
 				await this.onUpdate(data)
 				break
 			case "updatesTooLong":
-				console.log("Handling updatesTooLong")
+				console.log("Handling updatesTooLong", this.pts, this.date)
 				const dat = await this.client("updates.getDifference", {
 					pts: this.pts,
 					date: this.date,
 					qts: -1,
 				})
 				console.log("updatesTooLong data:", dat)
+				// TODO use updatesTooLong data?
 				break
 			default:
 				console.log("Unrecognized update type:", data._)
