@@ -14,10 +14,10 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 const telegram = require("telegram-mtproto")
+const { nextRandomInt } = require("telegram-mtproto/lib/bin")
 const fileType = require("file-type")
 const pkg = require("../package.json")
 const TelegramPeer = require("./telegram-peer")
-
 
 /**
  * @module telegram-puppet
@@ -254,7 +254,7 @@ class TelegramPuppet {
 			peer: peer.toInputPeer(),
 			message,
 			entities,
-			random_id: ~~(Math.random() * (1 << 30)),
+			random_id: [nextRandomInt(0xFFFFFFFF), nextRandomInt(0xFFFFFFFF)],
 		}
 		if (!payload.entities) {
 			// Everything breaks if we send undefined things :/
@@ -271,7 +271,7 @@ class TelegramPuppet {
 		const result = await this.client("messages.sendMedia", {
 			peer: peer.toInputPeer(),
 			media,
-			random_id: ~~(Math.random() * (1 << 30)),
+			random_id: [nextRandomInt(0xFFFFFFFF), nextRandomInt(0xFFFFFFFF)],
 		})
 		// TODO use result? (maybe the ID)
 		return result

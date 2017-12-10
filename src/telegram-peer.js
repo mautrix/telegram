@@ -42,10 +42,14 @@ class TelegramPeer {
 		case "peerChat":
 			return new TelegramPeer("chat", peer.chat_id)
 		case "peerUser":
-			return new TelegramPeer("user", sender, {
+			const args = {
 				accessHash: peer.access_hash,
 				receiverID,
-			})
+			}
+			if (sender === receiverID && peer.user_id !== receiverID) {
+				return new TelegramPeer("user", peer.user_id, args)
+			}
+			return new TelegramPeer("user", sender, args)
 		case "peerChannel":
 			return new TelegramPeer("channel", peer.channel_id, {
 				accessHash: peer.access_hash,
