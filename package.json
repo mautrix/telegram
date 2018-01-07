@@ -24,7 +24,7 @@
 		"yamljs": "0.3.x"
 	},
 	"devDependencies": {
-		"eslint": "4.13.x",
+		"eslint": "4.15.x",
 		"eslint-config-airbnb-base": "12.1.x",
 		"eslint-plugin-import": "2.8.x",
 		"jsdoc": "3.5.x"
