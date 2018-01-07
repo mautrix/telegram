@@ -10,6 +10,7 @@
 		"url": "https://github.com/tulir/mautrix-telegram.git"
 	},
 	"dependencies": {
+		"chalk": "^2.3.0",
 		"colors": "1.1.x",
 		"commander": "2.12.x",
 		"escape-html": "1.0.x",

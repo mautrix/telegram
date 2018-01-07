@@ -15,6 +15,7 @@
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 const TelegramPeer = require("./telegram-peer")
 const formatter = require("./formatter")
+const chalk = require("chalk")
 
 /**
  * Portal represents a portal from a Matrix room to a Telegram chat.
@@ -124,7 +125,6 @@ class Portal {
 	 * @returns {Object}                   The uploaded Matrix file object.
 	 */
 	async copyTelegramFile(telegramPOV, sender, location, id) {
-		console.log(JSON.stringify(location, "", "  "))
 		id = id || location.id
 		const file = await telegramPOV.getFile(location)
 		const uploaded = await sender.intent.getClient().uploadContent({
@@ -226,7 +226,7 @@ class Portal {
 				// We don't care about user deletions on chats without portals
 				return
 			}
-			console.log("Service message received, creating room for", evt.to.id)
+			this.app.debug("yellow", "Service message received, creating room for", evt.to.id)
 			await this.createMatrixRoom(evt.source, { invite: [evt.source.matrixUser.userID] })
 			return
 		}
@@ -293,11 +293,42 @@ class Portal {
 			await intent.setRoomName(this.roomID, this.peer.title)
 			break
 		default:
-			console.log("Unhandled service message of type", evt.action._)
-			console.log(evt.action)
+			this.app.warn("Unhandled service message of type", evt.action._)
+			this.app.warn(JSON.stringify(evt.action, "", "  "))
 		}
 	}
 
+	/**
+	 * Context:  Matrix user X is logged into mautrix-telegram and has a private chat portal room with Telegram user Y.
+	 *           X sends message to Y from another Telegram client.
+	 *
+	 * Problem:  We can't control X's Matrix account. We also can't make sure that X's Telegram account's Matrix puppet
+	 *           is always in private chat portal rooms, since X could create a private chat portal by inviting Y's
+	 *           puppet without giving it, the only AS-controllable user in the room, any power.
+	 *
+	 * Solution: When encountering an error caused by the above situation, this function is called.
+	 *           This function first tries to invite X's Matrix puppet to the room.
+	 *           If that fails, text messages are sent through the other user as notices and other messages are dropped.
+	 *
+	 * @param {Object}       evt    The custom event object (see #handleTelegramMessage(evt))
+	 * @param {TelegramUser} sender The Telegram user object of the sender.
+	 * @returns {boolean}           Whether or not the puppet for the sender was successfully invited.
+	 */
+	async tryFixPrivateChatForOutgoingMessage(evt, sender) {
+		try {
+			const intent = await this.getMainIntent()
+			await intent.invite(this.roomID, sender.mxid)
+			return true
+		} catch (_) {
+			const receiver = await this.app.getTelegramUser(evt.to.id, { createIfNotFound: false })
+			if (receiver) {
+				if (evt.text) {
+					receiver.sendNotice(this.roomID, `[Your message from another client] ${evt.text}`)
+				}
+			}
+		}
+		return false
+	}
 
 	/**
 	 * Handle a Telegram service message event.
@@ -315,6 +346,8 @@ class Portal {
 	 * @param {messageMediaGeo}      [evt.geo]      The Telegram {@link https://tjhorner.com/tl-schema/constructor/messageMediaGeo Location} attached to the message.
 	 */
 	async handleTelegramMessage(evt) {
+		const a = Object.assign({}, evt)
+		delete a.source
 		if (!this.isMatrixRoomCreated()) {
 			try {
 				const result = await this.createMatrixRoom(evt.source, { invite: [evt.source.matrixUser.userID] })
@@ -329,7 +362,18 @@ class Portal {
 		}
 
 		const sender = await this.app.getTelegramUser(evt.from)
-		await sender.intent.sendTyping(this.roomID, false)
+		try {
+			await sender.intent.sendTyping(this.roomID, false)
+		} catch (err) {
+			if (evt.to.type === "user") {
+				if (!await this.tryFixPrivateChatForOutgoingMessage(evt, sender)) {
+					return
+				}
+				await sender.intent.sendTyping(this.roomID, false)
+			} else {
+				throw err
+			}
+		}
 
 		if (evt.text && evt.text.length > 0) {
 			if (evt.entities) {
@@ -403,7 +447,7 @@ class Portal {
 			})
 			break
 		default:
-			console.log("Unhandled event:", evt)
+			this.app.warn("Unhandled event:", JSON.stringify(evt, "", "  "))
 		}
 	}
 
@@ -435,13 +479,13 @@ class Portal {
 				user_id: user.toPeer(telegramPOV).toInputObject(),
 				fwd_limit: 50,
 			})
-			console.log("Chat invite result:", updates)
+			this.app.debug("green", "Chat invite result:", JSON.stringify(updates, "", "  "))
 		} else if (this.peer.type === "channel") {
 			const updates = await telegramPOV.client("channels.inviteToChannel", {
 				channel: this.peer.toInputObject(),
 				users: [user.toPeer(telegramPOV).toInputObject()],
 			})
-			console.log("Channel invite result:", updates)
+			this.app.debug("green", "Channel invite result:", JSON.stringify(updates, "", "  "))
 		} else {
 			throw new Error(`Can't invite user to peer type ${this.peer.type}`)
 		}
@@ -478,11 +522,25 @@ class Portal {
 		if (Array.isArray(users)) {
 			for (const userID of users) {
 				if (typeof userID === "string") {
-					intent.invite(this.roomID, userID)
+					try {
+						await intent.invite(this.roomID, userID)
+					} catch (err) {
+						if (err.httpStatus !== 403) {
+							console.error(`Failed to invite ${userID} to ${this.roomID}:`)
+							console.error(err)
+						}
+					}
 				}
 			}
 		} else if (typeof users === "string") {
-			intent.invite(this.roomID, users)
+			try {
+				await intent.invite(this.roomID, users)
+			} catch (err) {
+				if (err.httpStatus !== 403) {
+					console.error(`Failed to invite ${users} to ${this.roomID}:`)
+					console.error(err)
+				}
+			}
 		}
 	}
 
@@ -586,7 +644,7 @@ class Portal {
 
 		if (!await this.loadAccessHash(telegramPOV)) {
 			this.creatingMatrixRoom = false
-			throw new Error("Failed to load access hash.")
+			throw new Error(`Failed to load access hash for ${this.peer.type} ${this.peer.username || this.peer.id}.`)
 		}
 
 		let room, info, users
@@ -661,7 +719,7 @@ class Portal {
 
 	async updateInfo(telegramPOV, dialog) {
 		if (!dialog) {
-			console.log("updateInfo called without dialog data")
+			this.app.warn("updateInfo called without dialog data")
 			const { user } = this.peer.getInfo(telegramPOV)
 			if (!user) {
 				throw new Error("Dialog data not given and fetching data failed")

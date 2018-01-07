@@ -17,6 +17,7 @@ const md5 = require("md5")
 const TelegramPuppet = require("./telegram-puppet")
 const TelegramPeer = require("./telegram-peer")
 const strSim = require("string-similarity")
+const chalk = require("chalk")
 
 /**
  * MatrixUser represents a Matrix user who probably wants to control their
@@ -211,21 +212,27 @@ class MatrixUser {
 			if (dialog._ === "chatForbidden" || dialog._ === "channelForbidden" || dialog.deactivated) {
 				continue
 			}
-			const peer = new TelegramPeer(dialog._, dialog.id)
+			const peer = new TelegramPeer(dialog._, dialog.id, {
+				accessHash: dialog.access_hash,
+			})
 			const portal = await this.app.getPortalByPeer(peer)
-			if (await portal.updateInfo(this.telegramPuppet, dialog)) {
-				changed = true
-			}
 			this.chats.push(portal)
 			if (createRooms) {
+				if (peer.type === "channel") {
+					portal.accessHashes.set(this.telegramPuppet.userID, dialog.access_hash)
+				}
 				try {
 					await portal.createMatrixRoom(this.telegramPuppet, {
 						invite: [this.userID],
 					})
 				} catch (err) {
+					console.error(`Failed to create a room for ${dialog._} ${dialog.id}`)
 					console.error(err)
-					console.error(err.stack)
+					continue
 				}
+			}
+			if (await portal.updateInfo(this.telegramPuppet, dialog)) {
+				changed = true
 			}
 		}
 		await this.save()

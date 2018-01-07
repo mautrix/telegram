@@ -12,6 +12,8 @@ appservice:
     port: 8080
     id: telegram
 
+    debug: false
+
     # Path to the registration file. This is automatically updated when generating a registration.
     registration: ./registration.yaml
 

@@ -18,6 +18,7 @@ const { nextRandomInt } = require("telegram-mtproto/lib/bin")
 const fileType = require("file-type")
 const pkg = require("../package.json")
 const TelegramPeer = require("./telegram-peer")
+const chalk = require("chalk")
 
 /**
  * @module telegram-puppet
@@ -279,7 +280,7 @@ class TelegramPuppet {
 
 	async onUpdate(update) {
 		if (!update) {
-			console.log("Oh noes! Empty update")
+			this.app.error("Oh noes! Empty update")
 			return
 		}
 		let to, from, portal
@@ -312,7 +313,7 @@ class TelegramPuppet {
 		//
 		case "updateShortMessage":
 			to = new TelegramPeer("user", update.user_id, { receiverID: this.userID })
-			from = update.user_id
+			from = update.out ? this.userID : update.user_id
 			break
 		case "updateShortChatMessage":
 			to = new TelegramPeer("chat", update.chat_id)
@@ -358,7 +359,6 @@ class TelegramPuppet {
 			})
 			return
 		}
-		console.log(update)
 		await portal.handleTelegramMessage({
 			from,
 			to,
@@ -381,6 +381,9 @@ class TelegramPuppet {
 	}
 
 	async handleUpdate(data) {
+		if (!data.update || data.update._ !== "updateUserStatus") {
+			this.app.debug("green", "Raw event for", this.userID, JSON.stringify(data, "", "  "))
+		}
 		try {
 			switch (data._) {
 			case "updateShort":
@@ -389,8 +392,8 @@ class TelegramPuppet {
 				break
 			case "updates":
 				// TODO use data.users and data.chats
-				console.log("Received updates users:", data.users)
-				console.log("Received updates chats:", data.chats)
+				this.app.debug("green", "Received updates users:", JSON.stringify(data.users, "", "  "))
+				this.app.debug("green", "Received updates chats:", JSON.stringify(data.chats, "", "  "))
 				this.date = data.date
 				const updateHandlers = []
 				for (const update of data.updates) {
@@ -403,21 +406,24 @@ class TelegramPuppet {
 				await this.onUpdate(data)
 				break
 			case "updatesTooLong":
-				console.log("Handling updatesTooLong", this.pts, this.date)
+				if (this.pts === 0) {
+					this.app.warn("updatesTooLong received, but we don't have a persistent timestamp :(")
+					break
+				}
+				this.app.debug("yellow", "Handling updatesTooLong", this.pts, this.date)
 				const dat = await this.client("updates.getDifference", {
 					pts: this.pts,
 					date: this.date,
 					qts: -1,
 				})
-				console.log("updatesTooLong data:", dat)
+				this.app.debug("yellow", `updatesTooLong data: ${JSON.stringify(dat, "", "  ")}`)
 				// TODO use updatesTooLong data?
 				break
 			default:
-				console.log("Unrecognized update type:", data._)
+				this.app.warn("Unrecognized update type:", data._)
 			}
 		} catch (err) {
-			console.error("Error handling update:", err)
-			console.error(err.stack)
+			this.app.warn("Error handling update:", err)
 		}
 	}
 
@@ -429,30 +435,30 @@ class TelegramPuppet {
 			//console.log("Updating online status...")
 			//const statusUpdate = await this.client("account.updateStatus", { offline: false })
 			//console.log(statusUpdate)
-			console.log("Fetching initial state...")
+			this.app.info("Fetching initial state...")
 			const state = await this.client("updates.getState", {})
-			console.log("Initial state:", state)
+			this.app.debug("green", "Initial state:", JSON.stringify(state, "", "  "))
 		} catch (err) {
 			console.error("Error getting initial state:", err)
 		}
 		try {
-			console.log("Updating contact list...")
+			this.app.info("Updating contact list...")
 			const changed = await this.matrixUser.syncContacts()
 			if (!changed) {
-				console.log("Contacts were up-to-date")
+				this.app.info("Contacts were up-to-date")
 			} else {
-				console.log("Contacts updated")
+				this.app.info("Contacts updated")
 			}
 		} catch (err) {
 			console.error("Failed to update contacts:", err)
 		}
 		try {
-			console.log("Updating dialogs...")
+			this.app.info("Updating dialogs...")
 			const changed = await this.matrixUser.syncChats()
 			if (!changed) {
-				console.log("Dialogs were up-to-date")
+				this.app.info("Dialogs were up-to-date")
 			} else {
-				console.log("Dialogs updated")
+				this.app.info("Dialogs updated")
 			}
 		} catch (err) {
 			console.error("Failed to update dialogs:", err)

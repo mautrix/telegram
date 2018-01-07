@@ -22,6 +22,7 @@ const MatrixUser = require("./matrix-user")
 const TelegramUser = require("./telegram-user")
 const TelegramPeer = require("./telegram-peer")
 const Portal = require("./portal")
+const chalk = require("chalk")
 
 /**
  * The base class for the bridge.
@@ -105,6 +106,7 @@ class MautrixTelegram {
 				onUserQuery(/*user*/) {
 					return {}
 				},
+				onLog: msg => self.debug("blue", msg),
 				async onEvent(request/*, context*/) {
 					try {
 						await self.handleMatrixEvent(request.getData())
@@ -117,16 +119,35 @@ class MautrixTelegram {
 		})
 	}
 
+	debug(color, ...message) {
+		if (this.config.appservice.debug) {
+			console.log(chalk[color](...message))
+		}
+	}
+
+	debugErr(color, ...message) {
+		if (this.config.appservice.debug) {
+			console.error(chalk[color](...message))
+		}
+	}
+
+	info(...message) {
+		console.log(...message)
+	}
+
+	warn(...message) {
+		console.error(chalk.orange(...message))
+	}
+
 	/**
 	 * Start the bridge.
 	 */
 	async run() {
-		console.log("Appservice listening on port %s", this.config.appservice.port)
+		this.info("Appservice listening on port %s", this.config.appservice.port)
 		await this.bridge.run(this.config.appservice.port, {})
 
 		// Load all Matrix users to cache
-		const userEntries = await this.bridge.getUserStore()
-			.select({ type: "matrix" })
+		const userEntries = await this.bridge.getUserStore().select({ type: "matrix" })
 
 		for (const entry of userEntries) {
 			const user = MatrixUser.fromEntry(this, entry)

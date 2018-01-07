@@ -73,7 +73,7 @@ class TelegramUser {
 
 	async updateInfo(telegramPOV, user, { updateAvatar = false } = {}) {
 		if (!user) {
-			console.log("updateInfo called without user data")
+			this.app.warn("updateInfo called without user data")
 			user = await telegramPOV.client("users.getFullUser", {
 				id: this.toPeer(telegramPOV).toInputObject(),
 			})
