@@ -186,6 +186,7 @@ class MatrixUser {
 		let changed = false
 
 		for (const user of dialogs.users) {
+			this.app.debug("cyan", "Syncing data for", this.telegramPuppet.userID, JSON.stringify(user, "", "  "))
 			if (!user.self) {
 				continue
 			}
@@ -209,9 +210,10 @@ class MatrixUser {
 
 		this.chats = []
 		for (const dialog of dialogs.chats) {
-			if (dialog._ === "chatForbidden" || dialog._ === "channelForbidden" || dialog.deactivated) {
+			if (dialog._ === "chatForbidden" || dialog._ === "channelForbidden" || dialog.deactivated || dialog.left) {
 				continue
 			}
+			this.app.debug("cyan", "Syncing data for ", this.telegramPuppet.userID, JSON.stringify(dialog, "", "  "))
 			const peer = new TelegramPeer(dialog._, dialog.id, {
 				accessHash: dialog.access_hash,
 			})
