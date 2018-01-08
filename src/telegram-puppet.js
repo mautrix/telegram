@@ -410,14 +410,26 @@ class TelegramPuppet {
 					this.app.warn("updatesTooLong received, but we don't have a persistent timestamp :(")
 					break
 				}
-				this.app.debug("yellow", "Handling updatesTooLong", this.pts, this.date)
+				this.app.debug("magenta", "Handling updatesTooLong", this.pts, this.date)
 				const dat = await this.client("updates.getDifference", {
 					pts: this.pts,
 					date: this.date,
 					qts: -1,
 				})
-				this.app.debug("yellow", `updatesTooLong data: ${JSON.stringify(dat, "", "  ")}`)
-				// TODO use updatesTooLong data?
+				this.app.debug("magenta", `updates.getDifference: ${JSON.stringify(dat, "", "  ")}`)
+				// TODO use dat.users and dat.chats
+				this.pts = dat.state.pts
+				this.date = dat.state.date
+				for (const message of dat.new_messages) {
+					this.onUpdate({
+						_: "updateNewMessage",
+						pts: this.pts,
+						message,
+					})
+				}
+				for (const update of dat.other_updates) {
+					this.onUpdate(update)
+				}
 				break
 			default:
 				this.app.warn("Unrecognized update type:", data._)
@@ -437,6 +449,8 @@ class TelegramPuppet {
 			//console.log(statusUpdate)
 			this.app.info("Fetching initial state...")
 			const state = await this.client("updates.getState", {})
+			this.pts = state.pts
+			this.date = state.date
 			this.app.debug("green", "Initial state:", JSON.stringify(state, "", "  "))
 		} catch (err) {
 			console.error("Error getting initial state:", err)

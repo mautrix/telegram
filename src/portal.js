@@ -226,7 +226,7 @@ class Portal {
 				// We don't care about user deletions on chats without portals
 				return
 			}
-			this.app.debug("yellow", "Service message received, creating room for", evt.to.id)
+			this.app.debug("magenta", "Service message received, creating room for", evt.to.id)
 			await this.createMatrixRoom(evt.source, { invite: [evt.source.matrixUser.userID] })
 			return
 		}

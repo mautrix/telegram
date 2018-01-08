@@ -136,7 +136,7 @@ class MautrixTelegram {
 	}
 
 	warn(...message) {
-		console.error(chalk.orange(...message))
+		console.error(chalk.yellow(...message))
 	}
 
 	/**
