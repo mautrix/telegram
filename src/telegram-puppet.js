@@ -99,6 +99,7 @@ class TelegramPuppet {
 
 		this.pts = 0
 		this.date = 0
+		this.lastID = 0
 
 		this.puppetStorage = {
 			get: async (key) => {
@@ -320,7 +321,7 @@ class TelegramPuppet {
 			from = update.from_id
 			break
 		case "updateNewChannelMessage":
-			// TODO figure out how channel message signing works
+			// TODO use message.post_author
 			from = -1
 		case "updateNewMessage":
 			this.pts = update.pts
@@ -330,23 +331,32 @@ class TelegramPuppet {
 			break
 		case "updateReadMessages":
 		case "updateReadHistoryOutbox":
+		case "updateReadHistoryInbox":
 		case "updateDeleteMessages":
 		case "updateRestoreMessages":
+			// TODO we probably want to handle those five updates properly
 			this.pts = update.pts
-			break
+			return
 
 		default:
 			// Unknown update type
-			console.log(`Update of unknown type ${update._} received:\n${JSON.stringify(update, "", "  ")}`)
+			this.app.warn(`Update of unknown type ${update._} received: ${JSON.stringify(update, "", "  ")}`)
 			return
 		}
 		if (!to) {
 			// This shouldn't happen
-			console.warn("No target found for update", update)
+			this.app.warn("No target found for update", update)
 			return
 		}
 		if (update._ === "messageService" && update.action._ === "messageActionChannelMigrateFrom") {
 			return
+		}
+		if (update.id) {
+			if (update.id <= this.lastID) {
+				this.app.debug(`Received old/duplicate message with ID ${update.id} (latest ID: ${this.lastID})`)
+				return
+			}
+			this.lastID = update.id
 		}
 
 		portal = await this.app.getPortalByPeer(to)
@@ -362,6 +372,7 @@ class TelegramPuppet {
 		await portal.handleTelegramMessage({
 			from,
 			to,
+			fwdFrom: update.fwd_from ? update.fwd_from.from_id : 0,
 			source: this,
 			text: update.message,
 			entities: update.entities,

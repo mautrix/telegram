@@ -334,7 +334,8 @@ class Portal {
 	 * Handle a Telegram service message event.
 	 *
 	 * @param {Object}          evt            The custom event object.
-	 * @param {number}          evt.from       The ID of the Telegram user who caused the service message.
+	 * @param {number}          evt.from       The ID of the Telegram user who sent the message.
+	 * @param {number}          evt.fwdFrom    The ID of the Telegram user who originally sent the message.
 	 * @param {TelegramPeer}    evt.to         The peer to which the message was sent.
 	 * @param {TelegramPuppet}  evt.source     The source where this event was captured.
 	 * @param {string}          evt.text       The text in the message.
@@ -374,6 +375,8 @@ class Portal {
 				throw err
 			}
 		}
+
+		// TODO display forwards (evt.fwdFrom)
 
 		if (evt.text && evt.text.length > 0) {
 			if (evt.entities) {

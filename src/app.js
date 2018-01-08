@@ -121,12 +121,20 @@ class MautrixTelegram {
 
 	debug(color, ...message) {
 		if (this.config.appservice.debug) {
+			if (!chalk[color]) {
+				message.unshift(`[Invalid color: ${color}]`)
+				color = "bgRed"
+			}
 			console.log(chalk[color](...message))
 		}
 	}
 
 	debugErr(color, ...message) {
 		if (this.config.appservice.debug) {
+			if (!chalk[color]) {
+				message.unshift(`[Invalid color: ${color}]`)
+				color = "bgRed"
+			}
 			console.error(chalk[color](...message))
 		}
 	}
