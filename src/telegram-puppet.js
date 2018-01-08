@@ -351,13 +351,6 @@ class TelegramPuppet {
 		if (update._ === "messageService" && update.action._ === "messageActionChannelMigrateFrom") {
 			return
 		}
-		if (update.id) {
-			if (update.id <= this.lastID) {
-				this.app.debug(`Received old/duplicate message with ID ${update.id} (latest ID: ${this.lastID})`)
-				return
-			}
-			this.lastID = update.id
-		}
 
 		portal = await this.app.getPortalByPeer(to)
 		if (update._ === "messageService") {
@@ -372,6 +365,8 @@ class TelegramPuppet {
 		await portal.handleTelegramMessage({
 			from,
 			to,
+			id: update.id,
+			date: update.date,
 			fwdFrom: update.fwd_from ? update.fwd_from.from_id : 0,
 			source: this,
 			text: update.message,
@@ -390,6 +385,8 @@ class TelegramPuppet {
 				: undefined,
 		})
 	}
+
+
 
 	async handleUpdate(data) {
 		if (!data.update || data.update._ !== "updateUserStatus") {
@@ -427,6 +424,10 @@ class TelegramPuppet {
 					date: this.date,
 					qts: -1,
 				})
+				if (dat._ === "updates.differenceEmpty") {
+					this.date = dat.date
+					break
+				}
 				this.app.debug("magenta", `updates.getDifference: ${JSON.stringify(dat, "", "  ")}`)
 				// TODO use dat.users and dat.chats
 				this.pts = dat.state.pts
