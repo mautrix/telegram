@@ -215,6 +215,42 @@ class Portal {
 	}
 
 	/**
+	 * Add a Telegram user to this room.
+	 *
+	 * This makes the Matrix puppet of that Telegram user join this room. If the Telegram user is also a puppet
+	 * controlled by a Matrix user, that Matrix user is invited as well.
+	 *
+	 * @param {number} userID The Telegram ID of the user to add.
+	 */
+	async addUser(userID) {
+		const matrixUser = await this.app.getMatrixUserByTelegramID(userID)
+		if (matrixUser) {
+			matrixUser.join(this)
+			this.inviteMatrix(matrixUser.userID)
+		}
+		const telegramUser = await this.app.getTelegramUser(userID)
+		await telegramUser.intent.join(this.roomID)
+	}
+
+	/**
+	 * Remove a Telegram user from this room.
+	 *
+	 * This makes the Matrix puppet of the given Telegram user leave this room. If the Telegram user is also a puppet
+	 * controlled by a Matrix user, that Matrix user is kicked with the message "Left Telegram chat".
+	 *
+	 * @param {number} userID The Telegram ID of the user to remove.
+	 */
+	async deleteUser(userID) {
+		const matrixUser = await this.app.getMatrixUserByTelegramID(userID)
+		if (matrixUser) {
+			matrixUser.leave(this)
+			this.kickMatrix(matrixUser.userID, "Left Telegram chat")
+		}
+		const telegramUser = await this.app.getTelegramUser(userID)
+		telegramUser.intent.leave(this.roomID)
+	}
+
+	/**
 	 * Handle a Telegram service message event.
 	 *
 	 * @param {Object}         evt        The custom event object.
@@ -242,21 +278,17 @@ class Portal {
 			}
 		}
 		this.lastMessageIDs.set(evt.source.userID, evt.id)
-		let matrixUser, telegramUser
 		switch (evt.action._) {
 		case "messageActionChatCreate":
 			// Portal gets created at beginning if it doesn't exist
 			// Falls through to invite everyone in initial user list
 		case "messageActionChatAddUser":
 			for (const userID of evt.action.users) {
-				matrixUser = await this.app.getMatrixUserByTelegramID(userID)
-				if (matrixUser) {
-					matrixUser.join(this)
-					this.inviteMatrix(matrixUser.userID)
-				}
-				telegramUser = await this.app.getTelegramUser(userID)
-				telegramUser.intent.join(this.roomID)
+				await this.addUser(userID)
 			}
+			break
+		case "messageActionChatJoinedByLink":
+			await this.addUser(evt.from)
 			break
 		case "messageActionChannelCreate":
 			// Portal gets created at beginning if it doesn't exist
@@ -276,13 +308,7 @@ class Portal {
 			await sender.sendEmote(this.roomID, "upgraded this group to a supergroup.")
 			break
 		case "messageActionChatDeleteUser":
-			matrixUser = await this.app.getMatrixUserByTelegramID(evt.action.user_id)
-			if (matrixUser) {
-				matrixUser.leave(this)
-				this.kickMatrix(matrixUser.userID, "Left Telegram chat")
-			}
-			telegramUser = await this.app.getTelegramUser(evt.action.user_id)
-			telegramUser.intent.leave(this.roomID)
+			await this.deleteUser(evt.action.user_id)
 			break
 		case "messageActionChatEditPhoto":
 			const sizes = evt.action.photo.sizes

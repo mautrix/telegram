@@ -386,7 +386,53 @@ class TelegramPuppet {
 		})
 	}
 
+	async receiveUsers(users) {
+		this.app.debug("green", "Handling received users:", JSON.stringify(users, "", "  "))
+		for (const user of users) {
+			const telegramUser = await this.app.getTelegramUser(user.id)
+			await telegramUser.updateInfo(this, user, true)
+		}
+	}
 
+	async receiveChats(chats) {
+		this.app.debug("green", "Handling received chats:", JSON.stringify(chats, "", "  "))
+		for (const chat of chats) {
+			const peer = new TelegramPeer(chat._, chat.id, {
+				accessHash: chat.access_hash,
+			})
+			const portal = await this.app.getPortalByPeer(peer)
+			await portal.updateInfo(this, chat)
+		}
+	}
+
+	async handleUpdatesTooLong() {
+		this.app.debug("magenta", "Handling updatesTooLong", this.pts, this.date)
+		const dat = await this.client("updates.getDifference", {
+			pts: this.pts,
+			date: this.date,
+			qts: -1,
+		})
+		if (dat._ === "updates.differenceEmpty") {
+			this.date = dat.date
+			return
+		}
+		this.app.debug("magenta", `updates.getDifference: ${JSON.stringify(dat, "", "  ")}`)
+		// TODO use dat.users and dat.chats
+		await this.receiveUsers(dat.users)
+		await this.receiveChats(dat.chats)
+		this.pts = dat.state.pts
+		this.date = dat.state.date
+		for (const message of dat.new_messages) {
+			await this.onUpdate({
+				_: "updateNewMessage",
+				pts: this.pts,
+				message,
+			})
+		}
+		for (const update of dat.other_updates) {
+			await this.onUpdate(update)
+		}
+	}
 
 	async handleUpdate(data) {
 		if (!data.update || data.update._ !== "updateUserStatus") {
@@ -399,15 +445,12 @@ class TelegramPuppet {
 				await this.onUpdate(data.update)
 				break
 			case "updates":
-				// TODO use data.users and data.chats
-				this.app.debug("green", "Received updates users:", JSON.stringify(data.users, "", "  "))
-				this.app.debug("green", "Received updates chats:", JSON.stringify(data.chats, "", "  "))
 				this.date = data.date
-				const updateHandlers = []
+				await this.receiveUsers(data.users)
+				await this.receiveChats(data.chats)
 				for (const update of data.updates) {
-					updateHandlers.push(this.onUpdate(update))
+					await this.onUpdate(update)
 				}
-				await Promise.all(updateHandlers)
 				break
 			case "updateShortMessage":
 			case "updateShortChatMessage":
@@ -418,30 +461,7 @@ class TelegramPuppet {
 					this.app.warn("updatesTooLong received, but we don't have a persistent timestamp :(")
 					break
 				}
-				this.app.debug("magenta", "Handling updatesTooLong", this.pts, this.date)
-				const dat = await this.client("updates.getDifference", {
-					pts: this.pts,
-					date: this.date,
-					qts: -1,
-				})
-				if (dat._ === "updates.differenceEmpty") {
-					this.date = dat.date
-					break
-				}
-				this.app.debug("magenta", `updates.getDifference: ${JSON.stringify(dat, "", "  ")}`)
-				// TODO use dat.users and dat.chats
-				this.pts = dat.state.pts
-				this.date = dat.state.date
-				for (const message of dat.new_messages) {
-					this.onUpdate({
-						_: "updateNewMessage",
-						pts: this.pts,
-						message,
-					})
-				}
-				for (const update of dat.other_updates) {
-					this.onUpdate(update)
-				}
+				await this.handleUpdatesTooLong()
 				break
 			default:
 				this.app.warn("Unrecognized update type:", data._)
