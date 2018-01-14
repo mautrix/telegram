@@ -169,6 +169,11 @@ const headers = /<h([0-6])>([^]*?)<\/h[0-6]>/g
 const unorderedLists = /<ul>([^]*?)<\/ul>/g
 const orderedLists = /<ol>([^]*?)<\/ol>/g
 const listEntries = /<li>([^]*?)<\/li>/g
+const blockquotes = /<blockquote>([^]*?)<\/blockquote>/g
+
+// Formatting that is brutally murdered
+const strikedText = /<del>([^]*?)<\/del>/g
+const underlinedText = /<u>([^]*?)<\/u>/g
 
 // Formatting that is converted to Telegram entity formatting
 const boldText = /<(strong)>()([^]*?)<\/strong>/g
@@ -315,6 +320,17 @@ function matrixToTelegram(message, isHTML, app) {
 		let n = 0
 		return list.replace(listEntries, (fullMatch, text) => `${++n}. ${text}`)
 	})
+	message = message.replace(blockquotes, (_, quote) => quote
+		.split("\n")
+		.map(line => line.trim())
+		.filter(line => line.length > 0)
+		.map(line => `> ${line}`)
+		.join("\n"))
+
+	// Just remove these, they have no textual or Telegramical representation.
+	message = message.replace(strikedText, (_, text) => text)
+	message = message.replace(underlinedText, (_, text) => text)
+	message = message.trim()
 
 	const regexMonsterReplacer = (match, ...args) => {
 		const { index, identifier, arg, text } = regexMonsterMatchParser(args)
