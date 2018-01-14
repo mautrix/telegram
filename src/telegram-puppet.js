@@ -196,6 +196,7 @@ class TelegramPuppet {
 	}
 
 	logOut() {
+		clearInterval(this.loop)
 		return this.client("auth.logOut")
 	}
 
@@ -509,7 +510,7 @@ class TelegramPuppet {
 		} catch (err) {
 			console.error("Failed to update dialogs:", err)
 		}
-		setInterval(async () => {
+		this.loop = setInterval(async () => {
 			try {
 				await this.client("updates.getState", {})
 			} catch (err) {
