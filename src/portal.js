@@ -368,10 +368,38 @@ class Portal {
 		return false
 	}
 
+	/**
+	 * @typedef PortalMessage A portal message event.
+	 *
+	 * @property {string} [text]
+	 * @property {string} [caption]
+	 *
+	 * @property {number} from
+	 * @property {number} [fwdFrom]
+	 *
+	 * @property {Object} to
+	 * @property {number} to.id
+	 *
+	 * @property {Object} [geo]
+	 * @property {number} geo.lat
+	 * @property {number} geo.long
+	 *
+	 * @property {Object} [document]
+	 * @property {number} document.id
+	 * @property {Object} [photo]
+	 * @property {number} photo.id
+	 */
+
+	/**
+	 * Get a deduplication hash of the given event. The hash is formed of the text or caption, source, forward source
+	 * and target. For documents and photos, the file ID is included and for locations the longitude and latitude are
+	 * included.
+	 *
+	 * @param   {PortalMessage} evt The event.
+	 * @returns {string}            An md5 hash of the data.
+	 */
 	hash(evt) {
-		// Including the timestamp in the hash prevents reliably deduplicating multiuser-caused duplicates of
-		// Matrix-sent messages.
-		let base = (evt.text || evt.caption) + /*evt.date +*/ evt.from + evt.fwdFrom + evt.to.id
+		let base = (evt.text || evt.caption) + evt.from + evt.fwdFrom + evt.to.id
 		if (evt.geo) {
 			base += evt.geo.lat
 			base += evt.geo.long
@@ -383,6 +411,12 @@ class Portal {
 		return md5(base)
 	}
 
+	/**
+	 * Hash the given event and check if it has been recently handled.
+	 *
+	 * @param   {PortalMessage} evt The event.
+	 * @returns {boolean}           Whether or not the event has been recently handled.
+	 */
 	deduplicate(evt) {
 		const hashed = this.hash(evt)
 		if (this.messageHashes.includes(hashed)) {
@@ -491,7 +525,6 @@ class Portal {
 					evt.content.formatted_body || evt.content.body,
 					evt.content.format === "org.matrix.custom.html",
 					this.app)
-			// evt.text || evt.caption) + evt.date + evt.from + evt.fwdFrom + evt.to.id)
 			this.deduplicate({
 				text: message,
 				date: Math.round(Date.now() / 1000),
@@ -525,7 +558,7 @@ class Portal {
 				to: {
 					id: this.peer.id,
 				},
-				geo: {lat, long },
+				geo: { lat, long },
 			})
 			await sender.telegramPuppet.sendMedia(this.peer, {
 				_: "inputMediaGeoPoint",
