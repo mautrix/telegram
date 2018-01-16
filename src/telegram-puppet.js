@@ -18,7 +18,6 @@ const { nextRandomInt } = require("telegram-mtproto/lib/bin")
 const fileType = require("file-type")
 const pkg = require("../package.json")
 const TelegramPeer = require("./telegram-peer")
-const chalk = require("chalk")
 
 /**
  * @module telegram-puppet
@@ -338,7 +337,10 @@ class TelegramPuppet {
 			// TODO we probably want to handle those five updates properly
 			this.pts = update.pts
 			return
-
+		case "updateDraftMessage":
+			this.app.debug("yellow", `Message draft received: ${JSON.stringify(update, "", "  ")}`)
+			// Ignore, we can't do anything with drafts.
+			return
 		default:
 			// Unknown update type
 			this.app.warn(`Update of unknown type ${update._} received: ${JSON.stringify(update, "", "  ")}`)
@@ -407,31 +409,45 @@ class TelegramPuppet {
 	}
 
 	async handleUpdatesTooLong() {
+		if (this.pts === 0 || this.date === 0) {
+			this.app.warn("updatesTooLong received, but we don't have timestamps :(")
+			return
+		}
 		this.app.debug("magenta", "Handling updatesTooLong", this.pts, this.date)
-		const dat = await this.client("updates.getDifference", {
+		const data = await this.client("updates.getDifference", {
 			pts: this.pts,
 			date: this.date,
 			qts: -1,
 		})
-		if (dat._ === "updates.differenceEmpty") {
-			this.date = dat.date
+		if (data._ === "updates.differenceEmpty") {
+			this.date = data.date
 			return
 		}
-		this.app.debug("magenta", `updates.getDifference: ${JSON.stringify(dat, "", "  ")}`)
-		// TODO use dat.users and dat.chats
-		await this.receiveUsers(dat.users)
-		await this.receiveChats(dat.chats)
-		this.pts = dat.state.pts
-		this.date = dat.state.date
-		for (const message of dat.new_messages) {
+		await this.receiveUsers(data.users)
+		await this.receiveChats(data.chats)
+		const state = data.state || data.intermediate_state
+		this.app.debug("cyan", `updates.getDifference -> ${data._}`)
+		this.app.debug("cyan", "====================================================================================================================================================")
+		this.app.debug("magenta", `diff.new_messages: ${JSON.stringify(data.new_messages, "", "  ")}`)
+		this.app.debug("cyan", "====================================================================================================================================================")
+		this.app.debug("magenta", `diff.other_updates: ${JSON.stringify(data.other_updates, "", "  ")}`)
+		this.app.debug("cyan", "====================================================================================================================================================")
+		this.app.debug("cyan", `Current timestamps: pts=${this.pts}, date=${this.date}, unix=${Date.now() / 1000}`)
+		this.app.debug("magenta", `diff.state: ${JSON.stringify(state, "", "  ")}`)
+		this.pts = state.pts
+		this.date = state.date
+		/*for (const message of data.new_messages) {
 			await this.onUpdate({
 				_: "updateNewMessage",
 				pts: this.pts,
 				message,
 			})
-		}
-		for (const update of dat.other_updates) {
+		}*/
+		for (const update of data.other_updates) {
 			await this.onUpdate(update)
+		}
+		if (data._ === "updates.differenceSlice") {
+			//await this.handleUpdatesTooLong()
 		}
 	}
 
@@ -458,10 +474,6 @@ class TelegramPuppet {
 				await this.onUpdate(data)
 				break
 			case "updatesTooLong":
-				if (this.pts === 0) {
-					this.app.warn("updatesTooLong received, but we don't have a persistent timestamp :(")
-					break
-				}
 				await this.handleUpdatesTooLong()
 				break
 			default:

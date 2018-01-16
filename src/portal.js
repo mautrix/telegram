@@ -331,7 +331,7 @@ class Portal {
 			await intent.setRoomName(this.roomID, this.peer.title)
 			break
 		default:
-			this.app.warn("Unhandled service message of type", evt.action._)
+			this.app.warn("Unhandled service message of type", evt.action._, "from", evt.from)
 			this.app.warn(JSON.stringify(evt.action, "", "  "))
 		}
 	}
