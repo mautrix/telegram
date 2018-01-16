@@ -1,6 +1,11 @@
-node_modules/
 .idea/
-jsdoc/
+
+.venv
+pip-selfcheck.json
+*.pyc
+__pycache__
+
 config.yaml
 registration.yaml
 *.db
+*.session

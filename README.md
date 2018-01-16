@@ -1,5 +1,6 @@
 # mautrix-telegram
-**Work in progress: Expect bugs, do not use in production.**
+**This is the python rewrite branch and can not yet be used.**
+**For a somewhat functional JavaScript version, check the master branch.**
 
 A Matrix-Telegram puppeting bridge.
 
@@ -10,13 +11,17 @@ A Telegram chat will be created once the bridge is stable enough.
 
 ## Usage
 ### Setup
-0. Clone the repository and install packages with `npm install`.
-1. Create a copy of `example-config.yaml` and fill out the fields.
-2. Generate the appservice registration with `./mautrix-telegram -g`.
+0. Clone the repository
+1. Set up the virtual environment
+   1. Create with `virtualenv -p /usr/bin/python3 .venv`
+   2. Activate with `source .venv/bin/activate`
+2. Install dependencies with `pip install -r requirements.txt`
+3. Create a copy of `example-config.yaml` and fill out the fields.
+4. Generate the appservice registration with `python -m mautrix_telegram -g`.
    You can use the `-c` and `-r` flags to change the location of the config and registration files.
    They default to `config.yaml` and `registration.yaml` respectively.
-3. Run the bridge `./mautrix-telegram`. You can also use forever: `forever start mautrix-telegram` (probably, I didn't actually test it).
-4. Invite the appservice bot to a private room and view the commands with `help`.
+5. Run the bridge `python -m mautrix_telegram`.
+6. Invite the appservice bot to a private room and view the commands with `help`.
 
 ### Logging in
 0. Make sure you have set up the bridge and have an open management room (a room with no other users than the appservice bot).
@@ -48,11 +53,11 @@ does not do this automatically.
 
 ## Features & Roadmap
 * Matrix → Telegram
-  * [x] Plaintext messages
-  * [x] Formatted messages
-    * [x] Bot commands (!command -> /command)
-    * [x] Mentions
-  * [x] Locations
+  * [ ] Plaintext messages
+  * [ ] Formatted messages
+    * [ ] Bot commands (!command -> /command)
+    * [ ] Mentions
+  * [ ] Locations
   * [ ] Images
   * [ ] Files
   * [ ] Message redactions
@@ -61,44 +66,44 @@ does not do this automatically.
   * [ ] Pinning messages
   * [ ] Power level
   * [ ] Membership actions
-    * [x] Inviting
-    * [x] Kicking
+    * [ ] Inviting
+    * [ ] Kicking
     * [ ] Joining/leaving
   * [ ] Room metadata changes
-  * [x] Room invites
+  * [ ] Room invites
 * Telegram → Matrix
-  * [x] Plaintext messages
-  * [x] Formatted messages
-    * [x] Bot commands (/command -> !command)
-    * [x] Mentions
-  * [x] Images
-  * [x] Locations
+  * [ ] Plaintext messages
+  * [ ] Formatted messages
+    * [ ] Bot commands (/command -> !command)
+    * [ ] Mentions
+  * [ ] Images
+  * [ ] Locations
   * [ ] Stickers (somewhat works through document upload, no preview though)
-  * [x] Audio messages
+  * [ ] Audio messages
   * [ ] Video messages
-  * [x] Documents
+  * [ ] Documents
   * [ ] Message deletions
-  * [x] Presence
-  * [x] Typing notifications
+  * [ ] Presence
+  * [ ] Typing notifications
   * [ ] Pinning messages
   * [ ] Admin status
-  * [x] Membership actions
-    * [x] Inviting
-    * [x] Kicking
-    * [x] Joining/leaving
-  * [x] Chat metadata changes
-  * [x] Initial chat metadata
+  * [ ] Membership actions
+    * [ ] Inviting
+    * [ ] Kicking
+    * [ ] Joining/leaving
+  * [ ] Chat metadata changes
+  * [ ] Initial chat metadata
   * [ ] Message edits
 * Initiating chats
-  * [x] Automatic portal creation for groups/channels at startup
-  * [x] Automatic portal creation for groups/channels when receiving invite/message
-  * [x] Private chat creation by inviting Telegram user to new room
+  * [ ] Automatic portal creation for groups/channels at startup
+  * [ ] Automatic portal creation for groups/channels when receiving invite/message
+  * [ ] Private chat creation by inviting Telegram user to new room
   * [ ] Joining public channels/supergroups using room aliases
-  * [x] Searching for Telegram users using management commands
-  * [x] Creating new Telegram chats from Matrix
-  * [x] Creating Telegram chats for existing Matrix rooms
+  * [ ] Searching for Telegram users using management commands
+  * [ ] Creating new Telegram chats from Matrix
+  * [ ] Creating Telegram chats for existing Matrix rooms
 * Misc
   * [ ] Use optional bot to relay messages for unauthenticated Matrix users
-  * [x] Properly handle upgrading groups to supergroups
-    * [x] Allow upgrading group to supergroup from Matrix
+  * [ ] Properly handle upgrading groups to supergroups
+    * [ ] Allow upgrading group to supergroup from Matrix
   * [ ] Handle public channel username changes
