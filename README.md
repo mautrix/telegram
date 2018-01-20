@@ -1,6 +1,6 @@
 # mautrix-telegram
-**This is the python rewrite branch and can not yet be used.**
-**For a somewhat functional JavaScript version, check the master branch.**
+**This is the python rewrite branch and is only barely functional.**
+**For a JavaScript version with more bugs and features, check the master branch.**
 
 A Matrix-Telegram puppeting bridge.
 
@@ -53,7 +53,7 @@ does not do this automatically.
 
 ## Features & Roadmap
 * Matrix → Telegram
-  * [ ] Plaintext messages
+  * [x] Plaintext messages
   * [ ] Formatted messages
     * [ ] Bot commands (!command -> /command)
     * [ ] Mentions
@@ -72,7 +72,7 @@ does not do this automatically.
   * [ ] Room metadata changes
   * [ ] Room invites
 * Telegram → Matrix
-  * [ ] Plaintext messages
+  * [x] Plaintext messages
   * [ ] Formatted messages
     * [ ] Bot commands (/command -> !command)
     * [ ] Mentions
@@ -95,7 +95,7 @@ does not do this automatically.
   * [ ] Initial chat metadata
   * [ ] Message edits
 * Initiating chats
-  * [ ] Automatic portal creation for groups/channels at startup
+  * [x] Automatic portal creation for groups/channels at startup
   * [ ] Automatic portal creation for groups/channels when receiving invite/message
   * [ ] Private chat creation by inviting Telegram user to new room
   * [ ] Joining public channels/supergroups using room aliases
