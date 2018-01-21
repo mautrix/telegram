@@ -79,7 +79,11 @@ class Portal:
     def handle_matrix_message(self, sender, message):
         type = message["msgtype"]
         if type == "m.text":
-            sender.client.send_message(self.peer, message["body"])
+            if "format" in message and message["format"] == "org.matrix.custom.html":
+                message, entities = formatter.matrix_to_telegram(message["formatted_body"])
+                sender.send_message(self.peer, message, entities=entities)
+            else:
+                sender.send_message(self.peer, message["body"])
 
     def handle_telegram_message(self, sender, evt):
         self.log.debug("Sending %s to %s by %d", evt.message, self.mxid, sender.id)

@@ -13,10 +13,8 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
-from telethon import TelegramClient
-from telethon.tl.types import User as UserEntity, Chat as ChatEntity, Channel as ChannelEntity
+import re
 from .db import Puppet as DBPuppet
-from . import portal as p
 
 config = None
 
@@ -35,6 +33,10 @@ class Puppet:
         self.intent = self.az.intent.user(self.mxid)
 
         self.cache[id] = self
+
+    @property
+    def tgid(self):
+        return self.id
 
     def to_db(self):
         return self.db.merge(
@@ -109,3 +111,6 @@ def init(context):
     global config
     Puppet.az, Puppet.db, log, config = context
     Puppet.log = log.getChild("puppet")
+    localpart = config.get("bridge.alias_template", "telegram_{}").format("(.+)")
+    hs = config["homeserver"]["domain"]
+    Puppet.mxid_regex = re.compile(f"@{localpart}:{hs}")

@@ -54,9 +54,9 @@ does not do this automatically.
 ## Features & Roadmap
 * Matrix → Telegram
   * [x] Plaintext messages
-  * [ ] Formatted messages
+  * [x] Formatted messages
     * [ ] Bot commands (!command -> /command)
-    * [ ] Mentions
+    * [x] Mentions
   * [ ] Locations
   * [ ] Images
   * [ ] Files

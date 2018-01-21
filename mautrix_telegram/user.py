@@ -16,7 +16,8 @@
 import traceback
 from telethon import TelegramClient
 from telethon.tl.types import User as UserEntity, Chat as ChatEntity, Channel as ChannelEntity, \
-    UpdateShortMessage, UpdateShortChatMessage
+    UpdateShortMessage, UpdateShortChatMessage, Message, UpdateShortSentMessage
+from telethon.tl.functions.messages import SendMessageRequest
 from .db import User as DBUser
 from . import portal as po, puppet as pu
 
@@ -88,6 +89,30 @@ class User:
         self.client.disconnect()
         self.client = None
         self.connected = False
+
+    def send_message(self, entity, message, reply_to=None, entities=None, link_preview=True):
+        entity = self.client.get_input_entity(entity)
+
+        request = SendMessageRequest(
+            peer=entity,
+            message=message,
+            entities=entities,
+            no_webpage=not link_preview,
+            reply_to_msg_id=self.client._get_reply_to(reply_to)
+        )
+        result = self.client(request)
+        if isinstance(result, UpdateShortSentMessage):
+            return Message(
+                id=result.id,
+                to_id=entity,
+                message=message,
+                date=result.date,
+                out=result.out,
+                media=result.media,
+                entities=result.entities
+            )
+
+        return self.client._get_response_message(request, result)
 
     def sync_dialogs(self):
         dialogs = self.client.get_dialogs(limit=30)
