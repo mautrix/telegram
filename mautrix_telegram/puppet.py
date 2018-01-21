@@ -24,23 +24,25 @@ config = None
 class Puppet:
     cache = {}
 
-    def __init__(self, id=None, displayname=None):
+    def __init__(self, id=None, username=None, displayname=None):
         self.id = id
 
         self.localpart = config.get("bridge.alias_template", "telegram_{}").format(self.id)
         hs = config["homeserver"]["domain"]
         self.mxid = f"@{self.localpart}:{hs}"
+        self.username = username
         self.displayname = displayname
         self.intent = self.az.intent.user(self.mxid)
 
         self.cache[id] = self
 
     def to_db(self):
-        return self.db.merge(DBPuppet(id=self.id, displayname=self.displayname))
+        return self.db.merge(
+            DBPuppet(id=self.id, username=self.username, displayname=self.displayname))
 
     @classmethod
     def from_db(cls, db_puppet):
-        return Puppet(db_puppet.id, db_puppet.displayname)
+        return Puppet(db_puppet.id, db_puppet.username, db_puppet.displayname)
 
     def save(self):
         self.to_db()
@@ -59,6 +61,9 @@ class Puppet:
 
     def update_info(self, info):
         changed = False
+        if self.username != info.username:
+            self.username = info.username
+            changed = True
         displayname = self.get_displayname(info)
         if displayname != self.displayname:
             self.intent.set_display_name(displayname)
@@ -84,6 +89,18 @@ class Puppet:
             cls.db.add(puppet.to_db())
             cls.db.commit()
             return puppet
+
+        return None
+
+    @classmethod
+    def find_by_username(cls, username):
+        for _, puppet in cls.cache.items():
+            if puppet.username == username:
+                return puppet
+
+        puppet = DBPuppet.query.filter(DBPuppet.username == username).one_or_none()
+        if puppet:
+            return cls.from_db(puppet)
 
         return None
 

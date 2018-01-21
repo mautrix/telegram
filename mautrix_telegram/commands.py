@@ -69,8 +69,7 @@ class CommandHandler:
             html = markdown.markdown(message, safe_mode="escape" if allow_html else False)
         elif allow_html:
             html = message
-        self.az.intent.send_text(self._room_id, message, formatted_text=html,
-                                 html=True if html else False, notice=True)
+        self.az.intent.send_text(self._room_id, message, html=html, notice=True)
 
     @command_handler
     def register(self, sender, args):
@@ -103,6 +102,7 @@ class CommandHandler:
 
         try:
             user = sender.client.sign_in(code=args[0])
+            sender.update_info(user)
             sender.command_status = None
             return self.reply(f"Successfully logged in as @{user.username}")
         except PhoneNumberUnoccupiedError:
@@ -143,6 +143,7 @@ class CommandHandler:
 
         try:
             user = sender.client.sign_in(password=args[0])
+            sender.update_info(user)
             sender.command_status = None
             return self.reply(f"Successfully logged in as @{user.username}")
         except PasswordHashInvalidError:
@@ -156,7 +157,7 @@ class CommandHandler:
     def logout(self, sender, args):
         if not sender.logged_in:
             return self.reply("You're not logged in.")
-        if sender.client.log_out():
+        if sender.log_out():
             return self.reply("Logged out successfully.")
         return self.reply("Failed to log out.")
 

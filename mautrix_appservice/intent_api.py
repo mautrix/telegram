@@ -142,13 +142,13 @@ class IntentAPI:
         self._ensure_registered()
         return self.client.create_room(alias, is_public, name, topic, is_direct, invitees)
 
-    def send_text(self, room_id, text, html=False, formatted_text=None, notice=False):
+    def send_text(self, room_id, text, html=None, notice=False):
         if html:
             return self.send_message(room_id, {
                 "body": text,
                 "msgtype": "m.notice" if notice else "m.text",
                 "format": "org.matrix.custom.html",
-                "formatted_body": formatted_text or text,
+                "formatted_body": html or text,
             })
         else:
             return self.send_message(room_id, {

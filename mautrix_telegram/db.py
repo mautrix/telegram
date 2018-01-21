@@ -33,10 +33,7 @@ class User(Base):
 
     mxid = Column(String, primary_key=True)
     tgid = Column(Integer, nullable=True)
-
-    def __init__(self, mxid, tgid=None):
-        self.mxid = mxid
-        self.tgid = tgid
+    tg_username = Column(String, nullable=True)
 
 
 class Puppet(Base):
@@ -44,6 +41,7 @@ class Puppet(Base):
 
     id = Column(Integer, primary_key=True)
     displayname = Column(String, nullable=True)
+    username = Column(String, nullable=True)
 
 
 def init(db_factory):

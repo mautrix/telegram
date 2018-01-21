@@ -73,9 +73,9 @@ does not do this automatically.
   * [ ] Room invites
 * Telegram → Matrix
   * [x] Plaintext messages
-  * [ ] Formatted messages
-    * [ ] Bot commands (/command -> !command)
-    * [ ] Mentions
+  * [x] Formatted messages
+    * [x] Bot commands (/command -> !command)
+    * [x] Mentions
   * [ ] Images
   * [ ] Locations
   * [ ] Stickers

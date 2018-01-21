@@ -17,7 +17,7 @@ from telethon.tl.functions.messages import GetFullChatRequest
 from telethon.tl.functions.channels import GetParticipantsRequest
 from telethon.tl.types import ChannelParticipantsRecent, PeerChat, PeerChannel, PeerUser
 from .db import Portal as DBPortal
-from . import puppet as p
+from . import puppet as p, formatter
 
 config = None
 
@@ -70,7 +70,6 @@ class Portal:
             puppet.update_info(entity)
             puppet.intent.join_room(self.mxid)
 
-
     def sync_telegram_users(self, users=[]):
         for entity in users:
             user = p.Puppet.get(entity.id)
@@ -82,9 +81,14 @@ class Portal:
         if type == "m.text":
             sender.client.send_message(self.peer, message["body"])
 
-    def handle_telegram_message(self, sender, message):
-        self.log.debug("Sending %s to %s by %d", message.message, self.mxid, sender.id)
-        sender.intent.send_text(self.mxid, message.message)
+    def handle_telegram_message(self, sender, evt):
+        self.log.debug("Sending %s to %s by %d", evt.message, self.mxid, sender.id)
+        if evt.message:
+            if evt.entities:
+                html = formatter.telegram_to_matrix(evt.message, evt.entities)
+                sender.intent.send_text(self.mxid, evt.message, html=html)
+            else:
+                sender.intent.send_text(self.mxid, evt.message)
 
     @property
     def peer(self):
