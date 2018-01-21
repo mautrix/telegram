@@ -31,6 +31,8 @@ class MatrixHandler:
         self.localpart_regex = re.compile(f"@{alias_format}:{hs}")
 
         self.az.matrix_event_handler(self.handle_event)
+        self.az.intent.set_display_name(
+            self.config.get("appservice.bot_displayname", "Mautrix-Telegram Bridge"))
 
     def is_puppet(self, mxid):
         match = self.localpart_regex.match(mxid)
@@ -51,14 +53,9 @@ class MatrixHandler:
     def handle_part(self, room, user):
         self.log.debug(f"{user} left {room}")
 
-    def is_management(self, room):
-        memberships = self.az.intent.get_room_members(room)
-        return [membership["state_key"] for membership in memberships["chunk"] if
-                membership["content"]["membership"] == "join"]
-
     def is_command(self, message):
         text = message.get("body", "")
-        prefix = self.config["bridge.commands.prefix"]
+        prefix = self.config["bridge.command_prefix"]
         is_command = text.startswith(prefix)
         if is_command:
             text = text[len(prefix) + 1:]
@@ -78,7 +75,7 @@ class MatrixHandler:
         if message["msgtype"] != "m.text":
             return
 
-        is_management = len(self.is_management(room)) == 2
+        is_management = len(self.az.intent.get_joined_users(room)) == 2
         if is_command or is_management:
             try:
                 command, arguments = text.split(" ", 1)
@@ -87,7 +84,8 @@ class MatrixHandler:
                 # Not enough values to unpack, i.e. no arguments
                 command = text
                 args = []
-            self.commands.handle(room, sender, command, args, is_management, is_portal=portal is not None)
+            self.commands.handle(room, sender, command, args, is_management,
+                                 is_portal=portal is not None)
 
     def filter_matrix_event(self, event):
         return event["sender"] == self.az.bot_mxid or self.is_puppet(event["sender"])

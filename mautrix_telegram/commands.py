@@ -15,6 +15,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from contextlib import contextmanager
 import markdown
+from telethon.errors import *
 
 command_handlers = {}
 
@@ -25,26 +26,34 @@ def command_handler(func):
 
 class CommandHandler:
     def __init__(self, context):
-        self.appserv, self.db, log, self.config = context
+        self.az, self.db, log, self.config = context
         self.log = log.getChild("commands")
-        self.command_prefix = self.config["bridge.commands.prefix"]
+        self.command_prefix = self.config["bridge.command_prefix"]
         self._room_id = None
+        self._is_management = False
+        self._is_portal = False
 
     def handle(self, room, sender, command, args, is_management, is_portal):
-        with self.handler(sender, room, command) as handle_command:
-            handle_command(self, sender, args, is_management, is_portal)
+        with self.handler(sender, room, command, args, is_management, is_portal) as handle_command:
+            handle_command(self, sender, args)
 
     @contextmanager
-    def handler(self, sender, room, command):
+    def handler(self, sender, room, command, args, is_management, is_portal):
         self._room_id = room
         try:
             command = command_handlers[command]
         except KeyError:
+            print(sender.command_status)
             if sender.command_status and "next" in sender.command_status:
+                args.insert(0, command)
                 command = sender.command_status["next"]
             else:
                 command = command_handlers["unknown_command"]
+        self._is_management = is_management
+        self._is_portal = is_portal
         yield command
+        self._is_management = None
+        self._is_portal = None
         self._room_id = None
 
     def reply(self, message, allow_html=False, render_markdown=True):
@@ -53,39 +62,152 @@ class CommandHandler:
                                  "the `CommandHandler.run` context manager")
 
         message = message.replace("$cmdprefix", self.command_prefix)
+        message = message.replace("$cmdprefix+sp ",
+                                  "" if self._is_management else f"{self.command_prefix} ")
         html = None
         if render_markdown:
             html = markdown.markdown(message, safe_mode="escape" if allow_html else False)
         elif allow_html:
             html = message
-        self.appserv.api.send_message_event(self._room_id, "m.room.message", {
-            "msgtype": "m.notice",
-            "body": message,
-            "format": "org.matrix.custom.html" if html else None,
-            "formatted_body": html or None,
-        })
+        self.az.intent.send_text(self._room_id, message, formatted_text=html,
+                                 html=True if html else False, notice=True)
 
     @command_handler
-    def cancel(self, sender, args, is_management, is_portal):
-        if sender.command_status:
+    def register(self, sender, args):
+        self.reply("Not yet implemented.")
+
+    @command_handler
+    def login(self, sender, args):
+        if not self._is_management:
+            return self.reply(
+                "`login` is a restricted command: you may only run it in management rooms.")
+        elif sender.logged_in:
+            return self.reply("You are already logged in.")
+        elif len(args) == 0:
+            return self.reply("**Usage:** `$cmdprefix+sp login <phone number>`")
+        phone_number = args[0]
+        sender.client.send_code_request(phone_number)
+        sender.client.sign_in(phone_number)
+        sender.command_status = {
+            "next": command_handlers["enter_code"],
+            "action": "Login",
+        }
+        return self.reply(f"Login code sent to {phone_number}. Please send the code here.")
+
+    @command_handler
+    def enter_code(self, sender, args):
+        if not sender.command_status:
+            return self.reply("Request a login code first with `$cmdprefix+sp login <phone>`")
+        elif len(args) == 0:
+            return self.reply("**Usage:** `$cmdprefix+sp enter_code <code>")
+
+        try:
+            user = sender.client.sign_in(code=args[0])
             sender.command_status = None
-            return self.reply(f"{sender.command_status.action} cancelled.")
+            return self.reply(f"Successfully logged in as @{user.username}")
+        except PhoneNumberUnoccupiedError:
+            return self.reply("That phone number has not been registered."
+                              "Please register with `$cmdprefix+sp register <phone>`.")
+        except PhoneCodeExpiredError:
+            return self.reply(
+                "Phone code expired. Try again with `$cmdprefix+sp login <phone>`.")
+        except PhoneCodeInvalidError:
+            return self.reply("Invalid phone code.")
+        except PhoneNumberAppSignupForbiddenError:
+            return self.reply(
+                "Your phone number does not allow 3rd party apps to sign in.")
+        except PhoneNumberFloodError:
+            return self.reply(
+                "Your phone number has been temporarily blocked for flooding. "
+                "The block is usually applied for around a day.")
+        except PhoneNumberBannedError:
+            return self.reply("Your phone number has been banned from Telegram.")
+        except SessionPasswordNeededError:
+            sender.command_status = {
+                "next": command_handlers["enter_password"],
+                "action": "Login (password entry)",
+            }
+            return self.reply("Your account has two-factor authentication."
+                              "Please send your password here.")
+        except:
+            self.log.exception()
+            return self.reply("Unhandled exception while sending code."
+                              "Check console for more details.")
+
+    @command_handler
+    def enter_password(self, sender, args):
+        if not sender.command_status:
+            return self.reply("Request a login code first with `$cmdprefix+sp login <phone>`")
+        elif len(args) == 0:
+            return self.reply("**Usage:** `$cmdprefix+sp enter_password <password>")
+
+        try:
+            user = sender.client.sign_in(password=args[0])
+            sender.command_status = None
+            return self.reply(f"Successfully logged in as @{user.username}")
+        except PasswordHashInvalidError:
+            return self.reply("Incorrect password.")
+        except:
+            self.log.exception()
+            return self.reply("Unhandled exception while sending password."
+                              "Check console for more details.")
+
+    @command_handler
+    def logout(self, sender, args):
+        if not sender.logged_in:
+            return self.reply("You're not logged in.")
+        if sender.client.log_out():
+            return self.reply("Logged out successfully.")
+        return self.reply("Failed to log out.")
+
+    @command_handler
+    def ping(self, sender, args):
+        if not sender.logged_in:
+            return self.reply("You're not logged in.")
+        me = sender.client.get_me()
+        if me:
+            return self.reply(f"You're logged in as @{me.username}")
+        else:
+            return self.reply("You're not logged in.")
+
+    @command_handler
+    def search(self, sender, args):
+        self.reply("Not yet implemented.")
+
+    @command_handler
+    def pm(self, sender, args):
+        self.reply("Not yet implemented.")
+
+    @command_handler
+    def create(self, sender, args):
+        self.reply("Not yet implemented.")
+
+    @command_handler
+    def upgrade(self, sender, args):
+        self.reply("Not yet implemented.")
+
+    @command_handler
+    def cancel(self, sender, args):
+        if sender.command_status:
+            action = sender.command_status["action"]
+            sender.command_status = None
+            return self.reply(f"{action} cancelled.")
         else:
             return self.reply("No ongoing command.")
 
     @command_handler
-    def unknown_command(self, sender, args, is_management, is_portal):
-        if is_management:
+    def unknown_command(self, sender, args):
+        if self._is_management:
             return self.reply("Unknown command. Try `help` for help.")
         else:
             return self.reply("Unknown command. Try `$cmdprefix help` for help.")
 
     @command_handler
-    def help(self, sender, args, is_management, is_portal):
-        if is_management:
+    def help(self, sender, args):
+        if self._is_management:
             management_status = ("This is a management room: prefixing commands"
                                  "with `$cmdprefix` is not required.\n")
-        elif is_portal:
+        elif self._is_portal:
             management_status = ("**This is a portal room**: you must always"
                                  "prefix commands with `$cmdprefix`.\n"
                                  "Management commands will not be sent to Telegram.")
@@ -100,15 +222,11 @@ _**Generic bridge commands**: commands for using the bridge that aren't related 
 _**Telegram actions**: commands for using the bridge to interact with Telegram._  
 **login** <_phone_> - Request an authentication code.  
 **logout** - Log out from Telegram.  
+**ping** - Check if you're logged into Telegram.  
 **search** [_-r|--remote_] <_query_> - Search your contacts or the Telegram servers for users.  
+**pm** <_id_> - Open a private chat with the given Telegram user ID.
 **create** <_group/channel_> [_room ID_] - Create a Telegram chat of the given type for a Matrix room.
                                            If the room ID is not specified, a chat for the current room is created.  
 **upgrade** - Upgrade a normal Telegram group to a supergroup.
-
-_**Temporary commands**: commands that will be replaced with more Matrix-y actions later._  
-**pm** <_id_> - Open a private chat with the given Telegram user ID.
-
-_**Debug commands**: commands to help in debugging the bridge. Disabled by default._  
-**api** <_method_> <_args_> - Call a Telegram API method. Args is always a single JSON object.
 """
         return self.reply(management_status + help)

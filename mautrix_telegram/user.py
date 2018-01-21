@@ -33,12 +33,15 @@ class User:
 
         self.command_status = None
         self.connected = False
-        self.logged_in = False
         self.client = None
 
         self.by_mxid[mxid] = self
         if tgid:
             self.by_tgid[tgid] = self
+
+    @property
+    def logged_in(self):
+        return self.client.is_user_authorized()
 
     def to_db(self):
         return self.db.merge(DBUser(self.mxid, self.tgid))
@@ -57,7 +60,6 @@ class User:
                                      config["telegram.api_hash"],
                                      update_workers=2)
         self.connected = self.client.connect()
-        self.logged_in = self.client.is_user_authorized()
         if self.logged_in:
             self.sync_dialogs()
         self.client.add_update_handler(self.update_catch)

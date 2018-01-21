@@ -78,7 +78,7 @@ does not do this automatically.
     * [ ] Mentions
   * [ ] Images
   * [ ] Locations
-  * [ ] Stickers (somewhat works through document upload, no preview though)
+  * [ ] Stickers
   * [ ] Audio messages
   * [ ] Video messages
   * [ ] Documents

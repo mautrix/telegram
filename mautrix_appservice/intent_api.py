@@ -51,7 +51,8 @@ class HTTPAPI(MatrixHttpApi):
         self.log.debug("%s %s %s", method, path, content)
         return super()._send(method, path, content, query_params, headers)
 
-    def create_room(self, alias=None, is_public=False, name=None, topic=None, is_direct=False, invitees=()):
+    def create_room(self, alias=None, is_public=False, name=None, topic=None, is_direct=False,
+                    invitees=()):
         """Perform /createRoom.
         Args:
             alias (str): Optional. The room alias name to set for this room.
@@ -136,17 +137,18 @@ class IntentAPI:
         self._ensure_registered()
         return self.client.set_display_name(self.mxid, name)
 
-    def create_room(self, alias=None, is_public=False, name=None, topic=None, is_direct=False, invitees=()):
+    def create_room(self, alias=None, is_public=False, name=None, topic=None, is_direct=False,
+                    invitees=()):
         self._ensure_registered()
         return self.client.create_room(alias, is_public, name, topic, is_direct, invitees)
 
-    def send_text(self, room_id, text, html=False, unformatted_text=None, notice=False):
+    def send_text(self, room_id, text, html=False, formatted_text=None, notice=False):
         if html:
             return self.send_message(room_id, {
-                "body": unformatted_text or text,
+                "body": text,
                 "msgtype": "m.notice" if notice else "m.text",
                 "format": "org.matrix.custom.html",
-                "formatted_body": text,
+                "formatted_body": formatted_text or text,
             })
         else:
             return self.send_message(room_id, {
@@ -169,6 +171,14 @@ class IntentAPI:
 
     def join_room(self, room_id):
         return self._ensure_joined(room_id, ignore_cache=True)
+
+    def get_room_members(self, room_id):
+        return self.client.get_room_members(room_id)
+
+    def get_joined_users(self, room_id):
+        memberships = self.get_room_members(room_id)
+        return [membership["state_key"] for membership in memberships["chunk"] if
+                membership["content"]["membership"] == "join"]
 
     def _ensure_joined(self, room_id, ignore_cache=False):
         if ignore_cache and self.memberships.get(room_id, "") == "join":
