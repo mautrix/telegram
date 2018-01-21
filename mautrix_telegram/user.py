@@ -15,8 +15,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import traceback
 from telethon import TelegramClient
-from telethon.tl.types import User as UserEntity, Chat as ChatEntity, Channel as ChannelEntity, \
-    UpdateShortMessage, UpdateShortChatMessage, Message, UpdateShortSentMessage
+from telethon.tl.types import *
 from telethon.tl.functions.messages import SendMessageRequest
 from .db import User as DBUser
 from . import portal as po, puppet as pu
@@ -118,9 +117,9 @@ class User:
         dialogs = self.client.get_dialogs(limit=30)
         for dialog in dialogs:
             entity = dialog.entity
-            if isinstance(entity, UserEntity):
+            if isinstance(entity, User):
                 continue
-            elif isinstance(entity, ChatEntity) and entity.deactivated:
+            elif isinstance(entity, Chat) and entity.deactivated:
                 continue
             portal = po.Portal.get_by_entity(entity)
             portal.create_room(self, entity, invites=[self.mxid])
@@ -133,12 +132,27 @@ class User:
             self.log.exception("Failed to handle Telegram update")
 
     def update(self, update):
-        if isinstance(update, UpdateShortChatMessage):
+        update_type = type(update)
+        if update_type == UpdateShortChatMessage:
             portal = po.Portal.get_by_tgid(update.chat_id, "chat")
             sender = pu.Puppet.get(update.from_id)
-        elif isinstance(update, UpdateShortMessage):
+        elif update_type == UpdateShortMessage:
             portal = po.Portal.get_by_tgid(update.user_id, "user")
             sender = pu.Puppet.get(self.tgid if update.out else update.user_id)
+        elif update_type == UpdateChatUserTyping or update_type == UpdateUserTyping:
+            if update_type == UpdateUserTyping:
+                portal = po.Portal.get_by_tgid(update.user_id, "user")
+            else:
+                portal = po.Portal.get_by_tgid(update.chat_id, "chat")
+            sender = pu.Puppet.get(update.user_id)
+            return portal.handle_telegram_typing(sender, update)
+        elif update_type == UpdateUserStatus:
+            puppet = pu.Puppet.get(update.user_id)
+            if isinstance(update.status, UserStatusOnline):
+                puppet.intent.set_presence("online")
+            elif isinstance(update.status, UserStatusOffline):
+                puppet.intent.set_presence("offline")
+            return
         else:
             self.log.debug("Unhandled update: %s", update)
             return

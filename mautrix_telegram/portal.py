@@ -85,6 +85,9 @@ class Portal:
             else:
                 sender.send_message(self.peer, message["body"])
 
+    def handle_telegram_typing(self, user, event):
+        user.intent.set_typing(self.mxid, is_typing=True)
+
     def handle_telegram_message(self, sender, evt):
         self.log.debug("Sending %s to %s by %d", evt.message, self.mxid, sender.id)
         if evt.message:

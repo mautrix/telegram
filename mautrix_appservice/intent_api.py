@@ -76,6 +76,22 @@ class HTTPAPI(MatrixHttpApi):
 
         return self._send("POST", "/createRoom", content)
 
+    def set_presence(self, status="online", user=None):
+        content = {
+            "presence": status
+        }
+        user = user or self.identity
+        return self._send("PUT", f"/presence/{user}/status", content)
+
+    def set_typing(self, room_id, is_typing=True, timeout=5000, user=None):
+        content = {
+            "typing": is_typing
+        }
+        if is_typing:
+            content["timeout"] = timeout
+        user = user or self.identity
+        return self._send("PUT", f"/rooms/{room_id}/typing/{user}", content)
+
 
 class ChildHTTPAPI(HTTPAPI):
     def __init__(self, user, parent):
@@ -137,6 +153,14 @@ class IntentAPI:
         self._ensure_registered()
         return self.client.set_display_name(self.mxid, name)
 
+    def set_presence(self, status="online"):
+        self._ensure_registered()
+        return self.client.set_presence(status)
+
+    def set_typing(self, room_id, is_typing=True, timeout=5000):
+        self._ensure_joined(room_id)
+        return self.client.set_typing(room_id, is_typing, timeout)
+
     def create_room(self, alias=None, is_public=False, name=None, topic=None, is_direct=False,
                     invitees=()):
         self._ensure_registered()
@@ -181,7 +205,7 @@ class IntentAPI:
                 membership["content"]["membership"] == "join"]
 
     def _ensure_joined(self, room_id, ignore_cache=False):
-        if ignore_cache and self.memberships.get(room_id, "") == "join":
+        if not ignore_cache and self.memberships.get(room_id, "") == "join":
             return
         self._ensure_registered()
         try:

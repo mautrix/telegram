@@ -83,8 +83,8 @@ does not do this automatically.
   * [ ] Video messages
   * [ ] Documents
   * [ ] Message deletions
-  * [ ] Presence
-  * [ ] Typing notifications
+  * [x] Presence
+  * [x] Typing notifications
   * [ ] Pinning messages
   * [ ] Admin status
   * [ ] Membership actions
