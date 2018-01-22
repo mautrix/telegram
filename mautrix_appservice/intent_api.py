@@ -15,6 +15,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import re
 import json
+import magic
 from matrix_client.api import MatrixHttpApi
 from matrix_client.errors import MatrixRequestError
 
@@ -44,12 +45,14 @@ class HTTPAPI(MatrixHttpApi):
     def intent(self, user):
         return IntentAPI(user, self.user(user), self, log=self.log)
 
-    def _send(self, method, path, content=None, query_params={}, headers={}):
+    def _send(self, method, path, content=None, query_params={}, headers={},
+              api_path="/_matrix/client/r0"):
         if not query_params:
             query_params = {}
         query_params["user_id"] = self.identity
-        self.log.debug("%s %s %s", method, path, content)
-        return super()._send(method, path, content, query_params, headers)
+        log_content = content if not isinstance(content, bytes) else f"<{len(content)} bytes>"
+        self.log.debug("%s %s %s", method, path, log_content)
+        return super()._send(method, path, content, query_params, headers, api_path=api_path)
 
     def create_room(self, alias=None, is_public=False, name=None, topic=None, is_direct=False,
                     invitees=()):
@@ -157,6 +160,11 @@ class IntentAPI:
         self._ensure_registered()
         return self.client.set_presence(status)
 
+    def media_upload(self, photo_data, mime_type=None):
+        self._ensure_registered()
+        mime_type = mime_type or magic.from_buffer(photo_data, mime=True)
+        return self.client.media_upload(photo_data, mime_type)
+
     def set_typing(self, room_id, is_typing=True, timeout=5000):
         self._ensure_joined(room_id)
         return self.client.set_typing(room_id, is_typing, timeout)
@@ -165,6 +173,21 @@ class IntentAPI:
                     invitees=()):
         self._ensure_registered()
         return self.client.create_room(alias, is_public, name, topic, is_direct, invitees)
+
+    def set_room_avatar(self, room_id, avatar_url, info=None):
+        content = {
+            "url": avatar_url,
+        }
+        if info:
+            content["info"] = info
+        self._ensure_joined(room_id)
+        self._ensure_has_power_level_for(room_id, "m.room.avatar")
+        return self.send_state_event(room_id, "m.room.avatar", content)
+
+    def set_room_name(self, room_id, name):
+        self._ensure_joined(room_id)
+        self._ensure_has_power_level_for(room_id, "m.room.name")
+        return self.client.set_room_name(room_id, name)
 
     def send_text(self, room_id, text, html=None, notice=False):
         if html:

@@ -57,7 +57,8 @@ does not do this automatically.
   * [x] Formatted messages
     * [ ] Bot commands (!command -> /command)
     * [x] Mentions
-  * [ ] Locations
+  * [ ] Rich quotes
+  * [ ] Locations (not implemented in Riot)
   * [ ] Images
   * [ ] Files
   * [ ] Message redactions
@@ -76,6 +77,8 @@ does not do this automatically.
   * [x] Formatted messages
     * [x] Bot commands (/command -> !command)
     * [x] Mentions
+  * [ ] Replies
+  * [ ] Forwards
   * [ ] Images
   * [ ] Locations
   * [ ] Stickers
@@ -91,8 +94,10 @@ does not do this automatically.
     * [ ] Inviting
     * [ ] Kicking
     * [ ] Joining/leaving
-  * [ ] Chat metadata changes
-  * [ ] Initial chat metadata
+  * [x] Chat metadata changes
+    * [ ] Public channel username changes
+  * [x] Initial chat metadata
+  * [ ] Supergroup upgrade
   * [ ] Message edits
 * Initiating chats
   * [x] Automatic portal creation for groups/channels at startup
@@ -104,6 +109,4 @@ does not do this automatically.
   * [ ] Creating Telegram chats for existing Matrix rooms
 * Misc
   * [ ] Use optional bot to relay messages for unauthenticated Matrix users
-  * [ ] Properly handle upgrading groups to supergroups
-    * [ ] Allow upgrading group to supergroup from Matrix
-  * [ ] Handle public channel username changes
+  * [ ] Command to upgrade chat to supergroup from Matrix

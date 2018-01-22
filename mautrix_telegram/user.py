@@ -123,7 +123,6 @@ class User:
                 continue
             portal = po.Portal.get_by_entity(entity)
             portal.create_room(self, entity, invites=[self.mxid])
-            # portal.update_info(self, entity)
 
     def update_catch(self, update):
         try:
@@ -153,15 +152,25 @@ class User:
             elif isinstance(update.status, UserStatusOffline):
                 puppet.intent.set_presence("offline")
             return
+        elif update_type == UpdateNewMessage or update_type == UpdateNewChannelMessage:
+            update = update.message
+            sender = pu.Puppet.get(update.from_id)
+            portal = po.Portal.get_by_entity(update.to_id)
         else:
             self.log.debug("Unhandled update: %s", update)
             return
 
         if not portal.mxid:
             portal.create_room(self, invites=[self.mxid])
-        self.log.debug("Handling message portal=%s sender=%s update=%s", portal, sender,
+
+        if isinstance(update, MessageService):
+            self.log.debug("Handling action portal=%s sender=%s action=%s", portal, sender,
+                           update.action)
+            portal.handle_telegram_action(self, sender, update.action)
+        else:
+            self.log.debug("Handling message portal=%s sender=%s update=%s", portal, sender,
                        update)
-        portal.handle_telegram_message(sender, update)
+            portal.handle_telegram_message(sender, update)
 
     @classmethod
     def get_by_mxid(cls, mxid, create=True):

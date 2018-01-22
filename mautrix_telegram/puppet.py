@@ -50,7 +50,8 @@ class Puppet:
         self.to_db()
         self.db.commit()
 
-    def get_displayname(self, info):
+    @staticmethod
+    def get_displayname(info):
         if info.first_name or info.last_name:
             name = " ".join([info.first_name or "", info.last_name or ""]).strip()
         elif info.username:

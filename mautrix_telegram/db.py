@@ -23,9 +23,17 @@ from .base import Base
 class Portal(Base):
     __tablename__ = "portal"
 
+    # Telegram chat information
     tgid = Column(Integer, primary_key=True)
     peer_type = Column(String)
+
+    # Matrix portal information
     mxid = Column(String, unique=True, nullable=True)
+
+    # Telegram chat metadata
+    username = Column(String, nullable=True)
+    title = Column(String, nullable=True)
+    photo_id = Column(String, nullable=True)
 
 
 class User(Base):

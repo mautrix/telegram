@@ -13,9 +13,11 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
+from io import BytesIO
+
 from telethon.tl.functions.messages import GetFullChatRequest
 from telethon.tl.functions.channels import GetParticipantsRequest
-from telethon.tl.types import ChannelParticipantsRecent, PeerChat, PeerChannel, PeerUser
+from telethon.tl.types import *
 from .db import Portal as DBPortal
 from . import puppet as p, formatter
 
@@ -26,25 +28,35 @@ class Portal:
     by_mxid = {}
     by_tgid = {}
 
-    def __init__(self, tgid, peer_type, mxid=None):
+    def __init__(self, tgid, peer_type, mxid=None, username=None, title=None, photo_id=None):
         self.mxid = mxid
         self.tgid = tgid
         self.peer_type = peer_type
+        self.username = username
+        self.title = title
+        self.photo_id = photo_id
 
         self.by_tgid[tgid] = self
         if mxid:
             self.by_mxid[mxid] = self
 
-    def create_room(self, user, entity=None, invites=[]):
+    def get_main_intent(self):
+        direct = self.peer_type == "user"
+        puppet = p.Puppet.get(self.tgid) if direct else None
+        return puppet.intent if direct else self.az.intent
+
+    def create_room(self, user, entity=None, invites=[], update_if_exists=True):
         self.log.debug("Creating room for %d", self.tgid)
         if not entity:
             entity = user.client.get_entity(self.peer)
             self.log.debug("Fetched data: %s", entity)
 
         if self.mxid:
+            if update_if_exists:
+                self.update_info(user, entity)
+                users = self.get_users(user, entity)
+                self.sync_telegram_users(users)
             self.invite_matrix(invites)
-            users = self.get_users(user, entity)
-            self.sync_telegram_users(users)
             return self.mxid
 
         try:
@@ -55,8 +67,9 @@ class Portal:
         direct = self.peer_type == "user"
         puppet = p.Puppet.get(self.tgid) if direct else None
         intent = puppet.intent if direct else self.az.intent
+        # TODO set room alias if public channel.
         room = intent.create_room(invitees=invites, name=title,
-                                          is_direct=direct)
+                                  is_direct=direct)
         if not room:
             raise Exception(f"Failed to create room for {self.tgid}")
 
@@ -64,6 +77,7 @@ class Portal:
         self.by_mxid[self.mxid] = self
         self.save()
         if not direct:
+            self.update_info(user, entity)
             users = self.get_users(user, entity)
             self.sync_telegram_users(users)
         else:
@@ -75,6 +89,33 @@ class Portal:
             user = p.Puppet.get(entity.id)
             user.update_info(entity)
             user.intent.join_room(self.mxid)
+
+    def update_info(self, user, entity=None):
+        if self.peer_type == "user":
+            self.log.warn("Called update_info() for direct chat portal %d", self.tgid)
+            return
+
+        self.log.debug("Updating info of %d", self.tgid)
+        if not entity:
+            entity = user.client.get_entity(self.peer)
+            self.log.debug("Fetched data: %s", entity)
+        changed = False
+
+        intent = self.get_main_intent()
+
+        if self.peer_type == "channel":
+            if self.username != entity.username:
+                # TODO update room alias
+                self.username = entity.username
+                changed = True
+
+        changed = self.update_title(entity.title, intent) or changed
+
+        if isinstance(entity.photo, ChatPhoto):
+            changed = self.update_avatar(user, entity.photo.photo_big, intent) or changed
+
+        if changed:
+            self.save()
 
     def handle_matrix_message(self, sender, message):
         type = message["msgtype"]
@@ -96,6 +137,45 @@ class Portal:
                 sender.intent.send_text(self.mxid, evt.message, html=html)
             else:
                 sender.intent.send_text(self.mxid, evt.message)
+
+    def update_title(self, title, intent=None):
+        if self.title != title:
+            self.title = title
+            intent = intent or self.get_main_intent()
+            intent.set_room_name(self.mxid, self.title)
+            return True
+        return False
+
+
+    def update_avatar(self, user, photo, intent=None):
+        photo_id = f"{photo.volume_id}-{photo.local_id}"
+        if self.photo_id != photo_id:
+            intent = intent or self.get_main_intent()
+
+            file = BytesIO()
+
+            user.client.download_file(
+                InputFileLocation(photo.volume_id, photo.local_id, photo.secret), file)
+
+            uploaded = intent.media_upload(file.getvalue())
+            intent.set_room_avatar(self.mxid, uploaded["content_uri"])
+
+            file.close()
+
+            self.photo_id = photo_id
+            return True
+        return False
+
+    def handle_telegram_action(self, source, sender, action):
+        intent = self.get_main_intent()
+        action_type = type(action)
+        if action_type == MessageActionChatEditTitle:
+            if self.update_title(action.title, intent):
+                self.save()
+        elif action_type == MessageActionChatEditPhoto:
+            largest_size = max(action.photo.sizes, key=lambda photo: photo.size)
+            if self.update_avatar(source, largest_size.location, intent):
+                self.save()
 
     @property
     def peer(self):
@@ -121,7 +201,9 @@ class Portal:
         pass
 
     def to_db(self):
-        return self.db.merge(DBPortal(tgid=self.tgid, peer_type=self.peer_type, mxid=self.mxid))
+        return self.db.merge(DBPortal(tgid=self.tgid, peer_type=self.peer_type, mxid=self.mxid,
+                                      username=self.username, title=self.title,
+                                      photo_id=self.photo_id))
 
     def save(self):
         self.to_db()
@@ -129,7 +211,8 @@ class Portal:
 
     @classmethod
     def from_db(cls, db_portal):
-        return Portal(db_portal.tgid, db_portal.peer_type, db_portal.mxid)
+        return Portal(db_portal.tgid, db_portal.peer_type, db_portal.mxid, db_portal.username,
+                      db_portal.title, db_portal.photo_id)
 
     @classmethod
     def get_by_mxid(cls, mxid):
@@ -165,7 +248,28 @@ class Portal:
 
     @classmethod
     def get_by_entity(cls, entity):
-        return cls.get_by_tgid(entity.id, entity.__class__.__name__.lower())
+        entity_type = type(entity)
+        if entity_type in {Chat, ChatFull}:
+            type_name = "chat"
+            id = entity.id
+        elif entity_type in {PeerChat, InputPeerChat}:
+            type_name = "chat"
+            id = entity.chat_id
+        elif entity_type in {Channel, ChannelFull}:
+            type_name = "channel"
+            id = entity.id
+        elif entity_type in {PeerChannel, InputPeerChannel, InputChannel}:
+            type_name = "channel"
+            id = entity.channel_id
+        elif entity_type in {User, UserFull}:
+            type_name = "user"
+            id = entity.id
+        elif entity_type in {PeerUser, InputPeerUser, InputUser}:
+            type_name = "user"
+            id = entity.user_id
+        else:
+            raise ValueError(f"Unknown entity type {entity_type.__name__}")
+        return cls.get_by_tgid(id, type_name)
 
 
 def init(context):
