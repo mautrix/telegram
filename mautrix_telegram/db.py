@@ -13,9 +13,7 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
-from sqlalchemy import orm, \
-    Column, ForeignKey, \
-    Integer, String
+from sqlalchemy import Column, ForeignKey, UniqueConstraint, Integer, String
 from sqlalchemy.orm.scoping import scoped_session
 from .base import Base
 
@@ -34,6 +32,16 @@ class Portal(Base):
     username = Column(String, nullable=True)
     title = Column(String, nullable=True)
     photo_id = Column(String, nullable=True)
+
+
+class Message(Base):
+    __tablename__ = "message"
+    mxid = Column(String)
+    mx_room = Column(String)
+    tgid = Column(Integer, primary_key=True)
+    user = Column(Integer, ForeignKey("user.tgid"), primary_key=True)
+
+    __table_args__ = (UniqueConstraint('mxid', 'mx_room', name='_mx_id_room'), )
 
 
 class User(Base):
@@ -55,5 +63,6 @@ class Puppet(Base):
 def init(db_factory):
     db = scoped_session(db_factory)
     Portal.query = db.query_property()
+    Message.query = db.query_property()
     User.query = db.query_property()
     Puppet.query = db.query_property()

@@ -51,7 +51,7 @@ class Puppet:
         self.db.commit()
 
     @staticmethod
-    def get_displayname(info):
+    def get_displayname(info, format=True):
         if info.first_name or info.last_name:
             name = " ".join([info.first_name or "", info.last_name or ""]).strip()
         elif info.username:
@@ -60,6 +60,8 @@ class Puppet:
             name = info.phone_number
         else:
             name = info.id
+        if not format:
+            return name
         return config.get("bridge.displayname_template", "{} (Telegram)").format(name)
 
     def update_info(self, info):

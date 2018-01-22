@@ -61,7 +61,7 @@ class MatrixHandler:
             text = text[len(prefix) + 1:]
         return is_command, text
 
-    def handle_message(self, room, sender, message):
+    def handle_message(self, room, sender, message, event_id):
         self.log.debug(f"{sender} sent {message} to ${room}")
 
         is_command, text = self.is_command(message)
@@ -69,7 +69,7 @@ class MatrixHandler:
 
         portal = Portal.get_by_mxid(room)
         if portal and not is_command:
-            portal.handle_matrix_message(sender, message)
+            portal.handle_matrix_message(sender, message, event_id)
             return
 
         if message["msgtype"] != "m.text":
@@ -105,4 +105,4 @@ class MatrixHandler:
             elif membership == "join":
                 pass
         elif type == "m.room.message":
-            self.handle_message(evt["room_id"], evt["sender"], content)
+            self.handle_message(evt["room_id"], evt["sender"], content, evt["event_id"])

@@ -43,7 +43,6 @@ class CommandHandler:
         try:
             command = command_handlers[command]
         except KeyError:
-            print(sender.command_status)
             if sender.command_status and "next" in sender.command_status:
                 args.insert(0, command)
                 command = sender.command_status["next"]

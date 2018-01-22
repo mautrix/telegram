@@ -57,7 +57,7 @@ does not do this automatically.
   * [x] Formatted messages
     * [ ] Bot commands (!command -> /command)
     * [x] Mentions
-  * [ ] Rich quotes
+  * [x] Rich quotes
   * [ ] Locations (not implemented in Riot)
   * [ ] Images
   * [ ] Files
@@ -77,8 +77,8 @@ does not do this automatically.
   * [x] Formatted messages
     * [x] Bot commands (/command -> !command)
     * [x] Mentions
-  * [ ] Replies
-  * [ ] Forwards
+  * [x] Replies
+  * [x] Forwards
   * [ ] Images
   * [ ] Locations
   * [ ] Stickers

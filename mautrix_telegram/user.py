@@ -170,7 +170,7 @@ class User:
         else:
             self.log.debug("Handling message portal=%s sender=%s update=%s", portal, sender,
                        update)
-            portal.handle_telegram_message(sender, update)
+            portal.handle_telegram_message(self, sender, update)
 
     @classmethod
     def get_by_mxid(cls, mxid, create=True):

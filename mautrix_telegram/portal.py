@@ -18,7 +18,7 @@ from io import BytesIO
 from telethon.tl.functions.messages import GetFullChatRequest
 from telethon.tl.functions.channels import GetParticipantsRequest
 from telethon.tl.types import *
-from .db import Portal as DBPortal
+from .db import Portal as DBPortal, Message as DBMessage
 from . import puppet as p, formatter
 
 config = None
@@ -117,26 +117,36 @@ class Portal:
         if changed:
             self.save()
 
-    def handle_matrix_message(self, sender, message):
+    def handle_matrix_message(self, sender, message, event_id):
         type = message["msgtype"]
         if type == "m.text":
             if "format" in message and message["format"] == "org.matrix.custom.html":
-                message, entities = formatter.matrix_to_telegram(message["formatted_body"])
-                sender.send_message(self.peer, message, entities=entities)
+                message, entities = formatter.matrix_to_telegram(message["formatted_body"],
+                                                                 sender.tgid)
+                reply_to = None
+                if len(entities) > 0 and isinstance(entities[0], formatter.MessageEntityReply):
+                    reply = entities.pop(0)
+                    # message = message[:reply.offset] + message[reply.offset + reply.length:]
+                    reply_to = reply.msg_id
+                response = sender.send_message(self.peer, message, entities=entities,
+                                               reply_to=reply_to)
             else:
-                sender.send_message(self.peer, message["body"])
+                response = sender.send_message(self.peer, message["body"])
+            self.db.add(
+                DBMessage(tgid=response.id, mx_room=self.mxid, mxid=event_id, user=sender.tgid))
+            self.db.commit()
 
     def handle_telegram_typing(self, user, event):
         user.intent.set_typing(self.mxid, is_typing=True)
 
-    def handle_telegram_message(self, sender, evt):
+    def handle_telegram_message(self, source, sender, evt):
         self.log.debug("Sending %s to %s by %d", evt.message, self.mxid, sender.id)
         if evt.message:
-            if evt.entities:
-                html = formatter.telegram_to_matrix(evt.message, evt.entities)
-                sender.intent.send_text(self.mxid, evt.message, html=html)
-            else:
-                sender.intent.send_text(self.mxid, evt.message)
+            text, html = formatter.telegram_event_to_matrix(evt, source)
+            response = sender.intent.send_text(self.mxid, text, html=html)
+            self.db.add(DBMessage(tgid=evt.id, mx_room=self.mxid, mxid=response["event_id"],
+                                  user=source.tgid))
+            self.db.commit()
 
     def update_title(self, title, intent=None):
         if self.title != title:
@@ -145,7 +155,6 @@ class Portal:
             intent.set_room_name(self.mxid, self.title)
             return True
         return False
-
 
     def update_avatar(self, user, photo, intent=None):
         photo_id = f"{photo.volume_id}-{photo.local_id}"
