@@ -24,6 +24,8 @@ from .db import Message as DBMessage
 log = None
 
 
+# region Matrix to Telegram
+
 class MessageEntityReply(MessageEntityUnknown):
     def __init__(self, offset=0, length=0, msg_id=0):
         super().__init__(offset, length)
@@ -186,6 +188,9 @@ def matrix_to_telegram(html, user_id=None):
         log.exception("Failed to convert Matrix format:\nhtml=%s", html)
 
 
+# endregion
+# region Telegram to Matrix
+
 def telegram_event_to_matrix(evt, source):
     text = evt.message
     html = telegram_to_matrix(evt.message, evt.entities) if evt.entities else None
@@ -300,6 +305,8 @@ def _telegram_to_matrix(text, entities):
 
     return "".join(html)
 
+
+# endregion
 
 def init(context):
     global log

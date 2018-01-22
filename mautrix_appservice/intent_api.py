@@ -152,6 +152,8 @@ class IntentAPI:
         else:
             raise ValueError("IntentAPI#user() is only available for base intent objects.")
 
+    # region User actions
+
     def set_display_name(self, name):
         self._ensure_registered()
         return self.client.set_display_name(self.mxid, name)
@@ -165,9 +167,8 @@ class IntentAPI:
         mime_type = mime_type or magic.from_buffer(photo_data, mime=True)
         return self.client.media_upload(photo_data, mime_type)
 
-    def set_typing(self, room_id, is_typing=True, timeout=5000):
-        self._ensure_joined(room_id)
-        return self.client.set_typing(room_id, is_typing, timeout)
+    # endregion
+    # region Room actions
 
     def create_room(self, alias=None, is_public=False, name=None, topic=None, is_direct=False,
                     invitees=()):
@@ -180,14 +181,16 @@ class IntentAPI:
         }
         if info:
             content["info"] = info
-        self._ensure_joined(room_id)
-        self._ensure_has_power_level_for(room_id, "m.room.avatar")
         return self.send_state_event(room_id, "m.room.avatar", content)
 
     def set_room_name(self, room_id, name):
         self._ensure_joined(room_id)
         self._ensure_has_power_level_for(room_id, "m.room.name")
         return self.client.set_room_name(room_id, name)
+
+    def set_typing(self, room_id, is_typing=True, timeout=5000):
+        self._ensure_joined(room_id)
+        return self.client.set_typing(room_id, is_typing, timeout)
 
     def send_text(self, room_id, text, html=None, notice=False):
         if html:
@@ -227,6 +230,9 @@ class IntentAPI:
         return [membership["state_key"] for membership in memberships["chunk"] if
                 membership["content"]["membership"] == "join"]
 
+    # endregion
+    # region Ensure functions
+
     def _ensure_joined(self, room_id, ignore_cache=False):
         if not ignore_cache and self.memberships.get(room_id, "") == "join":
             return
@@ -255,4 +261,7 @@ class IntentAPI:
         self.registered = True
 
     def _ensure_has_power_level_for(self, room_id, event_type):
+        # TODO implement
         pass
+
+    # endregion

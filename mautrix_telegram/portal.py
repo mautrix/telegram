@@ -40,10 +40,25 @@ class Portal:
         if mxid:
             self.by_mxid[mxid] = self
 
+    @property
+    def peer(self):
+        if self.peer_type == "user":
+            return PeerUser(user_id=self.tgid)
+        elif self.peer_type == "chat":
+            return PeerChat(chat_id=self.tgid)
+        elif self.peer_type == "channel":
+            return PeerChannel(channel_id=self.tgid)
+
+    # region Matrix room info updating
+
     def get_main_intent(self):
         direct = self.peer_type == "user"
         puppet = p.Puppet.get(self.tgid) if direct else None
         return puppet.intent if direct else self.az.intent
+
+    def invite_matrix(self, users=[]):
+        # TODO implement
+        pass
 
     def create_room(self, user, entity=None, invites=[], update_if_exists=True):
         self.log.debug("Creating room for %d", self.tgid)
@@ -117,6 +132,20 @@ class Portal:
         if changed:
             self.save()
 
+    def get_users(self, user, entity):
+        if self.peer_type == "chat":
+            return user.client(GetFullChatRequest(chat_id=self.tgid)).users
+        elif self.peer_type == "channel":
+            participants = user.client(GetParticipantsRequest(
+                entity, ChannelParticipantsRecent(), offset=0, limit=100, hash=0
+            ))
+            return participants.users
+        elif self.peer_type == "user":
+            return [entity]
+
+    # endregion
+    # region Matrix event handling
+
     def handle_matrix_message(self, sender, message, event_id):
         type = message["msgtype"]
         if type == "m.text":
@@ -136,10 +165,16 @@ class Portal:
                 DBMessage(tgid=response.id, mx_room=self.mxid, mxid=event_id, user=sender.tgid))
             self.db.commit()
 
+    # endregion
+    # region Telegram event handling
+
     def handle_telegram_typing(self, user, event):
         user.intent.set_typing(self.mxid, is_typing=True)
 
     def handle_telegram_message(self, source, sender, evt):
+        if not self.mxid:
+            self.create_room(self, invites=[source.mxid])
+
         self.log.debug("Sending %s to %s by %d", evt.message, self.mxid, sender.id)
         if evt.message:
             text, html = formatter.telegram_event_to_matrix(evt, source)
@@ -147,6 +182,20 @@ class Portal:
             self.db.add(DBMessage(tgid=evt.id, mx_room=self.mxid, mxid=response["event_id"],
                                   user=source.tgid))
             self.db.commit()
+
+    def handle_telegram_action(self, source, sender, action):
+        if not self.mxid:
+            return
+
+        intent = self.get_main_intent()
+        action_type = type(action)
+        if action_type == MessageActionChatEditTitle:
+            if self.update_title(action.title, intent):
+                self.save()
+        elif action_type == MessageActionChatEditPhoto:
+            largest_size = max(action.photo.sizes, key=lambda photo: photo.size)
+            if self.update_avatar(source, largest_size.location, intent):
+                self.save()
 
     def update_title(self, title, intent=None):
         if self.title != title:
@@ -175,39 +224,8 @@ class Portal:
             return True
         return False
 
-    def handle_telegram_action(self, source, sender, action):
-        intent = self.get_main_intent()
-        action_type = type(action)
-        if action_type == MessageActionChatEditTitle:
-            if self.update_title(action.title, intent):
-                self.save()
-        elif action_type == MessageActionChatEditPhoto:
-            largest_size = max(action.photo.sizes, key=lambda photo: photo.size)
-            if self.update_avatar(source, largest_size.location, intent):
-                self.save()
-
-    @property
-    def peer(self):
-        if self.peer_type == "user":
-            return PeerUser(user_id=self.tgid)
-        elif self.peer_type == "chat":
-            return PeerChat(chat_id=self.tgid)
-        elif self.peer_type == "channel":
-            return PeerChannel(channel_id=self.tgid)
-
-    def get_users(self, user, entity):
-        if self.peer_type == "chat":
-            return user.client(GetFullChatRequest(chat_id=self.tgid)).users
-        elif self.peer_type == "channel":
-            participants = user.client(GetParticipantsRequest(
-                entity, ChannelParticipantsRecent(), offset=0, limit=100, hash=0
-            ))
-            return participants.users
-        elif self.peer_type == "user":
-            return [entity]
-
-    def invite_matrix(self, users=[]):
-        pass
+    # endregion
+    # region Database conversion
 
     def to_db(self):
         return self.db.merge(DBPortal(tgid=self.tgid, peer_type=self.peer_type, mxid=self.mxid,
@@ -222,6 +240,9 @@ class Portal:
     def from_db(cls, db_portal):
         return Portal(db_portal.tgid, db_portal.peer_type, db_portal.mxid, db_portal.username,
                       db_portal.title, db_portal.photo_id)
+
+    # endregion
+    # region Class instance lookup
 
     @classmethod
     def get_by_mxid(cls, mxid):
@@ -279,6 +300,8 @@ class Portal:
         else:
             raise ValueError(f"Unknown entity type {entity_type.__name__}")
         return cls.get_by_tgid(id, type_name)
+
+    # endregion
 
 
 def init(context):

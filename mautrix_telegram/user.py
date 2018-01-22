@@ -44,6 +44,8 @@ class User:
     def logged_in(self):
         return self.client.is_user_authorized()
 
+    # region Database conversion
+
     def to_db(self):
         return self.db.merge(DBUser(mxid=self.mxid, tgid=self.tgid, tg_username=self.username))
 
@@ -54,6 +56,9 @@ class User:
     @classmethod
     def from_db(cls, db_user):
         return User(db_user.mxid, db_user.tgid, db_user.tg_username)
+
+    # endregion
+    # region Telegram connection management
 
     def start(self):
         self.client = TelegramClient(self.mxid,
@@ -66,6 +71,14 @@ class User:
             self.update_info()
         self.client.add_update_handler(self.update_catch)
         return self
+
+    def stop(self):
+        self.client.disconnect()
+        self.client = None
+        self.connected = False
+
+    # endregion
+    # region Telegram actions that need custom methods
 
     def update_info(self, info=None):
         info = info or self.client.get_me()
@@ -83,11 +96,6 @@ class User:
             except KeyError:
                 pass
         return self.client.log_out()
-
-    def stop(self):
-        self.client.disconnect()
-        self.client = None
-        self.connected = False
 
     def send_message(self, entity, message, reply_to=None, entities=None, link_preview=True):
         entity = self.client.get_input_entity(entity)
@@ -124,6 +132,9 @@ class User:
             portal = po.Portal.get_by_entity(entity)
             portal.create_room(self, entity, invites=[self.mxid])
 
+    # endregion
+    # region Telegram update handling
+
     def update_catch(self, update):
         try:
             self.update(update)
@@ -132,36 +143,52 @@ class User:
 
     def update(self, update):
         update_type = type(update)
+
+        if update_type in {UpdateShortChatMessage, UpdateShortMessage, UpdateNewMessage,
+                           UpdateNewChannelMessage}:
+            return self.update_message(update)
+        elif update_type in {UpdateChatUserTyping, UpdateUserTyping}:
+            return self.update_typing(update)
+        elif update_type == UpdateUserStatus:
+            return self.update_status(update)
+        else:
+            self.log.debug("Unhandled update: %s", update)
+            return
+
+    def get_message_details(self, update):
+        update_type = type(update)
         if update_type == UpdateShortChatMessage:
             portal = po.Portal.get_by_tgid(update.chat_id, "chat")
             sender = pu.Puppet.get(update.from_id)
         elif update_type == UpdateShortMessage:
             portal = po.Portal.get_by_tgid(update.user_id, "user")
             sender = pu.Puppet.get(self.tgid if update.out else update.user_id)
-        elif update_type == UpdateChatUserTyping or update_type == UpdateUserTyping:
-            if update_type == UpdateUserTyping:
-                portal = po.Portal.get_by_tgid(update.user_id, "user")
-            else:
-                portal = po.Portal.get_by_tgid(update.chat_id, "chat")
-            sender = pu.Puppet.get(update.user_id)
-            return portal.handle_telegram_typing(sender, update)
-        elif update_type == UpdateUserStatus:
-            puppet = pu.Puppet.get(update.user_id)
-            if isinstance(update.status, UserStatusOnline):
-                puppet.intent.set_presence("online")
-            elif isinstance(update.status, UserStatusOffline):
-                puppet.intent.set_presence("offline")
-            return
-        elif update_type == UpdateNewMessage or update_type == UpdateNewChannelMessage:
+        elif update_type in {UpdateNewMessage, UpdateNewChannelMessage}:
             update = update.message
             sender = pu.Puppet.get(update.from_id)
             portal = po.Portal.get_by_entity(update.to_id)
-        else:
-            self.log.debug("Unhandled update: %s", update)
-            return
+        return update, sender, portal
 
-        if not portal.mxid:
-            portal.create_room(self, invites=[self.mxid])
+    def update_typing(self, update):
+        update_type = type(update)
+        if update_type == UpdateUserTyping:
+            portal = po.Portal.get_by_tgid(update.user_id, "user")
+        else:
+            portal = po.Portal.get_by_tgid(update.chat_id, "chat")
+        sender = pu.Puppet.get(update.user_id)
+        return portal.handle_telegram_typing(sender, update)
+
+    def update_status(self, update):
+        puppet = pu.Puppet.get(update.user_id)
+        status = type(update.status)
+        if status == UserStatusOnline:
+            puppet.intent.set_presence("online")
+        elif status == UserStatusOffline:
+            puppet.intent.set_presence("offline")
+        return
+
+    def update_message(self, update):
+        update, sender, portal = self.get_message_details(update)
 
         if isinstance(update, MessageService):
             self.log.debug("Handling action portal=%s sender=%s action=%s", portal, sender,
@@ -169,8 +196,11 @@ class User:
             portal.handle_telegram_action(self, sender, update.action)
         else:
             self.log.debug("Handling message portal=%s sender=%s update=%s", portal, sender,
-                       update)
+                           update)
             portal.handle_telegram_message(self, sender, update)
+
+    # endregion
+    # region Class instance lookup
 
     @classmethod
     def get_by_mxid(cls, mxid, create=True):
@@ -215,6 +245,8 @@ class User:
             return cls.from_db(puppet)
 
         return None
+    # endregion
+
 
 def init(context):
     global config
