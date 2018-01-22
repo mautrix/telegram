@@ -1,6 +1,5 @@
 # mautrix-telegram
-**This is the python rewrite branch and is only barely functional.**
-**For a JavaScript version with more bugs and features, check the master branch.**
+**This is the python rewrite. If you want more features (and more bugs), check the JavaScript version on the master branch.**
 
 A Matrix-Telegram puppeting bridge.
 
@@ -35,16 +34,20 @@ A Telegram chat will be created once the bridge is stable enough.
 You should be automatically invited into portal rooms for your groups and channels if you
 1. (re)start the bridge,
 2. receive a messages in the chat or
-3. receive an invite to the chat
+3. ~~receive an invite to the chat~~ (not yet implemented)
 
 Support for inviting users both Telegram and Matrix users to Telegram portal rooms is planned, but not yet implemented.
 
 #### Private messaging
+**Initiating private chats is not yet implemented.**
+
 You can start private chats by simply inviting the Matrix puppet of the Telegram user you want to chat with to a private room.
 
 If you don't know the MXID of the puppet, you can search for users using the `search <query>` management command.
 
 #### Bot commands
+**Initiating private chats is not yet implemented.**
+
 Initiating chats with bots is no different from initiating chats with real Telegram users.
 
 The bridge translates `!commands` into `/commands`, which allows you to use Telegram bots without constantly escaping
