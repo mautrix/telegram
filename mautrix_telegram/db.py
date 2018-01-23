@@ -36,6 +36,7 @@ class Portal(Base):
 
 class Message(Base):
     __tablename__ = "message"
+
     mxid = Column(String)
     mx_room = Column(String)
     tgid = Column(Integer, primary_key=True)
@@ -58,6 +59,7 @@ class Puppet(Base):
     id = Column(Integer, primary_key=True)
     displayname = Column(String, nullable=True)
     username = Column(String, nullable=True)
+    photo_id = Column(String, nullable=True)
 
 
 def init(db_factory):

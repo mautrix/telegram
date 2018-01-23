@@ -162,6 +162,10 @@ class IntentAPI:
         self._ensure_registered()
         return self.client.set_presence(status)
 
+    def set_avatar(self, url):
+        self._ensure_registered()
+        return self.client.set_avatar_url(self.mxid, url)
+
     def media_upload(self, photo_data, mime_type=None):
         self._ensure_registered()
         mime_type = mime_type or magic.from_buffer(photo_data, mime=True)
@@ -174,6 +178,15 @@ class IntentAPI:
                     invitees=()):
         self._ensure_registered()
         return self.client.create_room(alias, is_public, name, topic, is_direct, invitees)
+
+    def invite(self, room_id, user_id):
+        self._ensure_joined(room_id)
+        try:
+            return self.client.invite_user(room_id, user_id)
+        except MatrixRequestError as e:
+            if matrix_error_code(e) != "M_FORBIDDEN":
+                raise IntentError(f"Failed to invite {user_id} to {room_id}", e)
+
 
     def set_room_avatar(self, room_id, avatar_url, info=None):
         content = {
@@ -221,6 +234,10 @@ class IntentAPI:
 
     def join_room(self, room_id):
         return self._ensure_joined(room_id, ignore_cache=True)
+
+    def leave_room(self, room_id):
+        self.memberships[room_id] = "left"
+        return self.client.leave_room(room_id)
 
     def get_room_members(self, room_id):
         return self.client.get_room_members(room_id)

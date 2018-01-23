@@ -14,15 +14,19 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import re
+from telethon.tl.types import UserProfilePhoto
 from .db import Puppet as DBPuppet
 
 config = None
 
 
 class Puppet:
+    log = None
+    db = None
+    az = None
     cache = {}
 
-    def __init__(self, id=None, username=None, displayname=None):
+    def __init__(self, id=None, username=None, displayname=None, photo_id=None):
         self.id = id
 
         self.localpart = config.get("bridge.alias_template", "telegram_{}").format(self.id)
@@ -30,6 +34,7 @@ class Puppet:
         self.mxid = f"@{self.localpart}:{hs}"
         self.username = username
         self.displayname = displayname
+        self.photo_id = photo_id
         self.intent = self.az.intent.user(self.mxid)
 
         self.cache[id] = self
@@ -40,11 +45,12 @@ class Puppet:
 
     def to_db(self):
         return self.db.merge(
-            DBPuppet(id=self.id, username=self.username, displayname=self.displayname))
+            DBPuppet(id=self.id, username=self.username, displayname=self.displayname,
+                     photo_id=self.photo_id))
 
     @classmethod
     def from_db(cls, db_puppet):
-        return Puppet(db_puppet.id, db_puppet.username, db_puppet.displayname)
+        return Puppet(db_puppet.id, db_puppet.username, db_puppet.displayname, db_puppet.photo_id)
 
     def save(self):
         self.to_db()
@@ -64,19 +70,33 @@ class Puppet:
             return name
         return config.get("bridge.displayname_template", "{} (Telegram)").format(name)
 
-    def update_info(self, info):
+    def update_info(self, source, info):
         changed = False
         if self.username != info.username:
             self.username = info.username
             changed = True
+
         displayname = self.get_displayname(info)
         if displayname != self.displayname:
             self.intent.set_display_name(displayname)
             self.displayname = displayname
             changed = True
 
+        if isinstance(info.photo, UserProfilePhoto):
+            changed = self.update_avatar(source, info.photo.photo_big)
+
         if changed:
             self.save()
+
+    def update_avatar(self, source, photo):
+        photo_id = f"{photo.volume_id}-{photo.local_id}"
+        if self.photo_id != photo_id:
+            file = source.download_file(photo)
+            uploaded = self.intent.media_upload(file)
+            self.intent.set_avatar(uploaded["content_uri"])
+            self.photo_id = photo_id
+            return True
+        return False
 
     @classmethod
     def get(cls, id, create=True):

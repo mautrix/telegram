@@ -89,19 +89,20 @@ does not do this automatically.
   * [ ] Video messages
   * [ ] Documents
   * [ ] Message deletions
+  * [ ] Message edits
+  * [x] Avatars
   * [x] Presence
   * [x] Typing notifications
   * [ ] Pinning messages
   * [ ] Admin status
   * [ ] Membership actions
     * [ ] Inviting
-    * [ ] Kicking
-    * [ ] Joining/leaving
+    * [ ] Kicking (currently shown as leaving)
+    * [x] Joining/leaving
   * [x] Chat metadata changes
     * [ ] Public channel username changes
   * [x] Initial chat metadata
   * [ ] Supergroup upgrade
-  * [ ] Message edits
 * Initiating chats
   * [x] Automatic portal creation for groups/channels at startup
   * [ ] Automatic portal creation for groups/channels when receiving invite/message

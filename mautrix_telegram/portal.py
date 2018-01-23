@@ -13,8 +13,6 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
-from io import BytesIO
-
 from telethon.tl.functions.messages import GetFullChatRequest
 from telethon.tl.functions.channels import GetParticipantsRequest
 from telethon.tl.types import *
@@ -25,6 +23,9 @@ config = None
 
 
 class Portal:
+    log = None
+    db = None
+    az = None
     by_mxid = {}
     by_tgid = {}
 
@@ -35,6 +36,7 @@ class Portal:
         self.username = username
         self.title = title
         self.photo_id = photo_id
+        self._main_intent = None
 
         self.by_tgid[tgid] = self
         if mxid:
@@ -51,17 +53,22 @@ class Portal:
 
     # region Matrix room info updating
 
-    def get_main_intent(self):
-        direct = self.peer_type == "user"
-        puppet = p.Puppet.get(self.tgid) if direct else None
-        return puppet.intent if direct else self.az.intent
+    @property
+    def main_intent(self):
+        if not self._main_intent:
+            direct = self.peer_type == "user"
+            puppet = p.Puppet.get(self.tgid) if direct else None
+            self._main_intent = puppet.intent if direct else self.az.intent
+        return self._main_intent
 
     def invite_matrix(self, users=[]):
-        # TODO implement
-        pass
+        if isinstance(users, str):
+            self.main_intent.invite(self.mxid, users)
+        else:
+            for user in users:
+                self.main_intent.invite(self.mxid, user)
 
     def create_room(self, user, entity=None, invites=[], update_if_exists=True):
-        self.log.debug("Creating room for %d", self.tgid)
         if not entity:
             entity = user.client.get_entity(self.peer)
             self.log.debug("Fetched data: %s", entity)
@@ -70,9 +77,11 @@ class Portal:
             if update_if_exists:
                 self.update_info(user, entity)
                 users = self.get_users(user, entity)
-                self.sync_telegram_users(users)
+                self.sync_telegram_users(user, users)
             self.invite_matrix(invites)
             return self.mxid
+
+        self.log.debug("Creating room for %d", self.tgid)
 
         try:
             title = entity.title
@@ -94,16 +103,27 @@ class Portal:
         if not direct:
             self.update_info(user, entity)
             users = self.get_users(user, entity)
-            self.sync_telegram_users(users)
+            self.sync_telegram_users(user, users)
         else:
-            puppet.update_info(entity)
+            puppet.update_info(user, entity)
             puppet.intent.join_room(self.mxid)
 
-    def sync_telegram_users(self, users=[]):
+    def sync_telegram_users(self, source, users=[]):
         for entity in users:
-            user = p.Puppet.get(entity.id)
-            user.update_info(entity)
-            user.intent.join_room(self.mxid)
+            puppet = p.Puppet.get(entity.id)
+            puppet.update_info(source, entity)
+            puppet.intent.join_room(self.mxid)
+
+    def add_telegram_user(self, user_id, source=None):
+        puppet = p.Puppet.get(user_id)
+        if source:
+            entity = source.client.get_entity(user_id)
+            puppet.update_info(source, entity)
+        puppet.intent.join_room(self.mxid)
+
+    def delete_telegram_user(self, user_id):
+        puppet = p.Puppet.get(user_id)
+        puppet.intent.leave_room(self.mxid)
 
     def update_info(self, user, entity=None):
         if self.peer_type == "user":
@@ -116,21 +136,36 @@ class Portal:
             self.log.debug("Fetched data: %s", entity)
         changed = False
 
-        intent = self.get_main_intent()
-
         if self.peer_type == "channel":
             if self.username != entity.username:
                 # TODO update room alias
                 self.username = entity.username
                 changed = True
 
-        changed = self.update_title(entity.title, intent) or changed
+        changed = self.update_title(entity.title, self.main_intent) or changed
 
         if isinstance(entity.photo, ChatPhoto):
-            changed = self.update_avatar(user, entity.photo.photo_big, intent) or changed
+            changed = self.update_avatar(user, entity.photo.photo_big, self.main_intent) or changed
 
         if changed:
             self.save()
+
+    def update_title(self, title, intent=None):
+        if self.title != title:
+            self.title = title
+            self.main_intent.set_room_name(self.mxid, self.title)
+            return True
+        return False
+
+    def update_avatar(self, user, photo, intent=None):
+        photo_id = f"{photo.volume_id}-{photo.local_id}"
+        if self.photo_id != photo_id:
+            file = user.download_file(photo)
+            uploaded = self.main_intent.media_upload(file)
+            self.main_intent.set_room_avatar(self.mxid, uploaded["content_uri"])
+            self.photo_id = photo_id
+            return True
+        return False
 
     def get_users(self, user, entity):
         if self.peer_type == "chat":
@@ -173,56 +208,42 @@ class Portal:
 
     def handle_telegram_message(self, source, sender, evt):
         if not self.mxid:
-            self.create_room(self, invites=[source.mxid])
+            self.create_room(source, invites=[source.mxid])
 
-        self.log.debug("Sending %s to %s by %d", evt.message, self.mxid, sender.id)
         if evt.message:
+            self.log.debug("Sending %s to %s by %d", evt.message, self.mxid, sender.id)
             text, html = formatter.telegram_event_to_matrix(evt, source)
             response = sender.intent.send_text(self.mxid, text, html=html)
             self.db.add(DBMessage(tgid=evt.id, mx_room=self.mxid, mxid=response["event_id"],
                                   user=source.tgid))
             self.db.commit()
+        else:
+            self.log.debug("Unhandled Telegram message: %s", evt)
 
     def handle_telegram_action(self, source, sender, action):
+        action_type = type(action)
         if not self.mxid:
+            if action_type in {MessageActionChatCreate, MessageActionChannelCreate}:
+                self.create_room(source, invites=[source.mxid])
             return
 
-        intent = self.get_main_intent()
-        action_type = type(action)
         if action_type == MessageActionChatEditTitle:
-            if self.update_title(action.title, intent):
+            if self.update_title(action.title, self.main_intent):
                 self.save()
         elif action_type == MessageActionChatEditPhoto:
             largest_size = max(action.photo.sizes, key=lambda photo: photo.size)
-            if self.update_avatar(source, largest_size.location, intent):
+            if self.update_avatar(source, largest_size.location, self.main_intent):
                 self.save()
-
-    def update_title(self, title, intent=None):
-        if self.title != title:
-            self.title = title
-            intent = intent or self.get_main_intent()
-            intent.set_room_name(self.mxid, self.title)
-            return True
-        return False
-
-    def update_avatar(self, user, photo, intent=None):
-        photo_id = f"{photo.volume_id}-{photo.local_id}"
-        if self.photo_id != photo_id:
-            intent = intent or self.get_main_intent()
-
-            file = BytesIO()
-
-            user.client.download_file(
-                InputFileLocation(photo.volume_id, photo.local_id, photo.secret), file)
-
-            uploaded = intent.media_upload(file.getvalue())
-            intent.set_room_avatar(self.mxid, uploaded["content_uri"])
-
-            file.close()
-
-            self.photo_id = photo_id
-            return True
-        return False
+        elif action_type == MessageActionChatAddUser:
+            for id in action.users:
+                self.add_telegram_user(id, source)
+        elif action_type == MessageActionChatJoinedByLink:
+            self.add_telegram_user(sender.id, source)
+        elif action_type == MessageActionChatDeleteUser:
+            # TODO show kick message if user was kicked
+            self.delete_telegram_user(action.user_id)
+        else:
+            self.log.debug("Unhandled Telegram action in %s: %s", self.title, action)
 
     # endregion
     # region Database conversion

@@ -13,7 +13,7 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
-import traceback
+from io import BytesIO
 from telethon import TelegramClient
 from telethon.tl.types import *
 from telethon.tl.functions.messages import SendMessageRequest
@@ -24,6 +24,9 @@ config = None
 
 
 class User:
+    log = None
+    db = None
+    az = None
     by_mxid = {}
     by_tgid = {}
 
@@ -82,11 +85,13 @@ class User:
 
     def update_info(self, info=None):
         info = info or self.client.get_me()
+        changed = False
         self.username = info.username
         if self.tgid != info.id:
             self.tgid = info.id
             self.by_tgid[self.tgid] = self
-        self.save()
+        if changed:
+            self.save()
 
     def log_out(self):
         self.connected = False
@@ -120,6 +125,18 @@ class User:
             )
 
         return self.client._get_response_message(request, result)
+
+    def download_file(self, location):
+        if not isinstance(location, InputFileLocation):
+            location = InputFileLocation(location.volume_id, location.local_id, location.secret)
+
+        file = BytesIO()
+
+        self.client.download_file(location, file)
+
+        data = file.getvalue()
+        file.close()
+        return data
 
     def sync_dialogs(self):
         dialogs = self.client.get_dialogs(limit=30)
@@ -191,12 +208,10 @@ class User:
         update, sender, portal = self.get_message_details(update)
 
         if isinstance(update, MessageService):
-            self.log.debug("Handling action portal=%s sender=%s action=%s", portal, sender,
-                           update.action)
+            self.log.debug("Handling action %s to %d by %d", update.action, portal.tgid, sender.id)
             portal.handle_telegram_action(self, sender, update.action)
         else:
-            self.log.debug("Handling message portal=%s sender=%s update=%s", portal, sender,
-                           update)
+            self.log.debug("Handling message %s to %d by %d", update, portal.tgid, sender.tgid)
             portal.handle_telegram_message(self, sender, update)
 
     # endregion
