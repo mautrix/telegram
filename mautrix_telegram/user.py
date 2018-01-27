@@ -126,24 +126,17 @@ class User:
 
         return self.client._get_response_message(request, result)
 
-    def send_file(self, entity, file, mime_type=None, caption=None,
-                  attributes=None, file_name=None, reply_to=None):
+    def send_file(self, entity, file, mime_type=None, caption=None, attributes=[], file_name=None,
+                  reply_to=None):
         entity = self.client.get_input_entity(entity)
         reply_to = self.client._get_reply_to(reply_to)
 
         file_handle = self.client.upload_file(file, file_name=file_name, use_cache=False)
-        print(entity, mime_type, caption)
-        for a in attributes:
-            print(a)
-        print(file_handle)
 
         if mime_type.startswith("image/"):
             media = InputMediaUploadedPhoto(file_handle, caption or "")
         else:
-            attr_dict = {}
-            if attributes:
-                for a in attributes:
-                    attr_dict[type(a)] = a
+            attr_dict = {type(attr): attr for attr in attributes}
 
             media = InputMediaUploadedDocument(
                 file=file_handle,
@@ -173,11 +166,9 @@ class User:
         dialogs = self.client.get_dialogs(limit=30)
         for dialog in dialogs:
             entity = dialog.entity
-            if isinstance(entity, User):
-                continue
-            elif isinstance(entity, Chat) and entity.deactivated:
-                continue
-            elif isinstance(entity, ChannelForbidden):
+            if isinstance(entity, User) \
+                or (isinstance(entity, Chat) and entity.deactivated) \
+                or isinstance(entity, ChannelForbidden):
                 continue
             portal = po.Portal.get_by_entity(entity)
             portal.create_room(self, entity, invites=[self.mxid])

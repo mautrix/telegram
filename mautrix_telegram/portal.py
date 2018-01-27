@@ -300,7 +300,6 @@ class Portal:
             "formatted_body": formatted_body,
         })
 
-
     def handle_telegram_message(self, source, sender, evt):
         if not self.mxid:
             self.create_room(source, invites=[source.mxid])

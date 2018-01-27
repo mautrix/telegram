@@ -33,6 +33,8 @@ class CommandHandler:
         self._is_management = False
         self._is_portal = False
 
+    # region Utility functions for handling commands
+
     def handle(self, room, sender, command, args, is_management, is_portal):
         with self.handler(sender, room, command, args, is_management, is_portal) as handle_command:
             handle_command(self, sender, args)
@@ -70,6 +72,20 @@ class CommandHandler:
             html = message
         self.az.intent.send_notice(self._room_id, message, html=html)
 
+    # endregion
+    # region Command handlers
+
+    @command_handler
+    def ping(self, sender, args):
+        if not sender.logged_in:
+            return self.reply("You're not logged in.")
+        me = sender.client.get_me()
+        if me:
+            return self.reply(f"You're logged in as @{me.username}")
+        else:
+            return self.reply("You're not logged in.")
+
+    # region Authentication commands
     @command_handler
     def register(self, sender, args):
         self.reply("Not yet implemented.")
@@ -160,15 +176,8 @@ class CommandHandler:
             return self.reply("Logged out successfully.")
         return self.reply("Failed to log out.")
 
-    @command_handler
-    def ping(self, sender, args):
-        if not sender.logged_in:
-            return self.reply("You're not logged in.")
-        me = sender.client.get_me()
-        if me:
-            return self.reply(f"You're logged in as @{me.username}")
-        else:
-            return self.reply("You're not logged in.")
+    # endregion
+    # region Telegram interaction commands
 
     @command_handler
     def search(self, sender, args):
@@ -186,6 +195,8 @@ class CommandHandler:
     def upgrade(self, sender, args):
         self.reply("Not yet implemented.")
 
+    # endregion
+    # region Command-related commands
     @command_handler
     def cancel(self, sender, args):
         if sender.command_status:
@@ -230,3 +241,6 @@ _**Telegram actions**: commands for using the bridge to interact with Telegram._
 **upgrade** - Upgrade a normal Telegram group to a supergroup.
 """
         return self.reply(management_status + help)
+
+    # endregion
+    # endregion

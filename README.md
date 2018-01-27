@@ -1,5 +1,5 @@
 # mautrix-telegram
-**This is the python rewrite. If you want more features (and more bugs), check the JavaScript version on the master branch.**
+**This is the python rewrite. The JavaScript version on the master branch has different features and more bugs**
 
 A Matrix-Telegram puppeting bridge.
 
@@ -88,8 +88,8 @@ does not do this automatically.
   * [x] Audio messages
   * [x] Video messages
   * [x] Documents
-  * [ ] Message deletions
-  * [ ] Message edits
+  * [ ] Message deletions (no way to tell difference between user-specific deletion and global deletion)
+  * [ ] Message edits (not supported in Matrix)
   * [x] Avatars
   * [x] Presence
   * [x] Typing notifications
@@ -114,3 +114,10 @@ does not do this automatically.
 * Misc
   * [ ] Use optional bot to relay messages for unauthenticated Matrix users
   * [ ] Command to upgrade chat to supergroup from Matrix
+* Commands
+  * [x] Logging in and out
+  * [ ] Registering
+  * [ ] Searching for users
+  * [ ] Starting a private chat with users
+  * [ ] Creating a Telegram chat for an existing Matrix room
+  * [ ] Upgrading the chat of a portal room into a supergroup
