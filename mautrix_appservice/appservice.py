@@ -24,6 +24,41 @@ from contextlib import contextmanager
 from .intent_api import HTTPAPI
 
 
+class StateStore:
+    def __init__(self):
+        self.memberships = {}
+        self.power_levels = {}
+        self.power_level_requirements = {}
+
+    def _get_membership(self, room, user):
+        return self.memberships.get(room, {}).get(user, "left")
+
+    def is_joined(self, room, user):
+        return self._get_membership(room, user) == "join"
+
+    def _set_membership(self, room, user, membership):
+        if room not in self.memberships:
+            self.memberships[room] = {}
+        self.memberships[room][user] = membership
+
+    def joined(self, room, user):
+        return self._set_membership(room, user, "join")
+
+    def invited(self, room, user):
+        return self._set_membership(room, user, "invited")
+
+    def left(self, room, user):
+        return self._set_membership(room, user, "left")
+
+    def has_power_level(self, room, user, event):
+        return True
+
+    def set_power_level(self, room, user, level):
+        if not room in self.power_levels:
+            self.power_levels[room] = {}
+        self.power_levels[room][user] = level
+
+
 class AppService:
     def __init__(self, server, domain, as_token, hs_token, bot_localpart, loop=None, log=None,
                  query_user=None, query_alias=None):
@@ -32,6 +67,7 @@ class AppService:
         self.as_token = as_token
         self.hs_token = hs_token
         self.bot_mxid = f"@{bot_localpart}:{domain}"
+        self.state_store = StateStore()
 
         self.transactions = []
 
@@ -71,7 +107,8 @@ class AppService:
     @contextmanager
     def run(self, host="127.0.0.1", port=8080):
         self._http_session = aiohttp.ClientSession(loop=self.loop)
-        self._intent = HTTPAPI(base_url=self.server, bot_mxid=self.bot_mxid, token=self.as_token, log=self.log).bot_intent()
+        self._intent = HTTPAPI(base_url=self.server, bot_mxid=self.bot_mxid, token=self.as_token,
+                               log=self.log, state_store=self.state_store).bot_intent()
 
         yield partial(aiohttp.web.run_app, self.app, host=host, port=port)
 

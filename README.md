@@ -34,25 +34,27 @@ A Telegram chat will be created once the bridge is stable enough.
 You should be automatically invited into portal rooms for your groups and channels if you
 1. (re)start the bridge,
 2. receive a messages in the chat or
-3. ~~receive an invite to the chat~~ (not yet implemented)
+3. receive an invite to the chat
 
 Support for inviting users both Telegram and Matrix users to Telegram portal rooms is planned, but not yet implemented.
 
 #### Private messaging
-**Initiating private chats is not yet implemented.**
+**Initiating private chats is not yet implemented.** In order to initiate a private chat,
+send a message in either direction with another Telegram client.
 
-You can start private chats by simply inviting the Matrix puppet of the Telegram user you want to chat with to a private room.
+~~You can start private chats by simply inviting the Matrix puppet of the Telegram user you want to chat with to a private room.~~
 
-If you don't know the MXID of the puppet, you can search for users using the `search <query>` management command.
+~~If you don't know the MXID of the puppet, you can search for users using the `search <query>` management command.~~
 
 #### Bot commands
-**Initiating private chats is not yet implemented.**
+**Initiating private chats is not yet implemented.** In order to initiate a chat with a,
+bot, send a message to the bot with another Telegram client.
 
-Initiating chats with bots is no different from initiating chats with real Telegram users.
+~~Initiating chats with bots is no different from initiating chats with real Telegram users.~~
 
-The bridge translates `!commands` into `/commands`, which allows you to use Telegram bots without constantly escaping
+~~The bridge translates `!commands` into `/commands`, which allows you to use Telegram bots without constantly escaping
 the slash. Please note that when messaging a bot for the first time, it may expect you to run `!start` first. The bridge
-does not do this automatically.
+does not do this automatically.~~
 
 ## Features & Roadmap
 * Matrix → Telegram

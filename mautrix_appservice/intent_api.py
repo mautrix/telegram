@@ -22,14 +22,17 @@ from matrix_client.errors import MatrixRequestError
 
 
 class HTTPAPI(MatrixHttpApi):
-    def __init__(self, base_url, bot_mxid=None, token=None, identity=None, log=None):
+    def __init__(self, base_url, bot_mxid=None, token=None, identity=None, log=None,
+                 state_store=None):
         self.base_url = base_url
         self.token = token
         self.identity = identity
         self.txn_id = 0
         self.bot_mxid = bot_mxid
-        self.log = log
+        self.intent_log = log.getChild("intent")
+        self.log = log.getChild("api")
         self.validate_cert = True
+        self.state_store = state_store
         self.children = {}
 
     def user(self, user):
@@ -41,10 +44,10 @@ class HTTPAPI(MatrixHttpApi):
             return child
 
     def bot_intent(self):
-        return IntentAPI(self.bot_mxid, self, log=self.log)
+        return IntentAPI(self.bot_mxid, self, state_store=self.state_store, log=self.intent_log)
 
     def intent(self, user):
-        return IntentAPI(user, self.user(user), self, log=self.log)
+        return IntentAPI(user, self.user(user), self, self.state_store, self.intent_log)
 
     def _send(self, method, path, content=None, query_params={}, headers={},
               api_path="/_matrix/client/r0"):
@@ -132,7 +135,7 @@ def matrix_error_code(err):
 class IntentAPI:
     mxid_regex = re.compile("@(.+):(.+)")
 
-    def __init__(self, mxid, client, bot=None, log=None):
+    def __init__(self, mxid, client, bot=None, state_store=None, log=None):
         self.client = client
         self.bot = bot
         self.mxid = mxid
@@ -143,15 +146,15 @@ class IntentAPI:
             raise ValueError("invalid MXID")
         self.localpart = results.group(1)
 
-        self.memberships = {}
-        self.power_levels = {}
+        self.state_store = state_store
         self.registered = False
 
     def user(self, user):
         if not self.bot:
             return self.client.intent(user)
         else:
-            raise ValueError("IntentAPI#user() is only available for base intent objects.")
+            self.log.warning("Called IntentAPI#user() of child intent object.")
+            return self.bot.intent(user)
 
     # region User actions
 
@@ -189,7 +192,9 @@ class IntentAPI:
     def invite(self, room_id, user_id):
         self._ensure_joined(room_id)
         try:
-            return self.client.invite_user(room_id, user_id)
+            response = self.client.invite_user(room_id, user_id)
+            self.state_store.set_invited(room_id, user_id)
+            return response
         except MatrixRequestError as e:
             if matrix_error_code(e) != "M_FORBIDDEN":
                 raise IntentError(f"Failed to invite {user_id} to {room_id}", e)
@@ -212,10 +217,10 @@ class IntentAPI:
         return self.client.set_typing(room_id, is_typing, timeout)
 
     def send_notice(self, room_id, text, html=None):
-        self.send_text(room_id, text, html, "m.notice")
+        return self.send_text(room_id, text, html, "m.notice")
 
     def send_emote(self, room_id, text, html=None):
-        self.send_text(room_id, text, html, "m.emote")
+        return self.send_text(room_id, text, html, "m.emote")
 
     def send_image(self, room_id, url, info={}, text=None):
         return self.send_file(room_id, url, info, text, "m.image")
@@ -249,21 +254,21 @@ class IntentAPI:
         self._ensure_joined(room_id)
         self.client.kick_user(room_id, user_id, message)
 
-    def send_event(self, room_id, type, body, txn_id=None, timestamp=None):
+    def send_event(self, room_id, type, body, txn_id=None):
         self._ensure_joined(room_id)
         self._ensure_has_power_level_for(room_id, type)
-        return self.client.send_message_event(room_id, type, body, txn_id, timestamp)
+        return self.client.send_message_event(room_id, type, body, txn_id)
 
-    def send_state_event(self, room_id, type, body, state_key="", timestamp=None):
+    def send_state_event(self, room_id, type, body, state_key=""):
         self._ensure_joined(room_id)
         self._ensure_has_power_level_for(room_id, type)
-        return self.client.send_state_event(room_id, type, body, state_key, timestamp)
+        return self.client.send_state_event(room_id, type, body, state_key)
 
     def join_room(self, room_id):
         return self._ensure_joined(room_id, ignore_cache=True)
 
     def leave_room(self, room_id):
-        self.memberships[room_id] = "left"
+        self.state_store.left(room_id, self.mxid)
         return self.client.leave_room(room_id)
 
     def get_room_members(self, room_id):
@@ -278,19 +283,19 @@ class IntentAPI:
     # region Ensure functions
 
     def _ensure_joined(self, room_id, ignore_cache=False):
-        if not ignore_cache and self.memberships.get(room_id, "") == "join":
+        if not ignore_cache and self.state_store.is_joined(room_id, self.mxid):
             return
         self._ensure_registered()
         try:
             self.client.join_room(room_id)
-            self.memberships[room_id] = "join"
+            self.state_store.joined(room_id, self.mxid)
         except MatrixRequestError as e:
             if matrix_error_code(e) != "M_FORBIDDEN" and not self.bot:
                 raise IntentError(f"Failed to join room {room_id} as {self.mxid}", e)
             try:
                 self.bot.invite_user(room_id, self.mxid)
                 self.client.join_room(room_id)
-                self.memberships[room_id] = "join"
+                self.state_store.joined(room_id, self.mxid)
             except MatrixRequestError as e2:
                 raise IntentError(f"Failed to join room {room_id} as {self.mxid}", e2)
 
@@ -306,7 +311,8 @@ class IntentAPI:
         self.registered = True
 
     def _ensure_has_power_level_for(self, room_id, event_type):
+        if self.state_store.has_power_level(room_id, self.mxid, event_type):
+            return
         # TODO implement
-        pass
 
     # endregion
