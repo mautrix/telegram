@@ -300,10 +300,9 @@ class IntentAPI:
         try:
             self.client.register({"username": self.localpart})
         except MatrixRequestError as e:
-            if matrix_error_code(e) == "M_UNKNOWN":
-                self.log.exception("Internal server error while registering!")
-            elif matrix_error_code(e) != "M_USER_IN_USE":
-                raise IntentError(f"Failed to register {self.mxid}", e)
+            if matrix_error_code(e) != "M_USER_IN_USE":
+                self.log.exception(f"Failed to register {self.mxid}!")
+                # raise IntentError(f"Failed to register {self.mxid}", e)
         self.registered = True
 
     def _ensure_has_power_level_for(self, room_id, event_type):
