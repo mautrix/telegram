@@ -304,18 +304,20 @@ class Portal:
 
     @staticmethod
     def convert_webp(file, to="png"):
-        image = Image.open(BytesIO(file)).convert("RGBA")
-        file = BytesIO()
-        image.save(file, to)
-        return file.getvalue()
+        try:
+            image = Image.open(BytesIO(file)).convert("RGBA")
+            new_file = BytesIO()
+            image.save(new_file, to)
+            return f"image/{to}", new_file.getvalue()
+        except:
+            return "image/webp", file
 
     def handle_telegram_document(self, source, sender, media):
         file = source.download_file(media.document)
         mime_type = magic.from_buffer(file, mime=True)
         dont_change_mime = False
         if mime_type == "image/webp":
-            file = self.convert_webp(file, to="png")
-            mime_type = "image/png"
+            mime_type, file = self.convert_webp(file, to="png")
             dont_change_mime = True
         uploaded = sender.intent.upload_file(file, mime_type)
         name = media.caption
