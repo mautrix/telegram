@@ -109,17 +109,14 @@ does not do this automatically.~~
   * [x] Automatic portal creation for groups/channels at startup
   * [x] Automatic portal creation for groups/channels when receiving invite/message
   * [ ] Private chat creation by inviting Telegram user to new room
-  * [ ] Joining public channels/supergroups using room aliases
   * [ ] Searching for Telegram users using management commands
-  * [ ] Creating new Telegram chats from Matrix
-  * [ ] Creating Telegram chats for existing Matrix rooms
 * Misc
   * [ ] Use optional bot to relay messages for unauthenticated Matrix users
-  * [ ] Command to upgrade chat to supergroup from Matrix
+  * [ ] Joining public channels/supergroups using room aliases
 * Commands
-  * [x] Logging in and out
-  * [ ] Registering
-  * [ ] Searching for users
-  * [ ] Starting a private chat with users
-  * [ ] Creating a Telegram chat for an existing Matrix room
-  * [ ] Upgrading the chat of a portal room into a supergroup
+  * [x] Logging in and out (`login` + code entering, `logout`)
+  * [ ] Registering (`register`)
+  * [ ] Searching for users (`search`)
+  * [ ] Starting private chats (`pm`)
+  * [ ] Creating a Telegram chat for an existing Matrix room (`create`)
+  * [ ] Upgrading the chat of a portal room into a supergroup (`upgrade`)
