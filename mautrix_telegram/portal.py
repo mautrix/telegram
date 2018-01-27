@@ -153,7 +153,8 @@ class Portal:
             self.main_intent.kick(self.mxid, puppet.mxid, kick_message)
         else:
             puppet.intent.leave_room(self.mxid)
-        self.main_intent.kick(self.mxid, user.mxid, kick_message or "Left Telegram chat")
+        if user:
+            self.main_intent.kick(self.mxid, user.mxid, kick_message or "Left Telegram chat")
 
     def update_info(self, user, entity=None):
         if self.peer_type == "user":
