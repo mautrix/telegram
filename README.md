@@ -95,9 +95,9 @@ does not do this automatically.
   * [x] Typing notifications
   * [ ] Pinning messages
   * [ ] Admin status
-  * [ ] Membership actions
-    * [ ] Inviting
-    * [ ] Kicking (currently shown as leaving)
+  * [x] Membership actions
+    * [x] Inviting
+    * [x] Kicking
     * [x] Joining/leaving
   * [x] Chat metadata changes
     * [ ] Public channel username changes
@@ -105,7 +105,7 @@ does not do this automatically.
   * [x] Supergroup upgrade
 * Initiating chats
   * [x] Automatic portal creation for groups/channels at startup
-  * [ ] Automatic portal creation for groups/channels when receiving invite/message
+  * [x] Automatic portal creation for groups/channels when receiving invite/message
   * [ ] Private chat creation by inviting Telegram user to new room
   * [ ] Joining public channels/supergroups using room aliases
   * [ ] Searching for Telegram users using management commands

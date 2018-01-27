@@ -245,6 +245,10 @@ class IntentAPI:
     def send_message(self, room_id, body):
         return self.send_event(room_id, "m.room.message", body)
 
+    def kick(self, room_id, user_id, message):
+        self._ensure_joined(room_id)
+        self.client.kick_user(room_id, user_id, message)
+
     def send_event(self, room_id, type, body, txn_id=None, timestamp=None):
         self._ensure_joined(room_id)
         self._ensure_has_power_level_for(room_id, type)

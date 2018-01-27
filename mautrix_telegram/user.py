@@ -166,9 +166,9 @@ class User:
         dialogs = self.client.get_dialogs(limit=30)
         for dialog in dialogs:
             entity = dialog.entity
-            if isinstance(entity, User) \
-                or (isinstance(entity, Chat) and entity.deactivated) \
-                or isinstance(entity, ChannelForbidden):
+            if (isinstance(entity, User)
+                or (isinstance(entity, Chat) and entity.deactivated)
+                or isinstance(entity, (ChannelForbidden, ChatForbidden))):
                 continue
             portal = po.Portal.get_by_entity(entity)
             portal.create_room(self, entity, invites=[self.mxid])

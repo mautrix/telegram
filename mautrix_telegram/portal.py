@@ -20,7 +20,7 @@ from telethon.tl.types import *
 import mimetypes
 import magic
 from .db import Portal as DBPortal, Message as DBMessage
-from . import puppet as p, formatter
+from . import puppet as p, user as u, formatter
 
 config = None
 
@@ -124,9 +124,18 @@ class Portal:
             puppet.update_info(source, entity)
         puppet.intent.join_room(self.mxid)
 
-    def delete_telegram_user(self, user_id):
+        user = u.User.get_by_tgid(user_id)
+        if user:
+            self.main_intent.invite(self.mxid, user.mxid)
+
+    def delete_telegram_user(self, user_id, kick_message=None):
         puppet = p.Puppet.get(user_id)
-        puppet.intent.leave_room(self.mxid)
+        user = u.User.get_by_tgid(user_id)
+        if kick_message:
+            self.main_intent.kick(self.mxid, puppet.mxid, kick_message)
+        else:
+            puppet.intent.leave_room(self.mxid)
+        self.main_intent.kick(self.mxid, user.mxid, kick_message or "Left Telegram chat")
 
     def update_info(self, user, entity=None):
         if self.peer_type == "user":
@@ -333,9 +342,12 @@ class Portal:
 
     def handle_telegram_action(self, source, sender, action):
         if not self.mxid:
-            if isinstance(action, (MessageActionChatCreate, MessageActionChannelCreate)):
+            create_and_exit = [MessageActionChatCreate, MessageActionChannelCreate]
+            create_and_continue = [MessageActionChatAddUser, MessageActionChatJoinedByLink]
+            if isinstance(action, create_and_exit + create_and_continue):
                 self.create_room(source, invites=[source.mxid])
-            return
+            if isinstance(action, create_and_exit):
+                return
 
         if isinstance(action, MessageActionChatEditTitle):
             if self.update_title(action.title, self.main_intent):
@@ -350,8 +362,10 @@ class Portal:
         elif isinstance(action, MessageActionChatJoinedByLink):
             self.add_telegram_user(sender.id, source)
         elif isinstance(action, MessageActionChatDeleteUser):
-            # TODO show kick message if user was kicked
-            self.delete_telegram_user(action.user_id)
+            kick_message = None
+            if sender.id != action.user_id:
+                kick_message = f"Kicked by {sender.displayname}"
+            self.delete_telegram_user(action.user_id, kick_message)
         elif isinstance(action, MessageActionChatMigrateTo):
             self.peer_type = "channel"
             self.migrate_and_save(action.channel_id)
