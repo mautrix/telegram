@@ -300,7 +300,9 @@ class IntentAPI:
         try:
             self.client.register({"username": self.localpart})
         except MatrixRequestError as e:
-            if matrix_error_code(e) != "M_USER_IN_USE":
+            if matrix_error_code(e) == "M_UNKNOWN":
+                self.log.exception("Internal server error while registering!")
+            elif matrix_error_code(e) != "M_USER_IN_USE":
                 raise IntentError(f"Failed to register {self.mxid}", e)
         self.registered = True
 
