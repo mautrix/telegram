@@ -205,18 +205,24 @@ class IntentAPI:
         self._ensure_joined(room_id)
         return self.client.set_typing(room_id, is_typing, timeout)
 
-    def send_text(self, room_id, text, html=None, notice=False):
+    def send_notice(self, room_id, text, html=None):
+        self.send_text(room_id, text, html, "m.notice")
+
+    def send_emote(self, room_id, text, html=None):
+        self.send_text(room_id, text, html, "m.emote")
+
+    def send_text(self, room_id, text, html=None, type="m.text"):
         if html:
             return self.send_message(room_id, {
                 "body": text,
-                "msgtype": "m.notice" if notice else "m.text",
+                "msgtype": type,
                 "format": "org.matrix.custom.html",
                 "formatted_body": html or text,
             })
         else:
             return self.send_message(room_id, {
                 "body": text,
-                "msgtype": "m.notice" if notice else "m.text",
+                "msgtype": type,
             })
 
     def send_message(self, room_id, body):

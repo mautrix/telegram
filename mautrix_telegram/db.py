@@ -14,7 +14,6 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from sqlalchemy import Column, ForeignKey, UniqueConstraint, Integer, String
-from sqlalchemy.orm.scoping import scoped_session
 from .base import Base
 
 
@@ -62,9 +61,8 @@ class Puppet(Base):
     photo_id = Column(String, nullable=True)
 
 
-def init(db_factory):
-    db = scoped_session(db_factory)
-    Portal.query = db.query_property()
-    Message.query = db.query_property()
-    User.query = db.query_property()
-    Puppet.query = db.query_property()
+def init(db_session):
+    Portal.query = db_session.query_property()
+    Message.query = db_session.query_property()
+    User.query = db_session.query_property()
+    Puppet.query = db_session.query_property()

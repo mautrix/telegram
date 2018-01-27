@@ -246,6 +246,10 @@ class Portal:
         elif action_type == MessageActionChatDeleteUser:
             # TODO show kick message if user was kicked
             self.delete_telegram_user(action.user_id)
+        elif action_type == MessageActionChatMigrateTo:
+            self.peer_type = "channel"
+            self.migrate_and_save(action.channel_id)
+            sender.intent.send_emote(self.mxid, "upgraded this group to a supergroup.")
         else:
             self.log.debug("Unhandled Telegram action in %s: %s", self.title, action)
 
@@ -256,6 +260,15 @@ class Portal:
         return self.db.merge(DBPortal(tgid=self.tgid, peer_type=self.peer_type, mxid=self.mxid,
                                       username=self.username, title=self.title,
                                       photo_id=self.photo_id))
+
+    def migrate_and_save(self, new_id):
+        existing = DBPortal.query.get(self.tgid)
+        if existing:
+            self.db.object_session(existing).delete(existing)
+        self.by_tgid[self.tgid] = None
+        self.tgid = new_id
+        self.by_tgid[self.tgid] = self
+        self.save()
 
     def save(self):
         self.to_db()

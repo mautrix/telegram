@@ -102,7 +102,7 @@ does not do this automatically.
   * [x] Chat metadata changes
     * [ ] Public channel username changes
   * [x] Initial chat metadata
-  * [ ] Supergroup upgrade
+  * [x] Supergroup upgrade
 * Initiating chats
   * [x] Automatic portal creation for groups/channels at startup
   * [ ] Automatic portal creation for groups/channels when receiving invite/message

@@ -68,7 +68,7 @@ class CommandHandler:
             html = markdown.markdown(message, safe_mode="escape" if allow_html else False)
         elif allow_html:
             html = message
-        self.az.intent.send_text(self._room_id, message, html=html, notice=True)
+        self.az.intent.send_notice(self._room_id, message, html=html)
 
     @command_handler
     def register(self, sender, args):

@@ -146,6 +146,8 @@ class User:
                 continue
             elif isinstance(entity, Chat) and entity.deactivated:
                 continue
+            elif isinstance(entity, ChannelForbidden):
+                continue
             portal = po.Portal.get_by_entity(entity)
             portal.create_room(self, entity, invites=[self.mxid])
 
@@ -208,6 +210,9 @@ class User:
         update, sender, portal = self.get_message_details(update)
 
         if isinstance(update, MessageService):
+            if isinstance(update.action, MessageActionChannelMigrateFrom):
+                self.log.debug("Ignoring action %s to %d by %d", update.action, portal.tgid, sender.id)
+                return
             self.log.debug("Handling action %s to %d by %d", update.action, portal.tgid, sender.id)
             portal.handle_telegram_action(self, sender, update.action)
         else:
