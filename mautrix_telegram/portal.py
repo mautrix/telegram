@@ -250,7 +250,8 @@ class Portal:
     # region Telegram event handling
 
     def handle_telegram_typing(self, user, event):
-        user.intent.set_typing(self.mxid, is_typing=True)
+        if self.mxid:
+            user.intent.set_typing(self.mxid, is_typing=True)
 
     def handle_telegram_photo(self, source, sender, media):
         largest_size = self.get_largest_photo_size(media.photo)
