@@ -229,6 +229,14 @@ class Portal:
             DBMessage(tgid=response.id, mx_room=self.mxid, mxid=event_id, user=sender.tgid))
         self.db.commit()
 
+    def handle_matrix_deletion(self, deleter, event_id):
+        message = DBMessage.query.filter(DBMessage.mxid == event_id and
+                                         DBMessage.user == deleter.tgid and
+                                         DBMessage.mx_room == self.mxid).one_or_none()
+        if not message:
+            return
+        deleter.client.delete_messages(self.peer, [message.tgid])
+
     # endregion
     # region Telegram event handling
 

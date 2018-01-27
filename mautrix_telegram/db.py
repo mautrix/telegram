@@ -41,7 +41,7 @@ class Message(Base):
     tgid = Column(Integer, primary_key=True)
     user = Column(Integer, ForeignKey("user.tgid"), primary_key=True)
 
-    __table_args__ = (UniqueConstraint('mxid', 'mx_room', name='_mx_id_room'), )
+    __table_args__ = (UniqueConstraint('mxid', 'mx_room', 'user', name='_mx_id_room'), )
 
 
 class User(Base):

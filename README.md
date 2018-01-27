@@ -64,7 +64,7 @@ does not do this automatically.
   * [ ] Locations (not implemented in Riot)
   * [x] Images
   * [x] Files
-  * [ ] Message redactions
+  * [x] Message redactions
   * [ ] Presence (currently always shown as online on Telegram)
   * [ ] Typing notifications (may not be possible)
   * [ ] Pinning messages

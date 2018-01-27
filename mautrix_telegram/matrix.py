@@ -87,6 +87,12 @@ class MatrixHandler:
             self.commands.handle(room, sender, command, args, is_management,
                                  is_portal=portal is not None)
 
+    def handle_redaction(self, room, sender, event_id):
+        portal = Portal.get_by_mxid(room)
+        sender = User.get_by_mxid(sender)
+        if portal:
+            portal.handle_matrix_deletion(sender, event_id)
+
     def filter_matrix_event(self, event):
         return event["sender"] == self.az.bot_mxid or self.is_puppet(event["sender"])
 
@@ -106,3 +112,5 @@ class MatrixHandler:
                 pass
         elif type == "m.room.message":
             self.handle_message(evt["room_id"], evt["sender"], content, evt["event_id"])
+        elif type == "m.room.redaction":
+            self.handle_redaction(evt["room_id"], evt["sender"], evt["redacts"])
