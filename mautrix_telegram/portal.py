@@ -17,6 +17,8 @@ from telethon.tl.functions.messages import GetFullChatRequest, EditChatAdminRequ
 from telethon.tl.functions.channels import GetParticipantsRequest
 from telethon.errors.rpc_error_list import ChatAdminRequiredError
 from telethon.tl.types import *
+from PIL import Image
+from io import BytesIO
 import mimetypes
 import magic
 from .db import Portal as DBPortal, Message as DBMessage
@@ -300,18 +302,31 @@ class Portal:
         name = media.caption
         sender.intent.send_image(self.mxid, uploaded["content_uri"], info=info, text=name)
 
+    @staticmethod
+    def convert_webp(file, to="png"):
+        image = Image.open(BytesIO(file)).convert("RGBA")
+        file = BytesIO()
+        image.save(file, to)
+        return file.getvalue()
+
     def handle_telegram_document(self, source, sender, media):
         file = source.download_file(media.document)
         mime_type = magic.from_buffer(file, mime=True)
+        dont_change_mime = False
+        if mime_type == "image/webp":
+            file = self.convert_webp(file, to="png")
+            mime_type = "image/png"
+            dont_change_mime = True
         uploaded = sender.intent.upload_file(file, mime_type)
         name = media.caption
-        if not name:
-            for attr in media.document.attributes:
-                if isinstance(attr, DocumentAttributeFilename):
-                    name = attr.file_name
+        for attr in media.document.attributes:
+            if not name and isinstance(attr, DocumentAttributeFilename):
+                name = attr.file_name
+                if not dont_change_mime:
                     (mime_from_name, _) = mimetypes.guess_type(name)
                     mime_type = mime_from_name or mime_type
-                    break
+            elif isinstance(attr, DocumentAttributeSticker):
+                name = f"Sticker for {attr.alt}"
         mime_type = media.document.mime_type or mime_type
         info = {
             "size": media.document.size,
@@ -322,6 +337,8 @@ class Portal:
             type = "m.video"
         elif mime_type.startswith("audio/"):
             type = "m.audio"
+        elif mime_type.startswith("image/"):
+            type = "m.image"
         sender.intent.send_file(self.mxid, uploaded["content_uri"], info=info, text=name,
                                 type=type)
 

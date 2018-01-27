@@ -6,3 +6,4 @@ python-magic
 SQLAlchemy
 Telethon
 Markdown
+Pillow

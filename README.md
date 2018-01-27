@@ -86,7 +86,7 @@ does not do this automatically.~~
   * [x] Forwards
   * [x] Images
   * [x] Locations
-  * [ ] Stickers (only works if client supports webp, need converter)
+  * [x] Stickers
   * [x] Audio messages
   * [x] Video messages
   * [x] Documents
