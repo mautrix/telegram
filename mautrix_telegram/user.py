@@ -190,22 +190,23 @@ class User:
             return self.update_typing(update)
         elif isinstance(update, UpdateUserStatus):
             return self.update_status(update)
+        elif isinstance(update, (UpdateChatAdmins, UpdateChatParticipantAdmin)):
+            return self.update_admin(update)
+        elif isinstance(update, UpdateChatParticipants):
+            portal = po.Portal.get_by_tgid(update.participants.chat_id, "chat")
+            portal.update_telegram_participants(update.participants.participants)
         else:
             self.log.debug("Unhandled update: %s", update)
             return
 
-    def get_message_details(self, update):
-        if isinstance(update, UpdateShortChatMessage):
-            portal = po.Portal.get_by_tgid(update.chat_id, "chat")
-            sender = pu.Puppet.get(update.from_id)
-        elif isinstance(update, UpdateShortMessage):
-            portal = po.Portal.get_by_tgid(update.user_id, "user")
-            sender = pu.Puppet.get(self.tgid if update.out else update.user_id)
-        elif isinstance(update, (UpdateNewMessage, UpdateNewChannelMessage)):
-            update = update.message
-            sender = pu.Puppet.get(update.from_id)
-            portal = po.Portal.get_by_entity(update.to_id)
-        return update, sender, portal
+    def update_admin(self, update):
+        portal = po.Portal.get_by_tgid(update.chat_id, "chat")
+        if isinstance(update, UpdateChatAdmins):
+            portal.set_telegram_admins_enabled(update.enabled)
+        elif isinstance(update, UpdateChatParticipantAdmin):
+            puppet = pu.Puppet.get(update.user_id)
+            user = User.get_by_tgid(update.user_id)
+            portal.set_telegram_admin(puppet, user)
 
     def update_typing(self, update):
         if isinstance(update, UpdateUserTyping):
@@ -222,6 +223,19 @@ class User:
         elif isinstance(update.status, UserStatusOffline):
             puppet.intent.set_presence("offline")
         return
+
+    def get_message_details(self, update):
+        if isinstance(update, UpdateShortChatMessage):
+            portal = po.Portal.get_by_tgid(update.chat_id, "chat")
+            sender = pu.Puppet.get(update.from_id)
+        elif isinstance(update, UpdateShortMessage):
+            portal = po.Portal.get_by_tgid(update.user_id, "user")
+            sender = pu.Puppet.get(self.tgid if update.out else update.user_id)
+        elif isinstance(update, (UpdateNewMessage, UpdateNewChannelMessage)):
+            update = update.message
+            sender = pu.Puppet.get(update.from_id)
+            portal = po.Portal.get_by_entity(update.to_id)
+        return update, sender, portal
 
     def update_message(self, update):
         update, sender, portal = self.get_message_details(update)

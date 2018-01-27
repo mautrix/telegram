@@ -59,7 +59,7 @@ class HTTPAPI(MatrixHttpApi):
         return super()._send(method, path, content, query_params, headers, api_path=api_path)
 
     def create_room(self, alias=None, is_public=False, name=None, topic=None, is_direct=False,
-                    invitees=()):
+                    invitees=(), initial_state=[]):
         """Perform /createRoom.
         Args:
             alias (str): Optional. The room alias name to set for this room.
@@ -79,6 +79,8 @@ class HTTPAPI(MatrixHttpApi):
             content["name"] = name
         if topic:
             content["topic"] = topic
+        if initial_state:
+            content["initial_state"] = initial_state
         content["is_direct"] = is_direct
 
         return self._send("POST", "/createRoom", content)
@@ -212,6 +214,17 @@ class IntentAPI:
         self._ensure_has_power_level_for(room_id, "m.room.name")
         return self.client.set_room_name(room_id, name)
 
+    def get_power_levels(self, room_id):
+        self._ensure_joined(room_id)
+        levels = self.client.get_power_levels(room_id)
+        self.state_store.set_power_levels(room_id, levels)
+        return levels
+
+    def set_power_levels(self, room_id, content):
+        response = self.send_state_event(room_id, "m.room.power_levels", content)
+        self.state_store.set_power_levels(room_id, content)
+        return response
+
     def set_typing(self, room_id, is_typing=True, timeout=5000):
         self._ensure_joined(room_id)
         return self.client.set_typing(room_id, is_typing, timeout)
@@ -311,8 +324,13 @@ class IntentAPI:
         self.registered = True
 
     def _ensure_has_power_level_for(self, room_id, event_type):
+        if not self.state_store.has_power_level_data(room_id):
+            self.get_power_levels(room_id)
         if self.state_store.has_power_level(room_id, self.mxid, event_type):
             return
+        elif not self.bot:
+            pass
+            # raise IntentError(f"Power level of {self.mxid} is not enough for {event_type} in {room_id}")
         # TODO implement
 
     # endregion

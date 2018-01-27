@@ -70,7 +70,7 @@ does not do this automatically.~~
   * [ ] Presence (currently always shown as online on Telegram)
   * [ ] Typing notifications (may not be possible)
   * [ ] Pinning messages
-  * [ ] Power level
+  * [x] Power level
   * [ ] Membership actions
     * [ ] Inviting
     * [ ] Kicking
@@ -96,7 +96,7 @@ does not do this automatically.~~
   * [x] Presence
   * [x] Typing notifications
   * [ ] Pinning messages
-  * [ ] Admin status
+  * [x] Admin/chat creator status
   * [x] Membership actions
     * [x] Inviting
     * [x] Kicking

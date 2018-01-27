@@ -93,6 +93,12 @@ class MatrixHandler:
         if portal:
             portal.handle_matrix_deletion(sender, event_id)
 
+    def handle_power_levels(self, room, sender, new, old):
+        portal = Portal.get_by_mxid(room)
+        if portal:
+            sender = User.get_by_mxid(sender)
+            portal.handle_matrix_power_levels(sender, new["users"], old["users"])
+
     def filter_matrix_event(self, event):
         return event["sender"] == self.az.bot_mxid or self.is_puppet(event["sender"])
 
@@ -114,3 +120,6 @@ class MatrixHandler:
             self.handle_message(evt["room_id"], evt["sender"], content, evt["event_id"])
         elif type == "m.room.redaction":
             self.handle_redaction(evt["room_id"], evt["sender"], evt["redacts"])
+        elif type == "m.room.power_levels":
+            self.handle_power_levels(evt["room_id"], evt["sender"], evt["content"],
+                                     evt["prev_content"])

@@ -28,7 +28,6 @@ class StateStore:
     def __init__(self):
         self.memberships = {}
         self.power_levels = {}
-        self.power_level_requirements = {}
 
     def _get_membership(self, room, user):
         return self.memberships.get(room, {}).get(user, "left")
@@ -50,13 +49,29 @@ class StateStore:
     def left(self, room, user):
         return self._set_membership(room, user, "left")
 
+    def has_power_level_data(self, room):
+        return room in self.power_levels
+
     def has_power_level(self, room, user, event):
-        return True
+        room_levels = self.power_levels.get(room, {})
+        required = room_levels["events"].get(event, 95)
+        has = room_levels["users"].get(user, 0)
+        return has >= required
 
     def set_power_level(self, room, user, level):
         if not room in self.power_levels:
-            self.power_levels[room] = {}
-        self.power_levels[room][user] = level
+            self.power_levels[room] = {
+                "users": {},
+                "events": {},
+            }
+        self.power_levels[room]["users"][user] = level
+
+    def set_power_levels(self, room, content):
+        if "events" not in content:
+            content["events"] = {}
+        if "users" not in content:
+            content["users"] = {}
+        self.power_levels[room] = content
 
 
 class AppService:

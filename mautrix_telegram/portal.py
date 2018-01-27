@@ -13,7 +13,7 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
-from telethon.tl.functions.messages import GetFullChatRequest
+from telethon.tl.functions.messages import GetFullChatRequest, EditChatAdminRequest
 from telethon.tl.functions.channels import GetParticipantsRequest
 from telethon.errors.rpc_error_list import ChatAdminRequiredError
 from telethon.tl.types import *
@@ -79,8 +79,9 @@ class Portal:
         if self.mxid:
             if update_if_exists:
                 self.update_info(user, entity)
-                users = self.get_users(user, entity)
+                users, participants = self.get_users(user, entity)
                 self.sync_telegram_users(user, users)
+                self.update_telegram_participants(participants)
             self.invite_matrix(invites)
             return self.mxid
 
@@ -94,9 +95,23 @@ class Portal:
         direct = self.peer_type == "user"
         puppet = p.Puppet.get(self.tgid) if direct else None
         intent = puppet.intent if direct else self.az.intent
+
+        power_level_requirement = 0 if self.peer_type == "chat" else 50
+        initial_power_levels = {
+            "ban": 100,
+            "events": {
+                "m.room.name": power_level_requirement,
+                "m.room.avatar": power_level_requirement,
+                "m.room.topic": 50,
+                "m.room.power_levels": 50,
+                "invite": power_level_requirement,
+            },
+            "users_default": 0,
+        }
+
         # TODO set room alias if public channel.
-        room = intent.create_room(invitees=invites, name=title,
-                                  is_direct=direct)
+        room = intent.create_room(invitees=invites, name=title, is_direct=direct,
+                                  initial_state=[initial_power_levels])
         if not room:
             raise Exception(f"Failed to create room for {self.tgid}")
 
@@ -105,8 +120,9 @@ class Portal:
         self.save()
         if not direct:
             self.update_info(user, entity)
-            users = self.get_users(user, entity)
+            users, participants = self.get_users(user, entity)
             self.sync_telegram_users(user, users)
+            self.update_telegram_participants(participants)
         else:
             puppet.update_info(user, entity)
             puppet.intent.join_room(self.mxid)
@@ -185,17 +201,18 @@ class Portal:
 
     def get_users(self, user, entity):
         if self.peer_type == "chat":
-            return user.client(GetFullChatRequest(chat_id=self.tgid)).users
+            chat = user.client(GetFullChatRequest(chat_id=self.tgid))
+            return chat.users, chat.full_chat.participants.participants
         elif self.peer_type == "channel":
             try:
                 participants = user.client(GetParticipantsRequest(
                     entity, ChannelParticipantsRecent(), offset=0, limit=100, hash=0
                 ))
-                return participants.users
+                return participants.users, participants.participants
             except ChatAdminRequiredError:
                 return []
         elif self.peer_type == "user":
-            return [entity]
+            return [entity], []
 
     # endregion
     # region Matrix event handling
@@ -245,6 +262,20 @@ class Portal:
         if not message:
             return
         deleter.client.delete_messages(self.peer, [message.tgid])
+
+    def handle_matrix_power_levels(self, sender, new_users, old_users):
+        for user, level in new_users.items():
+            puppet_match = p.Puppet.mxid_regex.search(user)
+            if puppet_match:
+                user_id = int(puppet_match.group(1))
+            else:
+                mx_user = u.User.get_by_mxid(user, create=False)
+                if not mx_user or not mx_user.tgid:
+                    continue
+                user_id = mx_user.tgid
+            if user not in old_users or level != old_users[user]:
+                sender.client(
+                    EditChatAdminRequest(chat_id=self.tgid, user_id=user_id, is_admin=level >= 50))
 
     # endregion
     # region Telegram event handling
@@ -373,6 +404,40 @@ class Portal:
             sender.intent.send_emote(self.mxid, "upgraded this group to a supergroup.")
         else:
             self.log.debug("Unhandled Telegram action in %s: %s", self.title, action)
+
+    def set_telegram_admin(self, puppet, user):
+        levels = self.main_intent.get_power_levels(self.mxid)
+        if user:
+            levels["users"][user.mxid] = 50
+        if puppet:
+            levels["users"][puppet.mxid] = 50
+        self.main_intent.set_power_levels(self.mxid, levels)
+
+    def update_telegram_participants(self, participants):
+        levels = self.main_intent.get_power_levels(self.mxid)
+        levels["events"]["m.room.power_levels"] = 50
+        for participant in participants:
+            puppet = p.Puppet.get(participant.user_id)
+            user = u.User.get_by_tgid(participant.user_id)
+            new_level = 0
+            if isinstance(participant, ChatParticipantAdmin):
+                new_level = 50
+            elif isinstance(participant, ChatParticipantCreator):
+                new_level = 95
+            if user:
+                levels["users"][user.mxid] = new_level
+            if puppet:
+                levels["users"][puppet.mxid] = new_level
+        self.main_intent.set_power_levels(self.mxid, levels)
+
+    def set_telegram_admins_enabled(self, enabled):
+        level = 50 if enabled else 10
+        levels = self.main_intent.get_power_levels(self.mxid)
+        print(levels)
+        levels["invite"] = level
+        levels["events"]["m.room.name"] = level
+        levels["events"]["m.room.avatar"] = level
+        self.main_intent.set_power_levels(self.mxid, levels)
 
     # endregion
     # region Database conversion
