@@ -185,19 +185,18 @@ class User:
     def update(self, update):
         if isinstance(update, (UpdateShortChatMessage, UpdateShortMessage, UpdateNewMessage,
                                UpdateNewChannelMessage)):
-            return self.update_message(update)
+            self.update_message(update)
         elif isinstance(update, (UpdateChatUserTyping, UpdateUserTyping)):
-            return self.update_typing(update)
+            self.update_typing(update)
         elif isinstance(update, UpdateUserStatus):
-            return self.update_status(update)
+            self.update_status(update)
         elif isinstance(update, (UpdateChatAdmins, UpdateChatParticipantAdmin)):
-            return self.update_admin(update)
+            self.update_admin(update)
         elif isinstance(update, UpdateChatParticipants):
             portal = po.Portal.get_by_tgid(update.participants.chat_id, "chat")
             portal.update_telegram_participants(update.participants.participants)
         else:
             self.log.debug("Unhandled update: %s", update)
-            return
 
     def update_admin(self, update):
         portal = po.Portal.get_by_tgid(update.chat_id, "chat")
