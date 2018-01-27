@@ -46,16 +46,16 @@ bridge:
     # very well be empty.
     #
     # Valid keys:
-    #   fullName         (First and/or last name)
-    #   fullNameReversed (Last and/or first name)
-    #   firstName
-    #   lastName
-    #   username
-    #   phoneNumber
+    #   "full name"          (First and/or last name)
+    #   "full name reversed" (Last and/or first name)
+    #   "first name"
+    #   "last name"
+    #   "username"
+    #   "phone number"
     displayname_preference:
-    - fullName
+    - full name
     - username
-    - phoneNumber
+    - phone number
 
 
     # The prefix for commands. Only required in non-management rooms.

@@ -58,14 +58,21 @@ class Puppet:
 
     @staticmethod
     def get_displayname(info, format=True):
-        if info.first_name or info.last_name:
-            name = " ".join([info.first_name or "", info.last_name or ""]).strip()
-        elif info.username:
-            name = info.username
-        elif info.phone_number:
-            name = info.phone_number
-        else:
-            name = info.id
+        data = {
+            "phone_number": info.phone,
+            "username": info.username,
+            "full name": " ".join([info.first_name or "", info.last_name or ""]).strip(),
+            "full name reversed": " ".join([info.first_name or "", info.last_name or ""]).strip(),
+            "first name": info.first_name,
+            "last_name": info.last_name,
+        }
+        preferences = config.get("bridge", {}).get("displayname_preference",
+                                                   ["full name", "username", "phone"])
+        for preference in preferences:
+            name = data[preference]
+            if name:
+                break
+
         if not format:
             return name
         return config.get("bridge.displayname_template", "{} (Telegram)").format(name)
