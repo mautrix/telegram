@@ -15,6 +15,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from telethon.tl.functions.messages import GetFullChatRequest
 from telethon.tl.functions.channels import GetParticipantsRequest
+from telethon.errors.rpc_error_list import ChatAdminRequiredError
 from telethon.tl.types import *
 from .db import Portal as DBPortal, Message as DBMessage
 from . import puppet as p, formatter
@@ -171,10 +172,13 @@ class Portal:
         if self.peer_type == "chat":
             return user.client(GetFullChatRequest(chat_id=self.tgid)).users
         elif self.peer_type == "channel":
-            participants = user.client(GetParticipantsRequest(
-                entity, ChannelParticipantsRecent(), offset=0, limit=100, hash=0
-            ))
-            return participants.users
+            try:
+                participants = user.client(GetParticipantsRequest(
+                    entity, ChannelParticipantsRecent(), offset=0, limit=100, hash=0
+                ))
+                return participants.users
+            except ChatAdminRequiredError:
+                return []
         elif self.peer_type == "user":
             return [entity]
 
