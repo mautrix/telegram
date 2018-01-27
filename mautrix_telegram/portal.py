@@ -300,7 +300,7 @@ class Portal:
             "mimetype": mime_type,
         }
         name = media.caption
-        sender.intent.send_image(self.mxid, uploaded["content_uri"], info=info, text=name)
+        return sender.intent.send_image(self.mxid, uploaded["content_uri"], info=info, text=name)
 
     @staticmethod
     def convert_webp(file, to="png"):
@@ -341,7 +341,7 @@ class Portal:
             type = "m.audio"
         elif mime_type.startswith("image/"):
             type = "m.image"
-        sender.intent.send_file(self.mxid, uploaded["content_uri"], info=info, text=name,
+        return sender.intent.send_file(self.mxid, uploaded["content_uri"], info=info, text=name,
                                 type=type)
 
     def handle_telegram_location(self, source, sender, location):
@@ -360,7 +360,7 @@ class Portal:
         # At least Riot ignores formatting in m.location messages, so we'll add a plaintext link.
         body = f"Location: {body}\n{url}"
 
-        sender.intent.send_message(self.mxid, {
+        return sender.intent.send_message(self.mxid, {
             "msgtype": "m.location",
             "geo_uri": f"geo:{lat},{long}",
             "body": body,
@@ -376,20 +376,23 @@ class Portal:
             self.log.debug("Sending %s to %s by %d", evt.message, self.mxid, sender.id)
             text, html = formatter.telegram_event_to_matrix(evt, source)
             response = sender.intent.send_text(self.mxid, text, html=html)
-            self.db.add(DBMessage(tgid=evt.id, mx_room=self.mxid, mxid=response["event_id"],
-                                  user=source.tgid))
-            self.db.commit()
         elif evt.media:
             if isinstance(evt.media, MessageMediaPhoto):
-                self.handle_telegram_photo(source, sender, evt.media)
+                response = self.handle_telegram_photo(source, sender, evt.media)
             elif isinstance(evt.media, MessageMediaDocument):
-                self.handle_telegram_document(source, sender, evt.media)
+                response = self.handle_telegram_document(source, sender, evt.media)
             elif isinstance(evt.media, MessageMediaGeo):
-                self.handle_telegram_location(source, sender, evt.media.geo)
+                response = self.handle_telegram_location(source, sender, evt.media.geo)
             else:
                 self.log.debug("Unhandled Telegram media: %s", evt.media)
+                return
         else:
             self.log.debug("Unhandled Telegram message: %s", evt)
+            return
+
+        self.db.add(DBMessage(tgid=evt.id, mx_room=self.mxid, mxid=response["event_id"],
+                              user=source.tgid))
+        self.db.commit()
 
     def handle_telegram_action(self, source, sender, action):
         if not self.mxid:
