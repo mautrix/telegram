@@ -62,8 +62,8 @@ does not do this automatically.
     * [x] Mentions
   * [x] Rich quotes
   * [ ] Locations (not implemented in Riot)
-  * [ ] Images
-  * [ ] Files
+  * [x] Images
+  * [x] Files
   * [ ] Message redactions
   * [ ] Presence (currently always shown as online on Telegram)
   * [ ] Typing notifications (may not be possible)
@@ -82,12 +82,12 @@ does not do this automatically.
     * [x] Mentions
   * [x] Replies
   * [x] Forwards
-  * [ ] Images
-  * [ ] Locations
-  * [ ] Stickers
-  * [ ] Audio messages
-  * [ ] Video messages
-  * [ ] Documents
+  * [x] Images
+  * [x] Locations
+  * [ ] Stickers (only works if client supports webp, need converter)
+  * [x] Audio messages
+  * [x] Video messages
+  * [x] Documents
   * [ ] Message deletions
   * [ ] Message edits
   * [x] Avatars

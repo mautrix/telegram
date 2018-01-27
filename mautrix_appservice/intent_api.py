@@ -16,6 +16,7 @@
 import re
 import json
 import magic
+import urllib.request
 from matrix_client.api import MatrixHttpApi
 from matrix_client.errors import MatrixRequestError
 
@@ -166,10 +167,16 @@ class IntentAPI:
         self._ensure_registered()
         return self.client.set_avatar_url(self.mxid, url)
 
-    def media_upload(self, photo_data, mime_type=None):
+    def upload_file(self, data, mime_type=None):
         self._ensure_registered()
-        mime_type = mime_type or magic.from_buffer(photo_data, mime=True)
-        return self.client.media_upload(photo_data, mime_type)
+        mime_type = mime_type or magic.from_buffer(data, mime=True)
+        return self.client.media_upload(data, mime_type)
+
+    def download_file(self, url):
+        self._ensure_registered()
+        url = self.client.get_download_url(url)
+        response = urllib.request.urlopen(url)
+        return response.read()
 
     # endregion
     # region Room actions
@@ -186,7 +193,6 @@ class IntentAPI:
         except MatrixRequestError as e:
             if matrix_error_code(e) != "M_FORBIDDEN":
                 raise IntentError(f"Failed to invite {user_id} to {room_id}", e)
-
 
     def set_room_avatar(self, room_id, avatar_url, info=None):
         content = {
@@ -210,6 +216,17 @@ class IntentAPI:
 
     def send_emote(self, room_id, text, html=None):
         self.send_text(room_id, text, html, "m.emote")
+
+    def send_image(self, room_id, url, info={}, text=None):
+        return self.send_file(room_id, url, info, text, "m.image")
+
+    def send_file(self, room_id, url, info={}, text=None, type="m.file"):
+        return self.send_message(room_id, {
+            "msgtype": type,
+            "url": url,
+            "body": text or "Uploaded file",
+            "info": info,
+        })
 
     def send_text(self, room_id, text, html=None, type="m.text"):
         if html:

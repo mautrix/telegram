@@ -92,7 +92,7 @@ class Puppet:
         photo_id = f"{photo.volume_id}-{photo.local_id}"
         if self.photo_id != photo_id:
             file = source.download_file(photo)
-            uploaded = self.intent.media_upload(file)
+            uploaded = self.intent.upload_file(file)
             self.intent.set_avatar(uploaded["content_uri"])
             self.photo_id = photo_id
             return True

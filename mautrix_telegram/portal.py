@@ -17,6 +17,8 @@ from telethon.tl.functions.messages import GetFullChatRequest
 from telethon.tl.functions.channels import GetParticipantsRequest
 from telethon.errors.rpc_error_list import ChatAdminRequiredError
 from telethon.tl.types import *
+import mimetypes
+import magic
 from .db import Portal as DBPortal, Message as DBMessage
 from . import puppet as p, formatter
 
@@ -158,11 +160,15 @@ class Portal:
             return True
         return False
 
+    def get_largest_photo_size(self, photo):
+        return max(photo.sizes, key=(lambda photo: (
+            len(photo.bytes) if isinstance(photo, PhotoCachedSize) else photo.size)))
+
     def update_avatar(self, user, photo, intent=None):
         photo_id = f"{photo.volume_id}-{photo.local_id}"
         if self.photo_id != photo_id:
             file = user.download_file(photo)
-            uploaded = self.main_intent.media_upload(file)
+            uploaded = self.main_intent.upload_file(file)
             self.main_intent.set_room_avatar(self.mxid, uploaded["content_uri"])
             self.photo_id = photo_id
             return True
@@ -200,15 +206,100 @@ class Portal:
                                                reply_to=reply_to)
             else:
                 response = sender.send_message(self.peer, message["body"])
-            self.db.add(
-                DBMessage(tgid=response.id, mx_room=self.mxid, mxid=event_id, user=sender.tgid))
-            self.db.commit()
+        elif type == "m.image" or type == "m.file":
+            file = self.main_intent.download_file(message["url"])
+
+            info = message["info"]
+            body = message["body"]
+            mime = info["mimetype"]
+
+            extension = mimetypes.guess_extension(mime)
+            file_name = body if body.endswith(extension) else f"matrix_upload{extension}"
+            caption = None if file_name == body else body
+
+            attributes = [DocumentAttributeFilename(file_name=file_name)]
+            if "w" in info and "h" in info:
+                attributes.append(DocumentAttributeImageSize(w=info["w"], h=info["h"]))
+
+            response = sender.send_file(self.peer, file, mime, caption, attributes, file_name)
+        else:
+            self.log.debug("Unhandled Matrix event: %s", message)
+            return
+        self.db.add(
+            DBMessage(tgid=response.id, mx_room=self.mxid, mxid=event_id, user=sender.tgid))
+        self.db.commit()
 
     # endregion
     # region Telegram event handling
 
     def handle_telegram_typing(self, user, event):
         user.intent.set_typing(self.mxid, is_typing=True)
+
+    def handle_telegram_photo(self, source, sender, media):
+        largest_size = self.get_largest_photo_size(media.photo)
+        file = source.download_file(largest_size.location)
+        mime_type = magic.from_buffer(file, mime=True)
+        uploaded = sender.intent.upload_file(file, mime_type)
+        info = {
+            "h": largest_size.h,
+            "w": largest_size.w,
+            "size": len(largest_size.bytes) if (
+                isinstance(largest_size, PhotoCachedSize)) else largest_size.size,
+            "orientation": 0,
+            "mimetype": mime_type,
+        }
+        name = media.caption
+        sender.intent.send_image(self.mxid, uploaded["content_uri"], info=info, text=name)
+
+    def handle_telegram_document(self, source, sender, media):
+        file = source.download_file(media.document)
+        mime_type = magic.from_buffer(file, mime=True)
+        uploaded = sender.intent.upload_file(file, mime_type)
+        name = media.caption
+        if not name:
+            for attr in media.document.attributes:
+                if isinstance(attr, DocumentAttributeFilename):
+                    name = attr.file_name
+                    (mime_from_name, _) = mimetypes.guess_type(name)
+                    mime_type = mime_from_name or mime_type
+                    break
+        mime_type = media.document.mime_type or mime_type
+        info = {
+            "size": media.document.size,
+            "mimetype": mime_type,
+        }
+        type = "m.file"
+        if mime_type.startswith("video/"):
+            type = "m.video"
+        elif mime_type.startswith("audio/"):
+            type = "m.audio"
+        sender.intent.send_file(self.mxid, uploaded["content_uri"], info=info, text=name,
+                                type=type)
+
+    def handle_telegram_location(self, source, sender, location):
+        long = location.long
+        lat = location.lat
+        long_char = "E" if long > 0 else "W"
+        lat_char = "N" if lat > 0 else "S"
+        rounded_long = abs(round(long * 100000) / 100000)
+        rounded_lat = abs(round(lat * 100000) / 100000)
+
+        body = f"{rounded_lat}° {lat_char}, {rounded_long}° {long_char}"
+
+        url = f"https://maps.google.com/?q={lat},{long}"
+
+        formatted_body = f"Location: <a href='{url}'>{body}</a>"
+        # At least Riot ignores formatting in m.location messages, so we'll add a plaintext link.
+        body = f"Location: {body}\n{url}"
+
+        sender.intent.send_message(self.mxid, {
+            "msgtype": "m.location",
+            "geo_uri": f"geo:{lat},{long}",
+            "body": body,
+            "format": "org.matrix.custom.html",
+            "formatted_body": formatted_body,
+        })
+
 
     def handle_telegram_message(self, source, sender, evt):
         if not self.mxid:
@@ -221,32 +312,40 @@ class Portal:
             self.db.add(DBMessage(tgid=evt.id, mx_room=self.mxid, mxid=response["event_id"],
                                   user=source.tgid))
             self.db.commit()
+        elif evt.media:
+            if isinstance(evt.media, MessageMediaPhoto):
+                self.handle_telegram_photo(source, sender, evt.media)
+            elif isinstance(evt.media, MessageMediaDocument):
+                self.handle_telegram_document(source, sender, evt.media)
+            elif isinstance(evt.media, MessageMediaGeo):
+                self.handle_telegram_location(source, sender, evt.media.geo)
+            else:
+                self.log.debug("Unhandled Telegram media: %s", evt.media)
         else:
             self.log.debug("Unhandled Telegram message: %s", evt)
 
     def handle_telegram_action(self, source, sender, action):
-        action_type = type(action)
         if not self.mxid:
-            if action_type in {MessageActionChatCreate, MessageActionChannelCreate}:
+            if isinstance(action, (MessageActionChatCreate, MessageActionChannelCreate)):
                 self.create_room(source, invites=[source.mxid])
             return
 
-        if action_type == MessageActionChatEditTitle:
+        if isinstance(action, MessageActionChatEditTitle):
             if self.update_title(action.title, self.main_intent):
                 self.save()
-        elif action_type == MessageActionChatEditPhoto:
-            largest_size = max(action.photo.sizes, key=lambda photo: photo.size)
+        elif isinstance(action, MessageActionChatEditPhoto):
+            largest_size = self.get_largest_photo_size(action.photo)
             if self.update_avatar(source, largest_size.location, self.main_intent):
                 self.save()
-        elif action_type == MessageActionChatAddUser:
-            for id in action.users:
-                self.add_telegram_user(id, source)
-        elif action_type == MessageActionChatJoinedByLink:
+        elif isinstance(action, MessageActionChatAddUser):
+            for user_id in action.users:
+                self.add_telegram_user(user_id, source)
+        elif isinstance(action, MessageActionChatJoinedByLink):
             self.add_telegram_user(sender.id, source)
-        elif action_type == MessageActionChatDeleteUser:
+        elif isinstance(action, MessageActionChatDeleteUser):
             # TODO show kick message if user was kicked
             self.delete_telegram_user(action.user_id)
-        elif action_type == MessageActionChatMigrateTo:
+        elif isinstance(action, MessageActionChatMigrateTo):
             self.peer_type = "channel"
             self.migrate_and_save(action.channel_id)
             sender.intent.send_emote(self.mxid, "upgraded this group to a supergroup.")

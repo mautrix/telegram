@@ -16,7 +16,7 @@
 from io import BytesIO
 from telethon import TelegramClient
 from telethon.tl.types import *
-from telethon.tl.functions.messages import SendMessageRequest
+from telethon.tl.functions.messages import SendMessageRequest, SendMediaRequest
 from .db import User as DBUser
 from . import portal as po, puppet as pu
 
@@ -126,8 +126,39 @@ class User:
 
         return self.client._get_response_message(request, result)
 
+    def send_file(self, entity, file, mime_type=None, caption=None,
+                  attributes=None, file_name=None, reply_to=None):
+        entity = self.client.get_input_entity(entity)
+        reply_to = self.client._get_reply_to(reply_to)
+
+        file_handle = self.client.upload_file(file, file_name=file_name, use_cache=False)
+        print(entity, mime_type, caption)
+        for a in attributes:
+            print(a)
+        print(file_handle)
+
+        if mime_type.startswith("image/"):
+            media = InputMediaUploadedPhoto(file_handle, caption or "")
+        else:
+            attr_dict = {}
+            if attributes:
+                for a in attributes:
+                    attr_dict[type(a)] = a
+
+            media = InputMediaUploadedDocument(
+                file=file_handle,
+                mime_type=mime_type or "application/octet-stream",
+                attributes=list(attr_dict.values()),
+                caption=caption or "")
+
+        request = SendMediaRequest(entity, media, reply_to_msg_id=reply_to)
+        return self.client._get_response_message(request, self.client(request))
+
     def download_file(self, location):
-        if not isinstance(location, InputFileLocation):
+        if isinstance(location, Document):
+            location = InputDocumentFileLocation(location.id, location.access_hash,
+                                                 location.version)
+        elif not isinstance(location, (InputFileLocation, InputDocumentFileLocation)):
             location = InputFileLocation(location.volume_id, location.local_id, location.secret)
 
         file = BytesIO()
@@ -161,36 +192,32 @@ class User:
             self.log.exception("Failed to handle Telegram update")
 
     def update(self, update):
-        update_type = type(update)
-
-        if update_type in {UpdateShortChatMessage, UpdateShortMessage, UpdateNewMessage,
-                           UpdateNewChannelMessage}:
+        if isinstance(update, (UpdateShortChatMessage, UpdateShortMessage, UpdateNewMessage,
+                               UpdateNewChannelMessage)):
             return self.update_message(update)
-        elif update_type in {UpdateChatUserTyping, UpdateUserTyping}:
+        elif isinstance(update, (UpdateChatUserTyping, UpdateUserTyping)):
             return self.update_typing(update)
-        elif update_type == UpdateUserStatus:
+        elif isinstance(update, UpdateUserStatus):
             return self.update_status(update)
         else:
             self.log.debug("Unhandled update: %s", update)
             return
 
     def get_message_details(self, update):
-        update_type = type(update)
-        if update_type == UpdateShortChatMessage:
+        if isinstance(update, UpdateShortChatMessage):
             portal = po.Portal.get_by_tgid(update.chat_id, "chat")
             sender = pu.Puppet.get(update.from_id)
-        elif update_type == UpdateShortMessage:
+        elif isinstance(update, UpdateShortMessage):
             portal = po.Portal.get_by_tgid(update.user_id, "user")
             sender = pu.Puppet.get(self.tgid if update.out else update.user_id)
-        elif update_type in {UpdateNewMessage, UpdateNewChannelMessage}:
+        elif isinstance(update, (UpdateNewMessage, UpdateNewChannelMessage)):
             update = update.message
             sender = pu.Puppet.get(update.from_id)
             portal = po.Portal.get_by_entity(update.to_id)
         return update, sender, portal
 
     def update_typing(self, update):
-        update_type = type(update)
-        if update_type == UpdateUserTyping:
+        if isinstance(update, UpdateUserTyping):
             portal = po.Portal.get_by_tgid(update.user_id, "user")
         else:
             portal = po.Portal.get_by_tgid(update.chat_id, "chat")
@@ -199,10 +226,9 @@ class User:
 
     def update_status(self, update):
         puppet = pu.Puppet.get(update.user_id)
-        status = type(update.status)
-        if status == UserStatusOnline:
+        if isinstance(update.status, UserStatusOnline):
             puppet.intent.set_presence("online")
-        elif status == UserStatusOffline:
+        elif isinstance(update.status, UserStatusOffline):
             puppet.intent.set_presence("offline")
         return
 
@@ -211,7 +237,8 @@ class User:
 
         if isinstance(update, MessageService):
             if isinstance(update.action, MessageActionChannelMigrateFrom):
-                self.log.debug("Ignoring action %s to %d by %d", update.action, portal.tgid, sender.id)
+                self.log.debug("Ignoring action %s to %d by %d", update.action, portal.tgid,
+                               sender.id)
                 return
             self.log.debug("Handling action %s to %d by %d", update.action, portal.tgid, sender.id)
             portal.handle_telegram_action(self, sender, update.action)
