@@ -1,6 +1,4 @@
 # mautrix-telegram
-**This is the python rewrite. The JavaScript version on the master branch has different features and more bugs**
-
 A Matrix-Telegram puppeting bridge.
 
 ## Discussion
@@ -23,11 +21,13 @@ A Telegram chat will be created once the bridge is stable enough.
 6. Invite the appservice bot to a private room and view the commands with `help`.
 
 ### Logging in
-0. Make sure you have set up the bridge and have an open management room (a room with no other users than the appservice bot).
+0. Make sure you have set up the bridge and have an open management room (a room with no other
+   users than the appservice bot).
 1. Request a Telegram auth code with `login <phone number>`.
 2. Send your auth code to the management room.
 3. If you have two-factor authentication enabled, send your password to the room.
-4. If all prior steps were executed successfully, the bridge should now create rooms for all your Telegram dialogs and invite you to them.
+4. If all prior steps were executed successfully, the bridge should now create rooms for all your
+   Telegram groups and channels and invite you to them.
 
 ### Chatting
 #### Group chats and channels
@@ -36,25 +36,28 @@ You should be automatically invited into portal rooms for your groups and channe
 2. receive a messages in the chat or
 3. receive an invite to the chat
 
-Support for inviting users both Telegram and Matrix users to Telegram portal rooms is planned, but not yet implemented.
+Inviting Telegram puppets to rooms should work. However, please don't invite non-puppet Matrix
+users to portal rooms yet.
+
+You can also create a Telegram chat for an existing Matrix room using `!tg create` in the room.
+However, there are some restrictions:
+* The room must have a title.
+* The AS bot must be invited first (before puppets) and be given power level 100.
+* The AS bot must be the only user to have power level 100.
 
 #### Private messaging
-**Initiating private chats is not yet implemented.** In order to initiate a private chat,
-send a message in either direction with another Telegram client.
+You can start private chats by simply inviting the Matrix puppet of the Telegram user you want to chat with to a private room.
 
-~~You can start private chats by simply inviting the Matrix puppet of the Telegram user you want to chat with to a private room.~~
+If you don't know the MXID of the puppet, you can search for users using the `search <query>` management command.
 
-~~If you don't know the MXID of the puppet, you can search for users using the `search <query>` management command.~~
+You can also initiate chats with the `pm` command using the username, phone number or user ID.
 
 #### Bot commands
-**Initiating private chats is not yet implemented.** In order to initiate a chat with a,
-bot, send a message to the bot with another Telegram client.
-
-~~Initiating chats with bots is no different from initiating chats with real Telegram users.~~
+Initiating chats with bots is no different from initiating chats with real Telegram users.
 
 ~~The bridge translates `!commands` into `/commands`, which allows you to use Telegram bots without constantly escaping
-the slash. Please note that when messaging a bot for the first time, it may expect you to run `!start` first. The bridge
-does not do this automatically.~~
+the slash.~~ Please note that when messaging a bot for the first time, it may expect you to run ~~`!start`~~ `/start` first.
+The bridge does not do this automatically.
 
 ## Features & Roadmap
 * Matrix → Telegram
@@ -72,11 +75,11 @@ does not do this automatically.~~
   * [ ] Pinning messages
   * [x] Power level
   * [ ] Membership actions
-    * [x] Inviting
+    * [x] Inviting puppets
+    * [ ] Inviting Matrix users who have logged in to Telegram
     * [ ] Kicking
     * [ ] Joining/leaving
   * [ ] Room metadata changes
-  * [ ] Room invites
 * Telegram → Matrix
   * [x] Plaintext messages
   * [x] Formatted messages
