@@ -61,12 +61,12 @@ class Puppet:
     @staticmethod
     def get_displayname(info, format=True):
         data = {
-            "phone_number": info.phone,
+            "phone number": info.phone,
             "username": info.username,
             "full name": " ".join([info.first_name or "", info.last_name or ""]).strip(),
             "full name reversed": " ".join([info.first_name or "", info.last_name or ""]).strip(),
             "first name": info.first_name,
-            "last_name": info.last_name,
+            "last name": info.last_name,
         }
         preferences = config.get("bridge", {}).get("displayname_preference",
                                                    ["full name", "username", "phone"])
@@ -74,6 +74,8 @@ class Puppet:
             name = data[preference]
             if name:
                 break
+        if not name:
+            name = info.id
 
         if not format:
             return name
