@@ -17,7 +17,7 @@ from telethon.tl.functions.messages import (GetFullChatRequest, EditChatAdminReq
                                             CreateChatRequest, AddChatUserRequest)
 from telethon.tl.functions.channels import (GetParticipantsRequest, CreateChannelRequest,
                                             InviteToChannelRequest)
-from telethon.errors.rpc_error_list import ChatAdminRequiredError
+from telethon.errors.rpc_error_list import ChatAdminRequiredError, LocationInvalidError
 from telethon.tl.types import *
 from PIL import Image
 from io import BytesIO
@@ -210,7 +210,10 @@ class Portal:
     def update_avatar(self, user, photo, intent=None):
         photo_id = f"{photo.volume_id}-{photo.local_id}"
         if self.photo_id != photo_id:
-            file = user.download_file(photo)
+            try:
+                file = user.download_file(photo)
+            except LocationInvalidError:
+                return False
             uploaded = self.main_intent.upload_file(file)
             self.main_intent.set_room_avatar(self.mxid, uploaded["content_uri"])
             self.photo_id = photo_id

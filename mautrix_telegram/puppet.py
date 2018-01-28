@@ -15,6 +15,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import re
 from telethon.tl.types import UserProfilePhoto
+from telethon.errors.rpc_error_list import LocationInvalidError
 from .db import Puppet as DBPuppet
 
 config = None
@@ -105,7 +106,10 @@ class Puppet:
     def update_avatar(self, source, photo):
         photo_id = f"{photo.volume_id}-{photo.local_id}"
         if self.photo_id != photo_id:
-            file = source.download_file(photo)
+            try:
+                file = source.download_file(photo)
+            except LocationInvalidError:
+                return False
             uploaded = self.intent.upload_file(file)
             self.intent.set_avatar(uploaded["content_uri"])
             self.photo_id = photo_id
