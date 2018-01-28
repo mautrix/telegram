@@ -262,7 +262,7 @@ class Portal:
                                                reply_to=reply_to)
             else:
                 response = sender.send_message(self.peer, message["body"])
-        elif type == "m.image" or type == "m.file":
+        elif type in {"m.image", "m.file", "m.audio", "m.video"}:
             file = self.main_intent.download_file(message["url"])
 
             info = message["info"]
