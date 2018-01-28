@@ -127,7 +127,7 @@ class CommandHandler:
 
         try:
             user = sender.client.sign_in(code=args[0])
-            sender.update_info(user)
+            sender.post_login(user)
             sender.command_status = None
             return self.reply(f"Successfully logged in as @{user.username}")
         except PhoneNumberUnoccupiedError:
@@ -168,7 +168,7 @@ class CommandHandler:
 
         try:
             user = sender.client.sign_in(password=args[0])
-            sender.update_info(user)
+            sender.post_login(user)
             sender.command_status = None
             return self.reply(f"Successfully logged in as @{user.username}")
         except PasswordHashInvalidError:

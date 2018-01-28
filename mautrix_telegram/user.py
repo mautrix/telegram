@@ -80,10 +80,13 @@ class User:
                                      update_workers=2)
         self.connected = self.client.connect()
         if self.logged_in:
-            self.sync_dialogs()
-            self.update_info()
+            self.post_login()
         self.client.add_update_handler(self.update_catch)
         return self
+
+    def post_login(self, info=None):
+        self.sync_dialogs()
+        self.update_info(info)
 
     def stop(self):
         self.client.disconnect()
