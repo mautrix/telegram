@@ -267,11 +267,56 @@ class CommandHandler:
             updates = sender.client(JoinChannelRequest(channel))
         for chat in updates.chats:
             portal = po.Portal.get_by_entity(chat)
-            portal.create_room(sender, chat, [sender.mxid])
+            portal.create_matrix_room(sender, chat, [sender.mxid])
+            self.reply(f"Created room for {portal.title}")
 
     @command_handler
     def create(self, sender, args):
-        self.reply("Not yet implemented.")
+        type = args[0] if len(args) > 0 else "group"
+        if type not in {"chat", "group", "supergroup", "channel"}:
+            return self.reply("**Usage:** `$cmdprefix+sp create [`group`/`supergroup`/`channel`]")
+        elif not sender.tgid:
+            return self.reply("This command requires you to be logged in.")
+
+        if po.Portal.get_by_mxid(self._room_id):
+            return self.reply("This is already a portal room.")
+
+        state = self.az.intent.get_room_state(self._room_id)
+        title = None
+        levels = None
+        for event in state:
+            if event["type"] == "m.room.name":
+                title = event["content"]["name"]
+            elif event["type"] == "m.room.power_levels":
+                levels = event["content"]
+        if not title:
+            return self.reply("Please set a title before creating a Telegram chat.")
+        elif (not levels or not levels["users"] or self.az.intent.mxid not in levels["users"] or
+              levels["users"][self.az.intent.mxid] < 100):
+            return self.reply(f"Please give "
+                              f"[the bridge bot](https://matrix.to/#/{self.az.intent.mxid}) "
+                              f"a power level of 100 before creating a Telegram chat.")
+        else:
+            for user, level in levels["users"].items():
+                if level >= 100 and user != self.az.intent.mxid:
+                    return self.reply(f"Please make sure only the bridge bot has power level above"
+                                      f"99 before creating a Telegram chat.\n\n"
+                                      f"Use power level 95 instead of 100 for admins.")
+
+        supergroup = type == "supergroup"
+        types = {
+            "supergroup": "channel",
+            "channel": "channel",
+            "chat": "chat",
+            "group": "chat",
+        }
+
+        portal = po.Portal(tgid=None, mxid=self._room_id, title=title, peer_type=types[type])
+        try:
+            portal.create_telegram_chat(sender, supergroup=supergroup)
+        except ValueError as e:
+            return self.reply(e.args[0])
+        self.reply(f"Telegram chat created. ID: {portal.tgid}")
 
     @command_handler
     def upgrade(self, sender, args):
@@ -320,9 +365,8 @@ _**Telegram actions**: commands for using the bridge to interact with Telegram._
 **pm** <_identifier_> - Open a private chat with the given Telegram user. The identifier is either
                         the internal user ID, the username or the phone number.  
 **join** <_link_> - Join a chat with an invite link.
-**create** <_group/channel_> [_room ID_] - Create a Telegram chat of the given type for a Matrix
-                                           room. If the room ID is not specified, a chat for the
-                                           current room is created.  
+**create** [_type_] - Create a Telegram chat of the given type for the current Matrix room.
+                      The type is either `group`, `supergroup` or `channel` (defaults to `group`).  
 **upgrade** - Upgrade a normal Telegram group to a supergroup.
 """
         return self.reply(management_status + help)

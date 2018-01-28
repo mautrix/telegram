@@ -72,7 +72,7 @@ does not do this automatically.~~
   * [ ] Pinning messages
   * [x] Power level
   * [ ] Membership actions
-    * [ ] Inviting
+    * [x] Inviting
     * [ ] Kicking
     * [ ] Joining/leaving
   * [ ] Room metadata changes
@@ -108,7 +108,7 @@ does not do this automatically.~~
 * Misc
   * [x] Automatic portal creation for groups/channels at startup
   * [x] Automatic portal creation for groups/channels when receiving invite/message
-  * [ ] Private chat creation by inviting Telegram user to new room
+  * [x] Private chat creation by inviting Telegram user to new room
   * [ ] Use optional bot to relay messages for unauthenticated Matrix users
   * [ ] Joining public channels/supergroups using room aliases
 * Commands
@@ -117,5 +117,5 @@ does not do this automatically.~~
   * [x] Searching for users (`search`)
   * [x] Starting private chats (`pm`)
   * [x] Joining chats with invite links (`join`)
-  * [ ] Creating a Telegram chat for an existing Matrix room (`create`)
+  * [x] Creating a Telegram chat for an existing Matrix room (`create`)
   * [ ] Upgrading the chat of a portal room into a supergroup (`upgrade`)

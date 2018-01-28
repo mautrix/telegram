@@ -196,7 +196,7 @@ class IntentAPI:
         self._ensure_joined(room_id)
         try:
             response = self.client.invite_user(room_id, user_id)
-            self.state_store.set_invited(room_id, user_id)
+            self.state_store.invited(room_id, user_id)
             return response
         except MatrixRequestError as e:
             if matrix_error_code(e) != "M_FORBIDDEN":
@@ -249,6 +249,8 @@ class IntentAPI:
 
     def send_text(self, room_id, text, html=None, type="m.text"):
         if html:
+            if not text:
+                text = html
             return self.send_message(room_id, {
                 "body": text,
                 "msgtype": type,
@@ -264,9 +266,14 @@ class IntentAPI:
     def send_message(self, room_id, body):
         return self.send_event(room_id, "m.room.message", body)
 
+    def error_and_leave(self, room_id, text, html=None):
+        self._ensure_joined(room_id)
+        self.send_notice(room_id, text, html=html)
+        self.leave_room(room_id)
+
     def kick(self, room_id, user_id, message):
         self._ensure_joined(room_id)
-        self.client.kick_user(room_id, user_id, message)
+        return self.client.kick_user(room_id, user_id, message)
 
     def send_event(self, room_id, type, body, txn_id=None):
         self._ensure_joined(room_id)
@@ -285,13 +292,17 @@ class IntentAPI:
         self.state_store.left(room_id, self.mxid)
         return self.client.leave_room(room_id)
 
-    def get_room_members(self, room_id):
+    def get_room_memberships(self, room_id):
         return self.client.get_room_members(room_id)
 
-    def get_joined_users(self, room_id):
-        memberships = self.get_room_members(room_id)
+    def get_room_members(self, room_id, allowed_memberships=("join",)):
+        memberships = self.get_room_memberships(room_id)
         return [membership["state_key"] for membership in memberships["chunk"] if
-                membership["content"]["membership"] == "join"]
+                membership["content"]["membership"] in allowed_memberships]
+
+    def get_room_state(self, room_id):
+        self._ensure_joined(room_id)
+        return self.client.get_room_state(room_id)
 
     # endregion
     # region Ensure functions

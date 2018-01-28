@@ -24,6 +24,7 @@ class Puppet:
     log = None
     db = None
     az = None
+    mxid_regex = None
     cache = {}
 
     def __init__(self, id=None, username=None, displayname=None, photo_id=None):

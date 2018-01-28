@@ -13,8 +13,10 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
-from telethon.tl.functions.messages import GetFullChatRequest, EditChatAdminRequest
-from telethon.tl.functions.channels import GetParticipantsRequest
+from telethon.tl.functions.messages import (GetFullChatRequest, EditChatAdminRequest,
+                                            CreateChatRequest, AddChatUserRequest)
+from telethon.tl.functions.channels import (GetParticipantsRequest, CreateChannelRequest,
+                                            InviteToChannelRequest)
 from telethon.errors.rpc_error_list import ChatAdminRequiredError
 from telethon.tl.types import *
 from PIL import Image
@@ -43,7 +45,8 @@ class Portal:
         self.photo_id = photo_id
         self._main_intent = None
 
-        self.by_tgid[tgid] = self
+        if tgid:
+            self.by_tgid[tgid] = self
         if mxid:
             self.by_mxid[mxid] = self
 
@@ -73,7 +76,7 @@ class Portal:
             for user in users:
                 self.main_intent.invite(self.mxid, user)
 
-    def create_room(self, user, entity=None, invites=[], update_if_exists=True):
+    def create_matrix_room(self, user, entity=None, invites=[], update_if_exists=True):
         if not entity:
             entity = user.client.get_entity(self.peer)
             self.log.debug("Fetched data: %s", entity)
@@ -278,6 +281,59 @@ class Portal:
                     EditChatAdminRequest(chat_id=self.tgid, user_id=user_id, is_admin=level >= 50))
 
     # endregion
+    # region Telegram chat info updating
+
+    def _get_telegram_users_in_matrix_room(self):
+        user_tgids = set()
+        user_mxids = self.main_intent.get_room_members(self.mxid, ("join", "invite"))
+        for user in user_mxids:
+            if user == self.az.intent.mxid:
+                continue
+            mx_user = u.User.get_by_mxid(user, create=False)
+            if mx_user and mx_user.tgid:
+                user_tgids.add(mx_user.tgid)
+            puppet_match = p.Puppet.mxid_regex.match(user)
+            if puppet_match:
+                user_tgids.add(int(puppet_match.group(1)))
+        return user_tgids
+
+    def create_telegram_chat(self, source, supergroup=False):
+        if not self.mxid:
+            raise ValueError("Can't create Telegram chat for portal without Matrix room.")
+        elif self.tgid:
+            raise ValueError("Can't create Telegram chat for portal with existing Telegram chat.")
+
+        invites = self._get_telegram_users_in_matrix_room()
+        if len(invites) < 2:
+            # TODO when we get the option for a bot, this won't happen when the bot is activated.
+            raise ValueError("Not enough Telegram users to create a chat")
+
+        invites = [source.client.get_input_entity(id) for id in invites]
+
+        if self.peer_type == "chat":
+            updates = source.client(CreateChatRequest(title=self.title, users=invites))
+        elif self.peer_type == "channel":
+            updates = source.client(CreateChannelRequest(title=self.title, megagroup=supergroup))
+            # TODO invite people
+        else:
+            raise ValueError("Invalid peer type for Telegram chat creation")
+
+        entity = updates.chats[0]
+        self.tgid = entity.id
+        self.update_info(source, entity)
+        self.save()
+
+    def invite_telegram(self, source, puppet):
+        if self.peer_type == "chat":
+            source.client(AddChatUserRequest(chat_id=self.tgid, user_id=puppet.tgid, fwd_limit=0))
+        elif self.peer_type == "channel":
+            source.client(InviteToChannelRequest(channel=self.peer,
+                                                 users=[InputUser(user_id=puppet.tgid)],
+                                                 fwd_limit=0))
+        else:
+            raise ValueError("Invalid peer type for Telegram user invite")
+
+    # endregion
     # region Telegram event handling
 
     def handle_telegram_typing(self, user, event):
@@ -342,7 +398,7 @@ class Portal:
             type = "m.image"
         sender.intent.set_typing(self.mxid, is_typing=False)
         return sender.intent.send_file(self.mxid, uploaded["content_uri"], info=info, text=name,
-                                type=type)
+                                       type=type)
 
     def handle_telegram_location(self, source, sender, location):
         long = location.long
@@ -376,7 +432,7 @@ class Portal:
 
     def handle_telegram_message(self, source, sender, evt):
         if not self.mxid:
-            self.create_room(source, invites=[source.mxid])
+            self.create_matrix_room(source, invites=[source.mxid])
 
         if evt.message:
             response = self.handle_telegram_text(source, sender, evt)
@@ -403,7 +459,7 @@ class Portal:
             create_and_exit = (MessageActionChatCreate, MessageActionChannelCreate)
             create_and_continue = (MessageActionChatAddUser, MessageActionChatJoinedByLink)
             if isinstance(action, create_and_exit + create_and_continue):
-                self.create_room(source, invites=[source.mxid])
+                self.create_matrix_room(source, invites=[source.mxid])
             if not isinstance(action, create_and_continue):
                 return
 
@@ -485,6 +541,9 @@ class Portal:
     def save(self):
         self.to_db()
         self.db.commit()
+
+    def delete(self):
+        self.db.delete(self.to_db())
 
     @classmethod
     def from_db(cls, db_portal):

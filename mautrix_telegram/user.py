@@ -173,7 +173,7 @@ class User:
                 or isinstance(entity, (ChannelForbidden, ChatForbidden))):
                 continue
             portal = po.Portal.get_by_entity(entity)
-            portal.create_room(self, entity, invites=[self.mxid])
+            portal.create_matrix_room(self, entity, invites=[self.mxid])
 
     # endregion
     # region Telegram update handling

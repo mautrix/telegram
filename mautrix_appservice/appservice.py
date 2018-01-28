@@ -44,7 +44,7 @@ class StateStore:
         return self._set_membership(room, user, "join")
 
     def invited(self, room, user):
-        return self._set_membership(room, user, "invited")
+        return self._set_membership(room, user, "invite")
 
     def left(self, room, user):
         return self._set_membership(room, user, "left")
