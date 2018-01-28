@@ -97,9 +97,11 @@ class User:
         self.connected = False
         if self.tgid:
             try:
-                del self.tgid[self.tgid]
+                del self.by_tgid[self.tgid]
             except KeyError:
                 pass
+            self.tgid = None
+            self.save()
         return self.client.log_out()
 
     def send_message(self, entity, message, reply_to=None, entities=None, link_preview=True):

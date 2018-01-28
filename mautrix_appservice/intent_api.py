@@ -187,9 +187,10 @@ class IntentAPI:
     # region Room actions
 
     def create_room(self, alias=None, is_public=False, name=None, topic=None, is_direct=False,
-                    invitees=()):
+                    invitees=(), initial_state=[]):
         self._ensure_registered()
-        return self.client.create_room(alias, is_public, name, topic, is_direct, invitees)
+        return self.client.create_room(alias, is_public, name, topic, is_direct, invitees,
+                                       initial_state)
 
     def invite(self, room_id, user_id):
         self._ensure_joined(room_id)

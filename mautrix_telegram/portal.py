@@ -98,28 +98,25 @@ class Portal:
         puppet = p.Puppet.get(self.tgid) if direct else None
         intent = puppet.intent if direct else self.az.intent
 
-        power_level_requirement = 0 if self.peer_type == "chat" else 50
-        initial_power_levels = {
-            "ban": 100,
-            "events": {
-                "m.room.name": power_level_requirement,
-                "m.room.avatar": power_level_requirement,
-                "m.room.topic": 50,
-                "m.room.power_levels": 50,
-                "invite": power_level_requirement,
-            },
-            "users_default": 0,
-        }
-
         # TODO set room alias if public channel.
-        room = intent.create_room(invitees=invites, name=title, is_direct=direct,
-                                  initial_state=[initial_power_levels])
+        room = intent.create_room(invitees=invites, name=title, is_direct=direct)
         if not room:
             raise Exception(f"Failed to create room for {self.tgid}")
 
         self.mxid = room["room_id"]
         self.by_mxid[self.mxid] = self
         self.save()
+
+        power_level_requirement = 0 if self.peer_type == "chat" else 50
+        levels = self.main_intent.get_power_levels(self.mxid)
+        levels["ban"] = 100
+        levels["invite"] = 50
+        levels["events"]["m.room.name"] = power_level_requirement
+        levels["events"]["m.room.avatar"] = power_level_requirement
+        levels["events"]["m.room.topic"] = 50 if self.peer_type == "channel" else 100
+        levels["events"]["m.room.power_levels"] = 95
+        self.main_intent.set_power_levels(self.mxid, levels)
+
         if not direct:
             self.update_info(user, entity)
             users, participants = self.get_users(user, entity)
@@ -397,11 +394,11 @@ class Portal:
 
     def handle_telegram_action(self, source, sender, action):
         if not self.mxid:
-            create_and_exit = [MessageActionChatCreate, MessageActionChannelCreate]
-            create_and_continue = [MessageActionChatAddUser, MessageActionChatJoinedByLink]
+            create_and_exit = (MessageActionChatCreate, MessageActionChannelCreate)
+            create_and_continue = (MessageActionChatAddUser, MessageActionChatJoinedByLink)
             if isinstance(action, create_and_exit + create_and_continue):
                 self.create_room(source, invites=[source.mxid])
-            if isinstance(action, create_and_exit):
+            if not isinstance(action, create_and_continue):
                 return
 
         if isinstance(action, MessageActionChatEditTitle):

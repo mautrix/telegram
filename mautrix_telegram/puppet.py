@@ -29,7 +29,8 @@ class Puppet:
     def __init__(self, id=None, username=None, displayname=None, photo_id=None):
         self.id = id
 
-        self.localpart = config.get("bridge.username_template", "telegram_{userid}").format(userid=self.id)
+        self.localpart = config.get("bridge.username_template", "telegram_{userid}").format(
+            userid=self.id)
         hs = config["homeserver"]["domain"]
         self.mxid = f"@{self.localpart}:{hs}"
         self.username = username
@@ -75,7 +76,8 @@ class Puppet:
 
         if not format:
             return name
-        return config.get("bridge.displayname_template", "{displayname} (Telegram)").format(displayname=name)
+        return config.get("bridge.displayname_template", "{displayname} (Telegram)").format(
+            displayname=name)
 
     def update_info(self, source, info):
         changed = False

@@ -16,6 +16,11 @@
 from contextlib import contextmanager
 import markdown
 from telethon.errors import *
+from telethon.tl.types import *
+from telethon.tl.functions.contacts import SearchRequest
+from telethon.tl.functions.messages import ImportChatInviteRequest, CheckChatInviteRequest
+from telethon.tl.functions.channels import JoinChannelRequest
+from . import puppet as pu, portal as po
 
 command_handlers = {}
 
@@ -37,7 +42,12 @@ class CommandHandler:
 
     def handle(self, room, sender, command, args, is_management, is_portal):
         with self.handler(sender, room, command, args, is_management, is_portal) as handle_command:
-            handle_command(self, sender, args)
+            try:
+                handle_command(self, sender, args)
+            except:
+                self.reply("Fatal error while handling command. Check logs for more details.")
+                self.log.exception(f"Fatal error handling command "
+                                   f"'$cmdprefix {command} {''.join(args)}' from {sender.mxid}")
 
     @contextmanager
     def handler(self, sender, room, command, args, is_management, is_portal):
@@ -62,9 +72,9 @@ class CommandHandler:
             raise AttributeError("the reply function can only be used from within"
                                  "the `CommandHandler.run` context manager")
 
-        message = message.replace("$cmdprefix", self.command_prefix)
         message = message.replace("$cmdprefix+sp ",
                                   "" if self._is_management else f"{self.command_prefix} ")
+        message = message.replace("$cmdprefix", self.command_prefix)
         html = None
         if render_markdown:
             html = markdown.markdown(message, safe_mode="escape" if allow_html else False)
@@ -165,7 +175,7 @@ class CommandHandler:
             return self.reply("Incorrect password.")
         except:
             self.log.exception()
-            return self.reply("Unhandled exception while sending password."
+            return self.reply("Unhandled exception while sending password. "
                               "Check console for more details.")
 
     @command_handler
@@ -181,11 +191,83 @@ class CommandHandler:
 
     @command_handler
     def search(self, sender, args):
-        self.reply("Not yet implemented.")
+        if len(args) == 0:
+            return self.reply("**Usage:** `$cmdprefix+sp search [-r|--remote] <query>")
+        elif not sender.tgid:
+            return self.reply("This command requires you to be logged in.")
+        force_remote = False
+        if args[0] in {"-r", "--remote"}:
+            args.pop(0)
+        query = " ".join(args)
+        if len(query) < 5:
+            return self.reply("Minimum length of query for remote search is 5 characters.")
+        found = sender.client(SearchRequest(q=query, limit=10))
+        print(found)
+        # reply = ["**People:**", ""]
+        reply = ["**Results from Telegram server:**", ""]
+        for result in found.users:
+            puppet = pu.Puppet.get(result.id)
+            puppet.update_info(sender, result)
+            reply.append(
+                f"* [{puppet.displayname}](https://matrix.to/#/{puppet.mxid}): {puppet.id}")
+        # reply.extend(("", "**Chats:**", ""))
+        # for result in found.chats:
+        #     reply.append(f"* {result.title}")
+        return self.reply("\n".join(reply))
 
     @command_handler
     def pm(self, sender, args):
-        self.reply("Not yet implemented.")
+        if len(args) == 0:
+            return self.reply("**Usage:** `$cmdprefix+sp pm <user identifier>")
+        elif not sender.tgid:
+            return self.reply("This command requires you to be logged in.")
+
+        user = sender.client.get_entity(args[0])
+        if not user:
+            return self.reply("User not found.")
+        elif not isinstance(user, User):
+            return self.reply("That doesn't seem to be a user.")
+        print(user)
+
+    def _strip_prefix(self, value, prefixes):
+        for prefix in prefixes:
+            if value.startswith(prefix):
+                return value[len(prefix):]
+        return value
+
+    @command_handler
+    def join(self, sender, args):
+        if len(args) == 0:
+            return self.reply("**Usage:** `$cmdprefix+sp join <invite link>")
+        elif not sender.tgid:
+            return self.reply("This command requires you to be logged in.")
+
+        regex = re.compile(r"(?:https?://)?t(?:elegram)?\.(?:dog|me)(?:joinchat/)?/(.+)")
+        arg = regex.match(args[0])
+        if not arg:
+            return self.reply("That doesn't look like a Telegram invite link.")
+        arg = arg.group(1)
+        if arg.startswith("joinchat/"):
+            invite_hash = arg[len("joinchat/"):]
+            try:
+                check = sender.client(CheckChatInviteRequest(invite_hash))
+                print(check)
+            except InviteHashInvalidError:
+                return self.reply("Invalid invite link.")
+            except InviteHashExpiredError:
+                return self.reply("Invite link expired.")
+            try:
+                updates = sender.client(ImportChatInviteRequest(invite_hash))
+            except UserAlreadyParticipantError:
+                return self.reply("You are already in that chat.")
+        else:
+            channel = sender.client.get_entity(arg)
+            if not channel:
+                return self.reply("Channel/supergroup not found.")
+            updates = sender.client(JoinChannelRequest(channel))
+        for chat in updates.chats:
+            portal = po.Portal.get_by_entity(chat)
+            portal.create_room(sender, chat, [sender.mxid])
 
     @command_handler
     def create(self, sender, args):
@@ -235,9 +317,12 @@ _**Telegram actions**: commands for using the bridge to interact with Telegram._
 **logout** - Log out from Telegram.  
 **ping** - Check if you're logged into Telegram.  
 **search** [_-r|--remote_] <_query_> - Search your contacts or the Telegram servers for users.  
-**pm** <_id_> - Open a private chat with the given Telegram user ID.
-**create** <_group/channel_> [_room ID_] - Create a Telegram chat of the given type for a Matrix room.
-                                           If the room ID is not specified, a chat for the current room is created.  
+**pm** <_identifier_> - Open a private chat with the given Telegram user. The identifier is either
+                        the internal user ID, the username or the phone number.  
+**join** <_link_> - Join a chat with an invite link.
+**create** <_group/channel_> [_room ID_] - Create a Telegram chat of the given type for a Matrix
+                                           room. If the room ID is not specified, a chat for the
+                                           current room is created.  
 **upgrade** - Upgrade a normal Telegram group to a supergroup.
 """
         return self.reply(management_status + help)
