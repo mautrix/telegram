@@ -29,7 +29,7 @@ class Puppet:
     def __init__(self, id=None, username=None, displayname=None, photo_id=None):
         self.id = id
 
-        self.localpart = config.get("bridge.alias_template", "telegram_{}").format(self.id)
+        self.localpart = config.get("bridge.username_template", "telegram_{userid}").format(userid=self.id)
         hs = config["homeserver"]["domain"]
         self.mxid = f"@{self.localpart}:{hs}"
         self.username = username
@@ -75,7 +75,7 @@ class Puppet:
 
         if not format:
             return name
-        return config.get("bridge.displayname_template", "{} (Telegram)").format(name)
+        return config.get("bridge.displayname_template", "{displayname} (Telegram)").format(displayname=name)
 
     def update_info(self, source, info):
         changed = False
@@ -141,6 +141,6 @@ def init(context):
     global config
     Puppet.az, Puppet.db, log, config = context
     Puppet.log = log.getChild("puppet")
-    localpart = config.get("bridge.alias_template", "telegram_{}").format("(.+)")
+    localpart = config.get("bridge.username_template", "telegram_{userid}").format(userid="(.+)")
     hs = config["homeserver"]["domain"]
     Puppet.mxid_regex = re.compile(f"@{localpart}:{hs}")

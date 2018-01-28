@@ -26,7 +26,7 @@ class MatrixHandler:
         self.log = log.getChild("mx")
         self.commands = CommandHandler(context)
 
-        alias_format = self.config.get("bridge.alias_template", "telegram_{}").format("(.+)")
+        alias_format = self.config.get("bridge.alias_template", "telegram_{groupname}").format(groupname="(.+)")
         hs = self.config["homeserver"]["domain"]
         self.localpart_regex = re.compile(f"@{alias_format}:{hs}")
 

@@ -30,14 +30,14 @@ appservice:
 # Bridge config
 bridge:
     # Localpart template of MXIDs for Telegram users.
-    # {} is replaced with the user ID of the Telegram user.
-    username_template: "telegram_{}"
+    # {userid} is replaced with the user ID of the Telegram user.
+    username_template: "telegram_{userid}"
     # Localpart template of room aliases for Telegram portal rooms.
-    # {} is replaced with the name part of the public channel/group invite link ( https://t.me/{} )
-    alias_template: "telegram_{}"
+    # {groupname} is replaced with the name part of the public channel/group invite link ( https://t.me/{} )
+    alias_template: "telegram_{groupname}"
     # Displayname template for Telegram users.
-    # {} is replaced with the display name of the Telegram user.
-    displayname_template: "{} (Telegram)"
+    # {displayname} is replaced with the display name of the Telegram user.
+    displayname_template: "{displayname} (Telegram)"
 
     # Set the preferred order of user identifiers which to use in the Matrix puppet display name.
     # In the (hopefully unlikely) scenario that none of the given keys are found, the numeric user ID is used.

@@ -82,8 +82,8 @@ class Config(DictWithRecursion):
     def generate_registration(self):
         homeserver = self["homeserver.domain"]
 
-        username_format = self.get("bridge.username_template", "telegram_{}").format(".+")
-        alias_format = self.get("bridge.alias_template", "telegram_{}").format(".+")
+        username_format = self.get("bridge.username_template", "telegram_{userid}").format(userid=".+")
+        alias_format = self.get("bridge.alias_template", "telegram_{groupname}").format(groupname=".+")
 
         self.set("appservice.as_token", self._new_token())
         self.set("appservice.hs_token", self._new_token())
@@ -100,7 +100,7 @@ class Config(DictWithRecursion):
                 }],
                 "aliases": [{
                     "exclusive": True,
-                    "regex": f"@{alias_format}:{homeserver}"
+                    "regex": f"#{alias_format}:{homeserver}"
                 }]
             },
             "url": f"{appservice.get('protocol')}://{appservice.get('hostname')}:{appservice.get('port')}",
