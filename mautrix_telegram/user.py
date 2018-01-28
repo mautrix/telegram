@@ -147,7 +147,7 @@ class User:
 
         file_handle = self.client.upload_file(file, file_name=file_name, use_cache=False)
 
-        if mime_type.startswith("image/"):
+        if mime_type == "image/png":
             media = InputMediaUploadedPhoto(file_handle, caption or "")
         else:
             attr_dict = {type(attr): attr for attr in attributes}

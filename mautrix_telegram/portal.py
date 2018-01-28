@@ -26,6 +26,8 @@ import magic
 from .db import Portal as DBPortal, Message as DBMessage
 from . import puppet as p, user as u, formatter
 
+mimetypes.init()
+
 config = None
 
 
@@ -233,6 +235,18 @@ class Portal:
     # endregion
     # region Matrix event handling
 
+    def _get_file_meta(self, body, mime):
+        file_name = None
+        try:
+            current_extension = body[body.rindex("."):]
+            if mimetypes.types_map[current_extension] == mime:
+                file_name = body
+            else:
+                file_name = f"matrix_upload{mimetypes.guess_extension(mime)}"
+        except (ValueError, KeyError):
+            file_name = f"matrix_upload{mimetypes.guess_extension(mime)}"
+        return file_name, None if file_name == body else body
+
     def handle_matrix_message(self, sender, message, event_id):
         type = message["msgtype"]
         if type == "m.text":
@@ -252,12 +266,9 @@ class Portal:
             file = self.main_intent.download_file(message["url"])
 
             info = message["info"]
-            body = message["body"]
             mime = info["mimetype"]
 
-            extension = mimetypes.guess_extension(mime)
-            file_name = body if body.endswith(extension) else f"matrix_upload{extension}"
-            caption = None if file_name == body else body
+            file_name, caption = self._get_file_meta(message["body"], mime)
 
             attributes = [DocumentAttributeFilename(file_name=file_name)]
             if "w" in info and "h" in info:
