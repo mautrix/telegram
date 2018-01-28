@@ -38,6 +38,11 @@ class User:
         self.command_status = None
         self.connected = False
         self.client = None
+        whitelist = config.get("bridge", {}).get("whitelist", [self.mxid])
+        self.whitelisted = self.mxid in whitelist
+        if not self.whitelisted:
+            homeserver = self.mxid[self.mxid.index(":")+1:]
+            self.whitelisted = homeserver in whitelist
 
         self.by_mxid[mxid] = self
         if tgid:
@@ -46,6 +51,10 @@ class User:
     @property
     def logged_in(self):
         return self.client.is_user_authorized()
+
+    @property
+    def has_full_access(self):
+        return self.logged_in and self.whitelisted
 
     # region Database conversion
 

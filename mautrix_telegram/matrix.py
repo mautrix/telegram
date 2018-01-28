@@ -43,6 +43,10 @@ class MatrixHandler:
 
     def handle_puppet_invite(self, room, puppet, inviter):
         self.log.debug(f"{inviter} invited puppet for {puppet.tgid} to {room}")
+        if not inviter.logged_in:
+            puppet.intent.error_and_leave(
+                room, text="Please log in before inviting Telegram puppets.")
+            return
         portal = Portal.get_by_mxid(room)
         if portal:
             if portal.peer_type == "user":
@@ -89,10 +93,10 @@ class MatrixHandler:
 
     def handle_invite(self, room, user, inviter):
         inviter = User.get_by_mxid(inviter)
-        if user == self.az.bot_mxid:
-            self.az.intent.join_room(room)
+        if not inviter.whitelisted:
             return
-        elif not inviter.tgid:
+        elif user == self.az.bot_mxid:
+            self.az.intent.join_room(room)
             return
         puppet = self.get_puppet(user)
         if puppet:
@@ -101,9 +105,28 @@ class MatrixHandler:
         # These can probably be ignored
         self.log.debug(f"{inviter} invited {user} to {room}")
 
+    def handle_join(self, room, user):
+        user = User.get_by_mxid(user)
+
+        portal = Portal.get_by_mxid(room)
+        if not portal:
+            return
+
+        if not user.whitelisted:
+            portal.main_intent.kick(room, user.mxid,
+                                    "You are not whitelisted on this Telegram bridge.")
+            return
+        elif not user.logged_in:
+            portal.main_intent.kick(room, user.mxid,
+                                    "You are not logged into this Telegram bridge.")
+            return
+
+        self.log.debug(f"{user} joined {room}")
+        # TODO join Telegram chat if applicable
+
     def handle_part(self, room, user):
         self.log.debug(f"{user} left {room}")
-        user = User.get_by_mxid(user, create=False)
+        # user = User.get_by_mxid(user, create=False)
 
     def is_command(self, message):
         text = message.get("body", "")
@@ -120,7 +143,7 @@ class MatrixHandler:
         sender = User.get_by_mxid(sender)
 
         portal = Portal.get_by_mxid(room)
-        if sender.tgid and portal and not is_command:
+        if sender.has_full_access and portal and not is_command:
             portal.handle_matrix_message(sender, message, event_id)
             return
 
@@ -142,13 +165,13 @@ class MatrixHandler:
     def handle_redaction(self, room, sender, event_id):
         portal = Portal.get_by_mxid(room)
         sender = User.get_by_mxid(sender)
-        if sender.tgid and portal:
+        if sender.has_full_access and portal:
             portal.handle_matrix_deletion(sender, event_id)
 
     def handle_power_levels(self, room, sender, new, old):
         portal = Portal.get_by_mxid(room)
         sender = User.get_by_mxid(sender)
-        if sender.tgid and portal:
+        if sender.has_full_access and portal:
             sender = User.get_by_mxid(sender)
             portal.handle_matrix_power_levels(sender, new["users"], old["users"])
 
@@ -168,8 +191,7 @@ class MatrixHandler:
             elif membership == "leave":
                 self.handle_part(evt["room_id"], evt["state_key"])
             elif membership == "join":
-                # TODO handle when needed
-                pass
+                self.handle_join(evt["room_id"], evt["state_key"])
         elif type == "m.room.message":
             self.handle_message(evt["room_id"], evt["sender"], content, evt["event_id"])
         elif type == "m.room.redaction":
