@@ -298,6 +298,7 @@ class Portal:
             "mimetype": mime_type,
         }
         name = media.caption
+        sender.intent.set_typing(self.mxid, is_typing=False)
         return sender.intent.send_image(self.mxid, uploaded["content_uri"], info=info, text=name)
 
     @staticmethod
@@ -339,6 +340,7 @@ class Portal:
             type = "m.audio"
         elif mime_type.startswith("image/"):
             type = "m.image"
+        sender.intent.set_typing(self.mxid, is_typing=False)
         return sender.intent.send_file(self.mxid, uploaded["content_uri"], info=info, text=name,
                                 type=type)
 
@@ -366,14 +368,18 @@ class Portal:
             "formatted_body": formatted_body,
         })
 
+    def handle_telegram_text(self, source, sender, evt):
+        self.log.debug("Sending %s to %s by %d", evt.message, self.mxid, sender.id)
+        text, html = formatter.telegram_event_to_matrix(evt, source)
+        sender.intent.set_typing(self.mxid, is_typing=False)
+        return sender.intent.send_text(self.mxid, text, html=html)
+
     def handle_telegram_message(self, source, sender, evt):
         if not self.mxid:
             self.create_room(source, invites=[source.mxid])
 
         if evt.message:
-            self.log.debug("Sending %s to %s by %d", evt.message, self.mxid, sender.id)
-            text, html = formatter.telegram_event_to_matrix(evt, source)
-            response = sender.intent.send_text(self.mxid, text, html=html)
+            response = self.handle_telegram_text(source, sender, evt)
         elif evt.media:
             if isinstance(evt.media, MessageMediaPhoto):
                 response = self.handle_telegram_photo(source, sender, evt.media)
