@@ -18,10 +18,12 @@ from .base import Base
 
 
 class Portal(Base):
+    query = None
     __tablename__ = "portal"
 
     # Telegram chat information
     tgid = Column(Integer, primary_key=True)
+    tg_receiver = Column(Integer, primary_key=True)
     peer_type = Column(String)
 
     # Matrix portal information
@@ -34,6 +36,7 @@ class Portal(Base):
 
 
 class Message(Base):
+    query = None
     __tablename__ = "message"
 
     mxid = Column(String)
@@ -45,6 +48,7 @@ class Message(Base):
 
 
 class User(Base):
+    query = None
     __tablename__ = "user"
 
     mxid = Column(String, primary_key=True)
@@ -53,6 +57,7 @@ class User(Base):
 
 
 class Puppet(Base):
+    query = None
     __tablename__ = "puppet"
 
     id = Column(Integer, primary_key=True)

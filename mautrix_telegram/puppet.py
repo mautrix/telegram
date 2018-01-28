@@ -86,17 +86,19 @@ class Puppet:
             self.username = info.username
             changed = True
 
-        displayname = self.get_displayname(info)
-        if displayname != self.displayname:
-            self.intent.set_display_name(displayname)
-            self.displayname = displayname
-            changed = True
-
+        changed = self.update_displayname(source, info) or changed
         if isinstance(info.photo, UserProfilePhoto):
             changed = self.update_avatar(source, info.photo.photo_big)
 
         if changed:
             self.save()
+
+    def update_displayname(self, source, info):
+        displayname = self.get_displayname(info)
+        if displayname != self.displayname:
+            self.intent.set_display_name(displayname)
+            self.displayname = displayname
+            return True
 
     def update_avatar(self, source, photo):
         photo_id = f"{photo.volume_id}-{photo.local_id}"

@@ -218,7 +218,7 @@ class CommandHandler:
     @command_handler
     def pm(self, sender, args):
         if len(args) == 0:
-            return self.reply("**Usage:** `$cmdprefix+sp pm <user identifier>")
+            return self.reply("**Usage:** `$cmdprefix+sp pm <user identifier>`")
         elif not sender.tgid:
             return self.reply("This command requires you to be logged in.")
 
@@ -227,7 +227,9 @@ class CommandHandler:
             return self.reply("User not found.")
         elif not isinstance(user, User):
             return self.reply("That doesn't seem to be a user.")
-        print(user)
+        portal = po.Portal.get_by_entity(user, sender.tgid)
+        portal.create_matrix_room(sender, user, [sender.mxid])
+        self.reply(f"Created private chat room with {pu.Puppet.get_displayname(user, False)}")
 
     def _strip_prefix(self, value, prefixes):
         for prefix in prefixes:

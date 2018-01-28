@@ -69,7 +69,7 @@ class MatrixHandler:
                 return
 
             puppet.intent.join_room(room)
-            existing_portal = Portal.get_by_tgid(puppet.tgid, "user")
+            existing_portal = Portal.get_by_tgid(puppet.tgid, inviter.tgid, "user")
             if existing_portal:
                 try:
                     puppet.intent.invite(existing_portal.mxid, inviter.mxid)
@@ -83,7 +83,7 @@ class MatrixHandler:
                 except MatrixRequestError:
                     existing_portal.delete()
 
-            portal = Portal(tgid=puppet.tgid, peer_type="user", mxid=room)
+            portal = Portal(tgid=puppet.tgid, tg_receiver=inviter.tgid, peer_type="user", mxid=room)
             portal.save()
             puppet.intent.send_notice(room, "Portal to private chat created.")
         else:

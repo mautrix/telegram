@@ -36,9 +36,11 @@ class Portal:
     by_mxid = {}
     by_tgid = {}
 
-    def __init__(self, tgid, peer_type, mxid=None, username=None, title=None, photo_id=None):
+    def __init__(self, tgid, peer_type, tg_receiver=None, mxid=None, username=None, title=None,
+                 photo_id=None):
         self.mxid = mxid
         self.tgid = tgid
+        self.tg_receiver = tg_receiver or tgid
         self.peer_type = peer_type
         self.username = username
         self.title = title
@@ -46,9 +48,19 @@ class Portal:
         self._main_intent = None
 
         if tgid:
-            self.by_tgid[tgid] = self
+            self.by_tgid[self.tgid_full] = self
         if mxid:
             self.by_mxid[mxid] = self
+
+    @property
+    def tgid_full(self):
+        return self.tgid, self.tg_receiver
+
+    @property
+    def tgid_log(self):
+        if self.tgid == self.tg_receiver:
+            return self.tgid
+        return f"{self.tg_receiver}<->{self.tgid}"
 
     @property
     def peer(self):
@@ -76,35 +88,44 @@ class Portal:
             for user in users:
                 self.main_intent.invite(self.mxid, user)
 
+    def update_after_create(self, user, entity, direct, puppet=None):
+        if not direct:
+            self.update_info(user, entity)
+            users, participants = self.get_users(user, entity)
+            self.sync_telegram_users(user, users)
+            self.update_telegram_participants(participants)
+        else:
+            if not puppet:
+                puppet = p.Puppet.get(self.tgid)
+            puppet.update_info(user, entity)
+            puppet.intent.join_room(self.mxid)
+
     def create_matrix_room(self, user, entity=None, invites=[], update_if_exists=True):
         if not entity:
             entity = user.client.get_entity(self.peer)
             self.log.debug("Fetched data: %s", entity)
+        direct = self.peer_type == "user"
 
         if self.mxid:
             if update_if_exists:
-                self.update_info(user, entity)
-                users, participants = self.get_users(user, entity)
-                self.sync_telegram_users(user, users)
-                self.update_telegram_participants(participants)
+                self.update_after_create(user, entity, direct)
             self.invite_matrix(invites)
             return self.mxid
 
-        self.log.debug("Creating room for %d", self.tgid)
+        self.log.debug(f"Creating room for {self.tgid_log}")
 
         try:
             title = entity.title
         except AttributeError:
             title = None
 
-        direct = self.peer_type == "user"
         puppet = p.Puppet.get(self.tgid) if direct else None
         intent = puppet.intent if direct else self.az.intent
 
         # TODO set room alias if public channel.
         room = intent.create_room(invitees=invites, name=title, is_direct=direct)
         if not room:
-            raise Exception(f"Failed to create room for {self.tgid}")
+            raise Exception(f"Failed to create room for {self.tgid_log}")
 
         self.mxid = room["room_id"]
         self.by_mxid[self.mxid] = self
@@ -119,15 +140,7 @@ class Portal:
         levels["events"]["m.room.topic"] = 50 if self.peer_type == "channel" else 100
         levels["events"]["m.room.power_levels"] = 95
         self.main_intent.set_power_levels(self.mxid, levels)
-
-        if not direct:
-            self.update_info(user, entity)
-            users, participants = self.get_users(user, entity)
-            self.sync_telegram_users(user, users)
-            self.update_telegram_participants(participants)
-        else:
-            puppet.update_info(user, entity)
-            puppet.intent.join_room(self.mxid)
+        self.update_after_create(user, entity, direct, puppet)
 
     def sync_telegram_users(self, source, users=[]):
         for entity in users:
@@ -158,10 +171,10 @@ class Portal:
 
     def update_info(self, user, entity=None):
         if self.peer_type == "user":
-            self.log.warn("Called update_info() for direct chat portal %d", self.tgid)
+            self.log.warn(f"Called update_info() for direct chat portal {self.tgid_log}")
             return
 
-        self.log.debug("Updating info of %d", self.tgid)
+        self.log.debug(f"Updating info of {self.tgid_log}")
         if not entity:
             entity = user.client.get_entity(self.peer)
             self.log.debug("Fetched data: %s", entity)
@@ -213,7 +226,7 @@ class Portal:
                 ))
                 return participants.users, participants.participants
             except ChatAdminRequiredError:
-                return []
+                return [], []
         elif self.peer_type == "user":
             return [entity], []
 
@@ -320,6 +333,7 @@ class Portal:
 
         entity = updates.chats[0]
         self.tgid = entity.id
+        self.tg_receiver = self.tgid
         self.update_info(source, entity)
         self.save()
 
@@ -425,7 +439,7 @@ class Portal:
         })
 
     def handle_telegram_text(self, source, sender, evt):
-        self.log.debug("Sending %s to %s by %d", evt.message, self.mxid, sender.id)
+        self.log.debug(f"Sending {evt.message} to {self.mxid} by {sender.id}")
         text, html = formatter.telegram_event_to_matrix(evt, source)
         sender.intent.set_typing(self.mxid, is_typing=False)
         return sender.intent.send_text(self.mxid, text, html=html)
@@ -525,17 +539,18 @@ class Portal:
     # region Database conversion
 
     def to_db(self):
-        return self.db.merge(DBPortal(tgid=self.tgid, peer_type=self.peer_type, mxid=self.mxid,
-                                      username=self.username, title=self.title,
-                                      photo_id=self.photo_id))
+        return self.db.merge(
+            DBPortal(tgid=self.tgid, tg_receiver=self.tg_receiver, peer_type=self.peer_type,
+                     mxid=self.mxid, username=self.username, title=self.title,
+                     photo_id=self.photo_id))
 
     def migrate_and_save(self, new_id):
-        existing = DBPortal.query.get(self.tgid)
+        existing = DBPortal.query.get(self.tgid_full)
         if existing:
             self.db.object_session(existing).delete(existing)
-        self.by_tgid[self.tgid] = None
+        self.by_tgid[self.tgid_full] = None
         self.tgid = new_id
-        self.by_tgid[self.tgid] = self
+        self.by_tgid[self.tgid_full] = self
         self.save()
 
     def save(self):
@@ -547,8 +562,10 @@ class Portal:
 
     @classmethod
     def from_db(cls, db_portal):
-        return Portal(db_portal.tgid, db_portal.peer_type, db_portal.mxid, db_portal.username,
-                      db_portal.title, db_portal.photo_id)
+        return Portal(tgid=db_portal.tgid, tg_receiver=db_portal.tg_receiver,
+                      peer_type=db_portal.peer_type, mxid=db_portal.mxid,
+                      username=db_portal.username, title=db_portal.title,
+                      photo_id=db_portal.photo_id)
 
     # endregion
     # region Class instance lookup
@@ -567,18 +584,20 @@ class Portal:
         return None
 
     @classmethod
-    def get_by_tgid(cls, tgid, peer_type=None):
+    def get_by_tgid(cls, tgid, tg_receiver=None, peer_type=None):
+        tg_receiver = tg_receiver or tgid
+        tgid_full = (tgid, tg_receiver)
         try:
-            return cls.by_tgid[tgid]
+            return cls.by_tgid[tgid_full]
         except KeyError:
             pass
 
-        portal = DBPortal.query.get(tgid)
+        portal = DBPortal.query.get(tgid_full)
         if portal:
             return cls.from_db(portal)
 
         if peer_type:
-            portal = Portal(tgid, peer_type)
+            portal = Portal(tgid, peer_type=peer_type, tg_receiver=tg_receiver)
             cls.db.add(portal.to_db())
             portal.save()
             return portal
@@ -586,7 +605,7 @@ class Portal:
         return None
 
     @classmethod
-    def get_by_entity(cls, entity):
+    def get_by_entity(cls, entity, receiver_id=None):
         entity_type = type(entity)
         if entity_type in {Chat, ChatFull}:
             type_name = "chat"
@@ -608,7 +627,7 @@ class Portal:
             id = entity.user_id
         else:
             raise ValueError(f"Unknown entity type {entity_type.__name__}")
-        return cls.get_by_tgid(id, type_name)
+        return cls.get_by_tgid(id, receiver_id if type_name == "user" else id, type_name)
 
     # endregion
 

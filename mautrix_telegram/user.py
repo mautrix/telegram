@@ -16,6 +16,7 @@
 from io import BytesIO
 from telethon import TelegramClient
 from telethon.tl.types import *
+from telethon.tl.types import User as TLUser
 from telethon.tl.functions.messages import SendMessageRequest, SendMediaRequest
 from .db import User as DBUser
 from . import portal as po, puppet as pu
@@ -41,7 +42,7 @@ class User:
         whitelist = config.get("bridge", {}).get("whitelist", [self.mxid])
         self.whitelisted = self.mxid in whitelist
         if not self.whitelisted:
-            homeserver = self.mxid[self.mxid.index(":")+1:]
+            homeserver = self.mxid[self.mxid.index(":") + 1:]
             self.whitelisted = homeserver in whitelist
 
         self.by_mxid[mxid] = self
@@ -95,7 +96,9 @@ class User:
     def update_info(self, info=None):
         info = info or self.client.get_me()
         changed = False
-        self.username = info.username
+        if self.username != info.username:
+            self.username = info.username
+            changed = True
         if self.tgid != info.id:
             self.tgid = info.id
             self.by_tgid[self.tgid] = self
@@ -177,9 +180,8 @@ class User:
         dialogs = self.client.get_dialogs(limit=30)
         for dialog in dialogs:
             entity = dialog.entity
-            if (isinstance(entity, User)
-                or (isinstance(entity, Chat) and entity.deactivated)
-                or isinstance(entity, (ChannelForbidden, ChatForbidden))):
+            if (isinstance(entity, (TLUser, ChatForbidden, ChannelForbidden)) or (
+                isinstance(entity, Chat) and entity.deactivated)):
                 continue
             portal = po.Portal.get_by_entity(entity)
             portal.create_matrix_room(self, entity, invites=[self.mxid])
@@ -204,13 +206,13 @@ class User:
         elif isinstance(update, (UpdateChatAdmins, UpdateChatParticipantAdmin)):
             self.update_admin(update)
         elif isinstance(update, UpdateChatParticipants):
-            portal = po.Portal.get_by_tgid(update.participants.chat_id, "chat")
+            portal = po.Portal.get_by_tgid(update.participants.chat_id, peer_type="chat")
             portal.update_telegram_participants(update.participants.participants)
         else:
             self.log.debug("Unhandled update: %s", update)
 
     def update_admin(self, update):
-        portal = po.Portal.get_by_tgid(update.chat_id, "chat")
+        portal = po.Portal.get_by_tgid(update.chat_id, peer_type="chat")
         if isinstance(update, UpdateChatAdmins):
             portal.set_telegram_admins_enabled(update.enabled)
         elif isinstance(update, UpdateChatParticipantAdmin):
@@ -220,9 +222,9 @@ class User:
 
     def update_typing(self, update):
         if isinstance(update, UpdateUserTyping):
-            portal = po.Portal.get_by_tgid(update.user_id, "user")
+            portal = po.Portal.get_by_tgid(update.user_id, self.tgid, "user")
         else:
-            portal = po.Portal.get_by_tgid(update.chat_id, "chat")
+            portal = po.Portal.get_by_tgid(update.chat_id, peer_type="chat")
         sender = pu.Puppet.get(update.user_id)
         return portal.handle_telegram_typing(sender, update)
 
@@ -236,15 +238,15 @@ class User:
 
     def get_message_details(self, update):
         if isinstance(update, UpdateShortChatMessage):
-            portal = po.Portal.get_by_tgid(update.chat_id, "chat")
+            portal = po.Portal.get_by_tgid(update.chat_id, peer_type="chat")
             sender = pu.Puppet.get(update.from_id)
         elif isinstance(update, UpdateShortMessage):
-            portal = po.Portal.get_by_tgid(update.user_id, "user")
+            portal = po.Portal.get_by_tgid(update.user_id, self.tgid, "user")
             sender = pu.Puppet.get(self.tgid if update.out else update.user_id)
         elif isinstance(update, (UpdateNewMessage, UpdateNewChannelMessage)):
             update = update.message
             sender = pu.Puppet.get(update.from_id)
-            portal = po.Portal.get_by_entity(update.to_id)
+            portal = po.Portal.get_by_entity(update.to_id, receiver_id=self.tgid)
         return update, sender, portal
 
     def update_message(self, update):
@@ -252,13 +254,14 @@ class User:
 
         if isinstance(update, MessageService):
             if isinstance(update.action, MessageActionChannelMigrateFrom):
-                self.log.debug("Ignoring action %s to %d by %d", update.action, portal.tgid,
+                self.log.debug(f"Ignoring action %s to %s by %d", update.action, portal.tgid_log,
                                sender.id)
                 return
-            self.log.debug("Handling action %s to %d by %d", update.action, portal.tgid, sender.id)
+            self.log.debug("Handling action %s to %s by %d", update.action, portal.tgid_log,
+                           sender.id)
             portal.handle_telegram_action(self, sender, update.action)
         else:
-            self.log.debug("Handling message %s to %d by %d", update, portal.tgid, sender.tgid)
+            self.log.debug("Handling message %s to %s by %d", update, portal.tgid_log, sender.tgid)
             portal.handle_telegram_message(self, sender, update)
 
     # endregion
