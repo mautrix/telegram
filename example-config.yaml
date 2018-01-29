@@ -67,6 +67,10 @@ bridge:
     - "internal-hs.example.com"
     - "@user:public.example.com"
 
+    # Admins can do things like delete portal rooms.
+    admins:
+    - "@admin:internal-hs.example.com"
+
 # Telegram config
 telegram:
     # Get your own API keys at https://my.telegram.org/apps

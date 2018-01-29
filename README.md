@@ -129,4 +129,4 @@ The bridge does not do this automatically.
   * [x] Creating a Telegram chat for an existing Matrix room (`create`)
   * [ ] Upgrading the chat of a portal room into a supergroup (`upgrade`)
   * [x] Getting the Telegram invite link to a Matrix room (`invitelink`)
-  * [ ] Clean up and forget a portal room (`deleteportal`)
+  * [x] Clean up and forget a portal room (`deleteportal`)

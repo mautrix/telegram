@@ -16,6 +16,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from contextlib import contextmanager
 import markdown
+from matrix_client.errors import MatrixRequestError
 from telethon.errors import *
 from telethon.tl.types import *
 from telethon.tl.functions.contacts import SearchRequest
@@ -255,6 +256,26 @@ class CommandHandler:
         except ChatAdminRequiredError:
             return self.reply("You don't have the permission to create an invite link.")
 
+    @command_handler
+    def delete_portal(self, sender, args):
+        if not sender.logged_in:
+            return self.reply("This command requires you to be logged in.")
+        elif not sender.is_admin:
+            return self.reply("This is command requires administrator privileges.")
+
+        portal = po.Portal.get_by_mxid(self._room_id)
+        if not portal:
+            return self.reply("This is not a portal room.")
+
+        for user in portal.main_intent.get_room_members(portal.mxid):
+            if user != portal.main_intent.mxid:
+                try:
+                    portal.main_intent.kick(portal.mxid, user, "Portal deleted.")
+                except MatrixRequestError:
+                    pass
+        portal.main_intent.leave_room(portal.mxid)
+        portal.delete()
+
     def _strip_prefix(self, value, prefixes):
         for prefix in prefixes:
             if value.startswith(prefix):
@@ -393,7 +414,9 @@ _**Telegram actions**: commands for using the bridge to interact with Telegram._
 **join** <_link_> - Join a chat with an invite link.
 **create** [_type_] - Create a Telegram chat of the given type for the current Matrix room.
                       The type is either `group`, `supergroup` or `channel` (defaults to `group`).  
-**upgrade** - Upgrade a normal Telegram group to a supergroup.
+**upgrade** - Upgrade a normal Telegram group to a supergroup.  
+**invitelink** - Get a Telegram invite link to the current chat.  
+**deleteportal** - Forget the current portal room.
 """
         return self.reply(management_status + help)
 

@@ -40,7 +40,12 @@ class User:
         self.command_status = None
         self.connected = False
         self.client = None
-        whitelist = config.get("bridge", {}).get("whitelist", None) or [self.mxid]
+
+        bridge_config = config.get("bridge", {})
+
+        self.is_admin = self.mxid in bridge_config.get("admins", [])
+
+        whitelist = bridge_config.get("whitelist", None) or [self.mxid]
         self.whitelisted = not whitelist or self.mxid in whitelist
         if not self.whitelisted:
             homeserver = self.mxid[self.mxid.index(":") + 1:]
@@ -185,7 +190,7 @@ class User:
         for dialog in dialogs:
             entity = dialog.entity
             if (isinstance(entity, (TLUser, ChatForbidden, ChannelForbidden)) or (
-                isinstance(entity, Chat) and entity.deactivated)):
+                isinstance(entity, Chat) and (entity.deactivated or entity.left))):
                 continue
             portal = po.Portal.get_by_entity(entity)
             portal.create_matrix_room(self, entity, invites=[self.mxid])
