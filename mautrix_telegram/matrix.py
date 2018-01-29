@@ -128,8 +128,9 @@ class MatrixHandler:
         self.log.debug(f"{user} left {room}")
         user = User.get_by_mxid(user, create=False)
         portal = Portal.get_by_mxid(room)
-        if portal and user.logged_in:
+        if user and portal and user.logged_in:
             portal.leave_matrix(user)
+        # TODO check if the event was a puppet being kicked and handle accordingly.
 
     def is_command(self, message):
         text = message.get("body", "")
