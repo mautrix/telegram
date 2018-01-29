@@ -79,7 +79,7 @@ The bridge does not do this automatically.
     * [ ] Inviting Matrix users who have logged in to Telegram
     * [ ] Kicking
     * [ ] Joining (once room aliases have been implemented)
-    * [ ] Leaving
+    * [x] Leaving
   * [ ] Room metadata changes
 * Telegram → Matrix
   * [x] Plaintext messages

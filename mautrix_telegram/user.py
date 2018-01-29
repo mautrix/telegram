@@ -210,8 +210,9 @@ class User:
         elif isinstance(update, (UpdateChatAdmins, UpdateChatParticipantAdmin)):
             self.update_admin(update)
         elif isinstance(update, UpdateChatParticipants):
-            portal = po.Portal.get_by_tgid(update.participants.chat_id, peer_type="chat")
-            portal.update_telegram_participants(update.participants.participants)
+            portal = po.Portal.get_by_tgid(update.participants.chat_id, peer_type=None)
+            if portal and portal.mxid:
+                portal.update_telegram_participants(update.participants.participants)
         else:
             self.log.debug("Unhandled update: %s", update)
 

@@ -126,7 +126,10 @@ class MatrixHandler:
 
     def handle_part(self, room, user):
         self.log.debug(f"{user} left {room}")
-        # user = User.get_by_mxid(user, create=False)
+        user = User.get_by_mxid(user, create=False)
+        portal = Portal.get_by_mxid(room)
+        if portal and user.logged_in:
+            portal.leave_matrix(user)
 
     def is_command(self, message):
         text = message.get("body", "")

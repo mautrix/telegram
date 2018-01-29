@@ -16,9 +16,10 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from telethon.tl.functions.messages import (GetFullChatRequest, EditChatAdminRequest,
                                             CreateChatRequest, AddChatUserRequest,
-                                            ExportChatInviteRequest)
+                                            ExportChatInviteRequest, DeleteChatUserRequest)
 from telethon.tl.functions.channels import (GetParticipantsRequest, CreateChannelRequest,
-                                            InviteToChannelRequest, ExportInviteRequest)
+                                            InviteToChannelRequest, ExportInviteRequest,
+                                            LeaveChannelRequest)
 from telethon.errors.rpc_error_list import ChatAdminRequiredError, LocationInvalidError
 from telethon.tl.types import *
 from PIL import Image
@@ -266,6 +267,17 @@ class Portal:
         except (ValueError, KeyError):
             file_name = f"matrix_upload{mimetypes.guess_extension(mime)}"
         return file_name, None if file_name == body else body
+
+    def leave_matrix(self, user):
+        if self.peer_type == "user":
+            self.main_intent.leave_room(self.mxid)
+            self.delete()
+            del self.by_tgid[self.tgid_full]
+            del self.by_mxid[self.mxid]
+        elif self.peer_type == "chat":
+            user.client(DeleteChatUserRequest(chat_id=self.tgid, user_id=InputUserSelf()))
+        elif self.peer_type == "channel":
+            user.client(LeaveChannelRequest(channel=user.client.get_input_entity(self.peer)))
 
     def handle_matrix_message(self, sender, message, event_id):
         type = message["msgtype"]
@@ -581,7 +593,7 @@ class Portal:
         existing = DBPortal.query.get(self.tgid_full)
         if existing:
             self.db.object_session(existing).delete(existing)
-        self.by_tgid[self.tgid_full] = None
+        del self.by_tgid[self.tgid_full]
         self.tgid = new_id
         self.by_tgid[self.tgid_full] = self
         self.save()
@@ -592,6 +604,7 @@ class Portal:
 
     def delete(self):
         self.db.delete(self.to_db())
+        self.db.commit()
 
     @classmethod
     def from_db(cls, db_portal):
