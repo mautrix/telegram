@@ -48,7 +48,7 @@ class CommandHandler:
             except:
                 self.reply("Fatal error while handling command. Check logs for more details.")
                 self.log.exception(f"Fatal error handling command "
-                                   f"'$cmdprefix {command} {''.join(args)}' from {sender.mxid}")
+                                   + f"'$cmdprefix {command} {''.join(args)}' from {sender.mxid}")
 
     @contextmanager
     def handler(self, sender, room, command, args, is_management, is_portal):
@@ -297,14 +297,14 @@ class CommandHandler:
         elif (not levels or not levels["users"] or self.az.intent.mxid not in levels["users"] or
               levels["users"][self.az.intent.mxid] < 100):
             return self.reply(f"Please give "
-                              f"[the bridge bot](https://matrix.to/#/{self.az.intent.mxid}) "
-                              f"a power level of 100 before creating a Telegram chat.")
+                              + f"[the bridge bot](https://matrix.to/#/{self.az.intent.mxid}) "
+                              + f"a power level of 100 before creating a Telegram chat.")
         else:
             for user, level in levels["users"].items():
                 if level >= 100 and user != self.az.intent.mxid:
                     return self.reply(f"Please make sure only the bridge bot has power level above"
-                                      f"99 before creating a Telegram chat.\n\n"
-                                      f"Use power level 95 instead of 100 for admins.")
+                                      + f"99 before creating a Telegram chat.\n\n"
+                                      + f"Use power level 95 instead of 100 for admins.")
 
         supergroup = type == "supergroup"
         types = {

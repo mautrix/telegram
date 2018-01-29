@@ -214,7 +214,7 @@ def telegram_event_to_matrix(evt, source):
         if not fwd_from:
             fwd_from = "Unknown user"
         html = (f"Forwarded message from <b>{fwd_from}</b><br/>"
-                f"<blockquote>{html}</blockquote>")
+                + f"<blockquote>{html}</blockquote>")
 
     if evt.reply_to_msg_id:
         msg = DBMessage.query.get((evt.reply_to_msg_id, source.tgid))
@@ -261,8 +261,8 @@ def _telegram_to_matrix(text, entities):
         elif entity_type == MessageEntityPre:
             if entity.language:
                 html.append("<pre>"
-                            f"<code class='language-{entity.language}'>{entity_text}</code>"
-                            "</pre>")
+                            + f"<code class='language-{entity.language}'>{entity_text}</code>"
+                            + "</pre>")
             else:
                 html.append(f"<pre><code>{entity_text}</code></pre>")
         elif entity_type == MessageEntityMention:

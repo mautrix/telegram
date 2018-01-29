@@ -65,8 +65,8 @@ class MatrixHandler:
             if len(members) > 1:
                 puppet.intent.error_and_leave(room, text=None, html=(
                     f"Please invite "
-                    f"<a href='https://matrix.to/#/{self.az.intent.mxid}'>the bridge bot</a> "
-                    f"first if you want to create a Telegram chat."))
+                    + f"<a href='https://matrix.to/#/{self.az.intent.mxid}'>the bridge bot</a> "
+                    + f"first if you want to create a Telegram chat."))
                 return
 
             puppet.intent.join_room(room)
@@ -76,15 +76,16 @@ class MatrixHandler:
                     puppet.intent.invite(existing_portal.mxid, inviter.mxid)
                     puppet.intent.send_notice(room, text=None, html=(
                         "You already have a private chat with me: "
-                        f"<a href='https://matrix.to/#/{existing_portal.mxid}'>"
-                        "Link to room"
-                        "</a>"))
+                        + f"<a href='https://matrix.to/#/{existing_portal.mxid}'>"
+                        + "Link to room"
+                        + "</a>"))
                     puppet.intent.leave_room(room)
                     return
                 except MatrixRequestError:
                     existing_portal.delete()
 
-            portal = Portal(tgid=puppet.tgid, tg_receiver=inviter.tgid, peer_type="user", mxid=room)
+            portal = Portal(tgid=puppet.tgid, tg_receiver=inviter.tgid, peer_type="user",
+                            mxid=room)
             portal.save()
             puppet.intent.send_notice(room, "Portal to private chat created.")
         else:
