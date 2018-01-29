@@ -253,7 +253,9 @@ class Portal:
 
     def handle_matrix_message(self, sender, message, event_id):
         type = message["msgtype"]
-        if type == "m.text":
+        if type in {"m.text", "m.emote"}:
+            if type == "m.emote":
+                message["body"] = f"/me " + message["body"]
             if "format" in message and message["format"] == "org.matrix.custom.html":
                 message, entities = formatter.matrix_to_telegram(message["formatted_body"],
                                                                  sender.tgid)
