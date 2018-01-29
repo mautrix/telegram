@@ -52,6 +52,7 @@ class CommandHandler:
 
     @contextmanager
     def handler(self, sender, room, command, args, is_management, is_portal):
+        command = command.lower()
         self._room_id = room
         try:
             command = command_handlers[command]
