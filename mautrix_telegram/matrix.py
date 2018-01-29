@@ -76,7 +76,7 @@ class MatrixHandler:
                     puppet.intent.invite(portal.mxid, inviter.mxid)
                     puppet.intent.send_notice(room, text=None, html=(
                         "You already have a private chat with me: "
-                        + f"<a href='https://matrix.to/#/{existing_portal.mxid}'>"
+                        + f"<a href='https://matrix.to/#/{portal.mxid}'>"
                         + "Link to room"
                         + "</a>"))
                     puppet.intent.leave_room(room)
