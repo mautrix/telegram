@@ -153,7 +153,12 @@ class MatrixHandler:
         if message["msgtype"] != "m.text":
             return
 
-        is_management = len(self.az.intent.get_room_members(room)) == 2
+        try:
+            is_management = len(self.az.intent.get_room_members(room)) == 2
+        except MatrixRequestError:
+            # The AS bot is not in the room.
+            return
+
         if is_command or is_management:
             try:
                 command, arguments = text.split(" ", 1)

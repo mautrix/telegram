@@ -411,12 +411,13 @@ _**Telegram actions**: commands for using the bridge to interact with Telegram._
 **search** [_-r|--remote_] <_query_> - Search your contacts or the Telegram servers for users.  
 **pm** <_identifier_> - Open a private chat with the given Telegram user. The identifier is either
                         the internal user ID, the username or the phone number.  
-**join** <_link_> - Join a chat with an invite link.
+**join** <_link_> - Join a chat with an invite link.  
 **create** [_type_] - Create a Telegram chat of the given type for the current Matrix room.
                       The type is either `group`, `supergroup` or `channel` (defaults to `group`).  
 **upgrade** - Upgrade a normal Telegram group to a supergroup.  
 **invitelink** - Get a Telegram invite link to the current chat.  
-**deleteportal** - Forget the current portal room.
+**deleteportal** - Forget the current portal room. Only works for group chats; to delete a private
+                   chat portal, simply leave the room.
 """
         return self.reply(management_status + help)
 
