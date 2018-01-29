@@ -254,11 +254,11 @@ class Portal:
     def handle_matrix_message(self, sender, message, event_id):
         type = message["msgtype"]
         if type in {"m.text", "m.emote"}:
-            if type == "m.emote":
-                message["body"] = f"/me " + message["body"]
             if "format" in message and message["format"] == "org.matrix.custom.html":
                 message, entities = formatter.matrix_to_telegram(message["formatted_body"],
                                                                  sender.tgid)
+                if type == "m.emote":
+                    message = "/me " + message
                 reply_to = None
                 if len(entities) > 0 and isinstance(entities[0], formatter.MessageEntityReply):
                     reply = entities.pop(0)
@@ -267,6 +267,8 @@ class Portal:
                 response = sender.send_message(self.peer, message, entities=entities,
                                                reply_to=reply_to)
             else:
+                if type == "m.emote":
+                    message["body"] = "/me " + message["body"]
                 response = sender.send_message(self.peer, message["body"])
         elif type in {"m.image", "m.file", "m.audio", "m.video"}:
             file = self.main_intent.download_file(message["url"])
