@@ -10,7 +10,7 @@ A Telegram chat will be created once the bridge is stable enough.
 ### Setup
 0. Clone the repository
 1. Set up the virtual environment
-   1. Create with `virtualenv -p /usr/bin/python3 .venv`
+   1. Create with `virtualenv -p /usr/bin/python3.6 .venv`
    2. Activate with `source .venv/bin/activate`
 2. Install dependencies with `pip install -r requirements.txt`
 3. Create a copy of `example-config.yaml` and fill out the fields.

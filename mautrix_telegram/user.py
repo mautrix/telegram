@@ -244,12 +244,17 @@ class User:
             portal = po.Portal.get_by_tgid(update.chat_id, peer_type="chat")
             sender = pu.Puppet.get(update.from_id)
         elif isinstance(update, UpdateShortMessage):
+            print(update)
             portal = po.Portal.get_by_tgid(update.user_id, self.tgid, "user")
             sender = pu.Puppet.get(self.tgid if update.out else update.user_id)
         elif isinstance(update, (UpdateNewMessage, UpdateNewChannelMessage)):
             update = update.message
+            if isinstance(update.to_id, PeerUser) and not update.out:
+                portal = po.Portal.get_by_tgid(update.from_id, peer_type="user",
+                                               tg_receiver=self.tgid)
+            else:
+                portal = po.Portal.get_by_entity(update.to_id, receiver_id=self.tgid)
             sender = pu.Puppet.get(update.from_id)
-            portal = po.Portal.get_by_entity(update.to_id, receiver_id=self.tgid)
         return update, sender, portal
 
     def update_message(self, update):
