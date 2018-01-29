@@ -261,9 +261,7 @@ class Portal:
                     message = "/me " + message
                 reply_to = None
                 if len(entities) > 0 and isinstance(entities[0], formatter.MessageEntityReply):
-                    reply = entities.pop(0)
-                    # message = message[:reply.offset] + message[reply.offset + reply.length:]
-                    reply_to = reply.msg_id
+                    reply_to = entities.pop(0).msg_id
                 response = sender.send_message(self.peer, message, entities=entities,
                                                reply_to=reply_to)
             else:

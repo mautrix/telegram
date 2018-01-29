@@ -40,8 +40,8 @@ class User:
         self.command_status = None
         self.connected = False
         self.client = None
-        whitelist = config.get("bridge", {}).get("whitelist", [self.mxid])
-        self.whitelisted = self.mxid in whitelist
+        whitelist = config.get("bridge", {}).get("whitelist", None) or [self.mxid]
+        self.whitelisted = not whitelist or self.mxid in whitelist
         if not self.whitelisted:
             homeserver = self.mxid[self.mxid.index(":") + 1:]
             self.whitelisted = homeserver in whitelist

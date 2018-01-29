@@ -1,7 +1,7 @@
 import setuptools
 
 setuptools.setup(
-    name="mautrix_telegram",
+    name="mautrix-telegram",
     version="0.1.0",
     url="https://github.com/tulir/mautrix-telegram",
 
@@ -13,12 +13,25 @@ setuptools.setup(
 
     packages=setuptools.find_packages(),
 
-    install_requires=["telethon", "matrix-client", "sqlalchemy"],
+    install_requires=[
+        "Telethon>=0.16.2.3,<0.17",
+        "git://github.com/Cadair/matrix-python-sdk@1fab9821d98d15769e44e66f714d00a32a48d692#egg=matrix_client",
+        "aiohttp>=2.3.9,<3",
+        "SQLAlchemy>=1.2.2,<2",
+        "Markdown>=2.6.11,<3",
+        "ruamel.yaml>=0.15.35,<0.16",
+        "Pillow>=5.0.0,<6",
+        "future-fstrings>=0.4.1",
+        "python-magic>=0.4.15,<0.5",
+    ],
 
     classifiers=[
-        "Development Status :: 2 - Pre-Alpha",
+        "Development Status :: 4 Beta",
+        "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
+        "Topic :: Communications :: Chat",
         "Programming Language :: Python",
         "Programming Language :: Python :: 3",
+        "Programming Language :: Python :: 3.5",
         "Programming Language :: Python :: 3.6",
     ],
     entry_points="""

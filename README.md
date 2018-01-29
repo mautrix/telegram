@@ -13,7 +13,7 @@ A Telegram chat will be created once the bridge is stable enough.
    1. Create with `virtualenv -p /usr/bin/python3.6 .venv`
    2. Activate with `source .venv/bin/activate`
 2. Install dependencies with `pip install -r requirements.txt`
-3. Create a copy of `example-config.yaml` and fill out the fields.
+3. Copy `example-config.yaml` to `config.yaml` and fill out the fields.
 4. Generate the appservice registration with `python -m mautrix_telegram -g`.
    You can use the `-c` and `-r` flags to change the location of the config and registration files.
    They default to `config.yaml` and `registration.yaml` respectively.
