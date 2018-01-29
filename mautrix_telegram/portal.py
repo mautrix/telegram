@@ -537,9 +537,9 @@ class Portal:
                 new_level = 50
             elif isinstance(participant, ChatParticipantCreator):
                 new_level = 95
-            if user:
+            if user and (user.mxid in levels["users"] or new_level > 0):
                 levels["users"][user.mxid] = new_level
-            if puppet:
+            if puppet and (puppet.mxid in levels["users"] or new_level > 0):
                 levels["users"][puppet.mxid] = new_level
         self.main_intent.set_power_levels(self.mxid, levels)
 
