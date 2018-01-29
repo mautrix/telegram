@@ -68,7 +68,7 @@ The bridge does not do this automatically.
   * [x] Rich quotes
   * [ ] Locations (not implemented in Riot)
   * [x] Images
-  * [x] Files* [ ] Add aliases to public channels/supergroups
+  * [x] Files
   * [x] Message redactions
   * [ ] Presence (may not be possible, currently always shown as online on Telegram)
   * [ ] Typing notifications (may not be possible)
