@@ -78,7 +78,8 @@ The bridge does not do this automatically.
     * [x] Inviting puppets
     * [ ] Inviting Matrix users who have logged in to Telegram
     * [ ] Kicking
-    * [ ] Joining/leaving
+    * [ ] Joining (once room aliases have been implemented)
+    * [ ] Leaving
   * [ ] Room metadata changes
 * Telegram → Matrix
   * [x] Plaintext messages
@@ -115,7 +116,6 @@ The bridge does not do this automatically.
   * [x] Private chat creation by inviting Matrix puppet of Telegram user to new room
   * [ ] Option to use bot to relay messages for unauthenticated Matrix users
   * [ ] Option to use own Matrix account for messages sent from other Telegram clients
-  * [ ] Joining public channels/supergroups using room aliases
   * [ ] Joining chats with room aliases
     * [ ] Name of public channel/supergroup as alias
 	* [ ] (Maybe) Invite link token as alias
@@ -129,3 +129,4 @@ The bridge does not do this automatically.
   * [x] Creating a Telegram chat for an existing Matrix room (`create`)
   * [ ] Upgrading the chat of a portal room into a supergroup (`upgrade`)
   * [ ] Getting the Telegram invite link to a Matrix room (`invitelink`)
+  * [ ] Clean up and forget a portal room (`deleteportal`)

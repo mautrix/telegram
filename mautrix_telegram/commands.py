@@ -199,6 +199,7 @@ class CommandHandler:
             return self.reply("This command requires you to be logged in.")
         force_remote = False
         if args[0] in {"-r", "--remote"}:
+            force_remote = True
             args.pop(0)
         query = " ".join(args)
         if len(query) < 5:
