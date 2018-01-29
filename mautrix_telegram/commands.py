@@ -1,3 +1,4 @@
+# -*- coding: future_fstrings -*-
 # mautrix-telegram - A Matrix-Telegram puppeting bridge
 # Copyright (C) 2018 Tulir Asokan
 #

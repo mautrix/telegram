@@ -7,3 +7,4 @@ SQLAlchemy
 Telethon
 Markdown
 Pillow
+future-fstrings
