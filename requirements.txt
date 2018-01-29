@@ -1,0 +1,9 @@
+aiohttp
+-e git+git://github.com/Cadair/matrix-python-sdk#egg=matrix_client
+#matrix-client
+ruamel.yaml
+python-magic
+SQLAlchemy
+Telethon
+Markdown
+Pillow
