@@ -68,9 +68,9 @@ The bridge does not do this automatically.
   * [x] Rich quotes
   * [ ] Locations (not implemented in Riot)
   * [x] Images
-  * [x] Files
+  * [x] Files* [ ] Add aliases to public channels/supergroups
   * [x] Message redactions
-  * [ ] Presence (currently always shown as online on Telegram)
+  * [ ] Presence (may not be possible, currently always shown as online on Telegram)
   * [ ] Typing notifications (may not be possible)
   * [ ] Pinning messages
   * [x] Power level
@@ -109,16 +109,23 @@ The bridge does not do this automatically.
   * [x] Initial chat metadata
   * [x] Supergroup upgrade
 * Misc
-  * [x] Automatic portal creation for groups/channels at startup
-  * [x] Automatic portal creation for groups/channels when receiving invite/message
-  * [x] Private chat creation by inviting Telegram user to new room
-  * [ ] Use optional bot to relay messages for unauthenticated Matrix users
+  * [x] Automatic portal creation
+    * [x] At startup
+    * [x] When receiving invite or message
+  * [x] Private chat creation by inviting Matrix puppet of Telegram user to new room
+  * [ ] Option to use bot to relay messages for unauthenticated Matrix users
+  * [ ] Option to use own Matrix account for messages sent from other Telegram clients
   * [ ] Joining public channels/supergroups using room aliases
+  * [ ] Joining chats with room aliases
+    * [ ] Name of public channel/supergroup as alias
+	* [ ] (Maybe) Invite link token as alias
 * Commands
   * [x] Logging in and out (`login` + code entering, `logout`)
   * [ ] Registering (`register`)
   * [x] Searching for users (`search`)
+    * [ ] Searching contacts locally
   * [x] Starting private chats (`pm`)
   * [x] Joining chats with invite links (`join`)
   * [x] Creating a Telegram chat for an existing Matrix room (`create`)
   * [ ] Upgrading the chat of a portal room into a supergroup (`upgrade`)
+  * [ ] Getting the Telegram invite link to a Matrix room (`invitelink`)
