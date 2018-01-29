@@ -15,9 +15,10 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from telethon.tl.functions.messages import (GetFullChatRequest, EditChatAdminRequest,
-                                            CreateChatRequest, AddChatUserRequest)
+                                            CreateChatRequest, AddChatUserRequest,
+                                            ExportChatInviteRequest)
 from telethon.tl.functions.channels import (GetParticipantsRequest, CreateChannelRequest,
-                                            InviteToChannelRequest)
+                                            InviteToChannelRequest, ExportInviteRequest)
 from telethon.errors.rpc_error_list import ChatAdminRequiredError, LocationInvalidError
 from telethon.tl.types import *
 from PIL import Image
@@ -235,6 +236,21 @@ class Portal:
                 return [], []
         elif self.peer_type == "user":
             return [entity], []
+
+    def get_invite_link(self, user):
+        if self.peer_type == "user":
+            raise ValueError("You can't invite users to private chats.")
+        elif self.peer_type == "chat":
+            link = user.client(ExportChatInviteRequest(chat_id=self.tgid))
+        elif self.peer_type == "channel":
+            link = user.client(ExportInviteRequest(channel=user.client.get_input_entity(self.peer)))
+        else:
+            raise ValueError(f"Invalid peer type '{self.peer_type}' for invite link.")
+
+        if isinstance(link, ChatInviteEmpty):
+            raise ValueError("Failed to get invite link.")
+
+        return link.link
 
     # endregion
     # region Matrix event handling

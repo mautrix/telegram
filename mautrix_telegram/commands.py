@@ -27,7 +27,8 @@ command_handlers = {}
 
 
 def command_handler(func):
-    command_handlers[func.__name__] = func
+    command_handlers[func.__name__.replace("_", "")] = func
+    return func
 
 
 class CommandHandler:
@@ -61,7 +62,7 @@ class CommandHandler:
                 args.insert(0, command)
                 command = sender.command_status["next"]
             else:
-                command = command_handlers["unknown_command"]
+                command = self.unknown_command
         self._is_management = is_management
         self._is_portal = is_portal
         yield command
@@ -195,7 +196,7 @@ class CommandHandler:
     def search(self, sender, args):
         if len(args) == 0:
             return self.reply("**Usage:** `$cmdprefix+sp search [-r|--remote] <query>")
-        elif not sender.tgid:
+        elif not sender.logged_in:
             return self.reply("This command requires you to be logged in.")
         force_remote = False
         if args[0] in {"-r", "--remote"}:
@@ -222,7 +223,7 @@ class CommandHandler:
     def pm(self, sender, args):
         if len(args) == 0:
             return self.reply("**Usage:** `$cmdprefix+sp pm <user identifier>`")
-        elif not sender.tgid:
+        elif not sender.logged_in:
             return self.reply("This command requires you to be logged in.")
 
         user = sender.client.get_entity(args[0])
@@ -234,6 +235,26 @@ class CommandHandler:
         portal.create_matrix_room(sender, user, [sender.mxid])
         self.reply(f"Created private chat room with {pu.Puppet.get_displayname(user, False)}")
 
+    @command_handler
+    def invite_link(self, sender, args):
+        if not sender.logged_in:
+            return self.reply("This command requires you to be logged in.")
+
+        portal = po.Portal.get_by_mxid(self._room_id)
+        if not portal:
+            return self.reply("This is not a portal room.")
+
+        if portal.peer_type == "user":
+            return self.reply("You can't invite users to private chats.")
+
+        try:
+            link = portal.get_invite_link(sender)
+            return self.reply(f"Invite link to {portal.title}: {link}")
+        except ValueError as e:
+            return self.reply(e.args[0])
+        except ChatAdminRequiredError:
+            return self.reply("You don't have the permission to create an invite link.")
+
     def _strip_prefix(self, value, prefixes):
         for prefix in prefixes:
             if value.startswith(prefix):
@@ -244,7 +265,7 @@ class CommandHandler:
     def join(self, sender, args):
         if len(args) == 0:
             return self.reply("**Usage:** `$cmdprefix+sp join <invite link>")
-        elif not sender.tgid:
+        elif not sender.logged_in:
             return self.reply("This command requires you to be logged in.")
 
         regex = re.compile(r"(?:https?://)?t(?:elegram)?\.(?:dog|me)(?:joinchat/)?/(.+)")
@@ -280,7 +301,7 @@ class CommandHandler:
         type = args[0] if len(args) > 0 else "group"
         if type not in {"chat", "group", "supergroup", "channel"}:
             return self.reply("**Usage:** `$cmdprefix+sp create [`group`/`supergroup`/`channel`]")
-        elif not sender.tgid:
+        elif not sender.logged_in:
             return self.reply("This command requires you to be logged in.")
 
         if po.Portal.get_by_mxid(self._room_id):
