@@ -70,10 +70,10 @@ class MatrixHandler:
                 return
 
             puppet.intent.join_room(room)
-            existing_portal = Portal.get_by_tgid(puppet.tgid, inviter.tgid, "user")
-            if existing_portal:
+            portal = Portal.get_by_tgid(puppet.tgid, inviter.tgid, "user")
+            if portal.mxid:
                 try:
-                    puppet.intent.invite(existing_portal.mxid, inviter.mxid)
+                    puppet.intent.invite(portal.mxid, inviter.mxid)
                     puppet.intent.send_notice(room, text=None, html=(
                         "You already have a private chat with me: "
                         + f"<a href='https://matrix.to/#/{existing_portal.mxid}'>"
@@ -82,10 +82,8 @@ class MatrixHandler:
                     puppet.intent.leave_room(room)
                     return
                 except MatrixRequestError:
-                    existing_portal.delete()
-
-            portal = Portal(tgid=puppet.tgid, tg_receiver=inviter.tgid, peer_type="user",
-                            mxid=room)
+                    pass
+            portal.mxid = room
             portal.save()
             puppet.intent.send_notice(room, "Portal to private chat created.")
         else:
