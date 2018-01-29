@@ -15,7 +15,6 @@ setuptools.setup(
 
     install_requires=[
         "Telethon>=0.16.2.3,<0.17",
-        "git://github.com/Cadair/matrix-python-sdk@1fab9821d98d15769e44e66f714d00a32a48d692#egg=matrix_client",
         "aiohttp>=2.3.9,<3",
         "SQLAlchemy>=1.2.2,<2",
         "Markdown>=2.6.11,<3",
@@ -23,6 +22,9 @@ setuptools.setup(
         "Pillow>=5.0.0,<6",
         "future-fstrings>=0.4.1",
         "python-magic>=0.4.15,<0.5",
+    ],
+    dependency_links=[
+        "https://github.com/Cadair/matrix-python-sdk/tarball/1fab9821d98d15769e44e66f714d00a32a48d692#egg=matrix_client"
     ],
 
     classifiers=[
