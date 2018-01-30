@@ -10,7 +10,7 @@ A Telegram chat will be created once the bridge is stable enough.
 ### Setup
 0. Clone the repository
 1. Set up the virtual environment
-   1. Create with `virtualenv -p /usr/bin/python3.6 .venv`
+   1. Create with `virtualenv -p /usr/bin/python3 .venv` (requires Python 3.5 or higher)
    2. Activate with `source .venv/bin/activate`
 2. Install dependencies with `pip install -r requirements.txt`
 3. Copy `example-config.yaml` to `config.yaml` and fill out the fields.
@@ -70,10 +70,12 @@ The bridge does not do this automatically.
   * [x] Images
   * [x] Files
   * [x] Message redactions
-  * [ ] Presence (may not be possible, currently always shown as online on Telegram)
+  * [ ] Presence (may not be possible)
   * [ ] Typing notifications (may not be possible)
   * [ ] Pinning messages
-  * [x] Power level
+  * [ ] Power level
+    * [x] Normal chats
+	* [ ] Supergroups/channels
   * [ ] Membership actions
     * [x] Inviting puppets
     * [ ] Inviting Matrix users who have logged in to Telegram
@@ -101,6 +103,7 @@ The bridge does not do this automatically.
   * [x] Typing notifications
   * [ ] Pinning messages
   * [x] Admin/chat creator status
+  * [ ] Supergroup/channel permissions
   * [x] Membership actions
     * [x] Inviting
     * [x] Kicking
