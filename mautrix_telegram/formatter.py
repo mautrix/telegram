@@ -224,6 +224,9 @@ def telegram_event_to_matrix(evt, source):
         else:
             html = quote + escape(text)
 
+    if html:
+        html = html.replace("\n", "<br/>")
+
     return text, html
 
 
