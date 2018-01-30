@@ -28,7 +28,7 @@ command_handlers = {}
 
 
 def command_handler(func):
-    command_handlers[func.__name__.replace("_", "")] = func
+    command_handlers[func.__name__] = func
     return func
 
 
@@ -63,7 +63,7 @@ class CommandHandler:
                 args.insert(0, command)
                 command = sender.command_status["next"]
             else:
-                command = self.unknown_command
+                command = command_handlers["unknown_command"]
         self._is_management = is_management
         self._is_portal = is_portal
         yield command
@@ -415,8 +415,8 @@ _**Telegram actions**: commands for using the bridge to interact with Telegram._
 **create** [_type_] - Create a Telegram chat of the given type for the current Matrix room.
                       The type is either `group`, `supergroup` or `channel` (defaults to `group`).  
 **upgrade** - Upgrade a normal Telegram group to a supergroup.  
-**invitelink** - Get a Telegram invite link to the current chat.  
-**deleteportal** - Forget the current portal room. Only works for group chats; to delete a private
+**invite_link** - Get a Telegram invite link to the current chat.  
+**delete_portal** - Forget the current portal room. Only works for group chats; to delete a private
                    chat portal, simply leave the room.
 """
         return self.reply(management_status + help)
