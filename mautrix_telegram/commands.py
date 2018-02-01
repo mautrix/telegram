@@ -351,14 +351,14 @@ class CommandHandler:
                                       + f"Use power level 95 instead of 100 for admins.")
 
         supergroup = type == "supergroup"
-        types = {
+        type = {
             "supergroup": "channel",
             "channel": "channel",
             "chat": "chat",
             "group": "chat",
-        }
+        }[type]
 
-        portal = po.Portal(tgid=None, mxid=self._room_id, title=title, peer_type=types[type])
+        portal = po.Portal(tgid=None, mxid=self._room_id, title=title, peer_type=type)
         try:
             portal.create_telegram_chat(sender, supergroup=supergroup)
         except ValueError as e:

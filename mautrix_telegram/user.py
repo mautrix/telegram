@@ -41,11 +41,9 @@ class User:
         self.connected = False
         self.client = None
 
-        bridge_config = config.get("bridge", {})
+        self.is_admin = self.mxid in config.get("bridge.admins", [])
 
-        self.is_admin = self.mxid in bridge_config.get("admins", [])
-
-        whitelist = bridge_config.get("whitelist", None) or [self.mxid]
+        whitelist = config.get("bridge.whitelist", None) or [self.mxid]
         self.whitelisted = not whitelist or self.mxid in whitelist
         if not self.whitelisted:
             homeserver = self.mxid[self.mxid.index(":") + 1:]

@@ -211,6 +211,14 @@ class IntentAPI:
             content["info"] = info
         return self.send_state_event(room_id, "m.room.avatar", content)
 
+    def add_room_alias(self, room_id, alias):
+        self._ensure_registered()
+        self.client.set_room_alias(room_id, alias)
+
+    def remove_room_alias(self, alias):
+        self._ensure_registered()
+        self.client.remove_room_alias(alias)
+
     def set_room_name(self, room_id, name):
         self._ensure_joined(room_id)
         self._ensure_has_power_level_for(room_id, "m.room.name")

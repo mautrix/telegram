@@ -70,8 +70,8 @@ class Puppet:
             "first name": info.first_name,
             "last name": info.last_name,
         }
-        preferences = config.get("bridge", {}).get("displayname_preference",
-                                                   ["full name", "username", "phone"])
+        preferences = config.get("bridge.displayname_preference",
+                                 ["full name", "username", "phone"])
         for preference in preferences:
             name = data[preference]
             if name:
@@ -134,6 +134,18 @@ class Puppet:
             cls.db.commit()
             return puppet
 
+        return None
+
+    @classmethod
+    def get_by_mxid(cls, mxid, create=True):
+        tgid = cls.get_id_from_mxid(mxid)
+        return cls.get(tgid, create) if tgid else None
+
+    @classmethod
+    def get_id_from_mxid(cls, mxid):
+        match = cls.mxid_regex.match(mxid)
+        if match:
+            return int(match.group(1))
         return None
 
     @classmethod

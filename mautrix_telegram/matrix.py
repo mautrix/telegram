@@ -32,16 +32,6 @@ class MatrixHandler:
         self.az.intent.set_display_name(
             self.config.get("appservice.bot_displayname", "Telegram bridge bot"))
 
-    def is_puppet(self, mxid):
-        match = Puppet.mxid_regex.match(mxid)
-        return True if match else False
-
-    def get_puppet(self, mxid):
-        match = Puppet.mxid_regex.match(mxid)
-        if not match:
-            return None
-        return Puppet.get(int(match.group(1)))
-
     def handle_puppet_invite(self, room, puppet, inviter):
         self.log.debug(f"{inviter} invited puppet for {puppet.tgid} to {room}")
         if not inviter.logged_in:
@@ -98,7 +88,7 @@ class MatrixHandler:
         elif user == self.az.bot_mxid:
             self.az.intent.join_room(room)
             return
-        puppet = self.get_puppet(user)
+        puppet = Puppet.get_by_mxid(user)
         if puppet:
             self.handle_puppet_invite(room, puppet, inviter)
             return
@@ -117,6 +107,7 @@ class MatrixHandler:
                                     "You are not whitelisted on this Telegram bridge.")
             return
         elif not user.logged_in:
+            # TODO[waiting-for-bots] once we have bot support, this won't be needed.
             portal.main_intent.kick(room, user.mxid,
                                     "You are not logged into this Telegram bridge.")
             return
@@ -124,13 +115,22 @@ class MatrixHandler:
         self.log.debug(f"{user} joined {room}")
         # TODO join Telegram chat if applicable
 
-    def handle_part(self, room, user):
+    def handle_part(self, room, user, sender):
         self.log.debug(f"{user} left {room}")
-        user = User.get_by_mxid(user, create=False)
+
+        sender = User.get_by_mxid(sender, create=False)
+
         portal = Portal.get_by_mxid(room)
-        if user and portal and user.logged_in:
-            portal.leave_matrix(user)
-        # TODO check if the event was a puppet being kicked and handle accordingly.
+        if not portal:
+            return
+
+        puppet = Puppet.get_by_mxid(user)
+        if sender and puppet:
+            portal.leave_matrix(puppet, sender)
+
+        user = User.get_by_mxid(user, create=False)
+        if user and user.logged_in:
+            portal.leave_matrix(user, sender)
 
     def is_command(self, message):
         text = message.get("body", "")
@@ -185,7 +185,8 @@ class MatrixHandler:
             portal.handle_matrix_power_levels(sender, new["users"], old["users"])
 
     def filter_matrix_event(self, event):
-        return event["sender"] == self.az.bot_mxid or self.is_puppet(event["sender"])
+        return (event["sender"] == self.az.bot_mxid
+                or Puppet.get_id_from_mxid(event["sender"]) is not None)
 
     def handle_event(self, evt):
         if self.filter_matrix_event(evt):
@@ -194,11 +195,11 @@ class MatrixHandler:
         type = evt["type"]
         content = evt.get("content", {})
         if type == "m.room.member":
-            membership = content.get("membership", {})
+            membership = content.get("membership", "")
             if membership == "invite":
                 self.handle_invite(evt["room_id"], evt["state_key"], evt["sender"])
             elif membership == "leave":
-                self.handle_part(evt["room_id"], evt["state_key"])
+                self.handle_part(evt["room_id"], evt["state_key"], evt["sender"])
             elif membership == "join":
                 self.handle_join(evt["room_id"], evt["state_key"])
         elif type == "m.room.message":

@@ -79,7 +79,7 @@ The bridge does not do this automatically.
   * [ ] Membership actions
     * [x] Inviting puppets
     * [ ] Inviting Matrix users who have logged in to Telegram
-    * [ ] Kicking
+    * [x] Kicking
     * [ ] Joining (once room aliases have been implemented)
     * [x] Leaving
   * [ ] Room metadata changes

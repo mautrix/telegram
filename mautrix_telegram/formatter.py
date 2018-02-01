@@ -80,13 +80,11 @@ class MatrixParser(HTMLParser):
             reply = self.reply_regex.search(url)
             if mention:
                 mxid = mention.group(1)
-                puppet_match = p.Puppet.mxid_regex.search(mxid)
-                if puppet_match:
-                    user = p.Puppet.get(puppet_match.group(1), create=False)
-                else:
-                    user = u.User.get_by_mxid(mxid, create=False)
+                user = p.Puppet.get_by_mxid(mxid, create=False)
                 if not user:
-                    return
+                    user = u.User.get_by_mxid(mxid, create=False)
+                    if not user:
+                        return
                 if user.username:
                     EntityType = MessageEntityMention
                     url = f"@{user.username}"
@@ -218,11 +216,12 @@ def telegram_event_to_matrix(evt, source):
 
     if evt.reply_to_msg_id:
         msg = DBMessage.query.get((evt.reply_to_msg_id, source.tgid))
-        quote = f"<a href=\"https://matrix.to/#/{msg.mx_room}/{msg.mxid}\">Quote<br></a>"
-        if html:
-            html = quote + html
-        else:
-            html = quote + escape(text)
+        if msg:
+            quote = f"<a href=\"https://matrix.to/#/{msg.mx_room}/{msg.mxid}\">Quote<br></a>"
+            if html:
+                html = quote + html
+            else:
+                html = quote + escape(text)
 
     if html:
         html = html.replace("\n", "<br/>")

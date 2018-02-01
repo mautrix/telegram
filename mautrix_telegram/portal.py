@@ -19,11 +19,12 @@ from telethon.tl.functions.messages import (GetFullChatRequest, EditChatAdminReq
                                             ExportChatInviteRequest, DeleteChatUserRequest)
 from telethon.tl.functions.channels import (GetParticipantsRequest, CreateChannelRequest,
                                             InviteToChannelRequest, ExportInviteRequest,
-                                            LeaveChannelRequest)
+                                            LeaveChannelRequest, EditBannedRequest)
 from telethon.errors.rpc_error_list import ChatAdminRequiredError, LocationInvalidError
 from telethon.tl.types import *
 from PIL import Image
 from io import BytesIO
+from datetime import datetime
 import mimetypes
 import magic
 from .db import Portal as DBPortal, Message as DBMessage
@@ -127,7 +128,17 @@ class Portal:
         puppet = p.Puppet.get(self.tgid) if direct else None
         intent = puppet.intent if direct else self.az.intent
 
-        # TODO set room alias if public channel.
+        # TODO fix aliases and enable
+        # if self.peer_type == "channel" and entity.username:
+        #     public = True
+        #     alias = self._get_room_alias(entity.username)
+        # else:
+        #     public = False
+        #     # TODO invite link alias?
+        #     alias = None
+
+        # room = intent.create_room(alias=alias, is_public=public, invitees=invites, name=title,
+        #                           is_direct=direct)
         room = intent.create_room(invitees=invites, name=title, is_direct=direct)
         if not room:
             raise Exception(f"Failed to create room for {self.tgid_log}")
@@ -136,7 +147,7 @@ class Portal:
         self.by_mxid[self.mxid] = self
         self.save()
 
-        power_level_requirement = 0 if self.peer_type == "chat" else 50
+        power_level_requirement = 0 if self.peer_type == "chat" and entity.admins_enabled else 50
         levels = self.main_intent.get_power_levels(self.mxid)
         levels["ban"] = 100
         levels["invite"] = 50
@@ -146,6 +157,11 @@ class Portal:
         levels["events"]["m.room.power_levels"] = 95
         self.main_intent.set_power_levels(self.mxid, levels)
         self.update_after_create(user, entity, direct, puppet)
+
+    def _get_room_alias(self, username=None):
+        username = username or self.username
+        return config.get("bridge.alias_template", "telegram_{groupname}").format(
+            groupname=username)
 
     def sync_telegram_users(self, source, users=[]):
         for entity in users:
@@ -187,8 +203,12 @@ class Portal:
 
         if self.peer_type == "channel":
             if self.username != entity.username:
-                # TODO update room alias
+                # TODO fix aliases and enable
+                # if self.username:
+                #     self.main_intent.remove_room_alias(self._get_room_alias())
                 self.username = entity.username
+                # if self.username:
+                #     self.main_intent.add_room_alias(self.mxid, self._get_room_alias())
                 changed = True
 
         changed = self.update_title(entity.title, self.main_intent) or changed
@@ -244,7 +264,8 @@ class Portal:
         elif self.peer_type == "chat":
             link = user.client(ExportChatInviteRequest(chat_id=self.tgid))
         elif self.peer_type == "channel":
-            link = user.client(ExportInviteRequest(channel=user.client.get_input_entity(self.peer)))
+            link = user.client(
+                ExportInviteRequest(channel=user.client.get_input_entity(self.peer)))
         else:
             raise ValueError(f"Invalid peer type '{self.peer_type}' for invite link.")
 
@@ -268,16 +289,28 @@ class Portal:
             file_name = f"matrix_upload{mimetypes.guess_extension(mime)}"
         return file_name, None if file_name == body else body
 
-    def leave_matrix(self, user):
+    def leave_matrix(self, user, source):
         if self.peer_type == "user":
             self.main_intent.leave_room(self.mxid)
             self.delete()
             del self.by_tgid[self.tgid_full]
             del self.by_mxid[self.mxid]
+        elif source:
+            target = source.client.get_input_entity(PeerUser(user_id=user.tgid))
+            if self.peer_type == "chat":
+                source.client(DeleteChatUserRequest(chat_id=self.tgid, user_id=target))
+            else:
+                channel = source.client.get_input_entity(self.peer)
+                rights = ChannelBannedRights(datetime.fromtimestamp(0), False)
+                # FIXME This should work, but it doesn't :(
+                source.client(EditBannedRequest(channel=channel,
+                                                user_id=target,
+                                                banned_rights=rights))
         elif self.peer_type == "chat":
             user.client(DeleteChatUserRequest(chat_id=self.tgid, user_id=InputUserSelf()))
         elif self.peer_type == "channel":
-            user.client(LeaveChannelRequest(channel=user.client.get_input_entity(self.peer)))
+            channel = user.client.get_input_entity(self.peer)
+            user.client(LeaveChannelRequest(channel=channel))
 
     def handle_matrix_message(self, sender, message, event_id):
         type = message["msgtype"]
@@ -326,10 +359,8 @@ class Portal:
 
     def handle_matrix_power_levels(self, sender, new_users, old_users):
         for user, level in new_users.items():
-            puppet_match = p.Puppet.mxid_regex.search(user)
-            if puppet_match:
-                user_id = int(puppet_match.group(1))
-            else:
+            user_id = p.Puppet.get_id_by_mxid(user)
+            if not user_id:
                 mx_user = u.User.get_by_mxid(user, create=False)
                 if not mx_user or not mx_user.tgid:
                     continue
@@ -350,9 +381,9 @@ class Portal:
             mx_user = u.User.get_by_mxid(user, create=False)
             if mx_user and mx_user.tgid:
                 user_tgids.add(mx_user.tgid)
-            puppet_match = p.Puppet.mxid_regex.match(user)
-            if puppet_match:
-                user_tgids.add(int(puppet_match.group(1)))
+            puppet_id = p.Puppet.get_id_from_mxid(user)
+            if puppet_id:
+                user_tgids.add(puppet_id)
         return user_tgids
 
     def create_telegram_chat(self, source, supergroup=False):
@@ -363,20 +394,23 @@ class Portal:
 
         invites = self._get_telegram_users_in_matrix_room()
         if len(invites) < 2:
-            # TODO when we get the option for a bot, this won't happen when the bot is activated.
+            # TODO[waiting-for-bots] This won't happen when the bot is enabled
             raise ValueError("Not enough Telegram users to create a chat")
 
         invites = [source.client.get_input_entity(id) for id in invites]
 
         if self.peer_type == "chat":
             updates = source.client(CreateChatRequest(title=self.title, users=invites))
+            entity = updates.chats[0]
         elif self.peer_type == "channel":
-            updates = source.client(CreateChannelRequest(title=self.title, megagroup=supergroup))
-            # TODO invite people
+            updates = source.client(CreateChannelRequest(title=self.title, about="",
+                                                         megagroup=supergroup))
+            entity = updates.chats[0]
+            source.client(InviteToChannelRequest(channel=source.client.get_input_entity(entity),
+                                                 users=invites))
         else:
             raise ValueError("Invalid peer type for Telegram chat creation")
 
-        entity = updates.chats[0]
         self.tgid = entity.id
         self.tg_receiver = self.tgid
         self.update_info(source, entity)
@@ -386,9 +420,8 @@ class Portal:
         if self.peer_type == "chat":
             source.client(AddChatUserRequest(chat_id=self.tgid, user_id=puppet.tgid, fwd_limit=0))
         elif self.peer_type == "channel":
-            source.client(InviteToChannelRequest(channel=self.peer,
-                                                 users=[InputUser(user_id=puppet.tgid)],
-                                                 fwd_limit=0))
+            target = source.client.get_input_entity(PeerUser(user_id=puppet.tgid))
+            source.client(InviteToChannelRequest(channel=self.peer, users=[target]))
         else:
             raise ValueError("Invalid peer type for Telegram user invite")
 
