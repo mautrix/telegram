@@ -93,8 +93,8 @@ class AppService:
         self.loop = loop or asyncio.get_event_loop()
         self.log = log or logging.getLogger("mautrix_appservice")
 
-        self.query_user = query_user or (lambda: None)
-        self.query_alias = query_alias or (lambda: None)
+        self.query_user = query_user or (lambda user: None)
+        self.query_alias = query_alias or (lambda alias: None)
 
         self.event_handlers = []
 
@@ -123,8 +123,9 @@ class AppService:
     @contextmanager
     def run(self, host="127.0.0.1", port=8080):
         self._http_session = aiohttp.ClientSession(loop=self.loop)
-        self._intent = HTTPAPI(base_url=self.server, bot_mxid=self.bot_mxid, token=self.as_token,
-                               log=self.log, state_store=self.state_store).bot_intent()
+        self._intent = HTTPAPI(base_url=self.server, domain=self.domain, bot_mxid=self.bot_mxid,
+                               token=self.as_token, log=self.log,
+                               state_store=self.state_store).bot_intent()
 
         yield partial(aiohttp.web.run_app, self.app, host=host, port=port)
 

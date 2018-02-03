@@ -23,9 +23,10 @@ from matrix_client.errors import MatrixRequestError
 
 
 class HTTPAPI(MatrixHttpApi):
-    def __init__(self, base_url, bot_mxid=None, token=None, identity=None, log=None,
+    def __init__(self, base_url, domain=None, bot_mxid=None, token=None, identity=None, log=None,
                  state_store=None):
         self.base_url = base_url
+        self.domain = domain
         self.token = token
         self.identity = identity
         self.txn_id = 0
@@ -110,6 +111,7 @@ class ChildHTTPAPI(HTTPAPI):
         self.base_url = parent.base_url
         self.validate_cert = parent.validate_cert
         self.log = parent.log
+        self.domain = parent.domain
         self.parent = parent
 
     @property
@@ -213,11 +215,11 @@ class IntentAPI:
 
     def add_room_alias(self, room_id, alias):
         self._ensure_registered()
-        self.client.set_room_alias(room_id, alias)
+        self.client.set_room_alias(room_id, f"#{alias}:{self.client.domain}")
 
     def remove_room_alias(self, alias):
         self._ensure_registered()
-        self.client.remove_room_alias(alias)
+        self.client.remove_room_alias(f"#{alias}:{self.client.domain}")
 
     def set_room_name(self, room_id, name):
         self._ensure_joined(room_id)

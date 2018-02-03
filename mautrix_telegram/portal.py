@@ -121,25 +121,28 @@ class Portal:
         self.log.debug(f"Creating room for {self.tgid_log}")
 
         try:
-            title = entity.title
+            self.title = entity.title
         except AttributeError:
-            title = None
+            self.title = None
 
         puppet = p.Puppet.get(self.tgid) if direct else None
         intent = puppet.intent if direct else self.az.intent
 
-        # TODO fix aliases and enable
-        # if self.peer_type == "channel" and entity.username:
-        #     public = True
-        #     alias = self._get_room_alias(entity.username)
-        # else:
-        #     public = False
-        #     # TODO invite link alias?
-        #     alias = None
+        if self.peer_type == "channel" and entity.username:
+            # TODO make public once safe
+            public = False
+            alias = self._get_room_alias(entity.username)
+            self.username = entity.username
+        else:
+            public = False
+            # TODO invite link alias?
+            alias = None
 
-        # room = intent.create_room(alias=alias, is_public=public, invitees=invites, name=title,
-        #                           is_direct=direct)
-        room = intent.create_room(invitees=invites, name=title, is_direct=direct)
+        if alias:
+            # TODO properly handle existing room aliases
+            intent.remove_room_alias(alias)
+        room = intent.create_room(alias=alias, is_public=public, invitees=invites, name=self.title,
+                                  is_direct=direct)
         if not room:
             raise Exception(f"Failed to create room for {self.tgid_log}")
 
@@ -216,12 +219,11 @@ class Portal:
 
     def update_username(self, username):
         if self.username != username:
-            # TODO fix aliases and enable
-            # if self.username:
-            #     self.main_intent.remove_room_alias(self._get_room_alias())
+            if self.username:
+                self.main_intent.remove_room_alias(self._get_room_alias())
             self.username = username
-            # if self.username:
-            #     self.main_intent.add_room_alias(self.mxid, self._get_room_alias())
+            if self.username:
+                self.main_intent.add_room_alias(self.mxid, self._get_room_alias())
             return True
         return False
 
