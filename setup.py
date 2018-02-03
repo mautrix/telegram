@@ -14,8 +14,8 @@ setuptools.setup(
     packages=setuptools.find_packages(),
 
     install_requires=[
-        "Telethon>=0.16.2.3,<0.17",
-        "aiohttp>=2.3.9,<3",
+        "Telethon>=0.17.0.0,<0.17",
+        "aiohttp>=2.3.10,<3",
         "SQLAlchemy>=1.2.2,<2",
         "Markdown>=2.6.11,<3",
         "ruamel.yaml>=0.15.35,<0.16",
