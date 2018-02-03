@@ -77,7 +77,6 @@ appserv = AppService(config["homeserver.address"], config["homeserver.domain"],
                      config["appservice.bot_username"], log=log.getChild("as"))
 context = (appserv, db_session, log, config)
 
-
 with appserv.run(config["appservice.hostname"], config["appservice.port"]) as start:
     init_db(db_session)
     init_formatter(context)

@@ -20,6 +20,7 @@ import string
 
 yaml = ruamel.yaml.YAML()
 
+
 class DictWithRecursion:
     def __init__(self, data={}):
         self._data = data
@@ -77,23 +78,27 @@ class Config(DictWithRecursion):
             with open(self.registration_path, 'w') as stream:
                 yaml.dump(self._registration, stream)
 
-    def _new_token(self):
+    @staticmethod
+    def _new_token():
         return "".join(random.choices(string.ascii_lowercase + string.digits, k=64))
 
     def generate_registration(self):
         homeserver = self["homeserver.domain"]
 
-        username_format = self.get("bridge.username_template", "telegram_{userid}").format(userid=".+")
-        alias_format = self.get("bridge.alias_template", "telegram_{groupname}").format(groupname=".+")
+        username_format = self.get("bridge.username_template", "telegram_{userid}") \
+            .format(userid=".+")
+        alias_format = self.get("bridge.alias_template", "telegram_{groupname}") \
+            .format(groupname=".+")
 
         self.set("appservice.as_token", self._new_token())
         self.set("appservice.hs_token", self._new_token())
 
-        appservice = self.get("appservice", {})
+        url = (f"{self['appservice.protocol']}://"
+               + f"{self['appservice.hostname']}:{self['appservice.port']}")
         self._registration = {
-            "id": appservice.get("id", "telegram"),
-            "as_token": appservice.get("as_token"),
-            "hs_token": appservice.get("hs_token"),
+            "id": self.get("appservice.id", "telegram"),
+            "as_token": self["appservice.as_token"],
+            "hs_token": self["appservice.hs_token"],
             "namespaces": {
                 "users": [{
                     "exclusive": True,
@@ -104,7 +109,7 @@ class Config(DictWithRecursion):
                     "regex": f"#{alias_format}:{homeserver}"
                 }]
             },
-            "url": f"{appservice.get('protocol')}://{appservice.get('hostname')}:{appservice.get('port')}",
-            "sender_localpart": appservice.get("bot_username"),
+            "url": url,
+            "sender_localpart": self["appservice.bot_username"],
             "rate_limited": False
         }

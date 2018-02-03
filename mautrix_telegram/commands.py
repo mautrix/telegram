@@ -276,7 +276,8 @@ class CommandHandler:
         portal.main_intent.leave_room(portal.mxid)
         portal.delete()
 
-    def _strip_prefix(self, value, prefixes):
+    @staticmethod
+    def _strip_prefix(value, prefixes):
         for prefix in prefixes:
             if value.startswith(prefix):
                 return value[len(prefix):]
