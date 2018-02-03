@@ -184,6 +184,20 @@ class MatrixHandler:
             sender = User.get_by_mxid(sender)
             portal.handle_matrix_power_levels(sender, new["users"], old["users"])
 
+    def handle_room_meta(self, type, room, sender, content):
+        portal = Portal.get_by_mxid(room)
+        sender = User.get_by_mxid(sender)
+        if sender.has_full_access and portal:
+            handler, content_key = {
+                "m.room.name": (portal.handle_matrix_title, "name"),
+                "m.room.topic": (portal.handle_matrix_about, "topic"),
+                "m.room.avatar": (portal.handle_matrix_avatar, "url"),
+            }[type]
+            if content_key not in content:
+                # FIXME handle
+                pass
+            handler(sender, content[content_key])
+
     def filter_matrix_event(self, event):
         return (event["sender"] == self.az.bot_mxid
                 or Puppet.get_id_from_mxid(event["sender"]) is not None)
@@ -209,3 +223,5 @@ class MatrixHandler:
         elif type == "m.room.power_levels":
             self.handle_power_levels(evt["room_id"], evt["sender"], evt["content"],
                                      evt["prev_content"])
+        elif type == "m.room.name" or type == "m.room.avatar" or type == "m.room.topic":
+            self.handle_room_meta(type, evt["room_id"], evt["sender"], evt["content"])

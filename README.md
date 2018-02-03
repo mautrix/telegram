@@ -70,19 +70,20 @@ The bridge does not do this automatically.
   * [x] Images
   * [x] Files
   * [x] Message redactions
-  * [ ] Presence (may not be possible)
-  * [ ] Typing notifications (may not be possible)
+  * [ ] † Presence
+  * [ ] † Typing notifications
   * [ ] Pinning messages
   * [ ] Power level
     * [x] Normal chats
-	* [ ] Supergroups/channels
+	* [ ] Supergroups/channels (currently only creator level bridged)
   * [ ] Membership actions
     * [x] Inviting puppets
     * [ ] Inviting Matrix users who have logged in to Telegram
     * [x] Kicking
     * [ ] Joining (once room aliases have been implemented)
     * [x] Leaving
-  * [ ] Room metadata changes
+  * [x] Room metadata changes (name, topic, avatar)
+  * [x] Initial room metadata
 * Telegram → Matrix
   * [x] Plaintext messages
   * [x] Formatted messages
@@ -108,9 +109,12 @@ The bridge does not do this automatically.
     * [x] Inviting
     * [x] Kicking
     * [x] Joining/leaving
-  * [x] Chat metadata changes
-    * [ ] Public channel username changes
-  * [x] Initial chat metadata
+  * [ ] Chat metadata changes
+    * [x] Title
+    * [x] Avatar
+    * [ ] † About text
+    * [ ] † Public channel username
+  * [x] Initial chat metadata (about text missing)
   * [x] Supergroup upgrade
 * Misc
   * [x] Automatic portal creation
@@ -131,5 +135,9 @@ The bridge does not do this automatically.
   * [x] Joining chats with invite links (`join`)
   * [x] Creating a Telegram chat for an existing Matrix room (`create`)
   * [ ] Upgrading the chat of a portal room into a supergroup (`upgrade`)
+  * [ ] Change public/private status of supergroup/channel (`setpublic`)
+  * [ ] Change username of supergroup/channel (`groupname`)
   * [x] Getting the Telegram invite link to a Matrix room (`invitelink`)
   * [x] Clean up and forget a portal room (`deleteportal`)
+
+† Information not automatically sent from source, i.e. implementation may not be possible

@@ -237,7 +237,7 @@ class CommandHandler:
         self.reply(f"Created private chat room with {pu.Puppet.get_displayname(user, False)}")
 
     @command_handler
-    def invite_link(self, sender, args):
+    def invitelink(self, sender, args):
         if not sender.logged_in:
             return self.reply("This command requires you to be logged in.")
 
@@ -257,7 +257,7 @@ class CommandHandler:
             return self.reply("You don't have the permission to create an invite link.")
 
     @command_handler
-    def delete_portal(self, sender, args):
+    def deleteportal(self, sender, args):
         if not sender.logged_in:
             return self.reply("This command requires you to be logged in.")
         elif not sender.is_admin:
@@ -331,10 +331,13 @@ class CommandHandler:
 
         state = self.az.intent.get_room_state(self._room_id)
         title = None
+        about = None
         levels = None
         for event in state:
             if event["type"] == "m.room.name":
                 title = event["content"]["name"]
+            elif event["type"] == "m.room.topic":
+                about = event["content"]["topic"]
             elif event["type"] == "m.room.power_levels":
                 levels = event["content"]
         if not title:
@@ -359,7 +362,7 @@ class CommandHandler:
             "group": "chat",
         }[type]
 
-        portal = po.Portal(tgid=None, mxid=self._room_id, title=title, peer_type=type)
+        portal = po.Portal(tgid=None, mxid=self._room_id, title=title, about=about, peer_type=type)
         try:
             portal.create_telegram_chat(sender, supergroup=supergroup)
         except ValueError as e:
@@ -368,6 +371,14 @@ class CommandHandler:
 
     @command_handler
     def upgrade(self, sender, args):
+        self.reply("Not yet implemented.")
+
+    @command_handler
+    def setpublic(self, sender, args):
+        self.reply("Not yet implemented.")
+
+    @command_handler
+    def groupname(self, sender, args):
         self.reply("Not yet implemented.")
 
     # endregion
@@ -416,9 +427,12 @@ _**Telegram actions**: commands for using the bridge to interact with Telegram._
 **create** [_type_] - Create a Telegram chat of the given type for the current Matrix room.
                       The type is either `group`, `supergroup` or `channel` (defaults to `group`).  
 **upgrade** - Upgrade a normal Telegram group to a supergroup.  
-**invite_link** - Get a Telegram invite link to the current chat.  
-**delete_portal** - Forget the current portal room. Only works for group chats; to delete a private
-                   chat portal, simply leave the room.
+**invitelink** - Get a Telegram invite link to the current chat.  
+**deleteportal** - Forget the current portal room. Only works for group chats; to delete a private
+                   chat portal, simply leave the room.  
+**setpublic** <_yes/no_> - Change whether or not a supergroup/channel is public.  
+**groupname** <_name_> - Change the username of a supergroup/channel.
+                         To disable, use `setpublic no`.
 """
         return self.reply(management_status + help)
 

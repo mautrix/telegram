@@ -15,7 +15,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import re
-from telethon.tl.types import UserProfilePhoto
+from telethon.tl.types import UserProfilePhoto, PeerUser
 from telethon.errors.rpc_error_list import LocationInvalidError
 from .db import Puppet as DBPuppet
 
@@ -46,6 +46,9 @@ class Puppet:
     @property
     def tgid(self):
         return self.id
+
+    def get_input_entity(self, user):
+        return user.client.get_input_entity(PeerUser(user_id=self.tgid))
 
     def to_db(self):
         return self.db.merge(

@@ -33,6 +33,7 @@ class Portal(Base):
     # Telegram chat metadata
     username = Column(String, nullable=True)
     title = Column(String, nullable=True)
+    about = Column(String, nullable=True)
     photo_id = Column(String, nullable=True)
 
 

@@ -61,6 +61,9 @@ class User:
     def has_full_access(self):
         return self.logged_in and self.whitelisted
 
+    def get_input_entity(self, user):
+        return user.client.get_input_entity(InputUser(user_id=self.tgid))
+
     # region Database conversion
 
     def to_db(self):

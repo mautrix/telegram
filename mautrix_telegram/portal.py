@@ -14,13 +14,9 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
-from telethon.tl.functions.messages import (GetFullChatRequest, EditChatAdminRequest,
-                                            CreateChatRequest, AddChatUserRequest,
-                                            ExportChatInviteRequest, DeleteChatUserRequest)
-from telethon.tl.functions.channels import (GetParticipantsRequest, CreateChannelRequest,
-                                            InviteToChannelRequest, ExportInviteRequest,
-                                            LeaveChannelRequest, EditBannedRequest)
-from telethon.errors.rpc_error_list import ChatAdminRequiredError, LocationInvalidError
+from telethon.tl.functions.messages import *
+from telethon.tl.functions.channels import *
+from telethon.errors.rpc_error_list import *
 from telethon.tl.types import *
 from PIL import Image
 from io import BytesIO
@@ -43,13 +39,14 @@ class Portal:
     by_tgid = {}
 
     def __init__(self, tgid, peer_type, tg_receiver=None, mxid=None, username=None, title=None,
-                 photo_id=None):
+                 about=None, photo_id=None):
         self.mxid = mxid
         self.tgid = tgid
         self.tg_receiver = tg_receiver or tgid
         self.peer_type = peer_type
         self.username = username
         self.title = title
+        self.about = about
         self.photo_id = photo_id
         self._main_intent = None
 
@@ -76,6 +73,9 @@ class Portal:
             return PeerChat(chat_id=self.tgid)
         elif self.peer_type == "channel":
             return PeerChannel(channel_id=self.tgid)
+
+    def get_input_entity(self, user):
+        return user.client.get_input_entity(self.peer)
 
     # region Matrix room info updating
 
@@ -202,35 +202,49 @@ class Portal:
         changed = False
 
         if self.peer_type == "channel":
-            if self.username != entity.username:
-                # TODO fix aliases and enable
-                # if self.username:
-                #     self.main_intent.remove_room_alias(self._get_room_alias())
-                self.username = entity.username
-                # if self.username:
-                #     self.main_intent.add_room_alias(self.mxid, self._get_room_alias())
-                changed = True
+            changed = self.update_username(entity.username) or changed
+            # TODO update about text
+            # changed = self.update_about(entity.about) or changed
 
-        changed = self.update_title(entity.title, self.main_intent) or changed
+        changed = self.update_title(entity.title) or changed
 
         if isinstance(entity.photo, ChatPhoto):
-            changed = self.update_avatar(user, entity.photo.photo_big, self.main_intent) or changed
+            changed = self.update_avatar(user, entity.photo.photo_big) or changed
 
         if changed:
             self.save()
 
-    def update_title(self, title, intent=None):
+    def update_username(self, username):
+        if self.username != username:
+            # TODO fix aliases and enable
+            # if self.username:
+            #     self.main_intent.remove_room_alias(self._get_room_alias())
+            self.username = username
+            # if self.username:
+            #     self.main_intent.add_room_alias(self.mxid, self._get_room_alias())
+            return True
+        return False
+
+    def update_about(self, about):
+        if self.about != about:
+            self.about = about
+            self.main_intent.set_room_topic(self.mxid, self.about)
+            return True
+        return False
+
+    def update_title(self, title):
         if self.title != title:
             self.title = title
             self.main_intent.set_room_name(self.mxid, self.title)
             return True
         return False
 
-    def get_largest_photo_size(self, photo):
+    @staticmethod
+    def _get_largest_photo_size(photo):
         return max(photo.sizes, key=(lambda photo: (
             len(photo.bytes) if isinstance(photo, PhotoCachedSize) else photo.size)))
 
-    def update_avatar(self, user, photo, intent=None):
+    def update_avatar(self, user, photo):
         photo_id = f"{photo.volume_id}-{photo.local_id}"
         if self.photo_id != photo_id:
             try:
@@ -265,7 +279,7 @@ class Portal:
             link = user.client(ExportChatInviteRequest(chat_id=self.tgid))
         elif self.peer_type == "channel":
             link = user.client(
-                ExportInviteRequest(channel=user.client.get_input_entity(self.peer)))
+                ExportInviteRequest(channel=self.get_input_entity(user)))
         else:
             raise ValueError(f"Invalid peer type '{self.peer_type}' for invite link.")
 
@@ -296,11 +310,11 @@ class Portal:
             del self.by_tgid[self.tgid_full]
             del self.by_mxid[self.mxid]
         elif source:
-            target = source.client.get_input_entity(PeerUser(user_id=user.tgid))
+            target = user.get_input_entity(source)
             if self.peer_type == "chat":
                 source.client(DeleteChatUserRequest(chat_id=self.tgid, user_id=target))
             else:
-                channel = source.client.get_input_entity(self.peer)
+                channel = self.get_input_entity(source)
                 rights = ChannelBannedRights(datetime.fromtimestamp(0), True)
                 source.client(EditBannedRequest(channel=channel,
                                                 user_id=target,
@@ -308,7 +322,7 @@ class Portal:
         elif self.peer_type == "chat":
             user.client(DeleteChatUserRequest(chat_id=self.tgid, user_id=InputUserSelf()))
         elif self.peer_type == "channel":
-            channel = user.client.get_input_entity(self.peer)
+            channel = self.get_input_entity(user)
             user.client(LeaveChannelRequest(channel=channel))
 
     def handle_matrix_message(self, sender, message, event_id):
@@ -358,7 +372,7 @@ class Portal:
 
     def handle_matrix_power_levels(self, sender, new_users, old_users):
         for user, level in new_users.items():
-            user_id = p.Puppet.get_id_by_mxid(user)
+            user_id = p.Puppet.get_id_from_mxid(user)
             if not user_id:
                 mx_user = u.User.get_by_mxid(user, create=False)
                 if not mx_user or not mx_user.tgid:
@@ -367,6 +381,52 @@ class Portal:
             if user not in old_users or level != old_users[user]:
                 sender.client(
                     EditChatAdminRequest(chat_id=self.tgid, user_id=user_id, is_admin=level >= 50))
+
+    def handle_matrix_about(self, sender, about):
+        if self.peer_type not in {"channel"}:
+            return
+        channel = self.get_input_entity(sender)
+        sender.client(EditAboutRequest(channel=channel, about=about))
+        self.about = about
+        self.save()
+
+    def handle_matrix_title(self, sender, title):
+        if self.peer_type not in {"chat", "channel"}:
+            return
+
+        if self.peer_type == "chat":
+            sender.client(EditChatTitleRequest(chat_id=self.tgid, title=title))
+        else:
+            channel = self.get_input_entity(sender)
+            sender.client(EditTitleRequest(channel=channel, title=title))
+        self.title = title
+        self.save()
+
+    def handle_matrix_avatar(self, sender, url):
+        if self.peer_type not in {"chat", "channel"}:
+            # Invalid peer type
+            return
+
+        file = self.main_intent.download_file(url)
+        mime = magic.from_buffer(file, mime=True)
+        ext = mimetypes.guess_extension(mime)
+        uploaded = sender.client.upload_file(file, file_name=f"avatar{ext}")
+        photo = InputChatUploadedPhoto(file=uploaded)
+
+        if self.peer_type == "chat":
+            updates = sender.client(EditChatPhotoRequest(chat_id=self.tgid, photo=photo))
+        else:
+            channel = self.get_input_entity(sender)
+            updates = sender.client(EditPhotoRequest(channel=channel, photo=photo))
+        for update in updates.updates:
+            is_photo_update = (isinstance(update, UpdateNewMessage)
+                               and isinstance(update.message, MessageService)
+                               and isinstance(update.message.action, MessageActionChatEditPhoto))
+            if is_photo_update:
+                loc = self._get_largest_photo_size(update.message.action.photo).location
+                self.photo_id = f"{loc.volume_id}-{loc.local_id}"
+                self.save()
+                break
 
     # endregion
     # region Telegram chat info updating
@@ -402,7 +462,7 @@ class Portal:
             updates = source.client(CreateChatRequest(title=self.title, users=invites))
             entity = updates.chats[0]
         elif self.peer_type == "channel":
-            updates = source.client(CreateChannelRequest(title=self.title, about="",
+            updates = source.client(CreateChannelRequest(title=self.title, about=self.about or "",
                                                          megagroup=supergroup))
             entity = updates.chats[0]
             source.client(InviteToChannelRequest(channel=source.client.get_input_entity(entity),
@@ -419,7 +479,7 @@ class Portal:
         if self.peer_type == "chat":
             source.client(AddChatUserRequest(chat_id=self.tgid, user_id=puppet.tgid, fwd_limit=0))
         elif self.peer_type == "channel":
-            target = source.client.get_input_entity(PeerUser(user_id=puppet.tgid))
+            target = puppet.get_input_entity(source)
             source.client(InviteToChannelRequest(channel=self.peer, users=[target]))
         else:
             raise ValueError("Invalid peer type for Telegram user invite")
@@ -432,7 +492,7 @@ class Portal:
             user.intent.set_typing(self.mxid, is_typing=True)
 
     def handle_telegram_photo(self, source, sender, media):
-        largest_size = self.get_largest_photo_size(media.photo)
+        largest_size = self._get_largest_photo_size(media.photo)
         file = source.download_file(largest_size.location)
         mime_type = magic.from_buffer(file, mime=True)
         uploaded = sender.intent.upload_file(file, mime_type)
@@ -554,12 +614,13 @@ class Portal:
             if not isinstance(action, create_and_continue):
                 return
 
+        # TODO figure out how to see changes to about text / channel username
         if isinstance(action, MessageActionChatEditTitle):
-            if self.update_title(action.title, self.main_intent):
+            if self.update_title(action.title):
                 self.save()
         elif isinstance(action, MessageActionChatEditPhoto):
-            largest_size = self.get_largest_photo_size(action.photo)
-            if self.update_avatar(source, largest_size.location, self.main_intent):
+            largest_size = self._get_largest_photo_size(action.photo)
+            if self.update_avatar(source, largest_size.location):
                 self.save()
         elif isinstance(action, MessageActionChatAddUser):
             for user_id in action.users:
@@ -619,7 +680,7 @@ class Portal:
         return self.db.merge(
             DBPortal(tgid=self.tgid, tg_receiver=self.tg_receiver, peer_type=self.peer_type,
                      mxid=self.mxid, username=self.username, title=self.title,
-                     photo_id=self.photo_id))
+                     about=self.about, photo_id=self.photo_id))
 
     def migrate_and_save(self, new_id):
         existing = DBPortal.query.get(self.tgid_full)
@@ -643,7 +704,7 @@ class Portal:
         return Portal(tgid=db_portal.tgid, tg_receiver=db_portal.tg_receiver,
                       peer_type=db_portal.peer_type, mxid=db_portal.mxid,
                       username=db_portal.username, title=db_portal.title,
-                      photo_id=db_portal.photo_id)
+                      about=db_portal.about, photo_id=db_portal.photo_id)
 
     # endregion
     # region Class instance lookup
