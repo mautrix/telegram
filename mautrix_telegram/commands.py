@@ -402,37 +402,44 @@ class CommandHandler:
     @command_handler
     def help(self, sender, args):
         if self._is_management:
-            management_status = ("This is a management room: prefixing commands"
+            management_status = ("This is a management room: prefixing commands "
                                  "with `$cmdprefix` is not required.\n")
         elif self._is_portal:
-            management_status = ("**This is a portal room**: you must always"
+            management_status = ("**This is a portal room**: you must always "
                                  "prefix commands with `$cmdprefix`.\n"
                                  "Management commands will not be sent to Telegram.")
         else:
-            management_status = ("**This is not a management room**: you must"
+            management_status = ("**This is not a management room**: you must "
                                  "prefix commands with `$cmdprefix`.\n")
-        help = """
-_**Generic bridge commands**: commands for using the bridge that aren't related to Telegram._  
+        help = """\n
+#### Generic bridge commands
 **help** - Show this help message.  
-**cancel** - Cancel an ongoing action (such as login).  
+**cancel** - Cancel an ongoing action (such as login).
 
-_**Telegram actions**: commands for using the bridge to interact with Telegram._  
+#### Authentication
 **login** <_phone_> - Request an authentication code.  
 **logout** - Log out from Telegram.  
-**ping** - Check if you're logged into Telegram.  
+**ping** - Check if you're logged into Telegram.
+
+#### Initiating chats
 **search** [_-r|--remote_] <_query_> - Search your contacts or the Telegram servers for users.  
 **pm** <_identifier_> - Open a private chat with the given Telegram user. The identifier is either
                         the internal user ID, the username or the phone number.  
 **join** <_link_> - Join a chat with an invite link.  
 **create** [_type_] - Create a Telegram chat of the given type for the current Matrix room.
-                      The type is either `group`, `supergroup` or `channel` (defaults to `group`).  
-**upgrade** - Upgrade a normal Telegram group to a supergroup.  
+                      The type is either `group`, `supergroup` or `channel` (defaults to `group`).
+
+#### Portal management  
+† **upgrade** - Upgrade a normal Telegram group to a supergroup.  
 **invitelink** - Get a Telegram invite link to the current chat.  
 **deleteportal** - Forget the current portal room. Only works for group chats; to delete a private
                    chat portal, simply leave the room.  
-**setpublic** <_yes/no_> - Change whether or not a supergroup/channel is public.  
-**groupname** <_name_> - Change the username of a supergroup/channel.
+† **setpublic** <_yes/no_> - Change whether or not a supergroup/channel is public.  
+† **groupname** <_name_> - Change the username of a supergroup/channel.
                          To disable, use `setpublic no`.
+
+
+† Not yet implemented
 """
         return self.reply(management_status + help)
 
