@@ -301,8 +301,7 @@ class Portal:
                 source.client(DeleteChatUserRequest(chat_id=self.tgid, user_id=target))
             else:
                 channel = source.client.get_input_entity(self.peer)
-                rights = ChannelBannedRights(datetime.fromtimestamp(0), False)
-                # FIXME This should work, but it doesn't :(
+                rights = ChannelBannedRights(datetime.fromtimestamp(0), True)
                 source.client(EditBannedRequest(channel=channel,
                                                 user_id=target,
                                                 banned_rights=rights))
