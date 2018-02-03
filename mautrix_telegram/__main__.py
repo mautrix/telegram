@@ -60,6 +60,9 @@ if args.generate_registration:
     sys.exit(0)
 
 if config["appservice.debug"]:
+    telethon_log = logging.getLogger("telethon")
+    telethon_log.addHandler(handler)
+    telethon_log.setLevel(logging.DEBUG)
     log.setLevel(logging.DEBUG)
     log.debug("Debug messages enabled.")
 
