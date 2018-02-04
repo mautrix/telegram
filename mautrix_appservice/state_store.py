@@ -74,7 +74,6 @@ class StateStore:
         return self.memberships.get(room, {}).get(user, "left")
 
     def is_joined(self, room, user):
-        print("Is joined", room, user, self.get_membership(room, user), self.get_membership(room, user) == "join")
         return self.get_membership(room, user) == "join"
 
     def set_membership(self, room, user, membership):
