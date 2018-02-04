@@ -42,13 +42,13 @@ class StateStore:
     def load(self, file):
         if isinstance(file, str):
             try:
-                input = open(file, "r")
+                input_source = open(file, "r")
             except FileNotFoundError:
                 return
         else:
-            input = file
+            input_source = file
 
-        data = json.load(input)
+        data = json.load(input_source)
         if "registrations" in data:
             self.registrations = set(data["registrations"])
         if "memberships" in data:
@@ -57,7 +57,7 @@ class StateStore:
             self.power_levels = data["power_levels"]
 
         if isinstance(file, str):
-            input.close()
+            input_source.close()
 
     def _autosave(self):
         if self.autosave_file:
@@ -104,7 +104,7 @@ class StateStore:
         return has >= required
 
     def set_power_level(self, room, user, level):
-        if not room in self.power_levels:
+        if room not in self.power_levels:
             self.power_levels[room] = {
                 "users": {},
                 "events": {},

@@ -14,16 +14,16 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
-import ruamel.yaml
+from ruamel.yaml import YAML
 import random
 import string
 
-yaml = ruamel.yaml.YAML()
+yaml = YAML()
 
 
 class DictWithRecursion:
-    def __init__(self, data={}):
-        self._data = data
+    def __init__(self, data=None):
+        self._data = data or {}
 
     def _recursive_get(self, data, key, default_value):
         if '.' in key:

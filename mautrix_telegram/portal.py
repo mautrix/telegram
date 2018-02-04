@@ -87,12 +87,14 @@ class Portal:
             self._main_intent = puppet.intent if direct else self.az.intent
         return self._main_intent
 
-    def invite_matrix(self, users=[]):
+    def invite_matrix(self, users):
         if isinstance(users, str):
             self.main_intent.invite(self.mxid, users)
-        else:
+        elif isinstance(users, list):
             for user in users:
                 self.main_intent.invite(self.mxid, user)
+        else:
+            raise ValueError("Invalid invite identifier given to invite_matrix()")
 
     def update_after_create(self, user, entity, direct, puppet=None):
         if not direct:
@@ -106,7 +108,7 @@ class Portal:
             puppet.update_info(user, entity)
             puppet.intent.join_room(self.mxid)
 
-    def create_matrix_room(self, user, entity=None, invites=[], update_if_exists=True):
+    def create_matrix_room(self, user, entity=None, invites=None, update_if_exists=True):
         if not entity:
             entity = user.client.get_entity(self.peer)
             self.log.debug("Fetched data: %s", entity)
@@ -115,7 +117,7 @@ class Portal:
         if self.mxid:
             if update_if_exists:
                 self.update_after_create(user, entity, direct)
-            self.invite_matrix(invites)
+            self.invite_matrix(invites or [])
             return self.mxid
 
         self.log.debug(f"Creating room for {self.tgid_log}")
@@ -141,8 +143,8 @@ class Portal:
         if alias:
             # TODO properly handle existing room aliases
             intent.remove_room_alias(alias)
-        room = intent.create_room(alias=alias, is_public=public, invitees=invites, name=self.title,
-                                  is_direct=direct)
+        room = intent.create_room(alias=alias, is_public=public, invitees=invites or [],
+                                  name=self.title, is_direct=direct)
         if not room:
             raise Exception(f"Failed to create room for {self.tgid_log}")
 
@@ -166,7 +168,7 @@ class Portal:
         return config.get("bridge.alias_template", "telegram_{groupname}").format(
             groupname=username)
 
-    def sync_telegram_users(self, source, users=[]):
+    def sync_telegram_users(self, source, users):
         for entity in users:
             puppet = p.Puppet.get(entity.id)
             puppet.update_info(source, entity)
@@ -243,8 +245,8 @@ class Portal:
 
     @staticmethod
     def _get_largest_photo_size(photo):
-        return max(photo.sizes, key=(lambda photo: (
-            len(photo.bytes) if isinstance(photo, PhotoCachedSize) else photo.size)))
+        return max(photo.sizes, key=(lambda photo2: (
+            len(photo2.bytes) if isinstance(photo2, PhotoCachedSize) else photo2.size)))
 
     def update_avatar(self, user, photo):
         photo_id = f"{photo.volume_id}-{photo.local_id}"
@@ -293,8 +295,8 @@ class Portal:
     # endregion
     # region Matrix event handling
 
-    def _get_file_meta(self, body, mime):
-        file_name = None
+    @staticmethod
+    def _get_file_meta(body, mime):
         try:
             current_extension = body[body.rindex("."):]
             if mimetypes.types_map[current_extension] == mime:
@@ -510,14 +512,14 @@ class Portal:
         sender.intent.set_typing(self.mxid, is_typing=False)
         return sender.intent.send_image(self.mxid, uploaded["content_uri"], info=info, text=name)
 
-    @staticmethod
-    def convert_webp(file, to="png"):
+    def convert_webp(self, file, to="png"):
         try:
             image = Image.open(BytesIO(file)).convert("RGBA")
             new_file = BytesIO()
             image.save(new_file, to)
             return f"image/{to}", new_file.getvalue()
-        except:
+        except Exception:
+            self.log.exception(f"Failed to convert webp to {to}")
             return "image/webp", file
 
     def handle_telegram_document(self, source, sender, media):
@@ -551,7 +553,7 @@ class Portal:
             type = "m.image"
         sender.intent.set_typing(self.mxid, is_typing=False)
         return sender.intent.send_file(self.mxid, uploaded["content_uri"], info=info, text=name,
-                                       type=type)
+                                       file_type=type)
 
     def handle_telegram_location(self, source, sender, location):
         long = location.long
@@ -566,7 +568,8 @@ class Portal:
         url = f"https://maps.google.com/?q={lat},{long}"
 
         formatted_body = f"Location: <a href='{url}'>{body}</a>"
-        # At least Riot ignores formatting in m.location messages, so we'll add a plaintext link.
+        # At least riot-web ignores formatting in m.location messages,
+        # so we'll add a plaintext link.
         body = f"Location: {body}\n{url}"
 
         return sender.intent.send_message(self.mxid, {

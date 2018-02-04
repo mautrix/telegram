@@ -47,7 +47,7 @@ class CommandHandler:
         with self.handler(sender, room, command, args, is_management, is_portal) as handle_command:
             try:
                 handle_command(self, sender, args)
-            except:
+            except Exception:
                 self.reply("Fatal error while handling command. Check logs for more details.")
                 self.log.exception(f"Fatal error handling command "
                                    + f"'$cmdprefix {command} {''.join(args)}' from {sender.mxid}")
@@ -158,7 +158,7 @@ class CommandHandler:
             }
             return self.reply("Your account has two-factor authentication."
                               "Please send your password here.")
-        except:
+        except Exception:
             self.log.exception()
             return self.reply("Unhandled exception while sending code."
                               "Check console for more details.")
@@ -177,7 +177,7 @@ class CommandHandler:
             return self.reply(f"Successfully logged in as @{user.username}")
         except PasswordHashInvalidError:
             return self.reply("Incorrect password.")
-        except:
+        except Exception:
             self.log.exception()
             return self.reply("Unhandled exception while sending password. "
                               "Check console for more details.")
@@ -199,9 +199,9 @@ class CommandHandler:
             return self.reply("**Usage:** `$cmdprefix+sp search [-r|--remote] <query>")
         elif not sender.logged_in:
             return self.reply("This command requires you to be logged in.")
-        force_remote = False
+        # force_remote = False
         if args[0] in {"-r", "--remote"}:
-            force_remote = True
+            # force_remote = True
             args.pop(0)
         query = " ".join(args)
         if len(query) < 5:
@@ -298,7 +298,7 @@ class CommandHandler:
         if arg.startswith("joinchat/"):
             invite_hash = arg[len("joinchat/"):]
             try:
-                check = sender.client(CheckChatInviteRequest(invite_hash))
+                sender.client(CheckChatInviteRequest(invite_hash))
             except InviteHashInvalidError:
                 return self.reply("Invalid invite link.")
             except InviteHashExpiredError:

@@ -106,7 +106,7 @@ class AppService:
 
         try:
             response = self.query_user(user_id)
-        except:
+        except Exception:
             self.log.exception("Exception in user query handler")
             return web.Response(status=500)
 
@@ -122,7 +122,7 @@ class AppService:
 
         try:
             response = self.query_alias(alias)
-        except:
+        except Exception:
             self.log.exception("Exception in alias query handler")
             return web.Response(status=500)
 
@@ -164,7 +164,7 @@ class AppService:
         for handler in self.event_handlers:
             try:
                 handler(event)
-            except:
+            except Exception:
                 self.log.exception("Exception in Matrix event handler")
 
     def matrix_event_handler(self, func):

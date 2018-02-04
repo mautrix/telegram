@@ -62,7 +62,7 @@ class User:
         return self.logged_in and self.whitelisted
 
     def get_input_entity(self, user):
-        return user.client.get_input_entity(InputUser(user_id=self.tgid))
+        return user.client.get_input_entity(InputUser(user_id=self.tgid, access_hash=0))
 
     # region Database conversion
 
@@ -202,7 +202,7 @@ class User:
     def update_catch(self, update):
         try:
             self.update(update)
-        except:
+        except Exception:
             self.log.exception("Failed to handle Telegram update")
 
     def update(self, update):

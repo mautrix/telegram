@@ -53,12 +53,12 @@ class MatrixParser(HTMLParser):
         self._open_tags.appendleft(tag)
         self._open_tags_meta.appendleft(0)
         attrs = dict(attrs)
-        EntityType = None
+        entity_type = None
         args = {}
         if tag == "strong" or tag == "b":
-            EntityType = MessageEntityBold
+            entity_type = MessageEntityBold
         elif tag == "em" or tag == "i":
-            EntityType = MessageEntityItalic
+            entity_type = MessageEntityItalic
         elif tag == "code":
             try:
                 pre = self._building_entities["pre"]
@@ -67,9 +67,9 @@ class MatrixParser(HTMLParser):
                 except KeyError:
                     pass
             except KeyError:
-                EntityType = MessageEntityCode
+                entity_type = MessageEntityCode
         elif tag == "pre":
-            EntityType = MessageEntityPre
+            entity_type = MessageEntityPre
             args["language"] = ""
         elif tag == "a":
             try:
@@ -86,13 +86,13 @@ class MatrixParser(HTMLParser):
                     if not user:
                         return
                 if user.username:
-                    EntityType = MessageEntityMention
+                    entity_type = MessageEntityMention
                     url = f"@{user.username}"
                 else:
-                    EntityType = MessageEntityMentionName
+                    entity_type = MessageEntityMentionName
                     args["user_id"] = user.tgid
-            elif reply and self._user_id and (
-                len(self.entities) == 0 and len(self._building_entities) == 0):
+            elif reply and self._user_id and (len(self.entities) == 0
+                                              and len(self._building_entities) == 0):
                 room_id = reply.group(1)
                 message_id = reply.group(2)
                 message = DBMessage.query.filter(DBMessage.mxid == message_id
@@ -100,25 +100,25 @@ class MatrixParser(HTMLParser):
                                                  and DBMessage.user == self._user_id).one_or_none()
                 if not message:
                     return
-                EntityType = MessageEntityReply
+                entity_type = MessageEntityReply
                 args["msg_id"] = message.tgid
                 self._building_reply = True
                 url = None
             elif url.startswith("mailto:"):
                 url = url[len("mailto:"):]
-                EntityType = MessageEntityEmail
+                entity_type = MessageEntityEmail
             else:
                 if self.get_starttag_text() == url:
-                    EntityType = MessageEntityUrl
+                    entity_type = MessageEntityUrl
                 else:
-                    EntityType = MessageEntityTextUrl
+                    entity_type = MessageEntityTextUrl
                     args["url"] = url
                     url = None
             self._open_tags_meta.popleft()
             self._open_tags_meta.appendleft(url)
 
-        if EntityType and tag not in self._building_entities:
-            self._building_entities[tag] = EntityType(offset=len(self.text), length=0, **args)
+        if entity_type and tag not in self._building_entities:
+            self._building_entities[tag] = entity_type(offset=len(self.text), length=0, **args)
 
     def _list_depth(self):
         depth = 0
@@ -183,7 +183,7 @@ def matrix_to_telegram(html, user_id=None):
         parser = MatrixParser(user_id)
         parser.feed(html)
         return parser.text, parser.entities
-    except:
+    except Exception:
         log.exception("Failed to convert Matrix format:\nhtml=%s", html)
 
 
@@ -197,18 +197,20 @@ def telegram_event_to_matrix(evt, source):
     if evt.fwd_from:
         if not html:
             html = escape(text)
-        id = evt.fwd_from.from_id
-        user = u.User.get_by_tgid(id)
+        from_id = evt.fwd_from.from_id
+        user = u.User.get_by_tgid(from_id)
         if user:
             fwd_from = f"<a href='https://matrix.to/#/{user.mxid}'>{user.mxid}</a>"
         else:
-            puppet = p.Puppet.get(id, create=False)
+            puppet = p.Puppet.get(from_id, create=False)
             if puppet and puppet.displayname:
                 fwd_from = f"<a href='https://matrix.to/#/{puppet.mxid}'>{puppet.displayname}</a>"
             else:
-                user = source.client.get_entity(id)
+                user = source.client.get_entity(from_id)
                 if user:
                     fwd_from = p.Puppet.get_displayname(user, format=False)
+                else:
+                    fwd_from = None
         if not fwd_from:
             fwd_from = "Unknown user"
         html = (f"Forwarded message from <b>{fwd_from}</b><br/>"
@@ -232,7 +234,7 @@ def telegram_event_to_matrix(evt, source):
 def telegram_to_matrix(text, entities):
     try:
         return _telegram_to_matrix(text, entities)
-    except:
+    except Exception:
         log.exception("Failed to convert Telegram format:\n"
                       "message=%s\n"
                       "entities=%s",

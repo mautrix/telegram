@@ -75,6 +75,7 @@ class Puppet:
         }
         preferences = config.get("bridge.displayname_preference",
                                  ["full name", "username", "phone"])
+        name = None
         for preference in preferences:
             name = data[preference]
             if name:

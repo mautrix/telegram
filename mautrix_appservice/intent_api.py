@@ -25,11 +25,8 @@ from matrix_client.errors import MatrixRequestError
 class HTTPAPI(MatrixHttpApi):
     def __init__(self, base_url, domain=None, bot_mxid=None, token=None, identity=None, log=None,
                  state_store=None):
-        self.base_url = base_url
+        super().__init__(base_url, token, identity)
         self.domain = domain
-        self.token = token
-        self.identity = identity
-        self.txn_id = 0
         self.bot_mxid = bot_mxid
         self.intent_log = log.getChild("intent")
         self.log = log.getChild("api")
@@ -51,25 +48,17 @@ class HTTPAPI(MatrixHttpApi):
     def intent(self, user):
         return IntentAPI(user, self.user(user), self, self.state_store, self.intent_log)
 
-    def _send(self, method, path, content=None, query_params={}, headers={},
+    def _send(self, method, path, content=None, query_params=None, headers=None,
               api_path="/_matrix/client/r0"):
         if not query_params:
             query_params = {}
         query_params["user_id"] = self.identity
         log_content = content if not isinstance(content, bytes) else f"<{len(content)} bytes>"
         self.log.debug("%s %s %s", method, path, log_content)
-        return super()._send(method, path, content, query_params, headers, api_path=api_path)
+        return super()._send(method, path, content, query_params, headers or {}, api_path=api_path)
 
     def create_room(self, alias=None, is_public=False, name=None, topic=None, is_direct=False,
-                    invitees=(), initial_state=[]):
-        """Perform /createRoom.
-        Args:
-            alias (str): Optional. The room alias name to set for this room.
-            is_public (bool): Optional. The public/private visibility.
-            name (str): Optional. The name for the room.
-            topic (str): Optional. The topic for the room.
-            invitees (list<str>): Optional. The list of user IDs to invite.
-        """
+                    invitees=(), initial_state=None):
         content = {
             "visibility": "public" if is_public else "private"
         }
@@ -106,9 +95,10 @@ class HTTPAPI(MatrixHttpApi):
 
 class ChildHTTPAPI(HTTPAPI):
     def __init__(self, user, parent):
-        self.identity = user
-        self.token = parent.token
         self.base_url = parent.base_url
+        self.token = parent.token
+        self.identity = user
+        self.validate_cert = True
         self.validate_cert = parent.validate_cert
         self.log = parent.log
         self.domain = parent.domain
@@ -133,7 +123,7 @@ def matrix_error_code(err):
     try:
         data = json.loads(err.content)
         return data["errcode"]
-    except:
+    except Exception:
         return err.content
 
 
@@ -189,10 +179,10 @@ class IntentAPI:
     # region Room actions
 
     def create_room(self, alias=None, is_public=False, name=None, topic=None, is_direct=False,
-                    invitees=(), initial_state=[]):
+                    invitees=(), initial_state=None):
         self.ensure_registered()
         return self.client.create_room(alias, is_public, name, topic, is_direct, invitees,
-                                       initial_state)
+                                       initial_state or {})
 
     def invite(self, room_id, user_id):
         self.ensure_joined(room_id)
@@ -251,31 +241,31 @@ class IntentAPI:
     def send_emote(self, room_id, text, html=None):
         return self.send_text(room_id, text, html, "m.emote")
 
-    def send_image(self, room_id, url, info={}, text=None):
-        return self.send_file(room_id, url, info, text, "m.image")
+    def send_image(self, room_id, url, info=None, text=None):
+        return self.send_file(room_id, url, info or {}, text, "m.image")
 
-    def send_file(self, room_id, url, info={}, text=None, type="m.file"):
+    def send_file(self, room_id, url, info=None, text=None, file_type="m.file"):
         return self.send_message(room_id, {
-            "msgtype": type,
+            "msgtype": file_type,
             "url": url,
             "body": text or "Uploaded file",
-            "info": info,
+            "info": info or {},
         })
 
-    def send_text(self, room_id, text, html=None, type="m.text"):
+    def send_text(self, room_id, text, html=None, msgtype="m.text"):
         if html:
             if not text:
                 text = html
             return self.send_message(room_id, {
                 "body": text,
-                "msgtype": type,
+                "msgtype": msgtype,
                 "format": "org.matrix.custom.html",
                 "formatted_body": html or text,
             })
         else:
             return self.send_message(room_id, {
                 "body": text,
-                "msgtype": type,
+                "msgtype": msgtype,
             })
 
     def send_message(self, room_id, body):
@@ -290,15 +280,15 @@ class IntentAPI:
         self.ensure_joined(room_id)
         return self.client.kick_user(room_id, user_id, message)
 
-    def send_event(self, room_id, type, body, txn_id=None):
+    def send_event(self, room_id, event_type, body, txn_id=None):
         self.ensure_joined(room_id)
-        self._ensure_has_power_level_for(room_id, type)
-        return self.client.send_message_event(room_id, type, body, txn_id)
+        self._ensure_has_power_level_for(room_id, event_type)
+        return self.client.send_message_event(room_id, event_type, body, txn_id)
 
-    def send_state_event(self, room_id, type, body, state_key=""):
+    def send_state_event(self, room_id, event_type, body, state_key=""):
         self.ensure_joined(room_id)
-        self._ensure_has_power_level_for(room_id, type)
-        return self.client.send_state_event(room_id, type, body, state_key)
+        self._ensure_has_power_level_for(room_id, event_type)
+        return self.client.send_state_event(room_id, event_type, body, state_key)
 
     def join_room(self, room_id):
         return self.ensure_joined(room_id, ignore_cache=True)
@@ -359,7 +349,8 @@ class IntentAPI:
         elif not self.bot:
             self.log.warning(
                 f"Power level of {self.mxid} is not enough for {event_type} in {room_id}")
-            # raise IntentError(f"Power level of {self.mxid} is not enough for {event_type} in {room_id}")
+            # raise IntentError(f"Power level of {self.mxid} is not enough"
+            #                  + f"for {event_type} in {room_id}")
             return
         # TODO implement
 
