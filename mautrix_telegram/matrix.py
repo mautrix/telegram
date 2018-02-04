@@ -88,11 +88,19 @@ class MatrixHandler:
         elif user == self.az.bot_mxid:
             self.az.intent.join_room(room)
             return
+
         puppet = Puppet.get_by_mxid(user)
         if puppet:
             self.handle_puppet_invite(room, puppet, inviter)
             return
-        # These can probably be ignored
+
+        user = User.get_by_mxid(user, create=False)
+        portal = Portal.get_by_mxid(room)
+        if user and user.has_full_access and portal:
+            portal.invite_telegram(inviter, user)
+            return
+
+        # The rest can probably be ignored
         self.log.debug(f"{inviter} invited {user} to {room}")
 
     def handle_join(self, room, user):

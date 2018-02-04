@@ -77,12 +77,13 @@ The bridge does not do this automatically.
     * [x] Normal chats
 	* [ ] Supergroups/channels (currently only creator level bridged)
   * [ ] Membership actions
-    * [x] Inviting puppets
-    * [ ] Inviting Matrix users who have logged in to Telegram
+    * [x] Inviting
+      * [x] Puppets
+      * [x] Matrix users who have logged into Telegram
     * [x] Kicking
     * [ ] Joining
       * [ ] Chat name as alias
-      * [ ] Chat invite link as alias
+      * [ ] (Maybe) Chat invite link as alias
     * [x] Leaving
   * [x] Room metadata changes (name, topic, avatar)
   * [x] Initial room metadata
