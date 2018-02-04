@@ -70,29 +70,33 @@ class StateStore:
         self.registrations.add(user)
         self._autosave()
 
-    def _get_membership(self, room, user):
+    def get_membership(self, room, user):
         return self.memberships.get(room, {}).get(user, "left")
 
     def is_joined(self, room, user):
-        return self._get_membership(room, user) == "join"
+        print("Is joined", room, user, self.get_membership(room, user), self.get_membership(room, user) == "join")
+        return self.get_membership(room, user) == "join"
 
-    def _set_membership(self, room, user, membership):
+    def set_membership(self, room, user, membership):
         if room not in self.memberships:
             self.memberships[room] = {}
         self.memberships[room][user] = membership
         self._autosave()
 
     def joined(self, room, user):
-        return self._set_membership(room, user, "join")
+        return self.set_membership(room, user, "join")
 
     def invited(self, room, user):
-        return self._set_membership(room, user, "invite")
+        return self.set_membership(room, user, "invite")
 
     def left(self, room, user):
-        return self._set_membership(room, user, "left")
+        return self.set_membership(room, user, "left")
 
-    def has_power_level_data(self, room):
+    def has_power_levels(self, room):
         return room in self.power_levels
+
+    def get_power_levels(self, room):
+        return self.power_levels[room]
 
     def has_power_level(self, room, user, event):
         room_levels = self.power_levels.get(room, {})

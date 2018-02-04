@@ -225,8 +225,13 @@ class IntentAPI:
         self._ensure_has_power_level_for(room_id, "m.room.name")
         return self.client.set_room_name(room_id, name)
 
-    def get_power_levels(self, room_id):
+    def get_power_levels(self, room_id, ignore_cache=False):
         self._ensure_joined(room_id)
+        if not ignore_cache:
+            try:
+                return self.state_store.get_power_levels(room_id)
+            except KeyError:
+                pass
         levels = self.client.get_power_levels(room_id)
         self.state_store.set_power_levels(room_id, levels)
         return levels
@@ -325,7 +330,7 @@ class IntentAPI:
             self.client.join_room(room_id)
             self.state_store.joined(room_id, self.mxid)
         except MatrixRequestError as e:
-            if matrix_error_code(e) != "M_FORBIDDEN" and not self.bot:
+            if matrix_error_code(e) != "M_FORBIDDEN" or not self.bot:
                 raise IntentError(f"Failed to join room {room_id} as {self.mxid}", e)
             try:
                 self.bot.invite_user(room_id, self.mxid)
@@ -342,18 +347,20 @@ class IntentAPI:
         except MatrixRequestError as e:
             if matrix_error_code(e) != "M_USER_IN_USE":
                 self.log.exception(f"Failed to register {self.mxid}!")
-                return
                 # raise IntentError(f"Failed to register {self.mxid}", e)
+                return
         self.state_store.registered(self.mxid)
 
     def _ensure_has_power_level_for(self, room_id, event_type):
-        if not self.state_store.has_power_level_data(room_id):
+        if not self.state_store.has_power_levels(room_id):
             self.get_power_levels(room_id)
         if self.state_store.has_power_level(room_id, self.mxid, event_type):
             return
         elif not self.bot:
-            pass
+            self.log.warning(
+                f"Power level of {self.mxid} is not enough for {event_type} in {room_id}")
             # raise IntentError(f"Power level of {self.mxid} is not enough for {event_type} in {room_id}")
+            return
         # TODO implement
 
     # endregion

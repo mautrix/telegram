@@ -56,6 +56,8 @@ class AppService:
         self.app.router.add_route("GET", "/rooms/{alias}", self._http_query_alias)
         self.app.router.add_route("GET", "/users/{user_id}", self._http_query_user)
 
+        self.matrix_event_handler(self.update_state_store)
+
     @property
     def http_session(self):
         if self._http_session is None:
@@ -149,6 +151,14 @@ class AppService:
         self.transactions.append(transaction_id)
 
         return web.json_response({})
+
+    def update_state_store(self, event):
+        event_type = event["type"]
+        if event_type == "m.room.power_levels":
+            self.state_store.set_power_levels(event["room_id"], event["content"])
+        elif event_type == "m.room.member":
+            self.state_store.set_membership(event["room_id"], event["state_key"],
+                                            event["content"]["membership"])
 
     def handle_matrix_event(self, event):
         for handler in self.event_handlers:
