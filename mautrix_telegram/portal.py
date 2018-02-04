@@ -170,7 +170,7 @@ class Portal:
         for entity in users:
             puppet = p.Puppet.get(entity.id)
             puppet.update_info(source, entity)
-            puppet.intent.join_room(self.mxid)
+            puppet.intent.ensure_joined(self.mxid)
 
     def add_telegram_user(self, user_id, source=None):
         puppet = p.Puppet.get(user_id)

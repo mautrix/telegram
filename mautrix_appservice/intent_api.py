@@ -163,24 +163,24 @@ class IntentAPI:
     # region User actions
 
     def set_display_name(self, name):
-        self._ensure_registered()
+        self.ensure_registered()
         return self.client.set_display_name(self.mxid, name)
 
     def set_presence(self, status="online"):
-        self._ensure_registered()
+        self.ensure_registered()
         return self.client.set_presence(status)
 
     def set_avatar(self, url):
-        self._ensure_registered()
+        self.ensure_registered()
         return self.client.set_avatar_url(self.mxid, url)
 
     def upload_file(self, data, mime_type=None):
-        self._ensure_registered()
+        self.ensure_registered()
         mime_type = mime_type or magic.from_buffer(data, mime=True)
         return self.client.media_upload(data, mime_type)
 
     def download_file(self, url):
-        self._ensure_registered()
+        self.ensure_registered()
         url = self.client.get_download_url(url)
         response = urllib.request.urlopen(url)
         return response.read()
@@ -190,12 +190,12 @@ class IntentAPI:
 
     def create_room(self, alias=None, is_public=False, name=None, topic=None, is_direct=False,
                     invitees=(), initial_state=[]):
-        self._ensure_registered()
+        self.ensure_registered()
         return self.client.create_room(alias, is_public, name, topic, is_direct, invitees,
                                        initial_state)
 
     def invite(self, room_id, user_id):
-        self._ensure_joined(room_id)
+        self.ensure_joined(room_id)
         try:
             response = self.client.invite_user(room_id, user_id)
             self.state_store.invited(room_id, user_id)
@@ -213,20 +213,20 @@ class IntentAPI:
         return self.send_state_event(room_id, "m.room.avatar", content)
 
     def add_room_alias(self, room_id, alias):
-        self._ensure_registered()
+        self.ensure_registered()
         self.client.set_room_alias(room_id, f"#{alias}:{self.client.domain}")
 
     def remove_room_alias(self, alias):
-        self._ensure_registered()
+        self.ensure_registered()
         self.client.remove_room_alias(f"#{alias}:{self.client.domain}")
 
     def set_room_name(self, room_id, name):
-        self._ensure_joined(room_id)
+        self.ensure_joined(room_id)
         self._ensure_has_power_level_for(room_id, "m.room.name")
         return self.client.set_room_name(room_id, name)
 
     def get_power_levels(self, room_id, ignore_cache=False):
-        self._ensure_joined(room_id)
+        self.ensure_joined(room_id)
         if not ignore_cache:
             try:
                 return self.state_store.get_power_levels(room_id)
@@ -242,7 +242,7 @@ class IntentAPI:
         return response
 
     def set_typing(self, room_id, is_typing=True, timeout=5000):
-        self._ensure_joined(room_id)
+        self.ensure_joined(room_id)
         return self.client.set_typing(room_id, is_typing, timeout)
 
     def send_notice(self, room_id, text, html=None):
@@ -282,26 +282,26 @@ class IntentAPI:
         return self.send_event(room_id, "m.room.message", body)
 
     def error_and_leave(self, room_id, text, html=None):
-        self._ensure_joined(room_id)
+        self.ensure_joined(room_id)
         self.send_notice(room_id, text, html=html)
         self.leave_room(room_id)
 
     def kick(self, room_id, user_id, message):
-        self._ensure_joined(room_id)
+        self.ensure_joined(room_id)
         return self.client.kick_user(room_id, user_id, message)
 
     def send_event(self, room_id, type, body, txn_id=None):
-        self._ensure_joined(room_id)
+        self.ensure_joined(room_id)
         self._ensure_has_power_level_for(room_id, type)
         return self.client.send_message_event(room_id, type, body, txn_id)
 
     def send_state_event(self, room_id, type, body, state_key=""):
-        self._ensure_joined(room_id)
+        self.ensure_joined(room_id)
         self._ensure_has_power_level_for(room_id, type)
         return self.client.send_state_event(room_id, type, body, state_key)
 
     def join_room(self, room_id):
-        return self._ensure_joined(room_id, ignore_cache=True)
+        return self.ensure_joined(room_id, ignore_cache=True)
 
     def leave_room(self, room_id):
         self.state_store.left(room_id, self.mxid)
@@ -316,16 +316,16 @@ class IntentAPI:
                 membership["content"]["membership"] in allowed_memberships]
 
     def get_room_state(self, room_id):
-        self._ensure_joined(room_id)
+        self.ensure_joined(room_id)
         return self.client.get_room_state(room_id)
 
     # endregion
     # region Ensure functions
 
-    def _ensure_joined(self, room_id, ignore_cache=False):
+    def ensure_joined(self, room_id, ignore_cache=False):
         if not ignore_cache and self.state_store.is_joined(room_id, self.mxid):
             return
-        self._ensure_registered()
+        self.ensure_registered()
         try:
             self.client.join_room(room_id)
             self.state_store.joined(room_id, self.mxid)
@@ -339,7 +339,7 @@ class IntentAPI:
             except MatrixRequestError as e2:
                 raise IntentError(f"Failed to join room {room_id} as {self.mxid}", e2)
 
-    def _ensure_registered(self):
+    def ensure_registered(self):
         if self.state_store.is_registered(self.mxid):
             return
         try:
