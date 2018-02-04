@@ -654,7 +654,12 @@ class Portal:
 
     def update_telegram_participants(self, participants):
         levels = self.main_intent.get_power_levels(self.mxid)
-        levels["events"]["m.room.power_levels"] = 50
+        changed = False
+
+        if levels["events"]["m.room.power_levels"] != 50:
+            changed = True
+            levels["events"]["m.room.power_levels"] = 50
+
         for participant in participants:
             puppet = p.Puppet.get(participant.user_id)
             user = u.User.get_by_tgid(participant.user_id)
@@ -665,9 +670,12 @@ class Portal:
                 new_level = 95
             if user and (user.mxid in levels["users"] or new_level > 0):
                 levels["users"][user.mxid] = new_level
+                changed = True
             if puppet and (puppet.mxid in levels["users"] or new_level > 0):
                 levels["users"][puppet.mxid] = new_level
-        self.main_intent.set_power_levels(self.mxid, levels)
+                changed = True
+        if changed:
+            self.main_intent.set_power_levels(self.mxid, levels)
 
     def set_telegram_admins_enabled(self, enabled):
         level = 50 if enabled else 10
