@@ -34,7 +34,8 @@ class AppService:
         self.as_token = as_token
         self.hs_token = hs_token
         self.bot_mxid = f"@{bot_localpart}:{domain}"
-        self.state_store = StateStore()
+        self.state_store = StateStore(autosave_file="mx-state.json")
+        self.state_store.load("mx-state.json")
 
         self.transactions = []
 

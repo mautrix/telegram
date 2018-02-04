@@ -9,3 +9,4 @@ config.yaml
 registration.yaml
 *.db
 *.session
+*.json

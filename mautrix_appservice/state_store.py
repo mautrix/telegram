@@ -14,11 +14,61 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
+import json
+
 
 class StateStore:
-    def __init__(self):
+    def __init__(self, autosave_file=None):
+        self.registrations = set()
         self.memberships = {}
         self.power_levels = {}
+        self.autosave_file = autosave_file
+
+    def save(self, file):
+        if isinstance(file, str):
+            output = open(file, "w")
+        else:
+            output = file
+
+        json.dump({
+            "registrations": list(self.registrations),
+            "memberships": self.memberships,
+            "power_levels": self.power_levels,
+        }, output)
+
+        if isinstance(file, str):
+            output.close()
+
+    def load(self, file):
+        if isinstance(file, str):
+            try:
+                input = open(file, "r")
+            except FileNotFoundError:
+                return
+        else:
+            input = file
+
+        data = json.load(input)
+        if "registrations" in data:
+            self.registrations = set(data["registrations"])
+        if "memberships" in data:
+            self.memberships = data["memberships"]
+        if "power_levels" in data:
+            self.power_levels = data["power_levels"]
+
+        if isinstance(file, str):
+            input.close()
+
+    def _autosave(self):
+        if self.autosave_file:
+            self.save(self.autosave_file)
+
+    def is_registered(self, user):
+        return user in self.registrations
+
+    def registered(self, user):
+        self.registrations.add(user)
+        self._autosave()
 
     def _get_membership(self, room, user):
         return self.memberships.get(room, {}).get(user, "left")
@@ -30,6 +80,7 @@ class StateStore:
         if room not in self.memberships:
             self.memberships[room] = {}
         self.memberships[room][user] = membership
+        self._autosave()
 
     def joined(self, room, user):
         return self._set_membership(room, user, "join")
@@ -56,6 +107,7 @@ class StateStore:
                 "events": {},
             }
         self.power_levels[room]["users"][user] = level
+        self._autosave()
 
     def set_power_levels(self, room, content):
         if "events" not in content:
@@ -63,3 +115,4 @@ class StateStore:
         if "users" not in content:
             content["users"] = {}
         self.power_levels[room] = content
+        self._autosave()
