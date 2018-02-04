@@ -105,7 +105,7 @@ The bridge does not do this automatically.
   * [x] Avatars
   * [x] Presence
   * [x] Typing notifications
-  * [ ] Pinning messages
+  * [x] Pinning messages
   * [x] Admin/chat creator status
   * [ ] Supergroup/channel permissions
   * [x] Membership actions

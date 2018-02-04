@@ -652,6 +652,13 @@ class Portal:
             levels["users"][puppet.mxid] = 50
         self.main_intent.set_power_levels(self.mxid, levels)
 
+    def update_telegram_pin(self, source, id):
+        message = DBMessage.query.get((id, source.tgid))
+        if message:
+            self.main_intent.set_pinned_messages(self.mxid, [message.mxid])
+        else:
+            self.main_intent.set_pinned_messages(self.mxid, [])
+
     def update_telegram_participants(self, participants):
         levels = self.main_intent.get_power_levels(self.mxid)
         changed = False

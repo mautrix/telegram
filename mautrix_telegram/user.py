@@ -216,9 +216,13 @@ class User:
         elif isinstance(update, (UpdateChatAdmins, UpdateChatParticipantAdmin)):
             self.update_admin(update)
         elif isinstance(update, UpdateChatParticipants):
-            portal = po.Portal.get_by_tgid(update.participants.chat_id, peer_type=None)
+            portal = po.Portal.get_by_tgid(update.participants.chat_id)
             if portal and portal.mxid:
                 portal.update_telegram_participants(update.participants.participants)
+        elif isinstance(update, UpdateChannelPinnedMessage):
+            portal = po.Portal.get_by_tgid(update.channel_id, peer_type="channel")
+            if portal and portal.mxid:
+                portal.update_telegram_pin(self, update.id)
         else:
             self.log.debug("Unhandled update: %s", update)
 
@@ -262,6 +266,10 @@ class User:
             else:
                 portal = po.Portal.get_by_entity(update.to_id, receiver_id=self.tgid)
             sender = pu.Puppet.get(update.from_id)
+        else:
+            self.log.warning(
+                f"Unexpected message type in User#get_message_details: {type(update)}")
+            return update, None, None
         return update, sender, portal
 
     def update_message(self, update):

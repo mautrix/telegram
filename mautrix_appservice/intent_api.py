@@ -231,6 +231,28 @@ class IntentAPI:
         self.state_store.set_power_levels(room_id, content)
         return response
 
+    def get_pinned_messages(self, room_id):
+        self.ensure_joined(room_id)
+        response = self.client._send("GET", f"/rooms/{room_id}/state/m.room.pinned_events")
+        return response["content"]["pinned"]
+
+    def set_pinned_messages(self, room_id, events):
+        return self.send_state_event(room_id, "m.room.pinned_events", {
+            "pinned": events
+        })
+
+    def pin_message(self, room_id, event_id):
+        events = self.get_pinned_messages(room_id)
+        if event_id not in events:
+            events.append(event_id)
+            self.set_pinned_messages(room_id, events)
+
+    def unpin_message(self, room_id, event_id):
+        events = self.get_pinned_messages(room_id)
+        if event_id in events:
+            events.remove(event_id)
+            self.set_pinned_messages(room_id, events)
+
     def set_typing(self, room_id, is_typing=True, timeout=5000):
         self.ensure_joined(room_id)
         return self.client.set_typing(room_id, is_typing, timeout)
