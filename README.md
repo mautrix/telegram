@@ -4,13 +4,14 @@ A Matrix-Telegram puppeting bridge.
 ## Discussion
 Matrix room: [`#telegram:maunium.net`](https://matrix.to/#/#telegram:maunium.net)
 
-A Telegram chat will be created once the bridge is stable enough.
+A Telegram chat bridged to the Matrix room will be created once the bridge supports using a bot
+for unauthenticated users.
 
 ## Usage
 ### Setup
 0. Clone the repository
 1. Set up the virtual environment
-   1. Create with `virtualenv -p /usr/bin/python3 .venv` (requires Python 3.5 or higher)
+   1. Create with `virtualenv -p /usr/bin/python3 .venv`
    2. Activate with `source .venv/bin/activate`
 2. Install dependencies with `pip install -r requirements.txt`
 3. Copy `example-config.yaml` to `config.yaml` and fill out the fields.
@@ -36,28 +37,34 @@ You should be automatically invited into portal rooms for your groups and channe
 2. receive a messages in the chat or
 3. receive an invite to the chat
 
-Inviting Telegram puppets to rooms should work. However, please don't invite non-puppet Matrix
-users to portal rooms yet.
+Many Matrix actions are bridged to Telegram as-is: Leaving portals and inviting or kicking users
+work as you would expect. Power level bridging is also implemented, but is not yet as precise as it
+could be.
 
-You can also create a Telegram chat for an existing Matrix room using `!tg create` in the room.
+You can create a Telegram chat for an existing Matrix room using `!tg create` in the room.
 However, there are some restrictions:
 * The room must have a title.
+* The room must have at least one Telegram puppet (your Telegram puppet is not counted).
 * The AS bot must be invited first (before puppets) and be given power level 100.
 * The AS bot must be the only user to have power level 100.
 
 #### Private messaging
-You can start private chats by simply inviting the Matrix puppet of the Telegram user you want to chat with to a private room.
+You can start private chats by simply inviting the Matrix puppet of the Telegram user you want to
+chat with to a private room.
 
-If you don't know the MXID of the puppet, you can search for users using the `search <query>` management command.
+Leaving a private chat portal will cause the portal to be deleted, but nothing will happen on the
+Telegram side. Other non-messaging Matrix actions should not affect anything.
 
-You can also initiate chats with the `pm` command using the username, phone number or user ID.
+If you don't know the MXID of the puppet, you can search for users using the `search <query>`
+management command. You can also initiate chats with the `pm` command using the username, phone
+number or user ID.
 
 #### Bot commands
 Initiating chats with bots is no different from initiating chats with real Telegram users.
 
-~~The bridge translates `!commands` into `/commands`, which allows you to use Telegram bots without constantly escaping
-the slash.~~ Please note that when messaging a bot for the first time, it may expect you to run ~~`!start`~~ `/start` first.
-The bridge does not do this automatically.
+~~The bridge translates `!commands` into `/commands`, which allows you to use Telegram bots without
+constantly escaping the slash.~~ Please note that when messaging a bot for the first time, it may
+expect you to run ~~`!start`~~ `/start` first. The bridge does not do this automatically.
 
 ## Features & Roadmap
 * Matrix → Telegram
@@ -73,7 +80,7 @@ The bridge does not do this automatically.
   * [ ] † Presence
   * [ ] † Typing notifications
   * [ ] Pinning messages
-  * [ ] Power level
+  * [x] Power level
     * [x] Normal chats
       * [ ] Non-hardcoded PL requirements
 	* [x] Supergroups/channels
