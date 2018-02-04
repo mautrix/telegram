@@ -75,7 +75,9 @@ The bridge does not do this automatically.
   * [ ] Pinning messages
   * [ ] Power level
     * [x] Normal chats
-	* [ ] Supergroups/channels (currently only creator level bridged)
+      * [ ] Non-hardcoded PL requirements
+	* [x] Supergroups/channels
+	  * [ ] Precise bridging (non-hardcoded PL requirements, bridge specific permissions, etc..)
   * [ ] Membership actions
     * [x] Inviting
       * [x] Puppets
@@ -107,7 +109,7 @@ The bridge does not do this automatically.
   * [x] Typing notifications
   * [x] Pinning messages
   * [x] Admin/chat creator status
-  * [ ] Supergroup/channel permissions
+  * [ ] Supergroup/channel permissions (precise per-user not supported in Matrix)
   * [x] Membership actions
     * [x] Inviting
     * [x] Kicking
@@ -134,7 +136,7 @@ The bridge does not do this automatically.
   * [x] Starting private chats (`pm`)
   * [x] Joining chats with invite links (`join`)
   * [x] Creating a Telegram chat for an existing Matrix room (`create`)
-  * [ ] Upgrading the chat of a portal room into a supergroup (`upgrade`)
+  * [x] Upgrading the chat of a portal room into a supergroup (`upgrade`)
   * [ ] Change public/private status of supergroup/channel (`setpublic`)
   * [ ] Change username of supergroup/channel (`groupname`)
   * [x] Getting the Telegram invite link to a Matrix room (`invitelink`)

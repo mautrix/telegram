@@ -370,7 +370,24 @@ class CommandHandler:
 
     @command_handler
     def upgrade(self, sender, args):
-        self.reply("Not yet implemented.")
+        if not sender.logged_in:
+            return self.reply("This command requires you to be logged in.")
+
+        portal = po.Portal.get_by_mxid(self._room_id)
+        if not portal:
+            return self.reply("This is not a portal room.")
+        elif portal.peer_type == "channel":
+            return self.reply("This is already a supergroup or a channel.")
+        elif portal.peer_type == "user":
+            return self.reply("You can't upgrade private chats.")
+
+        try:
+            portal.upgrade_telegram_chat(sender)
+            return self.reply(f"Group upgraded to supergroup. New ID: {portal.tgid}")
+        except ChatAdminRequiredError:
+            return self.reply("You don't have the permission to upgrade this group.")
+        except ValueError as e:
+            return self.reply(e.args[0])
 
     @command_handler
     def setpublic(self, sender, args):

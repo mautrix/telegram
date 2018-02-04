@@ -159,7 +159,7 @@ class Portal:
         levels["events"]["m.room.name"] = power_level_requirement
         levels["events"]["m.room.avatar"] = power_level_requirement
         levels["events"]["m.room.topic"] = 50 if self.peer_type == "channel" else 100
-        levels["events"]["m.room.power_levels"] = 95
+        levels["events"]["m.room.power_levels"] = 75
         self.main_intent.set_power_levels(self.mxid, levels)
         self.update_after_create(user, entity, direct, puppet)
 
@@ -313,7 +313,7 @@ class Portal:
             self.delete()
             del self.by_tgid[self.tgid_full]
             del self.by_mxid[self.mxid]
-        elif source:
+        elif source and source.tgid != user.tgid:
             target = user.get_input_entity(source)
             if self.peer_type == "chat":
                 source.client(DeleteChatUserRequest(chat_id=self.tgid, user_id=target))
@@ -375,6 +375,7 @@ class Portal:
         deleter.client.delete_messages(self.peer, [message.tgid])
 
     def handle_matrix_power_levels(self, sender, new_users, old_users):
+        # TODO handle all power level changes and bridge exact admin rights to supergroups/channels
         for user, level in new_users.items():
             user_id = p.Puppet.get_id_from_mxid(user)
             if not user_id:
@@ -383,8 +384,21 @@ class Portal:
                     continue
                 user_id = mx_user.tgid
             if user not in old_users or level != old_users[user]:
-                sender.client(
-                    EditChatAdminRequest(chat_id=self.tgid, user_id=user_id, is_admin=level >= 50))
+                if self.peer_type == "chat":
+                    sender.client(EditChatAdminRequest(
+                        chat_id=self.tgid, user_id=user_id, is_admin=level >= 50))
+                elif self.peer_type == "channel":
+                    moderator = level >= 50
+                    admin = level >= 75
+                    rights = ChannelAdminRights(change_info=moderator, post_messages=moderator,
+                                                edit_messages=moderator, delete_messages=moderator,
+                                                ban_users=moderator, invite_users=moderator,
+                                                invite_link=moderator, pin_messages=moderator,
+                                                add_admins=admin, manage_call=moderator)
+                    sender.client(
+                        EditAdminRequest(channel=self.get_input_entity(sender),
+                                         user_id=sender.client.get_input_entity(PeerUser(user_id)),
+                                         admin_rights=rights))
 
     def handle_matrix_about(self, sender, about):
         if self.peer_type not in {"channel"}:
@@ -449,6 +463,22 @@ class Portal:
                 user_tgids.add(puppet_id)
         return user_tgids
 
+    def upgrade_telegram_chat(self, source):
+        if self.peer_type != "chat":
+            raise ValueError("Only normal group chats are upgradable to supergroups.")
+
+        updates = source.client(MigrateChatRequest(chat_id=self.tgid))
+        entity = None
+        for chat in updates.chats:
+            if isinstance(chat, Channel):
+                entity = chat
+                break
+        if not entity:
+            raise ValueError("Upgrade may have failed: output channel not found.")
+        self.peer_type = "channel"
+        self.migrate_and_save(entity.id)
+        self.update_info(source, entity)
+
     def create_telegram_chat(self, source, supergroup=False):
         if not self.mxid:
             raise ValueError("Can't create Telegram chat for portal without Matrix room.")
@@ -476,6 +506,7 @@ class Portal:
 
         self.tgid = entity.id
         self.tg_receiver = self.tgid
+        self.by_tgid[self.tgid_full] = self
         self.update_info(source, entity)
         self.save()
 
@@ -663,17 +694,19 @@ class Portal:
         levels = self.main_intent.get_power_levels(self.mxid)
         changed = False
 
-        if levels["events"]["m.room.power_levels"] != 50:
+        admin_power_level = 75 if self.peer_type == "channel" else 50
+        if levels["events"]["m.room.power_levels"] != admin_power_level:
             changed = True
-            levels["events"]["m.room.power_levels"] = 50
+            levels["events"]["m.room.power_levels"] = admin_power_level
 
         for participant in participants:
             puppet = p.Puppet.get(participant.user_id)
             user = u.User.get_by_tgid(participant.user_id)
+            print(participant)
             new_level = 0
-            if isinstance(participant, ChatParticipantAdmin):
+            if isinstance(participant, (ChatParticipantAdmin, ChannelParticipantAdmin)):
                 new_level = 50
-            elif isinstance(participant, ChatParticipantCreator):
+            elif isinstance(participant, (ChatParticipantCreator, ChannelParticipantCreator)):
                 new_level = 95
             if user and (user.mxid in levels["users"] or new_level > 0):
                 levels["users"][user.mxid] = new_level
@@ -705,8 +738,12 @@ class Portal:
         existing = DBPortal.query.get(self.tgid_full)
         if existing:
             self.db.object_session(existing).delete(existing)
-        del self.by_tgid[self.tgid_full]
+        try:
+            del self.by_tgid[self.tgid_full]
+        except KeyError:
+            pass
         self.tgid = new_id
+        self.tg_receiver = new_id
         self.by_tgid[self.tgid_full] = self
         self.save()
 
