@@ -702,7 +702,6 @@ class Portal:
         for participant in participants:
             puppet = p.Puppet.get(participant.user_id)
             user = u.User.get_by_tgid(participant.user_id)
-            print(participant)
             new_level = 0
             if isinstance(participant, (ChatParticipantAdmin, ChannelParticipantAdmin)):
                 new_level = 50
