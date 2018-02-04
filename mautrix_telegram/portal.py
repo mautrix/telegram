@@ -669,7 +669,6 @@ class Portal:
     def set_telegram_admins_enabled(self, enabled):
         level = 50 if enabled else 10
         levels = self.main_intent.get_power_levels(self.mxid)
-        print(levels)
         levels["invite"] = level
         levels["events"]["m.room.name"] = level
         levels["events"]["m.room.avatar"] = level

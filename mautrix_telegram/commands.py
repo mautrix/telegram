@@ -207,7 +207,7 @@ class CommandHandler:
         if len(query) < 5:
             return self.reply("Minimum length of query for remote search is 5 characters.")
         found = sender.client(SearchRequest(q=query, limit=10))
-        print(found)
+
         # reply = ["**People:**", ""]
         reply = ["**Results from Telegram server:**", ""]
         for result in found.users:
@@ -299,7 +299,6 @@ class CommandHandler:
             invite_hash = arg[len("joinchat/"):]
             try:
                 check = sender.client(CheckChatInviteRequest(invite_hash))
-                print(check)
             except InviteHashInvalidError:
                 return self.reply("Invalid invite link.")
             except InviteHashExpiredError:

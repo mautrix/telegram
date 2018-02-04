@@ -181,7 +181,6 @@ class MatrixHandler:
         portal = Portal.get_by_mxid(room)
         sender = User.get_by_mxid(sender)
         if sender.has_full_access and portal:
-            sender = User.get_by_mxid(sender)
             portal.handle_matrix_power_levels(sender, new["users"], old["users"])
 
     def handle_room_meta(self, type, room, sender, content):
