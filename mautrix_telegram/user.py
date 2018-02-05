@@ -14,12 +14,10 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
-from io import BytesIO
-from telethon import TelegramClient
 from telethon.tl.types import *
 from telethon.tl.types import User as TLUser
-from telethon.tl.functions.messages import SendMessageRequest, SendMediaRequest
 from .db import User as DBUser
+from .tgclient import MautrixTelegramClient
 from . import portal as po, puppet as pu
 
 config = None
@@ -81,10 +79,10 @@ class User:
     # region Telegram connection management
 
     def start(self):
-        self.client = TelegramClient(self.mxid,
-                                     config["telegram.api_id"],
-                                     config["telegram.api_hash"],
-                                     update_workers=2)
+        self.client = MautrixTelegramClient(self.mxid,
+                                            config["telegram.api_id"],
+                                            config["telegram.api_hash"],
+                                            update_workers=2)
         self.connected = self.client.connect()
         if self.logged_in:
             self.post_login()
@@ -125,66 +123,6 @@ class User:
             self.tgid = None
             self.save()
         return self.client.log_out()
-
-    def send_message(self, entity, message, reply_to=None, entities=None, link_preview=True):
-        entity = self.client.get_input_entity(entity)
-
-        request = SendMessageRequest(
-            peer=entity,
-            message=message,
-            entities=entities,
-            no_webpage=not link_preview,
-            reply_to_msg_id=self.client._get_reply_to(reply_to)
-        )
-        result = self.client(request)
-        if isinstance(result, UpdateShortSentMessage):
-            return Message(
-                id=result.id,
-                to_id=entity,
-                message=message,
-                date=result.date,
-                out=result.out,
-                media=result.media,
-                entities=result.entities
-            )
-
-        return self.client._get_response_message(request, result)
-
-    def send_file(self, entity, file, mime_type=None, caption=None, attributes=[], file_name=None,
-                  reply_to=None):
-        entity = self.client.get_input_entity(entity)
-        reply_to = self.client._get_reply_to(reply_to)
-
-        file_handle = self.client.upload_file(file, file_name=file_name, use_cache=False)
-
-        if mime_type == "image/png":
-            media = InputMediaUploadedPhoto(file_handle, caption or "")
-        else:
-            attr_dict = {type(attr): attr for attr in attributes}
-
-            media = InputMediaUploadedDocument(
-                file=file_handle,
-                mime_type=mime_type or "application/octet-stream",
-                attributes=list(attr_dict.values()),
-                caption=caption or "")
-
-        request = SendMediaRequest(entity, media, reply_to_msg_id=reply_to)
-        return self.client._get_response_message(request, self.client(request))
-
-    def download_file(self, location):
-        if isinstance(location, Document):
-            location = InputDocumentFileLocation(location.id, location.access_hash,
-                                                 location.version)
-        elif not isinstance(location, (InputFileLocation, InputDocumentFileLocation)):
-            location = InputFileLocation(location.volume_id, location.local_id, location.secret)
-
-        file = BytesIO()
-
-        self.client.download_file(location, file)
-
-        data = file.getvalue()
-        file.close()
-        return data
 
     def sync_dialogs(self):
         dialogs = self.client.get_dialogs(limit=30)

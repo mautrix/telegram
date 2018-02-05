@@ -112,7 +112,7 @@ class Puppet:
         photo_id = f"{photo.volume_id}-{photo.local_id}"
         if self.photo_id != photo_id:
             try:
-                file = source.download_file(photo)
+                file = source.client.download_file_bytes(photo)
             except LocationInvalidError:
                 return False
             uploaded = self.intent.upload_file(file)

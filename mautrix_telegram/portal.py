@@ -252,7 +252,7 @@ class Portal:
         photo_id = f"{photo.volume_id}-{photo.local_id}"
         if self.photo_id != photo_id:
             try:
-                file = user.download_file(photo)
+                file = user.client.download_file_bytes(photo)
             except LocationInvalidError:
                 return False
             uploaded = self.main_intent.upload_file(file)
@@ -340,12 +340,12 @@ class Portal:
                 reply_to = None
                 if len(entities) > 0 and isinstance(entities[0], formatter.MessageEntityReply):
                     reply_to = entities.pop(0).msg_id
-                response = sender.send_message(self.peer, message, entities=entities,
-                                               reply_to=reply_to)
+                response = sender.client.send_message(self.peer, message, entities=entities,
+                                                      reply_to=reply_to)
             else:
                 if type == "m.emote":
                     message["body"] = "/me " + message["body"]
-                response = sender.send_message(self.peer, message["body"])
+                response = sender.client.send_message(self.peer, message["body"])
         elif type in {"m.image", "m.file", "m.audio", "m.video"}:
             file = self.main_intent.download_file(message["url"])
 
@@ -358,7 +358,8 @@ class Portal:
             if "w" in info and "h" in info:
                 attributes.append(DocumentAttributeImageSize(w=info["w"], h=info["h"]))
 
-            response = sender.send_file(self.peer, file, mime, caption, attributes, file_name)
+            response = sender.client.send_file(self.peer, file, mime, caption, attributes,
+                                               file_name)
         else:
             self.log.debug("Unhandled Matrix event: %s", message)
             return
@@ -528,7 +529,7 @@ class Portal:
 
     def handle_telegram_photo(self, source, sender, media):
         largest_size = self._get_largest_photo_size(media.photo)
-        file = source.download_file(largest_size.location)
+        file = source.client.download_file_bytes(largest_size.location)
         mime_type = magic.from_buffer(file, mime=True)
         uploaded = sender.intent.upload_file(file, mime_type)
         info = {
@@ -554,7 +555,7 @@ class Portal:
             return "image/webp", file
 
     def handle_telegram_document(self, source, sender, media):
-        file = source.download_file(media.document)
+        file = source.client.download_file_bytes(media.document)
         mime_type = magic.from_buffer(file, mime=True)
         dont_change_mime = False
         if mime_type == "image/webp":
