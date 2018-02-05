@@ -12,6 +12,7 @@
   * [x] Message redactions
   * [ ] † Presence
   * [ ] † Typing notifications
+  * [ ] † Read receipts
   * [ ] Pinning messages
   * [x] Power level
     * [x] Normal chats
@@ -50,6 +51,7 @@
   * [x] Avatars
   * [x] Presence
   * [x] Typing notifications
+  * [x] Read receipts (private chat only)
   * [x] Pinning messages
   * [x] Admin/chat creator status
   * [ ] Supergroup/channel permissions (precise per-user not supported in Matrix)

@@ -16,7 +16,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from telethon.tl.types import *
 from telethon.tl.types import User as TLUser
-from .db import User as DBUser
+from .db import User as DBUser, Message as DBMessage
 from .tgclient import MautrixTelegramClient
 from . import portal as po, puppet as pu
 
@@ -163,8 +163,26 @@ class User:
                 portal.update_telegram_pin(self, update.id)
         elif isinstance(update, (UpdateUserName, UpdateUserPhoto)):
             self.update_others_info(update)
+        elif isinstance(update, UpdateReadHistoryOutbox):
+            self.update_read_receipt(update)
         else:
             self.log.debug("Unhandled update: %s", update)
+
+    def update_read_receipt(self, update):
+        if not isinstance(update.peer, PeerUser):
+            self.log.debug("Unexpected read receipt peer: %s", update.peer)
+            return
+
+        portal = po.Portal.get_by_tgid(update.peer.user_id, self.tgid)
+        if not portal or not portal.mxid:
+            return
+
+        message = DBMessage.query.get((update.max_id, self.tgid))
+        if not message:
+            return
+
+        puppet = pu.Puppet.get(update.peer.user_id)
+        puppet.intent.mark_read(portal.mxid, message.mxid)
 
     def update_admin(self, update):
         portal = po.Portal.get_by_tgid(update.chat_id, peer_type="chat")

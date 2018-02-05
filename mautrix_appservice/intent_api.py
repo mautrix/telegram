@@ -262,6 +262,10 @@ class IntentAPI:
         self.ensure_joined(room_id)
         return self.client.set_typing(room_id, is_typing, timeout)
 
+    def mark_read(self, room_id, event_id):
+        self.ensure_joined(room_id)
+        return self.client._send("POST", f"/rooms/{room_id}/receipt/m.read/{event_id}", content={})
+
     def send_notice(self, room_id, text, html=None):
         return self.send_text(room_id, text, html, "m.notice")
 
