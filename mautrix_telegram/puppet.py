@@ -66,7 +66,7 @@ class Puppet:
     @staticmethod
     def get_displayname(info, format=True):
         data = {
-            "phone number": info.phone,
+            "phone number": info.phone if hasattr(info, "phone") else None,
             "username": info.username,
             "full name": " ".join([info.first_name or "", info.last_name or ""]).strip(),
             "full name reversed": " ".join([info.first_name or "", info.last_name or ""]).strip(),

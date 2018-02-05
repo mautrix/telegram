@@ -25,10 +25,13 @@
     * [x] Kicking
     * [ ] Joining
       * [ ] Chat name as alias
-      * [ ] (Maybe) Chat invite link as alias
+      * [ ] ‡ Chat invite link as alias
     * [x] Leaving
   * [x] Room metadata changes (name, topic, avatar)
   * [x] Initial room metadata
+  * [ ] User metadata
+    * [ ] Initial displayname/username/avatar at register
+    * [ ] ‡ Changes to displayname/avatar
 * Telegram → Matrix
   * [x] Plaintext messages
   * [x] Formatted messages
@@ -60,6 +63,9 @@
     * [ ] † About text
     * [ ] † Public channel username
   * [x] Initial chat metadata (about text missing)
+  * [x] User metadata
+    * [x] Initial displayname/avatar
+    * [x] Changes to displayname/avatar
   * [x] Supergroup upgrade
 * Misc
   * [x] Automatic portal creation
@@ -82,4 +88,5 @@
   * [x] Getting the Telegram invite link to a Matrix room (`invitelink`)
   * [x] Clean up and forget a portal room (`deleteportal`)
 
-† Information not automatically sent from source, i.e. implementation may not be possible
+† Information not automatically sent from source, i.e. implementation may not be possible  
+‡ Maybe, i.e. this feature may or may not be implemented at some point

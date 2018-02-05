@@ -161,6 +161,8 @@ class User:
             portal = po.Portal.get_by_tgid(update.channel_id, peer_type="channel")
             if portal and portal.mxid:
                 portal.update_telegram_pin(self, update.id)
+        elif isinstance(update, (UpdateUserName, UpdateUserPhoto)):
+            self.update_others_info(update)
         else:
             self.log.debug("Unhandled update: %s", update)
 
@@ -180,6 +182,15 @@ class User:
             portal = po.Portal.get_by_tgid(update.chat_id, peer_type="chat")
         sender = pu.Puppet.get(update.user_id)
         return portal.handle_telegram_typing(sender, update)
+
+    def update_others_info(self, update):
+        puppet = pu.Puppet.get(update.user_id)
+        if isinstance(update, UpdateUserName):
+            if puppet.update_displayname(self, update):
+                puppet.save()
+        elif isinstance(update, UpdateUserPhoto):
+            if puppet.update_avatar(self, update.photo.photo_big):
+                puppet.save()
 
     def update_status(self, update):
         puppet = pu.Puppet.get(update.user_id)

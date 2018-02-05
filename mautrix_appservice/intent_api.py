@@ -152,6 +152,11 @@ class IntentAPI:
 
     # region User actions
 
+    def get_joined_rooms(self):
+        self.ensure_registered()
+        response = self.client._send("GET", "/joined_rooms")
+        return response["joined_rooms"]
+
     def set_display_name(self, name):
         self.ensure_registered()
         return self.client.set_display_name(self.mxid, name)
