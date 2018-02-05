@@ -223,7 +223,7 @@ class Portal:
         if self.username != username:
             if self.username:
                 self.main_intent.remove_room_alias(self._get_room_alias())
-            self.username = username
+            self.username = username or None
             if self.username:
                 self.main_intent.add_room_alias(self.mxid, self._get_room_alias())
             return True
@@ -282,6 +282,8 @@ class Portal:
         elif self.peer_type == "chat":
             link = user.client(ExportChatInviteRequest(chat_id=self.tgid))
         elif self.peer_type == "channel":
+            if self.username:
+                return f"https://t.me/{self.username}"
             link = user.client(
                 ExportInviteRequest(channel=self.get_input_entity(user)))
         else:
@@ -484,9 +486,8 @@ class Portal:
         if self.peer_type != "channel":
             raise ValueError("Only channels and supergroups have usernames.")
         success = source.client(UpdateUsernameRequest(self.get_input_entity(source), username))
-        if success:
-            if self.update_username(username):
-                self.save()
+        if self.update_username(username):
+            self.save()
 
     def create_telegram_chat(self, source, supergroup=False):
         if not self.mxid:

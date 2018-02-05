@@ -32,6 +32,24 @@ def command_handler(func):
     return func
 
 
+def format_duration(seconds):
+    def pluralize(count, singular): return singular if count == 1 else singular + "s"
+
+    def include(count, word): return f"{count} {pluralize(count, word)}" if count > 0 else ""
+
+    minutes, seconds = divmod(seconds, 60)
+    hours, minutes = divmod(minutes, 60)
+    days, hours = divmod(hours, 24)
+    parts = [a for a in [
+        include(days, "day"),
+        include(hours, "hour"),
+        include(minutes, "minute"),
+        include(seconds, "second")] if a]
+    if len(parts) > 2:
+        return "{} and {}".format(", ".join(parts[:-1]), parts[-1])
+    return " and ".join(parts)
+
+
 class CommandHandler:
     def __init__(self, context):
         self.az, self.db, log, self.config = context
@@ -47,6 +65,8 @@ class CommandHandler:
         with self.handler(sender, room, command, args, is_management, is_portal) as handle_command:
             try:
                 handle_command(self, sender, args)
+            except FloodWaitError as e:
+                self.reply(f"Flood error: Please wait {format_duration(e.seconds)}")
             except Exception:
                 self.reply("Fatal error while handling command. Check logs for more details.")
                 self.log.exception(f"Fatal error handling command "
@@ -419,7 +439,6 @@ class CommandHandler:
             return self.reply("That username is already in use.")
         except UsernameInvalidError:
             return self.reply("Invalid username")
-
 
     # endregion
     # region Command-related commands
