@@ -83,8 +83,7 @@
   * [x] Joining chats with invite links (`join`)
   * [x] Creating a Telegram chat for an existing Matrix room (`create`)
   * [x] Upgrading the chat of a portal room into a supergroup (`upgrade`)
-  * [ ] Change public/private status of supergroup/channel (`setpublic`)
-  * [ ] Change username of supergroup/channel (`groupname`)
+  * [x] Change username of supergroup/channel (`groupname`)
   * [x] Getting the Telegram invite link to a Matrix room (`invitelink`)
   * [x] Clean up and forget a portal room (`deleteportal`)
 

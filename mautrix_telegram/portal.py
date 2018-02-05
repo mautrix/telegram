@@ -480,6 +480,14 @@ class Portal:
         self.migrate_and_save(entity.id)
         self.update_info(source, entity)
 
+    def set_telegram_username(self, source, username):
+        if self.peer_type != "channel":
+            raise ValueError("Only channels and supergroups have usernames.")
+        success = source.client(UpdateUsernameRequest(self.get_input_entity(source), username))
+        if success:
+            if self.update_username(username):
+                self.save()
+
     def create_telegram_chat(self, source, supergroup=False):
         if not self.mxid:
             raise ValueError("Can't create Telegram chat for portal without Matrix room.")

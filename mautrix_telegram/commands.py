@@ -127,7 +127,7 @@ class CommandHandler:
         if not sender.command_status:
             return self.reply("Request a login code first with `$cmdprefix+sp login <phone>`")
         elif len(args) == 0:
-            return self.reply("**Usage:** `$cmdprefix+sp enter_code <code>")
+            return self.reply("**Usage:** `$cmdprefix+sp enter_code <code>`")
 
         try:
             user = sender.client.sign_in(code=args[0])
@@ -168,7 +168,7 @@ class CommandHandler:
         if not sender.command_status:
             return self.reply("Request a login code first with `$cmdprefix+sp login <phone>`")
         elif len(args) == 0:
-            return self.reply("**Usage:** `$cmdprefix+sp enter_password <password>")
+            return self.reply("**Usage:** `$cmdprefix+sp enter_password <password>`")
 
         try:
             user = sender.client.sign_in(password=args[0])
@@ -196,7 +196,7 @@ class CommandHandler:
     @command_handler
     def search(self, sender, args):
         if len(args) == 0:
-            return self.reply("**Usage:** `$cmdprefix+sp search [-r|--remote] <query>")
+            return self.reply("**Usage:** `$cmdprefix+sp search [-r|--remote] <query>`")
         elif not sender.logged_in:
             return self.reply("This command requires you to be logged in.")
         # force_remote = False
@@ -286,7 +286,7 @@ class CommandHandler:
     @command_handler
     def join(self, sender, args):
         if len(args) == 0:
-            return self.reply("**Usage:** `$cmdprefix+sp join <invite link>")
+            return self.reply("**Usage:** `$cmdprefix+sp join <invite link>`")
         elif not sender.logged_in:
             return self.reply("This command requires you to be logged in.")
 
@@ -321,7 +321,7 @@ class CommandHandler:
     def create(self, sender, args):
         type = args[0] if len(args) > 0 else "group"
         if type not in {"chat", "group", "supergroup", "channel"}:
-            return self.reply("**Usage:** `$cmdprefix+sp create [`group`/`supergroup`/`channel`]")
+            return self.reply("**Usage:** `$cmdprefix+sp create ['group'/'supergroup'/'channel']`")
         elif not sender.logged_in:
             return self.reply("This command requires you to be logged in.")
 
@@ -390,12 +390,36 @@ class CommandHandler:
             return self.reply(e.args[0])
 
     @command_handler
-    def setpublic(self, sender, args):
-        self.reply("Not yet implemented.")
-
-    @command_handler
     def groupname(self, sender, args):
-        self.reply("Not yet implemented.")
+        if len(args) == 0:
+            return self.reply("**Usage:** `$cmdprefix+sp groupname <name/->`")
+        if not sender.logged_in:
+            return self.reply("This command requires you to be logged in.")
+
+        portal = po.Portal.get_by_mxid(self._room_id)
+        if not portal:
+            return self.reply("This is not a portal room.")
+        elif portal.peer_type != "channel":
+            return self.reply("Only channels and supergroups have usernames.")
+
+        try:
+            portal.set_telegram_username(sender, args[0] if args[0] != "-" else "")
+            if portal.username:
+                return self.reply(f"Username of channel changed to {portal.username}.")
+            else:
+                return self.reply(f"Channel is now private.")
+        except ChatAdminRequiredError:
+            return self.reply("You don't have the permission to set the username of this channel.")
+        except UsernameNotModifiedError:
+            if portal.username:
+                return self.reply("That is already the username of this channel.")
+            else:
+                return self.reply("This channel is already private")
+        except UsernameOccupiedError:
+            return self.reply("That username is already in use.")
+        except UsernameInvalidError:
+            return self.reply("Invalid username")
+
 
     # endregion
     # region Command-related commands
@@ -410,10 +434,7 @@ class CommandHandler:
 
     @command_handler
     def unknown_command(self, sender, args):
-        if self._is_management:
-            return self.reply("Unknown command. Try `help` for help.")
-        else:
-            return self.reply("Unknown command. Try `$cmdprefix help` for help.")
+        return self.reply("Unknown command. Try `$cmdprefix+sp help` for help.")
 
     @command_handler
     def help(self, sender, args):
@@ -429,33 +450,31 @@ class CommandHandler:
                                  "prefix commands with `$cmdprefix`.\n")
         help = """\n
 #### Generic bridge commands
-**help** - Show this help message.  
+**help**   - Show this help message.  
 **cancel** - Cancel an ongoing action (such as login).
 
 #### Authentication
 **login** <_phone_> - Request an authentication code.  
-**logout** - Log out from Telegram.  
-**ping** - Check if you're logged into Telegram.
+**logout**          - Log out from Telegram.  
+**ping**            - Check if you're logged into Telegram.
 
 #### Initiating chats
 **search** [_-r|--remote_] <_query_> - Search your contacts or the Telegram servers for users.  
-**pm** <_identifier_> - Open a private chat with the given Telegram user. The identifier is either
-                        the internal user ID, the username or the phone number.  
-**join** <_link_> - Join a chat with an invite link.  
-**create** [_type_] - Create a Telegram chat of the given type for the current Matrix room.
-                      The type is either `group`, `supergroup` or `channel` (defaults to `group`).
+**pm** <_identifier_>                - Open a private chat with the given Telegram user. The
+                                       identifier is either the internal user ID, the username or
+                                       the phone number.  
+**join** <_link_>                    - Join a chat with an invite link.  
+**create** [_type_]                  - Create a Telegram chat of the given type for the current
+                                       Matrix room. The type is either `group`, `supergroup` or
+                                       `channel` (defaults to `group`).
 
 #### Portal management  
-† **upgrade** - Upgrade a normal Telegram group to a supergroup.  
-**invitelink** - Get a Telegram invite link to the current chat.  
-**deleteportal** - Forget the current portal room. Only works for group chats; to delete a private
-                   chat portal, simply leave the room.  
-† **setpublic** <_yes/no_> - Change whether or not a supergroup/channel is public.  
-† **groupname** <_name_> - Change the username of a supergroup/channel.
-                         To disable, use `setpublic no`.
-
-
-† Not yet implemented
+**upgrade**                - Upgrade a normal Telegram group to a supergroup.  
+**invitelink**             - Get a Telegram invite link to the current chat.  
+**deleteportal**           - Forget the current portal room. Only works for group chats; to delete
+                             a private chat portal, simply leave the room.  
+**groupname** <_name_|`-`> - Change the username of a supergroup/channel. To disable, use a dash
+                             (`-`) as the name.
 """
         return self.reply(management_status + help)
 
