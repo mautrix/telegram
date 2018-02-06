@@ -198,7 +198,7 @@ class IntentAPI:
         return self.client.create_room(alias, is_public, name, topic, is_direct, invitees,
                                        initial_state or {})
 
-    def invite(self, room_id, user_id, check_cache):
+    def invite(self, room_id, user_id, check_cache=False):
         self.ensure_joined(room_id)
         try:
             ok_states = {"invite", "join"}

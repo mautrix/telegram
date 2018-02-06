@@ -334,8 +334,12 @@ class CommandHandler:
             updates = sender.client(JoinChannelRequest(channel))
         for chat in updates.chats:
             portal = po.Portal.get_by_entity(chat)
-            portal.create_matrix_room(sender, chat, [sender.mxid])
-            self.reply(f"Created room for {portal.title}")
+            if portal.mxid:
+                portal.create_matrix_room(sender, chat, [sender.mxid])
+                self.reply(f"Created room for {portal.title}")
+            else:
+                portal.invite_matrix([sender.mxid])
+                self.reply(f"Invited you to portal of {portal.title}")
 
     @command_handler
     def create(self, sender, args):
