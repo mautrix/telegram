@@ -189,12 +189,16 @@ class IntentAPI:
         return self.client.create_room(alias, is_public, name, topic, is_direct, invitees,
                                        initial_state or {})
 
-    def invite(self, room_id, user_id):
+    def invite(self, room_id, user_id, check_cache):
         self.ensure_joined(room_id)
         try:
-            response = self.client.invite_user(room_id, user_id)
-            self.state_store.invited(room_id, user_id)
-            return response
+            do_invite = (not check_cache
+                         or self.state_store.get_membership(room_id, user_id) not in {"invite",
+                                                                                      "join"})
+            if do_invite:
+                response = self.client.invite_user(room_id, user_id)
+                self.state_store.invited(room_id, user_id)
+                return response
         except MatrixRequestError as e:
             if matrix_error_code(e) != "M_FORBIDDEN":
                 raise IntentError(f"Failed to invite {user_id} to {room_id}", e)

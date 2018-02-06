@@ -133,10 +133,10 @@ class Portal:
 
     def invite_matrix(self, users):
         if isinstance(users, str):
-            self.main_intent.invite(self.mxid, users)
+            self.main_intent.invite(self.mxid, users, check_cache=True)
         elif isinstance(users, list):
             for user in users:
-                self.main_intent.invite(self.mxid, user)
+                self.main_intent.invite(self.mxid, user, check_cache=True)
         else:
             raise ValueError("Invalid invite identifier given to invite_matrix()")
 
@@ -770,10 +770,16 @@ class Portal:
                 new_level = 50
             elif isinstance(participant, (ChatParticipantCreator, ChannelParticipantCreator)):
                 new_level = 95
-            if user and (user.mxid in levels["users"] or new_level > 0):
+
+            update_user_level = (user and (user.mxid in levels["users"] or new_level > 0)
+                                 and levels["users"][user.mxid] != new_level)
+            if update_user_level:
                 levels["users"][user.mxid] = new_level
                 changed = True
-            if puppet and (puppet.mxid in levels["users"] or new_level > 0):
+
+            update_puppet_level = (puppet and (puppet.mxid in levels["users"] or new_level > 0)
+                                   and levels["users"][puppet.mxid] != new_level)
+            if update_puppet_level:
                 levels["users"][puppet.mxid] = new_level
                 changed = True
         if changed:
