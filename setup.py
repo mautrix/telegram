@@ -14,7 +14,7 @@ setuptools.setup(
     packages=setuptools.find_packages(),
 
     install_requires=[
-        "Telethon>=0.17.0.0,<0.17",
+        "Telethon>=0.17.0.0,<0.18",
         "aiohttp>=2.3.10,<3",
         "SQLAlchemy>=1.2.2,<2",
         "Markdown>=2.6.11,<3",
