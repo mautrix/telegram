@@ -14,15 +14,20 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
+from io import BytesIO
+from collections import deque
+from datetime import datetime
+import mimetypes
+import hashlib
+
+from PIL import Image
+import magic
+
 from telethon.tl.functions.messages import *
 from telethon.tl.functions.channels import *
 from telethon.errors.rpc_error_list import *
 from telethon.tl.types import *
-from PIL import Image
-from io import BytesIO
-from datetime import datetime
-import mimetypes
-import magic
+
 from .db import Portal as DBPortal, Message as DBMessage
 from . import puppet as p, user as u, formatter
 
@@ -50,6 +55,8 @@ class Portal:
         self.photo_id = photo_id
         self._main_intent = None
 
+        self._dedup = deque()
+
         if tgid:
             self.by_tgid[self.tgid_full] = self
         if mxid:
@@ -73,6 +80,43 @@ class Portal:
             return PeerChat(chat_id=self.tgid)
         elif self.peer_type == "channel":
             return PeerChannel(channel_id=self.tgid)
+
+    def _hash_event(self, event):
+        if self.peer_type == "channel":
+            # Message IDs are unique per-channel
+            return event.id
+
+        # Non-channel messages are unique per-user (wtf telegram), so we have no other choice than
+        # to deduplicate based on a hash of the message content.
+
+        # The timestamp is only accurate to the second, so we can't rely on solely that either.
+        hash_content = [str(event.date.timestamp()), event.from_id, event.message]
+        if event.fwd_from:
+            hash_content += [event.fwd_from.from_id, event.fwd_from.channel_id]
+        elif event.media:
+            try:
+                hash_content += {
+                    MessageMediaContact: lambda media: [media.user_id],
+                    MessageMediaDocument: lambda media: [media.document.id, media.caption],
+                    MessageMediaPhoto: lambda media: [media.photo.id, media.caption],
+                    MessageMediaGeo: lambda media: [media.geo.long, media.geo.lat],
+                }[type(event.media)](event.media)
+            except KeyError:
+                pass
+
+        return hashlib.md5("-"
+                           .join(str(a) for a in hash_content)
+                           .encode("utf-8")
+                           ).hexdigest()
+
+    def is_duplicate(self, event):
+        hash = self._hash_event(event)
+        if hash in self._dedup:
+            return True
+        self._dedup.append(hash)
+        if len(self._dedup) > 20:
+            self._dedup.popleft()
+        return False
 
     def get_input_entity(self, user):
         return user.client.get_input_entity(self.peer)
@@ -365,6 +409,7 @@ class Portal:
         else:
             self.log.debug("Unhandled Matrix event: %s", message)
             return
+        self.is_duplicate(response)
         self.db.add(
             DBMessage(tgid=response.id, mx_room=self.mxid, mxid=event_id, user=sender.tgid))
         self.db.commit()
@@ -630,6 +675,9 @@ class Portal:
     def handle_telegram_message(self, source, sender, evt):
         if not self.mxid:
             self.create_matrix_room(source, invites=[source.mxid])
+
+        if self.is_duplicate(evt):
+            return
 
         if evt.message:
             response = self.handle_telegram_text(source, sender, evt)
