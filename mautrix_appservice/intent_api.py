@@ -126,6 +126,15 @@ def matrix_error_code(err):
     except Exception:
         return err.content
 
+def matrix_error_data(err):
+    try:
+        data = json.loads(err.content)
+        return data["errcode"], data["error"]
+    except Exception:
+        return err.content
+
+
+
 
 class IntentAPI:
     mxid_regex = re.compile("@(.+):(.+)")
@@ -192,16 +201,19 @@ class IntentAPI:
     def invite(self, room_id, user_id, check_cache):
         self.ensure_joined(room_id)
         try:
+            ok_states = {"invite", "join"}
             do_invite = (not check_cache
-                         or self.state_store.get_membership(room_id, user_id) not in {"invite",
-                                                                                      "join"})
+                         or self.state_store.get_membership(room_id, user_id) not in ok_states)
             if do_invite:
                 response = self.client.invite_user(room_id, user_id)
                 self.state_store.invited(room_id, user_id)
                 return response
         except MatrixRequestError as e:
-            if matrix_error_code(e) != "M_FORBIDDEN":
+            code, message = matrix_error_data(e)
+            if code != "M_FORBIDDEN":
                 raise IntentError(f"Failed to invite {user_id} to {room_id}", e)
+            if "is already in the room" in message:
+                self.state_store.joined(room_id, user_id)
 
     def set_room_avatar(self, room_id, avatar_url, info=None):
         content = {
