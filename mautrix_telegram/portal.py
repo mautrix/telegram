@@ -379,8 +379,8 @@ class Portal:
         type = message["msgtype"]
         if type in {"m.text", "m.emote"}:
             if "format" in message and message["format"] == "org.matrix.custom.html":
-                message, entities = formatter.matrix_to_telegram(message["formatted_body"],
-                                                                 sender.tgid)
+                space = self.tgid if self.peer_type == "channel" else sender.tgid
+                message, entities = formatter.matrix_to_telegram(message["formatted_body"], space)
                 if type == "m.emote":
                     message = "/me " + message
                 reply_to = None
@@ -410,13 +410,17 @@ class Portal:
             self.log.debug("Unhandled Matrix event: %s", message)
             return
         self.is_duplicate(response)
-        self.db.add(
-            DBMessage(tgid=response.id, mx_room=self.mxid, mxid=event_id, user=sender.tgid))
+        self.db.add(DBMessage(
+            tgid=response.id,
+            tg_space=self.tgid if self.peer_type == "channel" else sender.tgid,
+            mx_room=self.mxid,
+            mxid=event_id))
         self.db.commit()
 
     def handle_matrix_deletion(self, deleter, event_id):
+        space = self.tgid if self.peer_type == "channel" else deleter.tgid
         message = DBMessage.query.filter(DBMessage.mxid == event_id and
-                                         DBMessage.user == deleter.tgid and
+                                         DBMessage.tg_space == space and
                                          DBMessage.mx_room == self.mxid).one_or_none()
         if not message:
             return
@@ -696,7 +700,7 @@ class Portal:
             return
 
         self.db.add(DBMessage(tgid=evt.id, mx_room=self.mxid, mxid=response["event_id"],
-                              user=source.tgid))
+                              tg_space=self.tgid if self.peer_type == "channel" else source.tgid))
         self.db.commit()
 
     def handle_telegram_action(self, source, sender, action):
@@ -742,7 +746,8 @@ class Portal:
         self.main_intent.set_power_levels(self.mxid, levels)
 
     def update_telegram_pin(self, source, id):
-        message = DBMessage.query.get((id, source.tgid))
+        space = self.tgid if self.peer_type == "channel" else source.tgid
+        message = DBMessage.query.get((id, space))
         if message:
             self.main_intent.set_pinned_messages(self.mxid, [message.mxid])
         else:

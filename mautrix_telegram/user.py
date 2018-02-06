@@ -177,6 +177,7 @@ class User:
         if not portal or not portal.mxid:
             return
 
+        # We check that these are user read receipts, so tg_space is always the user ID.
         message = DBMessage.query.get((update.max_id, self.tgid))
         if not message:
             return

@@ -37,9 +37,9 @@ class MatrixParser(HTMLParser):
     mention_regex = re.compile("https://matrix.to/#/(@.+)")
     reply_regex = re.compile(r"https://matrix.to/#/(!.+?)/(\$.+)")
 
-    def __init__(self, user_id=None):
+    def __init__(self, tg_space=None):
         super().__init__()
-        self._user_id = user_id
+        self._tg_space = tg_space
         self.text = ""
         self.entities = []
         self._building_entities = {}
@@ -91,13 +91,14 @@ class MatrixParser(HTMLParser):
                 else:
                     entity_type = MessageEntityMentionName
                     args["user_id"] = user.tgid
-            elif reply and self._user_id and (len(self.entities) == 0
+            elif reply and self._tg_space and (len(self.entities) == 0
                                               and len(self._building_entities) == 0):
                 room_id = reply.group(1)
                 message_id = reply.group(2)
                 message = DBMessage.query.filter(DBMessage.mxid == message_id
                                                  and DBMessage.mx_room == room_id
-                                                 and DBMessage.user == self._user_id).one_or_none()
+                                                 and DBMessage.tg_space == self._tg_space
+                                                 ).one_or_none()
                 if not message:
                     return
                 entity_type = MessageEntityReply
@@ -178,9 +179,9 @@ class MatrixParser(HTMLParser):
             self.entities.append(entity)
 
 
-def matrix_to_telegram(html, user_id=None):
+def matrix_to_telegram(html, tg_space=None):
     try:
-        parser = MatrixParser(user_id)
+        parser = MatrixParser(tg_space)
         parser.feed(html)
         return parser.text, parser.entities
     except Exception:
