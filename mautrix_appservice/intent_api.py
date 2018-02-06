@@ -18,6 +18,7 @@ import re
 import json
 import magic
 import urllib.request
+
 from matrix_client.api import MatrixHttpApi
 from matrix_client.errors import MatrixRequestError
 

@@ -19,6 +19,7 @@ from collections import deque
 from datetime import datetime
 import mimetypes
 import hashlib
+import logging
 
 from PIL import Image
 import magic
@@ -37,7 +38,7 @@ config = None
 
 
 class Portal:
-    log = None
+    log = logging.getLogger("mau.portal")
     db = None
     az = None
     by_mxid = {}
@@ -897,5 +898,4 @@ class Portal:
 
 def init(context):
     global config
-    Portal.az, Portal.db, log, config = context
-    Portal.log = log.getChild("portal")
+    Portal.az, Portal.db, config = context

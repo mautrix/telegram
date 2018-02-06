@@ -15,15 +15,18 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import re
+import logging
+
 from telethon.tl.types import UserProfilePhoto, PeerUser
 from telethon.errors.rpc_error_list import LocationInvalidError
+
 from .db import Puppet as DBPuppet
 
 config = None
 
 
 class Puppet:
-    log = None
+    log = logging.getLogger("mau.puppet")
     db = None
     az = None
     mxid_regex = None
@@ -167,8 +170,7 @@ class Puppet:
 
 def init(context):
     global config
-    Puppet.az, Puppet.db, log, config = context
-    Puppet.log = log.getChild("puppet")
+    Puppet.az, Puppet.db, config = context
     localpart = config.get("bridge.username_template", "telegram_{userid}").format(userid="(.+)")
     hs = config["homeserver"]["domain"]
     Puppet.mxid_regex = re.compile(f"@{localpart}:{hs}")

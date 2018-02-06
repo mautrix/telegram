@@ -14,8 +14,11 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
+import logging
+
 from telethon.tl.types import *
 from telethon.tl.types import User as TLUser
+
 from .db import User as DBUser, Message as DBMessage
 from .tgclient import MautrixTelegramClient
 from . import portal as po, puppet as pu
@@ -24,7 +27,7 @@ config = None
 
 
 class User:
-    log = None
+    log = logging.getLogger("mau.user")
     db = None
     az = None
     by_mxid = {}
@@ -306,8 +309,7 @@ class User:
 
 def init(context):
     global config
-    User.az, User.db, log, config = context
-    User.log = log.getChild("user")
+    User.az, User.db, config = context
 
     users = [User.from_db(user) for user in DBUser.query.all()]
     for user in users:

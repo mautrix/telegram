@@ -14,15 +14,18 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
-import re
 from html import escape, unescape
 from html.parser import HTMLParser
 from collections import deque
+import re
+import logging
+
 from telethon.tl.types import *
+
 from . import user as u, puppet as p
 from .db import Message as DBMessage
 
-log = None
+log = logging.getLogger("mau.formatter")
 
 
 # region Matrix to Telegram
@@ -314,8 +317,3 @@ def _telegram_to_matrix(text, entities):
 
 
 # endregion
-
-def init(context):
-    global log
-    _, _, parent_log, _ = context
-    log = parent_log.getChild("formatter")

@@ -16,12 +16,13 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 # Partly based on github.com/Cadair/python-appservice-framework (MIT license)
-import asyncio
-import logging
-import aiohttp
-from aiohttp import web
 from functools import partial
 from contextlib import contextmanager
+from aiohttp import web
+import aiohttp
+import asyncio
+import logging
+
 from .intent_api import HTTPAPI
 from .state_store import StateStore
 
@@ -43,7 +44,8 @@ class AppService:
         self._intent = None
 
         self.loop = loop or asyncio.get_event_loop()
-        self.log = log or logging.getLogger("mautrix_appservice")
+        self.log = (logging.getLogger(log) if isinstance(log, str)
+                    else log or logging.getLogger("mautrix_appservice"))
 
         self.query_user = query_user or (lambda user: None)
         self.query_alias = query_alias or (lambda alias: None)

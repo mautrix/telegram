@@ -16,12 +16,16 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from contextlib import contextmanager
 import markdown
+import logging
+
 from matrix_client.errors import MatrixRequestError
+
 from telethon.errors import *
 from telethon.tl.types import *
 from telethon.tl.functions.contacts import SearchRequest
 from telethon.tl.functions.messages import ImportChatInviteRequest, CheckChatInviteRequest
 from telethon.tl.functions.channels import JoinChannelRequest
+
 from . import puppet as pu, portal as po
 
 command_handlers = {}
@@ -51,9 +55,10 @@ def format_duration(seconds):
 
 
 class CommandHandler:
+    log = logging.getLogger("mau.commands")
+
     def __init__(self, context):
-        self.az, self.db, log, self.config = context
-        self.log = log.getChild("commands")
+        self.az, self.db, self.config = context
         self.command_prefix = self.config["bridge.command_prefix"]
         self._room_id = None
         self._is_management = False

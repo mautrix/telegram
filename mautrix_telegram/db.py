@@ -14,7 +14,8 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
-from sqlalchemy import Column, ForeignKey, UniqueConstraint, Integer, String
+from sqlalchemy import Column, UniqueConstraint, Integer, String
+
 from .base import Base
 
 

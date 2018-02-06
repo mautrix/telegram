@@ -14,6 +14,8 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
+import logging
+
 from matrix_client.errors import MatrixRequestError
 
 from .user import User
@@ -23,9 +25,10 @@ from .commands import CommandHandler
 
 
 class MatrixHandler:
+    log = logging.getLogger("mau.mx")
+
     def __init__(self, context):
-        self.az, self.db, log, self.config = context
-        self.log = log.getChild("mx")
+        self.az, self.db, self.config = context
         self.commands = CommandHandler(context)
 
         self.az.matrix_event_handler(self.handle_event)

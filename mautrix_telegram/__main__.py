@@ -31,7 +31,7 @@ from .db import init as init_db
 from .user import init as init_user
 from .portal import init as init_portal
 from .puppet import init as init_puppet
-from .formatter import init as init_formatter
+# from .formatter import init as init_formatter
 
 log = logging.getLogger("mau")
 time_formatter = logging.Formatter("[%(asctime)s] [%(levelname)s@%(name)s] %(message)s")
@@ -74,12 +74,12 @@ Base.metadata.create_all()
 
 appserv = AppService(config["homeserver.address"], config["homeserver.domain"],
                      config["appservice.as_token"], config["appservice.hs_token"],
-                     config["appservice.bot_username"], log=log.getChild("as"))
-context = (appserv, db_session, log, config)
+                     config["appservice.bot_username"], log="mau.as")
+context = (appserv, db_session, config)
 
 with appserv.run(config["appservice.hostname"], config["appservice.port"]) as start:
     init_db(db_session)
-    init_formatter(context)
+    # init_formatter(context)
     init_portal(context)
     init_puppet(context)
     init_user(context)
