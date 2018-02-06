@@ -90,10 +90,10 @@ class Portal:
         # to deduplicate based on a hash of the message content.
 
         # The timestamp is only accurate to the second, so we can't rely on solely that either.
-        hash_content = [str(event.date.timestamp()), event.from_id, event.message]
+        hash_content = [event.date.timestamp(), event.message]
         if event.fwd_from:
             hash_content += [event.fwd_from.from_id, event.fwd_from.channel_id]
-        elif event.media:
+        elif isinstance(event, Message) and event.media:
             try:
                 hash_content += {
                     MessageMediaContact: lambda media: [media.user_id],

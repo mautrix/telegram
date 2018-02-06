@@ -218,7 +218,8 @@ def telegram_event_to_matrix(evt, source):
                 + f"<blockquote>{html}</blockquote>")
 
     if evt.reply_to_msg_id:
-        msg = DBMessage.query.get((evt.reply_to_msg_id, source.tgid))
+        space = evt.to_id.channel_id if isinstance(evt, Message) and isinstance(evt.to_id, PeerChannel) else source.tgid
+        msg = DBMessage.query.get((evt.reply_to_msg_id, space))
         if msg:
             quote = f"<a href=\"https://matrix.to/#/{msg.mx_room}/{msg.mxid}\">Quote<br></a>"
             if html:
