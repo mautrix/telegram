@@ -29,6 +29,20 @@ from .db import Message as DBMessage
 
 log = logging.getLogger("mau.formatter")
 
+# TEXT LEN EXPLANATION:
+# Telegram formatting counts two bytes in an UTF-16 string as one character.
+#
+# For Telegram -> Matrix formatting, we get the same counting mechanism by encoding the input
+# text as UTF-16 Little Endian and doubling all the offsets and lengths given by Telegram. With
+# those doubled values, we process the input entities and text. The text is converted back to
+# native str format before it's inserted into the output HTML.
+#
+# For Matrix -> Telegram formatting, do the same input encoding, but divide the length by two
+# instead of multiplying when generating the lengths and offsets of Telegram entities.
+#
+# The endianness doesn't matter, but it has to be specified to avoid the two BOM bits messing
+# everything up.
+TEMP_ENC = "utf-16-le"
 
 # region Matrix to Telegram
 
@@ -124,7 +138,9 @@ class MatrixParser(HTMLParser):
             self._open_tags_meta.appendleft(url)
 
         if entity_type and tag not in self._building_entities:
-            self._building_entities[tag] = entity_type(offset=len(self.text), length=0, **args)
+            # See "TEXT LEN EXPLANATION" near start of file
+            offset = int(len(self.text.encode(TEMP_ENC)) / 2)
+            self._building_entities[tag] = entity_type(offset=offset, length=0, **args)
 
     def _list_depth(self):
         depth = 0
@@ -159,7 +175,8 @@ class MatrixParser(HTMLParser):
                 text = f"{indent}{n}. {text}"
                 list_format_offset = len(indent) + 3
         for tag, entity in self._building_entities.items():
-            entity.length += len(text.strip("\n"))
+            # See "TEXT LEN EXPLANATION" near start of file
+            entity.length += int(len(text.strip("\n").encode(TEMP_ENC)) / 2)
             entity.offset += list_format_offset
 
         if text.endswith("\n"):
@@ -269,16 +286,20 @@ def telegram_to_matrix(text, entities):
 def _telegram_to_matrix(text, entities):
     if not entities:
         return text
+    # See "TEXT LEN EXPLANATION" near start of file
+    text = text.encode(TEMP_ENC)
     html = []
     last_offset = 0
     for entity in entities:
+        entity.offset *= 2
+        entity.length *= 2
         if entity.offset > last_offset:
-            html.append(escape(text[last_offset:entity.offset]))
+            html.append(escape(text[last_offset:entity.offset].decode(TEMP_ENC)))
         elif entity.offset < last_offset:
             continue
 
         skip_entity = False
-        entity_text = escape(text[entity.offset:entity.offset + entity.length])
+        entity_text = escape(text[entity.offset:entity.offset + entity.length].decode(TEMP_ENC))
         entity_type = type(entity)
 
         if entity_type == MessageEntityBold:
@@ -331,7 +352,7 @@ def _telegram_to_matrix(text, entities):
         else:
             skip_entity = True
         last_offset = entity.offset + (0 if skip_entity else entity.length)
-    html.append(text[last_offset:])
+    html.append(text[last_offset:].decode(TEMP_ENC))
 
     return "".join(html)
 
