@@ -46,7 +46,7 @@ class Portal:
     by_tgid = {}
 
     def __init__(self, tgid, peer_type, tg_receiver=None, mxid=None, username=None, title=None,
-                 about=None, photo_id=None):
+                 about=None, photo_id=None, save_to_cache=True):
         self.mxid = mxid
         self.tgid = tgid
         self.tg_receiver = tg_receiver or tgid
@@ -60,10 +60,11 @@ class Portal:
         self._dedup = deque()
         self._dedup_mxid = {}
 
-        if tgid:
-            self.by_tgid[self.tgid_full] = self
-        if mxid:
-            self.by_mxid[mxid] = self
+        if save_to_cache:
+            if tgid:
+                self.by_tgid[self.tgid_full] = self
+            if mxid:
+                self.by_mxid[mxid] = self
 
     @property
     def tgid_full(self):
@@ -698,7 +699,8 @@ class Portal:
         if duplicate_found:
             mxid, other_tg_space = duplicate_found
             if tg_space != other_tg_space:
-                self.db.add(DBMessage(tgid=evt.id, mx_room=self.mxid, mxid=mxid, tg_space=tg_space))
+                self.db.add(
+                    DBMessage(tgid=evt.id, mx_room=self.mxid, mxid=mxid, tg_space=tg_space))
                 self.db.commit()
             return
 
@@ -794,17 +796,24 @@ class Portal:
             elif isinstance(participant, (ChatParticipantCreator, ChannelParticipantCreator)):
                 new_level = 95
 
-            update_user_level = (user and (user.mxid in levels["users"] or new_level > 0)
-                                 and levels["users"][user.mxid] != new_level)
-            if update_user_level:
-                levels["users"][user.mxid] = new_level
-                changed = True
+            user_levels = levels["users"]
 
-            update_puppet_level = (puppet and (puppet.mxid in levels["users"] or new_level > 0)
-                                   and levels["users"][puppet.mxid] != new_level)
-            if update_puppet_level:
-                levels["users"][puppet.mxid] = new_level
-                changed = True
+            if user:
+                user_level_defined = user.mxid in user_levels
+                user_has_right_level = (user_levels[user.mxid] != new_level
+                                        if user_level_defined else new_level == 0)
+                if not user_has_right_level:
+                    levels["users"][user.mxid] = new_level
+                    changed = True
+
+            if puppet:
+                puppet_level_defined = puppet.mxid in user_levels
+                puppet_has_right_level = (user_levels[puppet.mxid] != new_level
+                                          if puppet_level_defined else new_level == 0)
+
+                if not puppet_has_right_level:
+                    levels["users"][puppet.mxid] = new_level
+                    changed = True
         if changed:
             self.main_intent.set_power_levels(self.mxid, levels)
 
@@ -819,11 +828,13 @@ class Portal:
     # endregion
     # region Database conversion
 
-    def to_db(self):
-        return self.db.merge(
-            DBPortal(tgid=self.tgid, tg_receiver=self.tg_receiver, peer_type=self.peer_type,
-                     mxid=self.mxid, username=self.username, title=self.title,
-                     about=self.about, photo_id=self.photo_id))
+    def to_db(self, merge=True):
+        portal = DBPortal(tgid=self.tgid, tg_receiver=self.tg_receiver, peer_type=self.peer_type,
+                          mxid=self.mxid, username=self.username, title=self.title,
+                          about=self.about, photo_id=self.photo_id)
+        if merge:
+            return self.db.merge(portal)
+        return portal
 
     def migrate_and_save(self, new_id):
         existing = DBPortal.query.get(self.tgid_full)
@@ -883,9 +894,11 @@ class Portal:
             return cls.from_db(portal)
 
         if peer_type:
-            portal = Portal(tgid, peer_type=peer_type, tg_receiver=tg_receiver)
-            cls.db.add(portal.to_db())
-            portal.save()
+            portal = Portal(tgid, peer_type=peer_type, tg_receiver=tg_receiver,
+                            save_to_cache=False)
+            cls.db.add(portal.to_db(merge=False))
+            cls.db.commit()
+            cls.by_tgid[portal.tgid_full] = portal
             return portal
 
         return None
