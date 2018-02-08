@@ -139,7 +139,6 @@ class CommandHandler:
         elif len(args) == 0:
             return self.reply("**Usage:** `$cmdprefix+sp login <phone number>`")
         phone_number = args[0]
-        sender.client.send_code_request(phone_number)
         sender.client.sign_in(phone_number)
         sender.command_status = {
             "next": command_handlers["enter_code"],
