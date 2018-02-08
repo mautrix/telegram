@@ -682,6 +682,7 @@ class Portal:
         self.log.debug(f"Sending {evt.message} to {self.mxid} by {sender.id}")
         text, html = formatter.telegram_event_to_matrix(evt, source,
                                                         config["bridge.native_replies"],
+                                                        config["bridge.link_in_reply"],
                                                         self.main_intent)
         sender.intent.set_typing(self.mxid, is_typing=False)
         return sender.intent.send_text(self.mxid, text, html=html)

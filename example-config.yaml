@@ -60,7 +60,13 @@ bridge:
 
     # Whether or not to use native Matrix replies. At the time of writing, only riot-web supports
     # replies and the format of them is subject to change.
-    native_replies: False
+    native_replies: True
+    # If native replies are disabled, should the custom replies contain a link to the message being
+    # replied to?
+    #
+    # Warning: Using this on a client with native replies will not look good: the message will have
+    #          a native quote AND a non-native quote.
+    link_in_reply: False
 
     # The prefix for commands. Only required in non-management rooms.
     command_prefix: "!tg"

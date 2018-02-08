@@ -196,7 +196,8 @@ def matrix_to_telegram(html, tg_space=None):
 # endregion
 # region Telegram to Matrix
 
-def telegram_event_to_matrix(evt, source, native_replies=False, main_intent=None):
+def telegram_event_to_matrix(evt, source, native_replies=False, message_link_in_reply=False,
+                             main_intent=None):
     text = evt.message
     html = telegram_to_matrix(evt.message, evt.entities) if evt.entities else None
 
@@ -233,11 +234,17 @@ def telegram_event_to_matrix(evt, source, native_replies=False, main_intent=None
                 try:
                     event = main_intent.get_event(msg.mx_room, msg.mxid)
                     content = event["content"]
-                    body = content["formatted_body"] if "formatted_body" in content else content["body"]
-                    reply_to = f"<a href='https://matrix.to/#/{event['sender']}'>event['sender']</a>"
-                    quote = f"Reply to {reply_to}<blockquote>{body}</blockquote>"
+                    body = (content["formatted_body"]
+                            if "formatted_body" in content
+                            else content["body"])
+                    reply_to_user = ("<a href='https://matrix.to/#/"
+                                     + f"{event['sender']}'>{event['sender']}</a>")
+                    reply_to_msg = (("<a href='https://matrix.to/#/"
+                                     + f"{msg.mx_room}/{msg.mxid}'>Reply</a>")
+                                    if message_link_in_reply else "Reply")
+                    quote = f"{reply_to_msg} to {reply_to_user}<blockquote>{body}</blockquote>"
                 except (ValueError, KeyError, MatrixRequestError):
-                    quote = "Reply to someone (failed to fetch message)<br/>"
+                    quote = "Reply to unknown user <em>(Failed to fetch message)</em>:<br/>"
             if html:
                 html = quote + html
             else:
