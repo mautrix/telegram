@@ -17,6 +17,7 @@
 from io import BytesIO
 from collections import deque
 from datetime import datetime
+import random
 import mimetypes
 import hashlib
 import logging
@@ -57,6 +58,7 @@ class Portal:
         self._main_intent = None
 
         self._dedup = deque()
+        self._dedup_mxid = {}
 
         if tgid:
             self.by_tgid[self.tgid_full] = self
@@ -110,13 +112,16 @@ class Portal:
                            .encode("utf-8")
                            ).hexdigest()
 
-    def is_duplicate(self, event):
+    def is_duplicate(self, event, mxid=None):
         hash = self._hash_event(event)
         if hash in self._dedup:
-            return True
+            return self._dedup_mxid[hash]
+
+        self._dedup_mxid[hash] = mxid
         self._dedup.append(hash)
+
         if len(self._dedup) > 20:
-            self._dedup.popleft()
+            del self._dedup_mxid[self._dedup.popleft()]
         return False
 
     def get_input_entity(self, user):
@@ -381,6 +386,7 @@ class Portal:
         if type in {"m.text", "m.emote"}:
             if "format" in message and message["format"] == "org.matrix.custom.html":
                 space = self.tgid if self.peer_type == "channel" else sender.tgid
+                print(sender.username, sender.tgid, space)
                 message, entities = formatter.matrix_to_telegram(message["formatted_body"], space)
                 if type == "m.emote":
                     message = "/me " + message
@@ -410,7 +416,7 @@ class Portal:
         else:
             self.log.debug("Unhandled Matrix event: %s", message)
             return
-        self.is_duplicate(response)
+        self.is_duplicate(response, event_id)
         self.db.add(DBMessage(
             tgid=response.id,
             tg_space=self.tgid if self.peer_type == "channel" else sender.tgid,
@@ -681,7 +687,13 @@ class Portal:
         if not self.mxid:
             self.create_matrix_room(source, invites=[source.mxid])
 
-        if self.is_duplicate(evt):
+        tg_space = self.tgid if self.peer_type == "channel" else source.tgid
+
+        temporary_identifier = f"${random.randint(1000000000000,9999999999999)}TGBRIDGETEMP"
+        mxid = self.is_duplicate(evt, temporary_identifier)
+        if mxid:
+            self.db.add(DBMessage(tgid=evt.id, mx_room=self.mxid, mxid=mxid, tg_space=tg_space))
+            self.db.commit()
             return
 
         if evt.message:
@@ -700,8 +712,13 @@ class Portal:
             self.log.debug("Unhandled Telegram message: %s", evt)
             return
 
-        self.db.add(DBMessage(tgid=evt.id, mx_room=self.mxid, mxid=response["event_id"],
-                              tg_space=self.tgid if self.peer_type == "channel" else source.tgid))
+        mxid = response["event_id"]
+        DBMessage.query \
+            .filter(DBMessage.mx_room == self.mxid,
+                    DBMessage.mxid == temporary_identifier,
+                    DBMessage.tg_space == tg_space) \
+            .update({"mxid": mxid})
+        self.db.add(DBMessage(tgid=evt.id, mx_room=self.mxid, mxid=mxid, tg_space=tg_space))
         self.db.commit()
 
     def handle_telegram_action(self, source, sender, action):

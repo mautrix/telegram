@@ -95,12 +95,12 @@ class MatrixParser(HTMLParser):
                     entity_type = MessageEntityMentionName
                     args["user_id"] = user.tgid
             elif reply and self._tg_space and (len(self.entities) == 0
-                                              and len(self._building_entities) == 0):
+                                               and len(self._building_entities) == 0):
                 room_id = reply.group(1)
                 message_id = reply.group(2)
-                message = DBMessage.query.filter(DBMessage.mxid == message_id
-                                                 and DBMessage.mx_room == room_id
-                                                 and DBMessage.tg_space == self._tg_space
+                message = DBMessage.query.filter(DBMessage.mxid == message_id,
+                                                 DBMessage.mx_room == room_id,
+                                                 DBMessage.tg_space == self._tg_space
                                                  ).one_or_none()
                 if not message:
                     return
@@ -221,7 +221,8 @@ def telegram_event_to_matrix(evt, source):
                 + f"<blockquote>{html}</blockquote>")
 
     if evt.reply_to_msg_id:
-        space = evt.to_id.channel_id if isinstance(evt, Message) and isinstance(evt.to_id, PeerChannel) else source.tgid
+        space = evt.to_id.channel_id if isinstance(evt, Message) and isinstance(evt.to_id,
+                                                                                PeerChannel) else source.tgid
         msg = DBMessage.query.get((evt.reply_to_msg_id, space))
         if msg:
             quote = f"<a href=\"https://matrix.to/#/{msg.mx_room}/{msg.mxid}\">Quote<br></a>"
@@ -314,6 +315,5 @@ def _telegram_to_matrix(text, entities):
     html.append(text[last_offset:])
 
     return "".join(html)
-
 
 # endregion
