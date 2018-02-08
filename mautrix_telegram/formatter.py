@@ -20,6 +20,8 @@ from collections import deque
 import re
 import logging
 
+from matrix_client.errors import MatrixRequestError
+
 from telethon.tl.types import *
 
 from . import user as u, puppet as p
@@ -194,7 +196,7 @@ def matrix_to_telegram(html, tg_space=None):
 # endregion
 # region Telegram to Matrix
 
-def telegram_event_to_matrix(evt, source):
+def telegram_event_to_matrix(evt, source, native_replies=False, main_intent=None):
     text = evt.message
     html = telegram_to_matrix(evt.message, evt.entities) if evt.entities else None
 
@@ -225,7 +227,17 @@ def telegram_event_to_matrix(evt, source):
                                                                                 PeerChannel) else source.tgid
         msg = DBMessage.query.get((evt.reply_to_msg_id, space))
         if msg:
-            quote = f"<a href=\"https://matrix.to/#/{msg.mx_room}/{msg.mxid}\">Quote<br></a>"
+            if native_replies:
+                quote = f"<a href=\"https://matrix.to/#/{msg.mx_room}/{msg.mxid}\">Quote<br></a>"
+            else:
+                try:
+                    event = main_intent.get_event(msg.mx_room, msg.mxid)
+                    content = event["content"]
+                    body = content["formatted_body"] if "formatted_body" in content else content["body"]
+                    reply_to = f"<a href='https://matrix.to/#/{event['sender']}'>event['sender']</a>"
+                    quote = f"Reply to {reply_to}<blockquote>{body}</blockquote>"
+                except (ValueError, KeyError, MatrixRequestError):
+                    quote = "Reply to someone (failed to fetch message)<br/>"
             if html:
                 html = quote + html
             else:

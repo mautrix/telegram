@@ -122,7 +122,7 @@ class Portal:
 
         if len(self._dedup) > 20:
             del self._dedup_mxid[self._dedup.popleft()]
-        return False
+        return None
 
     def get_input_entity(self, user):
         return user.client.get_input_entity(self.peer)
@@ -416,10 +416,11 @@ class Portal:
         else:
             self.log.debug("Unhandled Matrix event: %s", message)
             return
-        self.is_duplicate(response, event_id)
+        tg_space = self.tgid if self.peer_type == "channel" else sender.tgid
+        self.is_duplicate(response, (event_id, tg_space))
         self.db.add(DBMessage(
             tgid=response.id,
-            tg_space=self.tgid if self.peer_type == "channel" else sender.tgid,
+            tg_space=tg_space,
             mx_room=self.mxid,
             mxid=event_id))
         self.db.commit()
@@ -679,7 +680,9 @@ class Portal:
 
     def handle_telegram_text(self, source, sender, evt):
         self.log.debug(f"Sending {evt.message} to {self.mxid} by {sender.id}")
-        text, html = formatter.telegram_event_to_matrix(evt, source)
+        text, html = formatter.telegram_event_to_matrix(evt, source,
+                                                        config["bridge.native_replies"],
+                                                        self.main_intent)
         sender.intent.set_typing(self.mxid, is_typing=False)
         return sender.intent.send_text(self.mxid, text, html=html)
 
@@ -690,10 +693,12 @@ class Portal:
         tg_space = self.tgid if self.peer_type == "channel" else source.tgid
 
         temporary_identifier = f"${random.randint(1000000000000,9999999999999)}TGBRIDGETEMP"
-        mxid = self.is_duplicate(evt, temporary_identifier)
-        if mxid:
-            self.db.add(DBMessage(tgid=evt.id, mx_room=self.mxid, mxid=mxid, tg_space=tg_space))
-            self.db.commit()
+        duplicate_found = self.is_duplicate(evt, (temporary_identifier, tg_space))
+        if duplicate_found:
+            mxid, other_tg_space = duplicate_found
+            if tg_space != other_tg_space:
+                self.db.add(DBMessage(tgid=evt.id, mx_room=self.mxid, mxid=mxid, tg_space=tg_space))
+                self.db.commit()
             return
 
         if evt.message:
@@ -715,8 +720,7 @@ class Portal:
         mxid = response["event_id"]
         DBMessage.query \
             .filter(DBMessage.mx_room == self.mxid,
-                    DBMessage.mxid == temporary_identifier,
-                    DBMessage.tg_space == tg_space) \
+                    DBMessage.mxid == temporary_identifier) \
             .update({"mxid": mxid})
         self.db.add(DBMessage(tgid=evt.id, mx_room=self.mxid, mxid=mxid, tg_space=tg_space))
         self.db.commit()

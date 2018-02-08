@@ -275,6 +275,10 @@ class IntentAPI:
             events.remove(event_id)
             self.set_pinned_messages(room_id, events)
 
+    def get_event(self, room_id, event_id):
+        self.ensure_joined(room_id)
+        return self.client._send("GET", f"/rooms/{room_id}/event/{event_id}")
+
     def set_typing(self, room_id, is_typing=True, timeout=5000):
         self.ensure_joined(room_id)
         return self.client.set_typing(room_id, is_typing, timeout)

@@ -40,10 +40,11 @@ bridge:
     displayname_template: "{displayname} (Telegram)"
 
     # Set the preferred order of user identifiers which to use in the Matrix puppet display name.
-    # In the (hopefully unlikely) scenario that none of the given keys are found, the numeric user ID is used.
+    # In the (hopefully unlikely) scenario that none of the given keys are found, the numeric user
+    # ID is used.
     #
-    # If the bridge is working properly, a phone number or an username should always be known, but the other one can
-    # very well be empty.
+    # If the bridge is working properly, a phone number or an username should always be known, but
+    # the other one can very well be empty.
     #
     # Valid keys:
     #   "full name"          (First and/or last name)
@@ -57,6 +58,9 @@ bridge:
     - username
     - phone number
 
+    # Whether or not to use native Matrix replies. At the time of writing, only riot-web supports
+    # replies and the format of them is subject to change.
+    native_replies: False
 
     # The prefix for commands. Only required in non-management rooms.
     command_prefix: "!tg"
@@ -67,7 +71,8 @@ bridge:
     - "internal-hs.example.com"
     - "@user:public.example.com"
 
-    # Admins can do things like delete portal rooms.
+    # Admins can do things like delete portal rooms. Here you must specify the exact MXID, domains
+    # are not accepted.
     admins:
     - "@admin:internal-hs.example.com"
 
