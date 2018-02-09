@@ -17,6 +17,7 @@
 import argparse
 import sys
 import logging
+import asyncio
 
 import sqlalchemy as sql
 from sqlalchemy import orm
@@ -28,10 +29,9 @@ from .config import Config
 from .matrix import MatrixHandler
 
 from .db import init as init_db
-from .user import init as init_user
+from .user import init as init_user, User
 from .portal import init as init_portal
 from .puppet import init as init_puppet
-# from .formatter import init as init_formatter
 
 log = logging.getLogger("mau")
 time_formatter = logging.Formatter("[%(asctime)s] [%(levelname)s@%(name)s] %(message)s")
@@ -72,16 +72,24 @@ db_session = orm.scoping.scoped_session(db_factory)
 Base.metadata.bind = db_engine
 Base.metadata.create_all()
 
+loop = asyncio.get_event_loop()
 appserv = AppService(config["homeserver.address"], config["homeserver.domain"],
                      config["appservice.as_token"], config["appservice.hs_token"],
-                     config["appservice.bot_username"], log="mau.as")
-context = (appserv, db_session, config)
+                     config["appservice.bot_username"], log="mau.as", loop=loop)
+context = (appserv, db_session, config, loop)
 
 with appserv.run(config["appservice.hostname"], config["appservice.port"]) as start:
+    MatrixHandler(context)
     init_db(db_session)
-    # init_formatter(context)
     init_portal(context)
     init_puppet(context)
-    init_user(context)
-    MatrixHandler(context)
-    start()
+    startup_actions = []
+    startup_actions += init_user(context)
+    startup_actions += [start]
+    try:
+        loop.run_until_complete(asyncio.gather(*startup_actions))
+        loop.run_forever()
+    except KeyboardInterrupt:
+        for user in User.by_tgid.values():
+            user.client.disconnect()
+        sys.exit(0)

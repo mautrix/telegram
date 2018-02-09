@@ -213,7 +213,7 @@ def matrix_to_telegram(html, tg_space=None):
 # endregion
 # region Telegram to Matrix
 
-def telegram_event_to_matrix(evt, source, native_replies=False, message_link_in_reply=False,
+async def telegram_event_to_matrix(evt, source, native_replies=False, message_link_in_reply=False,
                              main_intent=None):
     text = evt.message
     html = telegram_to_matrix(evt.message, evt.entities) if evt.entities else None
@@ -230,7 +230,7 @@ def telegram_event_to_matrix(evt, source, native_replies=False, message_link_in_
             if puppet and puppet.displayname:
                 fwd_from = f"<a href='https://matrix.to/#/{puppet.mxid}'>{puppet.displayname}</a>"
             else:
-                user = source.client.get_entity(from_id)
+                user = await source.client.get_entity(from_id)
                 if user:
                     fwd_from = p.Puppet.get_displayname(user, format=False)
                 else:
@@ -249,7 +249,7 @@ def telegram_event_to_matrix(evt, source, native_replies=False, message_link_in_
                 quote = f"<a href=\"https://matrix.to/#/{msg.mx_room}/{msg.mxid}\">Quote<br></a>"
             else:
                 try:
-                    event = main_intent.get_event(msg.mx_room, msg.mxid)
+                    event = await main_intent.get_event(msg.mx_room, msg.mxid)
                     content = event["content"]
                     body = (content["formatted_body"]
                             if "formatted_body" in content

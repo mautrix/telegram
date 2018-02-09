@@ -15,6 +15,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import logging
+import asyncio
 
 from telethon.tl.types import *
 from telethon.tl.types import User as TLUser
@@ -81,20 +82,22 @@ class User:
     # endregion
     # region Telegram connection management
 
-    def start(self):
+    async def start(self):
         self.client = MautrixTelegramClient(self.mxid,
                                             config["telegram.api_id"],
-                                            config["telegram.api_hash"],
-                                            update_workers=2)
-        self.connected = self.client.connect()
-        if self.logged_in:
-            self.post_login()
+                                            config["telegram.api_hash"])
         self.client.add_update_handler(self.update_catch)
+        self.connected = await self.client.connect()
+        if self.logged_in:
+            await self.post_login()
         return self
 
-    def post_login(self, info=None):
-        self.sync_dialogs()
-        self.update_info(info)
+    async def post_login(self, info=None):
+        try:
+            await self.sync_dialogs()
+            await self.update_info(info)
+        except Exception:
+            self.log.exception("Failed to run post-login functions")
 
     def stop(self):
         self.client.disconnect()
@@ -104,8 +107,8 @@ class User:
     # endregion
     # region Telegram actions that need custom methods
 
-    def update_info(self, info=None):
-        info = info or self.client.get_me()
+    async def update_info(self, info=None):
+        info = info or await self.client.get_me()
         changed = False
         if self.username != info.username:
             self.username = info.username
@@ -127,51 +130,53 @@ class User:
             self.save()
         return self.client.log_out()
 
-    def sync_dialogs(self):
-        dialogs = self.client.get_dialogs(limit=30)
+    async def sync_dialogs(self):
+        dialogs = await self.client.get_dialogs(limit=30)
+        creators = []
         for dialog in dialogs:
             entity = dialog.entity
             if (isinstance(entity, (TLUser, ChatForbidden, ChannelForbidden)) or (
                 isinstance(entity, Chat) and (entity.deactivated or entity.left))):
                 continue
             portal = po.Portal.get_by_entity(entity)
-            portal.create_matrix_room(self, entity, invites=[self.mxid])
+            creators.append(portal.create_matrix_room(self, entity, invites=[self.mxid]))
+        await asyncio.gather(*creators)
 
     # endregion
     # region Telegram update handling
 
-    def update_catch(self, update):
+    async def update_catch(self, update):
         try:
-            self.update(update)
+            await self.update(update)
         except Exception:
             self.log.exception("Failed to handle Telegram update")
 
-    def update(self, update):
+    async def update(self, update):
         if isinstance(update, (UpdateShortChatMessage, UpdateShortMessage, UpdateNewMessage,
                                UpdateNewChannelMessage)):
-            self.update_message(update)
+            await self.update_message(update)
         elif isinstance(update, (UpdateChatUserTyping, UpdateUserTyping)):
-            self.update_typing(update)
+            await self.update_typing(update)
         elif isinstance(update, UpdateUserStatus):
-            self.update_status(update)
+            await self.update_status(update)
         elif isinstance(update, (UpdateChatAdmins, UpdateChatParticipantAdmin)):
-            self.update_admin(update)
+            await self.update_admin(update)
         elif isinstance(update, UpdateChatParticipants):
             portal = po.Portal.get_by_tgid(update.participants.chat_id)
             if portal and portal.mxid:
-                portal.update_telegram_participants(update.participants.participants)
+                await portal.update_telegram_participants(update.participants.participants)
         elif isinstance(update, UpdateChannelPinnedMessage):
             portal = po.Portal.get_by_tgid(update.channel_id, peer_type="channel")
             if portal and portal.mxid:
-                portal.update_telegram_pin(self, update.id)
+                await portal.update_telegram_pin(self, update.id)
         elif isinstance(update, (UpdateUserName, UpdateUserPhoto)):
-            self.update_others_info(update)
+            await self.update_others_info(update)
         elif isinstance(update, UpdateReadHistoryOutbox):
-            self.update_read_receipt(update)
+            await self.update_read_receipt(update)
         else:
             self.log.debug("Unhandled update: %s", update)
 
-    def update_read_receipt(self, update):
+    async def update_read_receipt(self, update):
         if not isinstance(update.peer, PeerUser):
             self.log.debug("Unexpected read receipt peer: %s", update.peer)
             return
@@ -186,40 +191,42 @@ class User:
             return
 
         puppet = pu.Puppet.get(update.peer.user_id)
-        puppet.intent.mark_read(portal.mxid, message.mxid)
+        await puppet.intent.mark_read(portal.mxid, message.mxid)
 
-    def update_admin(self, update):
+    async def update_admin(self, update):
         portal = po.Portal.get_by_tgid(update.chat_id, peer_type="chat")
         if isinstance(update, UpdateChatAdmins):
-            portal.set_telegram_admins_enabled(update.enabled)
+            await portal.set_telegram_admins_enabled(update.enabled)
         elif isinstance(update, UpdateChatParticipantAdmin):
             puppet = pu.Puppet.get(update.user_id)
             user = User.get_by_tgid(update.user_id)
-            portal.set_telegram_admin(puppet, user)
+            await portal.set_telegram_admin(puppet, user)
 
-    def update_typing(self, update):
+    async def update_typing(self, update):
         if isinstance(update, UpdateUserTyping):
             portal = po.Portal.get_by_tgid(update.user_id, self.tgid, "user")
         else:
             portal = po.Portal.get_by_tgid(update.chat_id, peer_type="chat")
         sender = pu.Puppet.get(update.user_id)
-        return portal.handle_telegram_typing(sender, update)
+        await portal.handle_telegram_typing(sender, update)
 
-    def update_others_info(self, update):
+    async def update_others_info(self, update):
         puppet = pu.Puppet.get(update.user_id)
         if isinstance(update, UpdateUserName):
-            if puppet.update_displayname(self, update):
+            if await puppet.update_displayname(self, update):
                 puppet.save()
         elif isinstance(update, UpdateUserPhoto):
-            if puppet.update_avatar(self, update.photo.photo_big):
+            if await puppet.update_avatar(self, update.photo.photo_big):
                 puppet.save()
 
-    def update_status(self, update):
+    async def update_status(self, update):
         puppet = pu.Puppet.get(update.user_id)
         if isinstance(update.status, UserStatusOnline):
-            puppet.intent.set_presence("online")
+            await puppet.intent.set_presence("online")
         elif isinstance(update.status, UserStatusOffline):
-            puppet.intent.set_presence("offline")
+            await puppet.intent.set_presence("offline")
+        else:
+            self.log.warning("Unexpected user status update: %s", update)
         return
 
     def get_message_details(self, update):
@@ -243,7 +250,7 @@ class User:
             return update, None, None
         return update, sender, portal
 
-    def update_message(self, update):
+    async def update_message(self, update):
         update, sender, portal = self.get_message_details(update)
 
         if isinstance(update, MessageService):
@@ -253,10 +260,10 @@ class User:
                 return
             self.log.debug("Handling action %s to %s by %d", update.action, portal.tgid_log,
                            sender.id)
-            portal.handle_telegram_action(self, sender, update.action)
+            await portal.handle_telegram_action(self, sender, update.action)
         else:
             self.log.debug("Handling message %s to %s by %d", update, portal.tgid_log, sender.tgid)
-            portal.handle_telegram_message(self, sender, update)
+            await portal.handle_telegram_message(self, sender, update)
 
     # endregion
     # region Class instance lookup
@@ -309,8 +316,7 @@ class User:
 
 def init(context):
     global config
-    User.az, User.db, config = context
+    User.az, User.db, config, _ = context
 
     users = [User.from_db(user) for user in DBUser.query.all()]
-    for user in users:
-        user.start()
+    return [user.start() for user in users]

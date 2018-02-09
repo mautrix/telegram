@@ -47,8 +47,8 @@ class AppService:
         self.log = (logging.getLogger(log) if isinstance(log, str)
                     else log or logging.getLogger("mautrix_appservice"))
 
-        self.query_user = query_user or (lambda user: None)
-        self.query_alias = query_alias or (lambda alias: None)
+        self.query_user = query_user or self.default_query_handler
+        self.query_alias = query_alias or self.default_query_handler
 
         self.event_handlers = []
 
@@ -59,6 +59,9 @@ class AppService:
         self.app.router.add_route("GET", "/users/{user_id}", self._http_query_user)
 
         self.matrix_event_handler(self.update_state_store)
+
+    async def default_query_handler(self, param):
+        return None
 
     @property
     def http_session(self):
@@ -80,10 +83,10 @@ class AppService:
     def run(self, host="127.0.0.1", port=8080):
         self._http_session = aiohttp.ClientSession(loop=self.loop)
         self._intent = HTTPAPI(base_url=self.server, domain=self.domain, bot_mxid=self.bot_mxid,
-                               token=self.as_token, log=self.log,
-                               state_store=self.state_store).bot_intent()
+                               token=self.as_token, log=self.log, state_store=self.state_store,
+                               client_session=self._http_session).bot_intent()
 
-        yield partial(aiohttp.web.run_app, self.app, host=host, port=port)
+        yield self.loop.create_server(self.app.make_handler(), host, port)
 
         self._intent = None
         self._http_session.close()
@@ -107,7 +110,7 @@ class AppService:
         user_id = request.match_info["userId"]
 
         try:
-            response = self.query_user(user_id)
+            response = await self.query_user(user_id)
         except Exception:
             self.log.exception("Exception in user query handler")
             return web.Response(status=500)
@@ -123,7 +126,7 @@ class AppService:
         alias = request.match_info["alias"]
 
         try:
-            response = self.query_alias(alias)
+            response = await self.query_alias(alias)
         except Exception:
             self.log.exception("Exception in alias query handler")
             return web.Response(status=500)
@@ -154,7 +157,7 @@ class AppService:
 
         return web.json_response({})
 
-    def update_state_store(self, event):
+    async def update_state_store(self, event):
         event_type = event["type"]
         if event_type == "m.room.power_levels":
             self.state_store.set_power_levels(event["room_id"], event["content"])
@@ -163,11 +166,14 @@ class AppService:
                                             event["content"]["membership"])
 
     def handle_matrix_event(self, event):
-        for handler in self.event_handlers:
+        async def try_handle(handler):
             try:
-                handler(event)
+                await handler(event)
             except Exception:
                 self.log.exception("Exception in Matrix event handler")
+
+        for handler in self.event_handlers:
+            asyncio.ensure_future(try_handle(handler))
 
     def matrix_event_handler(self, func):
         self.event_handlers.append(func)
