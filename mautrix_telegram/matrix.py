@@ -16,7 +16,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import logging
 
-from matrix_client.errors import MatrixRequestError
+from mautrix_appservice import MatrixRequestError
 
 from .user import User
 from .portal import Portal

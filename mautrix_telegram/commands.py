@@ -18,7 +18,7 @@ import markdown
 import logging
 import asyncio
 
-from matrix_client.errors import MatrixRequestError
+from mautrix_appservice import MatrixRequestError
 
 from telethon.errors import *
 from telethon.tl.types import *

@@ -20,7 +20,7 @@ from collections import deque
 import re
 import logging
 
-from matrix_client.errors import MatrixRequestError
+from mautrix_appservice import MatrixRequestError
 
 from telethon.tl.types import *
 

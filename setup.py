@@ -24,7 +24,6 @@ setuptools.setup(
         "python-magic>=0.4.15,<0.5",
     ],
     dependency_links=[
-        "https://github.com/Cadair/matrix-python-sdk/tarball/1fab9821d98d15769e44e66f714d00a32a48d692#egg=matrix_client",
         "https://github.com/LonamiWebs/Telethon/tarball/7da092894b306d720cc60c04daa2bfba58f81946#egg=Telethon"
     ],
 

@@ -1,5 +1,4 @@
 aiohttp
--e git+git://github.com/Cadair/matrix-python-sdk#egg=matrix_client
 ruamel.yaml
 python-magic
 SQLAlchemy
