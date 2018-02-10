@@ -57,7 +57,9 @@ class HTTPAPI(AsyncHTTPAPI):
         if self.identity:
             query_params["user_id"] = self.identity
         log_content = content if not isinstance(content, bytes) else f"<{len(content)} bytes>"
-        self.log.debug("%s %s %s", method, path, log_content)
+        log_content = log_content or "(No content)"
+        query_identity = query_params["user_id"] if "user_id" in query_params else "No identity"
+        self.log.debug("%s %s %s as user %s", method, path, log_content, query_identity)
         return super()._send(method, path, content, query_params, headers or {}, api_path=api_path)
 
     def create_room(self, alias=None, is_public=False, name=None, topic=None, is_direct=False,
@@ -236,7 +238,7 @@ class IntentAPI:
 
     async def set_room_name(self, room_id, name):
         await self.ensure_joined(room_id)
-        self._ensure_has_power_level_for(room_id, "m.room.name")
+        await self._ensure_has_power_level_for(room_id, "m.room.name")
         return await self.client.set_room_name(room_id, name)
 
     async def get_power_levels(self, room_id, ignore_cache=False):
@@ -336,12 +338,12 @@ class IntentAPI:
 
     async def send_event(self, room_id, event_type, body, txn_id=None):
         await self.ensure_joined(room_id)
-        self._ensure_has_power_level_for(room_id, event_type)
+        await self._ensure_has_power_level_for(room_id, event_type)
         return await self.client.send_message_event(room_id, event_type, body, txn_id)
 
     async def send_state_event(self, room_id, event_type, body, state_key=""):
         await self.ensure_joined(room_id)
-        self._ensure_has_power_level_for(room_id, event_type)
+        await self._ensure_has_power_level_for(room_id, event_type)
         return await self.client.send_state_event(room_id, event_type, body, state_key)
 
     def join_room(self, room_id):
@@ -378,8 +380,8 @@ class IntentAPI:
             if matrix_error_code(e) != "M_FORBIDDEN" or not self.bot:
                 raise IntentError(f"Failed to join room {room_id} as {self.mxid}", e)
             try:
-                self.bot.invite_user(room_id, self.mxid)
-                self.client.join_room(room_id)
+                await self.bot.invite_user(room_id, self.mxid)
+                await self.client.join_room(room_id)
                 self.state_store.joined(room_id, self.mxid)
             except MatrixRequestError as e2:
                 raise IntentError(f"Failed to join room {room_id} as {self.mxid}", e2)
@@ -396,9 +398,9 @@ class IntentAPI:
                 return
         self.state_store.registered(self.mxid)
 
-    def _ensure_has_power_level_for(self, room_id, event_type):
+    async def _ensure_has_power_level_for(self, room_id, event_type):
         if not self.state_store.has_power_levels(room_id):
-            self.get_power_levels(room_id)
+            await self.get_power_levels(room_id)
         if self.state_store.has_power_level(room_id, self.mxid, event_type):
             return
         elif not self.bot:

@@ -18,7 +18,6 @@ from io import BytesIO
 from collections import deque
 from datetime import datetime
 import random
-import asyncio
 import mimetypes
 import hashlib
 import logging
