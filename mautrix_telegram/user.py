@@ -127,7 +127,7 @@ class User:
         if changed:
             self.save()
 
-    def log_out(self):
+    async def log_out(self):
         self.connected = False
         if self.tgid:
             try:
@@ -136,7 +136,8 @@ class User:
                 pass
             self.tgid = None
             self.save()
-        return self.client.log_out()
+        await self.client.log_out()
+        # TODO kick user from portals
 
     async def sync_dialogs(self):
         dialogs = await self.client.get_dialogs(limit=30)

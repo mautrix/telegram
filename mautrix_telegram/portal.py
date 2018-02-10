@@ -367,7 +367,7 @@ class Portal:
             del self.by_tgid[self.tgid_full]
             del self.by_mxid[self.mxid]
         elif source and source.tgid != user.tgid:
-            target = user.get_input_entity(source)
+            target = await user.get_input_entity(source)
             if self.peer_type == "chat":
                 await source.client(DeleteChatUserRequest(chat_id=self.tgid, user_id=target))
             else:
@@ -456,8 +456,9 @@ class Portal:
                                                 invite_link=moderator, pin_messages=moderator,
                                                 add_admins=admin, manage_call=moderator)
                     await sender.client(
-                        EditAdminRequest(channel=self.get_input_entity(sender),
-                                         user_id=sender.client.get_input_entity(PeerUser(user_id)),
+                        EditAdminRequest(channel=await self.get_input_entity(sender),
+                                         user_id=await sender.client.get_input_entity(
+                                             PeerUser(user_id)),
                                          admin_rights=rights))
 
     async def handle_matrix_about(self, sender, about):
@@ -543,7 +544,7 @@ class Portal:
         if self.peer_type != "channel":
             raise ValueError("Only channels and supergroups have usernames.")
         await source.client(
-            UpdateUsernameRequest(self.get_input_entity(source), username))
+            UpdateUsernameRequest(await self.get_input_entity(source), username))
         if await self.update_username(username):
             self.save()
 
@@ -569,7 +570,7 @@ class Portal:
                                                                megagroup=supergroup))
             entity = updates.chats[0]
             await source.client(InviteToChannelRequest(
-                channel=source.client.get_input_entity(entity),
+                channel=await source.client.get_input_entity(entity),
                 users=invites))
         else:
             raise ValueError("Invalid peer type for Telegram chat creation")

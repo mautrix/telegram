@@ -83,7 +83,7 @@ class MatrixHandler:
             await puppet.intent.send_notice(room, "Portal to private chat created.")
         else:
             await puppet.intent.join_room(room)
-            await puppet.intent.send_notice(room, "This puppet will remain inactive until a"
+            await puppet.intent.send_notice(room, "This puppet will remain inactive until a "
                                                   "Telegram chat is created for this room.")
 
     async def handle_invite(self, room, user, inviter):
