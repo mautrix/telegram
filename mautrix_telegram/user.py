@@ -86,11 +86,12 @@ class User:
     async def start(self):
         self.client = MautrixTelegramClient(self.mxid,
                                             config["telegram.api_id"],
-                                            config["telegram.api_hash"])
+                                            config["telegram.api_hash"],
+                                            loop=self.loop)
         self.client.add_update_handler(self.update_catch)
         self.connected = await self.client.connect()
         if self.logged_in:
-            await self.post_login()
+            asyncio.ensure_future(self.post_login(), loop=self.loop)
         return self
 
     async def post_login(self, info=None):
