@@ -16,6 +16,8 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from urllib.parse import quote
 from time import time
+from json.decoder import JSONDecodeError
+from aiohttp.client_exceptions import ContentTypeError
 import re
 import json
 import magic
@@ -35,6 +37,7 @@ class HTTPAPI:
 
         self.domain = domain
         self.bot_mxid = bot_mxid
+        self._bot_intent = None
         self.state_store = state_store
 
         if child:
@@ -54,10 +57,13 @@ class HTTPAPI:
             return child
 
     def bot_intent(self):
+        if self._bot_intent:
+            return self._bot_intent
         return IntentAPI(self.bot_mxid, self, state_store=self.state_store, log=self.intent_log)
 
     def intent(self, user):
-        return IntentAPI(user, self.user(user), self, self.state_store, self.intent_log)
+        return IntentAPI(user, self.user(user), self.bot_intent(), self.state_store,
+                         self.intent_log)
 
     async def _send(self, method, endpoint, content, query_params, headers):
         while True:
@@ -71,7 +77,7 @@ class HTTPAPI:
                         response_data = await response.json()
                         errcode = response_data["errcode"]
                         message = response_data["error"]
-                    except (json.decoder.JSONDecodeError, KeyError):
+                    except (JSONDecodeError, ContentTypeError, KeyError):
                         pass
                     raise MatrixRequestError(code=response.status, text=await response.text(),
                                              errcode=errcode, message=message)
@@ -174,7 +180,7 @@ class IntentAPI:
             return self.client.intent(user)
         else:
             self.log.warning("Called IntentAPI#user() of child intent object.")
-            return self.bot.intent(user)
+            return self.bot.client.intent(user)
 
     # region User actions
 
@@ -469,7 +475,7 @@ class IntentAPI:
             if e.errcode != "M_FORBIDDEN" or not self.bot:
                 raise IntentError(f"Failed to join room {room_id} as {self.mxid}", e)
             try:
-                await self.bot.invite_user(room_id, self.mxid)
+                await self.bot.invite(room_id, self.mxid)
                 await self._join_room_direct(room_id)
                 self.state_store.joined(room_id, self.mxid)
             except MatrixRequestError as e2:
