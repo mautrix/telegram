@@ -1,8 +1,9 @@
 import setuptools
+import mautrix_telegram
 
 setuptools.setup(
     name="mautrix-telegram",
-    version="0.1.0",
+    version=mautrix_telegram.__version__,
     url="https://github.com/tulir/mautrix-telegram",
 
     author="Tulir Asokan",

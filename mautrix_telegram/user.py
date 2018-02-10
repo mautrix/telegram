@@ -174,7 +174,7 @@ class User:
             if portal and portal.mxid:
                 await portal.update_telegram_participants(update.participants.participants)
         elif isinstance(update, UpdateChannelPinnedMessage):
-            portal = po.Portal.get_by_tgid(update.channel_id, peer_type="channel")
+            portal = po.Portal.get_by_tgid(update.channel_id)
             if portal and portal.mxid:
                 await portal.update_telegram_pin(self, update.id)
         elif isinstance(update, (UpdateUserName, UpdateUserPhoto)):
