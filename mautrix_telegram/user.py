@@ -279,13 +279,16 @@ class User:
 
         user = DBUser.query.get(mxid)
         if user:
-            return cls.from_db(user).start()
+            user = cls.from_db(user)
+            asyncio.ensure_future(user.start(), loop=cls.loop)
+            return user
 
         if create:
             user = cls(mxid)
             cls.db.add(user.to_db())
             cls.db.commit()
-            return user.start()
+            asyncio.ensure_future(user.start(), loop=cls.loop)
+            return user
 
         return None
 
@@ -298,7 +301,9 @@ class User:
 
         user = DBUser.query.filter(DBUser.tgid == tgid).one_or_none()
         if user:
-            return cls.from_db(user).start()
+            user = cls.from_db(user)
+            asyncio.ensure_future(user.start(), loop=cls.loop)
+            return user
 
         return None
 
