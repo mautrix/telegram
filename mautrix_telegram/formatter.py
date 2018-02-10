@@ -254,8 +254,10 @@ async def telegram_event_to_matrix(evt, source, native_replies=False, message_li
                     body = (content["formatted_body"]
                             if "formatted_body" in content
                             else content["body"])
-                    reply_to_user = ("<a href='https://matrix.to/#/"
-                                     + f"{event['sender']}'>{event['sender']}</a>")
+                    sender = event['sender']
+                    puppet = p.Puppet.get_by_mxid(sender, create=False)
+                    displayname = puppet.displayname if puppet else sender
+                    reply_to_user = (f"<a href='https://matrix.to/#/{sender}'>{displayname}</a>")
                     reply_to_msg = (("<a href='https://matrix.to/#/"
                                      + f"{msg.mx_room}/{msg.mxid}'>Reply</a>")
                                     if message_link_in_reply else "Reply")
