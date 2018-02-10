@@ -804,7 +804,7 @@ class Portal:
 
             if user:
                 user_level_defined = user.mxid in user_levels
-                user_has_right_level = (user_levels[user.mxid] != new_level
+                user_has_right_level = (user_levels[user.mxid] == new_level
                                         if user_level_defined else new_level == 0)
                 if not user_has_right_level:
                     levels["users"][user.mxid] = new_level
@@ -812,7 +812,7 @@ class Portal:
 
             if puppet:
                 puppet_level_defined = puppet.mxid in user_levels
-                puppet_has_right_level = (user_levels[puppet.mxid] != new_level
+                puppet_has_right_level = (user_levels[puppet.mxid] == new_level
                                           if puppet_level_defined else new_level == 0)
 
                 if not puppet_has_right_level:
