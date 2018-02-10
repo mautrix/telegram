@@ -768,9 +768,9 @@ class Portal:
         elif isinstance(action, MessageActionChatJoinedByLink):
             await self.add_telegram_user(sender.id, source)
         elif isinstance(action, MessageActionChatDeleteUser):
-            if sender.id != action.user_id:
-                kick_message = f"Kicked by {sender.displayname}"
-                await self.delete_telegram_user(action.user_id, kick_message)
+            kick_message = (f"Kicked by {sender.displayname}"
+                            if sender.id != action.user_id else None)
+            await self.delete_telegram_user(action.user_id, kick_message)
         elif isinstance(action, MessageActionChatMigrateTo):
             self.peer_type = "channel"
             self.migrate_and_save(action.channel_id)
