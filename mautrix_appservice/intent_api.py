@@ -211,7 +211,7 @@ class IntentAPI:
         mime_type = mime_type or magic.from_buffer(data, mime=True)
         return await self.client.request("POST", "", content=data,
                                          headers={"Content-Type": mime_type},
-                                         api_path="/matrix/media/r0/upload")
+                                         api_path="/_matrix/media/r0/upload")
 
     async def download_file(self, url):
         await self.ensure_registered()
