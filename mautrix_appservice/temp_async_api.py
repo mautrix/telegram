@@ -7,20 +7,6 @@ from matrix_client.errors import MatrixError, MatrixRequestError
 
 
 class AsyncHTTPAPI(MatrixHttpApi):
-    """
-    Contains all raw matrix HTTP client-server API calls using asyncio and coroutines.
-    Examples
-    --------
-    .. code-block: python
-        async def main():
-            async with aiohttp.ClientSession() as session:
-                mapi = AsyncHTTPAPI("http://matrix.org", session)
-                resp = await mapi.get_room_id("#matrix:matrix.org")
-                print(resp)
-        loop = asyncio.get_event_loop()
-        loop.run_until_complete(main())
-    """
-
     def __init__(self, base_url, client_session, token=None, identity=None):
         self.base_url = base_url
         self.token = token
@@ -79,12 +65,6 @@ class AsyncHTTPAPI(MatrixHttpApi):
         return content.get('avatar_url', None)
 
     async def get_room_id(self, room_alias):
-        """Get room id from its alias
-        Args:
-            room_alias(str): The room alias name.
-        Returns:
-            Wanted room's id.
-        """
         content = await self._send(
             "GET",
             "/directory/room/{}".format(quote(room_alias)),
