@@ -844,7 +844,7 @@ class Portal:
     def migrate_and_save(self, new_id):
         existing = DBPortal.query.get(self.tgid_full)
         if existing:
-            self.db.object_session(existing).delete(existing)
+            self.db.delete(existing)
         try:
             del self.by_tgid[self.tgid_full]
         except KeyError:

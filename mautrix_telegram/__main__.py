@@ -87,9 +87,9 @@ with appserv.run(config["appservice.hostname"], config["appservice.port"]) as st
     startup_actions += init_user(context)
     startup_actions += [start]
     try:
-        loop.run_until_complete(asyncio.gather(*startup_actions))
+        loop.run_until_complete(asyncio.gather(*startup_actions, loop=loop))
         loop.run_forever()
     except KeyboardInterrupt:
         for user in User.by_tgid.values():
-            user.client.disconnect()
+            user.stop()
         sys.exit(0)

@@ -28,6 +28,7 @@ config = None
 
 
 class User:
+    loop = None
     log = logging.getLogger("mau.user")
     db = None
     az = None
@@ -140,7 +141,7 @@ class User:
                 continue
             portal = po.Portal.get_by_entity(entity)
             creators.append(portal.create_matrix_room(self, entity, invites=[self.mxid]))
-        await asyncio.gather(*creators)
+        await asyncio.gather(*creators, loop=self.loop)
 
     # endregion
     # region Telegram update handling
@@ -316,7 +317,7 @@ class User:
 
 def init(context):
     global config
-    User.az, User.db, config, _ = context
+    User.az, User.db, config, User.loop = context
 
     users = [User.from_db(user) for user in DBUser.query.all()]
     return [user.start() for user in users]

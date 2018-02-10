@@ -173,7 +173,7 @@ class AppService:
                 self.log.exception("Exception in Matrix event handler")
 
         for handler in self.event_handlers:
-            asyncio.ensure_future(try_handle(handler))
+            asyncio.ensure_future(try_handle(handler), loop=self.loop)
 
     def matrix_event_handler(self, func):
         self.event_handlers.append(func)
