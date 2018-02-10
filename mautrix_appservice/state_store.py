@@ -99,8 +99,8 @@ class StateStore:
 
     def has_power_level(self, room, user, event):
         room_levels = self.power_levels.get(room, {})
-        required = room_levels["events"].get(event, 95)
-        has = room_levels["users"].get(user, 0)
+        required = room_levels.get("events", {}).get(event, 95)
+        has = room_levels.get("users", {}).get(user, 0)
         return has >= required
 
     def set_power_level(self, room, user, level):
@@ -109,6 +109,8 @@ class StateStore:
                 "users": {},
                 "events": {},
             }
+        elif "users" not in self.power_levels[room]:
+            self.power_levels[room]["users"] = {}
         self.power_levels[room]["users"][user] = level
         self._autosave()
 

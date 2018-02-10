@@ -15,13 +15,14 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import logging
+import platform
 
 from telethon.tl.types import *
 from telethon.tl.types import User as TLUser
 
 from .db import User as DBUser, Message as DBMessage
 from .tgclient import MautrixTelegramClient
-from . import portal as po, puppet as pu
+from . import portal as po, puppet as pu, __version__
 
 config = None
 
@@ -82,10 +83,15 @@ class User:
     # region Telegram connection management
 
     def start(self):
+        device = f"{platform.system()} {platform.release()}"
+        sysversion = MautrixTelegramClient.__version__
         self.client = MautrixTelegramClient(self.mxid,
                                             config["telegram.api_id"],
                                             config["telegram.api_hash"],
-                                            update_workers=2)
+                                            update_workers=2,
+                                            app_version=__version__,
+                                            system_version=sysversion,
+                                            device_model=device)
         self.connected = self.client.connect()
         if self.logged_in:
             self.post_login()
