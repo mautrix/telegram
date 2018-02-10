@@ -293,7 +293,7 @@ class CommandHandler:
         if not portal:
             return await evt.reply("This is not a portal room.")
 
-        for user in portal.main_intent.get_room_members(portal.mxid):
+        for user in await portal.main_intent.get_room_members(portal.mxid):
             if user != portal.main_intent.mxid:
                 try:
                     await portal.main_intent.kick(portal.mxid, user, "Portal deleted.")

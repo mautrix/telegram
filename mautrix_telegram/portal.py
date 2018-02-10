@@ -17,6 +17,7 @@
 from io import BytesIO
 from collections import deque
 from datetime import datetime
+import asyncio
 import random
 import mimetypes
 import hashlib
@@ -56,6 +57,7 @@ class Portal:
         self.about = about
         self.photo_id = photo_id
         self._main_intent = None
+        self._room_create_lock = asyncio.Lock()
 
         self._dedup = deque()
         self._dedup_mxid = {}
@@ -160,16 +162,25 @@ class Portal:
             await puppet.intent.join_room(self.mxid)
 
     async def create_matrix_room(self, user, entity=None, invites=None, update_if_exists=True):
-        if not entity:
-            entity = await user.client.get_entity(self.peer)
-            self.log.debug("Fetched data: %s", entity)
+        if self.mxid:
+            if update_if_exists:
+                if not entity:
+                    entity = await user.client.get_entity(self.peer)
+                await self.update_after_create(user, entity, self.peer_type == "user")
+                await self.invite_matrix(invites or [])
+            return self.mxid
+        async with self._room_create_lock:
+            return await self._create_matrix_room(user, entity, invites)
+
+    async def _create_matrix_room(self, user, entity, invites):
         direct = self.peer_type == "user"
 
         if self.mxid:
-            if update_if_exists:
-                await self.update_after_create(user, entity, direct)
-                await self.invite_matrix(invites or [])
             return self.mxid
+
+        if not entity:
+            entity = await user.client.get_entity(self.peer)
+            self.log.debug("Fetched data: %s", entity)
 
         self.log.debug(f"Creating room for {self.tgid_log}")
 
@@ -695,7 +706,7 @@ class Portal:
 
     async def handle_telegram_message(self, source, sender, evt):
         if not self.mxid:
-            await self.create_matrix_room(source, invites=[source.mxid])
+            await self.create_matrix_room(source, invites=[source.mxid], update_if_exists=False)
 
         tg_space = self.tgid if self.peer_type == "channel" else source.tgid
 
@@ -738,7 +749,8 @@ class Portal:
             create_and_exit = (MessageActionChatCreate, MessageActionChannelCreate)
             create_and_continue = (MessageActionChatAddUser, MessageActionChatJoinedByLink)
             if isinstance(action, create_and_exit + create_and_continue):
-                self.create_matrix_room(source, invites=[source.mxid])
+                await self.create_matrix_room(source, invites=[source.mxid],
+                                              update_if_exists=isinstance(action, create_and_exit))
             if not isinstance(action, create_and_continue):
                 return
 
@@ -756,7 +768,6 @@ class Portal:
         elif isinstance(action, MessageActionChatJoinedByLink):
             await self.add_telegram_user(sender.id, source)
         elif isinstance(action, MessageActionChatDeleteUser):
-            kick_message = None
             if sender.id != action.user_id:
                 kick_message = f"Kicked by {sender.displayname}"
                 await self.delete_telegram_user(action.user_id, kick_message)
