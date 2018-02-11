@@ -44,21 +44,15 @@ log = logging.getLogger("mau.formatter")
 # everything up.
 TEMP_ENC = "utf-16-le"
 
-# region Matrix to Telegram
 
-class MessageEntityReply(MessageEntityUnknown):
-    def __init__(self, offset=0, length=0, msg_id=0):
-        super().__init__(offset, length)
-        self.msg_id = msg_id
+# region Matrix to Telegram
 
 
 class MatrixParser(HTMLParser):
     mention_regex = re.compile("https://matrix.to/#/(@.+)")
-    reply_regex = re.compile(r"https://matrix.to/#/(!.+?)/(\$.+)")
 
-    def __init__(self, tg_space=None):
+    def __init__(self):
         super().__init__()
-        self._tg_space = tg_space
         self.text = ""
         self.entities = []
         self._building_entities = {}
@@ -66,7 +60,6 @@ class MatrixParser(HTMLParser):
         self._open_tags = deque()
         self._open_tags_meta = deque()
         self._previous_ended_line = True
-        self._building_reply = False
 
     def handle_starttag(self, tag, attrs):
         self._open_tags.appendleft(tag)
@@ -96,7 +89,6 @@ class MatrixParser(HTMLParser):
             except KeyError:
                 return
             mention = self.mention_regex.search(url)
-            reply = self.reply_regex.search(url)
             if mention:
                 mxid = mention.group(1)
                 user = p.Puppet.get_by_mxid(mxid, create=False)
@@ -110,20 +102,6 @@ class MatrixParser(HTMLParser):
                 else:
                     entity_type = MessageEntityMentionName
                     args["user_id"] = user.tgid
-            elif reply and self._tg_space and (len(self.entities) == 0
-                                               and len(self._building_entities) == 0):
-                room_id = reply.group(1)
-                message_id = reply.group(2)
-                message = DBMessage.query.filter(DBMessage.mxid == message_id,
-                                                 DBMessage.mx_room == room_id,
-                                                 DBMessage.tg_space == self._tg_space
-                                                 ).one_or_none()
-                if not message:
-                    return
-                entity_type = MessageEntityReply
-                args["msg_id"] = message.tgid
-                self._building_reply = True
-                url = None
             elif url.startswith("mailto:"):
                 url = url[len("mailto:"):]
                 entity_type = MessageEntityEmail
@@ -151,8 +129,6 @@ class MatrixParser(HTMLParser):
 
     def handle_data(self, text):
         text = unescape(text)
-        if self._building_reply:
-            return
         previous_tag = self._open_tags[0] if len(self._open_tags) > 0 else ""
         list_format_offset = 0
         if previous_tag == "a":
@@ -192,8 +168,6 @@ class MatrixParser(HTMLParser):
             self._open_tags_meta.popleft()
         except IndexError:
             pass
-        if tag == "a":
-            self._building_reply = False
         if (tag == "ul" or tag == "ol") and self.text.endswith("\n"):
             self.text = self.text[:-1]
         entity = self._building_entities.pop(tag, None)
@@ -201,22 +175,54 @@ class MatrixParser(HTMLParser):
             self.entities.append(entity)
 
 
-def matrix_to_telegram(html, tg_space=None):
+def matrix_to_telegram(html):
     try:
-        parser = MatrixParser(tg_space)
+        parser = MatrixParser()
         parser.feed(html)
         return parser.text, parser.entities
     except Exception:
         log.exception("Failed to convert Matrix format:\nhtml=%s", html)
 
 
+def matrix_reply_to_telegram(content, tg_space, room_id=None):
+    try:
+        reply = content["m.relates_to"]["m.in_reply_to"]
+        room_id = room_id or reply["room_id"]
+        event_id = reply["event_id"]
+        message = DBMessage.query.filter(DBMessage.mxid == event_id and
+                                         DBMessage.tg_space == tg_space and
+                                         DBMessage.mx_room == room_id).one_or_none()
+        if message:
+            return message.tgid
+    except KeyError:
+        pass
+    return None
+
+
 # endregion
 # region Telegram to Matrix
 
+def telegram_reply_to_matrix(evt, source):
+    if evt.reply_to_msg_id:
+        space = (evt.to_id.channel_id
+                 if isinstance(evt, Message) and isinstance(evt.to_id, PeerChannel)
+                 else source.tgid)
+        msg = DBMessage.query.get((evt.reply_to_msg_id, space))
+        if msg:
+            return {
+                "m.in_reply_to": {
+                    "event_id": msg.mxid,
+                    "room_id": msg.mx_room,
+                }
+            }
+    return {}
+
+
 async def telegram_event_to_matrix(evt, source, native_replies=False, message_link_in_reply=False,
-                             main_intent=None):
+                                   main_intent=None):
     text = evt.message
     html = telegram_to_matrix(evt.message, evt.entities) if evt.entities else None
+    relates_to = {}
 
     if evt.fwd_from:
         if not html:
@@ -241,12 +247,16 @@ async def telegram_event_to_matrix(evt, source, native_replies=False, message_li
                 + f"<blockquote>{html}</blockquote>")
 
     if evt.reply_to_msg_id:
-        space = evt.to_id.channel_id if isinstance(evt, Message) and isinstance(evt.to_id,
-                                                                                PeerChannel) else source.tgid
+        space = (evt.to_id.channel_id
+                 if isinstance(evt, Message) and isinstance(evt.to_id, PeerChannel)
+                 else source.tgid)
         msg = DBMessage.query.get((evt.reply_to_msg_id, space))
         if msg:
             if native_replies:
-                quote = f"<a href=\"https://matrix.to/#/{msg.mx_room}/{msg.mxid}\">Quote<br></a>"
+                relates_to["m.in_reply_to"] = {
+                    "event_id": msg.mxid,
+                    "room_id": msg.mx_room,
+                }
             else:
                 try:
                     event = await main_intent.get_event(msg.mx_room, msg.mxid)
@@ -264,15 +274,16 @@ async def telegram_event_to_matrix(evt, source, native_replies=False, message_li
                     quote = f"{reply_to_msg} to {reply_to_user}<blockquote>{body}</blockquote>"
                 except (ValueError, KeyError, MatrixRequestError):
                     quote = "Reply to unknown user <em>(Failed to fetch message)</em>:<br/>"
-            if html:
-                html = quote + html
-            else:
-                html = quote + escape(text)
+
+                if html:
+                    html = quote + html
+                else:
+                    html = quote + escape(text)
 
     if html:
         html = html.replace("\n", "<br/>")
 
-    return text, html
+    return text, html, relates_to
 
 
 def telegram_to_matrix(text, entities):

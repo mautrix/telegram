@@ -344,24 +344,25 @@ class IntentAPI:
         return await self.client.request("POST", f"/rooms/{room_id}/receipt/m.read/{event_id}",
                                          content={})
 
-    def send_notice(self, room_id, text, html=None):
-        return self.send_text(room_id, text, html, "m.notice")
+    def send_notice(self, room_id, text, html=None, relates_to=None):
+        return self.send_text(room_id, text, html, "m.notice", relates_to)
 
-    def send_emote(self, room_id, text, html=None):
-        return self.send_text(room_id, text, html, "m.emote")
+    def send_emote(self, room_id, text, html=None, relates_to=None):
+        return self.send_text(room_id, text, html, "m.emote", relates_to)
 
-    def send_image(self, room_id, url, info=None, text=None):
-        return self.send_file(room_id, url, info or {}, text, "m.image")
+    def send_image(self, room_id, url, info=None, text=None, relates_to=None):
+        return self.send_file(room_id, url, info or {}, text, "m.image", relates_to)
 
-    def send_file(self, room_id, url, info=None, text=None, file_type="m.file"):
+    def send_file(self, room_id, url, info=None, text=None, file_type="m.file", relates_to=None):
         return self.send_message(room_id, {
             "msgtype": file_type,
             "url": url,
             "body": text or "Uploaded file",
             "info": info or {},
+            "m.relates_to": relates_to or {},
         })
 
-    def send_text(self, room_id, text, html=None, msgtype="m.text"):
+    def send_text(self, room_id, text, html=None, msgtype="m.text", relates_to=None):
         if html:
             if not text:
                 text = html
@@ -370,11 +371,13 @@ class IntentAPI:
                 "msgtype": msgtype,
                 "format": "org.matrix.custom.html",
                 "formatted_body": html or text,
+                "m.relates_to": relates_to or None,
             })
         else:
             return self.send_message(room_id, {
                 "body": text,
                 "msgtype": msgtype,
+                "m.relates_to": relates_to or None,
             })
 
     def send_message(self, room_id, body):
