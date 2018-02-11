@@ -170,6 +170,8 @@ class User:
         return results[0:max_results]
 
     async def _search_remote(self, query, max_results=5):
+        if len(query) < 5:
+            return []
         server_results = await self.client(SearchRequest(q=query, limit=max_results))
         results = []
         for user in server_results.users:

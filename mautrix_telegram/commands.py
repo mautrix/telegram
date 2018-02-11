@@ -235,6 +235,12 @@ class CommandHandler:
 
         results, remote = await evt.sender.search(query, force_remote)
 
+        if not results:
+            if len(query) < 5 and remote:
+                return await evt.reply("No local results. "
+                                       "Minimum length of remote query is 5 characters.")
+            return await evt.reply("No results 3:")
+
         reply = []
         if remote:
             reply += ["**Results from Telegram server:**", ""]
