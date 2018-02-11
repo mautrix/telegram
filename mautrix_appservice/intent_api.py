@@ -359,7 +359,7 @@ class IntentAPI:
             "url": url,
             "body": text or "Uploaded file",
             "info": info or {},
-            "m.relates_to": relates_to or {},
+            "m.relates_to": relates_to or None,
         })
 
     def send_text(self, room_id, text, html=None, msgtype="m.text", relates_to=None):
