@@ -91,35 +91,35 @@ class Puppet:
         return config.get("bridge.displayname_template", "{displayname} (Telegram)").format(
             displayname=name)
 
-    def update_info(self, source, info):
+    async def update_info(self, source, info):
         changed = False
         if self.username != info.username:
             self.username = info.username
             changed = True
 
-        changed = self.update_displayname(source, info) or changed
+        changed = await self.update_displayname(source, info) or changed
         if isinstance(info.photo, UserProfilePhoto):
-            changed = self.update_avatar(source, info.photo.photo_big)
+            changed = await self.update_avatar(source, info.photo.photo_big)
 
         if changed:
             self.save()
 
-    def update_displayname(self, source, info):
+    async def update_displayname(self, source, info):
         displayname = self.get_displayname(info)
         if displayname != self.displayname:
-            self.intent.set_display_name(displayname)
+            await self.intent.set_display_name(displayname)
             self.displayname = displayname
             return True
 
-    def update_avatar(self, source, photo):
+    async def update_avatar(self, source, photo):
         photo_id = f"{photo.volume_id}-{photo.local_id}"
         if self.photo_id != photo_id:
             try:
-                file = source.client.download_file_bytes(photo)
+                file = await source.client.download_file_bytes(photo)
             except LocationInvalidError:
                 return False
-            uploaded = self.intent.upload_file(file)
-            self.intent.set_avatar(uploaded["content_uri"])
+            uploaded = await self.intent.upload_file(file)
+            await self.intent.set_avatar(uploaded["content_uri"])
             self.photo_id = photo_id
             return True
         return False
@@ -170,7 +170,7 @@ class Puppet:
 
 def init(context):
     global config
-    Puppet.az, Puppet.db, config = context
+    Puppet.az, Puppet.db, config, _ = context
     localpart = config.get("bridge.username_template", "telegram_{userid}").format(userid="(.+)")
     hs = config["homeserver"]["domain"]
     Puppet.mxid_regex = re.compile(f"@{localpart}:{hs}")

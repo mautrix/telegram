@@ -16,7 +16,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import logging
 
-from matrix_client.errors import MatrixRequestError
+from mautrix_appservice import MatrixRequestError
 
 from .user import User
 from .portal import Portal
@@ -28,85 +28,87 @@ class MatrixHandler:
     log = logging.getLogger("mau.mx")
 
     def __init__(self, context):
-        self.az, self.db, self.config = context
+        self.az, self.db, self.config, _ = context
         self.commands = CommandHandler(context)
 
         self.az.matrix_event_handler(self.handle_event)
+
+    async def init_as_bot(self):
         self.az.intent.set_display_name(
             self.config.get("appservice.bot_displayname", "Telegram bridge bot"))
 
-    def handle_puppet_invite(self, room, puppet, inviter):
+    async def handle_puppet_invite(self, room, puppet, inviter):
         self.log.debug(f"{inviter} invited puppet for {puppet.tgid} to {room}")
         if not inviter.logged_in:
-            puppet.intent.error_and_leave(
+            await puppet.intent.error_and_leave(
                 room, text="Please log in before inviting Telegram puppets.")
             return
         portal = Portal.get_by_mxid(room)
         if portal:
             if portal.peer_type == "user":
-                puppet.intent.error_and_leave(
+                await puppet.intent.error_and_leave(
                     room, text="You can not invite additional users to private chats.")
                 return
-            portal.invite_telegram(inviter, puppet)
-            puppet.intent.join_room(room)
+            await portal.invite_telegram(inviter, puppet)
+            await puppet.intent.join_room(room)
             return
         try:
-            members = self.az.intent.get_room_members(room)
+            members = await self.az.intent.get_room_members(room)
         except MatrixRequestError:
             members = []
         if self.az.intent.mxid not in members:
             if len(members) > 1:
-                puppet.intent.error_and_leave(room, text=None, html=(
+                await puppet.intent.error_and_leave(room, text=None, html=(
                     f"Please invite "
                     + f"<a href='https://matrix.to/#/{self.az.intent.mxid}'>the bridge bot</a> "
                     + f"first if you want to create a Telegram chat."))
                 return
 
-            puppet.intent.join_room(room)
+            await puppet.intent.join_room(room)
             portal = Portal.get_by_tgid(puppet.tgid, inviter.tgid, "user")
             if portal.mxid:
                 try:
-                    puppet.intent.invite(portal.mxid, inviter.mxid)
-                    puppet.intent.send_notice(room, text=None, html=(
+                    await puppet.intent.invite(portal.mxid, inviter.mxid)
+                    await puppet.intent.send_notice(room, text=None, html=(
                         "You already have a private chat with me: "
                         + f"<a href='https://matrix.to/#/{portal.mxid}'>"
                         + "Link to room"
                         + "</a>"))
-                    puppet.intent.leave_room(room)
+                    await puppet.intent.leave_room(room)
                     return
                 except MatrixRequestError:
                     pass
             portal.mxid = room
             portal.save()
-            puppet.intent.send_notice(room, "Portal to private chat created.")
+            await puppet.intent.send_notice(room, "Portal to private chat created.")
         else:
-            puppet.intent.join_room(room)
-            puppet.intent.send_notice(room, "This puppet will remain inactive until a Telegram "
-                                            "chat is created for this room.")
+            await puppet.intent.join_room(room)
+            await puppet.intent.send_notice(room, "This puppet will remain inactive until a "
+                                                  "Telegram chat is created for this room.")
 
-    def handle_invite(self, room, user, inviter):
+    async def handle_invite(self, room, user, inviter):
         inviter = User.get_by_mxid(inviter)
         if not inviter.whitelisted:
             return
         elif user == self.az.bot_mxid:
-            self.az.intent.join_room(room)
+            await self.az.intent.join_room(room)
             return
 
         puppet = Puppet.get_by_mxid(user)
         if puppet:
-            self.handle_puppet_invite(room, puppet, inviter)
+            await self.handle_puppet_invite(room, puppet, inviter)
             return
 
         user = User.get_by_mxid(user, create=False)
         portal = Portal.get_by_mxid(room)
         if user and user.has_full_access and portal:
-            portal.invite_telegram(inviter, user)
+            await portal.invite_telegram(inviter, user)
             return
 
         # The rest can probably be ignored
         self.log.debug(f"{inviter} invited {user} to {room}")
 
-    def handle_join(self, room, user):
+    async def handle_join(self, room, user):
         user = User.get_by_mxid(user)
 
         portal = Portal.get_by_mxid(room)
@@ -114,19 +116,19 @@ class MatrixHandler:
             return
 
         if not user.whitelisted:
-            portal.main_intent.kick(room, user.mxid,
-                                    "You are not whitelisted on this Telegram bridge.")
+            await portal.main_intent.kick(room, user.mxid,
+                                          "You are not whitelisted on this Telegram bridge.")
             return
         elif not user.logged_in:
             # TODO[waiting-for-bots] once we have bot support, this won't be needed.
-            portal.main_intent.kick(room, user.mxid,
-                                    "You are not logged into this Telegram bridge.")
+            await portal.main_intent.kick(room, user.mxid,
+                                          "You are not logged into this Telegram bridge.")
             return
 
         self.log.debug(f"{user} joined {room}")
         # TODO join Telegram chat if applicable
 
-    def handle_part(self, room, user, sender):
+    async def handle_part(self, room, user, sender):
         self.log.debug(f"{user} left {room}")
 
         sender = User.get_by_mxid(sender, create=False)
@@ -137,11 +139,11 @@ class MatrixHandler:
 
         puppet = Puppet.get_by_mxid(user)
         if sender and puppet:
-            portal.leave_matrix(puppet, sender)
+            await portal.leave_matrix(puppet, sender)
 
         user = User.get_by_mxid(user, create=False)
         if user and user.logged_in:
-            portal.leave_matrix(user, sender)
+            await portal.leave_matrix(user, sender)
 
     def is_command(self, message):
         text = message.get("body", "")
@@ -151,7 +153,7 @@ class MatrixHandler:
             text = text[len(prefix) + 1:]
         return is_command, text
 
-    def handle_message(self, room, sender, message, event_id):
+    async def handle_message(self, room, sender, message, event_id):
         self.log.debug(f"{sender} sent {message} to ${room}")
 
         is_command, text = self.is_command(message)
@@ -159,14 +161,14 @@ class MatrixHandler:
 
         portal = Portal.get_by_mxid(room)
         if sender.has_full_access and portal and not is_command:
-            portal.handle_matrix_message(sender, message, event_id)
+            await portal.handle_matrix_message(sender, message, event_id)
             return
 
         if message["msgtype"] != "m.text":
             return
 
         try:
-            is_management = len(self.az.intent.get_room_members(room)) == 2
+            is_management = len(await self.az.intent.get_room_members(room)) == 2
         except MatrixRequestError:
             # The AS bot is not in the room.
             return
@@ -179,22 +181,22 @@ class MatrixHandler:
                 # Not enough values to unpack, i.e. no arguments
                 command = text
                 args = []
-            self.commands.handle(room, sender, command, args, is_management,
-                                 is_portal=portal is not None)
+            await self.commands.handle(room, sender, command, args, is_management,
+                                       is_portal=portal is not None)
 
-    def handle_redaction(self, room, sender, event_id):
+    async def handle_redaction(self, room, sender, event_id):
         portal = Portal.get_by_mxid(room)
         sender = User.get_by_mxid(sender)
         if sender.has_full_access and portal:
-            portal.handle_matrix_deletion(sender, event_id)
+            await portal.handle_matrix_deletion(sender, event_id)
 
-    def handle_power_levels(self, room, sender, new, old):
+    async def handle_power_levels(self, room, sender, new, old):
         portal = Portal.get_by_mxid(room)
         sender = User.get_by_mxid(sender)
         if sender.has_full_access and portal:
-            portal.handle_matrix_power_levels(sender, new["users"], old["users"])
+            await portal.handle_matrix_power_levels(sender, new["users"], old["users"])
 
-    def handle_room_meta(self, type, room, sender, content):
+    async def handle_room_meta(self, type, room, sender, content):
         portal = Portal.get_by_mxid(room)
         sender = User.get_by_mxid(sender)
         if sender.has_full_access and portal:
@@ -206,13 +208,13 @@ class MatrixHandler:
             if content_key not in content:
                 # FIXME handle
                 pass
-            handler(sender, content[content_key])
+                await handler(sender, content[content_key])
 
     def filter_matrix_event(self, event):
         return (event["sender"] == self.az.bot_mxid
                 or Puppet.get_id_from_mxid(event["sender"]) is not None)
 
-    def handle_event(self, evt):
+    async def handle_event(self, evt):
         if self.filter_matrix_event(evt):
             return
         self.log.debug("Received event: %s", evt)
@@ -221,17 +223,17 @@ class MatrixHandler:
         if type == "m.room.member":
             membership = content.get("membership", "")
             if membership == "invite":
-                self.handle_invite(evt["room_id"], evt["state_key"], evt["sender"])
+                await self.handle_invite(evt["room_id"], evt["state_key"], evt["sender"])
             elif membership == "leave":
-                self.handle_part(evt["room_id"], evt["state_key"], evt["sender"])
+                await self.handle_part(evt["room_id"], evt["state_key"], evt["sender"])
             elif membership == "join":
-                self.handle_join(evt["room_id"], evt["state_key"])
+                await self.handle_join(evt["room_id"], evt["state_key"])
         elif type == "m.room.message":
-            self.handle_message(evt["room_id"], evt["sender"], content, evt["event_id"])
+            await self.handle_message(evt["room_id"], evt["sender"], content, evt["event_id"])
         elif type == "m.room.redaction":
-            self.handle_redaction(evt["room_id"], evt["sender"], evt["redacts"])
+            await self.handle_redaction(evt["room_id"], evt["sender"], evt["redacts"])
         elif type == "m.room.power_levels":
-            self.handle_power_levels(evt["room_id"], evt["sender"], evt["content"],
-                                     evt["prev_content"])
+            await self.handle_power_levels(evt["room_id"], evt["sender"], evt["content"],
+                                           evt["prev_content"])
         elif type == "m.room.name" or type == "m.room.avatar" or type == "m.room.topic":
-            self.handle_room_meta(type, evt["room_id"], evt["sender"], evt["content"])
+            await self.handle_room_meta(type, evt["room_id"], evt["sender"], evt["content"])

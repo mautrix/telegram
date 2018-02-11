@@ -15,7 +15,6 @@ setuptools.setup(
     packages=setuptools.find_packages(),
 
     install_requires=[
-        "Telethon>=0.17.0.0,<0.18",
         "aiohttp>=2.3.10,<3",
         "SQLAlchemy>=1.2.2,<2",
         "Markdown>=2.6.11,<3",
@@ -25,7 +24,7 @@ setuptools.setup(
         "python-magic>=0.4.15,<0.5",
     ],
     dependency_links=[
-        "https://github.com/Cadair/matrix-python-sdk/tarball/1fab9821d98d15769e44e66f714d00a32a48d692#egg=matrix_client"
+        "https://github.com/LonamiWebs/Telethon/tarball/7da092894b306d720cc60c04daa2bfba58f81946#egg=Telethon"
     ],
 
     classifiers=[

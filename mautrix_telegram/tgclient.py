@@ -22,8 +22,8 @@ from telethon.tl.types import *
 
 
 class MautrixTelegramClient(TelegramClient):
-    def send_message(self, entity, message, reply_to=None, entities=None, link_preview=True):
-        entity = self.get_input_entity(entity)
+    async def send_message(self, entity, message, reply_to=None, entities=None, link_preview=True):
+        entity = await self.get_input_entity(entity)
 
         request = SendMessageRequest(
             peer=entity,
@@ -32,7 +32,7 @@ class MautrixTelegramClient(TelegramClient):
             no_webpage=not link_preview,
             reply_to_msg_id=self._get_reply_to(reply_to)
         )
-        result = self(request)
+        result = await self(request)
         if isinstance(result, UpdateShortSentMessage):
             return Message(
                 id=result.id,
@@ -46,12 +46,12 @@ class MautrixTelegramClient(TelegramClient):
 
         return self._get_response_message(request, result)
 
-    def send_file(self, entity, file, mime_type=None, caption=None, attributes=None, file_name=None,
+    async def send_file(self, entity, file, mime_type=None, caption=None, attributes=None, file_name=None,
                   reply_to=None, **kwargs):
-        entity = self.get_input_entity(entity)
+        entity = await self.get_input_entity(entity)
         reply_to = self._get_reply_to(reply_to)
 
-        file_handle = self.upload_file(file, file_name=file_name, use_cache=False)
+        file_handle = await self.upload_file(file, file_name=file_name, use_cache=False)
 
         if mime_type == "image/png":
             media = InputMediaUploadedPhoto(file_handle, caption or "")
@@ -66,9 +66,9 @@ class MautrixTelegramClient(TelegramClient):
                 caption=caption or "")
 
         request = SendMediaRequest(entity, media, reply_to_msg_id=reply_to)
-        return self._get_response_message(request, self(request))
+        return self._get_response_message(request, await self(request))
 
-    def download_file_bytes(self, location):
+    async def download_file_bytes(self, location):
         if isinstance(location, Document):
             location = InputDocumentFileLocation(location.id, location.access_hash,
                                                  location.version)
@@ -77,7 +77,7 @@ class MautrixTelegramClient(TelegramClient):
 
         file = BytesIO()
 
-        self.download_file(location, file)
+        await self.download_file(location, file)
 
         data = file.getvalue()
         file.close()

@@ -14,26 +14,39 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
+from urllib.parse import quote
+from time import time
+from json.decoder import JSONDecodeError
+from aiohttp.client_exceptions import ContentTypeError
 import re
 import json
 import magic
-import urllib.request
+import asyncio
 
-from matrix_client.api import MatrixHttpApi
-from matrix_client.errors import MatrixRequestError
+from .errors import MatrixError, MatrixRequestError, IntentError
 
 
-class HTTPAPI(MatrixHttpApi):
+class HTTPAPI:
     def __init__(self, base_url, domain=None, bot_mxid=None, token=None, identity=None, log=None,
-                 state_store=None):
-        super().__init__(base_url, token, identity)
+                 state_store=None, client_session=None, child=False):
+        self.base_url = base_url
+        self.token = token
+        self.identity = identity
+        self.validate_cert = True
+        self.session = client_session
+
         self.domain = domain
         self.bot_mxid = bot_mxid
-        self.intent_log = log.getChild("intent")
-        self.log = log.getChild("api")
-        self.validate_cert = True
+        self._bot_intent = None
         self.state_store = state_store
-        self.children = {}
+
+        if child:
+            self.log = log
+        else:
+            self.intent_log = log.getChild("intent")
+            self.log = log.getChild("api")
+            self.txn_id = 0
+            self.children = {}
 
     def user(self, user):
         try:
@@ -44,45 +57,82 @@ class HTTPAPI(MatrixHttpApi):
             return child
 
     def bot_intent(self):
+        if self._bot_intent:
+            return self._bot_intent
         return IntentAPI(self.bot_mxid, self, state_store=self.state_store, log=self.intent_log)
 
     def intent(self, user):
-        return IntentAPI(user, self.user(user), self, self.state_store, self.intent_log)
+        return IntentAPI(user, self.user(user), self.bot_intent(), self.state_store,
+                         self.intent_log)
 
-    def _send(self, method, path, content=None, query_params=None, headers=None,
-              api_path="/_matrix/client/r0"):
-        if not query_params:
-            query_params = {}
-        query_params["user_id"] = self.identity
+    async def _send(self, method, endpoint, content, query_params, headers):
+        while True:
+            query_params["access_token"] = self.token
+            request = self.session.request(method, endpoint, params=query_params,
+                                           data=content, headers=headers)
+            async with request as response:
+                if response.status < 200 or response.status >= 300:
+                    errcode = message = None
+                    try:
+                        response_data = await response.json()
+                        errcode = response_data["errcode"]
+                        message = response_data["error"]
+                    except (JSONDecodeError, ContentTypeError, KeyError):
+                        pass
+                    raise MatrixRequestError(code=response.status, text=await response.text(),
+                                             errcode=errcode, message=message)
+
+                if response.status == 429:
+                    await asyncio.sleep(response.json()["retry_after_ms"] / 1000)
+                else:
+                    return await response.json()
+
+    def _log_request(self, method, path, content, query_params):
         log_content = content if not isinstance(content, bytes) else f"<{len(content)} bytes>"
-        self.log.debug("%s %s %s", method, path, log_content)
-        return super()._send(method, path, content, query_params, headers or {}, api_path=api_path)
+        log_content = log_content or "(No content)"
+        query_identity = query_params["user_id"] if "user_id" in query_params else "No identity"
+        self.log.debug("%s %s %s as user %s", method, path, log_content, query_identity)
 
-    def create_room(self, alias=None, is_public=False, name=None, topic=None, is_direct=False,
-                    invitees=(), initial_state=None):
-        content = {
-            "visibility": "public" if is_public else "private"
-        }
-        if alias:
-            content["room_alias_name"] = alias
-        if invitees:
-            content["invite"] = invitees
-        if name:
-            content["name"] = name
-        if topic:
-            content["topic"] = topic
-        if initial_state:
-            content["initial_state"] = initial_state
-        content["is_direct"] = is_direct
+    def request(self, method, path, content=None, query_params=None, headers=None,
+                api_path="/_matrix/client/r0"):
+        content = content or {}
+        query_params = query_params or {}
+        headers = headers or {}
 
-        return self._send("POST", "/createRoom", content)
+        method = method.upper()
+        if method not in ["GET", "PUT", "DELETE", "POST"]:
+            raise MatrixError("Unsupported HTTP method: %s" % method)
 
-    def set_presence(self, status="online", user=None):
-        content = {
-            "presence": status
-        }
-        user = user or self.identity
-        return self._send("PUT", f"/presence/{user}/status", content)
+        if "Content-Type" not in headers:
+            headers["Content-Type"] = "application/json"
+        if headers["Content-Type"] == "application/json":
+            content = json.dumps(content)
+
+        if self.identity:
+            query_params["user_id"] = self.identity
+
+        self._log_request(method, path, content, query_params)
+
+        endpoint = self.base_url + api_path + path
+        return self._send(method, endpoint, content, query_params, headers or {})
+
+    def get_download_url(self, mxcurl):
+        if mxcurl.startswith('mxc://'):
+            return f"{self.base_url}/_matrix/media/r0/download/{mxcurl[6:]}"
+        else:
+            raise ValueError("MXC URL did not begin with 'mxc://'")
+
+    async def get_display_name(self, user_id):
+        content = await self.request("GET", f"/profile/{user_id}/displayname")
+        return content.get('displayname', None)
+
+    async def get_avatar_url(self, user_id):
+        content = await self.request("GET", f"/profile/{user_id}/avatar_url")
+        return content.get('avatar_url', None)
+
+    async def get_room_id(self, room_alias):
+        content = await self.request("GET", f"/directory/room/{quote(room_alias)}")
+        return content.get("room_id", None)
 
     def set_typing(self, room_id, is_typing=True, timeout=5000, user=None):
         content = {
@@ -91,18 +141,13 @@ class HTTPAPI(MatrixHttpApi):
         if is_typing:
             content["timeout"] = timeout
         user = user or self.identity
-        return self._send("PUT", f"/rooms/{room_id}/typing/{user}", content)
+        return self.request("PUT", f"/rooms/{room_id}/typing/{user}", content)
 
 
 class ChildHTTPAPI(HTTPAPI):
     def __init__(self, user, parent):
-        self.base_url = parent.base_url
-        self.token = parent.token
-        self.identity = user
-        self.validate_cert = True
-        self.validate_cert = parent.validate_cert
-        self.log = parent.log
-        self.domain = parent.domain
+        super().__init__(parent.base_url, parent.domain, parent.bot_mxid, parent.token, user,
+                         parent.log, parent.state_store, parent.session, child=True)
         self.parent = parent
 
     @property
@@ -112,29 +157,6 @@ class ChildHTTPAPI(HTTPAPI):
     @txn_id.setter
     def txn_id(self, value):
         self.parent.txn_id = value
-
-
-class IntentError(Exception):
-    def __init__(self, message, source):
-        super().__init__(message)
-        self.source = source
-
-
-def matrix_error_code(err):
-    try:
-        data = json.loads(err.content)
-        return data["errcode"]
-    except Exception:
-        return err.content
-
-def matrix_error_data(err):
-    try:
-        data = json.loads(err.content)
-        return data["errcode"], data["error"]
-    except Exception:
-        return err.content
-
-
 
 
 class IntentAPI:
@@ -158,62 +180,86 @@ class IntentAPI:
             return self.client.intent(user)
         else:
             self.log.warning("Called IntentAPI#user() of child intent object.")
-            return self.bot.intent(user)
+            return self.bot.client.intent(user)
 
     # region User actions
 
-    def get_joined_rooms(self):
-        self.ensure_registered()
-        response = self.client._send("GET", "/joined_rooms")
+    async def get_joined_rooms(self):
+        await self.ensure_registered()
+        response = await self.client.request("GET", "/joined_rooms")
         return response["joined_rooms"]
 
-    def set_display_name(self, name):
-        self.ensure_registered()
-        return self.client.set_display_name(self.mxid, name)
+    async def set_display_name(self, name):
+        await self.ensure_registered()
+        content = {"displayname": name}
+        return await self.client.request("PUT", f"/profile/{self.mxid}/displayname", content)
 
-    def set_presence(self, status="online"):
-        self.ensure_registered()
-        return self.client.set_presence(status)
+    async def set_presence(self, status="online"):
+        await self.ensure_registered()
+        content = {
+            "presence": status
+        }
+        return await self.client.request("PUT", f"/presence/{self.mxid}/status", content)
 
-    def set_avatar(self, url):
-        self.ensure_registered()
-        return self.client.set_avatar_url(self.mxid, url)
+    async def set_avatar(self, url):
+        await self.ensure_registered()
+        content = {"avatar_url": url}
+        return await self.client.request("PUT", f"/profile/{self.mxid}/avatar_url", content)
 
-    def upload_file(self, data, mime_type=None):
-        self.ensure_registered()
+    async def upload_file(self, data, mime_type=None):
+        await self.ensure_registered()
         mime_type = mime_type or magic.from_buffer(data, mime=True)
-        return self.client.media_upload(data, mime_type)
+        return await self.client.request("POST", "", content=data,
+                                         headers={"Content-Type": mime_type},
+                                         api_path="/_matrix/media/r0/upload")
 
-    def download_file(self, url):
-        self.ensure_registered()
+    async def download_file(self, url):
+        await self.ensure_registered()
         url = self.client.get_download_url(url)
-        response = urllib.request.urlopen(url)
-        return response.read()
+        async with self.client.session.get(url) as response:
+            return await response.read()
 
     # endregion
     # region Room actions
 
-    def create_room(self, alias=None, is_public=False, name=None, topic=None, is_direct=False,
-                    invitees=(), initial_state=None):
-        self.ensure_registered()
-        return self.client.create_room(alias, is_public, name, topic, is_direct, invitees,
-                                       initial_state or {})
+    async def create_room(self, alias=None, is_public=False, name=None, topic=None,
+                          is_direct=False, invitees=None, initial_state=None):
+        await self.ensure_registered()
+        content = {
+            "visibility": "public" if is_public else "private",
+            "is_direct": is_direct,
+        }
+        if alias:
+            content["room_alias_name"] = alias
+        if invitees:
+            content["invite"] = invitees
+        if name:
+            content["name"] = name
+        if topic:
+            content["topic"] = topic
+        if initial_state:
+            content["initial_state"] = initial_state
 
-    def invite(self, room_id, user_id, check_cache=False):
-        self.ensure_joined(room_id)
+        return await self.client.request("POST", "/createRoom", content)
+
+    def _invite_direct(self, room_id, user_id):
+        content = {"user_id": user_id}
+        return self.client.request("POST", "/rooms/" + room_id + "/invite", content)
+
+    async def invite(self, room_id, user_id, check_cache=False):
+        await self.ensure_joined(room_id)
         try:
             ok_states = {"invite", "join"}
             do_invite = (not check_cache
                          or self.state_store.get_membership(room_id, user_id) not in ok_states)
             if do_invite:
-                response = self.client.invite_user(room_id, user_id)
+                response = await self._invite_direct(room_id, user_id)
                 self.state_store.invited(room_id, user_id)
                 return response
         except MatrixRequestError as e:
-            code, message = matrix_error_data(e)
-            if code != "M_FORBIDDEN":
+            if e.errcode != "M_FORBIDDEN":
                 raise IntentError(f"Failed to invite {user_id} to {room_id}", e)
-            if "is already in the room" in message:
+            if "is already in the room" in e.message:
                 self.state_store.joined(room_id, user_id)
 
     def set_room_avatar(self, room_id, avatar_url, info=None):
@@ -224,38 +270,43 @@ class IntentAPI:
             content["info"] = info
         return self.send_state_event(room_id, "m.room.avatar", content)
 
-    def add_room_alias(self, room_id, alias):
-        self.ensure_registered()
-        self.client.set_room_alias(room_id, f"#{alias}:{self.client.domain}")
+    async def add_room_alias(self, room_id, localpart):
+        await self.ensure_registered()
+        content = {"room_id": room_id}
+        alias = f"#{localpart}:{self.client.domain}"
+        return await self.client.request("PUT", f"/directory/room/{quote(alias)}", content)
 
-    def remove_room_alias(self, alias):
-        self.ensure_registered()
-        self.client.remove_room_alias(f"#{alias}:{self.client.domain}")
+    async def remove_room_alias(self, localpart):
+        await self.ensure_registered()
+        alias = f"#{localpart}:{self.client.domain}"
+        return await self.client.request("DELETE", f"/directory/room/{quote(alias)}")
 
     def set_room_name(self, room_id, name):
-        self.ensure_joined(room_id)
-        self._ensure_has_power_level_for(room_id, "m.room.name")
-        return self.client.set_room_name(room_id, name)
+        body = {"name": name}
+        return self.send_state_event(room_id, "m.room.name", body)
 
-    def get_power_levels(self, room_id, ignore_cache=False):
-        self.ensure_joined(room_id)
+    async def get_power_levels(self, room_id, ignore_cache=False):
+        await self.ensure_joined(room_id)
         if not ignore_cache:
             try:
                 return self.state_store.get_power_levels(room_id)
             except KeyError:
                 pass
-        levels = self.client.get_power_levels(room_id)
+        levels = await self.client.request("GET",
+                                           f"/rooms/{quote(room_id)}/state/m.room.power_levels")
         self.state_store.set_power_levels(room_id, levels)
         return levels
 
-    def set_power_levels(self, room_id, content):
-        response = self.send_state_event(room_id, "m.room.power_levels", content)
+    async def set_power_levels(self, room_id, content):
+        if "events" not in content:
+            content["events"] = {}
+        response = await self.send_state_event(room_id, "m.room.power_levels", content)
         self.state_store.set_power_levels(room_id, content)
         return response
 
-    def get_pinned_messages(self, room_id):
-        self.ensure_joined(room_id)
-        response = self.client._send("GET", f"/rooms/{room_id}/state/m.room.pinned_events")
+    async def get_pinned_messages(self, room_id):
+        await self.ensure_joined(room_id)
+        response = await self.client.request("GET", f"/rooms/{room_id}/state/m.room.pinned_events")
         return response["content"]["pinned"]
 
     def set_pinned_messages(self, room_id, events):
@@ -263,29 +314,35 @@ class IntentAPI:
             "pinned": events
         })
 
-    def pin_message(self, room_id, event_id):
-        events = self.get_pinned_messages(room_id)
+    async def pin_message(self, room_id, event_id):
+        events = await self.get_pinned_messages(room_id)
         if event_id not in events:
             events.append(event_id)
-            self.set_pinned_messages(room_id, events)
+            await self.set_pinned_messages(room_id, events)
 
-    def unpin_message(self, room_id, event_id):
-        events = self.get_pinned_messages(room_id)
+    async def unpin_message(self, room_id, event_id):
+        events = await self.get_pinned_messages(room_id)
         if event_id in events:
             events.remove(event_id)
-            self.set_pinned_messages(room_id, events)
+            await self.set_pinned_messages(room_id, events)
 
-    def get_event(self, room_id, event_id):
-        self.ensure_joined(room_id)
-        return self.client._send("GET", f"/rooms/{room_id}/event/{event_id}")
+    async def get_event(self, room_id, event_id):
+        await self.ensure_joined(room_id)
+        return await self.client.request("GET", f"/rooms/{room_id}/event/{event_id}")
 
-    def set_typing(self, room_id, is_typing=True, timeout=5000):
-        self.ensure_joined(room_id)
-        return self.client.set_typing(room_id, is_typing, timeout)
+    async def set_typing(self, room_id, is_typing=True, timeout=5000):
+        await self.ensure_joined(room_id)
+        content = {
+            "typing": is_typing
+        }
+        if is_typing:
+            content["timeout"] = timeout
+        return await self.client.request("PUT", f"/rooms/{room_id}/typing/{self.mxid}", content)
 
-    def mark_read(self, room_id, event_id):
-        self.ensure_joined(room_id)
-        return self.client._send("POST", f"/rooms/{room_id}/receipt/m.read/{event_id}", content={})
+    async def mark_read(self, room_id, event_id):
+        await self.ensure_joined(room_id)
+        return await self.client.request("POST", f"/rooms/{room_id}/receipt/m.read/{event_id}",
+                                         content={})
 
     def send_notice(self, room_id, text, html=None):
         return self.send_text(room_id, text, html, "m.notice")
@@ -323,79 +380,127 @@ class IntentAPI:
     def send_message(self, room_id, body):
         return self.send_event(room_id, "m.room.message", body)
 
-    def error_and_leave(self, room_id, text, html=None):
-        self.ensure_joined(room_id)
-        self.send_notice(room_id, text, html=html)
-        self.leave_room(room_id)
+    async def error_and_leave(self, room_id, text, html=None):
+        await self.ensure_joined(room_id)
+        await self.send_notice(room_id, text, html=html)
+        await self.leave_room(room_id)
 
     def kick(self, room_id, user_id, message):
-        self.ensure_joined(room_id)
-        return self.client.kick_user(room_id, user_id, message)
+        return self.set_membership(room_id, user_id, "leave", message)
 
-    def send_event(self, room_id, event_type, body, txn_id=None):
-        self.ensure_joined(room_id)
-        self._ensure_has_power_level_for(room_id, event_type)
-        return self.client.send_message_event(room_id, event_type, body, txn_id)
+    def get_membership(self, room_id, user_id):
+        return self.get_state_event(room_id, "m.room.member", state_key=user_id)
 
-    def send_state_event(self, room_id, event_type, body, state_key=""):
-        self.ensure_joined(room_id)
-        self._ensure_has_power_level_for(room_id, event_type)
-        return self.client.send_state_event(room_id, event_type, body, state_key)
+    def set_membership(self, room_id, user_id, membership, reason="", profile=None):
+        body = {
+            "membership": membership,
+            "reason": reason
+        }
+        profile = profile or {}
+        if "displayname" in profile:
+            body["displayname"] = profile["displayname"]
+        if "avatar_url" in profile:
+            body["avatar_url"] = profile["avatar_url"]
+
+        return self.send_state_event(room_id, "m.room.member", body, state_key=user_id)
+
+    @staticmethod
+    def _get_event_url(room_id, event_type, txn_id):
+        return f"/rooms/{quote(room_id)}/send/{quote(event_type)}/{quote(txn_id)}"
+
+    async def send_event(self, room_id, event_type, content, txn_id=None):
+        await self.ensure_joined(room_id)
+        await self._ensure_has_power_level_for(room_id, event_type)
+
+        txn_id = txn_id or str(self.client.txn_id) + str(int(time() * 1000))
+        self.client.txn_id += 1
+
+        url = self._get_event_url(room_id, event_type, txn_id)
+
+        return await self.client.request("PUT", url, content)
+
+    @staticmethod
+    def _get_state_url(room_id, event_type, state_key=""):
+        url = f"/rooms/{quote(room_id)}/state/{quote(event_type)}"
+        if state_key:
+            url += f"/{quote(state_key)}"
+        return url
+
+    async def send_state_event(self, room_id, event_type, content, state_key=""):
+        await self.ensure_joined(room_id)
+        await self._ensure_has_power_level_for(room_id, event_type)
+        url = self._get_state_url(room_id, event_type, state_key)
+        return await self.client.request("PUT", url, content)
+
+    async def get_state_event(self, room_id, event_type, state_key=""):
+        await self.ensure_joined(room_id)
+        url = self._get_state_url(room_id, event_type, state_key)
+        return await self.client.request("GET", url)
 
     def join_room(self, room_id):
         return self.ensure_joined(room_id, ignore_cache=True)
 
+    def _join_room_direct(self, room):
+        return self.client.request("POST", f"/join/{quote(room)}")
+
     def leave_room(self, room_id):
         self.state_store.left(room_id, self.mxid)
-        return self.client.leave_room(room_id)
+        return self.client.request("POST", f"/rooms/{quote(room_id)}/leave")
 
     def get_room_memberships(self, room_id):
-        return self.client.get_room_members(room_id)
+        return self.client.request("GET", f"/rooms/{quote(room_id)}/members")
 
-    def get_room_members(self, room_id, allowed_memberships=("join",)):
-        memberships = self.get_room_memberships(room_id)
+    async def get_room_members(self, room_id, allowed_memberships=("join",)):
+        memberships = await self.get_room_memberships(room_id)
         return [membership["state_key"] for membership in memberships["chunk"] if
                 membership["content"]["membership"] in allowed_memberships]
 
-    def get_room_state(self, room_id):
-        self.ensure_joined(room_id)
-        return self.client.get_room_state(room_id)
+    async def get_room_state(self, room_id):
+        await self.ensure_joined(room_id)
+        state = await self.client.request("GET", f"/rooms/{quote(room_id)}/state")
+        # TODO update values based on state?
+        return state
 
     # endregion
     # region Ensure functions
 
-    def ensure_joined(self, room_id, ignore_cache=False):
+    async def ensure_joined(self, room_id, ignore_cache=False):
         if not ignore_cache and self.state_store.is_joined(room_id, self.mxid):
             return
-        self.ensure_registered()
+        await self.ensure_registered()
         try:
-            self.client.join_room(room_id)
+            await self._join_room_direct(room_id)
             self.state_store.joined(room_id, self.mxid)
         except MatrixRequestError as e:
-            if matrix_error_code(e) != "M_FORBIDDEN" or not self.bot:
+            if e.errcode != "M_FORBIDDEN" or not self.bot:
                 raise IntentError(f"Failed to join room {room_id} as {self.mxid}", e)
             try:
-                self.bot.invite_user(room_id, self.mxid)
-                self.client.join_room(room_id)
+                await self.bot.invite(room_id, self.mxid)
+                await self._join_room_direct(room_id)
                 self.state_store.joined(room_id, self.mxid)
             except MatrixRequestError as e2:
                 raise IntentError(f"Failed to join room {room_id} as {self.mxid}", e2)
 
-    def ensure_registered(self):
+    def _register(self):
+        content = {"username": self.localpart}
+        query_params = {"kind": "user"}
+        return self.client.request("POST", "/register", content, query_params)
+
+    async def ensure_registered(self):
         if self.state_store.is_registered(self.mxid):
             return
         try:
-            self.client.register({"username": self.localpart})
+            await self._register()
         except MatrixRequestError as e:
-            if matrix_error_code(e) != "M_USER_IN_USE":
+            if e.errcode != "M_USER_IN_USE":
                 self.log.exception(f"Failed to register {self.mxid}!")
                 # raise IntentError(f"Failed to register {self.mxid}", e)
                 return
         self.state_store.registered(self.mxid)
 
-    def _ensure_has_power_level_for(self, room_id, event_type):
+    async def _ensure_has_power_level_for(self, room_id, event_type):
         if not self.state_store.has_power_levels(room_id):
-            self.get_power_levels(room_id)
+            await self.get_power_levels(room_id)
         if self.state_store.has_power_level(room_id, self.mxid, event_type):
             return
         elif not self.bot:
