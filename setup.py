@@ -21,7 +21,6 @@ setuptools.setup(
         "Markdown>=2.6.11,<3",
         "ruamel.yaml>=0.15.35,<0.16",
         "Pillow>=5.0.0,<6",
-        "future-fstrings>=0.4.1",
         "python-magic>=0.4.15,<0.5",
     ],
     dependency_links=[
