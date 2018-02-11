@@ -22,7 +22,6 @@ from mautrix_appservice import MatrixRequestError
 
 from telethon.errors import *
 from telethon.tl.types import *
-from telethon.tl.functions.contacts import SearchRequest
 from telethon.tl.functions.messages import ImportChatInviteRequest, CheckChatInviteRequest
 from telethon.tl.functions.channels import JoinChannelRequest
 
@@ -224,25 +223,29 @@ class CommandHandler:
             return await evt.reply("**Usage:** `$cmdprefix+sp search [-r|--remote] <query>`")
         elif not evt.sender.logged_in:
             return await evt.reply("This command requires you to be logged in.")
-        # force_remote = False
-        if evt.args[0] in {"-r", "--remote"}:
-            # force_remote = True
-            evt.args.pop(0)
-        query = " ".join(evt.args)
-        if len(query) < 5:
-            return await evt.reply("Minimum length of query for remote search is 5 characters.")
-        found = await evt.sender.client(SearchRequest(q=query, limit=10))
 
-        # reply = ["**People:**", ""]
-        reply = ["**Results from Telegram server:**", ""]
-        for result in found.users:
-            puppet = pu.Puppet.get(result.id)
-            await puppet.update_info(evt.sender, result)
-            reply.append(
-                f"* [{puppet.displayname}](https://matrix.to/#/{puppet.mxid}): {puppet.id}")
-        # reply.extend(("", "**Chats:**", ""))
-        # for result in found.chats:
-        #     reply.append(f"* {result.title}")
+        force_remote = False
+        if evt.args[0] in {"-r", "--remote"}:
+            force_remote = True
+            evt.args.pop(0)
+
+        query = " ".join(evt.args)
+        if force_remote and len(query) < 5:
+            return await evt.reply("Minimum length of query for remote search is 5 characters.")
+
+        results, remote = await evt.sender.search(query, force_remote)
+
+        reply = []
+        if remote:
+            reply += ["**Results from Telegram server:**", ""]
+        else:
+            reply += ["**Results in contacts:**", ""]
+        reply += [(f"* [{puppet.displayname}](https://matrix.to/#/{puppet.mxid}): "
+                   + f"{puppet.id} ({similarity}% match)")
+                  for puppet, similarity in results]
+
+        # TODO somehow show remote channel results when joining by alias is possible?
+
         return await evt.reply("\n".join(reply))
 
     @command_handler

@@ -14,7 +14,8 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
-from sqlalchemy import Column, UniqueConstraint, Integer, String
+from sqlalchemy import Column, UniqueConstraint, ForeignKey, Integer, String
+from sqlalchemy.orm import relationship
 
 from .base import Base
 
@@ -57,6 +58,16 @@ class User(Base):
     mxid = Column(String, primary_key=True)
     tgid = Column(Integer, nullable=True)
     tg_username = Column(String, nullable=True)
+    saved_contacts = Column(Integer, default=0)
+    contacts = relationship("Contact", uselist=True)
+
+
+class Contact(Base):
+    query = None
+    __tablename__ = "contact"
+
+    user = Column("user", Integer, ForeignKey("user.tgid"), primary_key=True)
+    contact = Column("contact", Integer, ForeignKey("puppet.id"), primary_key=True)
 
 
 class Puppet(Base):

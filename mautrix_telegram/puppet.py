@@ -14,6 +14,7 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
+from difflib import SequenceMatcher
 import re
 import logging
 
@@ -66,6 +67,16 @@ class Puppet:
         self.to_db()
         self.db.commit()
 
+    def similarity(self, query):
+        username_similarity = (SequenceMatcher(None, self.username, query).ratio()
+                               if self.username else 0)
+        displayname_similarity = (SequenceMatcher(None, self.displayname, query).ratio()
+                                  if self.displayname else 0)
+        #phone_number_similarity = (SequenceMatcher(None, self.phone_number, query).ratio()
+        #                           if self.phone_number else 0)
+        similarity = max(username_similarity, displayname_similarity)
+        return round(similarity * 1000) / 10
+
     @staticmethod
     def get_displayname(info, format=True):
         data = {
@@ -99,7 +110,7 @@ class Puppet:
 
         changed = await self.update_displayname(source, info) or changed
         if isinstance(info.photo, UserProfilePhoto):
-            changed = await self.update_avatar(source, info.photo.photo_big)
+            changed = await self.update_avatar(source, info.photo.photo_big) or changed
 
         if changed:
             self.save()
