@@ -1,3 +1,4 @@
+# -*- coding: future_fstrings -*-
 # mautrix-telegram - A Matrix-Telegram puppeting bridge
 # Copyright (C) 2018 Tulir Asokan
 #
@@ -564,12 +565,14 @@ class Portal:
         elif self.tgid:
             raise ValueError("Can't create Telegram chat for portal with existing Telegram chat.")
 
-        invites = await self._get_telegram_users_in_matrix_room()
-        if len(invites) < 2:
+        invite_ids = await self._get_telegram_users_in_matrix_room()
+        if len(invite_ids) < 2:
             # TODO[waiting-for-bots] This won't happen when the bot is enabled
             raise ValueError("Not enough Telegram users to create a chat")
 
-        invites = [await source.client.get_input_entity(id) for id in invites]
+        invites = []
+        for id in invite_ids:
+            invites.append(await source.client.get_input_entity(id))
 
         if self.peer_type == "chat":
             updates = await source.client(CreateChatRequest(title=self.title, users=invites))
