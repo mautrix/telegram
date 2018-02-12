@@ -372,7 +372,11 @@ class Portal:
 
     @staticmethod
     async def cleanup_room(intent, room_id, type="Portal"):
-        for user in await intent.get_room_members(room_id):
+        try:
+            members = await intent.get_room_members(room_id)
+        except MatrixRequestError:
+            members = []
+        for user in members:
             if user != intent.mxid:
                 try:
                     await intent.kick(room_id, user, f"{type} deleted.")
