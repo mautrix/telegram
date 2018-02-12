@@ -29,7 +29,7 @@ from telethon.tl.functions.messages import *
 from telethon.tl.functions.channels import *
 from telethon.errors.rpc_error_list import *
 from telethon.tl.types import *
-from mautrix_appservice import MatrixRequestError
+from mautrix_appservice import MatrixRequestError, IntentError
 
 from .db import Portal as DBPortal, Message as DBMessage
 from . import puppet as p, user as u, formatter
@@ -360,7 +360,10 @@ class Portal:
         return link.link
 
     async def get_authenticated_matrix_users(self):
-        members = await self.main_intent.get_room_members(self.mxid)
+        try:
+            members = await self.main_intent.get_room_members(self.mxid)
+        except MatrixRequestError:
+            return []
         authenticated = []
         for member in members:
             if p.Puppet.get_id_from_mxid(member) or member == self.main_intent.mxid:
@@ -380,7 +383,7 @@ class Portal:
             if user != intent.mxid:
                 try:
                     await intent.kick(room_id, user, f"{type} deleted.")
-                except MatrixRequestError:
+                except (MatrixRequestError, IntentError):
                     pass
         await intent.leave_room(room_id)
 

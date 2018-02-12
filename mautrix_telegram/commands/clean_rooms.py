@@ -13,6 +13,8 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
+from mautrix_appservice import MatrixRequestError
+
 from . import command_handler
 from .. import puppet as pu, portal as po
 
@@ -27,7 +29,10 @@ async def _find_rooms(intent):
     for room in rooms:
         portal = po.Portal.get_by_mxid(room)
         if not portal:
-            members = await intent.get_room_members(room)
+            try:
+                members = await intent.get_room_members(room)
+            except MatrixRequestError:
+                members = []
             if len(members) == 2:
                 other_member = members[0] if members[0] != intent.mxid else members[1]
                 if pu.Puppet.get_id_from_mxid(other_member):
