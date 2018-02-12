@@ -29,6 +29,7 @@ from telethon.tl.functions.messages import *
 from telethon.tl.functions.channels import *
 from telethon.errors.rpc_error_list import *
 from telethon.tl.types import *
+from mautrix_appservice import MatrixRequestError
 
 from .db import Portal as DBPortal, Message as DBMessage
 from . import puppet as p, user as u, formatter
@@ -354,6 +355,31 @@ class Portal:
             raise ValueError("Failed to get invite link.")
 
         return link.link
+
+    async def get_authenticated_matrix_users(self):
+        members = await self.main_intent.get_room_members(self.mxid)
+        authenticated = []
+        for member in members:
+            if p.Puppet.get_id_from_mxid(member) or member == self.main_intent.mxid:
+                continue
+            user = u.User.get_by_mxid(member)
+            if user.has_full_access:
+                authenticated.append(user)
+        return authenticated
+
+    @staticmethod
+    async def cleanup_room(intent, room_id, type="Portal"):
+        for user in await intent.get_room_members(room_id):
+            if user != intent.mxid:
+                try:
+                    await intent.kick(room_id, user, f"{type} deleted.")
+                except MatrixRequestError:
+                    pass
+        await intent.leave_room(room_id)
+
+    async def cleanup_and_delete(self):
+        await self.cleanup_room(self.main_intent, self.mxid)
+        self.delete()
 
     # endregion
     # region Matrix event handling

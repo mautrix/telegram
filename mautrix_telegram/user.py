@@ -26,6 +26,7 @@ from .db import User as DBUser, Message as DBMessage, Contact as DBContact
 from .tgclient import MautrixTelegramClient
 from . import portal as po, puppet as pu, __version__
 
+
 config = None
 
 
@@ -47,7 +48,16 @@ class User:
 
         self.command_status = None
         self.connected = False
-        self.client = None
+        device = f"{platform.system()} {platform.release()}"
+        sysversion = MautrixTelegramClient.__version__
+        self.client = MautrixTelegramClient(self.mxid,
+                                            config["telegram.api_id"],
+                                            config["telegram.api_hash"],
+                                            loop=self.loop,
+                                            app_version=__version__,
+                                            system_version=sysversion,
+                                            device_model=device)
+        self.client.add_update_handler(self.update_catch)
 
         self.is_admin = self.mxid in config.get("bridge.admins", [])
 
@@ -104,16 +114,6 @@ class User:
     # region Telegram connection management
 
     async def start(self):
-        device = f"{platform.system()} {platform.release()}"
-        sysversion = MautrixTelegramClient.__version__
-        self.client = MautrixTelegramClient(self.mxid,
-                                            config["telegram.api_id"],
-                                            config["telegram.api_hash"],
-                                            loop=self.loop,
-                                            app_version=__version__,
-                                            system_version=sysversion,
-                                            device_model=device)
-        self.client.add_update_handler(self.update_catch)
         self.connected = await self.client.connect()
         if self.logged_in:
             asyncio.ensure_future(self.post_login(), loop=self.loop)
