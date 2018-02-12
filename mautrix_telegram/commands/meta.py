@@ -69,6 +69,7 @@ def help(evt):
 **delete-portal**           - Forget the current portal room. Only works for group chats; to delete
                              a private chat portal, simply leave the room.  
 **group-name** <_name_|`-`> - Change the username of a supergroup/channel. To disable, use a dash
-                             (`-`) as the name.
+                             (`-`) as the name.  
+**clean-rooms**             - Clean up unused portal/management rooms.
 """
     return evt.reply(management_status + help)
