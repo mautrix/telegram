@@ -204,7 +204,7 @@ class Portal:
 
         if alias:
             # TODO properly handle existing room aliases
-            intent.remove_room_alias(alias)
+            await intent.remove_room_alias(alias)
         room = await intent.create_room(alias=alias, is_public=public, invitees=invites or [],
                                         name=self.title, is_direct=direct)
         if not room:
@@ -213,6 +213,7 @@ class Portal:
         self.mxid = room["room_id"]
         self.by_mxid[self.mxid] = self
         self.save()
+        user.register_portal(self)
 
         power_level_requirement = 0 if self.peer_type == "chat" and entity.admins_enabled else 50
         levels = await self.main_intent.get_power_levels(self.mxid)
@@ -245,6 +246,7 @@ class Portal:
 
         user = u.User.get_by_tgid(user_id)
         if user:
+            user.register_portal(self)
             await self.main_intent.invite(self.mxid, user.mxid)
 
     async def delete_telegram_user(self, user_id, kick_message=None):
@@ -255,6 +257,7 @@ class Portal:
         else:
             await puppet.intent.leave_room(self.mxid)
         if user:
+            user.unregister_portal(self)
             await self.main_intent.kick(self.mxid, user.mxid, kick_message or "Left Telegram chat")
 
     async def update_info(self, user, entity=None):
@@ -840,6 +843,7 @@ class Portal:
             user_levels = levels["users"]
 
             if user:
+                user.register_portal(self)
                 user_level_defined = user.mxid in user_levels
                 user_has_right_level = (user_levels[user.mxid] == new_level
                                         if user_level_defined else new_level == 0)

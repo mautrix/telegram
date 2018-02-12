@@ -79,6 +79,7 @@ class MatrixHandler:
                     pass
             portal.mxid = room
             portal.save()
+            inviter.register_portal(portal)
             await puppet.intent.send_notice(room, "Portal to private chat created.")
         else:
             await puppet.intent.join_room(room)

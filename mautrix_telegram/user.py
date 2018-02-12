@@ -21,11 +21,11 @@ from telethon.tl.types import *
 from telethon.tl.types.contacts import ContactsNotModified
 from telethon.tl.types import User as TLUser
 from telethon.tl.functions.contacts import GetContactsRequest, SearchRequest
+from mautrix_appservice import MatrixRequestError
 
 from .db import User as DBUser, Message as DBMessage, Contact as DBContact
 from .tgclient import MautrixTelegramClient
 from . import portal as po, puppet as pu, __version__
-
 
 config = None
 
@@ -38,26 +38,20 @@ class User:
     by_mxid = {}
     by_tgid = {}
 
-    def __init__(self, mxid, tgid=None, username=None, db_contacts=None, saved_contacts=0):
+    def __init__(self, mxid, tgid=None, username=None, db_contacts=None, saved_contacts=0,
+                 db_portals=None):
         self.mxid = mxid
         self.tgid = tgid
         self.username = username
         self.contacts = []
         self.saved_contacts = saved_contacts
         self.db_contacts = db_contacts
+        self.portals = {}
+        self.db_portals = db_portals
 
         self.command_status = None
         self.connected = False
-        device = f"{platform.system()} {platform.release()}"
-        sysversion = MautrixTelegramClient.__version__
-        self.client = MautrixTelegramClient(self.mxid,
-                                            config["telegram.api_id"],
-                                            config["telegram.api_hash"],
-                                            loop=self.loop,
-                                            app_version=__version__,
-                                            system_version=sysversion,
-                                            device_model=device)
-        self.client.add_update_handler(self.update_catch)
+        self._init_client()
 
         self.is_admin = self.mxid in config.get("bridge.admins", [])
 
@@ -91,6 +85,19 @@ class User:
         else:
             self.contacts = []
 
+    @property
+    def db_portals(self):
+        return [portal.to_db(merge=False) for _, portal in self.portals.items()]
+
+    @db_portals.setter
+    def db_portals(self, portals):
+        if portals:
+            self.portals = {(portal.tgid, portal.tg_receiver):
+                                po.Portal.get_by_tgid(portal.tgid, portal.tg_receiver)
+                            for portal in portals}
+        else:
+            self.portals = {}
+
     def get_input_entity(self, user):
         return user.client.get_input_entity(InputUser(user_id=self.tgid, access_hash=0))
 
@@ -99,7 +106,8 @@ class User:
     def to_db(self):
         return self.db.merge(
             DBUser(mxid=self.mxid, tgid=self.tgid, tg_username=self.username,
-                   contacts=self.db_contacts, saved_contacts=self.saved_contacts))
+                   contacts=self.db_contacts, saved_contacts=self.saved_contacts,
+                   portals=self.db_portals))
 
     def save(self):
         self.to_db()
@@ -108,10 +116,22 @@ class User:
     @classmethod
     def from_db(cls, db_user):
         return User(db_user.mxid, db_user.tgid, db_user.tg_username, db_user.contacts,
-                    db_user.saved_contacts)
+                    db_user.saved_contacts, db_user.portals)
 
     # endregion
     # region Telegram connection management
+
+    def _init_client(self):
+        device = f"{platform.system()} {platform.release()}"
+        sysversion = MautrixTelegramClient.__version__
+        self.client = MautrixTelegramClient(self.mxid,
+                                            config["telegram.api_id"],
+                                            config["telegram.api_hash"],
+                                            loop=self.loop,
+                                            app_version=__version__,
+                                            system_version=sysversion,
+                                            device_model=device)
+        self.client.add_update_handler(self.update_catch)
 
     async def start(self):
         self.connected = await self.client.connect()
@@ -148,7 +168,14 @@ class User:
             self.save()
 
     async def log_out(self):
-        self.connected = False
+        for _, portal in self.portals.items():
+            try:
+                await portal.main_intent.kick(portal.mxid, self.mxid, "Logged out of Telegram.")
+            except MatrixRequestError:
+                pass
+        self.portals = {}
+        self.contacts = []
+        self.save()
         if self.tgid:
             try:
                 del self.by_tgid[self.tgid]
@@ -156,8 +183,12 @@ class User:
                 pass
             self.tgid = None
             self.save()
-        await self.client.log_out()
-        # TODO kick user from portals
+        ok = await self.client.log_out()
+        if not ok:
+            return False
+        self._init_client()
+        await self.start()
+        return True
 
     def _search_local(self, query, max_results=5, min_similarity=45):
         results = []
@@ -200,8 +231,26 @@ class User:
             if invalid:
                 continue
             portal = po.Portal.get_by_entity(entity)
+            self.portals[portal.tgid_full] = portal
             creators.append(portal.create_matrix_room(self, entity, invites=[self.mxid]))
+        self.save()
         await asyncio.gather(*creators, loop=self.loop)
+
+    def register_portal(self, portal):
+        try:
+            if self.portals[portal.tgid_full] == portal:
+                return
+        except KeyError:
+            pass
+        self.portals[portal.tgid_full] = portal
+        self.save()
+
+    def unregister_portal(self, portal):
+        try:
+            del self.portals[portal.tgid_full]
+            self.save()
+        except KeyError:
+            pass
 
     def _hash_contacts(self):
         acc = 0
