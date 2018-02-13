@@ -281,8 +281,8 @@ class User:
             self.log.exception("Failed to handle Telegram update")
 
     async def update(self, update):
-        if isinstance(update, (UpdateShortChatMessage, UpdateShortMessage, UpdateNewMessage,
-                               UpdateNewChannelMessage)):
+        if isinstance(update, (UpdateShortChatMessage, UpdateShortMessage, UpdateNewChannelMessage,
+                               UpdateNewMessage, UpdateEditMessage, UpdateEditChannelMessage)):
             await self.update_message(update)
         elif isinstance(update, (UpdateChatUserTyping, UpdateUserTyping)):
             await self.update_typing(update)
@@ -365,7 +365,8 @@ class User:
         elif isinstance(update, UpdateShortMessage):
             portal = po.Portal.get_by_tgid(update.user_id, self.tgid, "user")
             sender = pu.Puppet.get(self.tgid if update.out else update.user_id)
-        elif isinstance(update, (UpdateNewMessage, UpdateNewChannelMessage)):
+        elif isinstance(update, (UpdateNewMessage, UpdateNewChannelMessage,
+                                 UpdateEditMessage, UpdateEditChannelMessage)):
             update = update.message
             if isinstance(update.to_id, PeerUser) and not update.out:
                 portal = po.Portal.get_by_tgid(update.from_id, peer_type="user",
@@ -379,8 +380,8 @@ class User:
             return update, None, None
         return update, sender, portal
 
-    async def update_message(self, update):
-        update, sender, portal = self.get_message_details(update)
+    def update_message(self, original_update):
+        update, sender, portal = self.get_message_details(original_update)
 
         if isinstance(update, MessageService):
             if isinstance(update.action, MessageActionChannelMigrateFrom):
@@ -389,10 +390,14 @@ class User:
                 return
             self.log.debug("Handling action %s to %s by %d", update.action, portal.tgid_log,
                            sender.id)
-            await portal.handle_telegram_action(self, sender, update.action)
-        else:
-            self.log.debug("Handling message %s to %s by %d", update, portal.tgid_log, sender.tgid)
-            await portal.handle_telegram_message(self, sender, update)
+            return portal.handle_telegram_action(self, sender, update.action)
+
+        if isinstance(original_update, (UpdateEditMessage, UpdateEditChannelMessage)):
+            self.log.debug("Handling edit %s to %s by %d", update, portal.tgid_log, sender.tgid)
+            return portal.handle_telegram_edit(self, sender, update)
+
+        self.log.debug("Handling message %s to %s by %d", update, portal.tgid_log, sender.tgid)
+        return portal.handle_telegram_message(self, sender, update)
 
     # endregion
     # region Class instance lookup

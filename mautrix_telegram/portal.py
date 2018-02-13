@@ -733,9 +733,23 @@ class Portal:
     async def handle_telegram_text(self, source, sender, evt):
         self.log.debug(f"Sending {evt.message} to {self.mxid} by {sender.id}")
         text, html = await formatter.telegram_event_to_matrix(evt, source,
-                                                        config["bridge.native_replies"],
-                                                        config["bridge.link_in_reply"],
-                                                        self.main_intent)
+                                                              config["bridge.native_replies"],
+                                                              config["bridge.link_in_reply"],
+                                                              self.main_intent)
+        await sender.intent.set_typing(self.mxid, is_typing=False)
+        return await sender.intent.send_text(self.mxid, text, html=html)
+
+    async def handle_telegram_edit(self, source, sender, evt):
+        if not self.mxid:
+            return
+        elif not config["bridge.edits_as_replies"]:
+            self.log.debug("Edits as replies disabled, ignoring edit event...")
+            return
+        evt.reply_to_msg_id = evt.id
+        text, html = await formatter.telegram_event_to_matrix(evt, source,
+                                                              config["bridge.native_replies"],
+                                                              config["bridge.link_in_reply"],
+                                                              self.main_intent, reply_text="Edit")
         await sender.intent.set_typing(self.mxid, is_typing=False)
         return await sender.intent.send_text(self.mxid, text, html=html)
 
