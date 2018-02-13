@@ -247,6 +247,8 @@ async def telegram_event_to_matrix(evt, source, native_replies=False, message_li
         if msg:
             if native_replies:
                 quote = f"<a href=\"https://matrix.to/#/{msg.mx_room}/{msg.mxid}\">Quote<br></a>"
+                if reply_text == "Edit":
+                    html = "<u>Edit:</u> " + (html or escape(text))
             else:
                 try:
                     event = await main_intent.get_event(msg.mx_room, msg.mxid)
