@@ -2,7 +2,7 @@ aiohttp
 ruamel.yaml
 python-magic
 SQLAlchemy
--e git+git://github.com/LonamiWebs/Telethon@asyncio#egg=Telethon
+alembic
+-e git+https://github.com/LonamiWebs/Telethon@asyncio#egg=Telethon
 Markdown
 Pillow
-future-fstrings

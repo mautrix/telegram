@@ -77,17 +77,19 @@
   * [ ] Option to use bot to relay messages for unauthenticated Matrix users
   * [ ] Option to use own Matrix account for messages sent from other Telegram clients
 * [Commands](https://github.com/tulir/mautrix-telegram/wiki/Management-commands)
-  * [x] Logging in and out (`login` + code entering, `logout`)
+  * [x] Logging in and out (`login` + code entering)
+  * [x] Logging out
   * [ ] Registering (`register`)
   * [x] Searching for users (`search`)
-    * [ ] Searching contacts locally
   * [x] Starting private chats (`pm`)
   * [x] Joining chats with invite links (`join`)
   * [x] Creating a Telegram chat for an existing Matrix room (`create`)
   * [x] Upgrading the chat of a portal room into a supergroup (`upgrade`)
   * [x] Change username of supergroup/channel (`groupname`)
   * [x] Getting the Telegram invite link to a Matrix room (`invitelink`)
-  * [x] Clean up and forget a portal room (`deleteportal`)
+  * Bridge administration
+    * [x] Clean up and forget a portal room (`deleteportal`)
+    * [ ] Setting Matrix-only power levels (`powerlevel`)
 
 † Information not automatically sent from source, i.e. implementation may not be possible  
 ‡ Maybe, i.e. this feature may or may not be implemented at some point

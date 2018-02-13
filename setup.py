@@ -17,10 +17,10 @@ setuptools.setup(
     install_requires=[
         "aiohttp>=2.3.10,<3",
         "SQLAlchemy>=1.2.2,<2",
+        "alembic>=0.9.7",
         "Markdown>=2.6.11,<3",
         "ruamel.yaml>=0.15.35,<0.16",
         "Pillow>=5.0.0,<6",
-        "future-fstrings>=0.4.1",
         "python-magic>=0.4.15,<0.5",
     ],
     dependency_links=[

@@ -1,4 +1,3 @@
-# -*- coding: future_fstrings -*-
 # mautrix-telegram - A Matrix-Telegram puppeting bridge
 # Copyright (C) 2018 Tulir Asokan
 #
@@ -14,7 +13,8 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
-from sqlalchemy import Column, UniqueConstraint, Integer, String
+from sqlalchemy import Column, UniqueConstraint, ForeignKey, ForeignKeyConstraint, Integer, String
+from sqlalchemy.orm import relationship
 
 from .base import Base
 
@@ -50,6 +50,18 @@ class Message(Base):
     __table_args__ = (UniqueConstraint('mxid', 'mx_room', 'tg_space', name='_mx_id_room'),)
 
 
+class UserPortal(Base):
+    query = None
+    __tablename__ = "user_portal"
+
+    user = Column(Integer, ForeignKey("user.tgid"), primary_key=True)
+    portal = Column(Integer, primary_key=True)
+    portal_receiver = Column(Integer, primary_key=True)
+
+    __table_args__ = (ForeignKeyConstraint(("portal", "portal_receiver"),
+                                           ("portal.tgid", "portal.tg_receiver")),)
+
+
 class User(Base):
     query = None
     __tablename__ = "user"
@@ -57,6 +69,19 @@ class User(Base):
     mxid = Column(String, primary_key=True)
     tgid = Column(Integer, nullable=True)
     tg_username = Column(String, nullable=True)
+    saved_contacts = Column(Integer, default=0)
+    contacts = relationship("Contact", uselist=True,
+                            cascade="save-update, merge, delete, delete-orphan")
+    portals = relationship("Portal", secondary="user_portal", single_parent=True,
+                           cascade="save-update, merge, delete, delete-orphan")
+
+
+class Contact(Base):
+    query = None
+    __tablename__ = "contact"
+
+    user = Column("user", Integer, ForeignKey("user.tgid"), primary_key=True)
+    contact = Column("contact", Integer, ForeignKey("puppet.id"), primary_key=True)
 
 
 class Puppet(Base):
@@ -72,5 +97,6 @@ class Puppet(Base):
 def init(db_session):
     Portal.query = db_session.query_property()
     Message.query = db_session.query_property()
+    UserPortal.query = db_session.query_property()
     User.query = db_session.query_property()
     Puppet.query = db_session.query_property()
