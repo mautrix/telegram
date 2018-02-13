@@ -63,9 +63,6 @@ bridge:
     native_replies: True
     # If native replies are disabled, should the custom replies contain a link to the message being
     # replied to?
-    #
-    # Warning: Using this on a client with native replies will not look good: the message will have
-    #          a native quote AND a non-native quote.
     link_in_reply: False
 
     # The prefix for commands. Only required in non-management rooms.
