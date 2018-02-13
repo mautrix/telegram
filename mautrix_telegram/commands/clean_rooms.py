@@ -155,12 +155,15 @@ async def execute_room_cleanup(evt, rooms_to_clean):
     if len(evt.args) > 0 and evt.args[0] == "confirm-clean":
         await evt.reply(f"Cleaning {len(rooms_to_clean)} rooms. "
                         + "This might take a while.")
+        cleaned = 0
         for room in rooms_to_clean:
             if isinstance(room, po.Portal):
                 await room.cleanup_and_delete()
-            else:
+                cleaned += 1
+            elif isinstance(room, str):
                 await po.Portal.cleanup_room(evt.az.intent, room, type="Room")
+                cleaned += 1
         evt.sender.command_status = None
-        await evt.reply(f"{len(rooms_to_clean)} rooms cleaned up successfully.")
+        await evt.reply(f"{cleaned} rooms cleaned up successfully.")
     else:
         await evt.reply("Room cleaning cancelled.")
