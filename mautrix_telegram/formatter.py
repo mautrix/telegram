@@ -256,6 +256,8 @@ async def telegram_event_to_matrix(evt, source, native_replies=False, message_li
                     "event_id": msg.mxid,
                     "room_id": msg.mx_room,
                 }
+                if reply_text == "Edit":
+                    html = "<u>Edit:</u> " + (html or escape(text))
             else:
                 try:
                     event = await main_intent.get_event(msg.mx_room, msg.mxid)
