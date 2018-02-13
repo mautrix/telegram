@@ -751,7 +751,15 @@ class Portal:
                                                               config["bridge.link_in_reply"],
                                                               self.main_intent, reply_text="Edit")
         await sender.intent.set_typing(self.mxid, is_typing=False)
-        return await sender.intent.send_text(self.mxid, text, html=html)
+        response = await sender.intent.send_text(self.mxid, text, html=html)
+
+        mxid = response["event_id"]
+        tg_space = self.tgid if self.peer_type == "channel" else source.tgid
+
+        msg = DBMessage.query.get((evt.id, tg_space))
+        msg.mxid = mxid
+        msg.mx_room = self.mxid
+        self.db.commit()
 
     async def handle_telegram_message(self, source, sender, evt):
         if not self.mxid:
