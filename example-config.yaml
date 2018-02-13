@@ -67,6 +67,9 @@ bridge:
     # Warning: Using this on a client with native replies will not look good: the message will have
     #          a native quote AND a non-native quote.
     link_in_reply: False
+    # Show message editing as a reply to the original message.
+    # If this is false, message edits are not shown at all, as Matrix does not support editing yet.
+    edits_as_replies: False
 
     # The prefix for commands. Only required in non-management rooms.
     command_prefix: "!tg"
@@ -74,13 +77,13 @@ bridge:
     # Whitelist of user IDs that are allowed to use this bridge. Leave empty to disable.
     # You can enter a domain without the localpart to allow all users from that homeserver to use the bridge.
     whitelist:
-    - "internal-hs.example.com"
+    - "internal.example.com"
     - "@user:public.example.com"
 
     # Admins can do things like delete portal rooms. Here you must specify the exact MXID, domains
     # are not accepted.
     admins:
-    - "@admin:internal-hs.example.com"
+    - "@admin:internal.example.com"
 
 # Telegram config
 telegram:

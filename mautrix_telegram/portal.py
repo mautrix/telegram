@@ -30,6 +30,7 @@ from telethon.tl.functions.messages import *
 from telethon.tl.functions.channels import *
 from telethon.errors.rpc_error_list import *
 from telethon.tl.types import *
+from mautrix_appservice import MatrixRequestError, IntentError
 
 from .db import Portal as DBPortal, Message as DBMessage
 from . import puppet as p, user as u, formatter
@@ -204,7 +205,7 @@ class Portal:
 
         if alias:
             # TODO properly handle existing room aliases
-            intent.remove_room_alias(alias)
+            await intent.remove_room_alias(alias)
         room = await intent.create_room(alias=alias, is_public=public, invitees=invites or [],
                                         name=self.title, is_direct=direct)
         if not room:
@@ -213,6 +214,7 @@ class Portal:
         self.mxid = room["room_id"]
         self.by_mxid[self.mxid] = self
         self.save()
+        user.register_portal(self)
 
         power_level_requirement = 0 if self.peer_type == "chat" and entity.admins_enabled else 50
         levels = await self.main_intent.get_power_levels(self.mxid)
@@ -245,6 +247,7 @@ class Portal:
 
         user = u.User.get_by_tgid(user_id)
         if user:
+            user.register_portal(self)
             await self.main_intent.invite(self.mxid, user.mxid)
 
     async def delete_telegram_user(self, user_id, kick_message=None):
@@ -255,6 +258,7 @@ class Portal:
         else:
             await puppet.intent.leave_room(self.mxid)
         if user:
+            user.unregister_portal(self)
             await self.main_intent.kick(self.mxid, user.mxid, kick_message or "Left Telegram chat")
 
     async def update_info(self, user, entity=None):
@@ -355,6 +359,38 @@ class Portal:
             raise ValueError("Failed to get invite link.")
 
         return link.link
+
+    async def get_authenticated_matrix_users(self):
+        try:
+            members = await self.main_intent.get_room_members(self.mxid)
+        except MatrixRequestError:
+            return []
+        authenticated = []
+        for member in members:
+            if p.Puppet.get_id_from_mxid(member) or member == self.main_intent.mxid:
+                continue
+            user = u.User.get_by_mxid(member)
+            if user.has_full_access:
+                authenticated.append(user)
+        return authenticated
+
+    @staticmethod
+    async def cleanup_room(intent, room_id, type="Portal"):
+        try:
+            members = await intent.get_room_members(room_id)
+        except MatrixRequestError:
+            members = []
+        for user in members:
+            if user != intent.mxid:
+                try:
+                    await intent.kick(room_id, user, f"{type} deleted.")
+                except (MatrixRequestError, IntentError):
+                    pass
+        await intent.leave_room(room_id)
+
+    async def cleanup_and_delete(self):
+        await self.cleanup_room(self.main_intent, self.mxid)
+        self.delete()
 
     # endregion
     # region Matrix event handling
@@ -700,11 +736,33 @@ class Portal:
     async def handle_telegram_text(self, source, sender, evt):
         self.log.debug(f"Sending {evt.message} to {self.mxid} by {sender.id}")
         text, html = await formatter.telegram_event_to_matrix(evt, source,
-                                                        config["bridge.native_replies"],
-                                                        config["bridge.link_in_reply"],
-                                                        self.main_intent)
+                                                              config["bridge.native_replies"],
+                                                              config["bridge.link_in_reply"],
+                                                              self.main_intent)
         await sender.intent.set_typing(self.mxid, is_typing=False)
         return await sender.intent.send_text(self.mxid, text, html=html)
+
+    async def handle_telegram_edit(self, source, sender, evt):
+        if not self.mxid:
+            return
+        elif not config["bridge.edits_as_replies"]:
+            self.log.debug("Edits as replies disabled, ignoring edit event...")
+            return
+        evt.reply_to_msg_id = evt.id
+        text, html = await formatter.telegram_event_to_matrix(evt, source,
+                                                              config["bridge.native_replies"],
+                                                              config["bridge.link_in_reply"],
+                                                              self.main_intent, reply_text="Edit")
+        await sender.intent.set_typing(self.mxid, is_typing=False)
+        response = await sender.intent.send_text(self.mxid, text, html=html)
+
+        mxid = response["event_id"]
+        tg_space = self.tgid if self.peer_type == "channel" else source.tgid
+
+        msg = DBMessage.query.get((evt.id, tg_space))
+        msg.mxid = mxid
+        msg.mx_room = self.mxid
+        self.db.commit()
 
     async def handle_telegram_message(self, source, sender, evt):
         if not self.mxid:
@@ -817,6 +875,7 @@ class Portal:
             user_levels = levels["users"]
 
             if user:
+                user.register_portal(self)
                 user_level_defined = user.mxid in user_levels
                 user_has_right_level = (user_levels[user.mxid] == new_level
                                         if user_level_defined else new_level == 0)

@@ -44,6 +44,7 @@ log = logging.getLogger("mau.formatter")
 # everything up.
 TEMP_ENC = "utf-16-le"
 
+
 # region Matrix to Telegram
 
 class MessageEntityReply(MessageEntityUnknown):
@@ -214,7 +215,7 @@ def matrix_to_telegram(html, tg_space=None):
 # region Telegram to Matrix
 
 async def telegram_event_to_matrix(evt, source, native_replies=False, message_link_in_reply=False,
-                             main_intent=None):
+                                   main_intent=None, reply_text="Reply"):
     text = evt.message
     html = telegram_to_matrix(evt.message, evt.entities) if evt.entities else None
 
@@ -247,6 +248,8 @@ async def telegram_event_to_matrix(evt, source, native_replies=False, message_li
         if msg:
             if native_replies:
                 quote = f"<a href=\"https://matrix.to/#/{msg.mx_room}/{msg.mxid}\">Quote<br></a>"
+                if reply_text == "Edit":
+                    html = "<u>Edit:</u> " + (html or escape(text))
             else:
                 try:
                     event = await main_intent.get_event(msg.mx_room, msg.mxid)
@@ -259,11 +262,11 @@ async def telegram_event_to_matrix(evt, source, native_replies=False, message_li
                     displayname = puppet.displayname if puppet else sender
                     reply_to_user = (f"<a href='https://matrix.to/#/{sender}'>{displayname}</a>")
                     reply_to_msg = (("<a href='https://matrix.to/#/"
-                                     + f"{msg.mx_room}/{msg.mxid}'>Reply</a>")
+                                     + f"{msg.mx_room}/{msg.mxid}'>{reply_text}</a>")
                                     if message_link_in_reply else "Reply")
                     quote = f"{reply_to_msg} to {reply_to_user}<blockquote>{body}</blockquote>"
                 except (ValueError, KeyError, MatrixRequestError):
-                    quote = "Reply to unknown user <em>(Failed to fetch message)</em>:<br/>"
+                    quote = "{reply_text} to unknown user <em>(Failed to fetch message)</em>:<br/>"
             if html:
                 html = quote + html
             else:
