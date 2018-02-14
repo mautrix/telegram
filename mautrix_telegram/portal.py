@@ -149,12 +149,14 @@ class Portal:
         else:
             raise ValueError("Invalid invite identifier given to invite_matrix()")
 
-    async def update_after_create(self, user, entity, direct, puppet=None):
+    async def update_after_create(self, user, entity, direct, puppet=None,
+                                  levels=None, users=None, participants=None):
         if not direct:
             await self.update_info(user, entity)
-            users, participants = await self.get_users(user, entity)
+            if not users or not participants:
+                users, participants = await self.get_users(user, entity)
             await self.sync_telegram_users(user, users)
-            await self.update_telegram_participants(participants)
+            await self.update_telegram_participants(participants, levels)
         else:
             if not puppet:
                 puppet = p.Puppet.get(self.tgid)
@@ -190,7 +192,7 @@ class Portal:
             self.title = None
 
         puppet = p.Puppet.get(self.tgid) if direct else None
-        intent = puppet.intent if direct else self.az.intent
+        self._main_intent = puppet.intent if direct else self.az.intent
 
         if self.peer_type == "channel" and entity.username:
             # TODO make public once safe
@@ -204,27 +206,52 @@ class Portal:
 
         if alias:
             # TODO properly handle existing room aliases
-            await intent.remove_room_alias(alias)
-        room = await intent.create_room(alias=alias, is_public=public, invitees=invites or [],
-                                        name=self.title, is_direct=direct)
+            await self.main_intent.remove_room_alias(alias)
+
+        power_levels = self._get_base_power_levels({}, entity)
+        users = participants = None
+        if not direct:
+            users, participants = await self.get_users(user, entity)
+            self._participants_to_power_levels(participants, power_levels)
+        initial_state = [{
+            "type": "m.room.power_levels",
+            "content": power_levels,
+        }]
+
+        room = await self.main_intent.create_room(alias=alias, is_public=public, is_direct=direct,
+                                                  invitees=invites or [], name=self.title,
+                                                  initial_state=initial_state)
         if not room:
             raise Exception(f"Failed to create room for {self.tgid_log}")
 
         self.mxid = room["room_id"]
         self.by_mxid[self.mxid] = self
         self.save()
+        self.az.state_store.set_power_levels(self.mxid, power_levels)
         user.register_portal(self)
+        await self.update_after_create(user, entity, direct, puppet,
+                                       levels=power_levels, users=users, participants=participants)
 
-        power_level_requirement = 0 if self.peer_type == "chat" and entity.admins_enabled else 50
-        levels = await self.main_intent.get_power_levels(self.mxid)
-        levels["ban"] = 100
-        levels["invite"] = 50
+    def _get_base_power_levels(self, levels=None, entity=None):
+        levels = levels or {}
+        power_level_requirement = (0 if self.peer_type == "chat" and not entity.admins_enabled
+                                   else 50)
+        levels["ban"] = 99
+        levels["invite"] = power_level_requirement if self.peer_type == "chat" else 75
+        if "events" not in levels:
+            levels["events"] = {}
         levels["events"]["m.room.name"] = power_level_requirement
         levels["events"]["m.room.avatar"] = power_level_requirement
-        levels["events"]["m.room.topic"] = 50 if self.peer_type == "channel" else 100
+        levels["events"]["m.room.topic"] = 50 if self.peer_type == "channel" else 99
         levels["events"]["m.room.power_levels"] = 75
-        await self.main_intent.set_power_levels(self.mxid, levels)
-        await self.update_after_create(user, entity, direct, puppet)
+        levels["events"]["m.room.history_visibility"] = 75
+        levels["events_default"] = (50 if self.peer_type == "channel" and not entity.megagroup
+                                    else 0)
+        if "users" not in levels:
+            levels["users"] = {
+                self.main_intent.mxid: 100
+            }
+        return levels
 
     def _get_room_alias(self, username=None):
         username = username or self.username
@@ -483,6 +510,8 @@ class Portal:
     async def handle_matrix_power_levels(self, sender, new_users, old_users):
         # TODO handle all power level changes and bridge exact admin rights to supergroups/channels
         for user, level in new_users.items():
+            if not user or user == self.main_intent.mxid or user == sender.mxid:
+                continue
             user_id = p.Puppet.get_id_from_mxid(user)
             if not user_id:
                 mx_user = u.User.get_by_mxid(user, create=False)
@@ -503,9 +532,7 @@ class Portal:
                                                 add_admins=admin, manage_call=moderator)
                     await sender.client(
                         EditAdminRequest(channel=await self.get_input_entity(sender),
-                                         user_id=await sender.client.get_input_entity(
-                                             PeerUser(user_id)),
-                                         admin_rights=rights))
+                                         user_id=user_id, admin_rights=rights))
 
     async def handle_matrix_about(self, sender, about):
         if self.peer_type not in {"channel"}:
@@ -568,7 +595,7 @@ class Portal:
             puppet_id = p.Puppet.get_id_from_mxid(user)
             if puppet_id:
                 user_tgids.add(puppet_id)
-        return user_tgids
+        return list(user_tgids)
 
     async def upgrade_telegram_chat(self, source):
         if self.peer_type != "chat":
@@ -605,8 +632,6 @@ class Portal:
             # TODO[waiting-for-bots] This won't happen when the bot is enabled
             raise ValueError("Not enough Telegram users to create a chat")
 
-        invites = [await source.client.get_input_entity(id) for id in invites]
-
         if self.peer_type == "chat":
             updates = await source.client(CreateChatRequest(title=self.title, users=invites))
             entity = updates.chats[0]
@@ -626,6 +651,12 @@ class Portal:
         self.by_tgid[self.tgid_full] = self
         await self.update_info(source, entity)
         self.save()
+
+        levels = await self.main_intent.get_power_levels(self.mxid)
+        levels = self._get_base_power_levels(levels, entity)
+        already_saved = await self.handle_matrix_power_levels(source, levels["users"], {})
+        if not already_saved:
+            await self.main_intent.set_power_levels(self.mxid, levels)
 
     async def invite_telegram(self, source, puppet):
         if self.peer_type == "chat":
@@ -851,10 +882,8 @@ class Portal:
         else:
             await self.main_intent.set_pinned_messages(self.mxid, [])
 
-    async def update_telegram_participants(self, participants):
-        levels = await self.main_intent.get_power_levels(self.mxid)
+    def _participants_to_power_levels(self, participants, levels):
         changed = False
-
         admin_power_level = 75 if self.peer_type == "channel" else 50
         if levels["events"]["m.room.power_levels"] != admin_power_level:
             changed = True
@@ -888,7 +917,12 @@ class Portal:
                 if not puppet_has_right_level:
                     levels["users"][puppet.mxid] = new_level
                     changed = True
-        if changed:
+        return changed
+
+    async def update_telegram_participants(self, participants, levels=None):
+        if not levels:
+            levels = await self.main_intent.get_power_levels(self.mxid)
+        if self._participants_to_power_levels(participants, levels):
             await self.main_intent.set_power_levels(self.mxid, levels)
 
     async def set_telegram_admins_enabled(self, enabled):
