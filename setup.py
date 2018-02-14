@@ -1,4 +1,5 @@
 import setuptools
+import sys
 import mautrix_telegram
 
 setuptools.setup(
@@ -25,7 +26,10 @@ setuptools.setup(
         "python-magic>=0.4.15,<0.5",
     ],
     dependency_links=[
-        "https://github.com/tulir/Telethon/tarball/ac46abc9680c5a74897fe6dbe9e585ad2577b1fa#egg=Telethon"
+        (
+            "https://github.com/LonamiWebs/Telethon/tarball/7da092894b306d720cc60c04daa2bfba58f81946#egg=Telethon"
+            if sys.version_info.major > 3 or sys.version_info.minor > 6
+            else "https://github.com/tulir/Telethon/tarball/ac46abc9680c5a74897fe6dbe9e585ad2577b1fa#egg=Telethon")
     ],
 
     classifiers=[
