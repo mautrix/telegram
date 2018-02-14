@@ -3,6 +3,6 @@ ruamel.yaml
 python-magic
 SQLAlchemy
 alembic
--e git+https://github.com/LonamiWebs/Telethon@asyncio#egg=Telethon
 Markdown
 Pillow
+future-fstrings

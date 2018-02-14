@@ -1,3 +1,4 @@
+# -*- coding: future_fstrings -*-
 # matrix-appservice-python - A Matrix Application Service framework written in Python.
 # Copyright (C) 2018 Tulir Asokan
 #
