@@ -446,8 +446,12 @@ class IntentAPI:
         return self.client.request("POST", f"/join/{quote(room)}")
 
     def leave_room(self, room_id):
-        self.state_store.left(room_id, self.mxid)
-        return self.client.request("POST", f"/rooms/{quote(room_id)}/leave")
+        try:
+            self.state_store.left(room_id, self.mxid)
+            return self.client.request("POST", f"/rooms/{quote(room_id)}/leave")
+        except MatrixRequestError as e:
+            if "not in room" not in e.message:
+                raise
 
     def get_room_memberships(self, room_id):
         return self.client.request("GET", f"/rooms/{quote(room_id)}/members")

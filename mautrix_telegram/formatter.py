@@ -280,6 +280,12 @@ async def telegram_event_to_matrix(evt, source, native_replies=False, message_li
                 else:
                     html = quote + escape(text)
 
+    if evt.post and evt.post_author:
+        if not html:
+            html = escape(text)
+        text += f"\n- {evt.post_author}"
+        html += f"<br/><i>- <u>{evt.post_author}</u></i>"
+
     if html:
         html = html.replace("\n", "<br/>")
 

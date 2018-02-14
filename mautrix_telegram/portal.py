@@ -149,12 +149,14 @@ class Portal:
         else:
             raise ValueError("Invalid invite identifier given to invite_matrix()")
 
-    async def update_after_create(self, user, entity, direct, puppet=None):
+    async def update_after_create(self, user, entity, direct, puppet=None,
+                                  levels=None, users=None, participants=None):
         if not direct:
             await self.update_info(user, entity)
-            users, participants = await self.get_users(user, entity)
+            if not users or not participants:
+                users, participants = await self.get_users(user, entity)
             await self.sync_telegram_users(user, users)
-            await self.update_telegram_participants(participants)
+            await self.update_telegram_participants(participants, levels)
         else:
             if not puppet:
                 puppet = p.Puppet.get(self.tgid)
@@ -190,7 +192,7 @@ class Portal:
             self.title = None
 
         puppet = p.Puppet.get(self.tgid) if direct else None
-        intent = puppet.intent if direct else self.az.intent
+        self._main_intent = puppet.intent if direct else self.az.intent
 
         if self.peer_type == "channel" and entity.username:
             # TODO make public once safe
@@ -204,27 +206,52 @@ class Portal:
 
         if alias:
             # TODO properly handle existing room aliases
-            await intent.remove_room_alias(alias)
-        room = await intent.create_room(alias=alias, is_public=public, invitees=invites or [],
-                                        name=self.title, is_direct=direct)
+            await self.main_intent.remove_room_alias(alias)
+
+        power_levels = self._get_base_power_levels({}, entity)
+        users = participants = None
+        if not direct:
+            users, participants = await self.get_users(user, entity)
+            self._participants_to_power_levels(participants, power_levels)
+        initial_state = [{
+            "type": "m.room.power_levels",
+            "content": power_levels,
+        }]
+
+        room = await self.main_intent.create_room(alias=alias, is_public=public, is_direct=direct,
+                                                  invitees=invites or [], name=self.title,
+                                                  initial_state=initial_state)
         if not room:
             raise Exception(f"Failed to create room for {self.tgid_log}")
 
         self.mxid = room["room_id"]
         self.by_mxid[self.mxid] = self
         self.save()
+        self.az.state_store.set_power_levels(self.mxid, power_levels)
         user.register_portal(self)
+        await self.update_after_create(user, entity, direct, puppet,
+                                       levels=power_levels, users=users, participants=participants)
 
-        power_level_requirement = 0 if self.peer_type == "chat" and entity.admins_enabled else 50
-        levels = await self.main_intent.get_power_levels(self.mxid)
-        levels["ban"] = 100
-        levels["invite"] = 50
+    def _get_base_power_levels(self, levels=None, entity=None):
+        levels = levels or {}
+        power_level_requirement = (0 if self.peer_type == "chat" and not entity.admins_enabled
+                                   else 50)
+        levels["ban"] = 99
+        levels["invite"] = power_level_requirement if self.peer_type == "chat" else 75
+        if "events" not in levels:
+            levels["events"] = {}
         levels["events"]["m.room.name"] = power_level_requirement
         levels["events"]["m.room.avatar"] = power_level_requirement
-        levels["events"]["m.room.topic"] = 50 if self.peer_type == "channel" else 100
+        levels["events"]["m.room.topic"] = 50 if self.peer_type == "channel" else 99
         levels["events"]["m.room.power_levels"] = 75
-        await self.main_intent.set_power_levels(self.mxid, levels)
-        await self.update_after_create(user, entity, direct, puppet)
+        levels["events"]["m.room.history_visibility"] = 75
+        levels["events_default"] = (50 if self.peer_type == "channel" and not entity.megagroup
+                                    else 0)
+        if "users" not in levels:
+            levels["users"] = {
+                self.main_intent.mxid: 100
+            }
+        return levels
 
     def _get_room_alias(self, username=None):
         username = username or self.username
@@ -481,6 +508,8 @@ class Portal:
     async def handle_matrix_power_levels(self, sender, new_users, old_users):
         # TODO handle all power level changes and bridge exact admin rights to supergroups/channels
         for user, level in new_users.items():
+            if not user or user == self.main_intent.mxid or user == sender.mxid:
+                continue
             user_id = p.Puppet.get_id_from_mxid(user)
             if not user_id:
                 mx_user = u.User.get_by_mxid(user, create=False)
@@ -501,9 +530,7 @@ class Portal:
                                                 add_admins=admin, manage_call=moderator)
                     await sender.client(
                         EditAdminRequest(channel=await self.get_input_entity(sender),
-                                         user_id=await sender.client.get_input_entity(
-                                             PeerUser(user_id)),
-                                         admin_rights=rights))
+                                         user_id=user_id, admin_rights=rights))
 
     async def handle_matrix_about(self, sender, about):
         if self.peer_type not in {"channel"}:
@@ -566,7 +593,7 @@ class Portal:
             puppet_id = p.Puppet.get_id_from_mxid(user)
             if puppet_id:
                 user_tgids.add(puppet_id)
-        return user_tgids
+        return list(user_tgids)
 
     async def upgrade_telegram_chat(self, source):
         if self.peer_type != "chat":
@@ -603,8 +630,6 @@ class Portal:
             # TODO[waiting-for-bots] This won't happen when the bot is enabled
             raise ValueError("Not enough Telegram users to create a chat")
 
-        invites = [await source.client.get_input_entity(id) for id in invites]
-
         if self.peer_type == "chat":
             updates = await source.client(CreateChatRequest(title=self.title, users=invites))
             entity = updates.chats[0]
@@ -625,6 +650,12 @@ class Portal:
         await self.update_info(source, entity)
         self.save()
 
+        levels = await self.main_intent.get_power_levels(self.mxid)
+        levels = self._get_base_power_levels(levels, entity)
+        already_saved = await self.handle_matrix_power_levels(source, levels["users"], {})
+        if not already_saved:
+            await self.main_intent.set_power_levels(self.mxid, levels)
+
     async def invite_telegram(self, source, puppet):
         if self.peer_type == "chat":
             await source.client(
@@ -642,11 +673,11 @@ class Portal:
         if self.mxid:
             await user.intent.set_typing(self.mxid, is_typing=True)
 
-    async def handle_telegram_photo(self, source, sender, media, relates_to=None):
+    async def handle_telegram_photo(self, source, intent, media, relates_to=None):
         largest_size = self._get_largest_photo_size(media.photo)
         file = await source.client.download_file_bytes(largest_size.location)
         mime_type = magic.from_buffer(file, mime=True)
-        uploaded = await sender.intent.upload_file(file, mime_type)
+        uploaded = await intent.upload_file(file, mime_type)
         info = {
             "h": largest_size.h,
             "w": largest_size.w,
@@ -656,8 +687,8 @@ class Portal:
             "mimetype": mime_type,
         }
         name = media.caption
-        await sender.intent.set_typing(self.mxid, is_typing=False)
-        return await sender.intent.send_image(self.mxid, uploaded["content_uri"], info=info,
+        await intent.set_typing(self.mxid, is_typing=False)
+        return await intent.send_image(self.mxid, uploaded["content_uri"], info=info,
                                               text=name, relates_to=relates_to)
 
     def convert_webp(self, file, to="png"):
@@ -670,14 +701,14 @@ class Portal:
             self.log.exception(f"Failed to convert webp to {to}")
             return "image/webp", file
 
-    async def handle_telegram_document(self, source, sender, media, relates_to=None):
+    async def handle_telegram_document(self, source, intent, media, relates_to=None):
         file = await source.client.download_file_bytes(media.document)
         mime_type = magic.from_buffer(file, mime=True)
         dont_change_mime = False
         if mime_type == "image/webp":
             mime_type, file = self.convert_webp(file, to="png")
             dont_change_mime = True
-        uploaded = await sender.intent.upload_file(file, mime_type)
+        uploaded = await intent.upload_file(file, mime_type)
         name = media.caption
         for attr in media.document.attributes:
             if not name and isinstance(attr, DocumentAttributeFilename):
@@ -699,11 +730,11 @@ class Portal:
             type = "m.audio"
         elif mime_type.startswith("image/"):
             type = "m.image"
-        await sender.intent.set_typing(self.mxid, is_typing=False)
-        return await sender.intent.send_file(self.mxid, uploaded["content_uri"], info=info,
+        await intent.set_typing(self.mxid, is_typing=False)
+        return await intent.send_file(self.mxid, uploaded["content_uri"], info=info,
                                              text=name, file_type=type, relates_to=relates_to)
 
-    def handle_telegram_location(self, source, sender, location, relates_to=None):
+    def handle_telegram_location(self, source, intent, location, relates_to=None):
         long = location.long
         lat = location.lat
         long_char = "E" if long > 0 else "W"
@@ -720,7 +751,7 @@ class Portal:
         # so we'll add a plaintext link.
         body = f"Location: {body}\n{url}"
 
-        return sender.intent.send_message(self.mxid, {
+        return intent.send_message(self.mxid, {
             "msgtype": "m.location",
             "geo_uri": f"geo:{lat},{long}",
             "body": body,
@@ -729,17 +760,17 @@ class Portal:
             "m.relates_to": relates_to or None,
         })
 
-    async def handle_telegram_text(self, source, sender, evt):
-        self.log.debug(f"Sending {evt.message} to {self.mxid} by {sender.id}")
+    async def handle_telegram_text(self, source, intent, evt):
+        self.log.debug(f"Sending {evt.message} to {self.mxid} by {intent.mxid}")
         text, html, relates_to = await formatter.telegram_event_to_matrix(
             evt, source,
             config["bridge.native_replies"],
             config["bridge.link_in_reply"],
             self.main_intent)
-        await sender.intent.set_typing(self.mxid, is_typing=False)
-        return await sender.intent.send_text(self.mxid, text, html=html, relates_to=relates_to)
+        await intent.set_typing(self.mxid, is_typing=False)
+        return await intent.send_text(self.mxid, text, html=html, relates_to=relates_to)
 
-    async def handle_telegram_edit(self, source, sender, evt):
+    async def handle_telegram_edit(self, source, intent, evt):
         if not self.mxid:
             return
         elif not config["bridge.edits_as_replies"]:
@@ -751,8 +782,8 @@ class Portal:
             config["bridge.native_replies"],
             config["bridge.link_in_reply"],
             self.main_intent, reply_text="Edit")
-        await sender.intent.set_typing(self.mxid, is_typing=False)
-        response = await sender.intent.send_text(self.mxid, text, html=html, relates_to=relates_to)
+        await intent.set_typing(self.mxid, is_typing=False)
+        response = await intent.send_text(self.mxid, text, html=html, relates_to=relates_to)
 
         mxid = response["event_id"]
         tg_space = self.tgid if self.peer_type == "channel" else source.tgid
@@ -778,17 +809,18 @@ class Portal:
                 self.db.commit()
             return
 
+        intent = sender.intent if sender else self.main_intent
         if evt.message:
-            response = await self.handle_telegram_text(source, sender, evt)
+            response = await self.handle_telegram_text(source, intent, evt)
         elif evt.media:
             relates_to = formatter.telegram_reply_to_matrix(evt, source)
             if isinstance(evt.media, MessageMediaPhoto):
-                response = await self.handle_telegram_photo(source, sender, evt.media, relates_to)
+                response = await self.handle_telegram_photo(source, intent, evt.media, relates_to)
             elif isinstance(evt.media, MessageMediaDocument):
-                response = await self.handle_telegram_document(source, sender, evt.media,
+                response = await self.handle_telegram_document(source, intent, evt.media,
                                                                relates_to)
             elif isinstance(evt.media, MessageMediaGeo):
-                response = await self.handle_telegram_location(source, sender, evt.media.geo,
+                response = await self.handle_telegram_location(source, intent, evt.media.geo,
                                                                relates_to)
             else:
                 self.log.debug("Unhandled Telegram media: %s", evt.media)
@@ -855,10 +887,8 @@ class Portal:
         else:
             await self.main_intent.set_pinned_messages(self.mxid, [])
 
-    async def update_telegram_participants(self, participants):
-        levels = await self.main_intent.get_power_levels(self.mxid)
+    def _participants_to_power_levels(self, participants, levels):
         changed = False
-
         admin_power_level = 75 if self.peer_type == "channel" else 50
         if levels["events"]["m.room.power_levels"] != admin_power_level:
             changed = True
@@ -892,7 +922,12 @@ class Portal:
                 if not puppet_has_right_level:
                     levels["users"][puppet.mxid] = new_level
                     changed = True
-        if changed:
+        return changed
+
+    async def update_telegram_participants(self, participants, levels=None):
+        if not levels:
+            levels = await self.main_intent.get_power_levels(self.mxid)
+        if self._participants_to_power_levels(participants, levels):
             await self.main_intent.set_power_levels(self.mxid, levels)
 
     async def set_telegram_admins_enabled(self, enabled):
