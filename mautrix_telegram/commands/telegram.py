@@ -101,7 +101,7 @@ async def delete_portal(evt):
         that_this = "This" if room_id == evt.room_id else "That"
         return await evt.reply(f"{that_this} is not a portal room.")
 
-    async def post_confirm(_, confirm):
+    async def post_confirm(confirm):
         evt.sender.command_status = None
         if len(confirm.args) > 0 and confirm.args[0] == "confirm-delete":
             await portal.cleanup_and_delete()

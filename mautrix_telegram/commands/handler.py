@@ -103,7 +103,7 @@ class CommandHandler:
                 evt.command = ""
                 command = sender.command_status["next"]
             else:
-                command = command_handlers["unknown_command"]
+                command = command_handlers["unknown-command"]
         try:
             await command(evt)
         except FloodWaitError as e:
