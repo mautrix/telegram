@@ -385,7 +385,7 @@ class User:
                                                tg_receiver=self.tgid)
             else:
                 portal = po.Portal.get_by_entity(update.to_id, receiver_id=self.tgid)
-            sender = pu.Puppet.get(update.from_id)
+            sender = pu.Puppet.get(update.from_id) if update.from_id else None
         else:
             self.log.warning(
                 f"Unexpected message type in User#get_message_details: {type(update)}")
@@ -404,11 +404,12 @@ class User:
                            sender.id)
             return portal.handle_telegram_action(self, sender, update.action)
 
+        user = sender.tgid if sender else "admin"
         if isinstance(original_update, (UpdateEditMessage, UpdateEditChannelMessage)):
-            self.log.debug("Handling edit %s to %s by %d", update, portal.tgid_log, sender.tgid)
+            self.log.debug("Handling edit %s to %s by %s", update, portal.tgid_log, user)
             return portal.handle_telegram_edit(self, sender, update)
 
-        self.log.debug("Handling message %s to %s by %d", update, portal.tgid_log, sender.tgid)
+        self.log.debug("Handling message %s to %s by %s", update, portal.tgid_log, user)
         return portal.handle_telegram_message(self, sender, update)
 
     # endregion

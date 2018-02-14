@@ -675,11 +675,11 @@ class Portal:
         if self.mxid:
             await user.intent.set_typing(self.mxid, is_typing=True)
 
-    async def handle_telegram_photo(self, source, sender, media):
+    async def handle_telegram_photo(self, source, intent, media):
         largest_size = self._get_largest_photo_size(media.photo)
         file = await source.client.download_file_bytes(largest_size.location)
         mime_type = magic.from_buffer(file, mime=True)
-        uploaded = await sender.intent.upload_file(file, mime_type)
+        uploaded = await intent.upload_file(file, mime_type)
         info = {
             "h": largest_size.h,
             "w": largest_size.w,
@@ -689,8 +689,8 @@ class Portal:
             "mimetype": mime_type,
         }
         name = media.caption
-        await sender.intent.set_typing(self.mxid, is_typing=False)
-        return await sender.intent.send_image(self.mxid, uploaded["content_uri"], info=info,
+        await intent.set_typing(self.mxid, is_typing=False)
+        return await intent.send_image(self.mxid, uploaded["content_uri"], info=info,
                                               text=name)
 
     def convert_webp(self, file, to="png"):
@@ -703,14 +703,14 @@ class Portal:
             self.log.exception(f"Failed to convert webp to {to}")
             return "image/webp", file
 
-    async def handle_telegram_document(self, source, sender, media):
+    async def handle_telegram_document(self, source, intent, media):
         file = await source.client.download_file_bytes(media.document)
         mime_type = magic.from_buffer(file, mime=True)
         dont_change_mime = False
         if mime_type == "image/webp":
             mime_type, file = self.convert_webp(file, to="png")
             dont_change_mime = True
-        uploaded = await sender.intent.upload_file(file, mime_type)
+        uploaded = await intent.upload_file(file, mime_type)
         name = media.caption
         for attr in media.document.attributes:
             if not name and isinstance(attr, DocumentAttributeFilename):
@@ -732,11 +732,11 @@ class Portal:
             type = "m.audio"
         elif mime_type.startswith("image/"):
             type = "m.image"
-        await sender.intent.set_typing(self.mxid, is_typing=False)
-        return await sender.intent.send_file(self.mxid, uploaded["content_uri"], info=info,
+        await intent.set_typing(self.mxid, is_typing=False)
+        return await intent.send_file(self.mxid, uploaded["content_uri"], info=info,
                                              text=name, file_type=type)
 
-    def handle_telegram_location(self, source, sender, location):
+    def handle_telegram_location(self, source, intent, location):
         long = location.long
         lat = location.lat
         long_char = "E" if long > 0 else "W"
@@ -753,7 +753,7 @@ class Portal:
         # so we'll add a plaintext link.
         body = f"Location: {body}\n{url}"
 
-        return sender.intent.send_message(self.mxid, {
+        return intent.send_message(self.mxid, {
             "msgtype": "m.location",
             "geo_uri": f"geo:{lat},{long}",
             "body": body,
@@ -761,16 +761,16 @@ class Portal:
             "formatted_body": formatted_body,
         })
 
-    async def handle_telegram_text(self, source, sender, evt):
-        self.log.debug(f"Sending {evt.message} to {self.mxid} by {sender.id}")
+    async def handle_telegram_text(self, source, intent, evt):
+        self.log.debug(f"Sending {evt.message} to {self.mxid} by {intent.mxid}")
         text, html = await formatter.telegram_event_to_matrix(evt, source,
                                                               config["bridge.native_replies"],
                                                               config["bridge.link_in_reply"],
                                                               self.main_intent)
-        await sender.intent.set_typing(self.mxid, is_typing=False)
-        return await sender.intent.send_text(self.mxid, text, html=html)
+        await intent.set_typing(self.mxid, is_typing=False)
+        return await intent.send_text(self.mxid, text, html=html)
 
-    async def handle_telegram_edit(self, source, sender, evt):
+    async def handle_telegram_edit(self, source, intent, evt):
         if not self.mxid:
             return
         elif not config["bridge.edits_as_replies"]:
@@ -781,8 +781,8 @@ class Portal:
                                                               config["bridge.native_replies"],
                                                               config["bridge.link_in_reply"],
                                                               self.main_intent, reply_text="Edit")
-        await sender.intent.set_typing(self.mxid, is_typing=False)
-        response = await sender.intent.send_text(self.mxid, text, html=html)
+        await intent.set_typing(self.mxid, is_typing=False)
+        response = await intent.send_text(self.mxid, text, html=html)
 
         mxid = response["event_id"]
         tg_space = self.tgid if self.peer_type == "channel" else source.tgid
@@ -808,15 +808,16 @@ class Portal:
                 self.db.commit()
             return
 
+        intent = sender.intent if sender else self.main_intent
         if evt.message:
-            response = await self.handle_telegram_text(source, sender, evt)
+            response = await self.handle_telegram_text(source, intent, evt)
         elif evt.media:
             if isinstance(evt.media, MessageMediaPhoto):
-                response = await self.handle_telegram_photo(source, sender, evt.media)
+                response = await self.handle_telegram_photo(source, intent, evt.media)
             elif isinstance(evt.media, MessageMediaDocument):
-                response = await self.handle_telegram_document(source, sender, evt.media)
+                response = await self.handle_telegram_document(source, intent, evt.media)
             elif isinstance(evt.media, MessageMediaGeo):
-                response = await self.handle_telegram_location(source, sender, evt.media.geo)
+                response = await self.handle_telegram_location(source, intent, evt.media.geo)
             else:
                 self.log.debug("Unhandled Telegram media: %s", evt.media)
                 return
