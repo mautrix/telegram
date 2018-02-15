@@ -441,14 +441,13 @@ class Portal:
             del self.by_tgid[self.tgid_full]
             del self.by_mxid[self.mxid]
         elif source and source.tgid != user.tgid:
-            target = await user.get_input_entity(source)
             if self.peer_type == "chat":
-                await source.client(DeleteChatUserRequest(chat_id=self.tgid, user_id=target))
+                await source.client(DeleteChatUserRequest(chat_id=self.tgid, user_id=user.tgid))
             else:
                 channel = await self.get_input_entity(source)
                 rights = ChannelBannedRights(datetime.fromtimestamp(0), True)
                 await source.client(EditBannedRequest(channel=channel,
-                                                      user_id=target,
+                                                      user_id=user.tgid,
                                                       banned_rights=rights))
         elif self.peer_type == "chat":
             await user.client(DeleteChatUserRequest(chat_id=self.tgid, user_id=InputUserSelf()))
@@ -664,8 +663,7 @@ class Portal:
             await source.client(
                 AddChatUserRequest(chat_id=self.tgid, user_id=puppet.tgid, fwd_limit=0))
         elif self.peer_type == "channel":
-            target = await puppet.get_input_entity(source)
-            await source.client(InviteToChannelRequest(channel=self.peer, users=[target]))
+            await source.client(InviteToChannelRequest(channel=self.peer, users=[puppet.tgid]))
         else:
             raise ValueError("Invalid peer type for Telegram user invite")
 

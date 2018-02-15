@@ -51,9 +51,6 @@ class Puppet:
     def tgid(self):
         return self.id
 
-    def get_input_entity(self, user):
-        return user.client.get_input_entity(PeerUser(user_id=self.tgid))
-
     def to_db(self):
         return self.db.merge(
             DBPuppet(id=self.id, username=self.username, displayname=self.displayname,

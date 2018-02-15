@@ -99,9 +99,6 @@ class User:
         else:
             self.portals = {}
 
-    def get_input_entity(self, user):
-        return user.client.get_input_entity(InputUser(user_id=self.tgid, access_hash=0))
-
     # region Database conversion
 
     def to_db(self):
