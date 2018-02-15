@@ -242,8 +242,9 @@ async def telegram_event_to_matrix(evt, source, native_replies=False, message_li
                 + f"<blockquote>{html}</blockquote>")
 
     if evt.reply_to_msg_id:
-        space = evt.to_id.channel_id if isinstance(evt, Message) and isinstance(evt.to_id,
-                                                                                PeerChannel) else source.tgid
+        space = (evt.to_id.channel_id
+                 if isinstance(evt, Message) and isinstance(evt.to_id, PeerChannel)
+                 else source.tgid)
         msg = DBMessage.query.get((evt.reply_to_msg_id, space))
         if msg:
             if native_replies:
@@ -260,7 +261,7 @@ async def telegram_event_to_matrix(evt, source, native_replies=False, message_li
                     sender = event['sender']
                     puppet = p.Puppet.get_by_mxid(sender, create=False)
                     displayname = puppet.displayname if puppet else sender
-                    reply_to_user = (f"<a href='https://matrix.to/#/{sender}'>{displayname}</a>")
+                    reply_to_user = f"<a href='https://matrix.to/#/{sender}'>{displayname}</a>"
                     reply_to_msg = (("<a href='https://matrix.to/#/"
                                      + f"{msg.mx_room}/{msg.mxid}'>{reply_text}</a>")
                                     if message_link_in_reply else "Reply")
@@ -272,7 +273,7 @@ async def telegram_event_to_matrix(evt, source, native_replies=False, message_li
             else:
                 html = quote + escape(text)
 
-    if evt.post and evt.post_author:
+    if isinstance(evt, Message) and evt.post and evt.post_author:
         if not html:
             html = escape(text)
         text += f"\n- {evt.post_author}"
