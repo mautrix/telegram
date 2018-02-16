@@ -140,14 +140,15 @@ class User:
                                             device_model=device)
         self.client.add_update_handler(self.update_catch)
 
-    async def start(self):
+    async def start(self, delete_unless_authenticated=False):
         self.connected = await self.client.connect()
         if self.logged_in:
             asyncio.ensure_future(self.post_login(), loop=self.loop)
-        else:
+        elif delete_unless_authenticated:
             # User not logged in -> forget user
             self.client.disconnect()
             self.client.session.delete()
+            self.delete()
         return self
 
     async def post_login(self, info=None):
@@ -469,4 +470,4 @@ def init(context):
     User.az, User.db, config, User.loop = context
 
     users = [User.from_db(user) for user in DBUser.query.all()]
-    return [user.start() for user in users]
+    return [user.start(delete_unless_authenticated=True) for user in users]
