@@ -30,7 +30,7 @@ class MautrixTelegramClient(TelegramClient):
             message=message,
             entities=entities,
             no_webpage=not link_preview,
-            reply_to_msg_id=self._get_reply_to(reply_to)
+            reply_to_msg_id=self._get_message_id(reply_to)
         )
         result = await self(request)
         if isinstance(result, UpdateShortSentMessage):
@@ -49,7 +49,7 @@ class MautrixTelegramClient(TelegramClient):
     async def send_file(self, entity, file, mime_type=None, caption=None, attributes=None,
                         file_name=None, reply_to=None, **kwargs):
         entity = await self.get_input_entity(entity)
-        reply_to = self._get_reply_to(reply_to)
+        reply_to = self._get_message_id(reply_to)
 
         file_handle = await self.upload_file(file, file_name=file_name, use_cache=False)
 
