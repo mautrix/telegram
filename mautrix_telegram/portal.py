@@ -769,7 +769,7 @@ class Portal:
         await intent.set_typing(self.mxid, is_typing=False)
         return await intent.send_text(self.mxid, text, html=html)
 
-    async def handle_telegram_edit(self, source, intent, evt):
+    async def handle_telegram_edit(self, source, sender, evt):
         if not self.mxid:
             return
         elif not config["bridge.edits_as_replies"]:
@@ -780,6 +780,7 @@ class Portal:
                                                               config["bridge.native_replies"],
                                                               config["bridge.link_in_reply"],
                                                               self.main_intent, reply_text="Edit")
+        intent = sender.intent if sender else self.main_intent
         await intent.set_typing(self.mxid, is_typing=False)
         response = await intent.send_text(self.mxid, text, html=html)
 
