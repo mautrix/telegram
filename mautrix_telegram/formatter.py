@@ -353,10 +353,11 @@ def _telegram_to_matrix(text, entities):
                 skip_entity = True
         elif entity_type == MessageEntityEmail:
             html.append(f"<a href='mailto:{entity_text}'>{entity_text}</a>")
-        elif entity_type == MessageEntityUrl:
-            html.append(f"<a href='{entity_text}'>{entity_text}</a>")
-        elif entity_type == MessageEntityTextUrl:
-            html.append(f"<a href='{escape(entity.url)}'>{entity_text}</a>")
+        elif entity_type in {MessageEntityTextUrl, MessageEntityUrl}:
+            url = escape(entity.url) if entity_type == MessageEntityTextUrl else entity_text
+            if not url.startswith(("https://", "http://", "ftp://", "magnet://")):
+                url = "http://" + url
+            html.append(f"<a href='{url}'>{entity_text}</a>")
         elif entity_type == MessageEntityBotCommand:
             html.append(f"<font color='blue'>!{entity_text[1:]}")
         elif entity_type == MessageEntityHashtag:
