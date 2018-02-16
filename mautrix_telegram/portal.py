@@ -1,3 +1,4 @@
+# -*- coding: future_fstrings -*-
 # mautrix-telegram - A Matrix-Telegram puppeting bridge
 # Copyright (C) 2018 Tulir Asokan
 #
@@ -440,14 +441,13 @@ class Portal:
             del self.by_tgid[self.tgid_full]
             del self.by_mxid[self.mxid]
         elif source and source.tgid != user.tgid:
-            target = await user.get_input_entity(source)
             if self.peer_type == "chat":
-                await source.client(DeleteChatUserRequest(chat_id=self.tgid, user_id=target))
+                await source.client(DeleteChatUserRequest(chat_id=self.tgid, user_id=user.tgid))
             else:
                 channel = await self.get_input_entity(source)
                 rights = ChannelBannedRights(datetime.fromtimestamp(0), True)
                 await source.client(EditBannedRequest(channel=channel,
-                                                      user_id=target,
+                                                      user_id=user.tgid,
                                                       banned_rights=rights))
         elif self.peer_type == "chat":
             await user.client(DeleteChatUserRequest(chat_id=self.tgid, user_id=InputUserSelf()))
@@ -661,8 +661,7 @@ class Portal:
             await source.client(
                 AddChatUserRequest(chat_id=self.tgid, user_id=puppet.tgid, fwd_limit=0))
         elif self.peer_type == "channel":
-            target = await puppet.get_input_entity(source)
-            await source.client(InviteToChannelRequest(channel=self.peer, users=[target]))
+            await source.client(InviteToChannelRequest(channel=self.peer, users=[puppet.tgid]))
         else:
             raise ValueError("Invalid peer type for Telegram user invite")
 
@@ -689,7 +688,7 @@ class Portal:
         name = media.caption
         await intent.set_typing(self.mxid, is_typing=False)
         return await intent.send_image(self.mxid, uploaded["content_uri"], info=info,
-                                              text=name, relates_to=relates_to)
+                                       text=name, relates_to=relates_to)
 
     def convert_webp(self, file, to="png"):
         try:
@@ -732,7 +731,7 @@ class Portal:
             type = "m.image"
         await intent.set_typing(self.mxid, is_typing=False)
         return await intent.send_file(self.mxid, uploaded["content_uri"], info=info,
-                                             text=name, file_type=type, relates_to=relates_to)
+                                      text=name, file_type=type, relates_to=relates_to)
 
     def handle_telegram_location(self, source, intent, location, relates_to=None):
         long = location.long
@@ -770,7 +769,7 @@ class Portal:
         await intent.set_typing(self.mxid, is_typing=False)
         return await intent.send_text(self.mxid, text, html=html, relates_to=relates_to)
 
-    async def handle_telegram_edit(self, source, intent, evt):
+    async def handle_telegram_edit(self, source, sender, evt):
         if not self.mxid:
             return
         elif not config["bridge.edits_as_replies"]:
@@ -782,6 +781,7 @@ class Portal:
             config["bridge.native_replies"],
             config["bridge.link_in_reply"],
             self.main_intent, reply_text="Edit")
+        intent = sender.intent if sender else self.main_intent
         await intent.set_typing(self.mxid, is_typing=False)
         response = await intent.send_text(self.mxid, text, html=html, relates_to=relates_to)
 

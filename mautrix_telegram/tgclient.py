@@ -1,3 +1,4 @@
+# -*- coding: future_fstrings -*-
 # mautrix-telegram - A Matrix-Telegram puppeting bridge
 # Copyright (C) 2018 Tulir Asokan
 #
@@ -45,8 +46,8 @@ class MautrixTelegramClient(TelegramClient):
 
         return self._get_response_message(request, result)
 
-    async def send_file(self, entity, file, mime_type=None, caption=None, attributes=None, file_name=None,
-                  reply_to=None, **kwargs):
+    async def send_file(self, entity, file, mime_type=None, caption=None, attributes=None,
+                        file_name=None, reply_to=None, **kwargs):
         entity = await self.get_input_entity(entity)
         reply_to = self._get_reply_to(reply_to)
 

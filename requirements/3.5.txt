@@ -1,0 +1,2 @@
+-r base.txt
+-e git+https://github.com/tulir/Telethon@asyncio-3.5#egg=Telethon

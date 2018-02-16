@@ -1,3 +1,4 @@
+# -*- coding: future_fstrings -*-
 # mautrix-telegram - A Matrix-Telegram puppeting bridge
 # Copyright (C) 2018 Tulir Asokan
 #
@@ -268,7 +269,7 @@ async def telegram_event_to_matrix(evt, source, native_replies=False, message_li
                     sender = event['sender']
                     puppet = p.Puppet.get_by_mxid(sender, create=False)
                     displayname = puppet.displayname if puppet else sender
-                    reply_to_user = (f"<a href='https://matrix.to/#/{sender}'>{displayname}</a>")
+                    reply_to_user = f"<a href='https://matrix.to/#/{sender}'>{displayname}</a>"
                     reply_to_msg = (("<a href='https://matrix.to/#/"
                                      + f"{msg.mx_room}/{msg.mxid}'>{reply_text}</a>")
                                     if message_link_in_reply else "Reply")
@@ -280,7 +281,7 @@ async def telegram_event_to_matrix(evt, source, native_replies=False, message_li
                 else:
                     html = quote + escape(text)
 
-    if evt.post and evt.post_author:
+    if isinstance(evt, Message) and evt.post and evt.post_author:
         if not html:
             html = escape(text)
         text += f"\n- {evt.post_author}"
@@ -360,10 +361,11 @@ def _telegram_to_matrix(text, entities):
                 skip_entity = True
         elif entity_type == MessageEntityEmail:
             html.append(f"<a href='mailto:{entity_text}'>{entity_text}</a>")
-        elif entity_type == MessageEntityUrl:
-            html.append(f"<a href='{entity_text}'>{entity_text}</a>")
-        elif entity_type == MessageEntityTextUrl:
-            html.append(f"<a href='{escape(entity.url)}'>{entity_text}</a>")
+        elif entity_type in {MessageEntityTextUrl, MessageEntityUrl}:
+            url = escape(entity.url) if entity_type == MessageEntityTextUrl else entity_text
+            if not url.startswith(("https://", "http://", "ftp://", "magnet://")):
+                url = "http://" + url
+            html.append(f"<a href='{url}'>{entity_text}</a>")
         elif entity_type == MessageEntityBotCommand:
             html.append(f"<font color='blue'>!{entity_text[1:]}")
         elif entity_type == MessageEntityHashtag:
