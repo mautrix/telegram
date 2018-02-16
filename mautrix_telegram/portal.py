@@ -690,7 +690,7 @@ class Portal:
         name = media.caption
         await intent.set_typing(self.mxid, is_typing=False)
         return await intent.send_image(self.mxid, uploaded["content_uri"], info=info,
-                                              text=name)
+                                       text=name)
 
     def convert_webp(self, file, to="png"):
         try:
@@ -733,7 +733,7 @@ class Portal:
             type = "m.image"
         await intent.set_typing(self.mxid, is_typing=False)
         return await intent.send_file(self.mxid, uploaded["content_uri"], info=info,
-                                             text=name, file_type=type)
+                                      text=name, file_type=type)
 
     def handle_telegram_location(self, source, intent, location):
         long = location.long

@@ -69,8 +69,6 @@ class Puppet:
                                if self.username else 0)
         displayname_similarity = (SequenceMatcher(None, self.displayname, query).ratio()
                                   if self.displayname else 0)
-        #phone_number_similarity = (SequenceMatcher(None, self.phone_number, query).ratio()
-        #                           if self.phone_number else 0)
         similarity = max(username_similarity, displayname_similarity)
         return round(similarity * 1000) / 10
 
