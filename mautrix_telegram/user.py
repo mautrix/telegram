@@ -52,6 +52,7 @@ class User:
 
         self.command_status = None
         self.connected = False
+        self.client = None
         self._init_client()
 
         self.is_admin = self.mxid in config.get("bridge.admins", [])

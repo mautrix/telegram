@@ -47,8 +47,11 @@ class AppService:
         self.log = (logging.getLogger(log) if isinstance(log, str)
                     else log or logging.getLogger("mautrix_appservice"))
 
-        self.query_user = query_user or self.default_query_handler
-        self.query_alias = query_alias or self.default_query_handler
+        def default_query_handler(_):
+            return None
+
+        self.query_user = query_user or default_query_handler
+        self.query_alias = query_alias or default_query_handler
 
         self.event_handlers = []
 
@@ -59,9 +62,6 @@ class AppService:
         self.app.router.add_route("GET", "/users/{user_id}", self._http_query_user)
 
         self.matrix_event_handler(self.update_state_store)
-
-    async def default_query_handler(self, param):
-        return None
 
     @property
     def http_session(self):

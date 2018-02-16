@@ -83,9 +83,7 @@ with appserv.run(config["appservice.hostname"], config["appservice.port"]) as st
     init_db(db_session)
     init_portal(context)
     init_puppet(context)
-    startup_actions = []
-    startup_actions += init_user(context)
-    startup_actions += [start]
+    startup_actions = init_user(context) + [start]
     try:
         loop.run_until_complete(asyncio.gather(*startup_actions, loop=loop))
         loop.run_forever()
