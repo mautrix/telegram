@@ -775,6 +775,19 @@ class Portal:
         elif not config["bridge.edits_as_replies"]:
             self.log.debug("Edits as replies disabled, ignoring edit event...")
             return
+
+        tg_space = self.tgid if self.peer_type == "channel" else source.tgid
+        temporary_identifier = f"${random.randint(1000000000000,9999999999999)}TGBRIDGEDITEMP"
+        duplicate_found = self.is_duplicate(evt, (temporary_identifier, tg_space))
+        if duplicate_found:
+            mxid, other_tg_space = duplicate_found
+            if tg_space != other_tg_space:
+                msg = DBMessage.query.get((evt.id, tg_space))
+                msg.mxid = mxid
+                msg.mx_room = self.mxid
+                self.db.commit()
+            return
+
         evt.reply_to_msg_id = evt.id
         text, html = await formatter.telegram_event_to_matrix(evt, source,
                                                               config["bridge.native_replies"],
@@ -785,11 +798,14 @@ class Portal:
         response = await intent.send_text(self.mxid, text, html=html)
 
         mxid = response["event_id"]
-        tg_space = self.tgid if self.peer_type == "channel" else source.tgid
 
         msg = DBMessage.query.get((evt.id, tg_space))
         msg.mxid = mxid
         msg.mx_room = self.mxid
+        DBMessage.query \
+            .filter(DBMessage.mx_room == self.mxid,
+                    DBMessage.mxid == temporary_identifier) \
+            .update({"mxid": mxid})
         self.db.commit()
 
     async def handle_telegram_message(self, source, sender, evt):
