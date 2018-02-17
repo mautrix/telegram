@@ -32,6 +32,21 @@ async def ping(evt):
         return await evt.reply("You're not logged in.")
 
 
+@command_handler()
+async def ping_bot(evt):
+    if not evt.tgbot:
+        return await evt.reply("Telegram message relay bot not configured.")
+    bot_info = await evt.tgbot.client.get_me()
+    localpart = evt.config.get("bridge.username_template", "telegram_{userid}").format(
+        userid=bot_info.id)
+    hs = evt.config["homeserver"]["domain"]
+    mxid = f"@{localpart}:{hs}"
+    displayname = bot_info.first_name
+    return await evt.reply(f"Telegram message relay bot is active: "
+                           + f"[{displayname}](https://matrix.to/#/{mxid}) (ID {bot_info.id})\n\n"
+                           + f"To use the bot, simply invite it to a portal room.")
+
+
 @command_handler(needs_auth=False, management_only=True)
 def register(evt):
     return evt.reply("Not yet implemented.")

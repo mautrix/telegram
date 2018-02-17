@@ -45,6 +45,8 @@ class CommandEvent:
         self.az = handler.az
         self.log = handler.log
         self.loop = handler.loop
+        self.tgbot = handler.tgbot
+        self.config = handler.config
         self.command_prefix = handler.command_prefix
         self.room_id = room
         self.sender = sender
@@ -87,7 +89,7 @@ class CommandHandler:
     log = logging.getLogger("mau.commands")
 
     def __init__(self, context):
-        self.az, self.db, self.config, self.loop, _ = context
+        self.az, self.db, self.config, self.loop, self.tgbot = context
         self.command_prefix = self.config["bridge.command_prefix"]
 
     # region Utility functions for handling commands

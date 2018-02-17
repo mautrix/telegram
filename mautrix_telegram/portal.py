@@ -45,6 +45,7 @@ class Portal:
     db = None
     az = None
     bot = None
+    bridge_notices = False
     by_mxid = {}
     by_tgid = {}
 
@@ -490,7 +491,7 @@ class Portal:
                     f"&lt;{sender.displayname}&gt; {message['formatted_body']}"
             message["body"] = f"<{sender.displayname}> {message['body']}"
 
-        if type == "m.text":
+        if type == "m.text" or (self.bridge_notices and type == "m.notice"):
             if "format" in message and message["format"] == "org.matrix.custom.html":
                 message, entities = formatter.matrix_to_telegram(message["formatted_body"])
                 response = await client.send_message(self.peer, message, entities=entities,
@@ -1092,3 +1093,4 @@ class Portal:
 def init(context):
     global config
     Portal.az, Portal.db, config, _, Portal.bot = context
+    Portal.bridge_notices = config["bridge.bridge_notices"]
