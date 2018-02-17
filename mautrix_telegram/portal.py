@@ -801,6 +801,9 @@ class Portal:
         mxid = response["event_id"]
 
         msg = DBMessage.query.get((evt.id, tg_space))
+        if not msg:
+            # Oh crap
+            return
         msg.mxid = mxid
         msg.mx_room = self.mxid
         DBMessage.query \
