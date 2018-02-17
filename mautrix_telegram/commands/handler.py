@@ -87,7 +87,7 @@ class CommandHandler:
     log = logging.getLogger("mau.commands")
 
     def __init__(self, context):
-        self.az, self.db, self.config, self.loop = context
+        self.az, self.db, self.config, self.loop, _ = context
         self.command_prefix = self.config["bridge.command_prefix"]
 
     # region Utility functions for handling commands

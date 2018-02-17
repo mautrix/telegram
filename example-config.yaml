@@ -87,3 +87,5 @@ telegram:
     # Get your own API keys at https://my.telegram.org/apps
     api_id: 12345
     api_hash: tjyd5yge35lbodk1xwzw2jstp90k55qz
+    # (Optional) Create your own bot at https://t.me/BotFather
+    #bot_token: 123456789:ABCD-QBPd3VrWRhg623xYh07WUWErYA9eMI

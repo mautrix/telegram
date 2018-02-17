@@ -52,7 +52,7 @@ async def _find_rooms(intent):
     return management_rooms, unidentified_rooms, portals, empty_portals
 
 
-@command_handler(needs_admin=True, name="clean-rooms")
+@command_handler(needs_admin=True, needs_auth=False, name="clean-rooms")
 async def clean_rooms(evt):
     if not evt.is_management:
         return await evt.reply("`clean-rooms` is a particularly spammy command. Please don't "

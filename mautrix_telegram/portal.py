@@ -44,6 +44,7 @@ class Portal:
     log = logging.getLogger("mau.portal")
     db = None
     az = None
+    bot = None
     by_mxid = {}
     by_tgid = {}
 
@@ -87,6 +88,10 @@ class Portal:
             return PeerChat(chat_id=self.tgid)
         elif self.peer_type == "channel":
             return PeerChannel(channel_id=self.tgid)
+
+    @property
+    def has_bot(self):
+        return self.bot and self.bot.is_in_chat(self.tgid)
 
     def _hash_event(self, event):
         if self.peer_type == "channel":
@@ -196,8 +201,7 @@ class Portal:
         self._main_intent = puppet.intent if direct else self.az.intent
 
         if self.peer_type == "channel" and entity.username:
-            # TODO make public once safe
-            public = False
+            public = True
             alias = self._get_room_alias(entity.username)
             self.username = entity.username
         else:
@@ -206,7 +210,7 @@ class Portal:
             alias = None
 
         if alias:
-            # TODO properly handle existing room aliases
+            # TODO? properly handle existing room aliases
             await self.main_intent.remove_room_alias(alias)
 
         power_levels = self._get_base_power_levels({}, entity)
@@ -319,6 +323,9 @@ class Portal:
             self.username = username or None
             if self.username:
                 await self.main_intent.add_room_alias(self.mxid, self._get_room_alias())
+                await self.main_intent.set_join_rule(self.mxid, "public")
+            else:
+                await self.main_intent.set_join_rule(self.mxid, "invite")
             return True
         return False
 
@@ -396,7 +403,7 @@ class Portal:
         for member in members:
             if p.Puppet.get_id_from_mxid(member) or member == self.main_intent.mxid:
                 continue
-            user = u.User.get_by_mxid(member)
+            user = await u.User.get_by_mxid(member).ensure_started()
             if user.has_full_access:
                 authenticated.append(user)
         return authenticated
@@ -455,22 +462,42 @@ class Portal:
             channel = await self.get_input_entity(user)
             await user.client(LeaveChannelRequest(channel=channel))
 
+    async def join_matrix(self, user):
+        if self.peer_type == "channel":
+            await user.client(JoinChannelRequest(channel=await self.get_input_entity(user)))
+        else:
+            # We'll just assume the user is already in the chat.
+            pass
+
     async def handle_matrix_message(self, sender, message, event_id):
         type = message["msgtype"]
-        space = self.tgid if self.peer_type == "channel" else sender.tgid
+        if sender.logged_in:
+            client = sender.client
+            space = self.tgid if self.peer_type == "channel" else sender.tgid
+        else:
+            client = self.bot.client
+            space = self.tgid if self.peer_type == "channel" else self.bot.tgid
         reply_to = formatter.matrix_reply_to_telegram(message, space, room_id=self.mxid)
-        if type in {"m.text", "m.emote"}:
+
+        if type == "m.emote":
+            if "formatted_body" in message:
+                message["formatted_body"] = f"* {sender.displayname} {message['formatted_body']}"
+            message["body"] = f"* {sender.displayname} {message['body']}"
+            type = "m.text"
+        elif not sender.logged_in:
+            if "formatted_body" in message:
+                message["formatted_body"] = \
+                    f"&lt;{sender.displayname}&gt; {message['formatted_body']}"
+            message["body"] = f"<{sender.displayname}> {message['body']}"
+
+        if type == "m.text":
             if "format" in message and message["format"] == "org.matrix.custom.html":
-                message, entities = formatter.matrix_to_telegram(message["formatted_body"], space)
-                if type == "m.emote":
-                    message = "/me " + message
-                response = await sender.client.send_message(self.peer, message, entities=entities,
-                                                            reply_to=reply_to)
+                message, entities = formatter.matrix_to_telegram(message["formatted_body"])
+                response = await client.send_message(self.peer, message, entities=entities,
+                                                     reply_to=reply_to)
             else:
-                if type == "m.emote":
-                    message["body"] = "/me " + message["body"]
-                response = await sender.client.send_message(self.peer, message["body"],
-                                                            reply_to=reply_to)
+                response = await client.send_message(self.peer, message["body"],
+                                                     reply_to=reply_to)
         elif type in {"m.image", "m.file", "m.audio", "m.video"}:
             file = await self.main_intent.download_file(message["url"])
 
@@ -483,8 +510,8 @@ class Portal:
             if "w" in info and "h" in info:
                 attributes.append(DocumentAttributeImageSize(w=info["w"], h=info["h"]))
 
-            response = await sender.client.send_file(self.peer, file, mime, caption, attributes,
-                                                     file_name, reply_to=reply_to)
+            response = await client.send_file(self.peer, file, mime, caption, attributes,
+                                              file_name, reply_to=reply_to)
         else:
             self.log.debug("Unhandled Matrix event: %s", message)
             return
@@ -498,8 +525,8 @@ class Portal:
 
     async def handle_matrix_deletion(self, deleter, event_id):
         space = self.tgid if self.peer_type == "channel" else deleter.tgid
-        message = DBMessage.query.filter(DBMessage.mxid == event_id and
-                                         DBMessage.tg_space == space and
+        message = DBMessage.query.filter(DBMessage.mxid == event_id,
+                                         DBMessage.tg_space == space,
                                          DBMessage.mx_room == self.mxid).one_or_none()
         if not message:
             return
@@ -627,7 +654,6 @@ class Portal:
 
         invites = await self._get_telegram_users_in_matrix_room()
         if len(invites) < 2:
-            # TODO[waiting-for-bots] This won't happen when the bot is enabled
             raise ValueError("Not enough Telegram users to create a chat")
 
         if self.peer_type == "chat":
@@ -1065,4 +1091,4 @@ class Portal:
 
 def init(context):
     global config
-    Portal.az, Portal.db, config, _ = context
+    Portal.az, Portal.db, config, _, Portal.bot = context

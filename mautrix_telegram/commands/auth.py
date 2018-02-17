@@ -44,6 +44,7 @@ async def login(evt):
     elif len(evt.args) == 0:
         return await evt.reply("**Usage:** `$cmdprefix+sp login <phone number>`")
     phone_number = evt.args[0]
+    await evt.sender.ensure_started(even_if_no_session=True)
     await evt.sender.client.sign_in(phone_number)
     evt.sender.command_status = {
         "next": enter_code,
@@ -58,6 +59,7 @@ async def enter_code(evt):
         return await evt.reply("**Usage:** `$cmdprefix+sp enter-code <code>`")
 
     try:
+        await evt.sender.ensure_started(even_if_no_session=True)
         user = await evt.sender.client.sign_in(code=evt.args[0])
         asyncio.ensure_future(evt.sender.post_login(user), loop=evt.loop)
         evt.sender.command_status = None
@@ -98,6 +100,7 @@ async def enter_password(evt):
         return await evt.reply("**Usage:** `$cmdprefix+sp enter-password <password>`")
 
     try:
+        await evt.sender.ensure_started(even_if_no_session=True)
         user = await evt.sender.client.sign_in(password=evt.args[0])
         asyncio.ensure_future(evt.sender.post_login(user), loop=evt.loop)
         evt.sender.command_status = None

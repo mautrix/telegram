@@ -223,11 +223,14 @@ class IntentAPI:
     # region Room actions
 
     async def create_room(self, alias=None, is_public=False, name=None, topic=None,
-                          is_direct=False, invitees=None, initial_state=None):
+                          is_direct=False, invitees=None, initial_state=None,
+                          guests_can_join=False):
         await self.ensure_registered()
         content = {
-            "visibility": "public" if is_public else "private",
+            "visibility": "private",
             "is_direct": is_direct,
+            "preset": "private_chat" if is_public else "public_chat",
+            "guests_can_join": guests_can_join,
         }
         if alias:
             content["room_alias_name"] = alias
@@ -325,6 +328,13 @@ class IntentAPI:
         if event_id in events:
             events.remove(event_id)
             await self.set_pinned_messages(room_id, events)
+
+    async def set_join_rule(self, room_id, join_rule):
+        if join_rule not in ("public", "knock", "invite", "private"):
+            raise ValueError(f"Invalid join rule \"{join_rule}\"")
+        await self.send_state_event(room_id, "m.room.join_rules", {
+            "join_rule": join_rule,
+        })
 
     async def get_event(self, room_id, event_id):
         await self.ensure_joined(room_id)

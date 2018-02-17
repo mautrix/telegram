@@ -176,7 +176,7 @@ class Puppet:
 
 def init(context):
     global config
-    Puppet.az, Puppet.db, config, _ = context
+    Puppet.az, Puppet.db, config, _, _ = context
     localpart = config.get("bridge.username_template", "telegram_{userid}").format(userid="(.+)")
     hs = config["homeserver"]["domain"]
     Puppet.mxid_regex = re.compile(f"@{localpart}:{hs}")

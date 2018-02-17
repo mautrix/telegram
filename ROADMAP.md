@@ -25,7 +25,7 @@
       * [x] Matrix users who have logged into Telegram
     * [x] Kicking
     * [ ] Joining
-      * [ ] Chat name as alias
+      * [x] Chat name as alias
       * [ ] ‡ Chat invite link as alias
     * [x] Leaving
   * [x] Room metadata changes (name, topic, avatar)
@@ -74,7 +74,7 @@
     * [x] At startup
     * [x] When receiving invite or message
   * [x] Private chat creation by inviting Matrix puppet of Telegram user to new room
-  * [ ] Option to use bot to relay messages for unauthenticated Matrix users
+  * [x] Option to use bot to relay messages for unauthenticated Matrix users
   * [ ] Option to use own Matrix account for messages sent from other Telegram clients
 * [Commands](https://github.com/tulir/mautrix-telegram/wiki/Management-commands)
   * [x] Logging in and out (`login` + code entering)

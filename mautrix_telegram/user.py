@@ -16,31 +16,28 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import logging
 import asyncio
-import platform
+import re
 
 from telethon.tl.types import *
 from telethon.tl.types.contacts import ContactsNotModified
-from telethon.tl.types import User as TLUser
 from telethon.tl.functions.contacts import GetContactsRequest, SearchRequest
 from mautrix_appservice import MatrixRequestError
 
 from .db import User as DBUser, Message as DBMessage, Contact as DBContact
-from .tgclient import MautrixTelegramClient
-from . import portal as po, puppet as pu, __version__
+from .abstract_user import AbstractUser
+from . import portal as po, puppet as pu
 
 config = None
 
 
-class User:
-    loop = None
+class User(AbstractUser):
     log = logging.getLogger("mau.user")
-    db = None
-    az = None
     by_mxid = {}
     by_tgid = {}
 
     def __init__(self, mxid, tgid=None, username=None, db_contacts=None, saved_contacts=0,
                  db_portals=None):
+        super().__init__()
         self.mxid = mxid
         self.tgid = tgid
         self.username = username
@@ -51,9 +48,6 @@ class User:
         self.db_portals = db_portals
 
         self.command_status = None
-        self.connected = False
-        self.client = None
-        self._init_client()
 
         self.is_admin = self.mxid in config.get("bridge.admins", [])
 
@@ -67,13 +61,17 @@ class User:
         if tgid:
             self.by_tgid[tgid] = self
 
-    @property
-    def logged_in(self):
-        return self.client.is_user_authorized()
+        self._init_client()
 
     @property
-    def has_full_access(self):
-        return self.logged_in and self.whitelisted
+    def name(self):
+        return self.mxid
+
+    @property
+    def displayname(self):
+        # TODO show better username
+        match = re.compile("@(.+):(.+)").match(self.mxid)
+        return match.group(1)
 
     @property
     def db_contacts(self):
@@ -129,23 +127,13 @@ class User:
     # endregion
     # region Telegram connection management
 
-    def _init_client(self):
-        device = f"{platform.system()} {platform.release()}"
-        sysversion = MautrixTelegramClient.__version__
-        self.client = MautrixTelegramClient(self.mxid,
-                                            config["telegram.api_id"],
-                                            config["telegram.api_hash"],
-                                            loop=self.loop,
-                                            app_version=__version__,
-                                            system_version=sysversion,
-                                            device_model=device)
-        self.client.add_update_handler(self.update_catch)
-
     async def start(self, delete_unless_authenticated=False):
-        self.connected = await self.client.connect()
+        await super().start()
         if self.logged_in:
+            self.log.debug(f"Ensuring post_login() for {self.name}")
             asyncio.ensure_future(self.post_login(), loop=self.loop)
         elif delete_unless_authenticated:
+            self.log.debug(f"Unauthenticated user {self.name} start()ed, deleting...")
             # User not logged in -> forget user
             self.client.disconnect()
             self.client.session.delete()
@@ -159,11 +147,6 @@ class User:
             await self.sync_contacts()
         except Exception:
             self.log.exception("Failed to run post-login functions")
-
-    def stop(self):
-        self.client.disconnect()
-        self.client = None
-        self.connected = False
 
     # endregion
     # region Telegram actions that need custom methods
@@ -234,14 +217,8 @@ class User:
         return await self._search_remote(query), True
 
     async def sync_dialogs(self):
-        dialogs = await self.client.get_dialogs(limit=30)
         creators = []
-        for dialog in dialogs:
-            entity = dialog.entity
-            invalid = (isinstance(entity, (TLUser, ChatForbidden, ChannelForbidden))
-                       or (isinstance(entity, Chat) and (entity.deactivated or entity.left)))
-            if invalid:
-                continue
+        for entity in await self._get_dialogs(limit=30):
             portal = po.Portal.get_by_entity(entity)
             self.portals[portal.tgid_full] = portal
             creators.append(portal.create_matrix_room(self, entity, invites=[self.mxid]))
@@ -285,12 +262,6 @@ class User:
 
     # endregion
     # region Telegram update handling
-
-    async def update_catch(self, update):
-        try:
-            await self.update(update)
-        except Exception:
-            self.log.exception("Failed to handle Telegram update")
 
     async def update(self, update):
         if isinstance(update, (UpdateShortChatMessage, UpdateShortMessage, UpdateNewChannelMessage,
@@ -340,7 +311,7 @@ class User:
             await portal.set_telegram_admins_enabled(update.enabled)
         elif isinstance(update, UpdateChatParticipantAdmin):
             puppet = pu.Puppet.get(update.user_id)
-            user = User.get_by_tgid(update.user_id)
+            user = await User.get_by_tgid(update.user_id).ensure_started()
             await portal.set_telegram_admin(puppet, user)
 
     async def update_typing(self, update):
@@ -425,14 +396,14 @@ class User:
         user = DBUser.query.get(mxid)
         if user:
             user = cls.from_db(user)
-            asyncio.ensure_future(user.start(), loop=cls.loop)
+            # asyncio.ensure_future(user.start(), loop=cls.loop)
             return user
 
         if create:
             user = cls(mxid)
             cls.db.add(user.to_db())
             cls.db.commit()
-            asyncio.ensure_future(user.start(), loop=cls.loop)
+            # asyncio.ensure_future(user.start(), loop=cls.loop)
             return user
 
         return None
@@ -447,7 +418,7 @@ class User:
         user = DBUser.query.filter(DBUser.tgid == tgid).one_or_none()
         if user:
             user = cls.from_db(user)
-            asyncio.ensure_future(user.start(), loop=cls.loop)
+            # asyncio.ensure_future(user.start(), loop=cls.loop)
             return user
 
         return None
@@ -468,7 +439,7 @@ class User:
 
 def init(context):
     global config
-    User.az, User.db, config, User.loop = context
+    config = context.config
 
     users = [User.from_db(user) for user in DBUser.query.all()]
     return [user.start(delete_unless_authenticated=True) for user in users]

@@ -95,9 +95,17 @@ class Puppet(Base):
     photo_id = Column(String, nullable=True)
 
 
+# Fucking Telegram not telling bots what chats they are in 3:<
+class BotChat(Base):
+    query = None
+    __tablename__ = "bot_chat"
+    id = Column(Integer, primary_key=True)
+
+
 def init(db_session):
     Portal.query = db_session.query_property()
     Message.query = db_session.query_property()
     UserPortal.query = db_session.query_property()
     User.query = db_session.query_property()
     Puppet.query = db_session.query_property()
+    BotChat.query = db_session.query_property()
