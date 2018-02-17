@@ -457,21 +457,20 @@ class Portal:
 
     async def handle_matrix_message(self, sender, message, event_id):
         type = message["msgtype"]
+        space = self.tgid if self.peer_type == "channel" else sender.tgid
+        reply_to = formatter.matrix_reply_to_telegram(message, space, room_id=self.mxid)
         if type in {"m.text", "m.emote"}:
             if "format" in message and message["format"] == "org.matrix.custom.html":
-                space = self.tgid if self.peer_type == "channel" else sender.tgid
                 message, entities = formatter.matrix_to_telegram(message["formatted_body"], space)
                 if type == "m.emote":
                     message = "/me " + message
-                reply_to = None
-                if len(entities) > 0 and isinstance(entities[0], formatter.MessageEntityReply):
-                    reply_to = entities.pop(0).msg_id
                 response = await sender.client.send_message(self.peer, message, entities=entities,
                                                             reply_to=reply_to)
             else:
                 if type == "m.emote":
                     message["body"] = "/me " + message["body"]
-                response = await sender.client.send_message(self.peer, message["body"])
+                response = await sender.client.send_message(self.peer, message["body"],
+                                                            reply_to=reply_to)
         elif type in {"m.image", "m.file", "m.audio", "m.video"}:
             file = await self.main_intent.download_file(message["url"])
 
@@ -485,15 +484,14 @@ class Portal:
                 attributes.append(DocumentAttributeImageSize(w=info["w"], h=info["h"]))
 
             response = await sender.client.send_file(self.peer, file, mime, caption, attributes,
-                                                     file_name)
+                                                     file_name, reply_to=reply_to)
         else:
             self.log.debug("Unhandled Matrix event: %s", message)
             return
-        tg_space = self.tgid if self.peer_type == "channel" else sender.tgid
-        self.is_duplicate(response, (event_id, tg_space))
+        self.is_duplicate(response, (event_id, space))
         self.db.add(DBMessage(
             tgid=response.id,
-            tg_space=tg_space,
+            tg_space=space,
             mx_room=self.mxid,
             mxid=event_id))
         self.db.commit()
@@ -674,7 +672,7 @@ class Portal:
         if self.mxid:
             await user.intent.set_typing(self.mxid, is_typing=True)
 
-    async def handle_telegram_photo(self, source, intent, media):
+    async def handle_telegram_photo(self, source, intent, media, relates_to=None):
         largest_size = self._get_largest_photo_size(media.photo)
         file = await source.client.download_file_bytes(largest_size.location)
         mime_type = magic.from_buffer(file, mime=True)
@@ -690,7 +688,7 @@ class Portal:
         name = media.caption
         await intent.set_typing(self.mxid, is_typing=False)
         return await intent.send_image(self.mxid, uploaded["content_uri"], info=info,
-                                       text=name)
+                                       text=name, relates_to=relates_to)
 
     def convert_webp(self, file, to="png"):
         try:
@@ -702,7 +700,7 @@ class Portal:
             self.log.exception(f"Failed to convert webp to {to}")
             return "image/webp", file
 
-    async def handle_telegram_document(self, source, intent, media):
+    async def handle_telegram_document(self, source, intent, media, relates_to=None):
         file = await source.client.download_file_bytes(media.document)
         mime_type = magic.from_buffer(file, mime=True)
         dont_change_mime = False
@@ -733,9 +731,9 @@ class Portal:
             type = "m.image"
         await intent.set_typing(self.mxid, is_typing=False)
         return await intent.send_file(self.mxid, uploaded["content_uri"], info=info,
-                                      text=name, file_type=type)
+                                      text=name, file_type=type, relates_to=relates_to)
 
-    def handle_telegram_location(self, source, intent, location):
+    def handle_telegram_location(self, source, intent, location, relates_to=None):
         long = location.long
         lat = location.lat
         long_char = "E" if long > 0 else "W"
@@ -758,16 +756,18 @@ class Portal:
             "body": body,
             "format": "org.matrix.custom.html",
             "formatted_body": formatted_body,
+            "m.relates_to": relates_to or None,
         })
 
     async def handle_telegram_text(self, source, intent, evt):
         self.log.debug(f"Sending {evt.message} to {self.mxid} by {intent.mxid}")
-        text, html = await formatter.telegram_event_to_matrix(evt, source,
-                                                              config["bridge.native_replies"],
-                                                              config["bridge.link_in_reply"],
-                                                              self.main_intent)
+        text, html, relates_to = await formatter.telegram_event_to_matrix(
+            evt, source,
+            config["bridge.native_replies"],
+            config["bridge.link_in_reply"],
+            self.main_intent)
         await intent.set_typing(self.mxid, is_typing=False)
-        return await intent.send_text(self.mxid, text, html=html)
+        return await intent.send_text(self.mxid, text, html=html, relates_to=relates_to)
 
     async def handle_telegram_edit(self, source, sender, evt):
         if not self.mxid:
@@ -789,13 +789,14 @@ class Portal:
             return
 
         evt.reply_to_msg_id = evt.id
-        text, html = await formatter.telegram_event_to_matrix(evt, source,
-                                                              config["bridge.native_replies"],
-                                                              config["bridge.link_in_reply"],
-                                                              self.main_intent, reply_text="Edit")
+        text, html, relates_to = await formatter.telegram_event_to_matrix(
+            evt, source,
+            config["bridge.native_replies"],
+            config["bridge.link_in_reply"],
+            self.main_intent, reply_text="Edit")
         intent = sender.intent if sender else self.main_intent
         await intent.set_typing(self.mxid, is_typing=False)
-        response = await intent.send_text(self.mxid, text, html=html)
+        response = await intent.send_text(self.mxid, text, html=html, relates_to=relates_to)
 
         mxid = response["event_id"]
 
@@ -828,12 +829,15 @@ class Portal:
         if evt.message:
             response = await self.handle_telegram_text(source, intent, evt)
         elif evt.media:
+            relates_to = formatter.telegram_reply_to_matrix(evt, source)
             if isinstance(evt.media, MessageMediaPhoto):
-                response = await self.handle_telegram_photo(source, intent, evt.media)
+                response = await self.handle_telegram_photo(source, intent, evt.media, relates_to)
             elif isinstance(evt.media, MessageMediaDocument):
-                response = await self.handle_telegram_document(source, intent, evt.media)
+                response = await self.handle_telegram_document(source, intent, evt.media,
+                                                               relates_to)
             elif isinstance(evt.media, MessageMediaGeo):
-                response = await self.handle_telegram_location(source, intent, evt.media.geo)
+                response = await self.handle_telegram_location(source, intent, evt.media.geo,
+                                                               relates_to)
             else:
                 self.log.debug("Unhandled Telegram media: %s", evt.media)
                 return
