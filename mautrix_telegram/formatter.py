@@ -189,7 +189,6 @@ def matrix_reply_to_telegram(content, tg_space, room_id=None):
         reply = content["m.relates_to"]["m.in_reply_to"]
         room_id = room_id or reply["room_id"]
         event_id = reply["event_id"]
-        print(event_id, tg_space, room_id)
         message = DBMessage.query.filter(DBMessage.mxid == event_id,
                                          DBMessage.tg_space == tg_space,
                                          DBMessage.mx_room == room_id).one_or_none()

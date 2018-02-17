@@ -100,6 +100,7 @@ class BotChat(Base):
     query = None
     __tablename__ = "bot_chat"
     id = Column(Integer, primary_key=True)
+    type = Column(String, nullable=False)
 
 
 def init(db_session):

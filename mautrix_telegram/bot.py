@@ -17,6 +17,9 @@
 import logging
 
 from telethon.tl.types import *
+from telethon.errors import ChannelInvalidError, ChannelPrivateError
+from telethon.tl.functions.messages import GetChatsRequest
+from telethon.tl.functions.channels import GetChannelsRequest
 
 from .abstract_user import AbstractUser
 from .db import BotChat
@@ -32,7 +35,7 @@ class Bot(AbstractUser):
         self.token = token
         self.whitelisted = True
         self._init_client()
-        self.chats = {chat.id for chat in BotChat.query.all()}
+        self.chats = {(chat.id, chat.type) for chat in BotChat.query.all()}
 
     async def start(self):
         await super().start()
@@ -45,24 +48,56 @@ class Bot(AbstractUser):
         info = await self.client.get_me()
         self.tgid = info.id
 
+        chat_ids = [id for (id, type) in self.chats if type == "chat"]
+        response = await self.client(GetChatsRequest(chat_ids))
+        for chat in response.chats:
+            if isinstance(chat, ChatForbidden) or chat.left or chat.deactivated:
+                self.remove_chat(chat.id, "chat")
+
+        channel_ids = [InputChannel(id, 0)
+                       for (id, type) in self.chats
+                       if type == "channel"]
+        for id in channel_ids:
+            try:
+                await self.client(GetChannelsRequest([id]))
+            except (ChannelPrivateError, ChannelInvalidError):
+                self.remove_chat(id.channel_id, "channel")
+
+    def add_chat(self, id, type):
+        entry = (id, type)
+        if entry not in self.chats:
+            self.chats.add(entry)
+            self.db.add(BotChat(id=id, type=type))
+            self.db.commit()
+
+    def remove_chat(self, id, type):
+        self.chats.remove((id, type))
+        self.db.delete(BotChat.query.get(id))
+        self.db.commit()
+
     async def update(self, update):
         if not isinstance(update, (UpdateNewMessage, UpdateNewChannelMessage)):
             return
         elif not isinstance(update.message, MessageService):
             return
-        action = update.message.action
+
         to_id = update.message.to_id
-        to_id = to_id.chat_id if isinstance(to_id, PeerChat) else to_id.channel_id
+        if isinstance(to_id, PeerChannel):
+            to_id = to_id.channel_id
+            type = "channel"
+        elif isinstance(to_id, PeerChat):
+            to_id = to_id.chat_id
+            type = "chat"
+        else:
+            return
+
+        action = update.message.action
         if isinstance(action, MessageActionChatAddUser):
             if self.tgid in action.users:
-                self.chats.add(to_id)
-                self.db.add(BotChat(id=to_id))
-                self.db.commit()
+                self.add_chat(to_id, type)
         elif isinstance(action, MessageActionChatDeleteUser):
             if action.user_id == self.tgid:
-                self.chats.remove(to_id)
-                BotChat.query.get(to_id).delete()
-                self.db.commit()
+                self.remove_chat(to_id, type)
 
     def is_in_chat(self, peer_id):
         return peer_id in self.chats
