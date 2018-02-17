@@ -273,7 +273,6 @@ class Portal:
             await puppet.update_info(source, entity)
 
         joined_mxids = await self.main_intent.get_room_members(self.mxid)
-        print(allowed_tgids)
         for user in joined_mxids:
             if user == self.az.intent.mxid:
                 continue
