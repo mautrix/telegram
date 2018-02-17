@@ -265,10 +265,28 @@ class Portal:
             groupname=username)
 
     async def sync_telegram_users(self, source, users):
+        allowed_tgids = set()
         for entity in users:
             puppet = p.Puppet.get(entity.id)
+            allowed_tgids.add(entity.id)
             await puppet.intent.ensure_joined(self.mxid)
             await puppet.update_info(source, entity)
+
+        joined_mxids = await self.main_intent.get_room_members(self.mxid)
+        print(allowed_tgids)
+        for user in joined_mxids:
+            if user == self.az.intent.mxid:
+                continue
+            puppet_id = p.Puppet.get_id_from_mxid(user)
+            if puppet_id and puppet_id not in allowed_tgids:
+                await self.main_intent.kick(self.mxid, user,
+                                            "User had left this Telegram chat.")
+                continue
+            mx_user = u.User.get_by_mxid(user, create=False)
+            if mx_user and not self.has_bot and mx_user.tgid not in allowed_tgids:
+                await self.main_intent.kick(self.mxid, mx_user.mxid,
+                                            "You had left this Telegram chat.")
+                continue
 
     async def add_telegram_user(self, user_id, source=None):
         puppet = p.Puppet.get(user_id)
