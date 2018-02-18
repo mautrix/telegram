@@ -461,7 +461,7 @@ class Portal:
         reply_to = formatter.matrix_reply_to_telegram(message, space, room_id=self.mxid)
         if type in {"m.text", "m.emote"}:
             if "format" in message and message["format"] == "org.matrix.custom.html":
-                message, entities = formatter.matrix_to_telegram(message["formatted_body"], space)
+                message, entities = formatter.matrix_to_telegram(message["formatted_body"])
                 if type == "m.emote":
                     message = "/me " + message
                 response = await sender.client.send_message(self.peer, message, entities=entities,
