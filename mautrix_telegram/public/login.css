@@ -1,0 +1,9 @@
+form > div {
+	display: none;
+}
+
+form[data-status="request"]  > div.status-request,
+form[data-status="code"]     > div.status-code,
+form[data-status="password"] > div.status-password {
+	display: initial;
+}

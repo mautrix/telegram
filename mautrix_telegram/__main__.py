@@ -32,6 +32,7 @@ from .db import init as init_db
 from .user import init as init_user, User
 from .portal import init as init_portal
 from .puppet import init as init_puppet
+from .public import PublicBridgeWebsite
 
 log = logging.getLogger("mau")
 time_formatter = logging.Formatter("[%(asctime)s] [%(levelname)s@%(name)s] %(message)s")
@@ -73,12 +74,16 @@ Base.metadata.bind = db_engine
 Base.metadata.create_all()
 
 loop = asyncio.get_event_loop()
-appserv = AppService(config["homeserver.address"], config["homeserver.domain"],
-                     config["appservice.as_token"], config["appservice.hs_token"],
-                     config["appservice.bot_username"], log="mau.as", loop=loop)
-context = (appserv, db_session, config, loop)
+az = AppService(config["homeserver.address"], config["homeserver.domain"],
+                config["appservice.as_token"], config["appservice.hs_token"],
+                config["appservice.bot_username"], log="mau.as", loop=loop)
+context = (az, db_session, config, loop)
 
-with appserv.run(config["appservice.hostname"], config["appservice.port"]) as start:
+if config["appservice.public.enabled"]:
+    public = PublicBridgeWebsite(loop)
+    az.app.add_subapp(config.get("appservice.public.prefix", "/public"), public.app)
+
+with az.run(config["appservice.hostname"], config["appservice.port"]) as start:
     MatrixHandler(context)
     init_db(db_session)
     init_portal(context)

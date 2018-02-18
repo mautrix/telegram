@@ -44,12 +44,26 @@ async def login(evt):
     elif len(evt.args) == 0:
         return await evt.reply("**Usage:** `$cmdprefix+sp login <phone number>`")
     phone_number = evt.args[0]
-    await evt.sender.client.sign_in(phone_number)
-    evt.sender.command_status = {
-        "next": enter_code,
-        "action": "Login",
-    }
-    return await evt.reply(f"Login code sent to {phone_number}. Please send the code here.")
+    try:
+        await evt.sender.client.sign_in(phone_number)
+        evt.sender.command_status = {
+            "next": enter_code,
+            "action": "Login",
+        }
+        return await evt.reply(f"Login code sent to {phone_number}. Please send the code here.")
+    except PhoneNumberAppSignupForbiddenError:
+        return await evt.reply(
+            "Your phone number does not allow 3rd party apps to sign in.")
+    except PhoneNumberFloodError:
+        return await evt.reply(
+            "Your phone number has been temporarily blocked for flooding. "
+            "The ban is usually applied for around a day.")
+    except PhoneNumberBannedError:
+        return await evt.reply("Your phone number has been banned from Telegram.")
+    except Exception:
+        evt.log.exception("Error requesting phone code")
+        return await evt.reply("Unhandled exception while requesting code. "
+                               "Check console for more details.")
 
 
 @command_handler(needs_auth=False)
@@ -63,32 +77,23 @@ async def enter_code(evt):
         evt.sender.command_status = None
         return await evt.reply(f"Successfully logged in as @{user.username}")
     except PhoneNumberUnoccupiedError:
-        return await evt.reply("That phone number has not been registered."
+        return await evt.reply("That phone number has not been registered. "
                                "Please register with `$cmdprefix+sp register <phone>`.")
     except PhoneCodeExpiredError:
         return await evt.reply(
             "Phone code expired. Try again with `$cmdprefix+sp login <phone>`.")
     except PhoneCodeInvalidError:
         return await evt.reply("Invalid phone code.")
-    except PhoneNumberAppSignupForbiddenError:
-        return await evt.reply(
-            "Your phone number does not allow 3rd party apps to sign in.")
-    except PhoneNumberFloodError:
-        return await evt.reply(
-            "Your phone number has been temporarily blocked for flooding. "
-            "The block is usually applied for around a day.")
-    except PhoneNumberBannedError:
-        return await evt.reply("Your phone number has been banned from Telegram.")
     except SessionPasswordNeededError:
         evt.sender.command_status = {
             "next": enter_password,
             "action": "Login (password entry)",
         }
-        return await evt.reply("Your account has two-factor authentication."
+        return await evt.reply("Your account has two-factor authentication. "
                                "Please send your password here.")
     except Exception:
         evt.log.exception("Error sending phone code")
-        return await evt.reply("Unhandled exception while sending code."
+        return await evt.reply("Unhandled exception while sending code. "
                                "Check console for more details.")
 
 

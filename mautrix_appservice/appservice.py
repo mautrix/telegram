@@ -16,7 +16,6 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 # Partly based on github.com/Cadair/python-appservice-framework (MIT license)
-from functools import partial
 from contextlib import contextmanager
 from aiohttp import web
 import aiohttp
