@@ -42,9 +42,9 @@ async def ping_bot(evt):
     hs = evt.config["homeserver"]["domain"]
     mxid = f"@{localpart}:{hs}"
     displayname = bot_info.first_name
-    return await evt.reply(f"Telegram message relay bot is active: "
-                           + f"[{displayname}](https://matrix.to/#/{mxid}) (ID {bot_info.id})\n\n"
-                           + f"To use the bot, simply invite it to a portal room.")
+    return await evt.reply("Telegram message relay bot is active: "
+                           f"[{displayname}](https://matrix.to/#/{mxid}) (ID {bot_info.id})\n\n"
+                           "To use the bot, simply invite it to a portal room.")
 
 
 @command_handler(needs_auth=False, management_only=True)

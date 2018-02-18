@@ -48,7 +48,7 @@ class Message(Base):
     tgid = Column(Integer, primary_key=True)
     tg_space = Column(Integer, primary_key=True)
 
-    __table_args__ = (UniqueConstraint('mxid', 'mx_room', 'tg_space', name='_mx_id_room'),)
+    __table_args__ = (UniqueConstraint("mxid", "mx_room", "tg_space", name="_mx_id_room"),)
 
 
 class UserPortal(Base):

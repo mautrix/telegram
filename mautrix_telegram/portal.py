@@ -504,8 +504,8 @@ class Portal:
             type = "m.text"
         elif not sender.logged_in:
             if "formatted_body" in message:
-                message["formatted_body"] = \
-                    f"&lt;{sender.displayname}&gt; {message['formatted_body']}"
+                message["formatted_body"] = (f"&lt;{sender.displayname}&gt; "
+                                             f"{message['formatted_body']}")
             message["body"] = f"<{sender.displayname}> {message['body']}"
 
         if type == "m.text" or (self.bridge_notices and type == "m.notice"):

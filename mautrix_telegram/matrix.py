@@ -60,8 +60,8 @@ class MatrixHandler:
             if len(members) > 1:
                 await puppet.intent.error_and_leave(room, text=None, html=(
                     f"Please invite "
-                    + f"<a href='https://matrix.to/#/{self.az.intent.mxid}'>the bridge bot</a> "
-                    + f"first if you want to create a Telegram chat."))
+                    f"<a href='https://matrix.to/#/{self.az.intent.mxid}'>the bridge bot</a> "
+                    f"first if you want to create a Telegram chat."))
                 return
 
             await puppet.intent.join_room(room)
@@ -71,9 +71,9 @@ class MatrixHandler:
                     await puppet.intent.invite(portal.mxid, inviter.mxid)
                     await puppet.intent.send_notice(room, text=None, html=(
                         "You already have a private chat with me: "
-                        + f"<a href='https://matrix.to/#/{portal.mxid}'>"
-                        + "Link to room"
-                        + "</a>"))
+                        f"<a href='https://matrix.to/#/{portal.mxid}'>"
+                        "Link to room"
+                        "</a>"))
                     await puppet.intent.leave_room(room)
                     return
                 except MatrixRequestError:

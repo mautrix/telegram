@@ -66,7 +66,7 @@ async def clean_rooms(evt):
               or ["No management rooms found."])
     reply.append("#### Active portal rooms (A)")
     reply += ([f"{n+1}. [P{n+1}](https://matrix.to/#/{portal.mxid}) "
-               + f"(to Telegram chat \"{portal.title}\")"
+               f"(to Telegram chat \"{portal.title}\")"
                for n, portal in enumerate(portals)]
               or ["No active portal rooms found."])
     reply.append("#### Unidentified rooms (U)")
@@ -75,7 +75,7 @@ async def clean_rooms(evt):
               or ["No unidentified rooms found."])
     reply.append("#### Inactive portal rooms (I)")
     reply += ([f"{n}. [E{n}](https://matrix.to/#/{portal.mxid}) "
-               + f"(to Telegram chat \"{portal.title}\")"
+               f"(to Telegram chat \"{portal.title}\")"
                for n, portal in enumerate(empty_portals)]
               or ["No inactive portal rooms found."])
 
@@ -141,21 +141,21 @@ async def set_rooms_to_clean(evt, management_rooms, unidentified_rooms, portals,
                 "**Usage:** `$cmdprefix+sp clean-groups <_M|A|U|I_><range>")
     else:
         return await evt.reply(f"Unknown room cleaning action `{command}`. "
-                               + "Use `$cmdprefix+sp cancel` to cancel room "
-                               + "cleaning.")
+                               "Use `$cmdprefix+sp cancel` to cancel room "
+                               "cleaning.")
 
     evt.sender.command_status = {
         "next": lambda confirm: execute_room_cleanup(confirm, rooms_to_clean),
         "action": "Room cleaning",
     }
     await evt.reply(f"To confirm cleaning up {len(rooms_to_clean)} rooms, type"
-                    + "`$cmdprefix+sp confirm-clean`.")
+                    "`$cmdprefix+sp confirm-clean`.")
 
 
 async def execute_room_cleanup(evt, rooms_to_clean):
     if len(evt.args) > 0 and evt.args[0] == "confirm-clean":
         await evt.reply(f"Cleaning {len(rooms_to_clean)} rooms. "
-                        + "This might take a while.")
+                        "This might take a while.")
         cleaned = 0
         for room in rooms_to_clean:
             if isinstance(room, po.Portal):

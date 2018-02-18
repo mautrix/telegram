@@ -31,7 +31,7 @@ class MatrixRequestError(MatrixError):
     """ The home server returned an error response. """
 
     def __init__(self, code=0, text="", errcode=None, message=None):
-        super().__init__("%d: %s" % (code, text))
+        super().__init__(f"{code}: {text}")
         self.code = code
         self.text = text
         self.errcode = errcode

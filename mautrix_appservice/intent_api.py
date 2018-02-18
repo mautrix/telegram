@@ -524,7 +524,7 @@ class IntentAPI:
             self.log.warning(
                 f"Power level of {self.mxid} is not enough for {event_type} in {room_id}")
             # raise IntentError(f"Power level of {self.mxid} is not enough"
-            #                  + f"for {event_type} in {room_id}")
+            #                   f"for {event_type} in {room_id}")
             return
         # TODO implement
 
