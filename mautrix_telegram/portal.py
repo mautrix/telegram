@@ -603,10 +603,11 @@ class Portal:
             return
 
         if self.peer_type == "chat":
-            await sender.client(EditChatTitleRequest(chat_id=self.tgid, title=title))
+            response = await sender.client(EditChatTitleRequest(chat_id=self.tgid, title=title))
         else:
             channel = await self.get_input_entity(sender)
-            await sender.client(EditTitleRequest(channel=channel, title=title))
+            response = await sender.client(EditTitleRequest(channel=channel, title=title))
+        self._register_outgoing_actions_for_dedup(response)
         self.title = title
         self.save()
 
@@ -622,11 +623,12 @@ class Portal:
         photo = InputChatUploadedPhoto(file=uploaded)
 
         if self.peer_type == "chat":
-            updates = await sender.client(EditChatPhotoRequest(chat_id=self.tgid, photo=photo))
+            response = await sender.client(EditChatPhotoRequest(chat_id=self.tgid, photo=photo))
         else:
             channel = await self.get_input_entity(sender)
-            updates = await sender.client(EditPhotoRequest(channel=channel, photo=photo))
-        for update in updates.updates:
+            response = await sender.client(EditPhotoRequest(channel=channel, photo=photo))
+        self._register_outgoing_actions_for_dedup(response)
+        for update in response.updates:
             is_photo_update = (isinstance(update, UpdateNewMessage)
                                and isinstance(update.message, MessageService)
                                and isinstance(update.message.action, MessageActionChatEditPhoto))
@@ -635,6 +637,13 @@ class Portal:
                 self.photo_id = f"{loc.volume_id}-{loc.local_id}"
                 self.save()
                 break
+
+    def _register_outgoing_actions_for_dedup(self, response):
+        for update in response.updates:
+            check_dedup = (isinstance(update, (UpdateNewMessage, UpdateNewChannelMessage))
+                           and isinstance(update.message, MessageService))
+            if check_dedup:
+                self.is_duplicate_action(update)
 
     # endregion
     # region Telegram chat info updating
