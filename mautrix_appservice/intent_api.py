@@ -194,12 +194,16 @@ class IntentAPI:
         content = {"displayname": name}
         return await self.client.request("PUT", f"/profile/{self.mxid}/displayname", content)
 
-    async def set_presence(self, status="online"):
+    async def set_presence(self, status="online", ignore_cache=False):
         await self.ensure_registered()
+        if not ignore_cache and self.state_store.has_presence(self.mxid, status):
+            return
         content = {
             "presence": status
         }
-        return await self.client.request("PUT", f"/presence/{self.mxid}/status", content)
+        resp = await self.client.request("PUT", f"/presence/{self.mxid}/status", content)
+        self.state_store.set_presence(self.mxid, status)
+        return resp
 
     async def set_avatar(self, url):
         await self.ensure_registered()
@@ -340,14 +344,18 @@ class IntentAPI:
         await self.ensure_joined(room_id)
         return await self.client.request("GET", f"/rooms/{room_id}/event/{event_id}")
 
-    async def set_typing(self, room_id, is_typing=True, timeout=5000):
+    async def set_typing(self, room_id, is_typing=True, timeout=5000, ignore_cache=False):
         await self.ensure_joined(room_id)
+        if not ignore_cache and is_typing == self.state_store.is_typing(room_id, self.mxid):
+            return
         content = {
             "typing": is_typing
         }
         if is_typing:
             content["timeout"] = timeout
-        return await self.client.request("PUT", f"/rooms/{room_id}/typing/{self.mxid}", content)
+        resp = await self.client.request("PUT", f"/rooms/{room_id}/typing/{self.mxid}", content)
+        self.state_store.set_typing(room_id, self.mxid, is_typing, timeout)
+        return resp
 
     async def mark_read(self, room_id, event_id):
         await self.ensure_joined(room_id)

@@ -144,13 +144,14 @@ class AbstractUser:
         await puppet.intent.mark_read(portal.mxid, message.mxid)
 
     async def update_admin(self, update):
+        # TODO duplication not checked
         portal = po.Portal.get_by_tgid(update.chat_id, peer_type="chat")
         if isinstance(update, UpdateChatAdmins):
             await portal.set_telegram_admins_enabled(update.enabled)
         elif isinstance(update, UpdateChatParticipantAdmin):
             await portal.set_telegram_admin(update.user_id)
         else:
-            self.log.warninng("Unexpected admin status update: %s", update)
+            self.log.warning("Unexpected admin status update: %s", update)
 
     async def update_typing(self, update):
         if isinstance(update, UpdateUserTyping):
@@ -161,6 +162,7 @@ class AbstractUser:
         await portal.handle_telegram_typing(sender, update)
 
     async def update_others_info(self, update):
+        # TODO duplication not checked
         puppet = pu.Puppet.get(update.user_id)
         if isinstance(update, UpdateUserName):
             if await puppet.update_displayname(self, update):
@@ -169,7 +171,7 @@ class AbstractUser:
             if await puppet.update_avatar(self, update.photo.photo_big):
                 puppet.save()
         else:
-            self.log.warninng("Unexpected other user info update: %s", update)
+            self.log.warning("Unexpected other user info update: %s", update)
 
     async def update_status(self, update):
         puppet = pu.Puppet.get(update.user_id)
@@ -214,7 +216,7 @@ class AbstractUser:
                 return
             self.log.debug("Handling action %s to %s by %d", update.action, portal.tgid_log,
                            sender.id)
-            return portal.handle_telegram_action(self, sender, update.action)
+            return portal.handle_telegram_action(self, sender, update)
 
         user = sender.tgid if sender else "admin"
         if isinstance(original_update, (UpdateEditMessage, UpdateEditChannelMessage)):

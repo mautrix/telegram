@@ -64,6 +64,7 @@ class Portal:
 
         self._dedup = deque()
         self._dedup_mxid = {}
+        self._dedup_action = deque()
 
         if save_to_cache:
             if tgid:
@@ -95,36 +96,47 @@ class Portal:
         print("BOT PRINT", self.bot)
         return self.bot and self.bot.is_in_chat(self.tgid)
 
-    def _hash_event(self, event):
-        if self.peer_type == "channel":
-            # Message IDs are unique per-channel
-            return event.id
-
+    @staticmethod
+    def _hash_event(event):
         # Non-channel messages are unique per-user (wtf telegram), so we have no other choice than
         # to deduplicate based on a hash of the message content.
 
-        # The timestamp is only accurate to the second, so we can't rely on solely that either.
-        hash_content = [event.date.timestamp(), event.message]
-        if event.fwd_from:
-            hash_content += [event.fwd_from.from_id, event.fwd_from.channel_id]
-        elif isinstance(event, Message) and event.media:
-            try:
-                hash_content += {
-                    MessageMediaContact: lambda media: [media.user_id],
-                    MessageMediaDocument: lambda media: [media.document.id, media.caption],
-                    MessageMediaPhoto: lambda media: [media.photo.id, media.caption],
-                    MessageMediaGeo: lambda media: [media.geo.long, media.geo.lat],
-                }[type(event.media)](event.media)
-            except KeyError:
-                pass
+        # The timestamp is only accurate to the second, so we can't rely solely on that either.
+        if isinstance(event, MessageService):
+            hash_content = [event.date.timestamp(), event.from_id, event.action]
+        else:
+            hash_content = [event.date.timestamp(), event.message]
+            if event.fwd_from:
+                hash_content += [event.fwd_from.from_id, event.fwd_from.channel_id]
+            elif isinstance(event, Message) and event.media:
+                try:
+                    hash_content += {
+                        MessageMediaContact: lambda media: [media.user_id],
+                        MessageMediaDocument: lambda media: [media.document.id, media.caption],
+                        MessageMediaPhoto: lambda media: [media.photo.id, media.caption],
+                        MessageMediaGeo: lambda media: [media.geo.long, media.geo.lat],
+                    }[type(event.media)](event.media)
+                except KeyError:
+                    pass
 
         return hashlib.md5("-"
                            .join(str(a) for a in hash_content)
                            .encode("utf-8")
                            ).hexdigest()
 
+    def is_duplicate_action(self, event):
+        hash = self._hash_event(event) if self.peer_type != "channel" else event.id
+        if hash in self._dedup_action:
+            return True
+
+        self._dedup_action.append(hash)
+
+        if len(self._dedup_action) > 20:
+            self._dedup_action.popleft()
+        return False
+
     def is_duplicate(self, event, mxid=None):
-        hash = self._hash_event(event)
+        hash = self._hash_event(event) if self.peer_type != "channel" else event.id
         if hash in self._dedup:
             return self._dedup_mxid[hash]
 
@@ -901,7 +913,8 @@ class Portal:
         self.db.add(DBMessage(tgid=evt.id, mx_room=self.mxid, mxid=mxid, tg_space=tg_space))
         self.db.commit()
 
-    async def handle_telegram_action(self, source, sender, action):
+    async def handle_telegram_action(self, source, sender, update):
+        action = update.action
         if not self.mxid:
             create_and_exit = (MessageActionChatCreate, MessageActionChannelCreate)
             create_and_continue = (MessageActionChatAddUser, MessageActionChatJoinedByLink)
@@ -910,6 +923,9 @@ class Portal:
                                               update_if_exists=isinstance(action, create_and_exit))
             if not isinstance(action, create_and_continue):
                 return
+
+        if self.is_duplicate_action(update):
+            return
 
         # TODO figure out how to see changes to about text / channel username
         if isinstance(action, MessageActionChatEditTitle):
