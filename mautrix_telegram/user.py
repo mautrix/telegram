@@ -23,7 +23,7 @@ from telethon.tl.types.contacts import ContactsNotModified
 from telethon.tl.functions.contacts import GetContactsRequest, SearchRequest
 from mautrix_appservice import MatrixRequestError
 
-from .db import User as DBUser, Message as DBMessage, Contact as DBContact
+from .db import User as DBUser, Contact as DBContact
 from .abstract_user import AbstractUser
 from . import portal as po, puppet as pu
 
@@ -259,129 +259,6 @@ class User(AbstractUser):
             await puppet.update_info(self, user)
             self.contacts.append(puppet)
         self.save()
-
-    # endregion
-    # region Telegram update handling
-
-    async def update(self, update):
-        if isinstance(update, (UpdateShortChatMessage, UpdateShortMessage, UpdateNewChannelMessage,
-                               UpdateNewMessage, UpdateEditMessage, UpdateEditChannelMessage)):
-            await self.update_message(update)
-        elif isinstance(update, (UpdateChatUserTyping, UpdateUserTyping)):
-            await self.update_typing(update)
-        elif isinstance(update, UpdateUserStatus):
-            await self.update_status(update)
-        elif isinstance(update, (UpdateChatAdmins, UpdateChatParticipantAdmin)):
-            await self.update_admin(update)
-        elif isinstance(update, UpdateChatParticipants):
-            portal = po.Portal.get_by_tgid(update.participants.chat_id)
-            if portal and portal.mxid:
-                await portal.update_telegram_participants(update.participants.participants)
-        elif isinstance(update, UpdateChannelPinnedMessage):
-            portal = po.Portal.get_by_tgid(update.channel_id)
-            if portal and portal.mxid:
-                await portal.update_telegram_pin(self, update.id)
-        elif isinstance(update, (UpdateUserName, UpdateUserPhoto)):
-            await self.update_others_info(update)
-        elif isinstance(update, UpdateReadHistoryOutbox):
-            await self.update_read_receipt(update)
-        else:
-            self.log.debug("Unhandled update: %s", update)
-
-    async def update_read_receipt(self, update):
-        if not isinstance(update.peer, PeerUser):
-            self.log.debug("Unexpected read receipt peer: %s", update.peer)
-            return
-
-        portal = po.Portal.get_by_tgid(update.peer.user_id, self.tgid)
-        if not portal or not portal.mxid:
-            return
-
-        # We check that these are user read receipts, so tg_space is always the user ID.
-        message = DBMessage.query.get((update.max_id, self.tgid))
-        if not message:
-            return
-
-        puppet = pu.Puppet.get(update.peer.user_id)
-        await puppet.intent.mark_read(portal.mxid, message.mxid)
-
-    async def update_admin(self, update):
-        portal = po.Portal.get_by_tgid(update.chat_id, peer_type="chat")
-        if isinstance(update, UpdateChatAdmins):
-            await portal.set_telegram_admins_enabled(update.enabled)
-        elif isinstance(update, UpdateChatParticipantAdmin):
-            puppet = pu.Puppet.get(update.user_id)
-            user = await User.get_by_tgid(update.user_id).ensure_started()
-            await portal.set_telegram_admin(puppet, user)
-
-    async def update_typing(self, update):
-        if isinstance(update, UpdateUserTyping):
-            portal = po.Portal.get_by_tgid(update.user_id, self.tgid, "user")
-        else:
-            portal = po.Portal.get_by_tgid(update.chat_id, peer_type="chat")
-        sender = pu.Puppet.get(update.user_id)
-        await portal.handle_telegram_typing(sender, update)
-
-    async def update_others_info(self, update):
-        puppet = pu.Puppet.get(update.user_id)
-        if isinstance(update, UpdateUserName):
-            if await puppet.update_displayname(self, update):
-                puppet.save()
-        elif isinstance(update, UpdateUserPhoto):
-            if await puppet.update_avatar(self, update.photo.photo_big):
-                puppet.save()
-
-    async def update_status(self, update):
-        puppet = pu.Puppet.get(update.user_id)
-        if isinstance(update.status, UserStatusOnline):
-            await puppet.intent.set_presence("online")
-        elif isinstance(update.status, UserStatusOffline):
-            await puppet.intent.set_presence("offline")
-        else:
-            self.log.warning("Unexpected user status update: %s", update)
-        return
-
-    def get_message_details(self, update):
-        if isinstance(update, UpdateShortChatMessage):
-            portal = po.Portal.get_by_tgid(update.chat_id, peer_type="chat")
-            sender = pu.Puppet.get(update.from_id)
-        elif isinstance(update, UpdateShortMessage):
-            portal = po.Portal.get_by_tgid(update.user_id, self.tgid, "user")
-            sender = pu.Puppet.get(self.tgid if update.out else update.user_id)
-        elif isinstance(update, (UpdateNewMessage, UpdateNewChannelMessage,
-                                 UpdateEditMessage, UpdateEditChannelMessage)):
-            update = update.message
-            if isinstance(update.to_id, PeerUser) and not update.out:
-                portal = po.Portal.get_by_tgid(update.from_id, peer_type="user",
-                                               tg_receiver=self.tgid)
-            else:
-                portal = po.Portal.get_by_entity(update.to_id, receiver_id=self.tgid)
-            sender = pu.Puppet.get(update.from_id) if update.from_id else None
-        else:
-            self.log.warning(
-                f"Unexpected message type in User#get_message_details: {type(update)}")
-            return update, None, None
-        return update, sender, portal
-
-    def update_message(self, original_update):
-        update, sender, portal = self.get_message_details(original_update)
-
-        if isinstance(update, MessageService):
-            if isinstance(update.action, MessageActionChannelMigrateFrom):
-                self.log.debug(f"Ignoring action %s to %s by %d", update.action, portal.tgid_log,
-                               sender.id)
-                return
-            self.log.debug("Handling action %s to %s by %d", update.action, portal.tgid_log,
-                           sender.id)
-            return portal.handle_telegram_action(self, sender, update.action)
-
-        user = sender.tgid if sender else "admin"
-        if isinstance(original_update, (UpdateEditMessage, UpdateEditChannelMessage)):
-            self.log.debug("Handling edit %s to %s by %s", update, portal.tgid_log, user)
-            return portal.handle_telegram_edit(self, sender, update)
-
-        self.log.debug("Handling message %s to %s by %s", update, portal.tgid_log, user)
-        return portal.handle_telegram_message(self, sender, update)
 
     # endregion
     # region Class instance lookup

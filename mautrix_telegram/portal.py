@@ -92,6 +92,7 @@ class Portal:
 
     @property
     def has_bot(self):
+        print("BOT PRINT", self.bot)
         return self.bot and self.bot.is_in_chat(self.tgid)
 
     def _hash_event(self, event):
@@ -934,7 +935,10 @@ class Portal:
         else:
             self.log.debug("Unhandled Telegram action in %s: %s", self.title, action)
 
-    async def set_telegram_admin(self, puppet, user):
+    async def set_telegram_admin(self, user_id):
+        puppet = p.Puppet.get(user_id)
+        user = await u.User.get_by_tgid(user_id)
+
         levels = await self.main_intent.get_power_levels(self.mxid)
         if user:
             levels["users"][user.mxid] = 50

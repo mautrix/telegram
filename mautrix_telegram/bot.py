@@ -35,7 +35,7 @@ class Bot(AbstractUser):
         self.token = token
         self.whitelisted = True
         self._init_client()
-        self.chats = {(chat.id, chat.type) for chat in BotChat.query.all()}
+        self.chats = {chat.id: chat.type for chat in BotChat.query.all()}
 
     async def start(self):
         await super().start()
@@ -48,30 +48,32 @@ class Bot(AbstractUser):
         info = await self.client.get_me()
         self.tgid = info.id
 
-        chat_ids = [id for (id, type) in self.chats if type == "chat"]
+        chat_ids = [id for id, type in self.chats.items() if type == "chat"]
         response = await self.client(GetChatsRequest(chat_ids))
         for chat in response.chats:
             if isinstance(chat, ChatForbidden) or chat.left or chat.deactivated:
-                self.remove_chat(chat.id, "chat")
+                self.remove_chat(chat.id)
 
         channel_ids = [InputChannel(id, 0)
-                       for (id, type) in self.chats
+                       for id, type in self.chats.items()
                        if type == "channel"]
         for id in channel_ids:
             try:
                 await self.client(GetChannelsRequest([id]))
             except (ChannelPrivateError, ChannelInvalidError):
-                self.remove_chat(id.channel_id, "channel")
+                self.remove_chat(id.channel_id)
 
     def add_chat(self, id, type):
-        entry = (id, type)
-        if entry not in self.chats:
-            self.chats.add(entry)
+        if id not in self.chats:
+            self.chats[id] = type
             self.db.add(BotChat(id=id, type=type))
             self.db.commit()
 
-    def remove_chat(self, id, type):
-        self.chats.remove((id, type))
+    def remove_chat(self, id):
+        try:
+            del self.chats[id]
+        except KeyError:
+            pass
         self.db.delete(BotChat.query.get(id))
         self.db.commit()
 
@@ -97,7 +99,7 @@ class Bot(AbstractUser):
                 self.add_chat(to_id, type)
         elif isinstance(action, MessageActionChatDeleteUser):
             if action.user_id == self.tgid:
-                self.remove_chat(to_id, type)
+                self.remove_chat(to_id)
 
     def is_in_chat(self, peer_id):
         return peer_id in self.chats
