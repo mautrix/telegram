@@ -223,7 +223,7 @@ class MatrixHandler:
             if content_key not in content:
                 # FIXME handle
                 pass
-                await handler(sender, content[content_key])
+            await handler(sender, content[content_key])
 
     def filter_matrix_event(self, event):
         return (event["sender"] == self.az.bot_mxid
