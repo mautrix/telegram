@@ -280,6 +280,8 @@ class Portal:
         allowed_tgids = set()
         for entity in users:
             puppet = p.Puppet.get(entity.id)
+            if self.bot and puppet.tgid == self.bot.tgid:
+                self.bot.add_chat(self.tgid, self.peer_type)
             allowed_tgids.add(entity.id)
             await puppet.intent.ensure_joined(self.mxid)
             await puppet.update_info(source, entity)
@@ -290,6 +292,8 @@ class Portal:
                 continue
             puppet_id = p.Puppet.get_id_from_mxid(user)
             if puppet_id and puppet_id not in allowed_tgids:
+                if self.bot and puppet_id == self.bot.tgid:
+                    self.bot.remove_chat(self.tgid)
                 await self.main_intent.kick(self.mxid, user,
                                             "User had left this Telegram chat.")
                 continue
