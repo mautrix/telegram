@@ -73,6 +73,8 @@ class Portal:
         if mxid:
             self.by_mxid[mxid] = self
 
+    # region Propegrties
+
     @property
     def tgid_full(self):
         return self.tgid, self.tg_receiver
@@ -95,6 +97,17 @@ class Portal:
     @property
     def has_bot(self):
         return self.bot and self.bot.is_in_chat(self.tgid)
+
+    @property
+    def main_intent(self):
+        if not self._main_intent:
+            direct = self.peer_type == "user"
+            puppet = p.Puppet.get(self.tgid) if direct else None
+            self._main_intent = puppet.intent if direct else self.az.intent
+        return self._main_intent
+
+    # endregion
+    # region Deduplication
 
     @staticmethod
     def _hash_event(event):
@@ -150,17 +163,10 @@ class Portal:
     def get_input_entity(self, user):
         return user.client.get_input_entity(self.peer)
 
+    # endregion
     # region Matrix room info updating
 
-    @property
-    def main_intent(self):
-        if not self._main_intent:
-            direct = self.peer_type == "user"
-            puppet = p.Puppet.get(self.tgid) if direct else None
-            self._main_intent = puppet.intent if direct else self.az.intent
-        return self._main_intent
-
-    async def invite_matrix(self, users):
+    async def invite_to_matrix(self, users):
         if isinstance(users, str):
             await self.main_intent.invite(self.mxid, users, check_cache=True)
         elif isinstance(users, list):
@@ -169,12 +175,12 @@ class Portal:
         else:
             raise ValueError("Invalid invite identifier given to invite_matrix()")
 
-    async def update_after_create(self, user, entity, direct, puppet=None,
-                                  levels=None, users=None, participants=None):
+    async def update_matrix_room(self, user, entity, direct, puppet=None,
+                                 levels=None, users=None, participants=None):
         if not direct:
             await self.update_info(user, entity)
             if not users or not participants:
-                users, participants = await self.get_users(user, entity)
+                users, participants = await self._get_users(user, entity)
             await self.sync_telegram_users(user, users)
             await self.update_telegram_participants(participants, levels)
         else:
@@ -188,8 +194,8 @@ class Portal:
             if update_if_exists:
                 if not entity:
                     entity = await user.client.get_entity(self.peer)
-                await self.update_after_create(user, entity, self.peer_type == "user")
-                await self.invite_matrix(invites or [])
+                await self.update_matrix_room(user, entity, self.peer_type == "user")
+                await self.invite_to_matrix(invites or [])
             return self.mxid
         async with self._room_create_lock:
             return await self._create_matrix_room(user, entity, invites)
@@ -230,7 +236,7 @@ class Portal:
         power_levels = self._get_base_power_levels({}, entity)
         users = participants = None
         if not direct:
-            users, participants = await self.get_users(user, entity)
+            users, participants = await self._get_users(user, entity)
             self._participants_to_power_levels(participants, power_levels)
         initial_state = [{
             "type": "m.room.power_levels",
@@ -248,8 +254,8 @@ class Portal:
         self.save()
         self.az.state_store.set_power_levels(self.mxid, power_levels)
         user.register_portal(self)
-        await self.update_after_create(user, entity, direct, puppet,
-                                       levels=power_levels, users=users, participants=participants)
+        await self.update_matrix_room(user, entity, direct, puppet,
+                                      levels=power_levels, users=users, participants=participants)
 
     def _get_base_power_levels(self, levels=None, entity=None):
         levels = levels or {}
@@ -264,6 +270,8 @@ class Portal:
         levels["events"]["m.room.topic"] = 50 if self.peer_type == "channel" else 99
         levels["events"]["m.room.power_levels"] = 75
         levels["events"]["m.room.history_visibility"] = 75
+        levels["state_default"] = 50
+        levels["users_default"] = 0
         levels["events_default"] = (50 if self.peer_type == "channel" and not entity.megagroup
                                     else 0)
         if "users" not in levels:
@@ -396,7 +404,7 @@ class Portal:
             return True
         return False
 
-    async def get_users(self, user, entity):
+    async def _get_users(self, user, entity):
         if self.peer_type == "chat":
             chat = await user.client(GetFullChatRequest(chat_id=self.tgid))
             return chat.users, chat.full_chat.participants.participants
