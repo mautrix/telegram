@@ -151,11 +151,12 @@ async def join(evt):
     for chat in updates.chats:
         portal = po.Portal.get_by_entity(chat)
         if portal.mxid:
-            await portal.create_matrix_room(evt.sender, chat, [evt.sender.mxid])
-            return await evt.reply(f"Created room for {portal.title}")
-        else:
             await portal.invite_matrix([evt.sender.mxid])
             return await evt.reply(f"Invited you to portal of {portal.title}")
+        else:
+            await evt.reply(f"Creating room for {chat.title}... This might take a while.")
+            await portal.create_matrix_room(evt.sender, chat, [evt.sender.mxid])
+            return await evt.reply(f"Created room for {portal.title}")
 
 
 @command_handler()
