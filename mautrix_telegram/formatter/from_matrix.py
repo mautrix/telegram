@@ -24,8 +24,7 @@ from telethon.tl.types import *
 
 from .. import user as u, puppet as p
 from ..db import Message as DBMessage
-
-TEMP_ENC = "utf-16-le"
+from .util import add_surrogates, remove_surrogates
 
 log = logging.getLogger("mau.fmt.mx")
 
@@ -98,8 +97,7 @@ class MatrixParser(HTMLParser):
             self._open_tags_meta.appendleft(url)
 
         if entity_type and tag not in self._building_entities:
-            # See "TEXT LEN EXPLANATION" near start of file
-            offset = int(len(self.text.encode(TEMP_ENC)) / 2)
+            offset = len(self.text)
             self._building_entities[tag] = entity_type(offset=offset, length=0, **args)
 
     def _list_depth(self):
@@ -133,8 +131,7 @@ class MatrixParser(HTMLParser):
                 text = f"{indent}{n}. {text}"
                 list_format_offset = len(indent) + 3
         for tag, entity in self._building_entities.items():
-            # See "TEXT LEN EXPLANATION" near start of file
-            entity.length += int(len(text.strip("\n").encode(TEMP_ENC)) / 2)
+            entity.length += len(text.strip("\n"))
             entity.offset += list_format_offset
 
         if text.endswith("\n"):
@@ -160,8 +157,8 @@ class MatrixParser(HTMLParser):
 def matrix_to_telegram(html):
     try:
         parser = MatrixParser()
-        parser.feed(html)
-        return parser.text, parser.entities
+        parser.feed(add_surrogates(html))
+        return remove_surrogates(parser.text), parser.entities
     except Exception:
         log.exception("Failed to convert Matrix format:\nhtml=%s", html)
 
@@ -179,4 +176,3 @@ def matrix_reply_to_telegram(content, tg_space, room_id=None):
     except KeyError:
         pass
     return None
-

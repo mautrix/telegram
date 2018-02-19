@@ -22,8 +22,7 @@ from mautrix_appservice import MatrixRequestError
 
 from .. import user as u, puppet as p
 from ..db import Message as DBMessage
-
-TEMP_ENC = "utf-16-le"
+from .util import add_surrogates, remove_surrogates
 
 log = logging.getLogger("mau.fmt.tg")
 
@@ -46,8 +45,8 @@ def telegram_reply_to_matrix(evt, source):
 
 async def telegram_to_matrix(evt, source, native_replies=False, message_link_in_reply=False,
                              main_intent=None, reply_text="Reply"):
-    text = evt.message
-    html = _telegram_entities_to_matrix_catch(evt.message, evt.entities) if evt.entities else None
+    text = add_surrogates(evt.message)
+    html = _telegram_entities_to_matrix_catch(text, evt.entities) if evt.entities else None
     relates_to = {}
 
     if evt.fwd_from:
@@ -116,7 +115,7 @@ async def telegram_to_matrix(evt, source, native_replies=False, message_link_in_
     if html:
         html = html.replace("\n", "<br/>")
 
-    return text, html, relates_to
+    return remove_surrogates(text), remove_surrogates(html), relates_to
 
 
 def _telegram_entities_to_matrix_catch(text, entities):
@@ -132,20 +131,16 @@ def _telegram_entities_to_matrix_catch(text, entities):
 def _telegram_entities_to_matrix(text, entities):
     if not entities:
         return text
-    # See "TEXT LEN EXPLANATION" near start of file
-    text = text.encode(TEMP_ENC)
     html = []
     last_offset = 0
     for entity in entities:
-        entity.offset *= 2
-        entity.length *= 2
         if entity.offset > last_offset:
-            html.append(escape(text[last_offset:entity.offset].decode(TEMP_ENC)))
+            html.append(escape(text[last_offset:entity.offset]))
         elif entity.offset < last_offset:
             continue
 
         skip_entity = False
-        entity_text = escape(text[entity.offset:entity.offset + entity.length].decode(TEMP_ENC))
+        entity_text = escape(text[entity.offset:entity.offset + entity.length])
         entity_type = type(entity)
 
         if entity_type == MessageEntityBold:
@@ -199,6 +194,6 @@ def _telegram_entities_to_matrix(text, entities):
         else:
             skip_entity = True
         last_offset = entity.offset + (0 if skip_entity else entity.length)
-    html.append(text[last_offset:].decode(TEMP_ENC))
+    html.append(text[last_offset:])
 
     return "".join(html)
