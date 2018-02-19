@@ -47,7 +47,7 @@ class AppService:
         self.log = (logging.getLogger(log) if isinstance(log, str)
                     else log or logging.getLogger("mautrix_appservice"))
 
-        def default_query_handler(_):
+        async def default_query_handler(_):
             return None
 
         self.query_user = query_user or default_query_handler
