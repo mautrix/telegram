@@ -467,7 +467,7 @@ class IntentAPI:
         elif not event_type:
             raise ValueError("Event type not given")
         await self.ensure_joined(room_id)
-        await self._ensure_has_power_level_for(room_id, event_type)
+        await self._ensure_has_power_level_for(room_id, event_type, is_state_event=True)
         url = self._get_state_url(room_id, event_type, state_key)
         return await self.client.request("PUT", url, content)
 
@@ -555,7 +555,7 @@ class IntentAPI:
                 return
         self.state_store.registered(self.mxid)
 
-    async def _ensure_has_power_level_for(self, room_id, event_type):
+    async def _ensure_has_power_level_for(self, room_id, event_type, is_state_event=False):
         if not room_id:
             raise ValueError("Room ID not given")
         elif not event_type:
@@ -563,7 +563,8 @@ class IntentAPI:
 
         if not self.state_store.has_power_levels(room_id):
             await self.get_power_levels(room_id)
-        if self.state_store.has_power_level(room_id, self.mxid, event_type):
+        if self.state_store.has_power_level(room_id, self.mxid, event_type,
+                                            is_state_event=is_state_event):
             return
         elif not self.bot:
             self.log.warning(
