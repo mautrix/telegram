@@ -36,7 +36,7 @@ class User(AbstractUser):
     by_tgid = {}
 
     def __init__(self, mxid, tgid=None, username=None, db_contacts=None, saved_contacts=0,
-                 db_portals=None):
+                 db_portals=None, db_instance=None):
         super().__init__()
         self.mxid = mxid
         self.tgid = tgid
@@ -46,6 +46,7 @@ class User(AbstractUser):
         self.db_contacts = db_contacts
         self.portals = {}
         self.db_portals = db_portals
+        self._db_instance = db_instance
 
         self.command_status = None
 
@@ -87,7 +88,7 @@ class User(AbstractUser):
 
     @property
     def db_portals(self):
-        return [portal.to_db(merge=False) for _, portal in self.portals.items()]
+        return [portal.db_instance for portal in self.portals.values()]
 
     @db_portals.setter
     def db_portals(self, portals):
@@ -100,14 +101,23 @@ class User(AbstractUser):
 
     # region Database conversion
 
-    def to_db(self):
-        return self.db.merge(
-            DBUser(mxid=self.mxid, tgid=self.tgid, tg_username=self.username,
-                   contacts=self.db_contacts, saved_contacts=self.saved_contacts,
-                   portals=self.db_portals))
+    @property
+    def db_instance(self):
+        if not self._db_instance:
+            self._db_instance = self.new_db_instance()
+        return self._db_instance
+
+    def new_db_instance(self):
+        return DBUser(mxid=self.mxid, tgid=self.tgid, tg_username=self.username,
+                      contacts=self.db_contacts, saved_contacts=self.saved_contacts,
+                      portals=self.db_portals)
 
     def save(self):
-        self.to_db()
+        self.db_instance.tgid = self.tgid
+        self.db_instance.username = self.username
+        self.db_instance.contacts = self.db_contacts
+        self.db_instance.saved_contacts = self.saved_contacts
+        self.db_instance.portals = self.db_portals
         self.db.commit()
 
     def delete(self):
@@ -116,13 +126,13 @@ class User(AbstractUser):
             del self.by_tgid[self.tgid]
         except KeyError:
             pass
-        self.db.delete(self.to_db())
+        self.db.delete(self.db_instance)
         self.db.commit()
 
     @classmethod
     def from_db(cls, db_user):
         return User(db_user.mxid, db_user.tgid, db_user.tg_username, db_user.contacts,
-                    db_user.saved_contacts, db_user.portals)
+                    db_user.saved_contacts, db_user.portals, db_instance=db_user)
 
     # endregion
     # region Telegram connection management
@@ -277,7 +287,7 @@ class User(AbstractUser):
 
         if create:
             user = cls(mxid)
-            cls.db.add(user.to_db())
+            cls.db.add(user.db_instance)
             cls.db.commit()
             return user
 

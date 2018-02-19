@@ -50,7 +50,7 @@ class Portal:
     by_tgid = {}
 
     def __init__(self, tgid, peer_type, tg_receiver=None, mxid=None, username=None, title=None,
-                 about=None, photo_id=None, save_to_cache=True):
+                 about=None, photo_id=None, db_instance=None):
         self.mxid = mxid
         self.tgid = tgid
         self.tg_receiver = tg_receiver or tgid
@@ -59,6 +59,8 @@ class Portal:
         self.title = title
         self.about = about
         self.photo_id = photo_id
+        self._db_instance = db_instance
+
         self._main_intent = None
         self._room_create_lock = asyncio.Lock()
 
@@ -66,11 +68,10 @@ class Portal:
         self._dedup_mxid = {}
         self._dedup_action = deque()
 
-        if save_to_cache:
-            if tgid:
-                self.by_tgid[self.tgid_full] = self
-            if mxid:
-                self.by_mxid[mxid] = self
+        if tgid:
+            self.by_tgid[self.tgid_full] = self
+        if mxid:
+            self.by_mxid[mxid] = self
 
     @property
     def tgid_full(self):
@@ -1047,13 +1048,16 @@ class Portal:
     # endregion
     # region Database conversion
 
-    def to_db(self, merge=True):
-        portal = DBPortal(tgid=self.tgid, tg_receiver=self.tg_receiver, peer_type=self.peer_type,
+    @property
+    def db_instance(self):
+        if not self._db_instance:
+            self._db_instance = self.new_db_instance()
+        return self._db_instance
+
+    def new_db_instance(self):
+        return DBPortal(tgid=self.tgid, tg_receiver=self.tg_receiver, peer_type=self.peer_type,
                           mxid=self.mxid, username=self.username, title=self.title,
                           about=self.about, photo_id=self.photo_id)
-        if merge:
-            return self.db.merge(portal)
-        return portal
 
     def migrate_and_save(self, new_id):
         existing = DBPortal.query.get(self.tgid_full)
@@ -1069,7 +1073,11 @@ class Portal:
         self.save()
 
     def save(self):
-        self.to_db()
+        self.db_instance.mxid = self.mxid
+        self.db_instance.username = self.username
+        self.db_instance.title = self.title
+        self.db_instance.about = self.about
+        self.db_instance.photo_id = self.photo_id
         self.db.commit()
 
     def delete(self):
@@ -1078,7 +1086,7 @@ class Portal:
             del self.by_mxid[self.mxid]
         except KeyError:
             pass
-        self.db.delete(self.to_db())
+        self.db.delete(self.db_instance)
         self.db.commit()
 
     @classmethod
@@ -1086,7 +1094,8 @@ class Portal:
         return Portal(tgid=db_portal.tgid, tg_receiver=db_portal.tg_receiver,
                       peer_type=db_portal.peer_type, mxid=db_portal.mxid,
                       username=db_portal.username, title=db_portal.title,
-                      about=db_portal.about, photo_id=db_portal.photo_id)
+                      about=db_portal.about, photo_id=db_portal.photo_id,
+                      db_instance=db_portal)
 
     # endregion
     # region Class instance lookup
@@ -1118,11 +1127,9 @@ class Portal:
             return cls.from_db(portal)
 
         if peer_type:
-            portal = Portal(tgid, peer_type=peer_type, tg_receiver=tg_receiver,
-                            save_to_cache=False)
-            cls.db.add(portal.to_db(merge=False))
+            portal = Portal(tgid, peer_type=peer_type, tg_receiver=tg_receiver)
+            cls.db.add(portal.db_instance)
             cls.db.commit()
-            cls.by_tgid[portal.tgid_full] = portal
             return portal
 
         return None

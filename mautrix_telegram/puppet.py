@@ -35,13 +35,15 @@ class Puppet:
     hs_domain = None
     cache = {}
 
-    def __init__(self, id=None, username=None, displayname=None, photo_id=None):
+    def __init__(self, id=None, username=None, displayname=None, photo_id=None, db_instance=None):
         self.id = id
         self.mxid = self.get_mxid_from_id(self.id)
 
         self.username = username
         self.displayname = displayname
         self.photo_id = photo_id
+        self._db_instance = db_instance
+
         self.intent = self.az.intent.user(self.mxid)
 
         self.cache[id] = self
@@ -50,17 +52,25 @@ class Puppet:
     def tgid(self):
         return self.id
 
-    def to_db(self):
-        return self.db.merge(
-            DBPuppet(id=self.id, username=self.username, displayname=self.displayname,
-                     photo_id=self.photo_id))
+    @property
+    def db_instance(self):
+        if not self._db_instance:
+            self._db_instance = self.new_db_instance()
+        return self._db_instance
+
+    def new_db_instance(self):
+        return DBPuppet(id=self.id, username=self.username, displayname=self.displayname,
+                        photo_id=self.photo_id)
 
     @classmethod
     def from_db(cls, db_puppet):
-        return Puppet(db_puppet.id, db_puppet.username, db_puppet.displayname, db_puppet.photo_id)
+        return Puppet(db_puppet.id, db_puppet.username, db_puppet.displayname, db_puppet.photo_id,
+                      db_instance=db_puppet)
 
     def save(self):
-        self.to_db()
+        self.db_instance.username = self.username
+        self.db_instance.displayname = self.displayname
+        self.db_instance.photo_id = self.photo_id
         self.db.commit()
 
     def similarity(self, query):
@@ -142,7 +152,7 @@ class Puppet:
 
         if create:
             puppet = cls(id)
-            cls.db.add(puppet.to_db())
+            cls.db.add(puppet.db_instance)
             cls.db.commit()
             return puppet
 
