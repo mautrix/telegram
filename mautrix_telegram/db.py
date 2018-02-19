@@ -15,7 +15,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from sqlalchemy import (Column, UniqueConstraint, ForeignKey, ForeignKeyConstraint, Integer,
-                        String, Boolean)
+                        BigInteger, String, Boolean)
 from sqlalchemy.orm import relationship
 
 from .base import Base
@@ -112,6 +112,7 @@ class TelegramFile(Base):
     mxc = Column(String)
     mime_type = Column(String)
     was_converted = Column(Boolean)
+    timestamp = Column(BigInteger, primary_key=True)
 
 
 def init(db_session):

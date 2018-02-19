@@ -25,6 +25,7 @@ import logging
 
 from PIL import Image
 import magic
+import time
 
 from telethon.tl.functions.messages import *
 from telethon.tl.functions.channels import *
@@ -815,7 +816,8 @@ class Portal:
         uploaded = await intent.upload_file(file, mime_type)
 
         db_file = DBTelegramFile(id=id, mxc=uploaded["content_uri"],
-                                 mime_type=mime_type, was_converted=image_converted)
+                                 mime_type=mime_type, was_converted=image_converted,
+                                 timestamp=int(time.time()))
         self.db.add(db_file)
         self.db.commit()
 
