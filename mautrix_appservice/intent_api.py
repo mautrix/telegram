@@ -409,9 +409,19 @@ class IntentAPI:
 
     @staticmethod
     def _get_event_url(room_id, event_type, txn_id):
+        if not room_id:
+            raise ValueError("Room ID not given")
+        elif not event_type:
+            raise ValueError("Event type not given")
+        elif not txn_id:
+            raise ValueError("Transaction ID not given")
         return f"/rooms/{quote(room_id)}/send/{quote(event_type)}/{quote(txn_id)}"
 
     async def send_event(self, room_id, event_type, content, txn_id=None):
+        if not room_id:
+            raise ValueError("Room ID not given")
+        elif not event_type:
+            raise ValueError("Event type not given")
         await self.ensure_joined(room_id)
         await self._ensure_has_power_level_for(room_id, event_type)
 
@@ -424,29 +434,47 @@ class IntentAPI:
 
     @staticmethod
     def _get_state_url(room_id, event_type, state_key=""):
+        if not room_id:
+            raise ValueError("Room ID not given")
+        elif not event_type:
+            raise ValueError("Event type not given")
         url = f"/rooms/{quote(room_id)}/state/{quote(event_type)}"
         if state_key:
             url += f"/{quote(state_key)}"
         return url
 
     async def send_state_event(self, room_id, event_type, content, state_key=""):
+        if not room_id:
+            raise ValueError("Room ID not given")
+        elif not event_type:
+            raise ValueError("Event type not given")
         await self.ensure_joined(room_id)
         await self._ensure_has_power_level_for(room_id, event_type)
         url = self._get_state_url(room_id, event_type, state_key)
         return await self.client.request("PUT", url, content)
 
     async def get_state_event(self, room_id, event_type, state_key=""):
+        if not room_id:
+            raise ValueError("Room ID not given")
+        elif not event_type:
+            raise ValueError("Event type not given")
         await self.ensure_joined(room_id)
         url = self._get_state_url(room_id, event_type, state_key)
         return await self.client.request("GET", url)
 
     def join_room(self, room_id):
+        if not room_id:
+            raise ValueError("Room ID not given")
         return self.ensure_joined(room_id, ignore_cache=True)
 
     def _join_room_direct(self, room):
+        if not room:
+            raise ValueError("Room ID not given")
         return self.client.request("POST", f"/join/{quote(room)}")
 
     def leave_room(self, room_id):
+        if not room_id:
+            raise ValueError("Room ID not given")
         try:
             self.state_store.left(room_id, self.mxid)
             return self.client.request("POST", f"/rooms/{quote(room_id)}/leave")
@@ -455,6 +483,8 @@ class IntentAPI:
                 raise
 
     def get_room_memberships(self, room_id):
+        if not room_id:
+            raise ValueError("Room ID not given")
         return self.client.request("GET", f"/rooms/{quote(room_id)}/members")
 
     async def get_room_members(self, room_id, allowed_memberships=("join",)):
@@ -472,6 +502,8 @@ class IntentAPI:
     # region Ensure functions
 
     async def ensure_joined(self, room_id, ignore_cache=False):
+        if not room_id:
+            raise ValueError("Room ID not given")
         if not ignore_cache and self.state_store.is_joined(room_id, self.mxid):
             return
         await self.ensure_registered()
@@ -506,6 +538,11 @@ class IntentAPI:
         self.state_store.registered(self.mxid)
 
     async def _ensure_has_power_level_for(self, room_id, event_type):
+        if not room_id:
+            raise ValueError("Room ID not given")
+        elif not event_type:
+            raise ValueError("Event type not given")
+
         if not self.state_store.has_power_levels(room_id):
             await self.get_power_levels(room_id)
         if self.state_store.has_power_level(room_id, self.mxid, event_type):
