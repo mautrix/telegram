@@ -14,7 +14,8 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
-from sqlalchemy import Column, UniqueConstraint, ForeignKey, ForeignKeyConstraint, Integer, String
+from sqlalchemy import (Column, UniqueConstraint, ForeignKey, ForeignKeyConstraint, Integer,
+                        String, Boolean)
 from sqlalchemy.orm import relationship
 
 from .base import Base
@@ -103,6 +104,16 @@ class BotChat(Base):
     type = Column(String, nullable=False)
 
 
+class TelegramFile(Base):
+    query = None
+    __tablename__ = "telegram_file"
+
+    id = Column(String, primary_key=True)
+    mxc = Column(String)
+    mime_type = Column(String)
+    was_converted = Column(Boolean)
+
+
 def init(db_session):
     Portal.query = db_session.query_property()
     Message.query = db_session.query_property()
@@ -110,3 +121,4 @@ def init(db_session):
     User.query = db_session.query_property()
     Puppet.query = db_session.query_property()
     BotChat.query = db_session.query_property()
+    TelegramFile.query = db_session.query_property()

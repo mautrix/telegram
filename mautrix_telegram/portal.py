@@ -32,7 +32,7 @@ from telethon.errors.rpc_error_list import *
 from telethon.tl.types import *
 from mautrix_appservice import MatrixRequestError, IntentError
 
-from .db import Portal as DBPortal, Message as DBMessage
+from .db import Portal as DBPortal, Message as DBMessage, TelegramFile as DBTelegramFile
 from . import puppet as p, user as u, formatter
 
 mimetypes.init()
@@ -763,21 +763,21 @@ class Portal:
 
     async def handle_telegram_photo(self, source, intent, media, relates_to=None):
         largest_size = self._get_largest_photo_size(media.photo)
-        file = await source.client.download_file_bytes(largest_size.location)
-        mime_type = magic.from_buffer(file, mime=True)
-        uploaded = await intent.upload_file(file, mime_type)
+        file = await self.transfer_file_to_matrix(source.client, intent, largest_size.location)
+        if not file:
+            return None
         info = {
             "h": largest_size.h,
             "w": largest_size.w,
             "size": len(largest_size.bytes) if (
                 isinstance(largest_size, PhotoCachedSize)) else largest_size.size,
             "orientation": 0,
-            "mimetype": mime_type,
+            "mimetype": file.mime_type,
         }
         name = media.caption
         await intent.set_typing(self.mxid, is_typing=False)
-        return await intent.send_image(self.mxid, uploaded["content_uri"], info=info,
-                                       text=name, relates_to=relates_to)
+        return await intent.send_image(self.mxid, file.mxc, info=info, text=name,
+                                       relates_to=relates_to)
 
     def convert_webp(self, file, to="png"):
         try:
@@ -789,24 +789,52 @@ class Portal:
             self.log.exception(f"Failed to convert webp to {to}")
             return "image/webp", file
 
-    async def handle_telegram_document(self, source, intent, media, relates_to=None):
-        file = await source.client.download_file_bytes(media.document)
+    async def transfer_file_to_matrix(self, client, intent, location):
+        if isinstance(location, (Document, InputDocumentFileLocation)):
+            id = f"{location.id}-{location.version}"
+        elif not isinstance(location, (FileLocation, InputFileLocation)):
+            id = f"{location.volume_id}-{location.local_id}"
+        else:
+            return None
+
+        db_file = DBTelegramFile.query.get(id)
+        if db_file:
+            return db_file
+
+        try:
+            file = await client.download_file_bytes(location)
+        except LocationInvalidError:
+            return None
         mime_type = magic.from_buffer(file, mime=True)
-        dont_change_mime = False
+
+        image_converted = False
         if mime_type == "image/webp":
             mime_type, file = self.convert_webp(file, to="png")
-            dont_change_mime = True
+            image_converted = True
+
         uploaded = await intent.upload_file(file, mime_type)
+
+        db_file = DBTelegramFile(id=id, mxc=uploaded["content_uri"],
+                                 mime_type=mime_type, was_converted=image_converted)
+        self.db.add(db_file)
+        self.db.commit()
+
+        return db_file
+
+    async def handle_telegram_document(self, source, intent, media, relates_to=None):
+        file = await self.transfer_file_to_matrix(source.client, intent, media.document)
+        if not file:
+            return None
         name = media.caption
         for attr in media.document.attributes:
             if not name and isinstance(attr, DocumentAttributeFilename):
                 name = attr.file_name
-                if not dont_change_mime:
+                if not file.was_converted:
                     (mime_from_name, _) = mimetypes.guess_type(name)
-                    mime_type = mime_from_name or mime_type
+                    file.mime_type = mime_from_name or file.mime_type
             elif isinstance(attr, DocumentAttributeSticker):
                 name = f"Sticker for {attr.alt}"
-        mime_type = media.document.mime_type or mime_type
+        mime_type = media.document.mime_type or file.mime_type
         info = {
             "size": media.document.size,
             "mimetype": mime_type,
@@ -819,8 +847,8 @@ class Portal:
         elif mime_type.startswith("image/"):
             type = "m.image"
         await intent.set_typing(self.mxid, is_typing=False)
-        return await intent.send_file(self.mxid, uploaded["content_uri"], info=info,
-                                      text=name, file_type=type, relates_to=relates_to)
+        return await intent.send_file(self.mxid, file.mxc, info=info, text=name, file_type=type,
+                                      relates_to=relates_to)
 
     def handle_telegram_location(self, source, intent, location, relates_to=None):
         long = location.long
@@ -935,6 +963,9 @@ class Portal:
                 return
         else:
             self.log.debug("Unhandled Telegram message: %s", evt)
+            return
+
+        if not response:
             return
 
         mxid = response["event_id"]
@@ -1064,8 +1095,8 @@ class Portal:
 
     def new_db_instance(self):
         return DBPortal(tgid=self.tgid, tg_receiver=self.tg_receiver, peer_type=self.peer_type,
-                          mxid=self.mxid, username=self.username, title=self.title,
-                          about=self.about, photo_id=self.photo_id)
+                        mxid=self.mxid, username=self.username, title=self.title,
+                        about=self.about, photo_id=self.photo_id)
 
     def migrate_and_save(self, new_id):
         existing = DBPortal.query.get(self.tgid_full)
