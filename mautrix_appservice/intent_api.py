@@ -233,7 +233,7 @@ class IntentAPI:
         content = {
             "visibility": "private",
             "is_direct": is_direct,
-            "preset": "private_chat" if is_public else "public_chat",
+            "preset": "public_chat" if is_public else "private_chat",
             "guests_can_join": guests_can_join,
         }
         if alias:
