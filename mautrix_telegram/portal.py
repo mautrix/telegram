@@ -397,10 +397,18 @@ class Portal:
             return chat.users, chat.full_chat.participants.participants
         elif self.peer_type == "channel":
             try:
-                participants = await user.client(GetParticipantsRequest(
-                    entity, ChannelParticipantsRecent(), offset=0, limit=100, hash=0
-                ))
-                return participants.users, participants.participants
+                users, participants = [], []
+                offset = 0
+                while True:
+                    response = await user.client(GetParticipantsRequest(
+                        entity, ChannelParticipantsSearch(""), offset=offset, limit=100, hash=0
+                    ))
+                    if not response.users:
+                        break
+                    participants += response.participants
+                    users += response.users
+                    offset += len(response.users)
+                return users, participants
             except ChatAdminRequiredError:
                 return [], []
         elif self.peer_type == "user":
@@ -1058,6 +1066,11 @@ class Portal:
         self.db.commit()
 
     def delete(self):
+        try:
+            del self.by_tgid[self.tgid_full]
+            del self.by_mxid[self.mxid]
+        except KeyError:
+            pass
         self.db.delete(self.to_db())
         self.db.commit()
 
