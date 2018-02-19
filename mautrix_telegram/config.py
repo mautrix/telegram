@@ -94,7 +94,7 @@ class Config(DictWithRecursion):
         self.set("appservice.hs_token", self._new_token())
 
         url = (f"{self['appservice.protocol']}://"
-               + f"{self['appservice.hostname']}:{self['appservice.port']}")
+               f"{self['appservice.hostname']}:{self['appservice.port']}")
         self._registration = {
             "id": self.get("appservice.id", "telegram"),
             "as_token": self["appservice.as_token"],

@@ -16,31 +16,28 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import logging
 import asyncio
-import platform
+import re
 
 from telethon.tl.types import *
 from telethon.tl.types.contacts import ContactsNotModified
-from telethon.tl.types import User as TLUser
 from telethon.tl.functions.contacts import GetContactsRequest, SearchRequest
 from mautrix_appservice import MatrixRequestError
 
-from .db import User as DBUser, Message as DBMessage, Contact as DBContact
-from .tgclient import MautrixTelegramClient
-from . import portal as po, puppet as pu, __version__
+from .db import User as DBUser, Contact as DBContact
+from .abstract_user import AbstractUser
+from . import portal as po, puppet as pu
 
 config = None
 
 
-class User:
-    loop = None
+class User(AbstractUser):
     log = logging.getLogger("mau.user")
-    db = None
-    az = None
     by_mxid = {}
     by_tgid = {}
 
     def __init__(self, mxid, tgid=None, username=None, db_contacts=None, saved_contacts=0,
                  db_portals=None):
+        super().__init__()
         self.mxid = mxid
         self.tgid = tgid
         self.username = username
@@ -51,9 +48,6 @@ class User:
         self.db_portals = db_portals
 
         self.command_status = None
-        self.connected = False
-        self.client = None
-        self._init_client()
 
         self.is_admin = self.mxid in config.get("bridge.admins", [])
 
@@ -67,13 +61,17 @@ class User:
         if tgid:
             self.by_tgid[tgid] = self
 
-    @property
-    def logged_in(self):
-        return self.client.is_user_authorized()
+        self._init_client()
 
     @property
-    def has_full_access(self):
-        return self.logged_in and self.whitelisted
+    def name(self):
+        return self.mxid
+
+    @property
+    def displayname(self):
+        # TODO show better username
+        match = re.compile("@(.+):(.+)").match(self.mxid)
+        return match.group(1)
 
     @property
     def db_contacts(self):
@@ -129,23 +127,13 @@ class User:
     # endregion
     # region Telegram connection management
 
-    def _init_client(self):
-        device = f"{platform.system()} {platform.release()}"
-        sysversion = MautrixTelegramClient.__version__
-        self.client = MautrixTelegramClient(self.mxid,
-                                            config["telegram.api_id"],
-                                            config["telegram.api_hash"],
-                                            loop=self.loop,
-                                            app_version=__version__,
-                                            system_version=sysversion,
-                                            device_model=device)
-        self.client.add_update_handler(self.update_catch)
-
     async def start(self, delete_unless_authenticated=False):
-        self.connected = await self.client.connect()
+        await super().start()
         if self.logged_in:
+            self.log.debug(f"Ensuring post_login() for {self.name}")
             asyncio.ensure_future(self.post_login(), loop=self.loop)
         elif delete_unless_authenticated:
+            self.log.debug(f"Unauthenticated user {self.name} start()ed, deleting...")
             # User not logged in -> forget user
             self.client.disconnect()
             self.client.session.delete()
@@ -159,11 +147,6 @@ class User:
             await self.sync_contacts()
         except Exception:
             self.log.exception("Failed to run post-login functions")
-
-    def stop(self):
-        self.client.disconnect()
-        self.client = None
-        self.connected = False
 
     # endregion
     # region Telegram actions that need custom methods
@@ -234,14 +217,8 @@ class User:
         return await self._search_remote(query), True
 
     async def sync_dialogs(self):
-        dialogs = await self.client.get_dialogs(limit=30)
         creators = []
-        for dialog in dialogs:
-            entity = dialog.entity
-            invalid = (isinstance(entity, (TLUser, ChatForbidden, ChannelForbidden))
-                       or (isinstance(entity, Chat) and (entity.deactivated or entity.left)))
-            if invalid:
-                continue
+        for entity in await self._get_dialogs(limit=30):
             portal = po.Portal.get_by_entity(entity)
             self.portals[portal.tgid_full] = portal
             creators.append(portal.create_matrix_room(self, entity, invites=[self.mxid]))
@@ -284,135 +261,6 @@ class User:
         self.save()
 
     # endregion
-    # region Telegram update handling
-
-    async def update_catch(self, update):
-        try:
-            await self.update(update)
-        except Exception:
-            self.log.exception("Failed to handle Telegram update")
-
-    async def update(self, update):
-        if isinstance(update, (UpdateShortChatMessage, UpdateShortMessage, UpdateNewChannelMessage,
-                               UpdateNewMessage, UpdateEditMessage, UpdateEditChannelMessage)):
-            await self.update_message(update)
-        elif isinstance(update, (UpdateChatUserTyping, UpdateUserTyping)):
-            await self.update_typing(update)
-        elif isinstance(update, UpdateUserStatus):
-            await self.update_status(update)
-        elif isinstance(update, (UpdateChatAdmins, UpdateChatParticipantAdmin)):
-            await self.update_admin(update)
-        elif isinstance(update, UpdateChatParticipants):
-            portal = po.Portal.get_by_tgid(update.participants.chat_id)
-            if portal and portal.mxid:
-                await portal.update_telegram_participants(update.participants.participants)
-        elif isinstance(update, UpdateChannelPinnedMessage):
-            portal = po.Portal.get_by_tgid(update.channel_id)
-            if portal and portal.mxid:
-                await portal.update_telegram_pin(self, update.id)
-        elif isinstance(update, (UpdateUserName, UpdateUserPhoto)):
-            await self.update_others_info(update)
-        elif isinstance(update, UpdateReadHistoryOutbox):
-            await self.update_read_receipt(update)
-        else:
-            self.log.debug("Unhandled update: %s", update)
-
-    async def update_read_receipt(self, update):
-        if not isinstance(update.peer, PeerUser):
-            self.log.debug("Unexpected read receipt peer: %s", update.peer)
-            return
-
-        portal = po.Portal.get_by_tgid(update.peer.user_id, self.tgid)
-        if not portal or not portal.mxid:
-            return
-
-        # We check that these are user read receipts, so tg_space is always the user ID.
-        message = DBMessage.query.get((update.max_id, self.tgid))
-        if not message:
-            return
-
-        puppet = pu.Puppet.get(update.peer.user_id)
-        await puppet.intent.mark_read(portal.mxid, message.mxid)
-
-    async def update_admin(self, update):
-        portal = po.Portal.get_by_tgid(update.chat_id, peer_type="chat")
-        if isinstance(update, UpdateChatAdmins):
-            await portal.set_telegram_admins_enabled(update.enabled)
-        elif isinstance(update, UpdateChatParticipantAdmin):
-            puppet = pu.Puppet.get(update.user_id)
-            user = User.get_by_tgid(update.user_id)
-            await portal.set_telegram_admin(puppet, user)
-
-    async def update_typing(self, update):
-        if isinstance(update, UpdateUserTyping):
-            portal = po.Portal.get_by_tgid(update.user_id, self.tgid, "user")
-        else:
-            portal = po.Portal.get_by_tgid(update.chat_id, peer_type="chat")
-        sender = pu.Puppet.get(update.user_id)
-        await portal.handle_telegram_typing(sender, update)
-
-    async def update_others_info(self, update):
-        puppet = pu.Puppet.get(update.user_id)
-        if isinstance(update, UpdateUserName):
-            if await puppet.update_displayname(self, update):
-                puppet.save()
-        elif isinstance(update, UpdateUserPhoto):
-            if await puppet.update_avatar(self, update.photo.photo_big):
-                puppet.save()
-
-    async def update_status(self, update):
-        puppet = pu.Puppet.get(update.user_id)
-        if isinstance(update.status, UserStatusOnline):
-            await puppet.intent.set_presence("online")
-        elif isinstance(update.status, UserStatusOffline):
-            await puppet.intent.set_presence("offline")
-        else:
-            self.log.warning("Unexpected user status update: %s", update)
-        return
-
-    def get_message_details(self, update):
-        if isinstance(update, UpdateShortChatMessage):
-            portal = po.Portal.get_by_tgid(update.chat_id, peer_type="chat")
-            sender = pu.Puppet.get(update.from_id)
-        elif isinstance(update, UpdateShortMessage):
-            portal = po.Portal.get_by_tgid(update.user_id, self.tgid, "user")
-            sender = pu.Puppet.get(self.tgid if update.out else update.user_id)
-        elif isinstance(update, (UpdateNewMessage, UpdateNewChannelMessage,
-                                 UpdateEditMessage, UpdateEditChannelMessage)):
-            update = update.message
-            if isinstance(update.to_id, PeerUser) and not update.out:
-                portal = po.Portal.get_by_tgid(update.from_id, peer_type="user",
-                                               tg_receiver=self.tgid)
-            else:
-                portal = po.Portal.get_by_entity(update.to_id, receiver_id=self.tgid)
-            sender = pu.Puppet.get(update.from_id) if update.from_id else None
-        else:
-            self.log.warning(
-                f"Unexpected message type in User#get_message_details: {type(update)}")
-            return update, None, None
-        return update, sender, portal
-
-    def update_message(self, original_update):
-        update, sender, portal = self.get_message_details(original_update)
-
-        if isinstance(update, MessageService):
-            if isinstance(update.action, MessageActionChannelMigrateFrom):
-                self.log.debug(f"Ignoring action %s to %s by %d", update.action, portal.tgid_log,
-                               sender.id)
-                return
-            self.log.debug("Handling action %s to %s by %d", update.action, portal.tgid_log,
-                           sender.id)
-            return portal.handle_telegram_action(self, sender, update.action)
-
-        user = sender.tgid if sender else "admin"
-        if isinstance(original_update, (UpdateEditMessage, UpdateEditChannelMessage)):
-            self.log.debug("Handling edit %s to %s by %s", update, portal.tgid_log, user)
-            return portal.handle_telegram_edit(self, sender, update)
-
-        self.log.debug("Handling message %s to %s by %s", update, portal.tgid_log, user)
-        return portal.handle_telegram_message(self, sender, update)
-
-    # endregion
     # region Class instance lookup
 
     @classmethod
@@ -425,14 +273,12 @@ class User:
         user = DBUser.query.get(mxid)
         if user:
             user = cls.from_db(user)
-            asyncio.ensure_future(user.start(), loop=cls.loop)
             return user
 
         if create:
             user = cls(mxid)
             cls.db.add(user.to_db())
             cls.db.commit()
-            asyncio.ensure_future(user.start(), loop=cls.loop)
             return user
 
         return None
@@ -447,7 +293,6 @@ class User:
         user = DBUser.query.filter(DBUser.tgid == tgid).one_or_none()
         if user:
             user = cls.from_db(user)
-            asyncio.ensure_future(user.start(), loop=cls.loop)
             return user
 
         return None
@@ -468,7 +313,7 @@ class User:
 
 def init(context):
     global config
-    User.az, User.db, config, User.loop = context
+    config = context.config
 
     users = [User.from_db(user) for user in DBUser.query.all()]
     return [user.start(delete_unless_authenticated=True) for user in users]

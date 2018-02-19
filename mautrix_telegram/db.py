@@ -48,7 +48,7 @@ class Message(Base):
     tgid = Column(Integer, primary_key=True)
     tg_space = Column(Integer, primary_key=True)
 
-    __table_args__ = (UniqueConstraint('mxid', 'mx_room', 'tg_space', name='_mx_id_room'),)
+    __table_args__ = (UniqueConstraint("mxid", "mx_room", "tg_space", name="_mx_id_room"),)
 
 
 class UserPortal(Base):
@@ -95,9 +95,18 @@ class Puppet(Base):
     photo_id = Column(String, nullable=True)
 
 
+# Fucking Telegram not telling bots what chats they are in 3:<
+class BotChat(Base):
+    query = None
+    __tablename__ = "bot_chat"
+    id = Column(Integer, primary_key=True)
+    type = Column(String, nullable=False)
+
+
 def init(db_session):
     Portal.query = db_session.query_property()
     Message.query = db_session.query_property()
     UserPortal.query = db_session.query_property()
     User.query = db_session.query_property()
     Puppet.query = db_session.query_property()
+    BotChat.query = db_session.query_property()

@@ -189,8 +189,8 @@ def matrix_reply_to_telegram(content, tg_space, room_id=None):
         reply = content["m.relates_to"]["m.in_reply_to"]
         room_id = room_id or reply["room_id"]
         event_id = reply["event_id"]
-        message = DBMessage.query.filter(DBMessage.mxid == event_id and
-                                         DBMessage.tg_space == tg_space and
+        message = DBMessage.query.filter(DBMessage.mxid == event_id,
+                                         DBMessage.tg_space == tg_space,
                                          DBMessage.mx_room == room_id).one_or_none()
         if message:
             return message.tgid
@@ -244,7 +244,7 @@ async def telegram_event_to_matrix(evt, source, native_replies=False, message_li
         if not fwd_from:
             fwd_from = "Unknown user"
         html = (f"Forwarded message from <b>{fwd_from}</b><br/>"
-                + f"<blockquote>{html}</blockquote>")
+                f"<blockquote>{html}</blockquote>")
 
     if evt.reply_to_msg_id:
         space = (evt.to_id.channel_id
@@ -271,7 +271,7 @@ async def telegram_event_to_matrix(evt, source, native_replies=False, message_li
                     displayname = puppet.displayname if puppet else sender
                     reply_to_user = f"<a href='https://matrix.to/#/{sender}'>{displayname}</a>"
                     reply_to_msg = (("<a href='https://matrix.to/#/"
-                                     + f"{msg.mx_room}/{msg.mxid}'>{reply_text}</a>")
+                                     f"{msg.mx_room}/{msg.mxid}'>{reply_text}</a>")
                                     if message_link_in_reply else "Reply")
                     quote = f"{reply_to_msg} to {reply_to_user}<blockquote>{body}</blockquote>"
                 except (ValueError, KeyError, MatrixRequestError):
@@ -331,8 +331,8 @@ def _telegram_to_matrix(text, entities):
         elif entity_type == MessageEntityPre:
             if entity.language:
                 html.append("<pre>"
-                            + f"<code class='language-{entity.language}'>{entity_text}</code>"
-                            + "</pre>")
+                            f"<code class='language-{entity.language}'>{entity_text}</code>"
+                            "</pre>")
             else:
                 html.append(f"<pre><code>{entity_text}</code></pre>")
         elif entity_type == MessageEntityMention:

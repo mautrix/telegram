@@ -194,12 +194,16 @@ class IntentAPI:
         content = {"displayname": name}
         return await self.client.request("PUT", f"/profile/{self.mxid}/displayname", content)
 
-    async def set_presence(self, status="online"):
+    async def set_presence(self, status="online", ignore_cache=False):
         await self.ensure_registered()
+        if not ignore_cache and self.state_store.has_presence(self.mxid, status):
+            return
         content = {
             "presence": status
         }
-        return await self.client.request("PUT", f"/presence/{self.mxid}/status", content)
+        resp = await self.client.request("PUT", f"/presence/{self.mxid}/status", content)
+        self.state_store.set_presence(self.mxid, status)
+        return resp
 
     async def set_avatar(self, url):
         await self.ensure_registered()
@@ -223,11 +227,14 @@ class IntentAPI:
     # region Room actions
 
     async def create_room(self, alias=None, is_public=False, name=None, topic=None,
-                          is_direct=False, invitees=None, initial_state=None):
+                          is_direct=False, invitees=None, initial_state=None,
+                          guests_can_join=False):
         await self.ensure_registered()
         content = {
-            "visibility": "public" if is_public else "private",
+            "visibility": "private",
             "is_direct": is_direct,
+            "preset": "public_chat" if is_public else "private_chat",
+            "guests_can_join": guests_can_join,
         }
         if alias:
             content["room_alias_name"] = alias
@@ -326,18 +333,29 @@ class IntentAPI:
             events.remove(event_id)
             await self.set_pinned_messages(room_id, events)
 
+    async def set_join_rule(self, room_id, join_rule):
+        if join_rule not in ("public", "knock", "invite", "private"):
+            raise ValueError(f"Invalid join rule \"{join_rule}\"")
+        await self.send_state_event(room_id, "m.room.join_rules", {
+            "join_rule": join_rule,
+        })
+
     async def get_event(self, room_id, event_id):
         await self.ensure_joined(room_id)
         return await self.client.request("GET", f"/rooms/{room_id}/event/{event_id}")
 
-    async def set_typing(self, room_id, is_typing=True, timeout=5000):
+    async def set_typing(self, room_id, is_typing=True, timeout=5000, ignore_cache=False):
         await self.ensure_joined(room_id)
+        if not ignore_cache and is_typing == self.state_store.is_typing(room_id, self.mxid):
+            return
         content = {
             "typing": is_typing
         }
         if is_typing:
             content["timeout"] = timeout
-        return await self.client.request("PUT", f"/rooms/{room_id}/typing/{self.mxid}", content)
+        resp = await self.client.request("PUT", f"/rooms/{room_id}/typing/{self.mxid}", content)
+        self.state_store.set_typing(room_id, self.mxid, is_typing, timeout)
+        return resp
 
     async def mark_read(self, room_id, event_id):
         await self.ensure_joined(room_id)
@@ -551,7 +569,7 @@ class IntentAPI:
             self.log.warning(
                 f"Power level of {self.mxid} is not enough for {event_type} in {room_id}")
             # raise IntentError(f"Power level of {self.mxid} is not enough"
-            #                  + f"for {event_type} in {room_id}")
+            #                   f"for {event_type} in {room_id}")
             return
         # TODO implement
 

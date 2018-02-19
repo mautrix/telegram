@@ -51,7 +51,7 @@ async def search(evt):
     else:
         reply += ["**Results in contacts:**", ""]
     reply += [(f"* [{puppet.displayname}](https://matrix.to/#/{puppet.mxid}): "
-               + f"{puppet.id} ({similarity}% match)")
+               f"{puppet.id} ({similarity}% match)")
               for puppet, similarity in results]
 
     # TODO somehow show remote channel results when joining by alias is possible?
@@ -71,8 +71,8 @@ async def pm(evt):
         return await evt.reply("That doesn't seem to be a user.")
     portal = po.Portal.get_by_entity(user, evt.sender.tgid)
     await portal.create_matrix_room(evt.sender, user, [evt.sender.mxid])
-    return await evt.reply(
-        f"Created private chat room with {pu.Puppet.get_displayname(user, False)}")
+    return await evt.reply("Created private chat room with "
+                           f"{pu.Puppet.get_displayname(user, False)}")
 
 
 @command_handler()
@@ -116,9 +116,9 @@ async def delete_portal(evt):
         "action": "Portal deletion",
     }
     return await evt.reply("Please confirm deletion of portal "
-                           + f"[{room_id}](https://matrix.to/#/{room_id}) "
-                           + f"to Telegram chat \"{portal.title}\" "
-                           + "by typing `$cmdprefix+sp confirm-delete`")
+                           f"[{room_id}](https://matrix.to/#/{room_id}) "
+                           f"to Telegram chat \"{portal.title}\" "
+                           "by typing `$cmdprefix+sp confirm-delete`")
 
 
 @command_handler()
@@ -184,16 +184,16 @@ async def create(evt):
         return await evt.reply("Please set a title before creating a Telegram chat.")
     elif (not levels or not levels["users"] or evt.az.intent.mxid not in levels["users"] or
           levels["users"][evt.az.intent.mxid] < 100):
-        return await evt.reply(f"Please give "
-                               + f"[the bridge bot](https://matrix.to/#/{evt.az.intent.mxid})"
-                               + f" a power level of 100 before creating a Telegram chat.")
+        return await evt.reply("Please give "
+                               f"[the bridge bot](https://matrix.to/#/{evt.az.intent.mxid})"
+                               " a power level of 100 before creating a Telegram chat.")
     else:
         for user, level in levels["users"].items():
             if level >= 100 and user != evt.az.intent.mxid:
                 return await evt.reply(
                     f"Please make sure only the bridge bot has power level above"
-                    + f"99 before creating a Telegram chat.\n\n"
-                    + f"Use power level 95 instead of 100 for admins.")
+                    f"99 before creating a Telegram chat.\n\n"
+                    f"Use power level 95 instead of 100 for admins.")
 
     supergroup = type == "supergroup"
     type = {

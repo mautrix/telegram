@@ -31,15 +31,14 @@ class Puppet:
     db = None
     az = None
     mxid_regex = None
+    username_template = None
+    hs_domain = None
     cache = {}
 
     def __init__(self, id=None, username=None, displayname=None, photo_id=None):
         self.id = id
+        self.mxid = self.get_mxid_from_id(self.id)
 
-        self.localpart = config.get("bridge.username_template", "telegram_{userid}").format(
-            userid=self.id)
-        hs = config["homeserver"]["domain"]
-        self.mxid = f"@{self.localpart}:{hs}"
         self.username = username
         self.displayname = displayname
         self.photo_id = photo_id
@@ -162,6 +161,10 @@ class Puppet:
         return None
 
     @classmethod
+    def get_mxid_from_id(cls, id):
+        return f"@{cls.username_template.format(userid=id)}:{cls.hs_domain}"
+
+    @classmethod
     def find_by_username(cls, username):
         for _, puppet in cls.cache.items():
             if puppet.username == username:
@@ -176,7 +179,8 @@ class Puppet:
 
 def init(context):
     global config
-    Puppet.az, Puppet.db, config, _ = context
-    localpart = config.get("bridge.username_template", "telegram_{userid}").format(userid="(.+)")
-    hs = config["homeserver"]["domain"]
-    Puppet.mxid_regex = re.compile(f"@{localpart}:{hs}")
+    Puppet.az, Puppet.db, config, _, _ = context
+    Puppet.username_template = config.get("bridge.username_template", "telegram_{userid}")
+    Puppet.hs_domain = config["homeserver"]["domain"]
+    localpart = Puppet.username_template.format(userid="(.+)")
+    Puppet.mxid_regex = re.compile(f"@{localpart}:{Puppet.hs_domain}")

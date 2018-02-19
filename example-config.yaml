@@ -67,6 +67,8 @@ bridge:
     # Show message editing as a reply to the original message.
     # If this is false, message edits are not shown at all, as Matrix does not support editing yet.
     edits_as_replies: False
+    # Whether or not Matrix bot messages (type m.notice) should be bridged.
+    bridge_notices: False
 
     # The prefix for commands. Only required in non-management rooms.
     command_prefix: "!tg"
@@ -87,3 +89,5 @@ telegram:
     # Get your own API keys at https://my.telegram.org/apps
     api_id: 12345
     api_hash: tjyd5yge35lbodk1xwzw2jstp90k55qz
+    # (Optional) Create your own bot at https://t.me/BotFather
+    #bot_token: 123456789:ABCD-QBPd3VrWRhg623xYh07WUWErYA9eMI

@@ -27,7 +27,7 @@ def command_handler(needs_auth=True, management_only=False, needs_admin=False, n
         def wrapper(evt):
             if management_only and not evt.is_management:
                 return evt.reply(f"`{evt.command}` is a restricted command:"
-                                 + "you may only run it in management rooms.")
+                                 "you may only run it in management rooms.")
             elif needs_auth and not evt.sender.logged_in:
                 return evt.reply("This command requires you to be logged in.")
             elif needs_admin and not evt.sender.is_admin:
@@ -45,6 +45,8 @@ class CommandEvent:
         self.az = handler.az
         self.log = handler.log
         self.loop = handler.loop
+        self.tgbot = handler.tgbot
+        self.config = handler.config
         self.command_prefix = handler.command_prefix
         self.room_id = room
         self.sender = sender
@@ -87,7 +89,7 @@ class CommandHandler:
     log = logging.getLogger("mau.commands")
 
     def __init__(self, context):
-        self.az, self.db, self.config, self.loop = context
+        self.az, self.db, self.config, self.loop, self.tgbot = context
         self.command_prefix = self.config["bridge.command_prefix"]
 
     # region Utility functions for handling commands
@@ -110,6 +112,6 @@ class CommandHandler:
         except FloodWaitError as e:
             return evt.reply(f"Flood error: Please wait {format_duration(e.seconds)}")
         except Exception:
-            self.log.exception(f"Fatal error handling command "
-                               + f"{evt.command} {' '.join(args)} from {sender.mxid}")
+            self.log.exception("Fatal error handling command "
+                               f"{evt.command} {' '.join(args)} from {sender.mxid}")
             return evt.reply("Fatal error while handling command. Check logs for more details.")
