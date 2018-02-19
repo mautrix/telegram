@@ -169,12 +169,10 @@ class MatrixHandler:
 
         is_command, text = self.is_command(message)
         sender = await User.get_by_mxid(sender).ensure_started()
-        print(sender, sender.whitelisted)
         if not sender.whitelisted:
             return
 
         portal = Portal.get_by_mxid(room)
-        print(is_command, portal, sender.logged_in, portal.has_bot)
         if not is_command and portal and (sender.logged_in or portal.has_bot):
             await portal.handle_matrix_message(sender, message, event_id)
             return

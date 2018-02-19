@@ -93,7 +93,6 @@ class Portal:
 
     @property
     def has_bot(self):
-        print("BOT PRINT", self.bot)
         return self.bot and self.bot.is_in_chat(self.tgid)
 
     @staticmethod
