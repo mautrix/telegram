@@ -23,6 +23,7 @@ from telethon.tl.functions.channels import GetChannelsRequest
 
 from .abstract_user import AbstractUser
 from .db import BotChat
+from . import puppet as pu
 
 config = None
 
@@ -47,6 +48,7 @@ class Bot(AbstractUser):
     async def post_login(self):
         info = await self.client.get_me()
         self.tgid = info.id
+        self.mxid = pu.Puppet.get_mxid_from_id(self.tgid)
 
         chat_ids = [id for id, type in self.chats.items() if type == "chat"]
         response = await self.client(GetChatsRequest(chat_ids))

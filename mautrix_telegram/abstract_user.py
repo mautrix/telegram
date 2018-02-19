@@ -37,6 +37,7 @@ class AbstractUser:
         self.whitelisted = False
         self.client = None
         self.tgid = None
+        self.mxid = None
 
     def _init_client(self):
         self.log.debug(f"Initializing client for {self.name}")

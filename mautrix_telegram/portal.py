@@ -654,7 +654,7 @@ class Portal:
             check_dedup = (isinstance(update, (UpdateNewMessage, UpdateNewChannelMessage))
                            and isinstance(update.message, MessageService))
             if check_dedup:
-                self.is_duplicate_action(update)
+                self.is_duplicate_action(update.message)
 
     # endregion
     # region Telegram chat info updating
@@ -726,6 +726,9 @@ class Portal:
         self.by_tgid[self.tgid_full] = self
         await self.update_info(source, entity)
         self.save()
+
+        if self.bot and self.bot.mxid in invites:
+            self.bot.add_chat(self.tgid, self.peer_type)
 
         levels = await self.main_intent.get_power_levels(self.mxid)
         levels = self._get_base_power_levels(levels, entity)

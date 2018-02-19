@@ -248,5 +248,5 @@ class MatrixHandler:
         elif type == "m.room.power_levels":
             await self.handle_power_levels(evt["room_id"], evt["sender"], evt["content"],
                                            evt["prev_content"])
-        elif type == "m.room.name" or type == "m.room.avatar" or type == "m.room.topic":
+        elif type in ("m.room.name", "m.room.avatar", "m.room.topic"):
             await self.handle_room_meta(type, evt["room_id"], evt["sender"], evt["content"])

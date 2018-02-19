@@ -19,6 +19,7 @@ import asyncio
 from telethon.errors import *
 
 from . import command_handler
+from .. import puppet as pu
 
 
 @command_handler(needs_auth=False)
@@ -37,10 +38,7 @@ async def ping_bot(evt):
     if not evt.tgbot:
         return await evt.reply("Telegram message relay bot not configured.")
     bot_info = await evt.tgbot.client.get_me()
-    localpart = evt.config.get("bridge.username_template", "telegram_{userid}").format(
-        userid=bot_info.id)
-    hs = evt.config["homeserver"]["domain"]
-    mxid = f"@{localpart}:{hs}"
+    mxid = pu.Puppet.get_mxid_from_id(bot_info.id)
     displayname = bot_info.first_name
     return await evt.reply("Telegram message relay bot is active: "
                            f"[{displayname}](https://matrix.to/#/{mxid}) (ID {bot_info.id})\n\n"
