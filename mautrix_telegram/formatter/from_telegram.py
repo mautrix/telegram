@@ -14,193 +14,19 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
-from html import escape, unescape
-from html.parser import HTMLParser
-from collections import deque
-import re
+from html import escape
 import logging
 
+from telethon.tl.types import *
 from mautrix_appservice import MatrixRequestError
 
-from telethon.tl.types import *
+from .. import user as u, puppet as p
+from ..db import Message as DBMessage
 
-from . import user as u, puppet as p
-from .db import Message as DBMessage
-
-log = logging.getLogger("mau.formatter")
-
-# TEXT LEN EXPLANATION:
-# Telegram formatting counts two bytes in an UTF-16 string as one character.
-#
-# For Telegram -> Matrix formatting, we get the same counting mechanism by encoding the input
-# text as UTF-16 Little Endian and doubling all the offsets and lengths given by Telegram. With
-# those doubled values, we process the input entities and text. The text is converted back to
-# native str format before it's inserted into the output HTML.
-#
-# For Matrix -> Telegram formatting, do the same input encoding, but divide the length by two
-# instead of multiplying when generating the lengths and offsets of Telegram entities.
-#
-# The endianness doesn't matter, but it has to be specified to avoid the two BOM bits messing
-# everything up.
 TEMP_ENC = "utf-16-le"
 
+log = logging.getLogger("mau.fmt.tg")
 
-# region Matrix to Telegram
-
-
-class MatrixParser(HTMLParser):
-    mention_regex = re.compile("https://matrix.to/#/(@.+)")
-
-    def __init__(self):
-        super().__init__()
-        self.text = ""
-        self.entities = []
-        self._building_entities = {}
-        self._list_counter = 0
-        self._open_tags = deque()
-        self._open_tags_meta = deque()
-        self._previous_ended_line = True
-
-    def handle_starttag(self, tag, attrs):
-        self._open_tags.appendleft(tag)
-        self._open_tags_meta.appendleft(0)
-        attrs = dict(attrs)
-        entity_type = None
-        args = {}
-        if tag == "strong" or tag == "b":
-            entity_type = MessageEntityBold
-        elif tag == "em" or tag == "i":
-            entity_type = MessageEntityItalic
-        elif tag == "code":
-            try:
-                pre = self._building_entities["pre"]
-                try:
-                    pre.language = attrs["class"][len("language-"):]
-                except KeyError:
-                    pass
-            except KeyError:
-                entity_type = MessageEntityCode
-        elif tag == "pre":
-            entity_type = MessageEntityPre
-            args["language"] = ""
-        elif tag == "a":
-            try:
-                url = attrs["href"]
-            except KeyError:
-                return
-            mention = self.mention_regex.search(url)
-            if mention:
-                mxid = mention.group(1)
-                user = p.Puppet.get_by_mxid(mxid, create=False)
-                if not user:
-                    user = u.User.get_by_mxid(mxid, create=False)
-                    if not user:
-                        return
-                if user.username:
-                    entity_type = MessageEntityMention
-                    url = f"@{user.username}"
-                else:
-                    entity_type = MessageEntityMentionName
-                    args["user_id"] = user.tgid
-            elif url.startswith("mailto:"):
-                url = url[len("mailto:"):]
-                entity_type = MessageEntityEmail
-            else:
-                if self.get_starttag_text() == url:
-                    entity_type = MessageEntityUrl
-                else:
-                    entity_type = MessageEntityTextUrl
-                    args["url"] = url
-                    url = None
-            self._open_tags_meta.popleft()
-            self._open_tags_meta.appendleft(url)
-
-        if entity_type and tag not in self._building_entities:
-            # See "TEXT LEN EXPLANATION" near start of file
-            offset = int(len(self.text.encode(TEMP_ENC)) / 2)
-            self._building_entities[tag] = entity_type(offset=offset, length=0, **args)
-
-    def _list_depth(self):
-        depth = 0
-        for tag in self._open_tags:
-            if tag == "ol" or tag == "ul":
-                depth += 1
-        return depth
-
-    def handle_data(self, text):
-        text = unescape(text)
-        previous_tag = self._open_tags[0] if len(self._open_tags) > 0 else ""
-        list_format_offset = 0
-        if previous_tag == "a":
-            url = self._open_tags_meta[0]
-            if url:
-                text = url
-        elif len(self._open_tags) > 1 and self._previous_ended_line and previous_tag == "li":
-            list_type = self._open_tags[1]
-            indent = (self._list_depth() - 1) * 4 * " "
-            text = text.strip("\n")
-            if len(text) == 0:
-                return
-            elif list_type == "ul":
-                text = f"{indent}* {text}"
-                list_format_offset = len(indent) + 2
-            elif list_type == "ol":
-                n = self._open_tags_meta[1]
-                n += 1
-                self._open_tags_meta[1] = n
-                text = f"{indent}{n}. {text}"
-                list_format_offset = len(indent) + 3
-        for tag, entity in self._building_entities.items():
-            # See "TEXT LEN EXPLANATION" near start of file
-            entity.length += int(len(text.strip("\n").encode(TEMP_ENC)) / 2)
-            entity.offset += list_format_offset
-
-        if text.endswith("\n"):
-            self._previous_ended_line = True
-        else:
-            self._previous_ended_line = False
-
-        self.text += text
-
-    def handle_endtag(self, tag):
-        try:
-            self._open_tags.popleft()
-            self._open_tags_meta.popleft()
-        except IndexError:
-            pass
-        if (tag == "ul" or tag == "ol") and self.text.endswith("\n"):
-            self.text = self.text[:-1]
-        entity = self._building_entities.pop(tag, None)
-        if entity:
-            self.entities.append(entity)
-
-
-def matrix_to_telegram(html):
-    try:
-        parser = MatrixParser()
-        parser.feed(html)
-        return parser.text, parser.entities
-    except Exception:
-        log.exception("Failed to convert Matrix format:\nhtml=%s", html)
-
-
-def matrix_reply_to_telegram(content, tg_space, room_id=None):
-    try:
-        reply = content["m.relates_to"]["m.in_reply_to"]
-        room_id = room_id or reply["room_id"]
-        event_id = reply["event_id"]
-        message = DBMessage.query.filter(DBMessage.mxid == event_id,
-                                         DBMessage.tg_space == tg_space,
-                                         DBMessage.mx_room == room_id).one_or_none()
-        if message:
-            return message.tgid
-    except KeyError:
-        pass
-    return None
-
-
-# endregion
-# region Telegram to Matrix
 
 def telegram_reply_to_matrix(evt, source):
     if evt.reply_to_msg_id:
@@ -218,10 +44,10 @@ def telegram_reply_to_matrix(evt, source):
     return {}
 
 
-async def telegram_event_to_matrix(evt, source, native_replies=False, message_link_in_reply=False,
-                                   main_intent=None, reply_text="Reply"):
+async def telegram_to_matrix(evt, source, native_replies=False, message_link_in_reply=False,
+                             main_intent=None, reply_text="Reply"):
     text = evt.message
-    html = telegram_to_matrix(evt.message, evt.entities) if evt.entities else None
+    html = _telegram_entities_to_matrix_catch(evt.message, evt.entities) if evt.entities else None
     relates_to = {}
 
     if evt.fwd_from:
@@ -293,9 +119,9 @@ async def telegram_event_to_matrix(evt, source, native_replies=False, message_li
     return text, html, relates_to
 
 
-def telegram_to_matrix(text, entities):
+def _telegram_entities_to_matrix_catch(text, entities):
     try:
-        return _telegram_to_matrix(text, entities)
+        return _telegram_entities_to_matrix(text, entities)
     except Exception:
         log.exception("Failed to convert Telegram format:\n"
                       "message=%s\n"
@@ -303,7 +129,7 @@ def telegram_to_matrix(text, entities):
                       text, entities)
 
 
-def _telegram_to_matrix(text, entities):
+def _telegram_entities_to_matrix(text, entities):
     if not entities:
         return text
     # See "TEXT LEN EXPLANATION" near start of file
@@ -376,5 +202,3 @@ def _telegram_to_matrix(text, entities):
     html.append(text[last_offset:].decode(TEMP_ENC))
 
     return "".join(html)
-
-# endregion

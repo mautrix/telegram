@@ -842,7 +842,7 @@ class Portal:
 
     async def handle_telegram_text(self, source, intent, evt):
         self.log.debug(f"Sending {evt.message} to {self.mxid} by {intent.mxid}")
-        text, html, relates_to = await formatter.telegram_event_to_matrix(
+        text, html, relates_to = await formatter.telegram_to_matrix(
             evt, source,
             config["bridge.native_replies"],
             config["bridge.link_in_reply"],
@@ -870,7 +870,7 @@ class Portal:
             return
 
         evt.reply_to_msg_id = evt.id
-        text, html, relates_to = await formatter.telegram_event_to_matrix(
+        text, html, relates_to = await formatter.telegram_to_matrix(
             evt, source,
             config["bridge.native_replies"],
             config["bridge.link_in_reply"],
