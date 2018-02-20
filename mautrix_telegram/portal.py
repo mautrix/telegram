@@ -129,7 +129,6 @@ class Portal:
                     }[type(event.media)](event.media)
                 except KeyError:
                     pass
-
         return hashlib.md5("-"
                            .join(str(a) for a in hash_content)
                            .encode("utf-8")
@@ -146,8 +145,8 @@ class Portal:
             self._dedup_action.popleft()
         return False
 
-    def is_duplicate(self, event, mxid=None):
-        hash = self._hash_event(event) if self.peer_type != "channel" else event.id
+    def is_duplicate(self, event, mxid=None, force_hash=False):
+        hash = self._hash_event(event) if self.peer_type != "channel" or force_hash else event.id
         if hash in self._dedup:
             return self._dedup_mxid[hash]
 
@@ -850,7 +849,7 @@ class Portal:
 
         tg_space = self.tgid if self.peer_type == "channel" else source.tgid
         temporary_identifier = f"${random.randint(1000000000000,9999999999999)}TGBRIDGEDITEMP"
-        duplicate_found = self.is_duplicate(evt, (temporary_identifier, tg_space))
+        duplicate_found = self.is_duplicate(evt, (temporary_identifier, tg_space), force_hash=True)
         if duplicate_found:
             mxid, other_tg_space = duplicate_found
             if tg_space != other_tg_space:

@@ -269,8 +269,10 @@ class AbstractUser:
 
         user = sender.tgid if sender else "admin"
         if isinstance(original_update, (UpdateEditMessage, UpdateEditChannelMessage)):
-            self.log.debug("Handling edit %s to %s by %s", update, portal.tgid_log, user)
-            return portal.handle_telegram_edit(self, sender, update)
+            if config["bridge.edits_as_replies"]:
+                self.log.debug("Handling edit %s to %s by %s", update, portal.tgid_log, user)
+                return portal.handle_telegram_edit(self, sender, update)
+            return
 
         self.log.debug("Handling message %s to %s by %s", update, portal.tgid_log, user)
         return portal.handle_telegram_message(self, sender, update)
