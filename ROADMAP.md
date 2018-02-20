@@ -46,7 +46,7 @@
   * [x] Audio messages
   * [x] Video messages
   * [x] Documents
-  * [ ] Message deletions (no way to tell difference between user-specific deletion and global deletion)
+  * [x] Message deletions
   * [ ] Message edits (not supported in Matrix)
   * [x] Avatars
   * [x] Presence

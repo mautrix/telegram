@@ -18,12 +18,15 @@ import platform
 import os
 
 from telethon.tl.types import *
+from mautrix_appservice import MatrixRequestError
 
 from .tgclient import MautrixTelegramClient
 from .db import Message as DBMessage
 from . import portal as po, puppet as pu, __version__
 
 config = None
+# Value updated from config in init()
+MAX_DELETIONS = 10
 
 
 class AbstractUser:
@@ -106,6 +109,10 @@ class AbstractUser:
                       (UpdateShortChatMessage, UpdateShortMessage, UpdateNewChannelMessage,
                        UpdateNewMessage, UpdateEditMessage, UpdateEditChannelMessage)):
             await self.update_message(update)
+        elif isinstance(update, UpdateDeleteMessages):
+            await self.delete_message(update)
+        elif isinstance(update, UpdateDeleteChannelMessages):
+            await self.delete_channel_message(update)
         elif isinstance(update, (UpdateChatUserTyping, UpdateUserTyping)):
             await self.update_typing(update)
         elif isinstance(update, UpdateUserStatus):
@@ -206,6 +213,47 @@ class AbstractUser:
             return update, None, None
         return update, sender, portal
 
+    @staticmethod
+    async def _try_redact(portal, message):
+        if not portal:
+            return
+        try:
+            await portal.main_intent.redact(message.mx_room, message.mxid)
+        except MatrixRequestError:
+            pass
+
+    async def delete_message(self, update):
+        if len(update.messages) > MAX_DELETIONS:
+            return
+
+        for message in update.messages:
+            message = DBMessage.query.get((message, self.tgid))
+            if not message:
+                continue
+            self.db.delete(message)
+            number_left = DBMessage.query.filter(DBMessage.mxid == message.mxid,
+                                                 DBMessage.mx_room == message.mx_room).count()
+            if number_left == 0:
+                portal = po.Portal.get_by_mxid(message.mx_room)
+                await self._try_redact(portal, message)
+        self.db.commit()
+
+    async def delete_channel_message(self, update):
+        if len(update.messages) > MAX_DELETIONS:
+            return
+
+        portal = po.Portal.get_by_tgid(update.channel_id)
+        if not portal:
+            return
+
+        for message in update.messages:
+            message = DBMessage.query.get((message, portal.tgid))
+            if not message:
+                continue
+            self.db.delete(message)
+            await self._try_redact(portal, message)
+        self.db.commit()
+
     def update_message(self, original_update):
         update, sender, portal = self.get_message_details(original_update)
 
@@ -231,5 +279,6 @@ class AbstractUser:
 
 
 def init(context):
-    global config
+    global config, MAX_DELETIONS
     AbstractUser.az, AbstractUser.db, config, AbstractUser.loop, _ = context
+    MAX_DELETIONS = config.get("bridge.max_telegram_delete", 10)

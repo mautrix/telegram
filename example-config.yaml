@@ -69,6 +69,9 @@ bridge:
     edits_as_replies: False
     # Whether or not Matrix bot messages (type m.notice) should be bridged.
     bridge_notices: False
+    # The maximum number of simultaneous Telegram deletions to handle.
+    # A large number of simultaneous redactions could put strain on your homeserver.
+    max_telegram_delete: 10
 
     # The prefix for commands. Only required in non-management rooms.
     command_prefix: "!tg"

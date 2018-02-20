@@ -425,6 +425,16 @@ class IntentAPI:
 
         return self.send_state_event(room_id, "m.room.member", body, state_key=user_id)
 
+    def redact(self, room_id, event_id, reason=None, txn_id=None):
+        txn_id = txn_id or str(self.client.txn_id) + str(int(time() * 1000))
+        self.client.txn_id += 1
+        content = {}
+        if reason:
+            content["reason"] = reason
+        return self.client.request("PUT",
+                                   f"/rooms/{quote(room_id)}/redact/{quote(event_id)}/{txn_id}",
+                                   content)
+
     @staticmethod
     def _get_event_url(room_id, event_type, txn_id):
         if not room_id:
