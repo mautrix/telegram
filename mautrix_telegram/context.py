@@ -16,23 +16,19 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 
-class MatrixError(Exception):
-    """A generic Matrix error. Specific errors will subclass this."""
-    pass
+class Context:
+    def __init__(self, az, db, config, loop, bot, mx):
+        self.az = az
+        self.db = db
+        self.config = config
+        self.loop = loop
+        self.bot = bot
+        self.mx = mx
 
-
-class IntentError(MatrixError):
-    def __init__(self, message, source):
-        super().__init__(message)
-        self.source = source
-
-
-class MatrixRequestError(MatrixError):
-    """ The home server returned an error response. """
-
-    def __init__(self, code=0, text="", errcode=None, message=None):
-        super().__init__(f"{code}: {text}")
-        self.code = code
-        self.text = text
-        self.errcode = errcode
-        self.message = message
+    def __iter__(self):
+        yield self.az
+        yield self.db
+        yield self.config
+        yield self.loop
+        yield self.bot
+        # yield self.mx

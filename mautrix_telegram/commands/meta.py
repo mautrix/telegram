@@ -65,6 +65,7 @@ def help(evt):
                                        `channel` (defaults to `group`).
 
 #### Portal management  
+**ping-bot**                - Get info of the message relay Telegram bot.
 **upgrade**                 - Upgrade a normal Telegram group to a supergroup.  
 **invite-link**             - Get a Telegram invite link to the current chat.  
 **delete-portal**           - Forget the current portal room. Only works for group chats; to delete

@@ -18,10 +18,11 @@ from difflib import SequenceMatcher
 import re
 import logging
 
-from telethon.tl.types import UserProfilePhoto, PeerUser
+from telethon.tl.types import UserProfilePhoto
 from telethon.errors.rpc_error_list import LocationInvalidError
 
 from .db import Puppet as DBPuppet
+from . import util
 
 config = None
 
@@ -31,18 +32,19 @@ class Puppet:
     db = None
     az = None
     mxid_regex = None
+    username_template = None
+    hs_domain = None
     cache = {}
 
-    def __init__(self, id=None, username=None, displayname=None, photo_id=None):
+    def __init__(self, id=None, username=None, displayname=None, photo_id=None, db_instance=None):
         self.id = id
+        self.mxid = self.get_mxid_from_id(self.id)
 
-        self.localpart = config.get("bridge.username_template", "telegram_{userid}").format(
-            userid=self.id)
-        hs = config["homeserver"]["domain"]
-        self.mxid = f"@{self.localpart}:{hs}"
         self.username = username
         self.displayname = displayname
         self.photo_id = photo_id
+        self._db_instance = db_instance
+
         self.intent = self.az.intent.user(self.mxid)
 
         self.cache[id] = self
@@ -51,17 +53,25 @@ class Puppet:
     def tgid(self):
         return self.id
 
-    def to_db(self):
-        return self.db.merge(
-            DBPuppet(id=self.id, username=self.username, displayname=self.displayname,
-                     photo_id=self.photo_id))
+    @property
+    def db_instance(self):
+        if not self._db_instance:
+            self._db_instance = self.new_db_instance()
+        return self._db_instance
+
+    def new_db_instance(self):
+        return DBPuppet(id=self.id, username=self.username, displayname=self.displayname,
+                        photo_id=self.photo_id)
 
     @classmethod
     def from_db(cls, db_puppet):
-        return Puppet(db_puppet.id, db_puppet.username, db_puppet.displayname, db_puppet.photo_id)
+        return Puppet(db_puppet.id, db_puppet.username, db_puppet.displayname, db_puppet.photo_id,
+                      db_instance=db_puppet)
 
     def save(self):
-        self.to_db()
+        self.db_instance.username = self.username
+        self.db_instance.displayname = self.displayname
+        self.db_instance.photo_id = self.photo_id
         self.db.commit()
 
     def similarity(self, query):
@@ -120,14 +130,11 @@ class Puppet:
     async def update_avatar(self, source, photo):
         photo_id = f"{photo.volume_id}-{photo.local_id}"
         if self.photo_id != photo_id:
-            try:
-                file = await source.client.download_file_bytes(photo)
-            except LocationInvalidError:
-                return False
-            uploaded = await self.intent.upload_file(file)
-            await self.intent.set_avatar(uploaded["content_uri"])
-            self.photo_id = photo_id
-            return True
+            file = await util.transfer_file_to_matrix(self.db, source.client, self.intent, photo)
+            if file:
+                await self.intent.set_avatar(file.mxc)
+                self.photo_id = photo_id
+                return True
         return False
 
     @classmethod
@@ -143,7 +150,7 @@ class Puppet:
 
         if create:
             puppet = cls(id)
-            cls.db.add(puppet.to_db())
+            cls.db.add(puppet.db_instance)
             cls.db.commit()
             return puppet
 
@@ -162,6 +169,10 @@ class Puppet:
         return None
 
     @classmethod
+    def get_mxid_from_id(cls, id):
+        return f"@{cls.username_template.format(userid=id)}:{cls.hs_domain}"
+
+    @classmethod
     def find_by_username(cls, username):
         for _, puppet in cls.cache.items():
             if puppet.username == username:
@@ -176,7 +187,8 @@ class Puppet:
 
 def init(context):
     global config
-    Puppet.az, Puppet.db, config, _ = context
-    localpart = config.get("bridge.username_template", "telegram_{userid}").format(userid="(.+)")
-    hs = config["homeserver"]["domain"]
-    Puppet.mxid_regex = re.compile(f"@{localpart}:{hs}")
+    Puppet.az, Puppet.db, config, _, _ = context
+    Puppet.username_template = config.get("bridge.username_template", "telegram_{userid}")
+    Puppet.hs_domain = config["homeserver"]["domain"]
+    localpart = Puppet.username_template.format(userid="(.+)")
+    Puppet.mxid_regex = re.compile(f"@{localpart}:{Puppet.hs_domain}")

@@ -1,5 +1,5 @@
 # mautrix-telegram
-A Matrix-Telegram puppeting bridge.
+A Matrix-Telegram hybrid puppeting/relaybot bridge.
 
 ### [Wiki](https://github.com/tulir/mautrix-telegram/wiki)
 

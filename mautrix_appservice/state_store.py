@@ -15,14 +15,21 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import json
+import time
 
 
 class StateStore:
     def __init__(self, autosave_file=None):
+        self.autosave_file = autosave_file
+
+        # Persistent storage
         self.registrations = set()
         self.memberships = {}
         self.power_levels = {}
-        self.autosave_file = autosave_file
+
+        # Non-persistent storage
+        self.presence = {}
+        self.typing = {}
 
     def save(self, file):
         if isinstance(file, str):
@@ -63,6 +70,29 @@ class StateStore:
         if self.autosave_file:
             self.save(self.autosave_file)
 
+    def set_presence(self, user, presence):
+        self.presence[user] = presence
+
+    def has_presence(self, user, presence):
+        try:
+            return self.presence[user] == presence
+        except KeyError:
+            return False
+
+    def set_typing(self, room_id, user, is_typing, timeout=0):
+        if is_typing:
+            ts = int(round(time.time() * 1000))
+            self.typing[(room_id, user)] = ts + timeout
+        else:
+            del self.typing[(room_id, user)]
+
+    def is_typing(self, room_id, user):
+        ts = int(round(time.time() * 1000))
+        try:
+            return self.typing[(room_id, user)] > ts
+        except KeyError:
+            return False
+
     def is_registered(self, user):
         return user in self.registrations
 
@@ -97,10 +127,12 @@ class StateStore:
     def get_power_levels(self, room):
         return self.power_levels[room]
 
-    def has_power_level(self, room, user, event):
+    def has_power_level(self, room, user, event, is_state_event=False):
         room_levels = self.power_levels.get(room, {})
-        required = room_levels.get("events", {}).get(event, 95)
-        has = room_levels.get("users", {}).get(user, 0)
+        default_required = (room_levels.get("state_default", 50) if is_state_event
+                            else room_levels.get("events_default", 0))
+        required = room_levels.get("events", {}).get(event, default_required)
+        has = room_levels.get("users", {}).get(user, room_levels.get("users_default", 0))
         return has >= required
 
     def set_power_level(self, room, user, level):

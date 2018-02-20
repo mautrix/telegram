@@ -29,10 +29,13 @@ from .config import Config
 from .matrix import MatrixHandler
 
 from .db import init as init_db
+from .abstract_user import init as init_abstract_user
 from .user import init as init_user, User
+from .bot import init as init_bot
 from .portal import init as init_portal
 from .puppet import init as init_puppet
 from .public import PublicBridgeWebsite
+from .context import Context
 
 log = logging.getLogger("mau")
 time_formatter = logging.Formatter("[%(asctime)s] [%(levelname)s@%(name)s] %(message)s")
@@ -74,21 +77,30 @@ Base.metadata.bind = db_engine
 Base.metadata.create_all()
 
 loop = asyncio.get_event_loop()
-az = AppService(config["homeserver.address"], config["homeserver.domain"],
-                config["appservice.as_token"], config["appservice.hs_token"],
-                config["appservice.bot_username"], log="mau.as", loop=loop)
-context = (az, db_session, config, loop)
+
+appserv = AppService(config["homeserver.address"], config["homeserver.domain"],
+                     config["appservice.as_token"], config["appservice.hs_token"],
+                     config["appservice.bot_username"], log="mau.as", loop=loop)
+
+
+context = Context(appserv, db_session, config, loop, None, None)
 
 if config["appservice.public.enabled"]:
     public = PublicBridgeWebsite(loop)
-    az.app.add_subapp(config.get("appservice.public.prefix", "/public"), public.app)
+    appserv.app.add_subapp(config.get("appservice.public.prefix", "/public"), public.app)
 
-with az.run(config["appservice.hostname"], config["appservice.port"]) as start:
-    MatrixHandler(context)
+with appserv.run(config["appservice.hostname"], config["appservice.port"]) as start:
     init_db(db_session)
+    init_abstract_user(context)
+    context.bot = init_bot(context)
+    context.mx = MatrixHandler(context)
     init_portal(context)
     init_puppet(context)
-    startup_actions = init_user(context) + [start]
+    startup_actions = init_user(context) + [start, context.mx.init_as_bot()]
+
+    if context.bot:
+        startup_actions.append(context.bot.start())
+
     try:
         loop.run_until_complete(asyncio.gather(*startup_actions, loop=loop))
         loop.run_forever()

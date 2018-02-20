@@ -19,6 +19,7 @@ import asyncio
 from telethon.errors import *
 
 from . import command_handler
+from .. import puppet as pu
 
 
 @command_handler(needs_auth=False)
@@ -30,6 +31,18 @@ async def ping(evt):
         return await evt.reply(f"You're logged in as @{me.username}")
     else:
         return await evt.reply("You're not logged in.")
+
+
+@command_handler()
+async def ping_bot(evt):
+    if not evt.tgbot:
+        return await evt.reply("Telegram message relay bot not configured.")
+    bot_info = await evt.tgbot.client.get_me()
+    mxid = pu.Puppet.get_mxid_from_id(bot_info.id)
+    displayname = bot_info.first_name
+    return await evt.reply("Telegram message relay bot is active: "
+                           f"[{displayname}](https://matrix.to/#/{mxid}) (ID {bot_info.id})\n\n"
+                           "To use the bot, simply invite it to a portal room.")
 
 
 @command_handler(needs_auth=False, management_only=True)
@@ -45,6 +58,7 @@ async def login(evt):
         return await evt.reply("**Usage:** `$cmdprefix+sp login <phone number>`")
     phone_number = evt.args[0]
     try:
+        await evt.sender.ensure_started(even_if_no_session=True)
         await evt.sender.client.sign_in(phone_number)
         evt.sender.command_status = {
             "next": enter_code,
@@ -60,6 +74,9 @@ async def login(evt):
             "The ban is usually applied for around a day.")
     except PhoneNumberBannedError:
         return await evt.reply("Your phone number has been banned from Telegram.")
+    except PhoneNumberUnoccupiedError:
+        return await evt.reply("That phone number has not been registered. "
+                               "Please register with `$cmdprefix+sp register <phone>`.")
     except Exception:
         evt.log.exception("Error requesting phone code")
         return await evt.reply("Unhandled exception while requesting code. "
@@ -72,13 +89,11 @@ async def enter_code(evt):
         return await evt.reply("**Usage:** `$cmdprefix+sp enter-code <code>`")
 
     try:
+        await evt.sender.ensure_started(even_if_no_session=True)
         user = await evt.sender.client.sign_in(code=evt.args[0])
         asyncio.ensure_future(evt.sender.post_login(user), loop=evt.loop)
         evt.sender.command_status = None
         return await evt.reply(f"Successfully logged in as @{user.username}")
-    except PhoneNumberUnoccupiedError:
-        return await evt.reply("That phone number has not been registered. "
-                               "Please register with `$cmdprefix+sp register <phone>`.")
     except PhoneCodeExpiredError:
         return await evt.reply(
             "Phone code expired. Try again with `$cmdprefix+sp login <phone>`.")
@@ -103,6 +118,7 @@ async def enter_password(evt):
         return await evt.reply("**Usage:** `$cmdprefix+sp enter-password <password>`")
 
     try:
+        await evt.sender.ensure_started(even_if_no_session=True)
         user = await evt.sender.client.sign_in(password=evt.args[0])
         asyncio.ensure_future(evt.sender.post_login(user), loop=evt.loop)
         evt.sender.command_status = None
