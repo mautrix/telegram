@@ -19,7 +19,7 @@ import logging
 
 from telethon.errors import FloodWaitError
 
-from .util import format_duration
+from ..util import format_duration
 
 command_handlers = {}
 
