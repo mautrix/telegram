@@ -14,7 +14,6 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
-from io import BytesIO
 from collections import deque
 from datetime import datetime
 import asyncio
@@ -23,9 +22,7 @@ import mimetypes
 import hashlib
 import logging
 
-from PIL import Image
 import magic
-import time
 
 from telethon.tl.functions.messages import *
 from telethon.tl.functions.channels import *
@@ -33,8 +30,8 @@ from telethon.errors.rpc_error_list import *
 from telethon.tl.types import *
 from mautrix_appservice import MatrixRequestError, IntentError
 
-from .db import Portal as DBPortal, Message as DBMessage, TelegramFile as DBTelegramFile
-from . import puppet as p, user as u, formatter
+from .db import Portal as DBPortal, Message as DBMessage
+from . import puppet as p, user as u, formatter, util
 
 mimetypes.init()
 
@@ -395,14 +392,12 @@ class Portal:
     async def update_avatar(self, user, photo):
         photo_id = f"{photo.volume_id}-{photo.local_id}"
         if self.photo_id != photo_id:
-            try:
-                file = await user.client.download_file_bytes(photo)
-            except LocationInvalidError:
-                return False
-            uploaded = await self.main_intent.upload_file(file)
-            await self.main_intent.set_room_avatar(self.mxid, uploaded["content_uri"])
-            self.photo_id = photo_id
-            return True
+            file = await util.transfer_file_to_matrix(self.db, user.client, self.main_intent,
+                                                      photo)
+            if file:
+                await self.main_intent.set_avatar(file.mxc)
+                self.photo_id = photo_id
+                return True
         return False
 
     async def _get_users(self, user, entity):
@@ -764,7 +759,8 @@ class Portal:
 
     async def handle_telegram_photo(self, source, intent, media, relates_to=None):
         largest_size = self._get_largest_photo_size(media.photo)
-        file = await self.transfer_file_to_matrix(source.client, intent, largest_size.location)
+        file = await util.transfer_file_to_matrix(self.db, source.client, intent,
+                                                  largest_size.location)
         if not file:
             return None
         info = {
@@ -780,51 +776,8 @@ class Portal:
         return await intent.send_image(self.mxid, file.mxc, info=info, text=name,
                                        relates_to=relates_to)
 
-    def convert_webp(self, file, to="png"):
-        try:
-            image = Image.open(BytesIO(file)).convert("RGBA")
-            new_file = BytesIO()
-            image.save(new_file, to)
-            return f"image/{to}", new_file.getvalue()
-        except Exception:
-            self.log.exception(f"Failed to convert webp to {to}")
-            return "image/webp", file
-
-    async def transfer_file_to_matrix(self, client, intent, location):
-        if isinstance(location, (Document, InputDocumentFileLocation)):
-            id = f"{location.id}-{location.version}"
-        elif not isinstance(location, (FileLocation, InputFileLocation)):
-            id = f"{location.volume_id}-{location.local_id}"
-        else:
-            return None
-
-        db_file = DBTelegramFile.query.get(id)
-        if db_file:
-            return db_file
-
-        try:
-            file = await client.download_file_bytes(location)
-        except LocationInvalidError:
-            return None
-        mime_type = magic.from_buffer(file, mime=True)
-
-        image_converted = False
-        if mime_type == "image/webp":
-            mime_type, file = self.convert_webp(file, to="png")
-            image_converted = True
-
-        uploaded = await intent.upload_file(file, mime_type)
-
-        db_file = DBTelegramFile(id=id, mxc=uploaded["content_uri"],
-                                 mime_type=mime_type, was_converted=image_converted,
-                                 timestamp=int(time.time()))
-        self.db.add(db_file)
-        self.db.commit()
-
-        return db_file
-
     async def handle_telegram_document(self, source, intent, media, relates_to=None):
-        file = await self.transfer_file_to_matrix(source.client, intent, media.document)
+        file = await util.transfer_file_to_matrix(self.db, source.client, intent, media.document)
         if not file:
             return None
         name = media.caption

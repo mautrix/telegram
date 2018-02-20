@@ -18,10 +18,11 @@ from difflib import SequenceMatcher
 import re
 import logging
 
-from telethon.tl.types import UserProfilePhoto, PeerUser
+from telethon.tl.types import UserProfilePhoto
 from telethon.errors.rpc_error_list import LocationInvalidError
 
 from .db import Puppet as DBPuppet
+from . import util
 
 config = None
 
@@ -129,14 +130,11 @@ class Puppet:
     async def update_avatar(self, source, photo):
         photo_id = f"{photo.volume_id}-{photo.local_id}"
         if self.photo_id != photo_id:
-            try:
-                file = await source.client.download_file_bytes(photo)
-            except LocationInvalidError:
-                return False
-            uploaded = await self.intent.upload_file(file)
-            await self.intent.set_avatar(uploaded["content_uri"])
-            self.photo_id = photo_id
-            return True
+            file = await util.transfer_file_to_matrix(self.db, source.client, self.intent, photo)
+            if file:
+                await self.intent.set_avatar(file.mxc)
+                self.photo_id = photo_id
+                return True
         return False
 
     @classmethod
