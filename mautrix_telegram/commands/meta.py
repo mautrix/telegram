@@ -50,9 +50,9 @@ def help(evt):
 **cancel** - Cancel an ongoing action (such as login).
 
 #### Authentication
-**login** <_phone_> - Request an authentication code.  
-**logout**          - Log out from Telegram.  
-**ping**            - Check if you're logged into Telegram.
+**login**  - Request an authentication code.  
+**logout** - Log out from Telegram.  
+**ping**   - Check if you're logged into Telegram.
 
 #### Initiating chats
 **search** [_-r|--remote_] <_query_> - Search your contacts or the Telegram servers for users.  

@@ -42,16 +42,22 @@ class PublicBridgeWebsite:
                                    pkg_resources.resource_filename("mautrix_telegram", "public/"))
 
     async def get_login(self, request):
-        return self.render_login(
-            request.rel_url.query["mxid"] if "mxid" in request.rel_url.query else "")
+        user = (User.get_by_mxid(request.rel_url.query["mxid"], create=False)
+                if "mxid" in request.rel_url.query else None)
+        if not user:
+            return self.render_login(mxid=request.rel_url.query["mxid"], state="request")
+        elif not user.whitelisted:
+            return self.render_login(mxid=user.mxid, error="You are not whitelisted.", status=403)
+        await user.ensure_started()
+        if not user.logged_in:
+            return self.render_login(mxid=user.mxid, state="request")
 
-    def render_login(self, mxid, state="request", phone="", code="", password="",
-                     error="", message="", username="", status=200):
-        return web.Response(status=status,
-                            content_type="text/html",
-                            text=self.login.render(mxid=mxid, state=state, phone=phone, code=code,
-                                                   message=message, username=username, error=error,
-                                                   password=password))
+        return self.render_login(mxid=user.mxid, username=user.username)
+
+    def render_login(self, status=200, username="", state="", error="", message="", mxid=""):
+        return web.Response(status=status, content_type="text/html",
+                            text=self.login.render(username=username, state=state, error=error,
+                                                   message=message, mxid=mxid))
 
     async def post_login(self, request):
         self.log.debug(request)
@@ -59,9 +65,11 @@ class PublicBridgeWebsite:
         if "mxid" not in data:
             return self.render_login(error="Please enter your Matrix ID.", status=400)
 
-        user = User.get_by_mxid(data["mxid"])
+        user = await User.get_by_mxid(data["mxid"]).ensure_started()
         if not user.whitelisted:
             return self.render_login(mxid=user.mxid, error="You are not whitelisted.", status=403)
+        elif user.logged_in:
+            return self.render_login(mxid=user.mxid, username=user.username)
 
         if "phone" in data:
             try:
@@ -93,7 +101,7 @@ class PublicBridgeWebsite:
             try:
                 user_info = await user.client.sign_in(code=data["code"])
                 asyncio.ensure_future(user.post_login(user_info), loop=self.loop)
-                if user.command_status.action == "Login":
+                if user.command_status and user.command_status.action == "Login":
                     user.command_status = None
                 return self.render_login(mxid=user.mxid, state="logged-in", status=200,
                                          username=user_info.username)
@@ -105,14 +113,14 @@ class PublicBridgeWebsite:
                                          error="Phone code expired.")
             except SessionPasswordNeededError:
                 if "password" not in data:
-                    if user.command_status.action == "Login":
+                    if user.command_status and user.command_status.action == "Login":
                         user.command_status = {
                             "next": enter_password,
                             "action": "Login (password entry)",
                         }
                     return self.render_login(
                         mxid=user.mxid, state="password", status=200,
-                        error="Code accepted, but you have 2-factor authentication is enabled.")
+                        message="Code accepted, but you have 2-factor authentication is enabled.")
             except Exception:
                 self.log.exception("Error sending phone code")
                 return self.render_login(mxid=user.mxid, state="code", status=500,
@@ -124,7 +132,7 @@ class PublicBridgeWebsite:
             try:
                 user_info = await user.client.sign_in(password=data["password"])
                 asyncio.ensure_future(user.post_login(user_info), loop=self.loop)
-                if user.command_status.action == "Login (password entry)":
+                if user.command_status and user.command_status.action == "Login (password entry)":
                     user.command_status = None
                 return self.render_login(mxid=user.mxid, state="logged-in", status=200,
                                          username=user_info.username)

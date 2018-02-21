@@ -7,3 +7,27 @@ form[data-status="code"]     > div.status-code,
 form[data-status="password"] > div.status-password {
 	display: initial;
 }
+
+.container {
+	margin-top: 3rem;
+	max-width: 60rem;
+}
+
+.error, .message {
+	border-radius: .25rem;
+	padding: .5rem 1rem;
+	border: 1px solid transparent;
+	margin: .5rem 0;
+}
+
+.error {
+	border-color: #f5c6cb;
+	background-color: #f8d7da;
+	color: #721c24;
+}
+
+.message {
+	border-color: #c3e6cb;
+	background-color: #d4edda;
+	color: #155724;
+}

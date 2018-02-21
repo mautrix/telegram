@@ -54,8 +54,30 @@ def register(evt):
 async def login(evt):
     if evt.sender.logged_in:
         return await evt.reply("You are already logged in.")
-    elif len(evt.args) == 0:
-        return await evt.reply("**Usage:** `$cmdprefix+sp login <phone number>`")
+    evt.sender.command_status = {
+        "next": enter_phone,
+        "action": "Login",
+    }
+    if evt.config["appservice.public.enabled"]:
+        prefix = evt.config["appservice.public.external"]
+        url = f"{prefix}/login?mxid={evt.sender.mxid}"
+        if evt.config.get("bridge.allow_matrix_login", True):
+            return await evt.reply("\n\n".join((
+                "This bridge instance allows you to log in inside or outside Matrix.",
+                "If you would like to log in within Matrix, please send your phone number here.",
+                f"If you would like to log in outside of Matrix, [click here]({url}).")))
+        return await evt.reply("This bridge instance does not allow logging in inside Matrix.\n\n"
+                               f"Please visit [the login page]({url}) to log in.")
+    return await evt.reply(
+        "This bridge instance does not allow you to log in outside of Matrix.\n\n"
+        "Please send your phone number here to start the login process.")
+
+
+@command_handler(needs_auth=False)
+async def enter_phone(evt):
+    if len(evt.args) == 0:
+        return await evt.reply("**Usage:** `$cmdprefix+sp enter-phone <phone>`")
+
     phone_number = evt.args[0]
     try:
         await evt.sender.ensure_started(even_if_no_session=True)
@@ -81,6 +103,9 @@ async def login(evt):
         evt.log.exception("Error requesting phone code")
         return await evt.reply("Unhandled exception while requesting code. "
                                "Check console for more details.")
+    finally:
+        if evt.sender.command_status["next"] == enter_phone:
+            evt.sender.command_status = None
 
 
 @command_handler(needs_auth=False)

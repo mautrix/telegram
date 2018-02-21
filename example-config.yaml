@@ -72,18 +72,21 @@ bridge:
 
     # Whether or not to use native Matrix replies. At the time of writing, only riot-web supports
     # replies and the format of them is subject to change.
-    native_replies: True
+    native_replies: true
     # If native replies are disabled, should the custom replies contain a link to the message being
     # replied to?
-    link_in_reply: False
+    link_in_reply: false
     # Show message editing as a reply to the original message.
     # If this is false, message edits are not shown at all, as Matrix does not support editing yet.
-    edits_as_replies: False
+    edits_as_replies: false
     # Whether or not Matrix bot messages (type m.notice) should be bridged.
-    bridge_notices: False
+    bridge_notices: false
     # The maximum number of simultaneous Telegram deletions to handle.
     # A large number of simultaneous redactions could put strain on your homeserver.
     max_telegram_delete: 10
+    # Allow logging in within Matrix. If false, the only way to log in is using the out-of-Matrix
+    # login website (see appservice.public config section)
+    allow_matrix_login: true
 
     # The prefix for commands. Only required in non-management rooms.
     command_prefix: "!tg"
