@@ -85,10 +85,11 @@
   * [x] Joining chats with invite links (`join`)
   * [x] Creating a Telegram chat for an existing Matrix room (`create`)
   * [x] Upgrading the chat of a portal room into a supergroup (`upgrade`)
-  * [x] Change username of supergroup/channel (`groupname`)
-  * [x] Getting the Telegram invite link to a Matrix room (`invitelink`)
+  * [x] Change username of supergroup/channel (`group-name`)
+  * [x] Getting the Telegram invite link to a Matrix room (`invite-link`)
   * Bridge administration
-    * [x] Clean up and forget a portal room (`deleteportal`)
+    * [x] Clean up and forget a portal room (`delete-portal`)
+    * [x] Find and clean up old portal rooms (`clean-rooms`)
     * [ ] Setting Matrix-only power levels (`powerlevel`)
 
 † Information not automatically sent from source, i.e. implementation may not be possible  
