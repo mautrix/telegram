@@ -446,11 +446,12 @@ class Portal:
         except MatrixRequestError:
             return []
         authenticated = []
+        has_bot = self.has_bot
         for member in members:
             if p.Puppet.get_id_from_mxid(member) or member == self.main_intent.mxid:
                 continue
             user = await u.User.get_by_mxid(member).ensure_started()
-            if user.has_full_access:
+            if (has_bot and user.whitelisted) or user.has_full_access:
                 authenticated.append(user)
         return authenticated
 

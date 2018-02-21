@@ -175,6 +175,8 @@ class User(AbstractUser):
 
     async def log_out(self):
         for _, portal in self.portals.items():
+            if portal.has_bot:
+                continue
             try:
                 await portal.main_intent.kick(portal.mxid, self.mxid, "Logged out of Telegram.")
             except MatrixRequestError:
