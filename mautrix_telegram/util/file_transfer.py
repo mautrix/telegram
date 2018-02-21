@@ -44,7 +44,7 @@ def _convert_webp(file, to="png"):
 async def transfer_file_to_matrix(db, client, intent, location):
     if isinstance(location, (Document, InputDocumentFileLocation)):
         id = f"{location.id}-{location.version}"
-    elif not isinstance(location, (FileLocation, InputFileLocation)):
+    elif isinstance(location, (FileLocation, InputFileLocation)):
         id = f"{location.volume_id}-{location.local_id}"
     else:
         return None
