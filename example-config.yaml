@@ -14,6 +14,18 @@ appservice:
     hostname: localhost
     port: 8080
 
+    # Public part of web server for out-of-Matrix interaction with the bridge.
+    # Used for things like login if the user wants to make sure the 2FA password isn't stored in
+    # the HS database.
+    public:
+        # Whether or not the public-facing endpoints should be enabled.
+        enabled: true
+        # The prefix to use in the public-facing endpoints.
+        prefix: /public
+        # The base URL where the public-facing endpoints are available. The prefix is not added
+        # implicitly.
+        external: https://example.com/public
+
     # Whether or not to enable debug messages in the console.
     debug: false
 
@@ -60,18 +72,21 @@ bridge:
 
     # Whether or not to use native Matrix replies. At the time of writing, only riot-web supports
     # replies and the format of them is subject to change.
-    native_replies: True
+    native_replies: true
     # If native replies are disabled, should the custom replies contain a link to the message being
     # replied to?
-    link_in_reply: False
+    link_in_reply: false
     # Show message editing as a reply to the original message.
     # If this is false, message edits are not shown at all, as Matrix does not support editing yet.
-    edits_as_replies: False
+    edits_as_replies: false
     # Whether or not Matrix bot messages (type m.notice) should be bridged.
-    bridge_notices: False
+    bridge_notices: false
     # The maximum number of simultaneous Telegram deletions to handle.
     # A large number of simultaneous redactions could put strain on your homeserver.
     max_telegram_delete: 10
+    # Allow logging in within Matrix. If false, the only way to log in is using the out-of-Matrix
+    # login website (see appservice.public config section)
+    allow_matrix_login: true
 
     # The prefix for commands. Only required in non-management rooms.
     command_prefix: "!tg"

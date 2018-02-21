@@ -44,4 +44,6 @@ setuptools.setup(
         [console_scripts]
         mautrix-telegram=mautrix_telegram.__main__:main
     """,
+    package_data={"mautrix_telegram": ["public/*.html", "public/*.png", "public/*.css", "public/*.js"]},
+    data_files=[(".", "example-config.yaml")],
 )

@@ -54,16 +54,58 @@ def register(evt):
 async def login(evt):
     if evt.sender.logged_in:
         return await evt.reply("You are already logged in.")
-    elif len(evt.args) == 0:
-        return await evt.reply("**Usage:** `$cmdprefix+sp login <phone number>`")
-    phone_number = evt.args[0]
-    await evt.sender.ensure_started(even_if_no_session=True)
-    await evt.sender.client.sign_in(phone_number)
     evt.sender.command_status = {
-        "next": enter_code,
+        "next": enter_phone,
         "action": "Login",
     }
-    return await evt.reply(f"Login code sent to {phone_number}. Please send the code here.")
+    if evt.config["appservice.public.enabled"]:
+        prefix = evt.config["appservice.public.external"]
+        url = f"{prefix}/login?mxid={evt.sender.mxid}"
+        if evt.config.get("bridge.allow_matrix_login", True):
+            return await evt.reply("\n\n".join((
+                "This bridge instance allows you to log in inside or outside Matrix.",
+                "If you would like to log in within Matrix, please send your phone number here.",
+                f"If you would like to log in outside of Matrix, [click here]({url}).")))
+        return await evt.reply("This bridge instance does not allow logging in inside Matrix.\n\n"
+                               f"Please visit [the login page]({url}) to log in.")
+    return await evt.reply(
+        "This bridge instance does not allow you to log in outside of Matrix.\n\n"
+        "Please send your phone number here to start the login process.")
+
+
+@command_handler(needs_auth=False)
+async def enter_phone(evt):
+    if len(evt.args) == 0:
+        return await evt.reply("**Usage:** `$cmdprefix+sp enter-phone <phone>`")
+
+    phone_number = evt.args[0]
+    try:
+        await evt.sender.ensure_started(even_if_no_session=True)
+        await evt.sender.client.sign_in(phone_number)
+        evt.sender.command_status = {
+            "next": enter_code,
+            "action": "Login",
+        }
+        return await evt.reply(f"Login code sent to {phone_number}. Please send the code here.")
+    except PhoneNumberAppSignupForbiddenError:
+        return await evt.reply(
+            "Your phone number does not allow 3rd party apps to sign in.")
+    except PhoneNumberFloodError:
+        return await evt.reply(
+            "Your phone number has been temporarily blocked for flooding. "
+            "The ban is usually applied for around a day.")
+    except PhoneNumberBannedError:
+        return await evt.reply("Your phone number has been banned from Telegram.")
+    except PhoneNumberUnoccupiedError:
+        return await evt.reply("That phone number has not been registered. "
+                               "Please register with `$cmdprefix+sp register <phone>`.")
+    except Exception:
+        evt.log.exception("Error requesting phone code")
+        return await evt.reply("Unhandled exception while requesting code. "
+                               "Check console for more details.")
+    finally:
+        if evt.sender.command_status["next"] == enter_phone:
+            evt.sender.command_status = None
 
 
 @command_handler(needs_auth=False)
@@ -77,33 +119,21 @@ async def enter_code(evt):
         asyncio.ensure_future(evt.sender.post_login(user), loop=evt.loop)
         evt.sender.command_status = None
         return await evt.reply(f"Successfully logged in as @{user.username}")
-    except PhoneNumberUnoccupiedError:
-        return await evt.reply("That phone number has not been registered."
-                               "Please register with `$cmdprefix+sp register <phone>`.")
     except PhoneCodeExpiredError:
         return await evt.reply(
             "Phone code expired. Try again with `$cmdprefix+sp login <phone>`.")
     except PhoneCodeInvalidError:
         return await evt.reply("Invalid phone code.")
-    except PhoneNumberAppSignupForbiddenError:
-        return await evt.reply(
-            "Your phone number does not allow 3rd party apps to sign in.")
-    except PhoneNumberFloodError:
-        return await evt.reply(
-            "Your phone number has been temporarily blocked for flooding. "
-            "The block is usually applied for around a day.")
-    except PhoneNumberBannedError:
-        return await evt.reply("Your phone number has been banned from Telegram.")
     except SessionPasswordNeededError:
         evt.sender.command_status = {
             "next": enter_password,
             "action": "Login (password entry)",
         }
-        return await evt.reply("Your account has two-factor authentication."
+        return await evt.reply("Your account has two-factor authentication. "
                                "Please send your password here.")
     except Exception:
         evt.log.exception("Error sending phone code")
-        return await evt.reply("Unhandled exception while sending code."
+        return await evt.reply("Unhandled exception while sending code. "
                                "Check console for more details.")
 
 

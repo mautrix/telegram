@@ -34,6 +34,7 @@ from .user import init as init_user, User
 from .bot import init as init_bot
 from .portal import init as init_portal
 from .puppet import init as init_puppet
+from .public import PublicBridgeWebsite
 from .context import Context
 
 log = logging.getLogger("mau")
@@ -76,12 +77,17 @@ Base.metadata.bind = db_engine
 Base.metadata.create_all()
 
 loop = asyncio.get_event_loop()
+
 appserv = AppService(config["homeserver.address"], config["homeserver.domain"],
                      config["appservice.as_token"], config["appservice.hs_token"],
                      config["appservice.bot_username"], log="mau.as", loop=loop)
 
 
 context = Context(appserv, db_session, config, loop, None, None)
+
+if config["appservice.public.enabled"]:
+    public = PublicBridgeWebsite(loop)
+    appserv.app.add_subapp(config.get("appservice.public.prefix", "/public"), public.app)
 
 with appserv.run(config["appservice.hostname"], config["appservice.port"]) as start:
     init_db(db_session)

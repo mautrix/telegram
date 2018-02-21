@@ -19,6 +19,8 @@ import logging
 
 from telethon.errors import FloodWaitError
 
+from ..util import format_duration
+
 command_handlers = {}
 
 
@@ -65,24 +67,6 @@ class CommandEvent:
         elif allow_html:
             html = message
         return self.az.intent.send_notice(self.room_id, message, html=html)
-
-
-def format_duration(seconds):
-    def pluralize(count, singular): return singular if count == 1 else singular + "s"
-
-    def include(count, word): return f"{count} {pluralize(count, word)}" if count > 0 else ""
-
-    minutes, seconds = divmod(seconds, 60)
-    hours, minutes = divmod(minutes, 60)
-    days, hours = divmod(hours, 24)
-    parts = [a for a in [
-        include(days, "day"),
-        include(hours, "hour"),
-        include(minutes, "minute"),
-        include(seconds, "second")] if a]
-    if len(parts) > 2:
-        return "{} and {}".format(", ".join(parts[:-1]), parts[-1])
-    return " and ".join(parts)
 
 
 class CommandHandler:
