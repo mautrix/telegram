@@ -17,7 +17,7 @@
 from . import command_handler
 
 
-@command_handler()
+@command_handler(needs_auth=False)
 def cancel(evt):
     if evt.sender.command_status:
         action = evt.sender.command_status["action"]
@@ -27,12 +27,12 @@ def cancel(evt):
         return evt.reply("No ongoing command.")
 
 
-@command_handler()
+@command_handler(needs_auth=False)
 def unknown_command(evt):
     return evt.reply("Unknown command. Try `$cmdprefix+sp help` for help.")
 
 
-@command_handler()
+@command_handler(needs_auth=False)
 def help(evt):
     if evt.is_management:
         management_status = ("This is a management room: prefixing commands "
