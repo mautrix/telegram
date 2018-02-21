@@ -394,7 +394,7 @@ class Portal:
             file = await util.transfer_file_to_matrix(self.db, user.client, self.main_intent,
                                                       photo)
             if file:
-                await self.main_intent.set_avatar(file.mxc)
+                await self.main_intent.set_room_avatar(self.mxid, file.mxc)
                 self.photo_id = photo_id
                 return True
         return False
