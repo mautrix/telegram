@@ -112,7 +112,7 @@ class TelegramFile(Base):
     mxc = Column(String)
     mime_type = Column(String)
     was_converted = Column(Boolean)
-    timestamp = Column(BigInteger, primary_key=True)
+    timestamp = Column(BigInteger)
 
 
 def init(db_session):

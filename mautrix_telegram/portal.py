@@ -491,8 +491,11 @@ class Portal:
         if self.peer_type == "user":
             await self.main_intent.leave_room(self.mxid)
             self.delete()
-            del self.by_tgid[self.tgid_full]
-            del self.by_mxid[self.mxid]
+            try:
+                del self.by_tgid[self.tgid_full]
+                del self.by_mxid[self.mxid]
+            except KeyError:
+                pass
         elif source and source.tgid != user.tgid:
             if self.peer_type == "chat":
                 await source.client(DeleteChatUserRequest(chat_id=self.tgid, user_id=user.tgid))
