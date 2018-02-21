@@ -59,6 +59,79 @@ class PublicBridgeWebsite:
                             text=self.login.render(username=username, state=state, error=error,
                                                    message=message, mxid=mxid))
 
+    async def post_login_phone(self, user, phone):
+        try:
+            await user.client.sign_in(phone or "+123")
+            return self.render_login(mxid=user.mxid, state="code", status=200,
+                                     message="Code requested successfully.")
+        except PhoneNumberInvalidError:
+            return self.render_login(mxid=user.mxid, state="request", status=400,
+                                     error="Invalid phone number.")
+        except PhoneNumberUnoccupiedError:
+            return self.render_login(mxid=user.mxid, state="request", status=404,
+                                     error="That phone number has not been registered.")
+        except PhoneNumberFloodError:
+            return self.render_login(
+                mxid=user.mxid, state="request", status=429,
+                error="Your phone number has been temporarily banned for flooding. "
+                      "The ban is usually applied for around a day.")
+        except PhoneNumberBannedError:
+            return self.render_login(mxid=user.mxid, state="request", status=401,
+                                     error="Your phone number is banned from Telegram.")
+        except PhoneNumberAppSignupForbiddenError:
+            return self.render_login(mxid=user.mxid, state="request", status=401,
+                                     error="You have disabled 3rd party apps on your account.")
+        except Exception:
+            self.log.exception("Error requesting phone code")
+            return self.render_login(mxid=user.mxid, state="request", status=500,
+                                     error="Internal server error while requesting code.")
+
+    async def post_login_code(self, user, code, password_in_data):
+        try:
+            user_info = await user.client.sign_in(code=code)
+            asyncio.ensure_future(user.post_login(user_info), loop=self.loop)
+            if user.command_status and user.command_status.action == "Login":
+                user.command_status = None
+            return self.render_login(mxid=user.mxid, state="logged-in", status=200,
+                                     username=user_info.username)
+        except PhoneCodeInvalidError:
+            return self.render_login(mxid=user.mxid, state="code", status=403,
+                                     error="Incorrect phone code.")
+        except PhoneCodeExpiredError:
+            return self.render_login(mxid=user.mxid, state="code", status=403,
+                                     error="Phone code expired.")
+        except SessionPasswordNeededError:
+            if not password_in_data:
+                if user.command_status and user.command_status.action == "Login":
+                    user.command_status = {
+                        "next": enter_password,
+                        "action": "Login (password entry)",
+                    }
+                return self.render_login(
+                    mxid=user.mxid, state="password", status=200,
+                    message="Code accepted, but you have 2-factor authentication is enabled.")
+            return None
+        except Exception:
+            self.log.exception("Error sending phone code")
+            return self.render_login(mxid=user.mxid, state="code", status=500,
+                                     error="Internal server error while sending code.")
+
+    async def post_login_password(self, user, password):
+        try:
+            user_info = await user.client.sign_in(password=password)
+            asyncio.ensure_future(user.post_login(user_info), loop=self.loop)
+            if user.command_status and user.command_status.action == "Login (password entry)":
+                user.command_status = None
+            return self.render_login(mxid=user.mxid, state="logged-in", status=200,
+                                     username=user_info.username)
+        except (PasswordHashInvalidError, PasswordEmptyError):
+            return self.render_login(mxid=user.mxid, state="password", status=400,
+                                     error="Incorrect password.")
+        except Exception:
+            self.log.exception("Error sending password")
+            return self.render_login(mxid=user.mxid, state="password", status=500,
+                                     error="Internal server error while sending password.")
+
     async def post_login(self, request):
         self.log.debug(request)
         data = await request.post()
@@ -72,74 +145,14 @@ class PublicBridgeWebsite:
             return self.render_login(mxid=user.mxid, username=user.username)
 
         if "phone" in data:
-            try:
-                await user.client.sign_in(data["phone"] or "+123")
-                return self.render_login(mxid=user.mxid, state="code", status=200,
-                                         message="Code requested successfully.")
-            except PhoneNumberInvalidError:
-                return self.render_login(mxid=user.mxid, state="request", status=400,
-                                         error="Invalid phone number.")
-            except PhoneNumberUnoccupiedError:
-                return self.render_login(mxid=user.mxid, state="request", status=404,
-                                         error="That phone number has not been registered.")
-            except PhoneNumberFloodError:
-                return self.render_login(
-                    mxid=user.mxid, state="request", status=429,
-                    error="Your phone number has been temporarily banned for flooding. "
-                          "The ban is usually applied for around a day.")
-            except PhoneNumberBannedError:
-                return self.render_login(mxid=user.mxid, state="request", status=401,
-                                         error="Your phone number is banned from Telegram.")
-            except PhoneNumberAppSignupForbiddenError:
-                return self.render_login(mxid=user.mxid, state="request", status=401,
-                                         error="You have disabled 3rd party apps on your account.")
-            except Exception:
-                self.log.exception("Error requesting phone code")
-                return self.render_login(mxid=user.mxid, state="request", status=500,
-                                         error="Internal server error while requesting code.")
+            return await self.post_login_phone(user, data["phone"])
         elif "code" in data:
-            try:
-                user_info = await user.client.sign_in(code=data["code"])
-                asyncio.ensure_future(user.post_login(user_info), loop=self.loop)
-                if user.command_status and user.command_status.action == "Login":
-                    user.command_status = None
-                return self.render_login(mxid=user.mxid, state="logged-in", status=200,
-                                         username=user_info.username)
-            except PhoneCodeInvalidError:
-                return self.render_login(mxid=user.mxid, state="code", status=403,
-                                         error="Incorrect phone code.")
-            except PhoneCodeExpiredError:
-                return self.render_login(mxid=user.mxid, state="code", status=403,
-                                         error="Phone code expired.")
-            except SessionPasswordNeededError:
-                if "password" not in data:
-                    if user.command_status and user.command_status.action == "Login":
-                        user.command_status = {
-                            "next": enter_password,
-                            "action": "Login (password entry)",
-                        }
-                    return self.render_login(
-                        mxid=user.mxid, state="password", status=200,
-                        message="Code accepted, but you have 2-factor authentication is enabled.")
-            except Exception:
-                self.log.exception("Error sending phone code")
-                return self.render_login(mxid=user.mxid, state="code", status=500,
-                                         error="Internal server error while sending code.")
+            resp = await self.post_login_code(user, data["code"], password_in_data="password" in data)
+            if resp:
+                return resp
         elif "password" not in data:
             return self.render_login(error="No data given.", status=400)
 
         if "password" in data:
-            try:
-                user_info = await user.client.sign_in(password=data["password"])
-                asyncio.ensure_future(user.post_login(user_info), loop=self.loop)
-                if user.command_status and user.command_status.action == "Login (password entry)":
-                    user.command_status = None
-                return self.render_login(mxid=user.mxid, state="logged-in", status=200,
-                                         username=user_info.username)
-            except (PasswordHashInvalidError, PasswordEmptyError):
-                return self.render_login(mxid=user.mxid, state="password", status=400,
-                                         error="Incorrect password.")
-            except Exception:
-                self.log.exception("Error sending password")
-                return self.render_login(mxid=user.mxid, state="password", status=500,
-                                         error="Internal server error while sending password.")
+            return await self.post_login_password(user, data["password"])
+        return self.render_login(error="This should never happen.", status=500)

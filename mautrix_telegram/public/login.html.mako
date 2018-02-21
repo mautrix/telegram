@@ -20,7 +20,8 @@
 			<h1>Logged in successfully!</h1>
 			<p>
 				Logged in as @${username}.
-				You should be invited to Telegram portals on Matrix very soon.
+				You can now close this page.
+				You should be invited to Telegram portals on Matrix momentarily.
 			</p>
 		% else:
 			<h1>You're already logged in!</h1>
