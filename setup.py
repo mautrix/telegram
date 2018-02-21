@@ -1,5 +1,6 @@
 import setuptools
 import sys
+import glob
 import mautrix_telegram
 
 setuptools.setup(
@@ -10,7 +11,7 @@ setuptools.setup(
     author="Tulir Asokan",
     author_email="tulir@maunium.net",
 
-    description="A Matrix-Telegram puppeting bridge.",
+    description="A Matrix-Telegram hybrid puppeting/relaybot bridge.",
     long_description=open("README.md").read(),
 
     packages=setuptools.find_packages(),
@@ -44,6 +45,12 @@ setuptools.setup(
         [console_scripts]
         mautrix-telegram=mautrix_telegram.__main__:main
     """,
-    package_data={"mautrix_telegram": ["public/*.html", "public/*.png", "public/*.css", "public/*.js"]},
-    data_files=[(".", "example-config.yaml")],
+    package_data={"mautrix_telegram": [
+        "public/*.html", "public/*.png", "public/*.css",
+    ]},
+    data_files=[
+        (".", ["example-config.yaml", "alembic.ini"]),
+        ("alembic", ["alembic/env.py"]),
+        ("alembic/versions", glob.glob("alembic/versions/*.py"))
+    ],
 )
