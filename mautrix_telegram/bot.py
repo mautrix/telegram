@@ -65,6 +65,12 @@ class Bot(AbstractUser):
             except (ChannelPrivateError, ChannelInvalidError):
                 self.remove_chat(id.channel_id)
 
+    def register_portal(self, portal):
+        self.add_chat(portal.tgid, portal.peer_type)
+
+    def unregister_portal(self, portal):
+        self.remove_chat(portal.tgid)
+
     def add_chat(self, id, type):
         if id not in self.chats:
             self.chats[id] = type
