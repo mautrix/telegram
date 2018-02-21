@@ -20,6 +20,7 @@ from telethon.errors import *
 
 from . import command_handler
 from .. import puppet as pu
+from ..util import format_duration
 
 
 @command_handler(needs_auth=False)
@@ -94,6 +95,10 @@ async def enter_phone(evt):
         return await evt.reply(
             "Your phone number has been temporarily blocked for flooding. "
             "The ban is usually applied for around a day.")
+    except FloodWaitError as e:
+        return await evt.reply(
+            "Your phone number has been temporarily blocked for flooding. "
+            f"Please wait for {format_duration(e.seconds)} before trying again.")
     except PhoneNumberBannedError:
         return await evt.reply("Your phone number has been banned from Telegram.")
     except PhoneNumberUnoccupiedError:

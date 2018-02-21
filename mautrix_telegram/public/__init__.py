@@ -24,6 +24,7 @@ from telethon.errors import *
 
 from ..user import User
 from ..commands.auth import enter_password
+from ..util import format_duration
 
 
 class PublicBridgeWebsite:
@@ -73,8 +74,13 @@ class PublicBridgeWebsite:
         except PhoneNumberFloodError:
             return self.render_login(
                 mxid=user.mxid, state="request", status=429,
-                error="Your phone number has been temporarily banned for flooding. "
+                error="Your phone number has been temporarily blocked for flooding. "
                       "The ban is usually applied for around a day.")
+        except FloodWaitError as e:
+            return self.render_login(
+                mxid=user.mxid, state="request", status=429,
+                error="Your phone number has been temporarily blocked for flooding. "
+                      f"Please wait for {format_duration(e.seconds)} before trying again.")
         except PhoneNumberBannedError:
             return self.render_login(mxid=user.mxid, state="request", status=401,
                                      error="Your phone number is banned from Telegram.")
@@ -90,7 +96,7 @@ class PublicBridgeWebsite:
         try:
             user_info = await user.client.sign_in(code=code)
             asyncio.ensure_future(user.post_login(user_info), loop=self.loop)
-            if user.command_status and user.command_status.action == "Login":
+            if user.command_status and user.command_status["action"] == "Login":
                 user.command_status = None
             return self.render_login(mxid=user.mxid, state="logged-in", status=200,
                                      username=user_info.username)
@@ -102,7 +108,7 @@ class PublicBridgeWebsite:
                                      error="Phone code expired.")
         except SessionPasswordNeededError:
             if not password_in_data:
-                if user.command_status and user.command_status.action == "Login":
+                if user.command_status and user.command_status["action"] == "Login":
                     user.command_status = {
                         "next": enter_password,
                         "action": "Login (password entry)",
@@ -120,7 +126,7 @@ class PublicBridgeWebsite:
         try:
             user_info = await user.client.sign_in(password=password)
             asyncio.ensure_future(user.post_login(user_info), loop=self.loop)
-            if user.command_status and user.command_status.action == "Login (password entry)":
+            if user.command_status and user.command_status["action"] == "Login (password entry)":
                 user.command_status = None
             return self.render_login(mxid=user.mxid, state="logged-in", status=200,
                                      username=user_info.username)
