@@ -62,8 +62,6 @@ class User(AbstractUser):
         if tgid:
             self.by_tgid[tgid] = self
 
-        self._init_client()
-
     @property
     def name(self):
         return self.mxid

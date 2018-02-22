@@ -23,7 +23,7 @@ from telethon.tl.functions.channels import GetChannelsRequest
 
 from .abstract_user import AbstractUser
 from .db import BotChat
-from . import puppet as pu
+from . import puppet as pu, portal as po, user as u
 
 config = None
 
@@ -35,6 +35,7 @@ class Bot(AbstractUser):
         super().__init__()
         self.token = token
         self.whitelisted = True
+        self.username = None
         self._init_client()
         self.chats = {chat.id: chat.type for chat in BotChat.query.all()}
 
@@ -48,6 +49,7 @@ class Bot(AbstractUser):
     async def post_login(self):
         info = await self.client.get_me()
         self.tgid = info.id
+        self.username = info.username
         self.mxid = pu.Puppet.get_mxid_from_id(self.tgid)
 
         chat_ids = [id for id, type in self.chats.items() if type == "chat"]
@@ -85,10 +87,50 @@ class Bot(AbstractUser):
         self.db.delete(BotChat.query.get(id))
         self.db.commit()
 
+    async def handle_command(self, message):
+        def reply(reply_text):
+            return self.client.send_message_super(message.to_id, reply_text)
+
+        text = message.message
+        portal = po.Portal.get_by_entity(message.to_id)
+        if text == "/portal":
+            await portal.create_matrix_room(self)
+            if portal.mxid:
+                if portal.username:
+                    return await reply(
+                        f"Portal is public: [portal.alias](https://matrix.to/#/{portal.alias})")
+                else:
+                    return await reply(
+                        "Portal is not public. Use `/invite <mxid>` to get an invite.")
+        elif text.startswith("/invite"):
+            mxid = text[len("/invite "):]
+            if len(mxid) == 0:
+                return await reply("Usage: `/invite <mxid>`")
+            elif not portal.mxid:
+                return await reply("Portal does not have Matrix room. "
+                                   "Create one with /portal first.")
+            user = await u.User.get_by_mxid(mxid).ensure_started()
+            if not user.whitelisted:
+                return await reply("That user is not whitelisted to use the bridge.")
+            elif user.logged_in:
+                displayname = f"@{user.username}" if user.username else user.displayname
+                return await reply("That user seems to be logged in. "
+                                   f"Just invite [{displayname}](tg://user?id={user.tgid})")
+            else:
+                await portal.main_intent.invite(portal.mxid, user.mxid)
+                return await reply(f"Invited `{user.mxid}` to the portal.")
+
     async def update(self, update):
         if not isinstance(update, (UpdateNewMessage, UpdateNewChannelMessage)):
             return
-        elif not isinstance(update.message, MessageService):
+
+        is_command = (isinstance(update.message, Message)
+                      and len(update.message.entities) > 0
+                      and isinstance(update.message.entities[0], MessageEntityBotCommand))
+        if is_command:
+            return await self.handle_command(update.message)
+
+        if not isinstance(update.message, MessageService):
             return
 
         to_id = update.message.to_id

@@ -88,6 +88,8 @@ class AbstractUser:
         return self.logged_in and self.whitelisted
 
     async def start(self):
+        if not self.client:
+            self._init_client()
         self.connected = await self.client.connect()
 
     async def ensure_started(self, even_if_no_session=False):

@@ -45,9 +45,9 @@ class Portal:
     az = None
     bot = None
     bridge_notices = False
+    alias_template = None
     mx_alias_regex = None
     hs_domain = None
-    mxid_regex = None
     by_mxid = {}
     by_tgid = {}
 
@@ -223,7 +223,7 @@ class Portal:
 
         if self.peer_type == "channel" and entity.username:
             public = True
-            alias = self._get_room_alias(entity.username)
+            alias = self._get_alias_localpart(entity.username)
             self.username = entity.username
         else:
             public = False
@@ -281,8 +281,17 @@ class Portal:
             }
         return levels
 
-    def _get_room_alias(self, username=None):
-        return self.alias_template.format(groupname=username or self.username)
+    @property
+    def alias(self):
+        if not self.username:
+            return None
+        return f"#{self._get_alias_localpart()}:{self.hs_domain}"
+
+    def _get_alias_localpart(self, username=None):
+        username = username or self.username
+        if not username:
+            return None
+        return self.alias_template.format(groupname=username)
 
     async def sync_telegram_users(self, source, users):
         allowed_tgids = set()
@@ -361,10 +370,10 @@ class Portal:
     async def update_username(self, username):
         if self.username != username:
             if self.username:
-                await self.main_intent.remove_room_alias(self._get_room_alias())
+                await self.main_intent.remove_room_alias(self._get_alias_localpart())
             self.username = username or None
             if self.username:
-                await self.main_intent.add_room_alias(self.mxid, self._get_room_alias())
+                await self.main_intent.add_room_alias(self.mxid, self._get_alias_localpart())
                 await self.main_intent.set_join_rule(self.mxid, "public")
             else:
                 await self.main_intent.set_join_rule(self.mxid, "invite")
@@ -1156,7 +1165,7 @@ class Portal:
         return None
 
     @classmethod
-    def get_by_entity(cls, entity, receiver_id=None):
+    def get_by_entity(cls, entity, receiver_id=None, create=True):
         entity_type = type(entity)
         if entity_type in {Chat, ChatFull}:
             type_name = "chat"
@@ -1178,7 +1187,9 @@ class Portal:
             id = entity.user_id
         else:
             raise ValueError(f"Unknown entity type {entity_type.__name__}")
-        return cls.get_by_tgid(id, receiver_id if type_name == "user" else id, type_name)
+        return cls.get_by_tgid(id,
+                               receiver_id if type_name == "user" else id,
+                               type_name if create else None)
 
     # endregion
 
