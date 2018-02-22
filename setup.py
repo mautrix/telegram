@@ -27,9 +27,9 @@ setuptools.setup(
         "python-magic>=0.4.15,<0.5",
     ],
     dependency_links=[
-        ("https://github.com/LonamiWebs/Telethon/tarball/6e854325a8e0e800a4f337257293d09006946162#egg=Telethon"
+        ("https://github.com/LonamiWebs/Telethon/tarball/7998fd59f709ae1cd959c5cc4ab107982307f4a6#egg=Telethon"
          if sys.version_info > (3, 5)
-         else "https://github.com/tulir/Telethon/tarball/24dc21aea3305ef3bb8c7fcaef2025ae65d5c85e#egg=Telethon")
+         else "https://github.com/tulir/Telethon/tarball/ca08fe28800d74fd6c19fd6f473e12fbf2c258de#egg=Telethon")
     ],
 
     classifiers=[
