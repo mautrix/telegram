@@ -21,6 +21,7 @@ import random
 import mimetypes
 import hashlib
 import logging
+import re
 
 import magic
 
@@ -44,6 +45,9 @@ class Portal:
     az = None
     bot = None
     bridge_notices = False
+    mx_alias_regex = None
+    hs_domain = None
+    mxid_regex = None
     by_mxid = {}
     by_tgid = {}
 
@@ -278,9 +282,7 @@ class Portal:
         return levels
 
     def _get_room_alias(self, username=None):
-        username = username or self.username
-        return config.get("bridge.alias_template", "telegram_{groupname}").format(
-            groupname=username)
+        return self.alias_template.format(groupname=username or self.username)
 
     async def sync_telegram_users(self, source, users):
         allowed_tgids = set()
@@ -1111,6 +1113,28 @@ class Portal:
         return None
 
     @classmethod
+    def get_username_from_mx_alias(cls, alias):
+        match = cls.mx_alias_regex.match(alias)
+        if match:
+            return match.group(1)
+        return None
+
+    @classmethod
+    def find_by_username(cls, username):
+        if not username:
+            return None
+
+        for _, portal in cls.by_tgid.items():
+            if portal.username == username:
+                return portal
+
+        portal = DBPortal.query.filter(DBPortal.username == username).one_or_none()
+        if portal:
+            return cls.from_db(portal)
+
+        return None
+
+    @classmethod
     def get_by_tgid(cls, tgid, tg_receiver=None, peer_type=None):
         tg_receiver = tg_receiver or tgid
         tgid_full = (tgid, tg_receiver)
@@ -1163,3 +1187,7 @@ def init(context):
     global config
     Portal.az, Portal.db, config, _, Portal.bot = context
     Portal.bridge_notices = config["bridge.bridge_notices"]
+    Portal.alias_template = config.get("bridge.alias_template", "telegram_{groupname}")
+    Portal.hs_domain = config["homeserver"]["domain"]
+    localpart = Portal.alias_template.format(groupname="(.+)")
+    Portal.mx_alias_regex = re.compile(f"#{localpart}:{Portal.hs_domain}")

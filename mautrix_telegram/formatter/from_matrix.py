@@ -22,7 +22,7 @@ import logging
 
 from telethon.tl.types import *
 
-from .. import user as u, puppet as p
+from .. import user as u, puppet as pu, portal as po
 from ..db import Message as DBMessage
 from .util import add_surrogates, remove_surrogates
 
@@ -30,7 +30,8 @@ log = logging.getLogger("mau.fmt.mx")
 
 
 class MatrixParser(HTMLParser):
-    mention_regex = re.compile("https://matrix.to/#/(@.+)")
+    mention_regex = re.compile("https://matrix.to/#/(@.+:.+)")
+    room_regex = re.compile("https://matrix.to/#/(#.+:.+)")
 
     def __init__(self):
         super().__init__()
@@ -69,10 +70,11 @@ class MatrixParser(HTMLParser):
                 url = attrs["href"]
             except KeyError:
                 return
-            mention = self.mention_regex.search(url)
+            mention = self.mention_regex.match(url)
+            room = self.room_regex.match(url)
             if mention:
                 mxid = mention.group(1)
-                user = p.Puppet.get_by_mxid(mxid, create=False)
+                user = pu.Puppet.get_by_mxid(mxid, create=False)
                 if not user:
                     user = u.User.get_by_mxid(mxid, create=False)
                     if not user:
@@ -83,6 +85,12 @@ class MatrixParser(HTMLParser):
                 else:
                     entity_type = MessageEntityMentionName
                     args["user_id"] = user.tgid
+            elif room:
+                username = po.Portal.get_username_from_mx_alias(room.group(1))
+                portal = po.Portal.find_by_username(username)
+                if portal and portal.username:
+                    url = f"@{portal.username}"
+                    entity_type = MessageEntityMention
             elif url.startswith("mailto:"):
                 url = url[len("mailto:"):]
                 entity_type = MessageEntityEmail

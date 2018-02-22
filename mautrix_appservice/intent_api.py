@@ -168,7 +168,7 @@ class IntentAPI:
         self.mxid = mxid
         self.log = log
 
-        results = self.mxid_regex.search(mxid)
+        results = self.mxid_regex.match(mxid)
         if not results:
             raise ValueError("invalid MXID")
         self.localpart = results.group(1)
