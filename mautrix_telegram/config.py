@@ -80,7 +80,7 @@ class Config(DictWithRecursion):
 
     @staticmethod
     def _new_token():
-        return "".join(random.choices(string.ascii_lowercase + string.digits, k=64))
+        return "".join(random.choice(string.ascii_lowercase + string.digits) for _ in range(64))
 
     def generate_registration(self):
         homeserver = self["homeserver.domain"]
