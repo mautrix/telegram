@@ -15,6 +15,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import logging
+import re
 
 from telethon.tl.types import *
 from telethon.errors import ChannelInvalidError, ChannelPrivateError
@@ -30,6 +31,7 @@ config = None
 
 class Bot(AbstractUser):
     log = logging.getLogger("mau.bot")
+    mxid_regex = re.compile("@.+:.+")
 
     def __init__(self, token):
         super().__init__()
@@ -87,6 +89,35 @@ class Bot(AbstractUser):
         self.db.delete(BotChat.query.get(id))
         self.db.commit()
 
+    async def handle_command_portal(self, portal, reply):
+        await portal.create_matrix_room(self)
+        if portal.mxid:
+            if portal.username:
+                return await reply(
+                    f"Portal is public: [portal.alias](https://matrix.to/#/{portal.alias})")
+            else:
+                return await reply(
+                    "Portal is not public. Use `/invite <mxid>` to get an invite.")
+
+    async def handle_command_invite(self, portal, reply, mxid):
+        if len(mxid) == 0:
+            return await reply("Usage: `/invite <mxid>`")
+        elif not portal.mxid:
+            return await reply("Portal does not have Matrix room. "
+                               "Create one with /portal first.")
+        if not self.mxid_regex.match(mxid):
+            return await reply("That doesn't look like a Matrix ID.")
+        user = await u.User.get_by_mxid(mxid).ensure_started()
+        if not user.whitelisted:
+            return await reply("That user is not whitelisted to use the bridge.")
+        elif user.logged_in:
+            displayname = f"@{user.username}" if user.username else user.displayname
+            return await reply("That user seems to be logged in. "
+                               f"Just invite [{displayname}](tg://user?id={user.tgid})")
+        else:
+            await portal.main_intent.invite(portal.mxid, user.mxid)
+            return await reply(f"Invited `{user.mxid}` to the portal.")
+
     async def handle_command(self, message):
         def reply(reply_text):
             return self.client.send_message_super(message.to_id, reply_text)
@@ -94,38 +125,16 @@ class Bot(AbstractUser):
         text = message.message
         portal = po.Portal.get_by_entity(message.to_id)
         if text == "/portal":
-            await portal.create_matrix_room(self)
-            if portal.mxid:
-                if portal.username:
-                    return await reply(
-                        f"Portal is public: [portal.alias](https://matrix.to/#/{portal.alias})")
-                else:
-                    return await reply(
-                        "Portal is not public. Use `/invite <mxid>` to get an invite.")
+            await self.handle_command_portal(portal, reply)
         elif text.startswith("/invite"):
-            mxid = text[len("/invite "):]
-            if len(mxid) == 0:
-                return await reply("Usage: `/invite <mxid>`")
-            elif not portal.mxid:
-                return await reply("Portal does not have Matrix room. "
-                                   "Create one with /portal first.")
-            user = await u.User.get_by_mxid(mxid).ensure_started()
-            if not user.whitelisted:
-                return await reply("That user is not whitelisted to use the bridge.")
-            elif user.logged_in:
-                displayname = f"@{user.username}" if user.username else user.displayname
-                return await reply("That user seems to be logged in. "
-                                   f"Just invite [{displayname}](tg://user?id={user.tgid})")
-            else:
-                await portal.main_intent.invite(portal.mxid, user.mxid)
-                return await reply(f"Invited `{user.mxid}` to the portal.")
+            await self.handle_command_invite(portal, reply, mxid=text[len("/invite "):])
 
     async def update(self, update):
         if not isinstance(update, (UpdateNewMessage, UpdateNewChannelMessage)):
             return
 
         is_command = (isinstance(update.message, Message)
-                      and len(update.message.entities) > 0
+                      and update.message.entities and len(update.message.entities) > 0
                       and isinstance(update.message.entities[0], MessageEntityBotCommand))
         if is_command:
             return await self.handle_command(update.message)
