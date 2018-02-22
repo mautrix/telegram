@@ -1053,8 +1053,8 @@ class Portal:
 
     def new_db_instance(self):
         return DBPortal(tgid=self.tgid, tg_receiver=self.tg_receiver, peer_type=self.peer_type,
-                        mxid=self.mxid, username=self.username, title=self.title,
-                        about=self.about, photo_id=self.photo_id)
+                        mxid=self.mxid, username=self.username, title=self.title, about=self.about,
+                        photo_id=self.photo_id)
 
     def migrate_and_save(self, new_id):
         existing = DBPortal.query.get(self.tgid_full)

@@ -154,7 +154,7 @@ class PublicBridgeWebsite:
             return await self.post_login_phone(user, data["phone"])
         elif "code" in data:
             resp = await self.post_login_code(user, data["code"], password_in_data="password" in data)
-            if resp:
+            if resp or "password" not in data:
                 return resp
         elif "password" not in data:
             return self.render_login(error="No data given.", status=400)
