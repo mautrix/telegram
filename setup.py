@@ -17,9 +17,9 @@ setuptools.setup(
     packages=setuptools.find_packages(),
 
     install_requires=[
-        "aiohttp>=2.3.10,<3",
+        "aiohttp>=3.0.1,<4",
         "SQLAlchemy>=1.2.3,<2",
-        "alembic>=0.9.7",
+        "alembic>=0.9.8,<0.10",
         "Markdown>=2.6.11,<3",
         "ruamel.yaml>=0.15.35,<0.16",
         "Pillow>=5.0.0,<6",
