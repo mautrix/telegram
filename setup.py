@@ -28,7 +28,7 @@ setuptools.setup(
     ],
     dependency_links=[
         ("https://github.com/LonamiWebs/Telethon/tarball/7998fd59f709ae1cd959c5cc4ab107982307f4a6#egg=Telethon"
-         if sys.version_info > (3, 5)
+         if sys.version_info >= (3, 6)
          else "https://github.com/tulir/Telethon/tarball/ca08fe28800d74fd6c19fd6f473e12fbf2c258de#egg=Telethon")
     ],
 
