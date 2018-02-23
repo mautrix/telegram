@@ -90,11 +90,14 @@ class Bot(AbstractUser):
         self.db.commit()
 
     async def handle_command_portal(self, portal, reply):
+        if not config["bridge.authless_relaybot_portals"]:
+            return await reply("This bridge doesn't allow portal creation/invites from Telegram.")
+
         await portal.create_matrix_room(self)
         if portal.mxid:
             if portal.username:
                 return await reply(
-                    f"Portal is public: [portal.alias](https://matrix.to/#/{portal.alias})")
+                    f"Portal is public: [{portal.alias}](https://matrix.to/#/{portal.alias})")
             else:
                 return await reply(
                     "Portal is not public. Use `/invite <mxid>` to get an invite.")
