@@ -174,8 +174,11 @@ class Puppet:
 
     @classmethod
     def find_by_username(cls, username):
+        if not username:
+            return None
+
         for _, puppet in cls.cache.items():
-            if puppet.username == username:
+            if puppet.username and puppet.username.lower() == username.lower():
                 return puppet
 
         puppet = DBPuppet.query.filter(DBPuppet.username == username).one_or_none()

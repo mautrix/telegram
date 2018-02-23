@@ -1125,7 +1125,7 @@ class Portal:
             return None
 
         for _, portal in cls.by_tgid.items():
-            if portal.username == username:
+            if portal.username and portal.username.lower() == username.lower():
                 return portal
 
         portal = DBPortal.query.filter(DBPortal.username == username).one_or_none()

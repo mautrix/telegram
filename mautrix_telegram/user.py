@@ -311,8 +311,11 @@ class User(AbstractUser):
 
     @classmethod
     def find_by_username(cls, username):
+        if not username:
+            return None
+
         for _, user in cls.by_tgid.items():
-            if user.username == username:
+            if user.username and user.username.lower() == username.lower():
                 return user
 
         puppet = DBUser.query.filter(DBUser.tg_username == username).one_or_none()

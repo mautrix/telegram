@@ -20,7 +20,7 @@ import logging
 from telethon.tl.types import *
 from mautrix_appservice import MatrixRequestError
 
-from .. import user as u, puppet as p
+from .. import user as u, puppet as pu, portal as po
 from ..db import Message as DBMessage
 from .util import add_surrogates, remove_surrogates
 
@@ -57,13 +57,13 @@ async def telegram_to_matrix(evt, source, native_replies=False, message_link_in_
         if user:
             fwd_from = f"<a href='https://matrix.to/#/{user.mxid}'>{user.mxid}</a>"
         else:
-            puppet = p.Puppet.get(from_id, create=False)
+            puppet = pu.Puppet.get(from_id, create=False)
             if puppet and puppet.displayname:
                 fwd_from = f"<a href='https://matrix.to/#/{puppet.mxid}'>{puppet.displayname}</a>"
             else:
                 user = await source.client.get_entity(from_id)
                 if user:
-                    fwd_from = p.Puppet.get_displayname(user, format=False)
+                    fwd_from = pu.Puppet.get_displayname(user, format=False)
                 else:
                     fwd_from = None
         if not fwd_from:
@@ -92,7 +92,7 @@ async def telegram_to_matrix(evt, source, native_replies=False, message_link_in_
                             if "formatted_body" in content
                             else content["body"])
                     sender = event['sender']
-                    puppet = p.Puppet.get_by_mxid(sender, create=False)
+                    puppet = pu.Puppet.get_by_mxid(sender, create=False)
                     displayname = puppet.displayname if puppet else sender
                     reply_to_user = f"<a href='https://matrix.to/#/{sender}'>{displayname}</a>"
                     reply_to_msg = (("<a href='https://matrix.to/#/"
@@ -159,12 +159,13 @@ def _telegram_entities_to_matrix(text, entities):
         elif entity_type == MessageEntityMention:
             username = entity_text[1:]
 
-            user = u.User.find_by_username(username)
+            user = u.User.find_by_username(username) or pu.Puppet.find_by_username(username)
             if user:
                 mxid = user.mxid
             else:
-                puppet = p.Puppet.find_by_username(username)
-                mxid = puppet.mxid if puppet else None
+                portal = po.Portal.find_by_username(username)
+                mxid = portal.alias or portal.mxid if portal else None
+
             if mxid:
                 html.append(f"<a href='https://matrix.to/#/{mxid}'>{entity_text}</a>")
             else:
@@ -174,7 +175,7 @@ def _telegram_entities_to_matrix(text, entities):
             if user:
                 mxid = user.mxid
             else:
-                puppet = p.Puppet.get(entity.user_id, create=False)
+                puppet = pu.Puppet.get(entity.user_id, create=False)
                 mxid = puppet.mxid if puppet else None
             if mxid:
                 html.append(f"<a href='https://matrix.to/#/{mxid}'>{entity_text}</a>")
