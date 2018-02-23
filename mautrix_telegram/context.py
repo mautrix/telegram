@@ -31,4 +31,3 @@ class Context:
         yield self.config
         yield self.loop
         yield self.bot
-        # yield self.mx

@@ -332,16 +332,19 @@ class Portal:
             user.register_portal(self)
             await self.main_intent.invite(self.mxid, user.mxid)
 
-    async def delete_telegram_user(self, user_id, kick_message=None):
+    async def delete_telegram_user(self, user_id, sender):
         puppet = p.Puppet.get(user_id)
         user = u.User.get_by_tgid(user_id)
-        if kick_message:
+        kick_message = (f"Kicked by {sender.displayname}"
+                        if sender and sender.tgid != user.tgid
+                        else "Left Telegram chat")
+        if sender and sender.tgid != user.tgid:
             await self.main_intent.kick(self.mxid, puppet.mxid, kick_message)
         else:
             await puppet.intent.leave_room(self.mxid)
         if user:
             user.unregister_portal(self)
-            await self.main_intent.kick(self.mxid, user.mxid, kick_message or "Left Telegram chat")
+            await self.main_intent.kick(self.mxid, user.mxid, kick_message)
 
     async def update_info(self, user, entity=None):
         if self.peer_type == "user":
@@ -367,7 +370,7 @@ class Portal:
         if changed:
             self.save()
 
-    async def update_username(self, username):
+    async def update_username(self, username, save=False):
         if self.username != username:
             if self.username:
                 await self.main_intent.remove_room_alias(self._get_alias_localpart())
@@ -377,20 +380,27 @@ class Portal:
                 await self.main_intent.set_join_rule(self.mxid, "public")
             else:
                 await self.main_intent.set_join_rule(self.mxid, "invite")
+
+            if save:
+                self.save()
             return True
         return False
 
-    async def update_about(self, about):
+    async def update_about(self, about, save=False):
         if self.about != about:
             self.about = about
             await self.main_intent.set_room_topic(self.mxid, self.about)
+            if save:
+                self.save()
             return True
         return False
 
-    async def update_title(self, title):
+    async def update_title(self, title, save=False):
         if self.title != title:
             self.title = title
             await self.main_intent.set_room_name(self.mxid, self.title)
+            if save:
+                self.save()
             return True
         return False
 
@@ -399,7 +409,7 @@ class Portal:
         return max(photo.sizes, key=(lambda photo2: (
             len(photo2.bytes) if isinstance(photo2, PhotoCachedSize) else photo2.size)))
 
-    async def update_avatar(self, user, photo):
+    async def update_avatar(self, user, photo, save=False):
         photo_id = f"{photo.volume_id}-{photo.local_id}"
         if self.photo_id != photo_id:
             file = await util.transfer_file_to_matrix(self.db, user.client, self.main_intent,
@@ -407,6 +417,8 @@ class Portal:
             if file:
                 await self.main_intent.set_room_avatar(self.mxid, file.mxc)
                 self.photo_id = photo_id
+                if save:
+                    self.save()
                 return True
         return False
 
@@ -974,21 +986,17 @@ class Portal:
 
         # TODO figure out how to see changes to about text / channel username
         if isinstance(action, MessageActionChatEditTitle):
-            if await self.update_title(action.title):
-                self.save()
+            await self.update_title(action.title, save=True)
         elif isinstance(action, MessageActionChatEditPhoto):
             largest_size = self._get_largest_photo_size(action.photo)
-            if await self.update_avatar(source, largest_size.location):
-                self.save()
+            self.update_avatar(source, largest_size.location, save=True)
         elif isinstance(action, MessageActionChatAddUser):
             for user_id in action.users:
                 await self.add_telegram_user(user_id, source)
         elif isinstance(action, MessageActionChatJoinedByLink):
             await self.add_telegram_user(sender.id, source)
         elif isinstance(action, MessageActionChatDeleteUser):
-            kick_message = (f"Kicked by {sender.displayname}"
-                            if sender.id != action.user_id else None)
-            await self.delete_telegram_user(action.user_id, kick_message)
+            await self.delete_telegram_user(action.user_id, sender)
         elif isinstance(action, MessageActionChatMigrateTo):
             self.peer_type = "channel"
             self.migrate_and_save(action.channel_id)
