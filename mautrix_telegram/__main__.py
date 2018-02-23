@@ -56,6 +56,7 @@ args = parser.parse_args()
 
 config = Config(args.config, args.registration)
 config.load()
+config.check_updates()
 
 if args.generate_registration:
     config.generate_registration()

@@ -50,19 +50,13 @@ class User(AbstractUser):
 
         self.command_status = None
 
-        self.is_admin = self.mxid in config.get("bridge.admins", [])
-
-        whitelist = config.get("bridge.whitelist", None) or [self.mxid]
-        self.whitelisted = not whitelist or self.mxid in whitelist
-        if not self.whitelisted:
-            homeserver = self.mxid[self.mxid.index(":") + 1:]
-            self.whitelisted = homeserver in whitelist
+        (self.relaybot_whitelisted,
+         self.whitelisted,
+         self.is_admin) = config.get_permissions(self.mxid)
 
         self.by_mxid[mxid] = self
         if tgid:
             self.by_tgid[tgid] = self
-
-        self._init_client()
 
     @property
     def name(self):
