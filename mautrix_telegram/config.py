@@ -19,6 +19,7 @@ import random
 import string
 
 yaml = YAML()
+yaml.indent(4)
 
 
 class DictWithRecursion:
@@ -59,6 +60,31 @@ class DictWithRecursion:
     def __setitem__(self, key, value):
         self.set(key, value)
 
+    def _recursive_del(self, data, key):
+        if '.' in key:
+            key, next_key = key.split('.', 1)
+            if key not in data:
+                return
+            next_data = data[key]
+            self._recursive_del(next_data, next_key)
+            return
+        try:
+            del data[key]
+        except KeyError:
+            pass
+
+    def delete(self, key, allow_recursion=True):
+        if allow_recursion and '.' in key:
+            self._recursive_del(self._data, key)
+            return
+        try:
+            del self._data[key]
+        except KeyError:
+            pass
+
+    def __delitem__(self, key):
+        self.delete(key)
+
 
 class Config(DictWithRecursion):
     def __init__(self, path, registration_path):
@@ -81,6 +107,42 @@ class Config(DictWithRecursion):
     @staticmethod
     def _new_token():
         return "".join(random.choice(string.ascii_lowercase + string.digits) for _ in range(64))
+
+    def update_0_1(self):
+        permissions = self["bridge.permissions"] or {}
+        for entry in self["bridge.whitelist"] or []:
+            permissions[entry] = "full"
+        for entry in self["bridge.admins"] or []:
+            permissions[entry] = "admin"
+        self["bridge.permissions"] = permissions
+        del self["bridge.whitelist"]
+        del self["bridge.admins"]
+        self["version"] = 1
+
+    def check_updates(self):
+        if self.get("version", 0) == 0:
+            self.update_0_1()
+        else:
+            return
+        self.save()
+
+    def _get_permissions(self, key):
+        level = self["bridge.permissions"].get(key, "")
+        admin = level == "admin"
+        whitelisted = level == "full" or admin
+        relaybot = level == "relaybot" or whitelisted
+        return relaybot, whitelisted, admin
+
+    def get_permissions(self, mxid):
+        permissions = self["bridge.permissions"] or {}
+        if mxid in permissions:
+            return self._get_permissions(mxid)
+
+        homeserver = mxid[mxid.index(":") + 1:]
+        if homeserver in permissions:
+            return self._get_permissions(homeserver)
+
+        return self._get_permissions("*")
 
     def generate_registration(self):
         homeserver = self["homeserver.domain"]

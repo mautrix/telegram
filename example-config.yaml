@@ -87,20 +87,26 @@ bridge:
     # Allow logging in within Matrix. If false, the only way to log in is using the out-of-Matrix
     # login website (see appservice.public config section)
     allow_matrix_login: true
+    # Whether or not to allow creating portals from Telegram.
+    authless_relaybot_portals: true
 
     # The prefix for commands. Only required in non-management rooms.
     command_prefix: "!tg"
 
-    # Whitelist of user IDs that are allowed to use this bridge. Leave empty to disable.
-    # You can enter a domain without the localpart to allow all users from that homeserver to use the bridge.
-    whitelist:
-    - "internal.example.com"
-    - "@user:public.example.com"
-
-    # Admins can do things like delete portal rooms. Here you must specify the exact MXID, domains
-    # are not accepted.
-    admins:
-    - "@admin:internal.example.com"
+    # Permissions for using the bridge.
+    # Permitted values:
+    #   relaybot - Only use the bridge via the relaybot, no access to commands.
+    #       full - Full access to use the bridge via relaybot or logging in with Telegram account.
+    #      admin - Full access to use the bridge and some extra administration commands.
+    # Permitted keys:
+    #        * - All Matrix users
+    #   domain - All users on that homeserver
+    #     mxid - Specific user
+    permissions:
+        "*": "relaybot"
+        "example.com": "full"
+        "public.example.com": "full"
+        "@admin:example.com": "admin"
 
 # Telegram config
 telegram:
@@ -109,3 +115,5 @@ telegram:
     api_hash: tjyd5yge35lbodk1xwzw2jstp90k55qz
     # (Optional) Create your own bot at https://t.me/BotFather
     #bot_token: 123456789:ABCD-QBPd3VrWRhg623xYh07WUWErYA9eMI
+
+version: 1

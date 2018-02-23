@@ -462,7 +462,7 @@ class Portal:
             if p.Puppet.get_id_from_mxid(member) or member == self.main_intent.mxid:
                 continue
             user = await u.User.get_by_mxid(member).ensure_started()
-            if (has_bot and user.whitelisted) or user.has_full_access:
+            if (has_bot and user.relaybot_whitelisted) or user.has_full_access:
                 authenticated.append(user)
         return authenticated
 

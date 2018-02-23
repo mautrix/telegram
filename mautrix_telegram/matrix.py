@@ -119,7 +119,7 @@ class MatrixHandler:
         if not portal:
             return
 
-        if not user.whitelisted:
+        if not user.relaybot_whitelisted:
             await portal.main_intent.kick(room, user.mxid,
                                           "You are not whitelisted on this Telegram bridge.")
             return
@@ -169,7 +169,7 @@ class MatrixHandler:
 
         is_command, text = self.is_command(message)
         sender = await User.get_by_mxid(sender).ensure_started()
-        if not sender.whitelisted:
+        if not sender.relaybot_whitelisted:
             return
 
         portal = Portal.get_by_mxid(room)
@@ -177,7 +177,7 @@ class MatrixHandler:
             await portal.handle_matrix_message(sender, message, event_id)
             return
 
-        if message["msgtype"] != "m.text":
+        if not sender.whitelisted or message["msgtype"] != "m.text":
             return
 
         try:
