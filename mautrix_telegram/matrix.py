@@ -56,11 +56,11 @@ class MatrixHandler:
             members = await self.az.intent.get_room_members(room)
         except MatrixRequestError:
             members = []
-        if self.az.intent.mxid not in members:
+        if self.az.bot_mxid not in members:
             if len(members) > 1:
                 await puppet.intent.error_and_leave(room, text=None, html=(
                     f"Please invite "
-                    f"<a href='https://matrix.to/#/{self.az.intent.mxid}'>the bridge bot</a> "
+                    f"<a href='https://matrix.to/#/{self.az.bot_mxid}'>the bridge bot</a> "
                     f"first if you want to create a Telegram chat."))
                 return
 

@@ -53,30 +53,28 @@ class MatrixParser(HTMLParser):
         mention = self.mention_regex.match(url)
         if mention:
             mxid = mention.group(1)
-            user = pu.Puppet.get_by_mxid(mxid, create=False)
+            user = (pu.Puppet.get_by_mxid(mxid, create=False)
+                    or u.User.get_by_mxid(mxid, create=False))
             if not user:
-                user = u.User.get_by_mxid(mxid, create=False)
-                if not user:
-                    return None, None
+                return None, None
             if user.username:
                 entity_type = MessageEntityMention
                 url = f"@{user.username}"
             else:
                 entity_type = MessageEntityMentionName
                 args["user_id"] = user.tgid
-            return url, entity_type
+            return entity_type, url
 
         room = self.room_regex.match(url)
         if room:
             username = po.Portal.get_username_from_mx_alias(room.group(1))
             portal = po.Portal.find_by_username(username)
             if portal and portal.username:
-                return f"@{portal.username}", MessageEntityMention
+                return MessageEntityMention, f"@{portal.username}"
 
         if url.startswith("mailto:"):
             return MessageEntityEmail, url[len("mailto:"):]
-
-        if self.get_starttag_text() == url:
+        elif self.get_starttag_text() == url:
             return MessageEntityUrl, url
         else:
             args["url"] = url

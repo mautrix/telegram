@@ -120,8 +120,9 @@ class User(AbstractUser):
             del self.by_tgid[self.tgid]
         except KeyError:
             pass
-        self.db.delete(self.db_instance)
-        self.db.commit()
+        if self._db_instance:
+            self.db.delete(self._db_instance)
+            self.db.commit()
 
     @classmethod
     def from_db(cls, db_user):

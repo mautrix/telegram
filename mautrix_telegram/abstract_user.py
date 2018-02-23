@@ -107,9 +107,8 @@ class AbstractUser:
     # region Telegram update handling
 
     async def _update(self, update):
-        if isinstance(update,
-                      (UpdateShortChatMessage, UpdateShortMessage, UpdateNewChannelMessage,
-                       UpdateNewMessage, UpdateEditMessage, UpdateEditChannelMessage)):
+        if isinstance(update, (UpdateShortChatMessage, UpdateShortMessage, UpdateNewChannelMessage,
+                               UpdateNewMessage, UpdateEditMessage, UpdateEditChannelMessage)):
             await self.update_message(update)
         elif isinstance(update, UpdateDeleteMessages):
             await self.delete_message(update)
@@ -122,19 +121,25 @@ class AbstractUser:
         elif isinstance(update, (UpdateChatAdmins, UpdateChatParticipantAdmin)):
             await self.update_admin(update)
         elif isinstance(update, UpdateChatParticipants):
-            portal = po.Portal.get_by_tgid(update.participants.chat_id)
-            if portal and portal.mxid:
-                await portal.update_telegram_participants(update.participants.participants)
+            await self.update_participants(update)
         elif isinstance(update, UpdateChannelPinnedMessage):
-            portal = po.Portal.get_by_tgid(update.channel_id)
-            if portal and portal.mxid:
-                await portal.update_telegram_pin(self, update.id)
+            await self.update_pinned_messages(update)
         elif isinstance(update, (UpdateUserName, UpdateUserPhoto)):
             await self.update_others_info(update)
         elif isinstance(update, UpdateReadHistoryOutbox):
             await self.update_read_receipt(update)
         else:
             self.log.debug("Unhandled update: %s", update)
+
+    async def update_pinned_messages(self, update):
+        portal = po.Portal.get_by_tgid(update.channel_id)
+        if portal and portal.mxid:
+            await portal.update_telegram_pin(self, update.id)
+
+    async def update_participants(self, update):
+        portal = po.Portal.get_by_tgid(update.participants.chat_id)
+        if portal and portal.mxid:
+            await portal.update_telegram_participants(update.participants.participants)
 
     async def update_read_receipt(self, update):
         if not isinstance(update.peer, PeerUser):

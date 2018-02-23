@@ -94,8 +94,9 @@ class CommandHandler:
         try:
             await command(evt)
         except FloodWaitError as e:
-            return evt.reply(f"Flood error: Please wait {format_duration(e.seconds)}")
+            return await evt.reply(f"Flood error: Please wait {format_duration(e.seconds)}")
         except Exception:
             self.log.exception("Fatal error handling command "
                                f"{evt.command} {' '.join(args)} from {sender.mxid}")
-            return evt.reply("Fatal error while handling command. Check logs for more details.")
+            return await evt.reply("Fatal error while handling command. "
+                                   "Check logs for more details.")

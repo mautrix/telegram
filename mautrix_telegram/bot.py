@@ -156,12 +156,10 @@ class Bot(AbstractUser):
             return
 
         action = update.message.action
-        if isinstance(action, MessageActionChatAddUser):
-            if self.tgid in action.users:
-                self.add_chat(to_id, type)
-        elif isinstance(action, MessageActionChatDeleteUser):
-            if action.user_id == self.tgid:
-                self.remove_chat(to_id)
+        if isinstance(action, MessageActionChatAddUser) and self.tgid in action.users:
+            self.add_chat(to_id, type)
+        elif isinstance(action, MessageActionChatDeleteUser) and action.user_id == self.tgid:
+            self.remove_chat(to_id)
 
     def is_in_chat(self, peer_id):
         return peer_id in self.chats

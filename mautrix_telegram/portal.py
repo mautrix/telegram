@@ -305,7 +305,7 @@ class Portal:
 
         joined_mxids = await self.main_intent.get_room_members(self.mxid)
         for user in joined_mxids:
-            if user == self.az.intent.mxid:
+            if user == self.az.bot_mxid:
                 continue
             puppet_id = p.Puppet.get_id_from_mxid(user)
             if puppet_id and puppet_id not in allowed_tgids:
@@ -530,49 +530,57 @@ class Portal:
             # We'll just assume the user is already in the chat.
             pass
 
-    async def handle_matrix_message(self, sender, message, event_id):
-        type = message["msgtype"]
-        if sender.logged_in:
-            client = sender.client
-            space = self.tgid if self.peer_type == "channel" else sender.tgid
-        else:
-            client = self.bot.client
-            space = self.tgid if self.peer_type == "channel" else self.bot.tgid
-        reply_to = formatter.matrix_reply_to_telegram(message, space, room_id=self.mxid)
-
-        if type == "m.emote":
+    @staticmethod
+    def _preprocess_matrix_message(sender, message):
+        if message["msgtype"] == "m.emote":
             if "formatted_body" in message:
                 message["formatted_body"] = f"* {sender.displayname} {message['formatted_body']}"
             message["body"] = f"* {sender.displayname} {message['body']}"
-            type = "m.text"
+            message["msgtype"] = "m.text"
         elif not sender.logged_in:
             if "formatted_body" in message:
                 message["formatted_body"] = (f"&lt;{sender.displayname}&gt; "
                                              f"{message['formatted_body']}")
             message["body"] = f"<{sender.displayname}> {message['body']}"
+        return type
+
+    def _handle_matrix_text(self, client, message, reply_to):
+        if "format" in message and message["format"] == "org.matrix.custom.html":
+            message, entities = formatter.matrix_to_telegram(message["formatted_body"])
+            return client.send_message(self.peer, message, entities=entities,
+                                                 reply_to=reply_to)
+        else:
+            return client.send_message(self.peer, message["body"],
+                                                 reply_to=reply_to)
+
+    async def _handle_matrix_file(self, client, message, reply_to):
+        file = await self.main_intent.download_file(message["url"])
+
+        info = message["info"]
+        mime = info["mimetype"]
+
+        file_name, caption = self._get_file_meta(message["body"], mime)
+
+        attributes = [DocumentAttributeFilename(file_name=file_name)]
+        if "w" in info and "h" in info:
+            attributes.append(DocumentAttributeImageSize(w=info["w"], h=info["h"]))
+
+        return await client.send_file(self.peer, file, mime, caption, attributes,
+                                      file_name, reply_to=reply_to)
+
+    async def handle_matrix_message(self, sender, message, event_id):
+        client = sender.client if sender.logged_in else self.bot.client
+        space = (self.tgid if self.peer_type == "channel"  # Channels have their own ID space
+                 else (sender.tgid if sender.logged_in else self.bot.tgid))
+        reply_to = formatter.matrix_reply_to_telegram(message, space, room_id=self.mxid)
+
+        self._preprocess_matrix_message(sender, message)
+        type = message["msgtype"]
 
         if type == "m.text" or (self.bridge_notices and type == "m.notice"):
-            if "format" in message and message["format"] == "org.matrix.custom.html":
-                message, entities = formatter.matrix_to_telegram(message["formatted_body"])
-                response = await client.send_message(self.peer, message, entities=entities,
-                                                     reply_to=reply_to)
-            else:
-                response = await client.send_message(self.peer, message["body"],
-                                                     reply_to=reply_to)
-        elif type in {"m.image", "m.file", "m.audio", "m.video"}:
-            file = await self.main_intent.download_file(message["url"])
-
-            info = message["info"]
-            mime = info["mimetype"]
-
-            file_name, caption = self._get_file_meta(message["body"], mime)
-
-            attributes = [DocumentAttributeFilename(file_name=file_name)]
-            if "w" in info and "h" in info:
-                attributes.append(DocumentAttributeImageSize(w=info["w"], h=info["h"]))
-
-            response = await client.send_file(self.peer, file, mime, caption, attributes,
-                                              file_name, reply_to=reply_to)
+            response = await self._handle_matrix_text(client, message, reply_to)
+        elif type in ("m.image", "m.file", "m.audio", "m.video"):
+            response = await self._handle_matrix_file(client, message, reply_to)
         else:
             self.log.debug("Unhandled Matrix event: %s", message)
             return
@@ -604,6 +612,8 @@ class Portal:
                 if not mx_user or not mx_user.tgid:
                     continue
                 user_id = mx_user.tgid
+            if not user_id or user_id == sender.tgid:
+                continue
             if user not in old_users or level != old_users[user]:
                 if self.peer_type == "chat":
                     await sender.client(EditChatAdminRequest(
@@ -682,7 +692,7 @@ class Portal:
         user_tgids = set()
         user_mxids = await self.main_intent.get_room_members(self.mxid, ("join", "invite"))
         for user in user_mxids:
-            if user == self.az.intent.mxid:
+            if user == self.az.bot_mxid:
                 continue
             mx_user = u.User.get_by_mxid(user, create=False)
             if mx_user and mx_user.tgid:
@@ -945,18 +955,21 @@ class Portal:
         self.db.add(DBMessage(tgid=evt.id, mx_room=self.mxid, mxid=mxid, tg_space=tg_space))
         self.db.commit()
 
+    async def _create_room_on_action(self, source, action):
+        create_and_exit = (MessageActionChatCreate, MessageActionChannelCreate)
+        create_and_continue = (MessageActionChatAddUser, MessageActionChatJoinedByLink)
+        if isinstance(action, create_and_exit + create_and_continue):
+            await self.create_matrix_room(source, invites=[source.mxid],
+                                          update_if_exists=isinstance(action, create_and_exit))
+        if not isinstance(action, create_and_continue):
+            return False
+        return True
+
     async def handle_telegram_action(self, source, sender, update):
         action = update.action
-        if not self.mxid:
-            create_and_exit = (MessageActionChatCreate, MessageActionChannelCreate)
-            create_and_continue = (MessageActionChatAddUser, MessageActionChatJoinedByLink)
-            if isinstance(action, create_and_exit + create_and_continue):
-                await self.create_matrix_room(source, invites=[source.mxid],
-                                              update_if_exists=isinstance(action, create_and_exit))
-            if not isinstance(action, create_and_continue):
-                return
-
-        if self.is_duplicate_action(update):
+        should_ignore = (not self.mxid and not await self._create_room_on_action(source, action)
+                         or self.is_duplicate_action(update))
+        if should_ignore:
             return
 
         # TODO figure out how to see changes to about text / channel username
@@ -1091,11 +1104,15 @@ class Portal:
     def delete(self):
         try:
             del self.by_tgid[self.tgid_full]
+        except KeyError:
+            pass
+        try:
             del self.by_mxid[self.mxid]
         except KeyError:
             pass
-        self.db.delete(self.db_instance)
-        self.db.commit()
+        if self._db_instance:
+            self.db.delete(self._db_instance)
+            self.db.commit()
 
     @classmethod
     def from_db(cls, db_portal):

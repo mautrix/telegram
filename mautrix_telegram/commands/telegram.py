@@ -59,8 +59,8 @@ async def search(evt):
     return await evt.reply("\n".join(reply))
 
 
-@command_handler()
-async def pm(evt):
+@command_handler(name="pm")
+async def private_message(evt):
     if len(evt.args) == 0:
         return await evt.reply("**Usage:** `$cmdprefix+sp pm <user identifier>`")
 
@@ -159,16 +159,7 @@ async def join(evt):
             return await evt.reply(f"Created room for {portal.title}")
 
 
-@command_handler()
-async def create(evt):
-    type = evt.args[0] if len(evt.args) > 0 else "group"
-    if type not in {"chat", "group", "supergroup", "channel"}:
-        return await evt.reply(
-            "**Usage:** `$cmdprefix+sp create ['group'/'supergroup'/'channel']`")
-
-    if po.Portal.get_by_mxid(evt.room_id):
-        return await evt.reply("This is already a portal room.")
-
+async def _get_initial_state(evt):
     state = await evt.az.intent.get_room_state(evt.room_id)
     title = None
     about = None
@@ -180,20 +171,41 @@ async def create(evt):
             about = event["content"]["topic"]
         elif event["type"] == "m.room.power_levels":
             levels = event["content"]
+    return title, about, levels
+
+
+def _check_power_levels(levels, bot_mxid):
+    try:
+        if levels["users"][bot_mxid] < 100:
+            raise ValueError()
+    except (TypeError, KeyError, ValueError):
+        return (f"Please give [the bridge bot](https://matrix.to/#/{bot_mxid}) a power level of "
+                "100 before creating a Telegram chat.")
+
+    for user, level in levels["users"].items():
+        if level >= 100 and user != bot_mxid:
+            return (f"Please make sure only the bridge bot has power level above 99 before "
+                    f"creating a Telegram chat.\n\n"
+                    f"Use power level 95 instead of 100 for admins.")
+
+
+@command_handler()
+async def create(evt):
+    type = evt.args[0] if len(evt.args) > 0 else "group"
+    if type not in {"chat", "group", "supergroup", "channel"}:
+        return await evt.reply(
+            "**Usage:** `$cmdprefix+sp create ['group'/'supergroup'/'channel']`")
+
+    if po.Portal.get_by_mxid(evt.room_id):
+        return await evt.reply("This is already a portal room.")
+
+    title, about, levels = await _get_initial_state(evt)
     if not title:
         return await evt.reply("Please set a title before creating a Telegram chat.")
-    elif (not levels or not levels["users"] or evt.az.intent.mxid not in levels["users"] or
-          levels["users"][evt.az.intent.mxid] < 100):
-        return await evt.reply("Please give "
-                               f"[the bridge bot](https://matrix.to/#/{evt.az.intent.mxid})"
-                               " a power level of 100 before creating a Telegram chat.")
-    else:
-        for user, level in levels["users"].items():
-            if level >= 100 and user != evt.az.intent.mxid:
-                return await evt.reply(
-                    f"Please make sure only the bridge bot has power level above"
-                    f"99 before creating a Telegram chat.\n\n"
-                    f"Use power level 95 instead of 100 for admins.")
+
+    power_level_error = _check_power_levels(levels, evt.az.bot_mxid)
+    if power_level_error:
+        return await evt.reply(power_level_error)
 
     supergroup = type == "supergroup"
     type = {
@@ -207,6 +219,7 @@ async def create(evt):
     try:
         await portal.create_telegram_chat(evt.sender, supergroup=supergroup)
     except ValueError as e:
+        portal.delete()
         return await evt.reply(e.args[0])
     return await evt.reply(f"Telegram chat created. ID: {portal.tgid}")
 
