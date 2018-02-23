@@ -15,6 +15,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from ruamel.yaml import YAML
+from ruamel.yaml.comments import CommentedMap
 import random
 import string
 
@@ -24,12 +25,12 @@ yaml.indent(4)
 
 class DictWithRecursion:
     def __init__(self, data=None):
-        self._data = data or {}
+        self._data = data or CommentedMap()
 
     def _recursive_get(self, data, key, default_value):
         if '.' in key:
             key, next_key = key.split('.', 1)
-            next_data = data.get(key, {})
+            next_data = data.get(key, CommentedMap())
             return self._recursive_get(next_data, next_key, default_value)
         return data.get(key, default_value)
 
@@ -45,8 +46,8 @@ class DictWithRecursion:
         if '.' in key:
             key, next_key = key.split('.', 1)
             if key not in data:
-                data[key] = {}
-            next_data = data.get(key, {})
+                data[key] = CommentedMap()
+            next_data = data.get(key, CommentedMap())
             self._recursive_set(next_data, next_key, value)
             return
         data[key] = value
@@ -85,6 +86,17 @@ class DictWithRecursion:
     def __delitem__(self, key):
         self.delete(key)
 
+    def comment(self, key, message):
+        indent = key.count(".") * 4
+        try:
+            path, key = key.rsplit(".", 1)
+        except ValueError:
+            path = None
+        entry = self[path] if path else self._data
+        c = self._data.ca.items.setdefault(key, [None, [], None, None])
+        c[1] = []
+        entry.yaml_set_comment_before_after_key(key=key, before=message, indent=indent)
+
 
 class Config(DictWithRecursion):
     def __init__(self, path, registration_path):
@@ -109,15 +121,41 @@ class Config(DictWithRecursion):
         return "".join(random.choice(string.ascii_lowercase + string.digits) for _ in range(64))
 
     def update_0_1(self):
-        permissions = self["bridge.permissions"] or {}
+        permissions = self["bridge.permissions"] or CommentedMap()
         for entry in self["bridge.whitelist"] or []:
             permissions[entry] = "full"
         for entry in self["bridge.admins"] or []:
             permissions[entry] = "admin"
+
         self["bridge.permissions"] = permissions
         del self["bridge.whitelist"]
         del self["bridge.admins"]
+
+        self["bridge.authless_relaybot_portals"] = self.get("bridge.authless_relaybot_portals",
+                                                            True)
+        self.comment("bridge.authless_relaybot_portals",
+                     "Whether or not to allow creating portals from Telegram.")
+
+        self.comment("bridge.permissions", "\n".join((
+            "",
+            "Permissions for using the bridge.",
+            "Permitted values:",
+            "  relaybot - Only use the bridge via the relaybot, no access to commands.",
+            "      full - Full access to use the bridge via relaybot or logging in with Telegram account.",
+            "     admin - Full access to use the bridge and some extra administration commands.",
+            "Permitted keys:",
+            "       * - All Matrix users",
+            "  domain - All users on that homeserver",
+            "    mxid - Specific user")))
+        # The telegram section comment disappears for some reason 3:
+        self.comment("telegram", "\nTelegram config")
+
         self["version"] = 1
+        # Add newline before version
+        self.comment("version",
+                     "\nThe version of the config. The bridge will read this and automatically "
+                     "update the config if\nthe schema has changed. For the latest version, "
+                     "check the example config.")
 
     def check_updates(self):
         if self.get("version", 0) == 0:

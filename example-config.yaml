@@ -116,4 +116,6 @@ telegram:
     # (Optional) Create your own bot at https://t.me/BotFather
     #bot_token: 123456789:ABCD-QBPd3VrWRhg623xYh07WUWErYA9eMI
 
+# The version of the config. The bridge will read this and automatically update the config if
+# the schema has changed. For the latest version, check the example config.
 version: 1
