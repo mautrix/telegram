@@ -573,11 +573,10 @@ class Portal:
     def _handle_matrix_text(self, client, message, reply_to):
         if "format" in message and message["format"] == "org.matrix.custom.html":
             message, entities = formatter.matrix_to_telegram(message["formatted_body"])
-            return client.send_message(self.peer, message, entities=entities,
-                                       reply_to=reply_to)
+            return client.send_message(self.peer, message, entities=entities, reply_to=reply_to)
         else:
-            return client.send_message(self.peer, message["body"],
-                                       reply_to=reply_to)
+            message = formatter.matrix_text_to_telegram(message["body"])
+            return client.send_message(self.peer, message, reply_to=reply_to)
 
     async def _handle_matrix_file(self, client, message, reply_to):
         file = await self.main_intent.download_file(message["url"])

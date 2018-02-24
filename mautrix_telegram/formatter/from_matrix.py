@@ -106,6 +106,8 @@ class MatrixParser(HTMLParser):
         elif tag == "pre":
             entity_type = MessageEntityPre
             args["language"] = ""
+        elif tag == "command":
+            entity_type = MessageEntityBotCommand
         elif tag == "li":
             self._list_entry_is_new = True
         elif tag == "a":
@@ -157,6 +159,8 @@ class MatrixParser(HTMLParser):
             url = self._open_tags_meta[0]
             if url:
                 text = url
+        elif previous_tag == "command":
+            text = f"/{text}"
         list_entry_handled_once = False
         # In order to maintain order of things like blockquotes in lists or lists in blockquotes,
         # we can't just have ifs/elses and we need to actually loop through the open tags in order.
@@ -180,7 +184,7 @@ class MatrixParser(HTMLParser):
                     prefix = "* " if self._list_entry_is_new else 3 * " "
                 if not self._list_entry_is_new and not self._line_is_new:
                     prefix = ""
-                extra_offset = len(indent) + len(prefix)
+                extra_offset += len(indent) + len(prefix)
                 text = indent + prefix + text
                 self._list_entry_is_new = False
                 list_entry_handled_once = True
@@ -206,10 +210,20 @@ class MatrixParser(HTMLParser):
             self.entities.append(entity)
 
 
+command_regex = re.compile("(\s|^)!([A-Za-z0-9]+)")
+
+
+def matrix_text_to_telegram(text):
+    text = command_regex.sub(r"\1/\2", text)
+    return text
+
+
 def matrix_to_telegram(html):
     try:
         parser = MatrixParser()
-        parser.feed(add_surrogates(html.replace("\n", "")))
+        html = html.replace("\n", "")
+        html = command_regex.sub(r"\1<command>\2</command>", html)
+        parser.feed(add_surrogates(html))
         return remove_surrogates(parser.text.strip()), parser.entities
     except Exception:
         log.exception("Failed to convert Matrix format:\nhtml=%s", html)

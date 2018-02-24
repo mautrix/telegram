@@ -3,7 +3,7 @@
 * Matrix → Telegram
   * [x] Plaintext messages
   * [x] Formatted messages
-    * [ ] Bot commands (!command -> /command)
+    * [x] Bot commands (!command -> /command)
     * [x] Mentions
   * [x] Rich quotes
   * [ ] Locations (not implemented in Riot)
