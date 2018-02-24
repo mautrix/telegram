@@ -1,14 +1,15 @@
 # Features & roadmap
 
 * Matrix → Telegram
-  * [x] Plaintext messages
-  * [x] Formatted messages
+  * [ ] Message content
+    * [x] Plaintext messages
+    * [x] Formatted messages
     * [x] Bot commands (!command -> /command)
     * [x] Mentions
-  * [x] Rich quotes
-  * [ ] Locations (not implemented in Riot)
-  * [x] Images
-  * [x] Files
+    * [x] Rich quotes
+    * [ ] Locations (not implemented in Riot)
+    * [x] Images
+    * [x] Files
   * [x] Message redactions
   * [ ] † Presence
   * [ ] † Typing notifications
@@ -19,14 +20,10 @@
       * [ ] Non-hardcoded PL requirements
 	* [x] Supergroups/channels
 	  * [ ] Precise bridging (non-hardcoded PL requirements, bridge specific permissions, etc..)
-  * [ ] Membership actions
-    * [x] Inviting
-      * [x] Puppets
-      * [x] Matrix users who have logged into Telegram
+  * [x] Membership actions
+    * [x] Inviting (both puppets and Matrix users)
     * [x] Kicking
-    * [ ] Joining
-      * [x] Chat name as alias
-      * [ ] ‡ Chat invite link as alias
+    * [x] Joining (chat username as alias)
     * [x] Leaving
   * [x] Room metadata changes (name, topic, avatar)
   * [x] Initial room metadata
@@ -34,20 +31,21 @@
     * [ ] Initial displayname/username/avatar at register
     * [ ] ‡ Changes to displayname/avatar
 * Telegram → Matrix
-  * [x] Plaintext messages
-  * [x] Formatted messages
+  * [x] Message content
+    * [x] Plaintext messages
+    * [x] Formatted messages
     * [x] Bot commands (/command -> !command)
     * [x] Mentions
-  * [x] Replies
-  * [x] Forwards
-  * [x] Images
-  * [x] Locations
-  * [x] Stickers
-  * [x] Audio messages
-  * [x] Video messages
-  * [x] Documents
+    * [x] Replies
+    * [x] Forwards
+    * [x] Images
+    * [x] Locations
+    * [x] Stickers
+    * [x] Audio messages
+    * [x] Video messages
+    * [x] Documents
   * [x] Message deletions
-  * [ ] Message edits (not supported in Matrix)
+  * [ ] Message edits (not yet supported in Matrix)
   * [x] Avatars
   * [x] Presence
   * [x] Typing notifications
