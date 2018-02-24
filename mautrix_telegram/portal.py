@@ -626,6 +626,22 @@ class Portal:
             return
         await deleter.client.delete_messages(self.peer, [message.tgid])
 
+    async def _update_telegram_power_level(self, sender, user_id, level):
+        if self.peer_type == "chat":
+            await sender.client(EditChatAdminRequest(
+                chat_id=self.tgid, user_id=user_id, is_admin=level >= 50))
+        elif self.peer_type == "channel":
+            moderator = level >= 50
+            admin = level >= 75
+            rights = ChannelAdminRights(change_info=moderator, post_messages=moderator,
+                                        edit_messages=moderator, delete_messages=moderator,
+                                        ban_users=moderator, invite_users=moderator,
+                                        invite_link=moderator, pin_messages=moderator,
+                                        add_admins=admin, manage_call=moderator)
+            await sender.client(
+                EditAdminRequest(channel=await self.get_input_entity(sender),
+                                 user_id=user_id, admin_rights=rights))
+
     async def handle_matrix_power_levels(self, sender, new_users, old_users):
         # TODO handle all power level changes and bridge exact admin rights to supergroups/channels
         for user, level in new_users.items():
@@ -640,20 +656,7 @@ class Portal:
             if not user_id or user_id == sender.tgid:
                 continue
             if user not in old_users or level != old_users[user]:
-                if self.peer_type == "chat":
-                    await sender.client(EditChatAdminRequest(
-                        chat_id=self.tgid, user_id=user_id, is_admin=level >= 50))
-                elif self.peer_type == "channel":
-                    moderator = level >= 50
-                    admin = level >= 75
-                    rights = ChannelAdminRights(change_info=moderator, post_messages=moderator,
-                                                edit_messages=moderator, delete_messages=moderator,
-                                                ban_users=moderator, invite_users=moderator,
-                                                invite_link=moderator, pin_messages=moderator,
-                                                add_admins=admin, manage_call=moderator)
-                    await sender.client(
-                        EditAdminRequest(channel=await self.get_input_entity(sender),
-                                         user_id=user_id, admin_rights=rights))
+                await self._update_telegram_power_level(sender, user_id, level)
 
     async def handle_matrix_about(self, sender, about):
         if self.peer_type not in {"channel"}:
@@ -1036,6 +1039,25 @@ class Portal:
         else:
             await self.main_intent.set_pinned_messages(self.mxid, [])
 
+    @staticmethod
+    def _get_level_from_participant(participant, _):
+        # TODO use the power level requirements to get better precision in channels
+        if isinstance(participant, (ChatParticipantAdmin, ChannelParticipantAdmin)):
+            return 50
+        elif isinstance(participant, (ChatParticipantCreator, ChannelParticipantCreator)):
+            return 95
+        return 0
+
+    @staticmethod
+    def _participant_to_power_levels(levels, user, new_level):
+        user_level_defined = user.mxid in levels["users"]
+        user_has_right_level = (levels["users"][user.mxid] == new_level
+                                if user_level_defined else new_level == 0)
+        if not user_has_right_level:
+            levels["users"][user.mxid] = new_level
+            return True
+        return False
+
     def _participants_to_power_levels(self, participants, levels):
         changed = False
         admin_power_level = 75 if self.peer_type == "channel" else 50
@@ -1046,31 +1068,14 @@ class Portal:
         for participant in participants:
             puppet = p.Puppet.get(participant.user_id)
             user = u.User.get_by_tgid(participant.user_id)
-            new_level = 0
-            if isinstance(participant, (ChatParticipantAdmin, ChannelParticipantAdmin)):
-                new_level = 50
-            elif isinstance(participant, (ChatParticipantCreator, ChannelParticipantCreator)):
-                new_level = 95
-
-            user_levels = levels["users"]
+            new_level = self._get_level_from_participant(participant, levels)
 
             if user:
                 user.register_portal(self)
-                user_level_defined = user.mxid in user_levels
-                user_has_right_level = (user_levels[user.mxid] == new_level
-                                        if user_level_defined else new_level == 0)
-                if not user_has_right_level:
-                    levels["users"][user.mxid] = new_level
-                    changed = True
+                changed = self._participant_to_power_levels(levels, user, new_level) or changed
 
             if puppet:
-                puppet_level_defined = puppet.mxid in user_levels
-                puppet_has_right_level = (user_levels[puppet.mxid] == new_level
-                                          if puppet_level_defined else new_level == 0)
-
-                if not puppet_has_right_level:
-                    levels["users"][puppet.mxid] = new_level
-                    changed = True
+                changed = self._participant_to_power_levels(levels, puppet, new_level) or changed
         return changed
 
     async def update_telegram_participants(self, participants, levels=None):

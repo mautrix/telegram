@@ -121,6 +121,26 @@ async def delete_portal(evt):
                            "by typing `$cmdprefix+sp confirm-delete`")
 
 
+async def _join(evt, arg):
+    if arg.startswith("joinchat/"):
+        invite_hash = arg[len("joinchat/"):]
+        try:
+            await evt.sender.client(CheckChatInviteRequest(invite_hash))
+        except InviteHashInvalidError:
+            return None, await evt.reply("Invalid invite link.")
+        except InviteHashExpiredError:
+            return None, await evt.reply("Invite link expired.")
+        try:
+            return evt.sender.client(ImportChatInviteRequest(invite_hash)), None
+        except UserAlreadyParticipantError:
+            return None, await evt.reply("You are already in that chat.")
+    else:
+        channel = await evt.sender.client.get_entity(arg)
+        if not channel:
+            return None, await evt.reply("Channel/supergroup not found.")
+        return await evt.sender.client(JoinChannelRequest(channel)), None
+
+
 @command_handler()
 async def join(evt):
     if len(evt.args) == 0:
@@ -130,24 +150,11 @@ async def join(evt):
     arg = regex.match(evt.args[0])
     if not arg:
         return await evt.reply("That doesn't look like a Telegram invite link.")
-    arg = arg.group(1)
-    if arg.startswith("joinchat/"):
-        invite_hash = arg[len("joinchat/"):]
-        try:
-            await evt.sender.client(CheckChatInviteRequest(invite_hash))
-        except InviteHashInvalidError:
-            return await evt.reply("Invalid invite link.")
-        except InviteHashExpiredError:
-            return await evt.reply("Invite link expired.")
-        try:
-            updates = evt.sender.client(ImportChatInviteRequest(invite_hash))
-        except UserAlreadyParticipantError:
-            return await evt.reply("You are already in that chat.")
-    else:
-        channel = await evt.sender.client.get_entity(arg)
-        if not channel:
-            return await evt.reply("Channel/supergroup not found.")
-        updates = await evt.sender.client(JoinChannelRequest(channel))
+
+    updates, _ = await _join(evt, arg.group(1))
+    if not updates:
+        return
+
     for chat in updates.chats:
         portal = po.Portal.get_by_entity(chat)
         if portal.mxid:

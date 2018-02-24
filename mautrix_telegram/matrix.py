@@ -219,8 +219,7 @@ class MatrixHandler:
                 "m.room.avatar": (portal.handle_matrix_avatar, "url"),
             }[type]
             if content_key not in content:
-                # FIXME handle
-                pass
+                return
             await handler(sender, content[content_key])
 
     def filter_matrix_event(self, event):
