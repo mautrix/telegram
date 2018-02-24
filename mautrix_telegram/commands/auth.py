@@ -55,10 +55,14 @@ def register(evt):
 async def login(evt):
     if evt.sender.logged_in:
         return await evt.reply("You are already logged in.")
-    evt.sender.command_status = {
-        "next": enter_phone,
-        "action": "Login",
-    }
+
+    allow_matrix_login = evt.config.get("bridge.allow_matrix_login", True)
+    if allow_matrix_login:
+        evt.sender.command_status = {
+            "next": enter_phone,
+            "action": "Login",
+        }
+
     if evt.config["appservice.public.enabled"]:
         prefix = evt.config["appservice.public.external"]
         url = f"{prefix}/login?mxid={evt.sender.mxid}"
@@ -69,15 +73,20 @@ async def login(evt):
                 f"If you would like to log in outside of Matrix, [click here]({url}).")))
         return await evt.reply("This bridge instance does not allow logging in inside Matrix.\n\n"
                                f"Please visit [the login page]({url}) to log in.")
-    return await evt.reply(
-        "This bridge instance does not allow you to log in outside of Matrix.\n\n"
-        "Please send your phone number here to start the login process.")
+    elif allow_matrix_login:
+        return await evt.reply(
+            "This bridge instance does not allow you to log in outside of Matrix.\n\n"
+            "Please send your phone number here to start the login process.")
+    return await evt.reply("This bridge instance has been configured to not allow logging in.")
 
 
 @command_handler(needs_auth=False)
 async def enter_phone(evt):
     if len(evt.args) == 0:
         return await evt.reply("**Usage:** `$cmdprefix+sp enter-phone <phone>`")
+    elif not evt.config.get("bridge.allow_matrix_login", True):
+        return await evt.reply("This bridge instance does not allow in-Matrix login. "
+                               "Please use `$cmdprefix+sp login` to get login instructions")
 
     phone_number = evt.args[0]
     try:
@@ -117,7 +126,9 @@ async def enter_phone(evt):
 async def enter_code(evt):
     if len(evt.args) == 0:
         return await evt.reply("**Usage:** `$cmdprefix+sp enter-code <code>`")
-
+    elif not evt.config.get("bridge.allow_matrix_login", True):
+        return await evt.reply("This bridge instance does not allow in-Matrix login. "
+                               "Please use `$cmdprefix+sp login` to get login instructions")
     try:
         await evt.sender.ensure_started(even_if_no_session=True)
         user = await evt.sender.client.sign_in(code=evt.args[0])
@@ -146,6 +157,9 @@ async def enter_code(evt):
 async def enter_password(evt):
     if len(evt.args) == 0:
         return await evt.reply("**Usage:** `$cmdprefix+sp enter-password <password>`")
+    elif not evt.config.get("bridge.allow_matrix_login", True):
+        return await evt.reply("This bridge instance does not allow in-Matrix login. "
+                               "Please use `$cmdprefix+sp login` to get login instructions")
 
     try:
         await evt.sender.ensure_started(even_if_no_session=True)
