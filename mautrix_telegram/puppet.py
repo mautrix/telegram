@@ -46,6 +46,7 @@ class Puppet:
         self._db_instance = db_instance
 
         self.intent = self.az.intent.user(self.mxid)
+        self.logged_in = True
 
         self.cache[id] = self
 

@@ -112,7 +112,7 @@ class MatrixHandler:
         # The rest can probably be ignored
         self.log.debug(f"{inviter} invited {user} to {room}")
 
-    async def handle_join(self, room, user):
+    async def handle_join(self, room, user, event_id):
         user = await User.get_by_mxid(user).ensure_started()
 
         portal = Portal.get_by_mxid(room)
@@ -130,10 +130,10 @@ class MatrixHandler:
             return
 
         self.log.debug(f"{user} joined {room}")
-        if user.logged_in:
-            await portal.join_matrix(user)
+        if user.logged_in or portal.has_bot:
+            await portal.join_matrix(user, event_id)
 
-    async def handle_part(self, room, user, sender):
+    async def handle_part(self, room, user, sender, event_id):
         self.log.debug(f"{user} left {room}")
 
         sender = User.get_by_mxid(sender, create=False)
@@ -153,8 +153,8 @@ class MatrixHandler:
         if not user:
             return
         await user.ensure_started()
-        if user.logged_in:
-            await portal.leave_matrix(user, sender)
+        if user.logged_in or portal.has_bot:
+            await portal.leave_matrix(user, sender, event_id)
 
     def is_command(self, message):
         text = message.get("body", "")
@@ -238,9 +238,10 @@ class MatrixHandler:
             if membership == "invite":
                 await self.handle_invite(evt["room_id"], evt["state_key"], evt["sender"])
             elif membership == "leave":
-                await self.handle_part(evt["room_id"], evt["state_key"], evt["sender"])
+                await self.handle_part(evt["room_id"], evt["state_key"], evt["sender"],
+                                       evt["event_id"])
             elif membership == "join":
-                await self.handle_join(evt["room_id"], evt["state_key"])
+                await self.handle_join(evt["room_id"], evt["state_key"], evt["event_id"])
         elif type == "m.room.message":
             await self.handle_message(evt["room_id"], evt["sender"], content, evt["event_id"])
         elif type == "m.room.redaction":

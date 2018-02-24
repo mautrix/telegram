@@ -511,7 +511,14 @@ class Portal:
             file_name = f"matrix_upload{mimetypes.guess_extension(mime)}"
         return file_name, None if file_name == body else body
 
-    async def leave_matrix(self, user, source):
+    async def leave_matrix(self, user, source, event_id):
+        if not user.logged_in:
+            response = await self.bot.client.send_message_super(
+                self.peer, f"__{user.displayname} left the room.__")
+            space = self.tgid if self.peer_type == "channel" else self.bot.tgid
+            self.is_duplicate(response, (event_id, space))
+            return
+
         if self.peer_type == "user":
             await self.main_intent.leave_room(self.mxid)
             self.delete()
@@ -535,7 +542,14 @@ class Portal:
             channel = await self.get_input_entity(user)
             await user.client(LeaveChannelRequest(channel=channel))
 
-    async def join_matrix(self, user):
+    async def join_matrix(self, user, event_id):
+        if not user.logged_in:
+            response = await self.bot.client.send_message_super(
+                self.peer, f"__{user.displayname} joined the room.__")
+            space = self.tgid if self.peer_type == "channel" else self.bot.tgid
+            self.is_duplicate(response, (event_id, space))
+            return
+
         if self.peer_type == "channel":
             await user.client(JoinChannelRequest(channel=await self.get_input_entity(user)))
         else:
@@ -560,10 +574,10 @@ class Portal:
         if "format" in message and message["format"] == "org.matrix.custom.html":
             message, entities = formatter.matrix_to_telegram(message["formatted_body"])
             return client.send_message(self.peer, message, entities=entities,
-                                                 reply_to=reply_to)
+                                       reply_to=reply_to)
         else:
             return client.send_message(self.peer, message["body"],
-                                                 reply_to=reply_to)
+                                       reply_to=reply_to)
 
     async def _handle_matrix_file(self, client, message, reply_to):
         file = await self.main_intent.download_file(message["url"])
