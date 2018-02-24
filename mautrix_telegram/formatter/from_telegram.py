@@ -176,7 +176,8 @@ def _telegram_entities_to_matrix(text, entities):
         elif entity_type == MessageEntityEmail:
             html.append(f"<a href='mailto:{entity_text}'>{entity_text}</a>")
         elif entity_type in {MessageEntityTextUrl, MessageEntityUrl}:
-            skip_entity = _parse_url(html, entity_text, entity_type, entity.url)
+            skip_entity = _parse_url(html, entity_text,
+                                     entity.url if entity_type == MessageEntityTextUrl else None)
         elif entity_type == MessageEntityBotCommand:
             html.append(f"<font color='blue'>!{entity_text[1:]}</font>")
         elif entity_type == MessageEntityHashtag:
@@ -230,8 +231,8 @@ def _parse_name_mention(html, entity_text, user_id):
     return False
 
 
-def _parse_url(html, entity_text, entity_type, url):
-    url = escape(url) if entity_type == MessageEntityTextUrl else entity_text
+def _parse_url(html, entity_text, url):
+    url = escape(url) if url else entity_text
     if not url.startswith(("https://", "http://", "ftp://", "magnet://")):
         url = "http://" + url
     html.append(f"<a href='{url}'>{entity_text}</a>")
