@@ -178,7 +178,7 @@ def _telegram_entities_to_matrix(text, entities):
         elif entity_type in {MessageEntityTextUrl, MessageEntityUrl}:
             skip_entity = _parse_url(html, entity_text, entity_type, entity.url)
         elif entity_type == MessageEntityBotCommand:
-            html.append(f"<font color='blue'>!{entity_text[1:]}")
+            html.append(f"<font color='blue'>!{entity_text[1:]}</font>")
         elif entity_type == MessageEntityHashtag:
             html.append(f"<font color='blue'>{entity_text}</font>")
         else:
