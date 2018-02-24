@@ -127,9 +127,9 @@ class Bot(AbstractUser):
 
         text = message.message
         portal = po.Portal.get_by_entity(message.to_id)
-        if text == "/portal":
+        if text == "/portal" or text == f"/portal@{self.username}":
             await self.handle_command_portal(portal, reply)
-        elif text.startswith("/invite"):
+        elif text.startswith("/invite") or text.startswith(f"/invite@{self.username}"):
             await self.handle_command_invite(portal, reply, mxid=text[len("/invite "):])
 
     async def update(self, update):

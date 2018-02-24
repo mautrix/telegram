@@ -210,7 +210,7 @@ class MatrixParser(HTMLParser):
             self.entities.append(entity)
 
 
-command_regex = re.compile("(\s|^)!([A-Za-z0-9]+)")
+command_regex = re.compile("(\s|^)!([A-Za-z0-9@]+)")
 
 
 def matrix_text_to_telegram(text):
