@@ -44,6 +44,7 @@ class Portal:
     db = None
     az = None
     bot = None
+    loop = None
     bridge_notices = False
     alias_template = None
     mx_alias_regex = None
@@ -195,7 +196,9 @@ class Portal:
             if update_if_exists:
                 if not entity:
                     entity = await user.client.get_entity(self.peer)
-                await self.update_matrix_room(user, entity, self.peer_type == "user")
+                asyncio.ensure_future(
+                    self.update_matrix_room(user, entity, self.peer_type == "user"),
+                    loop=self.loop)
                 await self.invite_to_matrix(invites or [])
             return self.mxid
         async with self._room_create_lock:
@@ -255,8 +258,10 @@ class Portal:
         self.save()
         self.az.state_store.set_power_levels(self.mxid, power_levels)
         user.register_portal(self)
-        await self.update_matrix_room(user, entity, direct, puppet,
-                                      levels=power_levels, users=users, participants=participants)
+        asyncio.ensure_future(self.update_matrix_room(user, entity, direct, puppet,
+                                                      levels=power_levels, users=users,
+                                                      participants=participants),
+                              loop=self.loop)
 
     def _get_base_power_levels(self, levels=None, entity=None):
         levels = levels or {}
@@ -1239,7 +1244,7 @@ class Portal:
 
 def init(context):
     global config
-    Portal.az, Portal.db, config, _, Portal.bot = context
+    Portal.az, Portal.db, config, Portal.loop, Portal.bot = context
     Portal.bridge_notices = config["bridge.bridge_notices"]
     Portal.alias_template = config.get("bridge.alias_template", "telegram_{groupname}")
     Portal.hs_domain = config["homeserver"]["domain"]
