@@ -54,18 +54,19 @@ def help(evt):
 **logout** - Log out from Telegram.  
 **ping**   - Check if you're logged into Telegram.
 
-#### Initiating chats
+#### Miscellaneous things
 **search** [_-r|--remote_] <_query_> - Search your contacts or the Telegram servers for users.  
-**pm** <_identifier_>                - Open a private chat with the given Telegram user. The
-                                       identifier is either the internal user ID, the username or
-                                       the phone number.  
-**join** <_link_>                    - Join a chat with an invite link.  
-**create** [_type_]                  - Create a Telegram chat of the given type for the current
-                                       Matrix room. The type is either `group`, `supergroup` or
-                                       `channel` (defaults to `group`).
+**sync** [`chats`|`contacts`|`me`]   - Synchronize your chat portals, contacts and/or own info.  
+**ping-bot**                         - Get info of the message relay Telegram bot.
+
+#### Initiating chats
+**pm** <_identifier_> - Open a private chat with the given Telegram user. The identifier is either
+                        the internal user ID, the username or the phone number.  
+**join** <_link_>     - Join a chat with an invite link.  
+**create** [_type_]   - Create a Telegram chat of the given type for the current Matrix room. The
+                        type is either `group`, `supergroup` or `channel` (defaults to `group`).
 
 #### Portal management  
-**ping-bot**                - Get info of the message relay Telegram bot.
 **upgrade**                 - Upgrade a normal Telegram group to a supergroup.  
 **invite-link**             - Get a Telegram invite link to the current chat.  
 **delete-portal**           - Forget the current portal room. Only works for group chats; to delete
