@@ -1,2 +1,2 @@
 -r base.txt
--e git+https://github.com/LonamiWebs/Telethon@asyncio#egg=Telethon
+git+https://github.com/LonamiWebs/Telethon@asyncio#egg=Telethon
