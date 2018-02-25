@@ -261,7 +261,7 @@ class AbstractUser:
             await self._try_redact(portal, message)
         self.db.commit()
 
-    def update_message(self, original_update):
+    async def update_message(self, original_update):
         update, sender, portal = self.get_message_details(original_update)
 
         if isinstance(update, MessageService):
@@ -272,17 +272,17 @@ class AbstractUser:
                 return
             self.log.debug("Handling action %s to %s by %d", update.action, portal.tgid_log,
                            sender.id)
-            return portal.handle_telegram_action(self, sender, update)
+            return await portal.handle_telegram_action(self, sender, update)
 
         user = sender.tgid if sender else "admin"
         if isinstance(original_update, (UpdateEditMessage, UpdateEditChannelMessage)):
             if config["bridge.edits_as_replies"]:
                 self.log.debug("Handling edit %s to %s by %s", update, portal.tgid_log, user)
-                return portal.handle_telegram_edit(self, sender, update)
+                return await portal.handle_telegram_edit(self, sender, update)
             return
 
         self.log.debug("Handling message %s to %s by %s", update, portal.tgid_log, user)
-        return portal.handle_telegram_message(self, sender, update)
+        return await portal.handle_telegram_message(self, sender, update)
 
     # endregion
 
