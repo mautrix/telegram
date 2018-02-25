@@ -25,11 +25,12 @@ setuptools.setup(
         "Pillow>=5.0.0,<6",
         "future-fstrings>=0.4.2",
         "python-magic>=0.4.15,<0.5",
+        "cryptg>=0.1,<0.2",
     ],
     dependency_links=[
-        ("https://github.com/LonamiWebs/Telethon/tarball/7998fd59f709ae1cd959c5cc4ab107982307f4a6#egg=Telethon"
+        ("https://github.com/LonamiWebs/Telethon/tarball/731a2956df632b10ecbbaf615cdf5eee49a4dc89#egg=Telethon"
          if sys.version_info >= (3, 6)
-         else "https://github.com/tulir/Telethon/tarball/ca08fe28800d74fd6c19fd6f473e12fbf2c258de#egg=Telethon")
+         else "https://github.com/tulir/Telethon/tarball/b050a5360a6b465943505d6ab9fdec6f96acb8b4#egg=Telethon")
     ],
 
     classifiers=[

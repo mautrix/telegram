@@ -38,7 +38,6 @@ class Bot(AbstractUser):
         self.token = token
         self.whitelisted = True
         self.username = None
-        self._init_client()
         self.chats = {chat.id: chat.type for chat in BotChat.query.all()}
 
     async def start(self):

@@ -42,7 +42,7 @@ class AbstractUser:
         self.tgid = None
         self.mxid = None
 
-    def _init_client(self):
+    async def _init_client(self):
         self.log.debug(f"Initializing client for {self.name}")
         device = f"{platform.system()} {platform.release()}"
         sysversion = MautrixTelegramClient.__version__
@@ -53,7 +53,7 @@ class AbstractUser:
                                             app_version=__version__,
                                             system_version=sysversion,
                                             device_model=device)
-        self.client.add_update_handler(self._update_catch)
+        await self.client.add_event_handler(self._update_catch)
 
     async def update(self, update):
         return False
@@ -89,7 +89,7 @@ class AbstractUser:
 
     async def start(self):
         if not self.client:
-            self._init_client()
+            await self._init_client()
         self.connected = await self.client.connect()
 
     async def ensure_started(self, even_if_no_session=False):

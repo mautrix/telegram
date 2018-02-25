@@ -6,3 +6,4 @@ alembic
 Markdown
 Pillow
 future-fstrings
+cryptg

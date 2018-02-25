@@ -74,6 +74,7 @@ async def transfer_file_to_matrix(db, client, intent, location):
         db.add(db_file)
         db.commit()
     except IntegrityError:
+        db.rollback()
         log.exception("Integrity error while saving transferred file data. "
                       "This was probably caused by two simultaneous transfers of the same file, "
                       "and should not cause any problems.")
