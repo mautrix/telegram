@@ -85,6 +85,8 @@
   * [x] Upgrading the chat of a portal room into a supergroup (`upgrade`)
   * [x] Change username of supergroup/channel (`group-name`)
   * [x] Getting the Telegram invite link to a Matrix room (`invite-link`)
+  * [ ] Bridging existing Matrix rooms to existing Telegram chats (`bridge`)
+  * [ ] Unbridging Matrix rooms from Telegram chats (`unbridge`)
   * Bridge administration
     * [x] Clean up and forget a portal room (`delete-portal`)
     * [x] Find and clean up old portal rooms (`clean-rooms`)

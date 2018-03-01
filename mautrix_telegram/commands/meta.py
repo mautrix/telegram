@@ -69,8 +69,10 @@ def help(evt):
 #### Portal management  
 **upgrade**                 - Upgrade a normal Telegram group to a supergroup.  
 **invite-link**             - Get a Telegram invite link to the current chat.  
-**delete-portal**           - Forget the current portal room. Only works for group chats; to delete
-                             a private chat portal, simply leave the room.  
+**delete-portal**           - Remove all users from the current portal room and forget the portal.
+                              Only works for group chats; to delete a private chat portal, simply
+                              leave the room.  
+**unbridge**                - Remove puppets from the current portal room and forget the portal.
 **group-name** <_name_|`-`> - Change the username of a supergroup/channel. To disable, use a dash
                              (`-`) as the name.  
 **clean-rooms**             - Clean up unused portal/management rooms.

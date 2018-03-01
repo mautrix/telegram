@@ -484,18 +484,23 @@ class Portal:
         return authenticated
 
     @staticmethod
-    async def cleanup_room(intent, room_id, type="Portal"):
+    async def cleanup_room(intent, room_id, message="Portal deleted", puppets_only=False):
         try:
             members = await intent.get_room_members(room_id)
         except MatrixRequestError:
             members = []
         for user in members:
-            if user != intent.mxid:
+            is_puppet = p.Puppet.get_id_from_mxid(user)
+            if user != intent.mxid and (not puppets_only or is_puppet):
                 try:
-                    await intent.kick(room_id, user, f"{type} deleted.")
+                    await intent.kick(room_id, user, message)
                 except (MatrixRequestError, IntentError):
                     pass
         await intent.leave_room(room_id)
+
+    async def unbridge(self):
+        await self.cleanup_room(self.main_intent, self.mxid, "Room unbridged", puppets_only=True)
+        self.delete()
 
     async def cleanup_and_delete(self):
         await self.cleanup_room(self.main_intent, self.mxid)

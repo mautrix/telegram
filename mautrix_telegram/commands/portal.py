@@ -15,6 +15,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from telethon.errors import *
+from mautrix_appservice import MatrixRequestError
 
 from .. import portal as po
 from . import command_handler
@@ -38,32 +39,76 @@ async def invite_link(evt):
         return await evt.reply("You don't have the permission to create an invite link.")
 
 
-@command_handler(needs_admin=True)
-async def delete_portal(evt):
-    room_id = evt.args[0] if len(evt.args) > 0 else evt.room_id
+async def _has_access_to(room, intent, sender, event, default=50):
+    if sender.is_admin:
+        return True
+    # Make sure the state store contains the power levels.
+    try:
+        await intent.get_power_levels(room)
+    except MatrixRequestError:
+        return False
+    return intent.state_store.has_power_level(room, sender.mxid,
+                                              event=f"net.maunium.telegram.{event}",
+                                              default=default)
+
+
+async def _get_portal_and_check_permission(evt, permission, action=None, allow_that=False):
+    room_id = evt.args[0] if len(evt.args) > 0 and allow_that else evt.room_id
 
     portal = po.Portal.get_by_mxid(room_id)
     if not portal:
         that_this = "This" if room_id == evt.room_id else "That"
-        return await evt.reply(f"{that_this} is not a portal room.")
+        return await evt.reply(f"{that_this} is not a portal room."), False
 
+    if not _has_access_to(portal.mxid, portal.main_intent, evt.sender, permission):
+        action = action or f"{permission.replace('_', ' ')}s"
+        return await evt.reply(f"You do not have the permissions to {action}."), False
+    return portal, True
+
+
+def _get_portal_murder_function(action, room_id, function, command, completed_message):
     async def post_confirm(confirm):
-        evt.sender.command_status = None
-        if len(confirm.args) > 0 and confirm.args[0] == "confirm-delete":
-            await portal.cleanup_and_delete()
+        confirm.sender.command_status = None
+        if len(confirm.args) > 0 and confirm.args[0] == f"confirm-{command}":
+            await function()
             if confirm.room_id != room_id:
-                return await confirm.reply("Portal successfully deleted.")
+                return await confirm.reply(completed_message)
         else:
-            return await confirm.reply("Portal deletion cancelled.")
+            return await confirm.reply(f"{action} cancelled.")
 
-    evt.sender.command_status = {
+    return {
         "next": post_confirm,
-        "action": "Portal deletion",
+        "action": action,
     }
+
+
+@command_handler()
+async def delete_portal(evt):
+    portal, ok = await _get_portal_and_check_permission(evt, "delete_portal")
+    if not ok:
+        return
+
+    evt.sender.command_status = _get_portal_murder_function("Portal deletion", portal.mxid,
+                                                            portal.cleanup_and_delete, "delete",
+                                                            "Portal successfully deleted.")
     return await evt.reply("Please confirm deletion of portal "
-                           f"[{room_id}](https://matrix.to/#/{room_id}) "
+                           f"[{portal.alias or portal.mxid}](https://matrix.to/#/{portal.mxid}) "
                            f"to Telegram chat \"{portal.title}\" "
                            "by typing `$cmdprefix+sp confirm-delete`")
+
+
+@command_handler()
+async def unbridge(evt):
+    portal, ok = await _get_portal_and_check_permission(evt, "unbridge_room", allow_that=False)
+    if not ok:
+        return
+
+    evt.sender.command_status = _get_portal_murder_function("Room unbridging", portal.mxid,
+                                                            portal.unbridge, "unbridge",
+                                                            "Room successfully unbridged.")
+    return await evt.reply(f"Please confirm unbridging chat \"{portal.title}\" from room "
+                           f"[{portal.alias or portal.mxid}](https://matrix.to/#/{portal.mxid}) "
+                           "by typing `$cmdprefix+sp confirm-unbridge`")
 
 
 async def _get_initial_state(evt):

@@ -162,7 +162,7 @@ async def execute_room_cleanup(evt, rooms_to_clean):
                 await room.cleanup_and_delete()
                 cleaned += 1
             elif isinstance(room, str):
-                await po.Portal.cleanup_room(evt.az.intent, room, type="Room")
+                await po.Portal.cleanup_room(evt.az.intent, room, message="Room deleted")
                 cleaned += 1
         evt.sender.command_status = None
         await evt.reply(f"{cleaned} rooms cleaned up successfully.")
