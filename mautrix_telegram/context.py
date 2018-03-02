@@ -17,13 +17,14 @@
 
 
 class Context:
-    def __init__(self, az, db, config, loop, bot, mx):
+    def __init__(self, az, db, config, loop, bot, mx, telethon_session_container):
         self.az = az
         self.db = db
         self.config = config
         self.loop = loop
         self.bot = bot
         self.mx = mx
+        self.telethon_session_container = telethon_session_container
 
     def __iter__(self):
         yield self.az
