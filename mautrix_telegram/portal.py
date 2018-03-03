@@ -964,7 +964,7 @@ class Portal:
             return
 
         intent = sender.intent if sender else self.main_intent
-        if evt.message:
+        if not evt.media and evt.message:
             response = await self.handle_telegram_text(source, intent, evt)
         elif evt.media:
             relates_to = formatter.telegram_reply_to_matrix(evt, source)
