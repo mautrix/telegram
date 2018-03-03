@@ -18,9 +18,9 @@ import logging
 import re
 
 from telethon.tl.types import *
-from telethon.errors import ChannelInvalidError, ChannelPrivateError
 from telethon.tl.functions.messages import GetChatsRequest
 from telethon.tl.functions.channels import GetChannelsRequest
+from telethon.errors import ChannelInvalidError, ChannelPrivateError
 
 from .abstract_user import AbstractUser
 from .db import BotChat
@@ -128,23 +128,11 @@ class Bot(AbstractUser):
         portal = po.Portal.get_by_entity(message.to_id)
         if text == "/portal" or text == f"/portal@{self.username}":
             await self.handle_command_portal(portal, reply)
-        elif text.startswith("/invite") or text.startswith(f"/invite@{self.username}"):
-            await self.handle_command_invite(portal, reply, mxid=text[len("/invite "):])
+        elif text.startswith("/invite ") or text.startswith(f"/invite@{self.username} "):
+            await self.handle_command_invite(portal, reply, mxid=text[text.index(" "):])
 
-    async def update(self, update):
-        if not isinstance(update, (UpdateNewMessage, UpdateNewChannelMessage)):
-            return
-
-        is_command = (isinstance(update.message, Message)
-                      and update.message.entities and len(update.message.entities) > 0
-                      and isinstance(update.message.entities[0], MessageEntityBotCommand))
-        if is_command:
-            return await self.handle_command(update.message)
-
-        if not isinstance(update.message, MessageService):
-            return
-
-        to_id = update.message.to_id
+    def handle_service_message(self, message):
+        to_id = message.to_id
         if isinstance(to_id, PeerChannel):
             to_id = to_id.channel_id
             type = "channel"
@@ -154,11 +142,24 @@ class Bot(AbstractUser):
         else:
             return
 
-        action = update.message.action
+        action = message.action
         if isinstance(action, MessageActionChatAddUser) and self.tgid in action.users:
             self.add_chat(to_id, type)
         elif isinstance(action, MessageActionChatDeleteUser) and action.user_id == self.tgid:
             self.remove_chat(to_id)
+
+    async def update(self, update):
+        if not isinstance(update, (UpdateNewMessage, UpdateNewChannelMessage)):
+            return
+
+        if isinstance(update.message, MessageService):
+            return self.handle_service_message(update.message)
+
+        is_command = (isinstance(update.message, Message)
+                      and update.message.entities and len(update.message.entities) > 0
+                      and isinstance(update.message.entities[0], MessageEntityBotCommand))
+        if is_command:
+            return await self.handle_command(update.message)
 
     def is_in_chat(self, peer_id):
         return peer_id in self.chats
