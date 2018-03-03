@@ -74,8 +74,7 @@ class User(Base):
     saved_contacts = Column(Integer, default=0)
     contacts = relationship("Contact", uselist=True,
                             cascade="save-update, merge, delete, delete-orphan")
-    portals = relationship("Portal", secondary="user_portal",
-                           cascade="save-update, merge, delete")
+    portals = relationship("Portal", secondary="user_portal")
 
 
 class Contact(Base):
