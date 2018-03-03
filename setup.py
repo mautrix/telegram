@@ -29,9 +29,9 @@ setuptools.setup(
         "telethon-asyncio-git",
     ],
     dependency_links=[
-        ("https://github.com/tulir/telethon-asyncio/tarball/0ee04f939267c29f9a684f1e5c90cedd67ecb4f9#egg=telethon-asyncio-git-0.17.4+1"
+        ("https://github.com/tulir/telethon-asyncio/tarball/4432a2d14eded4463f8f30127d39b2801f671cf1#egg=telethon-asyncio-git-0.17.4+2"
          if sys.version_info >= (3, 6)
-         else "https://github.com/tulir/telethon-asyncio/tarball/24ffd719cb6fa3eba6c2585c860c685275e12c52#egg=telethon-asyncio-git-0.17.4+1")
+         else "https://github.com/tulir/telethon-asyncio/tarball/4432a2d14eded4463f8f30127d39b2801f671cf1#egg=telethon-asyncio-git-0.17.4+2")
     ],
 
     classifiers=[

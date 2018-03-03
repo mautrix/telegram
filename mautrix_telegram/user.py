@@ -141,7 +141,7 @@ class User(AbstractUser):
             self.log.debug(f"Unauthenticated user {self.name} start()ed, deleting...")
             # User not logged in -> forget user
             self.client.disconnect()
-            self.client.session.delete()
+            # self.client.session.delete()
             self.delete()
         return self
 

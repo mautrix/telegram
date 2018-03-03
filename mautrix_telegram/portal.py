@@ -128,8 +128,8 @@ class Portal:
                 try:
                     hash_content += {
                         MessageMediaContact: lambda media: [media.user_id],
-                        MessageMediaDocument: lambda media: [media.document.id, media.caption],
-                        MessageMediaPhoto: lambda media: [media.photo.id, media.caption],
+                        MessageMediaDocument: lambda media: [media.document.id],
+                        MessageMediaPhoto: lambda media: [media.photo.id],
                         MessageMediaGeo: lambda media: [media.geo.long, media.geo.lat],
                     }[type(event.media)](event.media)
                 except KeyError:
@@ -341,9 +341,9 @@ class Portal:
         puppet = p.Puppet.get(user_id)
         user = u.User.get_by_tgid(user_id)
         kick_message = (f"Kicked by {sender.displayname}"
-                        if sender and sender.tgid != user.tgid
+                        if sender and sender.tgid != puppet.tgid
                         else "Left Telegram chat")
-        if sender and sender.tgid != user.tgid:
+        if sender and sender.tgid != puppet.tgid:
             await self.main_intent.kick(self.mxid, puppet.mxid, kick_message)
         else:
             await puppet.intent.leave_room(self.mxid)
@@ -819,8 +819,8 @@ class Portal:
         if self.mxid:
             await user.intent.set_typing(self.mxid, is_typing=True)
 
-    async def handle_telegram_photo(self, source, intent, media, relates_to=None):
-        largest_size = self._get_largest_photo_size(media.photo)
+    async def handle_telegram_photo(self, source, intent, evt, relates_to=None):
+        largest_size = self._get_largest_photo_size(evt.media.photo)
         file = await util.transfer_file_to_matrix(self.db, source.client, intent,
                                                   largest_size.location)
         if not file:
@@ -833,17 +833,18 @@ class Portal:
             "orientation": 0,
             "mimetype": file.mime_type,
         }
-        name = media.caption
+        name = evt.message
         await intent.set_typing(self.mxid, is_typing=False)
         return await intent.send_image(self.mxid, file.mxc, info=info, text=name,
                                        relates_to=relates_to)
 
-    async def handle_telegram_document(self, source, intent, media, relates_to=None):
-        file = await util.transfer_file_to_matrix(self.db, source.client, intent, media.document)
+    async def handle_telegram_document(self, source, intent, evt, relates_to=None):
+        document = evt.media.document
+        file = await util.transfer_file_to_matrix(self.db, source.client, intent, document)
         if not file:
             return None
-        name = media.caption
-        for attr in media.document.attributes:
+        name = evt.message
+        for attr in document.attributes:
             if not name and isinstance(attr, DocumentAttributeFilename):
                 name = attr.file_name
                 if not file.was_converted:
@@ -851,9 +852,9 @@ class Portal:
                     file.mime_type = mime_from_name or file.mime_type
             elif isinstance(attr, DocumentAttributeSticker):
                 name = f"Sticker for {attr.alt}"
-        mime_type = media.document.mime_type or file.mime_type
+        mime_type = document.mime_type or file.mime_type
         info = {
-            "size": media.document.size,
+            "size": document.size,
             "mimetype": mime_type,
         }
         type = "m.file"
@@ -968,10 +969,9 @@ class Portal:
         elif evt.media:
             relates_to = formatter.telegram_reply_to_matrix(evt, source)
             if isinstance(evt.media, MessageMediaPhoto):
-                response = await self.handle_telegram_photo(source, intent, evt.media, relates_to)
+                response = await self.handle_telegram_photo(source, intent, evt, relates_to)
             elif isinstance(evt.media, MessageMediaDocument):
-                response = await self.handle_telegram_document(source, intent, evt.media,
-                                                               relates_to)
+                response = await self.handle_telegram_document(source, intent, evt, relates_to)
             elif isinstance(evt.media, MessageMediaGeo):
                 response = await self.handle_telegram_location(source, intent, evt.media.geo,
                                                                relates_to)

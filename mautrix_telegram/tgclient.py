@@ -49,15 +49,15 @@ class MautrixTelegramClient(TelegramClient):
 
         return self._get_response_message(request, result)
 
-    async def send_file(self, entity, file, mime_type=None, caption=None, attributes=None,
-                        file_name=None, reply_to=None, **kwargs):
+    async def send_file(self, entity, file, mime_type=None, caption=None, entities=None,
+                        attributes=None, file_name=None, reply_to=None, **kwargs):
         entity = await self.get_input_entity(entity)
         reply_to = self._get_message_id(reply_to)
 
         file_handle = await self.upload_file(file, file_name=file_name, use_cache=False)
 
         if mime_type == "image/png":
-            media = InputMediaUploadedPhoto(file_handle, caption or "")
+            media = InputMediaUploadedPhoto(file_handle)
         else:
             attributes = attributes or []
             attr_dict = {type(attr): attr for attr in attributes}
@@ -65,10 +65,10 @@ class MautrixTelegramClient(TelegramClient):
             media = InputMediaUploadedDocument(
                 file=file_handle,
                 mime_type=mime_type or "application/octet-stream",
-                attributes=list(attr_dict.values()),
-                caption=caption or "")
+                attributes=list(attr_dict.values()))
 
-        request = SendMediaRequest(entity, media, reply_to_msg_id=reply_to)
+        request = SendMediaRequest(entity, media, message=caption, entities=entities,
+                                   reply_to_msg_id=reply_to)
         return self._get_response_message(request, await self(request))
 
     async def download_file_bytes(self, location):
