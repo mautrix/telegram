@@ -75,7 +75,6 @@ db_engine = sql.create_engine(config.get("appservice.database", "sqlite:///mautr
 db_factory = orm.sessionmaker(bind=db_engine)
 db_session = orm.scoping.scoped_session(db_factory)
 Base.metadata.bind = db_engine
-Base.metadata.create_all()
 
 loop = asyncio.get_event_loop()
 
