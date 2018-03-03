@@ -122,14 +122,14 @@ class Bot(AbstractUser):
 
     async def handle_command(self, message):
         def reply(reply_text):
-            return self.client.send_message_super(message.to_id, reply_text)
+            return self.client.send_message(message.to_id, reply_text, markdown=True)
 
         text = message.message
         portal = po.Portal.get_by_entity(message.to_id)
         if text == "/portal" or text == f"/portal@{self.username}":
             await self.handle_command_portal(portal, reply)
         elif text.startswith("/invite ") or text.startswith(f"/invite@{self.username} "):
-            await self.handle_command_invite(portal, reply, mxid=text[text.index(" "):])
+            await self.handle_command_invite(portal, reply, mxid=text[text.index(" ") + 1:])
 
     def handle_service_message(self, message):
         to_id = message.to_id

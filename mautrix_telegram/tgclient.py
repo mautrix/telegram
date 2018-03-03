@@ -19,14 +19,16 @@ from io import BytesIO
 from telethon import TelegramClient
 from telethon.tl.functions.messages import SendMessageRequest, SendMediaRequest
 from telethon.tl.types import *
+from telethon.extensions.markdown import parse as parse_md
 
 
 class MautrixTelegramClient(TelegramClient):
-    def send_message_super(self, *args, **kwargs):
-        return super().send_message(*args, **kwargs)
-
-    async def send_message(self, entity, message, reply_to=None, entities=None, link_preview=True):
+    async def send_message(self, entity, message, reply_to=None, entities=None, markdown=False,
+                           link_preview=True):
         entity = await self.get_input_entity(entity)
+
+        if markdown:
+            message, entities = parse_md(message)
 
         request = SendMessageRequest(
             peer=entity,

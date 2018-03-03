@@ -523,8 +523,8 @@ class Portal:
 
     async def leave_matrix(self, user, source, event_id):
         if not user.logged_in:
-            response = await self.bot.client.send_message_super(
-                self.peer, f"__{user.displayname} left the room.__")
+            response = await self.bot.client.send_message(
+                self.peer, f"__{user.displayname} left the room.__", markdown=True)
             space = self.tgid if self.peer_type == "channel" else self.bot.tgid
             self.is_duplicate(response, (event_id, space))
             return
@@ -554,8 +554,8 @@ class Portal:
 
     async def join_matrix(self, user, event_id):
         if not user.logged_in:
-            response = await self.bot.client.send_message_super(
-                self.peer, f"__{user.displayname} joined the room.__")
+            response = await self.bot.client.send_message(
+                self.peer, f"__{user.displayname} joined the room.__", markdown=True)
             space = self.tgid if self.peer_type == "channel" else self.bot.tgid
             self.is_duplicate(response, (event_id, space))
             return
