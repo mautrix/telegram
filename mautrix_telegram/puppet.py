@@ -100,7 +100,10 @@ class Puppet:
             name = data[preference]
             if name:
                 break
-        if not name:
+
+        if info.deleted:
+            name = f"Deleted account {info.id}"
+        elif not name:
             name = info.id
 
         if not format:
