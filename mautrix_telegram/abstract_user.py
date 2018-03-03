@@ -30,6 +30,7 @@ MAX_DELETIONS = 10
 
 
 class AbstractUser:
+    session_container = None
     loop = None
     log = None
     db = None
@@ -46,9 +47,10 @@ class AbstractUser:
         self.log.debug(f"Initializing client for {self.name}")
         device = f"{platform.system()} {platform.release()}"
         sysversion = MautrixTelegramClient.__version__
-        self.client = MautrixTelegramClient(self.name,
-                                            config["telegram.api_id"],
-                                            config["telegram.api_hash"],
+        self.session = self.session_container.new_session(self.name)
+        self.client = MautrixTelegramClient(session=self.session,
+                                            api_id=config["telegram.api_id"],
+                                            api_hash=config["telegram.api_hash"],
                                             loop=self.loop,
                                             app_version=__version__,
                                             system_version=sysversion,
@@ -290,4 +292,5 @@ class AbstractUser:
 def init(context):
     global config, MAX_DELETIONS
     AbstractUser.az, AbstractUser.db, config, AbstractUser.loop, _ = context
+    AbstractUser.session_container = context.telethon_session_container
     MAX_DELETIONS = config.get("bridge.max_telegram_delete", 10)

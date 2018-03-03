@@ -22,6 +22,7 @@ import asyncio
 import sqlalchemy as sql
 from sqlalchemy import orm
 
+from telethon.sessions import AlchemySessionContainer
 from mautrix_appservice import AppService
 
 from .base import Base
@@ -76,14 +77,17 @@ db_factory = orm.sessionmaker(bind=db_engine)
 db_session = orm.scoping.scoped_session(db_factory)
 Base.metadata.bind = db_engine
 
+telethon_session_container = AlchemySessionContainer(engine=db_engine, session=db_session,
+                                                     table_base=Base, table_prefix="telethon_",
+                                                     manage_tables=False)
+
 loop = asyncio.get_event_loop()
 
 appserv = AppService(config["homeserver.address"], config["homeserver.domain"],
                      config["appservice.as_token"], config["appservice.hs_token"],
                      config["appservice.bot_username"], log="mau.as", loop=loop)
 
-
-context = Context(appserv, db_session, config, loop, None, None)
+context = Context(appserv, db_session, config, loop, None, None, telethon_session_container)
 
 if config["appservice.public.enabled"]:
     public = PublicBridgeWebsite(loop)
