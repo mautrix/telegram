@@ -48,14 +48,13 @@ class AbstractUser:
         device = f"{platform.system()} {platform.release()}"
         sysversion = MautrixTelegramClient.__version__
         self.session = self.session_container.new_session(self.name)
-        self.session.app_version = __version__
-        self.session.system_version = sysversion
-        self.session.device_model = device
-
         self.client = MautrixTelegramClient(session=self.session,
                                             api_id=config["telegram.api_id"],
                                             api_hash=config["telegram.api_hash"],
-                                            loop=self.loop)
+                                            loop=self.loop,
+                                            app_version=__version__,
+                                            system_version=sysversion,
+                                            device_model=device)
         await self.client.add_event_handler(self._update_catch)
 
     async def update(self, update):
