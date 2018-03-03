@@ -600,8 +600,9 @@ class Portal:
         if "w" in info and "h" in info:
             attributes.append(DocumentAttributeImageSize(w=info["w"], h=info["h"]))
 
-        return await client.send_file(self.peer, file, mime, caption, attributes,
-                                      file_name, reply_to=reply_to)
+        return await client.send_file(self.peer, file, mime, caption=caption,
+                                      attributes=attributes, file_name=file_name,
+                                      reply_to=reply_to)
 
     async def handle_matrix_message(self, sender, message, event_id):
         client = sender.client if sender.logged_in else self.bot.client

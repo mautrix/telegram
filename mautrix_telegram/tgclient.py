@@ -67,7 +67,7 @@ class MautrixTelegramClient(TelegramClient):
                 mime_type=mime_type or "application/octet-stream",
                 attributes=list(attr_dict.values()))
 
-        request = SendMediaRequest(entity, media, message=caption, entities=entities,
+        request = SendMediaRequest(entity, media, message=caption or "", entities=entities or [],
                                    reply_to_msg_id=reply_to)
         return self._get_response_message(request, await self(request))
 
