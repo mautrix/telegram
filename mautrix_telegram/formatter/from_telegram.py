@@ -93,7 +93,7 @@ async def _add_reply_header(source, text, html, evt, relates_to,
         content = event["content"]
         body = (content["formatted_body"]
                 if "formatted_body" in content
-                else content["body"])
+                else escape(content["body"]))
         sender = event['sender']
         puppet = pu.Puppet.get_by_mxid(sender, create=False)
         reply_displayname = puppet.displayname if puppet else sender
