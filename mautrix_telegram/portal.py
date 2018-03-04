@@ -980,7 +980,8 @@ class Portal:
                 self.db.commit()
             return
         allowed_media = (MessageMediaPhoto, MessageMediaDocument, MessageMediaGeo)
-        media = evt.media if hasattr(evt, "media") and isinstance(media, allowed_media) else None
+        media = evt.media if hasattr(evt, "media") and isinstance(evt.media,
+                                                                  allowed_media) else None
         intent = sender.intent if sender else self.main_intent
         if not media and evt.message:
             response = await self.handle_telegram_text(source, intent, evt)
