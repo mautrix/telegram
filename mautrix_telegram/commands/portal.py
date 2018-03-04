@@ -14,15 +14,17 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
+import asyncio
+
 from telethon_aio.errors import *
 from mautrix_appservice import MatrixRequestError
 
 from .. import portal as po
-from . import command_handler
+from . import command_handler, CommandEvent
 
 
 @command_handler()
-async def invite_link(evt):
+async def invite_link(evt: CommandEvent):
     portal = po.Portal.get_by_mxid(evt.room_id)
     if not portal:
         return await evt.reply("This is not a portal room.")
@@ -52,17 +54,17 @@ async def _has_access_to(room, intent, sender, event, default=50):
                                               default=default)
 
 
-async def _get_portal_and_check_permission(evt, permission, action=None, allow_that=False):
-    room_id = evt.args[0] if len(evt.args) > 0 and allow_that else evt.room_id
+async def _get_portal_and_check_permission(evt, permission, action=None):
+    room_id = evt.args[0] if len(evt.args) > 0 else evt.room_id
 
     portal = po.Portal.get_by_mxid(room_id)
     if not portal:
         that_this = "This" if room_id == evt.room_id else "That"
         return await evt.reply(f"{that_this} is not a portal room."), False
 
-    if not _has_access_to(portal.mxid, portal.main_intent, evt.sender, permission):
+    if not await _has_access_to(portal.mxid, evt.az.intent, evt.sender, permission):
         action = action or f"{permission.replace('_', ' ')}s"
-        return await evt.reply(f"You do not have the permissions to {action}."), False
+        return await evt.reply(f"You do not have the permissions to {action} that portal."), False
     return portal, True
 
 
@@ -83,7 +85,7 @@ def _get_portal_murder_function(action, room_id, function, command, completed_me
 
 
 @command_handler()
-async def delete_portal(evt):
+async def delete_portal(evt: CommandEvent):
     portal, ok = await _get_portal_and_check_permission(evt, "delete_portal")
     if not ok:
         return
@@ -98,8 +100,8 @@ async def delete_portal(evt):
 
 
 @command_handler()
-async def unbridge(evt):
-    portal, ok = await _get_portal_and_check_permission(evt, "unbridge_room", allow_that=False)
+async def unbridge(evt: CommandEvent):
+    portal, ok = await _get_portal_and_check_permission(evt, "unbridge_room")
     if not ok:
         return
 
@@ -111,7 +113,137 @@ async def unbridge(evt):
                            "by typing `$cmdprefix+sp confirm-unbridge`")
 
 
-async def _get_initial_state(evt):
+@command_handler()
+async def bridge(evt: CommandEvent):
+    if len(evt.args) == 0:
+        return await evt.reply("**Usage:** "
+                               "`$cmdprefix+sp bridge <Telegram chat ID> [Matrix room ID]`")
+    room_id = evt.args[1] if len(evt.args) > 1 else evt.room_id
+    that_this = "This" if room_id == evt.room_id else "That"
+
+    portal = po.Portal.get_by_mxid(room_id)
+    if portal:
+        return await evt.reply(f"{that_this} room is already a portal room.")
+
+    if not await _has_access_to(room_id, evt.az.intent, evt.sender, "bridge"):
+        return await evt.reply("You do not have the permissions to bridge that room.")
+
+    levels = await evt.az.intent.get_power_levels(room_id)
+    power_level_error = _check_power_levels(levels, evt.az.bot_mxid)
+    if power_level_error:
+        return await evt.reply(power_level_error)
+
+    # The /id bot command provides the prefixed ID, so we assume
+    tgid = evt.args[0]
+    if tgid.startswith("-100"):
+        tgid = int(tgid[4:])
+        peer_type = "channel"
+    elif tgid.startswith("-"):
+        tgid = -int(tgid)
+        peer_type = "chat"
+    else:
+        return await evt.reply("That doesn't seem like a prefixed Telegram chat ID.\n\n"
+                               "If you did not get the ID using the `/id` bot command, please "
+                               "prefix channel IDs with `-100` and normal group IDs with `-`.\n\n"
+                               "Bridging private chats to existing rooms is not allowed.")
+
+    portal = po.Portal.get_by_tgid(tgid, peer_type=peer_type)
+    if portal.mxid:
+        has_portal_message = (
+            "That Telegram chat already has a portal at "
+            f"[{portal.alias or portal.mxid}](https://matrix.to/#/{portal.mxid}). ")
+        if not await _has_access_to(portal.mxid, evt.az.intent, evt.sender, "unbridge"):
+            return await evt.reply(f"{has_portal_message}"
+                                   "Additionally, you do not have the permissions to unbridge "
+                                   "that room.")
+        evt.sender.command_status = {
+            "next": confirm_bridge,
+            "action": "Room bridging",
+            "mxid": portal.mxid,
+            "bridge_to_mxid": room_id,
+            "tgid": portal.tgid,
+            "peer_type": portal.peer_type,
+        }
+        return await evt.reply(f"{has_portal_message}"
+                               "However, you have the permissions to unbridge that room.\n\n"
+                               "To delete that portal completely and continue bridging, use "
+                               "`$cmdprefix+sp delete-and-continue`. To unbridge the portal "
+                               "without kicking Matrix users, use `$cmdprefix+sp unbridge-and-"
+                               "continue`. To cancel, use `$cmdprefix+sp cancel`")
+    evt.sender.command_status = {
+        "next": confirm_bridge,
+        "action": "Room bridging",
+        "bridge_to_mxid": room_id,
+        "tgid": portal.tgid,
+        "peer_type": portal.peer_type,
+    }
+    return await evt.reply("That Telegram chat has no existing portal. To confirm bridging the "
+                           "chat to this room, use `$cmdprefix+sp continue`")
+
+
+async def cleanup_old_portal_while_bridging(evt, portal):
+    if not portal.mxid:
+        await evt.reply("The portal seems to have lost its Matrix room between you"
+                        "calling `$cmdprefix+sp bridge` and this command.\n\n"
+                        "Continuing without touching previous Matrix room...")
+        return True, None
+    elif evt.args[0] == "delete-and-continue":
+        return True, portal.cleanup_room(portal.main_intent, portal.mxid,
+                                         message="Portal deleted (moving to another room)")
+    elif evt.args[0] == "unbridge-and-continue":
+        return True, portal.cleanup_room(portal.main_intent, portal.mxid,
+                                         message="Room unbridged (portal moving to another room)",
+                                         puppets_only=True)
+    else:
+        await evt.reply(
+            "The chat you were trying to bridge already has a Matrix portal room.\n\n"
+            "Please use `$cmdprefix+sp delete-and-continue` or `$cmdprefix+sp unbridge-and-"
+            "continue` to either delete or unbridge the existing room (respectively) and "
+            "continue with the bridging.\n\n"
+            "If you changed your mind, use `$cmdprefix+sp cancel` to cancel.")
+        return False, None
+
+
+async def confirm_bridge(evt: CommandEvent):
+    status = evt.sender.command_status
+    try:
+        portal = po.Portal.get_by_tgid(status["tgid"], peer_type=status["peer_type"])
+        bridge_to_mxid = status["bridge_to_mxid"]
+    except KeyError:
+        evt.sender.command_status = None
+        return await evt.reply("Fatal error: tgid or peer_type missing from command_status. "
+                               "This shouldn't happen unless you're messing with the command "
+                               "handler code.")
+    if "mxid" in status:
+        ok, coro = await cleanup_old_portal_while_bridging(evt, portal)
+        if not ok:
+            return
+        elif coro:
+            asyncio.ensure_future(coro, loop=evt.loop)
+            await evt.reply("Cleaning up previous portal room...")
+    elif portal.mxid:
+        evt.sender.command_status = None
+        return await evt.reply("The portal seems to have created a Matrix room between you "
+                               "calling `$cmdprefix+sp bridge` and this command.\n\n"
+                               "Please start over by calling the bridge command again.")
+    elif evt.args[0] != "continue":
+        return await evt.reply("Please use `$cmdprefix+sp continue` to confirm the bridging or "
+                               "`$cmdprefix+sp cancel` to cancel.")
+
+    portal.mxid = bridge_to_mxid
+    portal.title, portal.about, levels = await _get_initial_state(evt)
+    portal.photo_id = ""
+    portal.save()
+
+    entity = await evt.sender.client.get_entity(portal.peer)
+    direct = False
+    asyncio.ensure_future(portal.update_matrix_room(evt.sender, entity, direct, levels=levels),
+                          loop=evt.loop)
+
+    return await evt.reply("Bridging complete. Portal synchronization should begin momentarily.")
+
+
+async def _get_initial_state(evt: CommandEvent):
     state = await evt.az.intent.get_room_state(evt.room_id)
     title = None
     about = None
@@ -126,23 +258,23 @@ async def _get_initial_state(evt):
     return title, about, levels
 
 
-def _check_power_levels(levels, bot_mxid):
+def _check_power_levels(levels: dict, bot_mxid: str):
     try:
         if levels["users"][bot_mxid] < 100:
             raise ValueError()
     except (TypeError, KeyError, ValueError):
         return (f"Please give [the bridge bot](https://matrix.to/#/{bot_mxid}) a power level of "
-                "100 before creating a Telegram chat.")
+                "100 before creating or bridging a Telegram chat.")
 
     for user, level in levels["users"].items():
         if level >= 100 and user != bot_mxid:
             return (f"Please make sure only the bridge bot has power level above 99 before "
-                    f"creating a Telegram chat.\n\n"
+                    f"creating or bridging a Telegram chat.\n\n"
                     f"Use power level 95 instead of 100 for admins.")
 
 
 @command_handler()
-async def create(evt):
+async def create(evt: CommandEvent):
     type = evt.args[0] if len(evt.args) > 0 else "group"
     if type not in {"chat", "group", "supergroup", "channel"}:
         return await evt.reply(
@@ -177,7 +309,7 @@ async def create(evt):
 
 
 @command_handler()
-async def upgrade(evt):
+async def upgrade(evt: CommandEvent):
     portal = po.Portal.get_by_mxid(evt.room_id)
     if not portal:
         return await evt.reply("This is not a portal room.")
@@ -196,7 +328,7 @@ async def upgrade(evt):
 
 
 @command_handler()
-async def group_name(evt):
+async def group_name(evt: CommandEvent):
     if len(evt.args) == 0:
         return await evt.reply("**Usage:** `$cmdprefix+sp group-name <name/->`")
 

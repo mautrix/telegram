@@ -121,12 +121,11 @@ class Bot(AbstractUser):
             return await reply(f"Invited `{user.mxid}` to the portal.")
 
     def handle_command_id(self, message, reply):
-        id = message.to_id
-        if isinstance(id, PeerChannel):
-            id = id.channel_id
-        else:
-            id = id.chat_id
-        return reply(str(id))
+        # Provide the prefixed ID to the user so that the user wouldn't need to specify whether the
+        # chat is a normal group or a supergroup/channel when using the ID.
+        if isinstance(message.to_id, PeerChannel):
+            return reply(f"-100{message.to_id.channel_id}")
+        return reply(str(-message.to_id.chat_id))
 
     def match_command(self, text, command):
         text = text.lower()
