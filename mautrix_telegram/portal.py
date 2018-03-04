@@ -963,21 +963,21 @@ class Portal:
                     DBMessage(tgid=evt.id, mx_room=self.mxid, mxid=mxid, tg_space=tg_space))
                 self.db.commit()
             return
-
+        media = evt.media if hasattr(evt, "media") else None
         intent = sender.intent if sender else self.main_intent
-        if not evt.media and evt.message:
+        if not media and evt.message:
             response = await self.handle_telegram_text(source, intent, evt)
-        elif evt.media:
+        elif media:
             relates_to = formatter.telegram_reply_to_matrix(evt, source)
-            if isinstance(evt.media, MessageMediaPhoto):
+            if isinstance(media, MessageMediaPhoto):
                 response = await self.handle_telegram_photo(source, intent, evt, relates_to)
-            elif isinstance(evt.media, MessageMediaDocument):
+            elif isinstance(media, MessageMediaDocument):
                 response = await self.handle_telegram_document(source, intent, evt, relates_to)
-            elif isinstance(evt.media, MessageMediaGeo):
-                response = await self.handle_telegram_location(source, intent, evt.media.geo,
+            elif isinstance(media, MessageMediaGeo):
+                response = await self.handle_telegram_location(source, intent, media.geo,
                                                                relates_to)
             else:
-                self.log.debug("Unhandled Telegram media: %s", evt.media)
+                self.log.debug("Unhandled Telegram media: %s", media)
                 return
         else:
             self.log.debug("Unhandled Telegram message: %s", evt)
