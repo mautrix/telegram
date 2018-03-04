@@ -979,7 +979,8 @@ class Portal:
                     DBMessage(tgid=evt.id, mx_room=self.mxid, mxid=mxid, tg_space=tg_space))
                 self.db.commit()
             return
-        media = evt.media if hasattr(evt, "media") else None
+        allowed_media = (MessageMediaPhoto, MessageMediaDocument, MessageMediaGeo)
+        media = evt.media if hasattr(evt, "media") and isinstance(media, allowed_media) else None
         intent = sender.intent if sender else self.main_intent
         if not media and evt.message:
             response = await self.handle_telegram_text(source, intent, evt)
