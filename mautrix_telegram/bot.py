@@ -90,7 +90,7 @@ class Bot(AbstractUser):
 
     async def handle_command_portal(self, portal, reply):
         if not config["bridge.authless_relaybot_portals"]:
-            return await reply("This bridge doesn't allow portal creation/invites from Telegram.")
+            return await reply("This bridge doesn't allow portal creation from Telegram.")
 
         await portal.create_matrix_room(self)
         if portal.mxid:
@@ -120,16 +120,49 @@ class Bot(AbstractUser):
             await portal.main_intent.invite(portal.mxid, user.mxid)
             return await reply(f"Invited `{user.mxid}` to the portal.")
 
+    def handle_command_id(self, message, reply):
+        id = message.to_id
+        if isinstance(id, PeerChannel):
+            id = id.channel_id
+        else:
+            id = id.chat_id
+        return reply(str(id))
+
+    def match_command(self, text, command):
+        text = text.lower()
+        command = f"/{command.lower()}"
+        command_targeted = f"{command}@{self.username.lower()}"
+
+        is_plain_command = text == command or text == command_targeted
+        if is_plain_command:
+            return True
+
+        is_arg_command = text.startswith(command + " ") or text.startswith(command_targeted + " ")
+        if is_arg_command:
+            return True
+
+        return False
+
     async def handle_command(self, message):
         def reply(reply_text):
-            return self.client.send_message(message.to_id, reply_text, markdown=True)
+            return self.client.send_message(message.to_id, reply_text, markdown=True,
+                                            reply_to=message.id)
 
         text = message.message
+
+        if self.match_command(text, "id"):
+            return await self.handle_command_id(message, reply)
+
         portal = po.Portal.get_by_entity(message.to_id)
-        if text == "/portal" or text == f"/portal@{self.username}":
+
+        if self.match_command(text, "portal"):
             await self.handle_command_portal(portal, reply)
-        elif text.startswith("/invite ") or text.startswith(f"/invite@{self.username} "):
-            await self.handle_command_invite(portal, reply, mxid=text[text.index(" ") + 1:])
+        elif self.match_command(text, "invite"):
+            try:
+                mxid = text[text.index(" ") + 1:]
+            except ValueError:
+                mxid = ""
+            await self.handle_command_invite(portal, reply, mxid=mxid)
 
     def handle_service_message(self, message):
         to_id = message.to_id
