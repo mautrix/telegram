@@ -23,7 +23,7 @@ from PIL import Image
 from sqlalchemy.exc import IntegrityError
 
 from telethon_aio.tl.types import (Document, FileLocation, InputFileLocation,
-                               InputDocumentFileLocation)
+                                   InputDocumentFileLocation, PhotoCachedSize)
 from telethon_aio.errors import LocationInvalidError
 
 from ..db import TelegramFile as DBTelegramFile

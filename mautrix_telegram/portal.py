@@ -839,25 +839,41 @@ class Portal:
         return await intent.send_image(self.mxid, file.mxc, info=info, text=name,
                                        relates_to=relates_to)
 
-    async def handle_telegram_document(self, source, intent, evt, relates_to=None):
+    async def handle_telegram_document(self, source, intent, evt: Message, relates_to=None):
         document = evt.media.document
         file = await util.transfer_file_to_matrix(self.db, source.client, intent, document)
         if not file:
             return None
         name = evt.message
+        width, height = 0, 0
         for attr in document.attributes:
-            if not name and isinstance(attr, DocumentAttributeFilename):
-                name = attr.file_name
+            if isinstance(attr, DocumentAttributeFilename):
+                name = name or attr.file_name
                 if not file.was_converted:
                     (mime_from_name, _) = mimetypes.guess_type(name)
                     file.mime_type = mime_from_name or file.mime_type
             elif isinstance(attr, DocumentAttributeSticker):
                 name = f"Sticker for {attr.alt}"
+            elif isinstance(attr, DocumentAttributeVideo):
+                width, height = attr.w, attr.h
         mime_type = document.mime_type or file.mime_type
         info = {
             "size": document.size,
             "mimetype": mime_type,
         }
+        if document.thumb:
+            thumbnail = await util.transfer_file_to_matrix(self.db, source.client, intent,
+                                                           document.thumb.location)
+            info["thumbnail_info"] = {
+                "mimetype": thumbnail.mime_type,
+                "h": document.thumb.h,
+                "w": document.thumb.w,
+                "size": len(document.thumb.bytes)
+            }
+            info["thumbnail_url"] = thumbnail.mxc
+        if height and width:
+            info["h"] = height
+            info["w"] = width
         type = "m.file"
         if mime_type.startswith("video/"):
             type = "m.video"
@@ -985,7 +1001,7 @@ class Portal:
 
         if not response:
             return
-
+        self.log.debug("Handled Telegram message: %s", evt)
         mxid = response["event_id"]
         DBMessage.query \
             .filter(DBMessage.mx_room == self.mxid,
