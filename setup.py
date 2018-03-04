@@ -26,12 +26,10 @@ setuptools.setup(
         "future-fstrings>=0.4.2",
         "python-magic>=0.4.15,<0.5",
         "cryptg>=0.1,<0.2",
-        "telethon-asyncio-git",
+        "telethon-aio>=0.18,<0.19" if sys.version_info >= (3, 6) else "telethon-aio-git",
     ],
     dependency_links=[
-        ("https://github.com/tulir/telethon-asyncio/tarball/cd2226c4a0c293f039b865565933c6f3dce25247#egg=telethon-asyncio-git-0.17.4+2"
-         if sys.version_info >= (3, 6)
-         else "https://github.com/tulir/telethon-asyncio/tarball/fabaadb3159d22c3f4a77c8ea280e7dc1aa7b723#egg=telethon-asyncio-git-0.17.4+2")
+        "https://github.com/tulir/telethon-asyncio/tarball/9b389cfb4b6d3876e9661c23507f17e96897e4b0#egg=telethon-aio-git-0.18.0+1"
     ],
 
     classifiers=[
@@ -56,3 +54,4 @@ setuptools.setup(
         ("alembic/versions", glob.glob("alembic/versions/*.py"))
     ],
 )
+

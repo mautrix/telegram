@@ -1,2 +1,2 @@
 -r base.txt
-git+https://github.com/tulir/telethon-asyncio@asyncio#egg=Telethon
+telethon-aio

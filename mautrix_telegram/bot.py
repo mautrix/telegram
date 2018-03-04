@@ -17,10 +17,10 @@
 import logging
 import re
 
-from telethon.tl.types import *
-from telethon.tl.functions.messages import GetChatsRequest
-from telethon.tl.functions.channels import GetChannelsRequest
-from telethon.errors import ChannelInvalidError, ChannelPrivateError
+from telethon_aio.tl.types import *
+from telethon_aio.tl.functions.messages import GetChatsRequest
+from telethon_aio.tl.functions.channels import GetChannelsRequest
+from telethon_aio.errors import ChannelInvalidError, ChannelPrivateError
 
 from .abstract_user import AbstractUser
 from .db import BotChat

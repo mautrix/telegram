@@ -21,7 +21,7 @@ import math
 import re
 import logging
 
-from telethon.tl.types import *
+from telethon_aio.tl.types import *
 
 from .. import user as u, puppet as pu, portal as po
 from ..db import Message as DBMessage

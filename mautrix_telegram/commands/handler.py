@@ -17,7 +17,7 @@
 import markdown
 import logging
 
-from telethon.errors import FloodWaitError
+from telethon_aio.errors import FloodWaitError
 
 from ..util import format_duration
 

@@ -16,7 +16,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import asyncio
 
-from telethon.errors import *
+from telethon_aio.errors import *
 
 from . import command_handler
 from .. import puppet as pu

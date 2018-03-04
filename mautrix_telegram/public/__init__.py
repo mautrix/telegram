@@ -20,7 +20,7 @@ import asyncio
 import pkg_resources
 import logging
 
-from telethon.errors import *
+from telethon_aio.errors import *
 
 from ..user import User
 from ..commands.auth import enter_password

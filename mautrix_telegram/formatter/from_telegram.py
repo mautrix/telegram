@@ -17,7 +17,7 @@
 from html import escape
 import logging
 
-from telethon.tl.types import *
+from telethon_aio.tl.types import *
 from mautrix_appservice import MatrixRequestError
 
 from .. import user as u, puppet as pu, portal as po

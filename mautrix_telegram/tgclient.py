@@ -16,10 +16,10 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from io import BytesIO
 
-from telethon import TelegramClient
-from telethon.tl.functions.messages import SendMessageRequest, SendMediaRequest
-from telethon.tl.types import *
-from telethon.extensions.markdown import parse as parse_md
+from telethon_aio import TelegramClient
+from telethon_aio.tl.functions.messages import SendMessageRequest, SendMediaRequest
+from telethon_aio.tl.types import *
+from telethon_aio.extensions.markdown import parse as parse_md
 
 
 class MautrixTelegramClient(TelegramClient):

@@ -22,9 +22,9 @@ import magic
 from PIL import Image
 from sqlalchemy.exc import IntegrityError
 
-from telethon.tl.types import (Document, FileLocation, InputFileLocation,
+from telethon_aio.tl.types import (Document, FileLocation, InputFileLocation,
                                InputDocumentFileLocation)
-from telethon.errors import LocationInvalidError
+from telethon_aio.errors import LocationInvalidError
 
 from ..db import TelegramFile as DBTelegramFile
 

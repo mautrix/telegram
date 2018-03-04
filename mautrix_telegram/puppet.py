@@ -18,8 +18,8 @@ from difflib import SequenceMatcher
 import re
 import logging
 
-from telethon.tl.types import UserProfilePhoto
-from telethon.errors.rpc_error_list import LocationInvalidError
+from telethon_aio.tl.types import UserProfilePhoto
+from telethon_aio.errors.rpc_error_list import LocationInvalidError
 
 from .db import Puppet as DBPuppet
 from . import util
