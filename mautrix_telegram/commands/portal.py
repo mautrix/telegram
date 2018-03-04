@@ -128,11 +128,6 @@ async def bridge(evt: CommandEvent):
     if not await _has_access_to(room_id, evt.az.intent, evt.sender, "bridge"):
         return await evt.reply("You do not have the permissions to bridge that room.")
 
-    levels = await evt.az.intent.get_power_levels(room_id)
-    power_level_error = _check_power_levels(levels, evt.az.bot_mxid)
-    if power_level_error:
-        return await evt.reply(power_level_error)
-
     # The /id bot command provides the prefixed ID, so we assume
     tgid = evt.args[0]
     if tgid.startswith("-100"):
@@ -258,21 +253,6 @@ async def _get_initial_state(evt: CommandEvent):
     return title, about, levels
 
 
-def _check_power_levels(levels: dict, bot_mxid: str):
-    try:
-        if levels["users"][bot_mxid] < 100:
-            raise ValueError()
-    except (TypeError, KeyError, ValueError):
-        return (f"Please give [the bridge bot](https://matrix.to/#/{bot_mxid}) a power level of "
-                "100 before creating or bridging a Telegram chat.")
-
-    for user, level in levels["users"].items():
-        if level >= 100 and user != bot_mxid:
-            return (f"Please make sure only the bridge bot has power level above 99 before "
-                    f"creating or bridging a Telegram chat.\n\n"
-                    f"Use power level 95 instead of 100 for admins.")
-
-
 @command_handler()
 async def create(evt: CommandEvent):
     type = evt.args[0] if len(evt.args) > 0 else "group"
@@ -286,10 +266,6 @@ async def create(evt: CommandEvent):
     title, about, levels = await _get_initial_state(evt)
     if not title:
         return await evt.reply("Please set a title before creating a Telegram chat.")
-
-    power_level_error = _check_power_levels(levels, evt.az.bot_mxid)
-    if power_level_error:
-        return await evt.reply(power_level_error)
 
     supergroup = type == "supergroup"
     type = {
