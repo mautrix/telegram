@@ -144,7 +144,7 @@ class PublicBridgeWebsite:
         if "mxid" not in data:
             return self.render_login(error="Please enter your Matrix ID.", status=400)
 
-        user = await User.get_by_mxid(data["mxid"]).ensure_started()
+        user = await User.get_by_mxid(data["mxid"]).ensure_started(even_if_no_session=True)
         if not user.whitelisted:
             return self.render_login(mxid=user.mxid, error="You are not whitelisted.", status=403)
         elif user.logged_in:
