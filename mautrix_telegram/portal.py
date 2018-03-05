@@ -580,13 +580,22 @@ class Portal:
             message["body"] = f"<{sender.displayname}> {message['body']}"
         return type
 
-    def _handle_matrix_text(self, client, message, reply_to):
-        if "format" in message and message["format"] == "org.matrix.custom.html":
+    async def _handle_matrix_text(self, client, message, reply_to):
+        is_formatted = ("format" in message
+                        and message["format"] == "org.matrix.custom.html"
+                        and "formatted_body" in message)
+        if is_formatted:
             message, entities = formatter.matrix_to_telegram(message["formatted_body"])
-            return client.send_message(self.peer, message, entities=entities, reply_to=reply_to)
+
+            # TODO remove this crap
+            for entity in entities:
+                if isinstance(entity, InputMessageEntityMentionName):
+                    entity.user_id = await client.get_input_entity(entity.user_id.user_id)
+
+            return await client.send_message(self.peer, message, entities=entities, reply_to=reply_to)
         else:
             message = formatter.matrix_text_to_telegram(message["body"])
-            return client.send_message(self.peer, message, reply_to=reply_to)
+            return await client.send_message(self.peer, message, reply_to=reply_to)
 
     async def _handle_matrix_file(self, client, message, reply_to):
         file = await self.main_intent.download_file(message["url"])

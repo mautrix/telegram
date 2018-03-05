@@ -53,17 +53,15 @@ class MatrixParser(HTMLParser):
         mention = self.mention_regex.match(url)
         if mention:
             mxid = mention.group(1)
-            user = (pu.Puppet.get_by_mxid(mxid, create=False)
+            user = (pu.Puppet.get_by_mxid(mxid)
                     or u.User.get_by_mxid(mxid, create=False))
             if not user:
                 return None, None
             if user.username:
-                entity_type = MessageEntityMention
-                url = f"@{user.username}"
+                return MessageEntityMention, f"@{user.username}"
             else:
-                entity_type = MessageEntityMentionName
-                args["user_id"] = user.tgid
-            return entity_type, url
+                args["user_id"] = InputUser(user.tgid, 0)
+                return InputMessageEntityMentionName, user.displayname or None
 
         room = self.room_regex.match(url)
         if room:
