@@ -25,7 +25,7 @@ from telethon_aio.tl.types import *
 
 from .. import user as u, puppet as pu, portal as po
 from ..db import Message as DBMessage
-from .util import add_surrogates, remove_surrogates
+from .util import (add_surrogates, remove_surrogates, trim_reply_fallback_html, trim_reply_fallback_text)
 
 log = logging.getLogger("mau.fmt.mx")
 
@@ -232,6 +232,14 @@ def matrix_reply_to_telegram(content, tg_space, room_id=None):
         reply = content["m.relates_to"]["m.in_reply_to"]
         room_id = room_id or reply["room_id"]
         event_id = reply["event_id"]
+
+        try:
+            if content["format"] == "org.custom.matrix.html":
+                content["formatted_body"] = trim_reply_fallback_html(content["formatted_body"])
+        except KeyError:
+            pass
+        content["body"] = trim_reply_fallback_text(content["body"])
+
         message = DBMessage.query.filter(DBMessage.mxid == event_id,
                                          DBMessage.tg_space == tg_space,
                                          DBMessage.mx_room == room_id).one_or_none()

@@ -70,12 +70,6 @@ bridge:
     - username
     - phone number
 
-    # Whether or not to use native Matrix replies. At the time of writing, only riot-web supports
-    # replies and the format of them is subject to change.
-    native_replies: true
-    # If native replies are disabled, should the custom replies contain a link to the message being
-    # replied to?
-    link_in_reply: false
     # Show message editing as a reply to the original message.
     # If this is false, message edits are not shown at all, as Matrix does not support editing yet.
     edits_as_replies: false

@@ -22,7 +22,8 @@ from mautrix_appservice import MatrixRequestError
 
 from .. import user as u, puppet as pu, portal as po
 from ..db import Message as DBMessage
-from .util import add_surrogates, remove_surrogates
+from .util import (add_surrogates, remove_surrogates, trim_reply_fallback_html,
+                   trim_reply_fallback_text)
 
 log = logging.getLogger("mau.fmt.tg")
 
@@ -67,8 +68,7 @@ async def _add_forward_header(source, text, html, fwd_from_id):
     return text, html
 
 
-async def _add_reply_header(source, text, html, evt, relates_to,
-                            native_replies, message_link_in_reply, main_intent, reply_text):
+async def _add_reply_header(source, text, html, evt, relates_to, main_intent, is_edit):
     space = (evt.to_id.channel_id
              if isinstance(evt, Message) and isinstance(evt.to_id, PeerChannel)
              else source.tgid)
@@ -77,42 +77,50 @@ async def _add_reply_header(source, text, html, evt, relates_to,
     if not msg:
         return text, html
 
-    if native_replies:
-        relates_to["m.in_reply_to"] = {
-            "event_id": msg.mxid,
-            "room_id": msg.mx_room,
-        }
-        if reply_text == "Edit":
-            html = f"<u>Edit:</u> {html or escape(text)}"
-            text = f"Edit: {text}"
-        return text, html
+    relates_to["m.in_reply_to"] = {
+        "event_id": msg.mxid,
+        "room_id": msg.mx_room,
+    }
+    if is_edit:
+        html = f"<u>Edit:</u> {html or escape(text)}"
+        text = f"Edit: {text}"
 
-    reply_displayname = "unknown user"
     try:
         event = await main_intent.get_event(msg.mx_room, msg.mxid)
+
         content = event["content"]
-        body = (content["formatted_body"]
-                if "formatted_body" in content
-                else escape(content["body"]))
-        sender = event['sender']
-        puppet = pu.Puppet.get_by_mxid(sender, create=False)
-        reply_displayname = puppet.displayname if puppet else sender
-        reply_to_user = f"<a href='https://matrix.to/#/{sender}'>{reply_displayname}</a>"
-        reply_to_msg = (("<a href='https://matrix.to/#/"
-                         f"{msg.mx_room}/{msg.mxid}'>{reply_text}</a>")
-                        if message_link_in_reply else "Reply")
-        quote = f"{reply_to_msg} to {reply_to_user}<blockquote>{body}</blockquote>"
+        r_sender = event["sender"]
+
+        r_text_body = trim_reply_fallback_text(content["body"])
+        r_html_body = trim_reply_fallback_html(content["formatted_body"]
+                                               if "formatted_body" in content
+                                               else escape(content["body"]))
+
+        puppet = pu.Puppet.get_by_mxid(r_sender, create=False)
+        r_displayname = puppet.displayname if puppet else r_sender
+        r_sender_link = f"<a href='https://matrix.to/#/{r_sender}'>{r_displayname}</a>"
     except (ValueError, KeyError, MatrixRequestError):
-        quote = f"{reply_text} to unknown user <em>(Failed to fetch message)</em>:<br/>"
-    if not html:
-        html = escape(text)
-    html = quote + html
-    text = f"{reply_text} to {reply_displayname}:\n{text}"
-    return text, html
+        r_sender_link = "unknown user"
+        # r_sender = "unknown user"
+        r_text_body = "Failed to fetch message"
+        r_html_body = "<em>Failed to fetch message</em>"
+
+    r_keyword = "In reply to" if not is_edit else "Edit to"
+    r_msg_link = f"<a href='https://matrix.to/#/{msg.mx_room}/{msg.mxid}'>{r_keyword}</a>"
+    html = (f"<blockquote data-mx-reply>{r_msg_link} {r_sender_link} {r_html_body}</blockquote>"
+            + (html or escape(text)))
+
+    lines = r_text_body.strip().split("\n")
+    text_with_quote = f"> <{r_displayname}> {lines.pop(0)}"
+    for line in lines:
+        if line:
+            text_with_quote += f"\n> {line}"
+    text_with_quote += "\n\n"
+    text_with_quote += text
+    return text_with_quote, html
 
 
-async def telegram_to_matrix(evt, source, native_replies=False, message_link_in_reply=False,
-                             main_intent=None, reply_text="Reply"):
+async def telegram_to_matrix(evt, source, main_intent=None, is_edit=False):
     text = add_surrogates(evt.message)
     html = _telegram_entities_to_matrix_catch(text, evt.entities) if evt.entities else None
     relates_to = {}
@@ -121,8 +129,8 @@ async def telegram_to_matrix(evt, source, native_replies=False, message_link_in_
         text, html = await _add_forward_header(source, text, html, evt.fwd_from.from_id)
 
     if evt.reply_to_msg_id:
-        text, html = await _add_reply_header(source, text, html, evt, relates_to, native_replies,
-                                             message_link_in_reply, main_intent, reply_text)
+        text, html = await _add_reply_header(source, text, html, evt, relates_to, main_intent,
+                                             is_edit)
 
     if isinstance(evt, Message) and evt.post and evt.post_author:
         if not html:

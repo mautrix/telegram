@@ -33,6 +33,7 @@ from mautrix_appservice import MatrixRequestError, IntentError
 
 from .db import Portal as DBPortal, Message as DBMessage
 from . import puppet as p, user as u, formatter, util
+from .formatter.util import trim_reply_fallback_html, trim_reply_fallback_text
 
 mimetypes.init()
 
@@ -575,9 +576,10 @@ class Portal:
             message["msgtype"] = "m.text"
         elif not sender.logged_in:
             if "formatted_body" in message:
-                message["formatted_body"] = (f"&lt;{sender.displayname}&gt; "
-                                             f"{message['formatted_body']}")
-            message["body"] = f"<{sender.displayname}> {message['body']}"
+                html = message["formatted_body"]
+                message["formatted_body"] = f"&lt;{sender.displayname}&gt; {html}"
+            text = message["body"]
+            message["body"] = f"<{sender.displayname}> {text}"
         return type
 
     async def _handle_matrix_text(self, client, message, reply_to):
@@ -592,7 +594,8 @@ class Portal:
                 if isinstance(entity, InputMessageEntityMentionName):
                     entity.user_id = await client.get_input_entity(entity.user_id.user_id)
 
-            return await client.send_message(self.peer, message, entities=entities, reply_to=reply_to)
+            return await client.send_message(self.peer, message, entities=entities,
+                                             reply_to=reply_to)
         else:
             message = formatter.matrix_text_to_telegram(message["body"])
             return await client.send_message(self.peer, message, reply_to=reply_to)
@@ -922,11 +925,7 @@ class Portal:
 
     async def handle_telegram_text(self, source, intent, evt):
         self.log.debug(f"Sending {evt.message} to {self.mxid} by {intent.mxid}")
-        text, html, relates_to = await formatter.telegram_to_matrix(
-            evt, source,
-            config["bridge.native_replies"],
-            config["bridge.link_in_reply"],
-            self.main_intent)
+        text, html, relates_to = await formatter.telegram_to_matrix(evt, source, self.main_intent)
         await intent.set_typing(self.mxid, is_typing=False)
         return await intent.send_text(self.mxid, text, html=html, relates_to=relates_to)
 
@@ -950,11 +949,8 @@ class Portal:
             return
 
         evt.reply_to_msg_id = evt.id
-        text, html, relates_to = await formatter.telegram_to_matrix(
-            evt, source,
-            config["bridge.native_replies"],
-            config["bridge.link_in_reply"],
-            self.main_intent, reply_text="Edit")
+        text, html, relates_to = await formatter.telegram_to_matrix(evt, source, self.main_intent,
+                                                                    is_edit=True)
         intent = sender.intent if sender else self.main_intent
         await intent.set_typing(self.mxid, is_typing=False)
         response = await intent.send_text(self.mxid, text, html=html, relates_to=relates_to)
