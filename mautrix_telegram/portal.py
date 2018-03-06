@@ -880,7 +880,9 @@ class Portal:
                 "mimetype": thumbnail.mime_type,
                 "h": document.thumb.h,
                 "w": document.thumb.w,
-                "size": len(document.thumb.bytes)
+                "size": (len(document.thumb.bytes)
+                         if isinstance(document.thumb, PhotoCachedSize)
+                         else document.thumb.size)
             }
             info["thumbnail_url"] = thumbnail.mxc
         if height and width:
