@@ -870,7 +870,7 @@ class Portal:
             "size": document.size,
             "mimetype": mime_type,
         }
-        if document.thumb:
+        if document.thumb and not isinstance(document.thumb, PhotoSizeEmpty):
             thumbnail = await util.transfer_file_to_matrix(self.db, source.client, intent,
                                                            document.thumb.location)
             info["thumbnail_info"] = {
