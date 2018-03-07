@@ -23,7 +23,7 @@ from mautrix_appservice import MatrixRequestError
 from .. import user as u, puppet as pu, portal as po
 from ..db import Message as DBMessage
 from .util import (add_surrogates, remove_surrogates, trim_reply_fallback_html,
-                   trim_reply_fallback_text)
+                   trim_reply_fallback_text, unicode_to_html)
 
 log = logging.getLogger("mau.fmt.tg")
 
@@ -137,6 +137,9 @@ async def telegram_to_matrix(evt, source, main_intent=None, is_edit=False):
             html = escape(text)
         text += f"\n- {evt.post_author}"
         html += f"<br/><i>- <u>{evt.post_author}</u></i>"
+
+    html = unicode_to_html(text, html, "\u0336", "del")
+    html = unicode_to_html(text, html, "\u0332", "u")
 
     if html:
         html = html.replace("\n", "<br/>")

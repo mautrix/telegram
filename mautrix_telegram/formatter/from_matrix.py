@@ -25,7 +25,8 @@ from telethon_aio.tl.types import *
 
 from .. import user as u, puppet as pu, portal as po
 from ..db import Message as DBMessage
-from .util import (add_surrogates, remove_surrogates, trim_reply_fallback_html, trim_reply_fallback_text)
+from .util import (add_surrogates, remove_surrogates, trim_reply_fallback_html,
+                   trim_reply_fallback_text, html_to_unicode)
 
 log = logging.getLogger("mau.fmt.mx")
 
@@ -35,7 +36,7 @@ class MatrixParser(HTMLParser):
     room_regex = re.compile("https://matrix.to/#/(#.+:.+)")
     block_tags = ("br", "p", "pre", "blockquote",
                   "ol", "ul", "li",
-                  "h1", "h2", "h3", "h4", "h5", "h6"
+                  "h1", "h2", "h3", "h4", "h5", "h6",
                   "div", "hr", "table")
 
     def __init__(self):
@@ -159,6 +160,14 @@ class MatrixParser(HTMLParser):
                 text = url
         elif previous_tag == "command":
             text = f"/{text}"
+
+        # Strikethrough
+        if "del" in self._open_tags:
+            text = html_to_unicode(text, "\u0336")
+        # Underline
+        if "u" in self._open_tags:
+            text = html_to_unicode(text, "\u0332")
+
         list_entry_handled_once = False
         # In order to maintain order of things like blockquotes in lists or lists in blockquotes,
         # we can't just have ifs/elses and we need to actually loop through the open tags in order.
