@@ -16,6 +16,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from collections import deque
 from datetime import datetime
+from html import escape
 import asyncio
 import random
 import mimetypes
@@ -838,6 +839,15 @@ class Portal:
                                                   largest_size.location)
         if not file:
             return None
+        if config["bridge.inline_images"] and evt.message:
+            text, html, relates_to = await formatter.telegram_to_matrix(evt, source,
+                                                                        self.main_intent)
+            await intent.set_typing(self.mxid, is_typing=False)
+            print(self.main_intent.client.get_download_url(file.mxc))
+            inline_img = f"<img src='{file.mxc}' alt='Inline Telegram photo'/><br/>\n"
+            html = inline_img + (html or escape(text))
+            text = f"Inline image: {text}"
+            return await intent.send_text(self.mxid, text, html=html, relates_to=relates_to)
         info = {
             "h": largest_size.h,
             "w": largest_size.w,

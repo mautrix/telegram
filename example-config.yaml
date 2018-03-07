@@ -83,6 +83,9 @@ bridge:
     allow_matrix_login: true
     # Whether or not to allow creating portals from Telegram.
     authless_relaybot_portals: true
+    # Use inline images instead of m.image to make rich captions possible.
+    # N.B. Inline images are not supported on all clients (e.g. Riot iOS).
+    inline_images: false
 
     # The prefix for commands. Only required in non-management rooms.
     command_prefix: "!tg"
@@ -112,4 +115,4 @@ telegram:
 
 # The version of the config. The bridge will read this and automatically update the config if
 # the schema has changed. For the latest version, check the example config.
-version: 1
+version: 2

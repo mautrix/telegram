@@ -16,6 +16,8 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from ruamel.yaml import YAML
 from ruamel.yaml.comments import CommentedMap
+from ruamel.yaml.tokens import CommentToken
+from ruamel.yaml.error import CommentMark
 import random
 import string
 
@@ -41,6 +43,9 @@ class DictWithRecursion:
 
     def __getitem__(self, key):
         return self.get(key, None)
+
+    def __contains__(self, key):
+        return self[key] is not None
 
     def _recursive_set(self, data, key, value):
         if '.' in key:
@@ -71,6 +76,7 @@ class DictWithRecursion:
             return
         try:
             del data[key]
+            del data.ca.items[key]
         except KeyError:
             pass
 
@@ -80,6 +86,7 @@ class DictWithRecursion:
             return
         try:
             del self._data[key]
+            del self._data.ca.items[key]
         except KeyError:
             pass
 
@@ -93,9 +100,18 @@ class DictWithRecursion:
         except ValueError:
             path = None
         entry = self[path] if path else self._data
-        c = self._data.ca.items.setdefault(key, [None, [], None, None])
+        c = entry.ca.items.setdefault(key, [None, [], None, None])
         c[1] = []
         entry.yaml_set_comment_before_after_key(key=key, before=message, indent=indent)
+
+    def comment_newline(self, key):
+        try:
+            path, key = key.rsplit(".", 1)
+        except ValueError:
+            path = None
+        entry = self[path] if path else self._data
+        c = entry.ca.items.setdefault(key, [None, [], None, None])
+        c[2] = CommentToken("\n\n", CommentMark(0), None)
 
 
 class Config(DictWithRecursion):
@@ -131,10 +147,10 @@ class Config(DictWithRecursion):
         del self["bridge.whitelist"]
         del self["bridge.admins"]
 
-        self["bridge.authless_relaybot_portals"] = self.get("bridge.authless_relaybot_portals",
-                                                            True)
-        self.comment("bridge.authless_relaybot_portals",
-                     "Whether or not to allow creating portals from Telegram.")
+        if "bridge.authless_relaybot_portals" not in self:
+            self["bridge.authless_relaybot_portals"] = True
+            self.comment("bridge.authless_relaybot_portals",
+                         "Whether or not to allow creating portals from Telegram.")
 
         self.comment("bridge.permissions", "\n".join((
             "",
@@ -156,13 +172,29 @@ class Config(DictWithRecursion):
                      "\nThe version of the config. The bridge will read this and automatically "
                      "update the config if\nthe schema has changed. For the latest version, "
                      "check the example config.")
+        return self["version"]
+
+    def update_1_2(self):
+        del self["bridge.link_in_reply"]
+        del self["bridge.native_replies"]
+        if "bridge.inline_images" not in self:
+            self["bridge.inline_images"] = False
+            self.comment("bridge.inline_images",
+                         "Use inline images instead of m.image to make rich captions possible.\n"
+                         "N.B. Inline images are not supported on all clients (e.g. Riot iOS).")
+            self.comment_newline("bridge.inline_images")
+        self["version"] = 2
+        return self["version"]
 
     def check_updates(self):
-        if self.get("version", 0) == 0:
-            self.update_0_1()
-        else:
-            return
-        self.save()
+        version = self.get("version", 0)
+        new_version = version
+        if version < 1:
+            new_version = self.update_0_1()
+        if version < 2:
+            new_version = self.update_1_2()
+        if new_version != version:
+            self.save()
 
     def _get_permissions(self, key):
         level = self["bridge.permissions"].get(key, "")
