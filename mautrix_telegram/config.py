@@ -198,6 +198,21 @@ class Config(DictWithRecursion):
             self.comment("bridge.inline_images",
                          "Use inline images instead of m.image to make rich captions possible.\n"
                          "N.B. Inline images are not supported on all clients (e.g. Riot iOS).")
+        if "appservice.public" not in self:
+            self["appservice.public.enabled"] = False
+            self["appservice.public.prefix"] = "/public"
+            self["appservice.public.external"] = "https://example.com/public"
+            self.comment("appservice.public",
+                         "Public part of web server for out-of-Matrix interaction with the "
+                         "bridge.\nUsed for things like login if the user wants to make sure the "
+                         "2FA password isn't stored in the HS database.")
+            self.comment("appservice.public.enabled",
+                         "Whether or not the public-facing endpoints should be enabled.")
+            self.comment("appservice.public.prefix",
+                         "The prefix to use in the public-facing endpoints.")
+            self.comment("appservice.public.external",
+                         "The base URL where the public-facing endpoints are available. The "
+                         "prefix is not added\nimplicitly.")
         if "homeserver.verify_ssl" not in self:
             self["homeserver.verify_ssl"] = True
         self["version"] = 2
