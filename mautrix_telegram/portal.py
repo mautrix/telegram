@@ -633,6 +633,7 @@ class Portal:
         else:
             self.log.debug("Unhandled Matrix event: %s", message)
             return
+        self.log.debug("Handled Matrix message: %s", response)
         self.is_duplicate(response, (event_id, space))
         self.db.add(DBMessage(
             tgid=response.id,

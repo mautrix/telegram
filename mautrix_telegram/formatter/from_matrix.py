@@ -143,7 +143,7 @@ class MatrixParser(HTMLParser):
         return indent
 
     def _newline(self, allow_multi=False):
-        if self._line_is_new or allow_multi:
+        if self._line_is_new and not allow_multi:
             return
         self.text += "\n"
         self._line_is_new = True
@@ -210,12 +210,12 @@ class MatrixParser(HTMLParser):
         except IndexError:
             pass
 
-        if tag in self.block_tags:
-            self._newline(allow_multi=tag == "br")
-
         entity = self._building_entities.pop(tag, None)
         if entity:
             self.entities.append(entity)
+
+        if tag in self.block_tags:
+            self._newline(allow_multi=tag == "br")
 
 
 command_regex = re.compile("(\s|^)!([A-Za-z0-9@]+)")
