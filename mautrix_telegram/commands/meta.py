@@ -73,6 +73,9 @@ def help(evt):
                               Only works for group chats; to delete a private chat portal, simply
                               leave the room.  
 **unbridge**                - Remove puppets from the current portal room and forget the portal.
+**bridge** [_id_]           - Bridge the current Matrix room to the Telegram chat with the given
+                              ID. The ID must be the prefixed version that you get with the `/id`
+                              command of the Telegram-side bot.
 **group-name** <_name_|`-`> - Change the username of a supergroup/channel. To disable, use a dash
                              (`-`) as the name.  
 **clean-rooms**             - Clean up unused portal/management rooms.
