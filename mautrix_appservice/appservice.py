@@ -28,9 +28,10 @@ from .state_store import StateStore
 
 class AppService:
     def __init__(self, server, domain, as_token, hs_token, bot_localpart, loop=None, log=None,
-                 query_user=None, query_alias=None):
+                 verify_ssl=True, query_user=None, query_alias=None):
         self.server = server
         self.domain = domain
+        self.verify_ssl = verify_ssl
         self.as_token = as_token
         self.hs_token = hs_token
         self.bot_mxid = f"@{bot_localpart}:{domain}"
@@ -80,7 +81,10 @@ class AppService:
 
     @contextmanager
     def run(self, host="127.0.0.1", port=8080):
-        self._http_session = aiohttp.ClientSession(loop=self.loop)
+        connector = None
+        if self.server.startswith("https://") and not self.verify_ssl:
+            connector = aiohttp.TCPConnector(verify_ssl=False)
+        self._http_session = aiohttp.ClientSession(loop=self.loop, connector=connector)
         self._intent = HTTPAPI(base_url=self.server, domain=self.domain, bot_mxid=self.bot_mxid,
                                token=self.as_token, log=self.log, state_store=self.state_store,
                                client_session=self._http_session).bot_intent()

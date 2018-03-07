@@ -2,6 +2,7 @@
 homeserver:
     address: https://matrix.org
     domain: matrix.org
+    verify_ssl: true
 
 # Application service host/registration related details
 # Changing these values requires regeneration of the registration.

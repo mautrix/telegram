@@ -85,7 +85,8 @@ loop = asyncio.get_event_loop()
 
 appserv = AppService(config["homeserver.address"], config["homeserver.domain"],
                      config["appservice.as_token"], config["appservice.hs_token"],
-                     config["appservice.bot_username"], log="mau.as", loop=loop)
+                     config["appservice.bot_username"], log="mau.as", loop=loop,
+                     verify_ssl=config["homeserver.verify_ssl"])
 
 context = Context(appserv, db_session, config, loop, None, None, telethon_session_container)
 

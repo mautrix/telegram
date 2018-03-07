@@ -183,6 +183,8 @@ class Config(DictWithRecursion):
                          "Use inline images instead of m.image to make rich captions possible.\n"
                          "N.B. Inline images are not supported on all clients (e.g. Riot iOS).")
             self.comment_newline("bridge.inline_images")
+        if "homeserver.verify_ssl" not in self:
+            self["homeserver.verify_ssl"] = True
         self["version"] = 2
         return self["version"]
 
