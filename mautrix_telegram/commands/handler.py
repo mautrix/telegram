@@ -81,12 +81,13 @@ class CommandHandler:
     async def handle(self, room, sender, command, args, is_management, is_portal):
         evt = CommandEvent(self, room, sender, command, args,
                            is_management, is_portal)
+        orig_command = command
         command = command.lower()
         try:
             command = command_handlers[command]
         except KeyError:
             if sender.command_status and "next" in sender.command_status:
-                args.insert(0, command)
+                args.insert(0, orig_command)
                 evt.command = ""
                 command = sender.command_status["next"]
             else:

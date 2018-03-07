@@ -843,7 +843,6 @@ class Portal:
             text, html, relates_to = await formatter.telegram_to_matrix(evt, source,
                                                                         self.main_intent)
             await intent.set_typing(self.mxid, is_typing=False)
-            print(self.main_intent.client.get_download_url(file.mxc))
             inline_img = f"<img src='{file.mxc}' alt='Inline Telegram photo'/><br/>\n"
             html = inline_img + (html or escape(text))
             text = f"Inline image: {text}"

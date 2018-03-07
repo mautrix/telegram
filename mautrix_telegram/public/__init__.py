@@ -46,7 +46,9 @@ class PublicBridgeWebsite:
         user = (User.get_by_mxid(request.rel_url.query["mxid"], create=False)
                 if "mxid" in request.rel_url.query else None)
         if not user:
-            return self.render_login(mxid=request.rel_url.query["mxid"], state="request")
+            return self.render_login(
+                mxid=request.rel_url.query["mxid"] if "mxid" in request.rel_url.query else None,
+                state="request")
         elif not user.whitelisted:
             return self.render_login(mxid=user.mxid, error="You are not whitelisted.", status=403)
         await user.ensure_started()
@@ -153,7 +155,8 @@ class PublicBridgeWebsite:
         if "phone" in data:
             return await self.post_login_phone(user, data["phone"])
         elif "code" in data:
-            resp = await self.post_login_code(user, data["code"], password_in_data="password" in data)
+            resp = await self.post_login_code(user, data["code"],
+                                              password_in_data="password" in data)
             if resp or "password" not in data:
                 return resp
         elif "password" not in data:

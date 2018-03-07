@@ -52,6 +52,50 @@ def register(evt):
 
 
 @command_handler(needs_auth=False, management_only=True)
+async def register(evt):
+    if evt.sender.logged_in:
+        return await evt.reply("You are already logged in.")
+    elif len(evt.args) < 1:
+        return await evt.reply("**Usage:** `$cmdprefix+sp register <phone> <full name>`")
+
+    phone_number = evt.args[0]
+    full_name = evt.args[1:].split(" ", 1)
+    if len(full_name) == 1:
+        full_name.append("")
+    await request_code(evt, phone_number, {
+        "next": enter_code_register,
+        "action": "Register",
+        "full_name": full_name,
+    })
+
+
+async def enter_code_register(evt):
+    if len(evt.args) == 0:
+        return await evt.reply("**Usage:** `$cmdprefix+sp <code>`")
+    try:
+        await evt.sender.ensure_started(even_if_no_session=True)
+        first_name, last_name = evt.sender.command_status["full_name"]
+        user = await evt.sender.client.sign_up(evt.args[0], first_name, last_name)
+        asyncio.ensure_future(evt.sender.post_login(user), loop=evt.loop)
+        evt.sender.command_status = None
+        return await evt.reply(f"Successfully registered to Telegram.")
+    except PhoneNumberOccupiedError:
+        return await evt.reply("That phone number has already been registered. "
+                               "You can log in with `$cmdprefix+sp login`.")
+    except FirstNameInvalidError:
+        return await evt.reply("Invalid name. Please set a Matrix displayname before registering.")
+    except PhoneCodeExpiredError:
+        return await evt.reply(
+            "Phone code expired. Try again with `$cmdprefix+sp register <phone>`.")
+    except PhoneCodeInvalidError:
+        return await evt.reply("Invalid phone code.")
+    except Exception:
+        evt.log.exception("Error sending phone code")
+        return await evt.reply("Unhandled exception while sending code. "
+                               "Check console for more details.")
+
+
+@command_handler(needs_auth=False, management_only=True)
 async def login(evt):
     if evt.sender.logged_in:
         return await evt.reply("You are already logged in.")
@@ -80,22 +124,12 @@ async def login(evt):
     return await evt.reply("This bridge instance has been configured to not allow logging in.")
 
 
-@command_handler(needs_auth=False)
-async def enter_phone(evt):
-    if len(evt.args) == 0:
-        return await evt.reply("**Usage:** `$cmdprefix+sp enter-phone <phone>`")
-    elif not evt.config.get("bridge.allow_matrix_login", True):
-        return await evt.reply("This bridge instance does not allow in-Matrix login. "
-                               "Please use `$cmdprefix+sp login` to get login instructions")
-
-    phone_number = evt.args[0]
+async def request_code(evt, phone_number, next_status):
+    ok = False
     try:
         await evt.sender.ensure_started(even_if_no_session=True)
         await evt.sender.client.sign_in(phone_number)
-        evt.sender.command_status = {
-            "next": enter_code,
-            "action": "Login",
-        }
+        ok = True
         return await evt.reply(f"Login code sent to {phone_number}. Please send the code here.")
     except PhoneNumberAppSignupForbiddenError:
         return await evt.reply(
@@ -109,17 +143,31 @@ async def enter_phone(evt):
             "Your phone number has been temporarily blocked for flooding. "
             f"Please wait for {format_duration(e.seconds)} before trying again.")
     except PhoneNumberBannedError:
-        return await evt.reply("Your phone number has been banned from Telegram.")
+        return await  evt.reply("Your phone number has been banned from Telegram.")
     except PhoneNumberUnoccupiedError:
-        return await evt.reply("That phone number has not been registered. "
-                               "Please register with `$cmdprefix+sp register <phone>`.")
+        return await  evt.reply("That phone number has not been registered. "
+                                "Please register with `$cmdprefix+sp register <phone>`.")
     except Exception:
         evt.log.exception("Error requesting phone code")
         return await evt.reply("Unhandled exception while requesting code. "
                                "Check console for more details.")
     finally:
-        if evt.sender.command_status["next"] == enter_phone:
-            evt.sender.command_status = None
+        evt.sender.command_status = next_status if ok else None
+
+
+@command_handler(needs_auth=False)
+async def enter_phone(evt):
+    if len(evt.args) == 0:
+        return await evt.reply("**Usage:** `$cmdprefix+sp enter-phone <phone>`")
+    elif not evt.config.get("bridge.allow_matrix_login", True):
+        return await evt.reply("This bridge instance does not allow in-Matrix login. "
+                               "Please use `$cmdprefix+sp login` to get login instructions")
+
+    phone_number = evt.args[0]
+    await request_code(evt, phone_number, {
+        "next": enter_code,
+        "action": "Login",
+    })
 
 
 @command_handler(needs_auth=False)
@@ -136,8 +184,7 @@ async def enter_code(evt):
         evt.sender.command_status = None
         return await evt.reply(f"Successfully logged in as @{user.username}")
     except PhoneCodeExpiredError:
-        return await evt.reply(
-            "Phone code expired. Try again with `$cmdprefix+sp login <phone>`.")
+        return await evt.reply("Phone code expired. Try again with `$cmdprefix+sp login`.")
     except PhoneCodeInvalidError:
         return await evt.reply("Invalid phone code.")
     except SessionPasswordNeededError:
@@ -160,7 +207,6 @@ async def enter_password(evt):
     elif not evt.config.get("bridge.allow_matrix_login", True):
         return await evt.reply("This bridge instance does not allow in-Matrix login. "
                                "Please use `$cmdprefix+sp login` to get login instructions")
-
     try:
         await evt.sender.ensure_started(even_if_no_session=True)
         user = await evt.sender.client.sign_in(password=evt.args[0])
