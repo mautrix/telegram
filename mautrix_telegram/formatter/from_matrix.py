@@ -161,11 +161,12 @@ class MatrixParser(HTMLParser):
         elif previous_tag == "command":
             text = f"/{text}"
 
-        # Strikethrough
-        if "del" in self._open_tags:
+        strikethrough, underline = "del" in self._open_tags, "u" in self._open_tags
+        if strikethrough and underline:
+            text = html_to_unicode(text, "\u0336\u0332")
+        elif strikethrough:
             text = html_to_unicode(text, "\u0336")
-        # Underline
-        if "u" in self._open_tags:
+        elif underline:
             text = html_to_unicode(text, "\u0332")
 
         list_entry_handled_once = False
