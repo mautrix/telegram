@@ -151,6 +151,12 @@ class Config(DictWithRecursion):
             self["bridge.authless_relaybot_portals"] = True
             self.comment("bridge.authless_relaybot_portals",
                          "Whether or not to allow creating portals from Telegram.")
+        if "bridge.max_telegram_delete" not in self:
+            self["bridge.max_telegram_delete"] = 10
+            self.comment("bridge.max_telegram_delete",
+                         "The maximum number of simultaneous Telegram deletions to handle.\n"
+                         "A large number of simultaneous redactions could put strain on your "
+                         "homeserver.")
 
         self.comment("bridge.permissions", "\n".join((
             "",
@@ -177,12 +183,21 @@ class Config(DictWithRecursion):
     def update_1_2(self):
         del self["bridge.link_in_reply"]
         del self["bridge.native_replies"]
+        if "bridge.bridge_notices" not in self:
+            self["bridge.bridge_notices"] = False
+            self.comment("bridge.bridge_notices",
+                         "Whether or not Matrix bot messages (type m.notice) should be bridged.")
+        if "bridge.allow_matrix_login" not in self:
+            self["bridge.allow_matrix_login"] = True
+            self.comment("bridge.allow_matrix_login",
+                         "Allow logging in within Matrix. If false, the only way to log in is "
+                         "using the out-of-Matrix login website (see appservice.public config "
+                         "section)")
         if "bridge.inline_images" not in self:
             self["bridge.inline_images"] = False
             self.comment("bridge.inline_images",
                          "Use inline images instead of m.image to make rich captions possible.\n"
                          "N.B. Inline images are not supported on all clients (e.g. Riot iOS).")
-            self.comment_newline("bridge.inline_images")
         if "homeserver.verify_ssl" not in self:
             self["homeserver.verify_ssl"] = True
         self["version"] = 2
