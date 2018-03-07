@@ -20,7 +20,7 @@ import logging
 
 import magic
 from PIL import Image
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, InvalidRequestError
 
 from telethon_aio.tl.types import (Document, FileLocation, InputFileLocation,
                                    InputDocumentFileLocation, PhotoCachedSize)
@@ -73,9 +73,9 @@ async def transfer_file_to_matrix(db, client, intent, location):
     try:
         db.add(db_file)
         db.commit()
-    except IntegrityError:
+    except (IntegrityError, InvalidRequestError) as e:
         db.rollback()
-        log.exception("Integrity error while saving transferred file data. "
+        log.exception(f"{e.__class__.__name__} while saving transferred file data. "
                       "This was probably caused by two simultaneous transfers of the same file, "
                       "and should not cause any problems.")
 
