@@ -35,7 +35,7 @@ def trim_reply_fallback_html(html):
 
 
 def unicode_to_html(text, html, ctrl, tag):
-    if "\u0336" not in text and "\u0332" not in text:
+    if ctrl not in text:
         return html
     if not html:
         html = escape(text)
@@ -43,20 +43,22 @@ def unicode_to_html(text, html, ctrl, tag):
     tag_end = f"</{tag}>"
     characters = html.split(ctrl)
     html = ""
-    in_del = False
+    in_tag = False
     for char in characters:
-        if not in_del:
+        if not in_tag:
             if len(char) > 1:
                 html += char[0:-1]
                 char = char[-1]
             html += tag_start
-            in_del = True
+            in_tag = True
             html += char
         else:
             if len(char) > 1:
                 html += tag_end
-                in_del = False
+                in_tag = False
             html += char
+    if in_tag:
+        html += tag_end
     return html
 
 
