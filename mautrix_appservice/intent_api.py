@@ -277,11 +277,16 @@ class IntentAPI:
             content["info"] = info
         return self.send_state_event(room_id, "m.room.avatar", content)
 
-    async def add_room_alias(self, room_id, localpart):
+    async def add_room_alias(self, room_id, localpart, override=True):
         await self.ensure_registered()
         content = {"room_id": room_id}
         alias = f"#{localpart}:{self.client.domain}"
-        return await self.client.request("PUT", f"/directory/room/{quote(alias)}", content)
+        try:
+            return await self.client.request("PUT", f"/directory/room/{quote(alias)}", content)
+        except MatrixRequestError as e:
+            if override and e.code == 409:
+                await self.remove_room_alias(localpart)
+                return await self.client.request("PUT", f"/directory/room/{quote(alias)}", content)
 
     async def remove_room_alias(self, localpart):
         await self.ensure_registered()
