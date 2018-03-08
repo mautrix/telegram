@@ -244,7 +244,7 @@ def matrix_reply_to_telegram(content, tg_space, room_id=None):
         event_id = reply["event_id"]
 
         try:
-            if content["format"] == "org.custom.matrix.html":
+            if content["format"] == "org.matrix.custom.html":
                 content["formatted_body"] = trim_reply_fallback_html(content["formatted_body"])
         except KeyError:
             pass
