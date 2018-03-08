@@ -31,6 +31,9 @@ setuptools.setup(
     dependency_links=[
         "https://github.com/tulir/telethon-asyncio/tarball/9b389cfb4b6d3876e9661c23507f17e96897e4b0#egg=telethon-aio-git-0.18.0+1"
     ],
+    extras_require={
+        "highlight_edits": ["lxml>=4.1.1,<5"],
+    },
 
     classifiers=[
         "Development Status :: 4 Beta",

@@ -15,7 +15,12 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from html import escape
+try:
+    from lxml.html.diff import htmldiff
+except ImportError:
+    htmldiff = None
 import logging
+import re
 
 from telethon_aio.tl.types import *
 from mautrix_appservice import MatrixRequestError
@@ -26,6 +31,7 @@ from .util import (add_surrogates, remove_surrogates, trim_reply_fallback_html,
                    trim_reply_fallback_text, unicode_to_html)
 
 log = logging.getLogger("mau.fmt.tg")
+should_highlight_edits = False
 
 
 def telegram_reply_to_matrix(evt, source):
@@ -68,6 +74,21 @@ async def _add_forward_header(source, text, html, fwd_from_id):
     return text, html
 
 
+def highlight_edits(new_html, old_html):
+    # Don't include `Edit:` text in diff.
+    if old_html.startswith("<u>Edit:</u> "):
+        old_html = old_html[len("<u>Edit:</u> "):]
+
+    # Generate diff with lxml
+    new_html = htmldiff(old_html, new_html)
+
+    # Replace <ins> with <u> since Riot doesn't allow <ins>
+    new_html = new_html.replace("<ins>", "<u>").replace("</ins>", "</u>")
+    # Remove <del>s since we just want to hide deletions.
+    new_html = re.sub("<del>.+?</del>", "", new_html)
+    return new_html
+
+
 async def _add_reply_header(source, text, html, evt, relates_to, main_intent, is_edit):
     space = (evt.to_id.channel_id
              if isinstance(evt, Message) and isinstance(evt.to_id, PeerChannel)
@@ -81,9 +102,6 @@ async def _add_reply_header(source, text, html, evt, relates_to, main_intent, is
         "event_id": msg.mxid,
         "room_id": msg.mx_room,
     }
-    if is_edit:
-        html = f"<u>Edit:</u> {html or escape(text)}"
-        text = f"Edit: {text}"
 
     try:
         event = await main_intent.get_event(msg.mx_room, msg.mxid)
@@ -99,11 +117,18 @@ async def _add_reply_header(source, text, html, evt, relates_to, main_intent, is
         puppet = pu.Puppet.get_by_mxid(r_sender, create=False)
         r_displayname = puppet.displayname if puppet else r_sender
         r_sender_link = f"<a href='https://matrix.to/#/{r_sender}'>{r_displayname}</a>"
+
+        if is_edit and should_highlight_edits:
+            html = highlight_edits(html or escape(text), r_html_body)
     except (ValueError, KeyError, MatrixRequestError):
         r_sender_link = "unknown user"
         # r_sender = "unknown user"
         r_text_body = "Failed to fetch message"
         r_html_body = "<em>Failed to fetch message</em>"
+
+    if is_edit:
+        html = f"<u>Edit:</u> {html or escape(text)}"
+        text = f"Edit: {text}"
 
     r_keyword = "In reply to" if not is_edit else "Edit to"
     r_msg_link = f"<a href='https://matrix.to/#/{msg.mx_room}/{msg.mxid}'>{r_keyword}</a>"
@@ -257,4 +282,5 @@ def _parse_url(html, entity_text, url):
 
 
 def init_tg(context):
-    pass
+    global should_highlight_edits
+    should_highlight_edits = htmldiff and context.config["bridge.highlight_edits"]
