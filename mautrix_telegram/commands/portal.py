@@ -28,11 +28,12 @@ async def set_power_level(evt: CommandEvent):
     try:
         level = int(evt.args[0])
     except KeyError:
-        return await evt.reply("**Usage:** `$cmdprefix+sp set-power <level>`")
+        return await evt.reply("**Usage:** `$cmdprefix+sp set-power <level> [mxid]`")
     except ValueError:
         return await evt.reply("The level must be an integer.")
     levels = await evt.az.intent.get_power_levels(evt.room_id)
-    levels["users"][evt.sender.mxid] = level
+    mxid = evt.args[1] if len(evt.args) > 1 else evt.sender.mxid
+    levels["users"][mxid] = level
     try:
         await evt.az.intent.set_power_levels(evt.room_id, levels)
     except MatrixRequestError:

@@ -58,7 +58,7 @@ def help(evt):
 **search** [_-r|--remote_] <_query_> - Search your contacts or the Telegram servers for users.  
 **sync** [`chats`|`contacts`|`me`]   - Synchronize your chat portals, contacts and/or own info.  
 **ping-bot**                         - Get info of the message relay Telegram bot.  
-**set-pl** <_level_>                 - Set a temporary power level without affecting Telegram.
+**set-pl** <_level_> [_mxid_]        - Set a temporary power level without affecting Telegram.
 
 #### Initiating chats
 **pm** <_identifier_> - Open a private chat with the given Telegram user. The identifier is either
