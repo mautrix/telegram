@@ -23,6 +23,23 @@ from .. import portal as po
 from . import command_handler, CommandEvent
 
 
+@command_handler(needs_admin=True, needs_auth=False, name="set-pl")
+async def set_power_level(evt: CommandEvent):
+    try:
+        level = int(evt.args[0])
+    except KeyError:
+        return await evt.reply("**Usage:** `$cmdprefix+sp set-power <level>`")
+    except ValueError:
+        return await evt.reply("The level must be an integer.")
+    levels = await evt.az.intent.get_power_levels(evt.room_id)
+    levels["users"][evt.sender.mxid] = level
+    try:
+        await evt.az.intent.set_power_levels(evt.room_id, levels)
+    except MatrixRequestError:
+        evt.log.exception("Failed to set power level.")
+        return await evt.reply("Failed to set power level.")
+
+
 @command_handler()
 async def invite_link(evt: CommandEvent):
     portal = po.Portal.get_by_mxid(evt.room_id)
