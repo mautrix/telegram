@@ -254,3 +254,7 @@ def _parse_url(html, entity_text, url):
         url = "http://" + url
     html.append(f"<a href='{url}'>{entity_text}</a>")
     return False
+
+
+def init_tg(context):
+    pass

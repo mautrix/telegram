@@ -191,6 +191,21 @@ class Puppet:
 
         return None
 
+    @classmethod
+    def find_by_displayname(cls, displayname):
+        if not displayname:
+            return None
+
+        for _, puppet in cls.cache.items():
+            if puppet.displayname and puppet.displayname == displayname:
+                return puppet
+
+        puppet = DBPuppet.query.filter(DBPuppet.displayname == displayname).one_or_none()
+        if puppet:
+            return cls.from_db(puppet)
+
+        return None
+
 
 def init(context):
     global config

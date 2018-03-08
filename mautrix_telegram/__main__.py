@@ -35,6 +35,7 @@ from .user import init as init_user, User
 from .bot import init as init_bot
 from .portal import init as init_portal
 from .puppet import init as init_puppet
+from .formatter import init as init_formatter
 from .public import PublicBridgeWebsite
 from .context import Context
 
@@ -99,6 +100,7 @@ with appserv.run(config["appservice.hostname"], config["appservice.port"]) as st
     init_abstract_user(context)
     context.bot = init_bot(context)
     context.mx = MatrixHandler(context)
+    init_formatter(context)
     init_portal(context)
     init_puppet(context)
     startup_actions = init_user(context) + [start, context.mx.init_as_bot()]

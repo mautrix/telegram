@@ -219,11 +219,46 @@ class MatrixParser(HTMLParser):
 
 
 command_regex = re.compile("(\s|^)!([A-Za-z0-9@]+)")
+plain_mention_regex = None
 
 
 def matrix_text_to_telegram(text):
     text = command_regex.sub(r"\1/\2", text)
-    return text
+    entities, pmr_replacer = plain_mention_to_text()
+    text = plain_mention_regex.sub(pmr_replacer, text)
+    return text, entities
+
+
+def plain_mention_to_text():
+    entities = []
+
+    def replacer(match):
+        puppet = pu.Puppet.find_by_displayname(match.group(2))
+        if puppet:
+            offset = match.start()
+            length = match.end() - offset
+            if puppet.username:
+                entity = MessageEntityMention(offset, length)
+                text = f"@{puppet.username}"
+            else:
+                entity = InputMessageEntityMentionName(offset, length,
+                                                       user_id=InputUser(puppet.tgid, 0))
+                text = puppet.displayname
+            entities.append(entity)
+            return text
+        return "".join(match.groups())
+
+    return entities, replacer
+
+
+def plain_mention_to_html(match):
+    puppet = pu.Puppet.find_by_displayname(match.group(2))
+    if puppet:
+        return (f"{match.group(1)}"
+                f"<a href='https://matrix.to/#/{puppet.mxid}'>"
+                f"{puppet.displayname}"
+                "</a>")
+    return "".join(match.groups())
 
 
 def matrix_to_telegram(html):
@@ -231,6 +266,7 @@ def matrix_to_telegram(html):
         parser = MatrixParser()
         html = html.replace("\n", "")
         html = command_regex.sub(r"\1<command>\2</command>", html)
+        html = plain_mention_regex.sub(plain_mention_to_html, html)
         parser.feed(add_surrogates(html))
         return remove_surrogates(parser.text.strip()), parser.entities
     except Exception:
@@ -258,3 +294,11 @@ def matrix_reply_to_telegram(content, tg_space, room_id=None):
     except KeyError:
         pass
     return None
+
+
+def init_mx(context):
+    global plain_mention_regex
+    config = context.config
+    dn_template = config.get("bridge.displayname_template", "{displayname} (Telegram)")
+    dn_template = re.escape(dn_template).replace(re.escape("{displayname}"), "[^>]+")
+    plain_mention_regex = re.compile(f"(\s|^)({dn_template})")

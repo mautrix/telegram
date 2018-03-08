@@ -594,12 +594,9 @@ class Portal:
             for entity in entities:
                 if isinstance(entity, InputMessageEntityMentionName):
                     entity.user_id = await client.get_input_entity(entity.user_id.user_id)
-
-            return await client.send_message(self.peer, message, entities=entities,
-                                             reply_to=reply_to)
         else:
-            message = formatter.matrix_text_to_telegram(message["body"])
-            return await client.send_message(self.peer, message, reply_to=reply_to)
+            message, entities = formatter.matrix_text_to_telegram(message["body"])
+        return await client.send_message(self.peer, message, reply_to=reply_to)
 
     async def _handle_matrix_file(self, client, message, reply_to):
         file = await self.main_intent.download_file(message["url"])
