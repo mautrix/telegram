@@ -18,6 +18,7 @@ setuptools.setup(
 
     install_requires=[
         "aiohttp>=3.0.1,<4",
+        "mautrix-telegram>=0.1,<0.2",
         "SQLAlchemy>=1.2.3,<2",
         "alembic>=0.9.8,<0.10",
         "Markdown>=2.6.11,<3",
@@ -25,7 +26,6 @@ setuptools.setup(
         "Pillow>=5.0.0,<6",
         "future-fstrings>=0.4.2",
         "python-magic>=0.4.15,<0.5",
-        "cryptg>=0.1,<0.2",
         "telethon-aio>=0.18,<0.19" if sys.version_info >= (3, 6) else "telethon-aio-git",
     ],
     dependency_links=[
@@ -33,10 +33,11 @@ setuptools.setup(
     ],
     extras_require={
         "highlight_edits": ["lxml>=4.1.1,<5"],
+        "fast_crypto": ["cryptg>=0.1,<0.2"],
     },
 
     classifiers=[
-        "Development Status :: 4 Beta",
+        "Development Status :: 4 - Beta",
         "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
         "Topic :: Communications :: Chat",
         "Programming Language :: Python",
