@@ -29,6 +29,7 @@ from .util import (add_surrogates, remove_surrogates, trim_reply_fallback_html,
                    trim_reply_fallback_text, html_to_unicode)
 
 log = logging.getLogger("mau.fmt.mx")
+should_bridge_plaintext_highlights = False
 
 
 class MatrixParser(HTMLParser):
@@ -224,8 +225,11 @@ plain_mention_regex = None
 
 def matrix_text_to_telegram(text):
     text = command_regex.sub(r"\1/\2", text)
-    entities, pmr_replacer = plain_mention_to_text()
-    text = plain_mention_regex.sub(pmr_replacer, text)
+    if should_bridge_plaintext_highlights:
+        entities, pmr_replacer = plain_mention_to_text()
+        text = plain_mention_regex.sub(pmr_replacer, text)
+    else:
+        entities = []
     return text, entities
 
 
@@ -266,7 +270,8 @@ def matrix_to_telegram(html):
         parser = MatrixParser()
         html = html.replace("\n", "")
         html = command_regex.sub(r"\1<command>\2</command>", html)
-        html = plain_mention_regex.sub(plain_mention_to_html, html)
+        if should_bridge_plaintext_highlights:
+            html = plain_mention_regex.sub(plain_mention_to_html, html)
         parser.feed(add_surrogates(html))
         return remove_surrogates(parser.text.strip()), parser.entities
     except Exception:
@@ -297,8 +302,9 @@ def matrix_reply_to_telegram(content, tg_space, room_id=None):
 
 
 def init_mx(context):
-    global plain_mention_regex
+    global plain_mention_regex, should_bridge_plaintext_highlights
     config = context.config
     dn_template = config.get("bridge.displayname_template", "{displayname} (Telegram)")
     dn_template = re.escape(dn_template).replace(re.escape("{displayname}"), "[^>]+")
     plain_mention_regex = re.compile(f"(\s|^)({dn_template})")
+    should_bridge_plaintext_highlights = config["bridge.plaintext_highlights"] or False
