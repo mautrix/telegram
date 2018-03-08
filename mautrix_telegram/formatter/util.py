@@ -1,9 +1,26 @@
+# -*- coding: future_fstrings -*-
+# mautrix-telegram - A Matrix-Telegram puppeting bridge
+# Copyright (C) 2018 Tulir Asokan
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from html import escape
 import struct
 import re
 
 
-# Unicode surrogate handling from
+# add_surrogates and remove_surrogates are unicode surrogate utility functions from Telethon.
+# Licensed under the MIT license.
 # https://github.com/LonamiWebs/Telethon/blob/master/telethon/extensions/markdown.py
 def add_surrogates(text):
     if text is None:
