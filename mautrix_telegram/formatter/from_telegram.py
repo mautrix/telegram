@@ -120,10 +120,16 @@ async def _add_reply_header(source, text, html, evt, relates_to, main_intent, is
     return text_with_quote, html
 
 
-async def telegram_to_matrix(evt, source, main_intent=None, is_edit=False):
+async def telegram_to_matrix(evt, source, main_intent=None, is_edit=False, prefix_text=None,
+                             prefix_html=None):
     text = add_surrogates(evt.message)
     html = _telegram_entities_to_matrix_catch(text, evt.entities) if evt.entities else None
     relates_to = {}
+
+    if prefix_html:
+        html = prefix_html + (html or escape(text))
+    if prefix_text:
+        text = prefix_text + text
 
     if evt.fwd_from:
         text, html = await _add_forward_header(source, text, html, evt.fwd_from.from_id)

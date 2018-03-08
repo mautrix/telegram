@@ -834,19 +834,18 @@ class Portal:
         if self.mxid:
             await user.intent.set_typing(self.mxid, is_typing=True)
 
-    async def handle_telegram_photo(self, source, intent, evt, relates_to=None):
+    async def handle_telegram_photo(self, source: u.User, intent, evt: Message, relates_to=None):
         largest_size = self._get_largest_photo_size(evt.media.photo)
         file = await util.transfer_file_to_matrix(self.db, source.client, intent,
                                                   largest_size.location)
         if not file:
             return None
-        if config["bridge.inline_images"] and evt.message:
-            text, html, relates_to = await formatter.telegram_to_matrix(evt, source,
-                                                                        self.main_intent)
+        if config["bridge.inline_images"] and (evt.message or evt.fwd_from or evt.reply_to_msg_id):
+            text, html, relates_to = await formatter.telegram_to_matrix(
+                evt, source, self.main_intent,
+                prefix_html=f"<img src='{file.mxc}' alt='Inline Telegram photo'/><br/>\n",
+                prefix_text="Inline image: ")
             await intent.set_typing(self.mxid, is_typing=False)
-            inline_img = f"<img src='{file.mxc}' alt='Inline Telegram photo'/><br/>\n"
-            html = inline_img + (html or escape(text))
-            text = f"Inline image: {text}"
             return await intent.send_text(self.mxid, text, html=html, relates_to=relates_to)
         info = {
             "h": largest_size.h,
