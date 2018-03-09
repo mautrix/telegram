@@ -104,7 +104,10 @@ async def transfer_thumbnail_to_matrix(client, intent, thumbnail_loc, video, mim
 
     video_ext = mimetypes.guess_extension(mime)
     if VideoFileClip and video_ext:
-        file, width, height = _read_video_thumbnail(video, video_ext, frame_ext="png")
+        try:
+            file, width, height = _read_video_thumbnail(video, video_ext, frame_ext="png")
+        except OSError:
+            return None
         mime_type = "image/png"
     else:
         file = await client.download_file_bytes(thumbnail_loc)
@@ -137,6 +140,7 @@ async def transfer_file_to_matrix(db, client, intent, location, thumbnail=None):
     image_converted = False
     if mime_type == "image/webp":
         mime_type, file, width, height = _convert_webp(file, to="png")
+        thumbnail = None
         image_converted = True
 
     uploaded = await intent.upload_file(file, mime_type)
@@ -145,7 +149,7 @@ async def transfer_file_to_matrix(db, client, intent, location, thumbnail=None):
                              mime_type=mime_type, was_converted=image_converted,
                              timestamp=int(time.time()), size=len(file),
                              width=width, height=height)
-    if thumbnail:
+    if thumbnail and (mime_type.startswith("video/") or mime_type == "image/gif"):
         if isinstance(thumbnail, (PhotoSize, PhotoCachedSize)):
             thumbnail = thumbnail.location
         db_file.thumbnail = await transfer_thumbnail_to_matrix(client, intent, thumbnail, file,
