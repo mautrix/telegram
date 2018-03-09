@@ -45,7 +45,7 @@
     * [x] Video messages
     * [x] Documents
   * [x] Message deletions
-  * [ ] Message edits (not yet supported in Matrix)
+  * [x] Message edits
   * [x] Avatars
   * [x] Presence
   * [x] Typing notifications
@@ -74,23 +74,6 @@
   * [x] Private chat creation by inviting Matrix puppet of Telegram user to new room
   * [x] Option to use bot to relay messages for unauthenticated Matrix users
   * [ ] Option to use own Matrix account for messages sent from other Telegram clients
-* [Commands](https://github.com/tulir/mautrix-telegram/wiki/Management-commands)
-  * [x] Logging in and out (`login` + code entering)
-  * [x] Logging out
-  * [ ] Registering (`register`)
-  * [x] Searching for users (`search`)
-  * [x] Starting private chats (`pm`)
-  * [x] Joining chats with invite links (`join`)
-  * [x] Creating a Telegram chat for an existing Matrix room (`create`)
-  * [x] Upgrading the chat of a portal room into a supergroup (`upgrade`)
-  * [x] Change username of supergroup/channel (`group-name`)
-  * [x] Getting the Telegram invite link to a Matrix room (`invite-link`)
-  * [ ] Bridging existing Matrix rooms to existing Telegram chats (`bridge`)
-  * [ ] Unbridging Matrix rooms from Telegram chats (`unbridge`)
-  * Bridge administration
-    * [x] Clean up and forget a portal room (`delete-portal`)
-    * [x] Find and clean up old portal rooms (`clean-rooms`)
-    * [ ] Setting Matrix-only power levels (`powerlevel`)
 
 † Information not automatically sent from source, i.e. implementation may not be possible  
 ‡ Maybe, i.e. this feature may or may not be implemented at some point

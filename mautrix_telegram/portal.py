@@ -838,7 +838,7 @@ class Portal:
         if config["bridge.inline_images"] and (evt.message or evt.fwd_from or evt.reply_to_msg_id):
             text, html, relates_to = await formatter.telegram_to_matrix(
                 evt, source, self.main_intent,
-                prefix_html=f"<img src='{file.mxc}' alt='Inline Telegram photo'/><br/>\n",
+                prefix_html=f"<img src='{file.mxc}' alt='Inline Telegram photo'/><br/>",
                 prefix_text="Inline image: ")
             await intent.set_typing(self.mxid, is_typing=False)
             return await intent.send_text(self.mxid, text, html=html, relates_to=relates_to)
