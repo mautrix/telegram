@@ -3,6 +3,14 @@ import sys
 import glob
 import mautrix_telegram
 
+extras = {
+    "highlight_edits": ["lxml>=4.1.1,<5"],
+    "fast_crypto": ["cryptg>=0.1,<0.2"],
+    "webp_convert": ["Pillow>=5.0.0,<6"],
+    "hq_thumbnails": ["moviepy>=0.2,<0.3"],
+}
+extras["all"] = [deps[0] for deps in extras.values()]
+
 setuptools.setup(
     name="mautrix-telegram",
     version=mautrix_telegram.__version__,
@@ -23,7 +31,6 @@ setuptools.setup(
         "alembic>=0.9.8,<0.10",
         "Markdown>=2.6.11,<3",
         "ruamel.yaml>=0.15.35,<0.16",
-        "Pillow>=5.0.0,<6",
         "future-fstrings>=0.4.2",
         "python-magic>=0.4.15,<0.5",
         "telethon-aio>=0.18,<0.19" if sys.version_info >= (3, 6) else "telethon-aio-git",
@@ -31,10 +38,7 @@ setuptools.setup(
     dependency_links=[
         "https://github.com/tulir/telethon-asyncio/tarball/9b389cfb4b6d3876e9661c23507f17e96897e4b0#egg=telethon-aio-git-0.18.0+1"
     ],
-    extras_require={
-        "highlight_edits": ["lxml>=4.1.1,<5"],
-        "fast_crypto": ["cryptg>=0.1,<0.2"],
-    },
+    extras_require=extras,
 
     classifiers=[
         "Development Status :: 4 - Beta",

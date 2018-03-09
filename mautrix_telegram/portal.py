@@ -33,7 +33,6 @@ from mautrix_appservice import MatrixRequestError, IntentError
 
 from .db import Portal as DBPortal, Message as DBMessage
 from . import puppet as p, user as u, formatter, util
-from .formatter.util import trim_reply_fallback_html, trim_reply_fallback_text
 
 mimetypes.init()
 
@@ -858,11 +857,12 @@ class Portal:
 
     async def handle_telegram_document(self, source, intent, evt: Message, relates_to=None):
         document = evt.media.document
-        file = await util.transfer_file_to_matrix(self.db, source.client, intent, document)
+        file = await util.transfer_file_to_matrix(self.db, source.client, intent, document,
+                                                  document.thumb)
         if not file:
             return None
         name = evt.message
-        width, height = 0, 0
+        width, height = file.width, file.height
         for attr in document.attributes:
             if isinstance(attr, DocumentAttributeFilename):
                 name = name or attr.file_name
@@ -871,25 +871,21 @@ class Portal:
                     file.mime_type = mime_from_name or file.mime_type
             elif isinstance(attr, DocumentAttributeSticker):
                 name = f"Sticker for {attr.alt}"
-            elif isinstance(attr, DocumentAttributeVideo):
+            elif isinstance(attr, DocumentAttributeVideo) and (not width or not height):
                 width, height = attr.w, attr.h
         mime_type = document.mime_type or file.mime_type
         info = {
-            "size": document.size,
+            "size": file.size,
             "mimetype": mime_type,
         }
-        if document.thumb and not isinstance(document.thumb, PhotoSizeEmpty):
-            thumbnail = await util.transfer_file_to_matrix(self.db, source.client, intent,
-                                                           document.thumb.location)
+        if file.thumbnail:
+            info["thumbnail_url"] = file.thumbnail.mxc
             info["thumbnail_info"] = {
-                "mimetype": thumbnail.mime_type,
-                "h": document.thumb.h,
-                "w": document.thumb.w,
-                "size": (len(document.thumb.bytes)
-                         if isinstance(document.thumb, PhotoCachedSize)
-                         else document.thumb.size)
+                "mimetype": file.thumbnail.mime_type,
+                "h": file.thumbnail.height or document.thumb.h,
+                "w": file.thumbnail.width or document.thumb.w,
+                "size": file.thumbnail.size,
             }
-            info["thumbnail_url"] = thumbnail.mxc
         if height and width:
             info["h"] = height
             info["w"] = width

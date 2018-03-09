@@ -81,8 +81,8 @@ class Contact(Base):
     query = None
     __tablename__ = "contact"
 
-    user = Column("user", Integer, ForeignKey("user.tgid"), primary_key=True)
-    contact = Column("contact", Integer, ForeignKey("puppet.id"), primary_key=True)
+    user = Column(Integer, ForeignKey("user.tgid"), primary_key=True)
+    contact = Column(Integer, ForeignKey("puppet.id"), primary_key=True)
 
 
 class Puppet(Base):
@@ -112,6 +112,11 @@ class TelegramFile(Base):
     mime_type = Column(String)
     was_converted = Column(Boolean)
     timestamp = Column(BigInteger)
+    size = Column(Integer, nullable=True)
+    width = Column(Integer, nullable=True)
+    height = Column(Integer, nullable=True)
+    thumbnail_id = Column("thumbnail", String, ForeignKey("telegram_file.id"), nullable=True)
+    thumbnail = relationship("TelegramFile", uselist=False)
 
 
 def init(db_session):

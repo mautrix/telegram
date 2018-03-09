@@ -1,2 +1,4 @@
 lxml
 cryptg
+Pillow
+moviepy
