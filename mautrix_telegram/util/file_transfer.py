@@ -20,6 +20,7 @@ import logging
 
 import magic
 from sqlalchemy.exc import IntegrityError, InvalidRequestError
+from sqlalchemy.orm.exc import FlushError
 try:
     from PIL import Image
 except ImportError:
@@ -158,6 +159,10 @@ async def transfer_file_to_matrix(db, client, intent, location, thumbnail=None):
     try:
         db.add(db_file)
         db.commit()
+    except FlushError as e:
+        log.exception(f"{e.__class__.__name__} while saving transferred file data. "
+                      "This was probably caused by two simultaneous transfers of the same file, "
+                      "and should not cause any problems.")
     except (IntegrityError, InvalidRequestError) as e:
         db.rollback()
         log.exception(f"{e.__class__.__name__} while saving transferred file data. "
