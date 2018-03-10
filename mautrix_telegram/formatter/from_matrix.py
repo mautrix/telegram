@@ -273,7 +273,6 @@ def matrix_to_telegram(html: str) -> Tuple[str, List[TypeMessageEntity]]:
         if should_bridge_plaintext_highlights:
             html = plain_mention_regex.sub(plain_mention_to_html, html)
         parser.feed(add_surrogates(html))
-        print([str(e) for e in parser.entities])
         return remove_surrogates(parser.text.strip()), parser.entities
     except Exception:
         log.exception("Failed to convert Matrix format:\nhtml=%s", html)

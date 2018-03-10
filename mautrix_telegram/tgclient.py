@@ -73,6 +73,11 @@ class MautrixTelegramClient(TelegramClient):
                                    reply_to_msg_id=reply_to)
         return self._get_response_message(request, await self(request))
 
+    async def send_media(self, entity, media, caption=None, entities=None, reply_to=None):
+        request = SendMediaRequest(entity, media, message=caption or "", entities=entities or [],
+                                   reply_to_msg_id=reply_to)
+        return self._get_response_message(request, await self(request))
+
     async def download_file_bytes(self, location):
         if isinstance(location, Document):
             location = InputDocumentFileLocation(location.id, location.access_hash,

@@ -516,12 +516,10 @@ class Portal:
         try:
             current_extension = body[body.rindex("."):]
             if mimetypes.types_map[current_extension] == mime:
-                file_name = body
-            else:
-                file_name = f"matrix_upload{mimetypes.guess_extension(mime)}"
+                return body
         except (ValueError, KeyError):
-            file_name = f"matrix_upload{mimetypes.guess_extension(mime)}"
-        return file_name, None if file_name == body else body
+            pass
+        return f"matrix_upload{mimetypes.guess_extension(mime)}"
 
     async def leave_matrix(self, user, source, event_id):
         if not user.logged_in:
@@ -570,32 +568,53 @@ class Portal:
 
     @staticmethod
     def _preprocess_matrix_message(sender, message):
-        if message["msgtype"] == "m.emote":
+        msgtype = message["msgtype"]
+        if msgtype == "m.emote":
             if "formatted_body" in message:
                 message["formatted_body"] = f"* {sender.displayname} {message['formatted_body']}"
             message["body"] = f"* {sender.displayname} {message['body']}"
             message["msgtype"] = "m.text"
         elif not sender.logged_in:
-            if "formatted_body" in message:
-                html = message["formatted_body"]
-                message["formatted_body"] = f"&lt;{sender.displayname}&gt; {html}"
+            html = message["formatted_body"] if "formatted_body" in message else None
             text = message["body"]
-            message["body"] = f"<{sender.displayname}> {text}"
-        return type
+            if msgtype == "m.text":
+                if html:
+                    html = f"&lt;{sender.displayname}&gt; {html}"
+                text = f"<{sender.displayname}> {text}"
+            else:
+                msgtype = msgtype[len("m."):]
+                prefix = {
+                    "file": "a ",
+                    "image": "an ",
+                    "audio": "",
+                    "video": "a ",
+                    "location": "a ",
+                }.get(msgtype, "")
+                if html:
+                    html = f"{sender.displayname} sent {prefix}{msgtype}: {html}"
+                text = ": " + text if text else ""
+                text = f"{sender.displayname} sent {prefix}{msgtype}{text}"
+            if html:
+                message["formatted_body"] = html
+            message["body"] = text
+
+    async def _matrix_event_to_entities(self, client, event):
+        try:
+            if event.get("format", None) == "org.matrix.custom.html":
+                message, entities = formatter.matrix_to_telegram(event["formatted_body"])
+
+                # TODO remove this crap
+                for entity in entities:
+                    if isinstance(entity, InputMessageEntityMentionName):
+                        entity.user_id = await client.get_input_entity(entity.user_id.user_id)
+            else:
+                message, entities = formatter.matrix_text_to_telegram(event["body"])
+        except KeyError:
+            message, entities = None, None
+        return message, entities
 
     async def _handle_matrix_text(self, client, message, reply_to):
-        is_formatted = ("format" in message
-                        and message["format"] == "org.matrix.custom.html"
-                        and "formatted_body" in message)
-        if is_formatted:
-            message, entities = formatter.matrix_to_telegram(message["formatted_body"])
-
-            # TODO remove this crap
-            for entity in entities:
-                if isinstance(entity, InputMessageEntityMentionName):
-                    entity.user_id = await client.get_input_entity(entity.user_id.user_id)
-        else:
-            message, entities = formatter.matrix_text_to_telegram(message["body"])
+        message, entities = await self._matrix_event_to_entities(client, message)
         return await client.send_message(self.peer, message, entities=entities, reply_to=reply_to)
 
     async def _handle_matrix_file(self, client, message, reply_to):
@@ -604,15 +623,28 @@ class Portal:
         info = message["info"]
         mime = info["mimetype"]
 
-        file_name, caption = self._get_file_meta(message["body"], mime)
+        file_name = self._get_file_meta(message["mxtg_filename"], mime)
 
         attributes = [DocumentAttributeFilename(file_name=file_name)]
         if "w" in info and "h" in info:
             attributes.append(DocumentAttributeImageSize(w=info["w"], h=info["h"]))
 
+        caption = message["body"] if message["body"] != file_name else None
         return await client.send_file(self.peer, file, mime, caption=caption,
                                       attributes=attributes, file_name=file_name,
                                       reply_to=reply_to)
+
+    async def _handle_matrix_location(self, client, message, reply_to):
+        try:
+            lat, long = message["geo_uri"][len("geo:"):].split(",")
+            lat, long = float(lat), float(long)
+        except (KeyError, ValueError):
+            self.log.exception("Failed to parse location")
+            return None
+        message, entities = await self._matrix_event_to_entities(client, message)
+        media = MessageMediaGeo(geo=GeoPoint(lat, long))
+        return await client.send_media(self.peer, media, reply_to=reply_to, caption=message,
+                                       entities=entities)
 
     async def handle_matrix_message(self, sender, message, event_id):
         client = sender.client if sender.logged_in else self.bot.client
@@ -620,16 +652,23 @@ class Portal:
                  else (sender.tgid if sender.logged_in else self.bot.tgid))
         reply_to = formatter.matrix_reply_to_telegram(message, space, room_id=self.mxid)
 
+        message["mxtg_filename"] = message["body"]
         self._preprocess_matrix_message(sender, message)
         type = message["msgtype"]
 
         if type == "m.text" or (self.bridge_notices and type == "m.notice"):
             response = await self._handle_matrix_text(client, message, reply_to)
+        elif type == "m.location":
+            response = await self._handle_matrix_location(client, message, reply_to)
         elif type in ("m.image", "m.file", "m.audio", "m.video"):
             response = await self._handle_matrix_file(client, message, reply_to)
         else:
             self.log.debug("Unhandled Matrix event: %s", message)
+            response = None
+
+        if not response:
             return
+
         self.log.debug("Handled Matrix message: %s", response)
         self.is_duplicate(response, (event_id, space))
         self.db.add(DBMessage(
