@@ -17,12 +17,18 @@
 from html import unescape
 from html.parser import HTMLParser
 from collections import deque
+from typing import Optional, List, Tuple, Type, Callable, Dict
 import math
 import re
 import logging
 
-from telethon_aio.tl.types import *
+from telethon_aio.tl.types import (TypeMessageEntity, MessageEntityMention,
+                                   InputMessageEntityMentionName, MessageEntityEmail,
+                                   MessageEntityUrl, MessageEntityTextUrl, MessageEntityBold,
+                                   MessageEntityItalic, MessageEntityCode, MessageEntityPre,
+                                   MessageEntityBotCommand, InputUser)
 
+from ..context import Context
 from .. import user as u, puppet as pu, portal as po
 from ..db import Message as DBMessage
 from .util import (add_surrogates, remove_surrogates, trim_reply_fallback_html,
@@ -51,7 +57,8 @@ class MatrixParser(HTMLParser):
         self._line_is_new = True
         self._list_entry_is_new = False
 
-    def _parse_url(self, url, args):
+    def _parse_url(self, url: str, args: Dict[str, str]
+                   ) -> Tuple[Optional[Type[TypeMessageEntity]], Optional[str]]:
         mention = self.mention_regex.match(url)
         if mention:
             mxid = mention.group(1)
@@ -80,7 +87,7 @@ class MatrixParser(HTMLParser):
             args["url"] = url
             return MessageEntityTextUrl, None
 
-    def handle_starttag(self, tag, attrs):
+    def handle_starttag(self, tag: str, attrs: List[Tuple[str, str]]):
         self._open_tags.appendleft(tag)
         self._open_tags_meta.appendleft(0)
 
@@ -127,7 +134,7 @@ class MatrixParser(HTMLParser):
             self._building_entities[tag] = entity_type(offset=offset, length=0, **args)
 
     @property
-    def _list_indent(self):
+    def _list_indent(self) -> int:
         indent = 0
         first_skipped = False
         for index, tag in enumerate(self._open_tags):
@@ -143,7 +150,7 @@ class MatrixParser(HTMLParser):
                 indent += 3
         return indent
 
-    def _newline(self, allow_multi=False):
+    def _newline(self, allow_multi: bool = False):
         if self._line_is_new and not allow_multi:
             return
         self.text += "\n"
@@ -151,7 +158,7 @@ class MatrixParser(HTMLParser):
         for entity in self._building_entities.values():
             entity.length += 1
 
-    def _handle_special_previous_tags(self, text):
+    def _handle_special_previous_tags(self, text: str) -> str:
         if "pre" not in self._open_tags and "code" not in self._open_tags:
             text = text.replace("\n", "")
         else:
@@ -166,7 +173,7 @@ class MatrixParser(HTMLParser):
             text = f"/{text}"
         return text
 
-    def _html_to_unicode(self, text):
+    def _html_to_unicode(self, text: str) -> str:
         strikethrough, underline = "del" in self._open_tags, "u" in self._open_tags
         if strikethrough and underline:
             text = html_to_unicode(text, "\u0336\u0332")
@@ -176,7 +183,7 @@ class MatrixParser(HTMLParser):
             text = html_to_unicode(text, "\u0332")
         return text
 
-    def _handle_tags_for_data(self, text):
+    def _handle_tags_for_data(self, text: str) -> Tuple[str, int]:
         extra_offset = 0
         list_entry_handled_once = False
         # In order to maintain order of things like blockquotes in lists or lists in blockquotes,
@@ -207,12 +214,12 @@ class MatrixParser(HTMLParser):
                 list_entry_handled_once = True
         return text, extra_offset
 
-    def _extend_entities_in_construction(self, text, extra_offset):
+    def _extend_entities_in_construction(self, text: str, extra_offset: int):
         for tag, entity in self._building_entities.items():
             entity.length += len(text) - extra_offset
             entity.offset += extra_offset
 
-    def handle_data(self, text):
+    def handle_data(self, text: str):
         text = unescape(text)
         text = self._handle_special_previous_tags(text)
         text = self._html_to_unicode(text)
@@ -221,7 +228,7 @@ class MatrixParser(HTMLParser):
         self._line_is_new = False
         self.text += text
 
-    def handle_endtag(self, tag):
+    def handle_endtag(self, tag: str):
         try:
             self._open_tags.popleft()
             self._open_tags_meta.popleft()
@@ -250,7 +257,7 @@ def plain_mention_to_html(match):
     return "".join(match.groups())
 
 
-def matrix_to_telegram(html):
+def matrix_to_telegram(html: str) -> Tuple[str, List[TypeMessageEntity]]:
     try:
         parser = MatrixParser()
         html = command_regex.sub(r"\1<command>\2</command>", html)
@@ -263,7 +270,8 @@ def matrix_to_telegram(html):
         log.exception("Failed to convert Matrix format:\nhtml=%s", html)
 
 
-def matrix_reply_to_telegram(content, tg_space, room_id=None):
+def matrix_reply_to_telegram(content: dict, tg_space: int, room_id: Optional[str] = None
+                             ) -> Optional[int]:
     try:
         reply = content["m.relates_to"]["m.in_reply_to"]
         room_id = room_id or reply["room_id"]
@@ -286,7 +294,7 @@ def matrix_reply_to_telegram(content, tg_space, room_id=None):
     return None
 
 
-def matrix_text_to_telegram(text):
+def matrix_text_to_telegram(text: str) -> Tuple[str, List[TypeMessageEntity]]:
     text = command_regex.sub(r"\1/\2", text)
     if should_bridge_plaintext_highlights:
         entities, pmr_replacer = plain_mention_to_text()
@@ -296,7 +304,7 @@ def matrix_text_to_telegram(text):
     return text, entities
 
 
-def plain_mention_to_text():
+def plain_mention_to_text() -> Tuple[List[TypeMessageEntity], Callable[[str], str]]:
     entities = []
 
     def replacer(match):
@@ -318,7 +326,7 @@ def plain_mention_to_text():
     return entities, replacer
 
 
-def init_mx(context):
+def init_mx(context: Context):
     global plain_mention_regex, should_bridge_plaintext_highlights
     config = context.config
     dn_template = config.get("bridge.displayname_template", "{displayname} (Telegram)")

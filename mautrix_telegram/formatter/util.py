@@ -15,6 +15,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from html import escape
+from typing import Optional
 import struct
 import re
 
@@ -22,20 +23,20 @@ import re
 # add_surrogates and remove_surrogates are unicode surrogate utility functions from Telethon.
 # Licensed under the MIT license.
 # https://github.com/LonamiWebs/Telethon/blob/master/telethon/extensions/markdown.py
-def add_surrogates(text):
+def add_surrogates(text: Optional[str]) -> Optional[str]:
     if text is None:
         return None
     return "".join("".join(chr(y) for y in struct.unpack("<HH", x.encode("utf-16-le")))
                    if (0x10000 <= ord(x) <= 0x10FFFF) else x for x in text)
 
 
-def remove_surrogates(text):
+def remove_surrogates(text: Optional[str]) -> Optional[str]:
     if text is None:
         return None
     return text.encode("utf-16", "surrogatepass").decode("utf-16")
 
 
-def trim_reply_fallback_text(text):
+def trim_reply_fallback_text(text: str) -> str:
     if not text.startswith("> ") or "\n" not in text:
         return text
     lines = text.split("\n")
@@ -44,14 +45,14 @@ def trim_reply_fallback_text(text):
     return "\n".join(lines)
 
 
-HTML_REPLY_FALLBACK_REGEX = re.compile(r"^<blockquote data-mx-reply>[\s\S]+?</blockquote>")
+html_reply_fallback_regex = re.compile(r"^<blockquote data-mx-reply>[\s\S]+?</blockquote>")
 
 
-def trim_reply_fallback_html(html):
-    return HTML_REPLY_FALLBACK_REGEX.sub("", html)
+def trim_reply_fallback_html(html: str) -> str:
+    return html_reply_fallback_regex.sub("", html)
 
 
-def unicode_to_html(text, html, ctrl, tag):
+def unicode_to_html(text: str, html: str, ctrl: str, tag: str) -> str:
     if ctrl not in text:
         return html
     if not html:
@@ -79,5 +80,5 @@ def unicode_to_html(text, html, ctrl, tag):
     return html
 
 
-def html_to_unicode(text, ctrl):
+def html_to_unicode(text: str, ctrl: str) -> str:
     return ctrl.join(text) + ctrl

@@ -15,6 +15,8 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from html import escape
+from typing import Optional, List, Tuple
+
 try:
     from lxml.html.diff import htmldiff
 except ImportError:
@@ -22,10 +24,16 @@ except ImportError:
 import logging
 import re
 
-from telethon_aio.tl.types import *
+from telethon_aio.tl.types import (MessageEntityMention, MessageEntityMentionName,
+                                   MessageEntityEmail, MessageEntityUrl, MessageEntityTextUrl,
+                                   MessageEntityBold, MessageEntityItalic, MessageEntityCode,
+                                   MessageEntityPre, MessageEntityBotCommand, Message, PeerChannel,
+                                   MessageEntityHashtag, TypeMessageEntity)
 from mautrix_appservice import MatrixRequestError
+from mautrix_appservice.intent_api import IntentAPI
 
 from .. import user as u, puppet as pu, portal as po
+from ..context import Context
 from ..db import Message as DBMessage
 from .util import (add_surrogates, remove_surrogates, trim_reply_fallback_html,
                    trim_reply_fallback_text, unicode_to_html)
@@ -34,7 +42,7 @@ log = logging.getLogger("mau.fmt.tg")
 should_highlight_edits = False
 
 
-def telegram_reply_to_matrix(evt, source):
+def telegram_reply_to_matrix(evt: Message, source: u.User) -> dict:
     if evt.reply_to_msg_id:
         space = (evt.to_id.channel_id
                  if isinstance(evt, Message) and isinstance(evt.to_id, PeerChannel)
@@ -50,7 +58,8 @@ def telegram_reply_to_matrix(evt, source):
     return {}
 
 
-async def _add_forward_header(source, text, html, fwd_from_id):
+async def _add_forward_header(source, text: str, html: Optional[str],
+                              fwd_from_id: Optional[int]) -> Tuple[str, str]:
     if not html:
         html = escape(text)
     user = u.User.get_by_tgid(fwd_from_id)
@@ -74,7 +83,7 @@ async def _add_forward_header(source, text, html, fwd_from_id):
     return text, html
 
 
-def highlight_edits(new_html, old_html):
+def highlight_edits(new_html: str, old_html: str) -> str:
     # Don't include `Edit:` text in diff.
     if old_html.startswith("<u>Edit:</u> "):
         old_html = old_html[len("<u>Edit:</u> "):]
@@ -89,7 +98,8 @@ def highlight_edits(new_html, old_html):
     return new_html
 
 
-async def _add_reply_header(source, text, html, evt, relates_to, main_intent, is_edit):
+async def _add_reply_header(source: u.User, text: str, html: str, evt: Message, relates_to: dict,
+                            main_intent: IntentAPI, is_edit: bool) -> Tuple[str, str]:
     space = (evt.to_id.channel_id
              if isinstance(evt, Message) and isinstance(evt.to_id, PeerChannel)
              else source.tgid)
@@ -145,8 +155,9 @@ async def _add_reply_header(source, text, html, evt, relates_to, main_intent, is
     return text_with_quote, html
 
 
-async def telegram_to_matrix(evt, source, main_intent=None, is_edit=False, prefix_text=None,
-                             prefix_html=None):
+async def telegram_to_matrix(evt: Message, source: u.User, main_intent: Optional[IntentAPI] = None,
+                             is_edit: bool = False, prefix_text: Optional[str] = None,
+                             prefix_html: Optional[str] = None) -> Tuple[str, str, dict]:
     text = add_surrogates(evt.message)
     html = _telegram_entities_to_matrix_catch(text, evt.entities) if evt.entities else None
     relates_to = {}
@@ -178,7 +189,7 @@ async def telegram_to_matrix(evt, source, main_intent=None, is_edit=False, prefi
     return remove_surrogates(text), remove_surrogates(html), relates_to
 
 
-def _telegram_entities_to_matrix_catch(text, entities):
+def _telegram_entities_to_matrix_catch(text: str, entities: List[TypeMessageEntity]) -> str:
     try:
         return _telegram_entities_to_matrix(text, entities)
     except Exception:
@@ -188,7 +199,7 @@ def _telegram_entities_to_matrix_catch(text, entities):
                       text, entities)
 
 
-def _telegram_entities_to_matrix(text, entities):
+def _telegram_entities_to_matrix(text: str, entities: List[TypeMessageEntity]) -> str:
     if not entities:
         return text
     html = []
@@ -232,7 +243,7 @@ def _telegram_entities_to_matrix(text, entities):
     return "".join(html)
 
 
-def _parse_pre(html, entity_text, language):
+def _parse_pre(html: List[str], entity_text: str, language: str) -> bool:
     if language:
         html.append("<pre>"
                     f"<code class='language-{language}'>{entity_text}</code>"
@@ -242,7 +253,7 @@ def _parse_pre(html, entity_text, language):
     return False
 
 
-def _parse_mention(html, entity_text):
+def _parse_mention(html: List[str], entity_text: str) -> bool:
     username = entity_text[1:]
 
     user = u.User.find_by_username(username) or pu.Puppet.find_by_username(username)
@@ -259,7 +270,7 @@ def _parse_mention(html, entity_text):
     return False
 
 
-def _parse_name_mention(html, entity_text, user_id):
+def _parse_name_mention(html: List[str], entity_text: str, user_id: int) -> bool:
     user = u.User.get_by_tgid(user_id)
     if user:
         mxid = user.mxid
@@ -273,7 +284,7 @@ def _parse_name_mention(html, entity_text, user_id):
     return False
 
 
-def _parse_url(html, entity_text, url):
+def _parse_url(html: List[str], entity_text: str, url: str) -> bool:
     url = escape(url) if url else entity_text
     if not url.startswith(("https://", "http://", "ftp://", "magnet://")):
         url = "http://" + url
@@ -281,6 +292,6 @@ def _parse_url(html, entity_text, url):
     return False
 
 
-def init_tg(context):
+def init_tg(context: Context):
     global should_highlight_edits
     should_highlight_edits = htmldiff and context.config["bridge.highlight_edits"]
