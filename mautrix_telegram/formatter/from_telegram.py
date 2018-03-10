@@ -15,7 +15,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from html import escape
-from typing import Optional, List, Tuple
+from typing import Optional, List, Tuple, Union
 
 try:
     from lxml.html.diff import htmldiff
@@ -28,7 +28,16 @@ from telethon_aio.tl.types import (MessageEntityMention, MessageEntityMentionNam
                                    MessageEntityEmail, MessageEntityUrl, MessageEntityTextUrl,
                                    MessageEntityBold, MessageEntityItalic, MessageEntityCode,
                                    MessageEntityPre, MessageEntityBotCommand, Message, PeerChannel,
-                                   MessageEntityHashtag, TypeMessageEntity)
+                                   MessageEntityHashtag)
+
+try:
+    from telethon_aio.tl.types import TypeMessageEntity
+except ImportError:
+    TypeMessageEntity = Union[
+        MessageEntityMention, MessageEntityHashtag, MessageEntityBotCommand, MessageEntityUrl,
+        MessageEntityEmail, MessageEntityBold, MessageEntityItalic, MessageEntityCode,
+        MessageEntityPre, MessageEntityTextUrl, MessageEntityMentionName]
+
 from mautrix_appservice import MatrixRequestError
 from mautrix_appservice.intent_api import IntentAPI
 

@@ -229,7 +229,7 @@ class Bot(AbstractUser):
         elif isinstance(action, MessageActionChatDeleteUser) and action.user_id == self.tgid:
             self.remove_chat(to_id)
 
-    async def update(self, update: TypeUpdate):
+    async def update(self, update):
         if not isinstance(update, (UpdateNewMessage, UpdateNewChannelMessage)):
             return
         if isinstance(update.message, MessageService):

@@ -17,16 +17,25 @@
 from html import unescape
 from html.parser import HTMLParser
 from collections import deque
-from typing import Optional, List, Tuple, Type, Callable, Dict
+from typing import Optional, List, Tuple, Type, Callable, Dict, Union
 import math
 import re
 import logging
 
-from telethon_aio.tl.types import (TypeMessageEntity, MessageEntityMention,
+from telethon_aio.tl.types import (MessageEntityMention,
                                    InputMessageEntityMentionName, MessageEntityEmail,
                                    MessageEntityUrl, MessageEntityTextUrl, MessageEntityBold,
                                    MessageEntityItalic, MessageEntityCode, MessageEntityPre,
-                                   MessageEntityBotCommand, InputUser)
+                                   MessageEntityBotCommand, MessageEntityHashtag,
+                                   MessageEntityMentionName, InputUser)
+
+try:
+    from telethon_aio.tl.types import TypeMessageEntity
+except ImportError:
+    TypeMessageEntity = Union[
+        MessageEntityMention, MessageEntityHashtag, MessageEntityBotCommand, MessageEntityUrl,
+        MessageEntityEmail, MessageEntityBold, MessageEntityItalic, MessageEntityCode,
+        MessageEntityPre, MessageEntityTextUrl, MessageEntityMentionName]
 
 from ..context import Context
 from .. import user as u, puppet as pu, portal as po
