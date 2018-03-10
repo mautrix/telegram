@@ -136,7 +136,7 @@ class AbstractUser:
     async def update_pinned_messages(self, update):
         portal = po.Portal.get_by_tgid(update.channel_id)
         if portal and portal.mxid:
-            await portal.update_telegram_pin(self, update.id)
+            await portal.receive_telegram_pin_id(update.id)
 
     async def update_participants(self, update):
         portal = po.Portal.get_by_tgid(update.participants.chat_id)

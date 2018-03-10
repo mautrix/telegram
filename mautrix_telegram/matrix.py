@@ -222,6 +222,18 @@ class MatrixHandler:
                 return
             await handler(sender, content[content_key])
 
+    async def handle_room_pin(self, room, sender, new_events, old_events):
+        portal = Portal.get_by_mxid(room)
+        sender = await User.get_by_mxid(sender).ensure_started()
+        if sender.has_full_access and portal:
+            events = new_events - old_events
+            if len(events) > 0:
+                # New event pinned, set that as pinned in Telegram.
+                await portal.handle_matrix_pin(sender, events.pop())
+            elif len(new_events) == 0:
+                # All pinned events removed, remove pinned event in Telegram.
+                await portal.handle_matrix_pin(sender, None)
+
     def filter_matrix_event(self, event):
         return (event["sender"] == self.az.bot_mxid
                 or Puppet.get_id_from_mxid(event["sender"]) is not None)
@@ -250,3 +262,10 @@ class MatrixHandler:
                                            evt["prev_content"])
         elif type in ("m.room.name", "m.room.avatar", "m.room.topic"):
             await self.handle_room_meta(type, evt["room_id"], evt["sender"], evt["content"])
+        elif type == "m.room.pinned_events":
+            new_events = set(evt["content"]["pinned"])
+            try:
+                old_events = set(evt["unsigned"]["prev_content"]["pinned"])
+            except KeyError:
+                old_events = set()
+            await self.handle_room_pin(evt["room_id"], evt["sender"], new_events, old_events)

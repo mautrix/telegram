@@ -66,6 +66,8 @@ class Portal:
 
         self._main_intent = None
         self._room_create_lock = asyncio.Lock()
+        self._temp_pinned_message_id = None
+        self._temp_pinned_message_sender = None
 
         self._dedup = deque()
         self._dedup_mxid = {}
@@ -637,6 +639,20 @@ class Portal:
             mxid=event_id))
         self.db.commit()
 
+    async def handle_matrix_pin(self, sender, pinned_message):
+        if self.peer_type != "channel":
+            return
+        try:
+            if not pinned_message:
+                await sender.client(UpdatePinnedMessageRequest(channel=self.peer, id=0))
+            else:
+                message = DBMessage.query.filter(DBMessage.mxid == pinned_message,
+                                                 DBMessage.tg_space == self.tgid,
+                                                 DBMessage.mx_room == self.mxid).one_or_none()
+                await sender.client(UpdatePinnedMessageRequest(channel=self.peer, id=message.tgid))
+        except ChatNotModifiedError:
+            pass
+
     async def handle_matrix_deletion(self, deleter, event_id):
         space = self.tgid if self.peer_type == "channel" else deleter.tgid
         message = DBMessage.query.filter(DBMessage.mxid == event_id,
@@ -657,7 +673,7 @@ class Portal:
                                         edit_messages=moderator, delete_messages=moderator,
                                         ban_users=moderator, invite_users=moderator,
                                         invite_link=moderator, pin_messages=moderator,
-                                        add_admins=admin, manage_call=moderator)
+                                        add_admins=admin)
             await sender.client(
                 EditAdminRequest(channel=await self.get_input_entity(sender),
                                  user_id=user_id, admin_rights=rights))
@@ -1036,7 +1052,6 @@ class Portal:
                          or self.is_duplicate_action(update))
         if should_ignore:
             return
-
         # TODO figure out how to see changes to about text / channel username
         if isinstance(action, MessageActionChatEditTitle):
             await self.update_title(action.title, save=True)
@@ -1054,6 +1069,8 @@ class Portal:
             self.peer_type = "channel"
             self.migrate_and_save(action.channel_id)
             await sender.intent.send_emote(self.mxid, "upgraded this group to a supergroup.")
+        elif isinstance(action, MessageActionPinMessage):
+            await self.receive_telegram_pin_sender(sender)
         else:
             self.log.debug("Unhandled Telegram action in %s: %s", self.title, action)
 
@@ -1068,13 +1085,30 @@ class Portal:
             levels["users"][puppet.mxid] = 50
         await self.main_intent.set_power_levels(self.mxid, levels)
 
-    async def update_telegram_pin(self, source, id):
-        space = self.tgid if self.peer_type == "channel" else source.tgid
-        message = DBMessage.query.get((id, space))
+    async def receive_telegram_pin_sender(self, sender):
+        self._temp_pinned_message_sender = sender
+        if self._temp_pinned_message_id:
+            await self.update_telegram_pin()
+
+    async def update_telegram_pin(self):
+        intent = (self._temp_pinned_message_sender.intent
+                  if self._temp_pinned_message_sender else self.main_intent)
+        id = self._temp_pinned_message_id
+        self._temp_pinned_message_id = None
+        self._temp_pinned_message_sender = None
+
+        message = DBMessage.query.get((id, self.tgid))
         if message:
-            await self.main_intent.set_pinned_messages(self.mxid, [message.mxid])
+            await intent.set_pinned_messages(self.mxid, [message.mxid])
         else:
-            await self.main_intent.set_pinned_messages(self.mxid, [])
+            await intent.set_pinned_messages(self.mxid, [])
+
+    async def receive_telegram_pin_id(self, id):
+        if id == 0:
+            return await self.update_telegram_pin()
+        self._temp_pinned_message_id = id
+        if self._temp_pinned_message_sender:
+            await self.update_telegram_pin()
 
     @staticmethod
     def _get_level_from_participant(participant, _):
