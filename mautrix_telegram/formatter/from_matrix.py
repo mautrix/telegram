@@ -151,17 +151,22 @@ class MatrixParser(HTMLParser):
         for entity in self._building_entities.values():
             entity.length += 1
 
-    def handle_data(self, text):
-        text = unescape(text)
+    def _handle_special_previous_tags(self, text):
+        if "pre" not in self._open_tags and "code" not in self._open_tags:
+            text = text.replace("\n", "")
+        else:
+            text = text.strip()
+
         previous_tag = self._open_tags[0] if len(self._open_tags) > 0 else ""
-        extra_offset = 0
         if previous_tag == "a":
             url = self._open_tags_meta[0]
             if url:
                 text = url
         elif previous_tag == "command":
             text = f"/{text}"
+        return text
 
+    def _html_to_unicode(self, text):
         strikethrough, underline = "del" in self._open_tags, "u" in self._open_tags
         if strikethrough and underline:
             text = html_to_unicode(text, "\u0336\u0332")
@@ -169,7 +174,10 @@ class MatrixParser(HTMLParser):
             text = html_to_unicode(text, "\u0336")
         elif underline:
             text = html_to_unicode(text, "\u0332")
+        return text
 
+    def _handle_tags_for_data(self, text):
+        extra_offset = 0
         list_entry_handled_once = False
         # In order to maintain order of things like blockquotes in lists or lists in blockquotes,
         # we can't just have ifs/elses and we need to actually loop through the open tags in order.
@@ -197,10 +205,19 @@ class MatrixParser(HTMLParser):
                 text = indent + prefix + text
                 self._list_entry_is_new = False
                 list_entry_handled_once = True
+        return text, extra_offset
+
+    def _extend_entities_in_construction(self, text, extra_offset):
         for tag, entity in self._building_entities.items():
             entity.length += len(text) - extra_offset
             entity.offset += extra_offset
 
+    def handle_data(self, text):
+        text = unescape(text)
+        text = self._handle_special_previous_tags(text)
+        text = self._html_to_unicode(text)
+        text, extra_offset = self._handle_tags_for_data(text)
+        self._extend_entities_in_construction(text, extra_offset)
         self._line_is_new = False
         self.text += text
 
@@ -221,6 +238,52 @@ class MatrixParser(HTMLParser):
 
 command_regex = re.compile("(\s|^)!([A-Za-z0-9@]+)")
 plain_mention_regex = None
+
+
+def plain_mention_to_html(match):
+    puppet = pu.Puppet.find_by_displayname(match.group(2))
+    if puppet:
+        return (f"{match.group(1)}"
+                f"<a href='https://matrix.to/#/{puppet.mxid}'>"
+                f"{puppet.displayname}"
+                "</a>")
+    return "".join(match.groups())
+
+
+def matrix_to_telegram(html):
+    try:
+        parser = MatrixParser()
+        html = command_regex.sub(r"\1<command>\2</command>", html)
+        if should_bridge_plaintext_highlights:
+            html = plain_mention_regex.sub(plain_mention_to_html, html)
+        parser.feed(add_surrogates(html))
+        print([str(e) for e in parser.entities])
+        return remove_surrogates(parser.text.strip()), parser.entities
+    except Exception:
+        log.exception("Failed to convert Matrix format:\nhtml=%s", html)
+
+
+def matrix_reply_to_telegram(content, tg_space, room_id=None):
+    try:
+        reply = content["m.relates_to"]["m.in_reply_to"]
+        room_id = room_id or reply["room_id"]
+        event_id = reply["event_id"]
+
+        try:
+            if content["format"] == "org.matrix.custom.html":
+                content["formatted_body"] = trim_reply_fallback_html(content["formatted_body"])
+        except KeyError:
+            pass
+        content["body"] = trim_reply_fallback_text(content["body"])
+
+        message = DBMessage.query.filter(DBMessage.mxid == event_id,
+                                         DBMessage.tg_space == tg_space,
+                                         DBMessage.mx_room == room_id).one_or_none()
+        if message:
+            return message.tgid
+    except KeyError:
+        pass
+    return None
 
 
 def matrix_text_to_telegram(text):
@@ -253,52 +316,6 @@ def plain_mention_to_text():
         return "".join(match.groups())
 
     return entities, replacer
-
-
-def plain_mention_to_html(match):
-    puppet = pu.Puppet.find_by_displayname(match.group(2))
-    if puppet:
-        return (f"{match.group(1)}"
-                f"<a href='https://matrix.to/#/{puppet.mxid}'>"
-                f"{puppet.displayname}"
-                "</a>")
-    return "".join(match.groups())
-
-
-def matrix_to_telegram(html):
-    try:
-        parser = MatrixParser()
-        html = html.replace("\n", "")
-        html = command_regex.sub(r"\1<command>\2</command>", html)
-        if should_bridge_plaintext_highlights:
-            html = plain_mention_regex.sub(plain_mention_to_html, html)
-        parser.feed(add_surrogates(html))
-        return remove_surrogates(parser.text.strip()), parser.entities
-    except Exception:
-        log.exception("Failed to convert Matrix format:\nhtml=%s", html)
-
-
-def matrix_reply_to_telegram(content, tg_space, room_id=None):
-    try:
-        reply = content["m.relates_to"]["m.in_reply_to"]
-        room_id = room_id or reply["room_id"]
-        event_id = reply["event_id"]
-
-        try:
-            if content["format"] == "org.matrix.custom.html":
-                content["formatted_body"] = trim_reply_fallback_html(content["formatted_body"])
-        except KeyError:
-            pass
-        content["body"] = trim_reply_fallback_text(content["body"])
-
-        message = DBMessage.query.filter(DBMessage.mxid == event_id,
-                                         DBMessage.tg_space == tg_space,
-                                         DBMessage.mx_room == room_id).one_or_none()
-        if message:
-            return message.tgid
-    except KeyError:
-        pass
-    return None
 
 
 def init_mx(context):

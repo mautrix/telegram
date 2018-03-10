@@ -132,7 +132,7 @@ async def _add_reply_header(source, text, html, evt, relates_to, main_intent, is
 
     r_keyword = "In reply to" if not is_edit else "Edit to"
     r_msg_link = f"<a href='https://matrix.to/#/{msg.mx_room}/{msg.mxid}'>{r_keyword}</a>"
-    html = (f"<blockquote data-mx-reply>{r_msg_link} {r_sender_link} {r_html_body}</blockquote>"
+    html = (f"<blockquote data-mx-reply>{r_msg_link} {r_sender_link}\n{r_html_body}</blockquote>"
             + (html or escape(text)))
 
     lines = r_text_body.strip().split("\n")
