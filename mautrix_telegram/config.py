@@ -218,6 +218,33 @@ class Config(DictWithRecursion):
         self["version"] = 2
         return self["version"]
 
+    def update_2_3(self):
+        if "bridge.plaintext_highlights" not in self:
+            self["bridge.plaintext_highlights"] = False
+            self.comment("bridge.plaintext_highlights",
+                         "Whether or not to bridge plaintext highlights.\n"
+                         "Only enable this if your displayname_template has some static part that "
+                         "the bridge can use to\nreliably identify what is a plaintext highlight.")
+        if "bridge.highlight_edits" not in self:
+            self["bridge.highlight_edits"] = False
+            self.comment("bridge.highlight_edits",
+                         "Highlight changed/added parts in edits. Requires lxml.")
+        if "bridge.relaybot" not in self:
+            self["bridge.relaybot.authless_portals"] = bool(
+                self["bridge.authless_relaybot_portals"]) or True
+            del self["bridge.authless_relaybot_portals"]
+            self["bridge.relaybot.whitelist_group_admins"] = True
+            self["bridge.relaybot.whitelist"] = []
+            self.comment("bridge.relaybot", "Options related to the message relay Telegram bot.")
+            self.comment("bridge.relaybot.authless_portals",
+                         "Whether or not to allow creating portals from Telegram.")
+            self.comment("bridge.relaybot.whitelist_group_admins",
+                         "Whether or not to allow Telegram group admins to use the bot commands.")
+            self.comment("bridge.relaybot.whitelist",
+                         "List of usernames/user IDs who are also allowed to use the bot commands.")
+        self["version"] = 3
+        return self["version"]
+
     def check_updates(self):
         version = self.get("version", 0)
         new_version = version
@@ -225,6 +252,8 @@ class Config(DictWithRecursion):
             new_version = self.update_0_1()
         if version < 2:
             new_version = self.update_1_2()
+        if version < 3:
+            new_version = self.update_2_3()
         if new_version != version:
             self.save()
 

@@ -84,8 +84,6 @@ bridge:
     # Allow logging in within Matrix. If false, the only way to log in is using the out-of-Matrix
     # login website (see appservice.public config section)
     allow_matrix_login: true
-    # Whether or not to allow creating portals from Telegram.
-    authless_relaybot_portals: true
     # Use inline images instead of m.image to make rich captions possible.
     # N.B. Inline images are not supported on all clients (e.g. Riot iOS).
     inline_images: false
@@ -111,6 +109,17 @@ bridge:
         "example.com": "full"
         "public.example.com": "full"
         "@admin:example.com": "admin"
+
+    # Options related to the message relay Telegram bot.
+    relaybot:
+        # Whether or not to allow creating portals from Telegram.
+        authless_portals: true
+        # Whether or not to allow Telegram group admins to use the bot commands.
+        whitelist_group_admins: true
+        # List of usernames/user IDs who are also allowed to use the bot commands.
+        whitelist:
+        - myusername
+        - 12345678
 
 # Telegram config
 telegram:
