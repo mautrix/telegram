@@ -862,6 +862,7 @@ class Portal:
         self.tg_receiver = self.tgid
         self.by_tgid[self.tgid_full] = self
         await self.update_info(source, entity)
+        self.db.add(self.db_instance)
         self.save()
 
         if self.bot and self.bot.tgid in invites:
