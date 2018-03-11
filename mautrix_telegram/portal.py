@@ -865,11 +865,11 @@ class Portal:
             self.bot.add_chat(self.tgid, self.peer_type)
 
         levels = await self.main_intent.get_power_levels(self.mxid)
-        if self._get_bot_level(levels) == 100:
+        bot_level = self._get_bot_level(levels)
+        if bot_level == 100:
             levels = self._get_base_power_levels(levels, entity)
-        already_saved = await self.handle_matrix_power_levels(source, levels["users"], {})
-        if not already_saved:
             await self.main_intent.set_power_levels(self.mxid, levels)
+        await self.handle_matrix_power_levels(source, levels["users"], {})
 
     async def invite_telegram(self, source, puppet):
         if self.peer_type == "chat":
@@ -1181,8 +1181,20 @@ class Portal:
             except KeyError:
                 return 0
 
+    @staticmethod
+    def _get_powerlevel_level(levels):
+        try:
+            return levels["events"]["m.room.power_levels"]
+        except KeyError:
+            try:
+                return levels["state_default"]
+            except KeyError:
+                return 50
+
     def _participants_to_power_levels(self, participants, levels):
         bot_level = self._get_bot_level(levels)
+        if bot_level < self._get_powerlevel_level(levels):
+            return False
         changed = False
         admin_power_level = min(75 if self.peer_type == "channel" else 50, bot_level)
         if levels["events"]["m.room.power_levels"] != admin_power_level:
@@ -1216,10 +1228,7 @@ class Portal:
         levels["invite"] = level
         levels["events"]["m.room.name"] = level
         levels["events"]["m.room.avatar"] = level
-        try:
-            await self.main_intent.set_power_levels(self.mxid, levels)
-        except MatrixRequestError:
-            pass
+        await self.main_intent.set_power_levels(self.mxid, levels)
 
     # endregion
     # region Database conversion
