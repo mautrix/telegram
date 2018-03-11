@@ -258,7 +258,7 @@ async def confirm_bridge(evt: CommandEvent):
 
 async def _get_initial_state(evt: CommandEvent):
     state = await evt.az.intent.get_room_state(evt.room_id)
-    title = evt.room_id
+    title = None
     about = None
     levels = None
     for event in state:
@@ -268,6 +268,8 @@ async def _get_initial_state(evt: CommandEvent):
             about = event["content"]["topic"]
         elif event["type"] == "m.room.power_levels":
             levels = event["content"]
+        elif event["type"] == "m.room.canonical_alias":
+            title = title or event["content"]["alias"]
     return title, about, levels
 
 
@@ -282,6 +284,8 @@ async def create(evt: CommandEvent):
         return await evt.reply("This is already a portal room.")
 
     title, about, levels = await _get_initial_state(evt)
+    if not title:
+        return await evt.reply("Please set a title before creating a Telegram chat.")
 
     supergroup = type == "supergroup"
     type = {
