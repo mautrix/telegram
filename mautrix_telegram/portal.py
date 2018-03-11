@@ -286,6 +286,8 @@ class Portal:
             levels["users"] = {
                 self.main_intent.mxid: 100
             }
+        else:
+            levels["users"][self.main_intent.mxid] = 100
         return levels
 
     @property
@@ -492,10 +494,13 @@ class Portal:
         except MatrixRequestError:
             members = []
         for user in members:
-            is_puppet = p.Puppet.get_id_from_mxid(user)
-            if user != intent.mxid and (not puppets_only or is_puppet):
+            puppet = p.Puppet.get_by_mxid(user, create=False)
+            if user != intent.mxid and (not puppets_only or puppet):
                 try:
-                    await intent.kick(room_id, user, message)
+                    if puppet:
+                        await puppet.intent.leave_room(room_id)
+                    else:
+                        await intent.kick(room_id, user, message)
                 except (MatrixRequestError, IntentError):
                     pass
         await intent.leave_room(room_id)
@@ -857,16 +862,18 @@ class Portal:
         self.tg_receiver = self.tgid
         self.by_tgid[self.tgid_full] = self
         await self.update_info(source, entity)
+        self.db.add(self.db_instance)
         self.save()
 
-        if self.bot and self.bot.mxid in invites:
+        if self.bot and self.bot.tgid in invites:
             self.bot.add_chat(self.tgid, self.peer_type)
 
         levels = await self.main_intent.get_power_levels(self.mxid)
-        levels = self._get_base_power_levels(levels, entity)
-        already_saved = await self.handle_matrix_power_levels(source, levels["users"], {})
-        if not already_saved:
+        bot_level = self._get_bot_level(levels)
+        if bot_level == 100:
+            levels = self._get_base_power_levels(levels, entity)
             await self.main_intent.set_power_levels(self.mxid, levels)
+        await self.handle_matrix_power_levels(source, levels["users"], {})
 
     async def invite_telegram(self, source, puppet):
         if self.peer_type == "chat":
@@ -1159,18 +1166,41 @@ class Portal:
         return 0
 
     @staticmethod
-    def _participant_to_power_levels(levels, user, new_level):
+    def _participant_to_power_levels(levels, user, new_level, bot_level):
+        new_level = min(new_level, bot_level)
         user_level_defined = user.mxid in levels["users"]
-        user_has_right_level = (levels["users"][user.mxid] == new_level
-                                if user_level_defined else new_level == 0)
-        if not user_has_right_level:
+        default_level = levels["users_default"] if "users_default" in levels else 0
+        user_level = levels["users"][user.mxid] if user_level_defined else default_level
+        if user_level != new_level and user_level < bot_level:
             levels["users"][user.mxid] = new_level
             return True
         return False
 
+    def _get_bot_level(self, levels):
+        try:
+            return levels["users"][self.main_intent.mxid]
+        except KeyError:
+            try:
+                return levels["users_default"]
+            except KeyError:
+                return 0
+
+    @staticmethod
+    def _get_powerlevel_level(levels):
+        try:
+            return levels["events"]["m.room.power_levels"]
+        except KeyError:
+            try:
+                return levels["state_default"]
+            except KeyError:
+                return 50
+
     def _participants_to_power_levels(self, participants, levels):
+        bot_level = self._get_bot_level(levels)
+        if bot_level < self._get_powerlevel_level(levels):
+            return False
         changed = False
-        admin_power_level = 75 if self.peer_type == "channel" else 50
+        admin_power_level = min(75 if self.peer_type == "channel" else 50, bot_level)
         if levels["events"]["m.room.power_levels"] != admin_power_level:
             changed = True
             levels["events"]["m.room.power_levels"] = admin_power_level
@@ -1182,10 +1212,12 @@ class Portal:
 
             if user:
                 user.register_portal(self)
-                changed = self._participant_to_power_levels(levels, user, new_level) or changed
+                changed = self._participant_to_power_levels(levels, user, new_level,
+                                                            bot_level) or changed
 
             if puppet:
-                changed = self._participant_to_power_levels(levels, puppet, new_level) or changed
+                changed = self._participant_to_power_levels(levels, puppet, new_level,
+                                                            bot_level) or changed
         return changed
 
     async def update_telegram_participants(self, participants, levels=None):
