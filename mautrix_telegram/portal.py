@@ -861,7 +861,7 @@ class Portal:
         await self.update_info(source, entity)
         self.save()
 
-        if self.bot and self.bot.mxid in invites:
+        if self.bot and self.bot.tgid in invites:
             self.bot.add_chat(self.tgid, self.peer_type)
 
         levels = await self.main_intent.get_power_levels(self.mxid)
