@@ -8,4 +8,4 @@ A Matrix-Telegram hybrid puppeting/relaybot bridge.
 ## Discussion
 Matrix room: [`#telegram:maunium.net`](https://matrix.to/#/#telegram:maunium.net)
 
-A Telegram chat bridged to the Matrix room might be created at some point.
+Telegram chat: [`mautrix_telegram`](https://t.me/mautrix_telegram) (bridged to Matrix room)
