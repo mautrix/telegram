@@ -42,7 +42,7 @@ setuptools.setup(
 
     classifiers=[
         "Development Status :: 4 - Beta",
-        "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
+        "License :: OSI Approved :: GNU Affero General Public License v3 or later (AGPLv3+)",
         "Topic :: Communications :: Chat",
         "Programming Language :: Python",
         "Programming Language :: Python :: 3",
