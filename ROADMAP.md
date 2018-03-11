@@ -1,20 +1,20 @@
 # Features & roadmap
 
 * Matrix → Telegram
-  * [ ] Message content
+  * [x] Message content
     * [x] Plaintext messages
     * [x] Formatted messages
     * [x] Bot commands (!command -> /command)
     * [x] Mentions
     * [x] Rich quotes
-    * [ ] Locations (not implemented in Riot)
+    * [x] Locations (not implemented in Riot)
     * [x] Images
     * [x] Files
   * [x] Message redactions
   * [ ] † Presence
   * [ ] † Typing notifications
   * [ ] † Read receipts
-  * [ ] Pinning messages
+  * [x] Pinning messages
   * [x] Power level
     * [x] Normal chats
       * [ ] Non-hardcoded PL requirements
@@ -52,7 +52,7 @@
   * [x] Read receipts (private chat only)
   * [x] Pinning messages
   * [x] Admin/chat creator status
-  * [ ] Supergroup/channel permissions (precise per-user not supported in Matrix)
+  * [ ] Supergroup/channel permissions (precise per-user permissions not supported in Matrix)
   * [x] Membership actions
     * [x] Inviting
     * [x] Kicking

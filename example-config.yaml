@@ -1,7 +1,11 @@
 # Homeserver details
 homeserver:
+    # The address that this appservice can use to connect to the homeserver.
     address: https://matrix.org
+    # The domain of the homeserver (for MXIDs, etc).
     domain: matrix.org
+    # Whether or not to verify the SSL certificate of the homeserver.
+    # Only applies if address starts with https://
     verify_ssl: true
 
 # Application service host/registration related details
@@ -14,6 +18,9 @@ appservice:
     # The hostname and port where the homeserver can find this appservice.
     hostname: localhost
     port: 8080
+
+    # The full URI to the database.
+    database: sqlite:///mautrix-telegram.db
 
     # Public part of web server for out-of-Matrix interaction with the bridge.
     # Used for things like login if the user wants to make sure the 2FA password isn't stored in
@@ -127,8 +134,4 @@ telegram:
     api_id: 12345
     api_hash: tjyd5yge35lbodk1xwzw2jstp90k55qz
     # (Optional) Create your own bot at https://t.me/BotFather
-    #bot_token: 123456789:ABCD-QBPd3VrWRhg623xYh07WUWErYA9eMI
-
-# The version of the config. The bridge will read this and automatically update the config if
-# the schema has changed. For the latest version, check the example config.
-version: 2
+    bot_token: disabled

@@ -26,7 +26,7 @@ from telethon_aio.sessions import AlchemySessionContainer
 from mautrix_appservice import AppService
 
 from .base import Base
-from .config import Config
+from .config import Config, DictWithRecursion
 from .matrix import MatrixHandler
 
 from .db import init as init_db
@@ -50,15 +50,18 @@ parser = argparse.ArgumentParser(
     prog="python -m mautrix-telegram")
 parser.add_argument("-c", "--config", type=str, default="config.yaml",
                     metavar="<path>", help="the path to your config file")
+parser.add_argument("-b", "--base-config", type=str, default="example-config.yaml",
+                    metavar="<path>", help="the path to the example config "
+                                           "(for automatic config updates)")
 parser.add_argument("-g", "--generate-registration", action="store_true",
                     help="generate registration and quit")
 parser.add_argument("-r", "--registration", type=str, default="registration.yaml",
                     metavar="<path>", help="the path to save the generated registration to")
 args = parser.parse_args()
 
-config = Config(args.config, args.registration)
+config = Config(args.config, args.registration, args.base_config)
 config.load()
-config.check_updates()
+config.update()
 
 if args.generate_registration:
     config.generate_registration()

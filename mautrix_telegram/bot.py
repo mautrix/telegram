@@ -253,6 +253,6 @@ def init(context):
     global config
     config = context.config
     token = config["telegram.bot_token"]
-    if token:
+    if token and not token.lower().startswith("disable"):
         return Bot(token)
     return None

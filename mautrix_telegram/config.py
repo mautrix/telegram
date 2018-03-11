@@ -16,8 +16,6 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from ruamel.yaml import YAML
 from ruamel.yaml.comments import CommentedMap
-from ruamel.yaml.tokens import CommentToken
-from ruamel.yaml.error import CommentMark
 import random
 import string
 
@@ -93,37 +91,26 @@ class DictWithRecursion:
     def __delitem__(self, key):
         self.delete(key)
 
-    def comment(self, key, message):
-        indent = key.count(".") * 4
-        try:
-            path, key = key.rsplit(".", 1)
-        except ValueError:
-            path = None
-        entry = self[path] if path else self._data
-        c = entry.ca.items.setdefault(key, [None, [], None, None])
-        c[1] = []
-        entry.yaml_set_comment_before_after_key(key=key, before=message, indent=indent)
-
-    def comment_newline(self, key):
-        try:
-            path, key = key.rsplit(".", 1)
-        except ValueError:
-            path = None
-        entry = self[path] if path else self._data
-        c = entry.ca.items.setdefault(key, [None, [], None, None])
-        c[2] = CommentToken("\n\n", CommentMark(0), None)
-
 
 class Config(DictWithRecursion):
-    def __init__(self, path, registration_path):
+    def __init__(self, path, registration_path, base_path):
         super().__init__()
         self.path = path
         self.registration_path = registration_path
+        self.base_path = base_path
         self._registration = None
 
     def load(self):
         with open(self.path, 'r') as stream:
             self._data = yaml.load(stream)
+
+    def load_base(self):
+        try:
+            with open(self.base_path, 'r') as stream:
+                return DictWithRecursion(yaml.load(stream))
+        except OSError:
+            pass
+        return None
 
     def save(self):
         with open(self.path, 'w') as stream:
@@ -136,126 +123,85 @@ class Config(DictWithRecursion):
     def _new_token():
         return "".join(random.choice(string.ascii_lowercase + string.digits) for _ in range(64))
 
-    def update_0_1(self):
-        permissions = self["bridge.permissions"] or CommentedMap()
-        for entry in self["bridge.whitelist"] or []:
-            permissions[entry] = "full"
-        for entry in self["bridge.admins"] or []:
-            permissions[entry] = "admin"
+    def update(self):
+        base = self.load_base()
+        if not base:
+            return
 
-        self["bridge.permissions"] = permissions
-        del self["bridge.whitelist"]
-        del self["bridge.admins"]
+        def copy(from_path, to_path=None):
+            if from_path in self:
+                base[to_path or from_path] = self[from_path]
 
-        if "bridge.authless_relaybot_portals" not in self:
-            self["bridge.authless_relaybot_portals"] = True
-            self.comment("bridge.authless_relaybot_portals",
-                         "Whether or not to allow creating portals from Telegram.")
-        if "bridge.max_telegram_delete" not in self:
-            self["bridge.max_telegram_delete"] = 10
-            self.comment("bridge.max_telegram_delete",
-                         "The maximum number of simultaneous Telegram deletions to handle.\n"
-                         "A large number of simultaneous redactions could put strain on your "
-                         "homeserver.")
+        def copy_dict(from_path, to_path=None):
+            if from_path in self:
+                to_path = to_path or from_path
+                base[to_path] = CommentedMap()
+                for key, value in self[from_path].items():
+                    base[to_path][key] = value
 
-        self.comment("bridge.permissions", "\n".join((
-            "",
-            "Permissions for using the bridge.",
-            "Permitted values:",
-            "  relaybot - Only use the bridge via the relaybot, no access to commands.",
-            "      full - Full access to use the bridge via relaybot or logging in with Telegram account.",
-            "     admin - Full access to use the bridge and some extra administration commands.",
-            "Permitted keys:",
-            "       * - All Matrix users",
-            "  domain - All users on that homeserver",
-            "    mxid - Specific user")))
-        # The telegram section comment disappears for some reason 3:
-        self.comment("telegram", "\nTelegram config")
+        copy("homeserver.address")
+        copy("homeserver.verify_ssl")
+        copy("homeserver.domain")
 
-        self["version"] = 1
-        # Add newline before version
-        self.comment("version",
-                     "\nThe version of the config. The bridge will read this and automatically "
-                     "update the config if\nthe schema has changed. For the latest version, "
-                     "check the example config.")
-        return self["version"]
+        copy("appservice.protocol")
+        copy("appservice.hostname")
+        copy("appservice.port")
 
-    def update_1_2(self):
-        del self["bridge.link_in_reply"]
-        del self["bridge.native_replies"]
-        if "bridge.bridge_notices" not in self:
-            self["bridge.bridge_notices"] = False
-            self.comment("bridge.bridge_notices",
-                         "Whether or not Matrix bot messages (type m.notice) should be bridged.")
-        if "bridge.allow_matrix_login" not in self:
-            self["bridge.allow_matrix_login"] = True
-            self.comment("bridge.allow_matrix_login",
-                         "Allow logging in within Matrix. If false, the only way to log in is "
-                         "using the out-of-Matrix login website (see appservice.public config "
-                         "section)")
-        if "bridge.inline_images" not in self:
-            self["bridge.inline_images"] = False
-            self.comment("bridge.inline_images",
-                         "Use inline images instead of m.image to make rich captions possible.\n"
-                         "N.B. Inline images are not supported on all clients (e.g. Riot iOS).")
-        if "appservice.public" not in self:
-            self["appservice.public.enabled"] = False
-            self["appservice.public.prefix"] = "/public"
-            self["appservice.public.external"] = "https://example.com/public"
-            self.comment("appservice.public",
-                         "Public part of web server for out-of-Matrix interaction with the "
-                         "bridge.\nUsed for things like login if the user wants to make sure the "
-                         "2FA password isn't stored in the HS database.")
-            self.comment("appservice.public.enabled",
-                         "Whether or not the public-facing endpoints should be enabled.")
-            self.comment("appservice.public.prefix",
-                         "The prefix to use in the public-facing endpoints.")
-            self.comment("appservice.public.external",
-                         "The base URL where the public-facing endpoints are available. The "
-                         "prefix is not added\nimplicitly.")
-        if "homeserver.verify_ssl" not in self:
-            self["homeserver.verify_ssl"] = True
-        self["version"] = 2
-        return self["version"]
+        copy("appservice.public.enabled")
+        copy("appservice.public.prefix")
+        copy("appservice.public.external")
 
-    def update_2_3(self):
-        if "bridge.plaintext_highlights" not in self:
-            self["bridge.plaintext_highlights"] = False
-            self.comment("bridge.plaintext_highlights",
-                         "Whether or not to bridge plaintext highlights.\n"
-                         "Only enable this if your displayname_template has some static part that "
-                         "the bridge can use to\nreliably identify what is a plaintext highlight.")
-        if "bridge.highlight_edits" not in self:
-            self["bridge.highlight_edits"] = False
-            self.comment("bridge.highlight_edits",
-                         "Highlight changed/added parts in edits. Requires lxml.")
+        copy("appservice.debug")
+
+        copy("appservice.id")
+        copy("appservice.bot_username")
+        copy("appservice.bot_displayname")
+
+        copy("appservice.as_token")
+        copy("appservice.hs_token")
+
+        copy("bridge.username_template")
+        copy("bridge.alias_template")
+        copy("bridge.displayname_template")
+
+        copy("bridge.displayname_preference")
+
+        copy("bridge.edits_as_replies")
+        copy("bridge.highlight_edits")
+        copy("bridge.bridge_notices")
+        copy("bridge.max_telegram_delete")
+        copy("bridge.allow_matrix_login")
+        copy("bridge.inline_images")
+        copy("bridge.plaintext_highlights")
+
+        copy("bridge.command_prefix")
+
+        migrate_permissions = ("bridge.permissions" not in self
+                               or "bridge.whitelist" in self
+                               or "bridge.admins" in self)
+        if migrate_permissions:
+            permissions = self["bridge.permissions"] or CommentedMap()
+            for entry in self["bridge.whitelist"] or []:
+                permissions[entry] = "full"
+            for entry in self["bridge.admins"] or []:
+                permissions[entry] = "admin"
+            base["bridge.permissions"] = permissions
+        else:
+            copy_dict("bridge.permissions")
+
         if "bridge.relaybot" not in self:
-            self["bridge.relaybot.authless_portals"] = bool(
-                self["bridge.authless_relaybot_portals"]) or True
-            del self["bridge.authless_relaybot_portals"]
-            self["bridge.relaybot.whitelist_group_admins"] = True
-            self["bridge.relaybot.whitelist"] = []
-            self.comment("bridge.relaybot", "Options related to the message relay Telegram bot.")
-            self.comment("bridge.relaybot.authless_portals",
-                         "Whether or not to allow creating portals from Telegram.")
-            self.comment("bridge.relaybot.whitelist_group_admins",
-                         "Whether or not to allow Telegram group admins to use the bot commands.")
-            self.comment("bridge.relaybot.whitelist",
-                         "List of usernames/user IDs who are also allowed to use the bot commands.")
-        self["version"] = 3
-        return self["version"]
+            copy("bridge.authless_relaybot_portals", "bridge.relaybot.authless_portals")
+        else:
+            copy("bridge.relaybot.authless_portals")
+            copy("bridge.relaybot.whitelist_group_admins")
+            copy("bridge.relaybot.whitelist")
 
-    def check_updates(self):
-        version = self.get("version", 0)
-        new_version = version
-        if version < 1:
-            new_version = self.update_0_1()
-        if version < 2:
-            new_version = self.update_1_2()
-        if version < 3:
-            new_version = self.update_2_3()
-        if new_version != version:
-            self.save()
+        copy("telegram.api_id")
+        copy("telegram.api_hash")
+        copy("telegram.bot_token")
+
+        self._data = base._data
+        self.save()
 
     def _get_permissions(self, key):
         level = self["bridge.permissions"].get(key, "")
