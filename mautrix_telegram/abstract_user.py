@@ -3,17 +3,17 @@
 # Copyright (C) 2018 Tulir Asokan
 #
 # This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
+# it under the terms of the GNU Affero General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
 # This program is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
+# GNU Affero General Public License for more details.
 #
-# You should have received a copy of the GNU General Public License
-# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
 import platform
 import os
 
@@ -136,7 +136,7 @@ class AbstractUser:
     async def update_pinned_messages(self, update):
         portal = po.Portal.get_by_tgid(update.channel_id)
         if portal and portal.mxid:
-            await portal.update_telegram_pin(self, update.id)
+            await portal.receive_telegram_pin_id(update.id)
 
     async def update_participants(self, update):
         portal = po.Portal.get_by_tgid(update.participants.chat_id)

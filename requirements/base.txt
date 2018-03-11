@@ -1,9 +1,8 @@
 aiohttp
+mautrix-appservice
 ruamel.yaml
 python-magic
 SQLAlchemy
 alembic
 Markdown
-Pillow
 future-fstrings
-cryptg

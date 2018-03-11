@@ -3,17 +3,17 @@
 # Copyright (C) 2018 Tulir Asokan
 #
 # This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
+# it under the terms of the GNU Affero General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
 # This program is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
+# GNU Affero General Public License for more details.
 #
-# You should have received a copy of the GNU General Public License
-# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from . import command_handler
 
 
@@ -57,7 +57,8 @@ def help(evt):
 #### Miscellaneous things
 **search** [_-r|--remote_] <_query_> - Search your contacts or the Telegram servers for users.  
 **sync** [`chats`|`contacts`|`me`]   - Synchronize your chat portals, contacts and/or own info.  
-**ping-bot**                         - Get info of the message relay Telegram bot.
+**ping-bot**                         - Get info of the message relay Telegram bot.  
+**set-pl** <_level_> [_mxid_]        - Set a temporary power level without affecting Telegram.
 
 #### Initiating chats
 **pm** <_identifier_> - Open a private chat with the given Telegram user. The identifier is either
@@ -72,7 +73,10 @@ def help(evt):
 **delete-portal**           - Remove all users from the current portal room and forget the portal.
                               Only works for group chats; to delete a private chat portal, simply
                               leave the room.  
-**unbridge**                - Remove puppets from the current portal room and forget the portal.
+**unbridge**                - Remove puppets from the current portal room and forget the portal.  
+**bridge** [_id_]           - Bridge the current Matrix room to the Telegram chat with the given
+                              ID. The ID must be the prefixed version that you get with the `/id`
+                              command of the Telegram-side bot.  
 **group-name** <_name_|`-`> - Change the username of a supergroup/channel. To disable, use a dash
                              (`-`) as the name.  
 **clean-rooms**             - Clean up unused portal/management rooms.

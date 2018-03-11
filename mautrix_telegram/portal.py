@@ -3,17 +3,17 @@
 # Copyright (C) 2018 Tulir Asokan
 #
 # This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
+# it under the terms of the GNU Affero General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
 # This program is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
+# GNU Affero General Public License for more details.
 #
-# You should have received a copy of the GNU General Public License
-# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from collections import deque
 from datetime import datetime
 import asyncio
@@ -66,6 +66,8 @@ class Portal:
 
         self._main_intent = None
         self._room_create_lock = asyncio.Lock()
+        self._temp_pinned_message_id = None
+        self._temp_pinned_message_sender = None
 
         self._dedup = deque()
         self._dedup_mxid = {}
@@ -516,12 +518,10 @@ class Portal:
         try:
             current_extension = body[body.rindex("."):]
             if mimetypes.types_map[current_extension] == mime:
-                file_name = body
-            else:
-                file_name = f"matrix_upload{mimetypes.guess_extension(mime)}"
+                return body
         except (ValueError, KeyError):
-            file_name = f"matrix_upload{mimetypes.guess_extension(mime)}"
-        return file_name, None if file_name == body else body
+            pass
+        return f"matrix_upload{mimetypes.guess_extension(mime)}"
 
     async def leave_matrix(self, user, source, event_id):
         if not user.logged_in:
@@ -570,25 +570,54 @@ class Portal:
 
     @staticmethod
     def _preprocess_matrix_message(sender, message):
-        if message["msgtype"] == "m.emote":
+        msgtype = message["msgtype"]
+        if msgtype == "m.emote":
             if "formatted_body" in message:
                 message["formatted_body"] = f"* {sender.displayname} {message['formatted_body']}"
             message["body"] = f"* {sender.displayname} {message['body']}"
             message["msgtype"] = "m.text"
         elif not sender.logged_in:
-            if "formatted_body" in message:
-                message["formatted_body"] = (f"&lt;{sender.displayname}&gt; "
-                                             f"{message['formatted_body']}")
-            message["body"] = f"<{sender.displayname}> {message['body']}"
-        return type
+            html = message["formatted_body"] if "formatted_body" in message else None
+            text = message["body"]
+            if msgtype == "m.text":
+                if html:
+                    html = f"&lt;{sender.displayname}&gt; {html}"
+                text = f"<{sender.displayname}> {text}"
+            else:
+                msgtype = msgtype[len("m."):]
+                prefix = {
+                    "file": "a ",
+                    "image": "an ",
+                    "audio": "",
+                    "video": "a ",
+                    "location": "a ",
+                }.get(msgtype, "")
+                if html:
+                    html = f"{sender.displayname} sent {prefix}{msgtype}: {html}"
+                text = ": " + text if text else ""
+                text = f"{sender.displayname} sent {prefix}{msgtype}{text}"
+            if html:
+                message["formatted_body"] = html
+            message["body"] = text
 
-    def _handle_matrix_text(self, client, message, reply_to):
-        if "format" in message and message["format"] == "org.matrix.custom.html":
-            message, entities = formatter.matrix_to_telegram(message["formatted_body"])
-            return client.send_message(self.peer, message, entities=entities, reply_to=reply_to)
-        else:
-            message = formatter.matrix_text_to_telegram(message["body"])
-            return client.send_message(self.peer, message, reply_to=reply_to)
+    async def _matrix_event_to_entities(self, client, event):
+        try:
+            if event.get("format", None) == "org.matrix.custom.html":
+                message, entities = formatter.matrix_to_telegram(event["formatted_body"])
+
+                # TODO remove this crap
+                for entity in entities:
+                    if isinstance(entity, InputMessageEntityMentionName):
+                        entity.user_id = await client.get_input_entity(entity.user_id.user_id)
+            else:
+                message, entities = formatter.matrix_text_to_telegram(event["body"])
+        except KeyError:
+            message, entities = None, None
+        return message, entities
+
+    async def _handle_matrix_text(self, client, message, reply_to):
+        message, entities = await self._matrix_event_to_entities(client, message)
+        return await client.send_message(self.peer, message, entities=entities, reply_to=reply_to)
 
     async def _handle_matrix_file(self, client, message, reply_to):
         file = await self.main_intent.download_file(message["url"])
@@ -596,15 +625,28 @@ class Portal:
         info = message["info"]
         mime = info["mimetype"]
 
-        file_name, caption = self._get_file_meta(message["body"], mime)
+        file_name = self._get_file_meta(message["mxtg_filename"], mime)
 
         attributes = [DocumentAttributeFilename(file_name=file_name)]
         if "w" in info and "h" in info:
             attributes.append(DocumentAttributeImageSize(w=info["w"], h=info["h"]))
 
+        caption = message["body"] if message["body"] != file_name else None
         return await client.send_file(self.peer, file, mime, caption=caption,
                                       attributes=attributes, file_name=file_name,
                                       reply_to=reply_to)
+
+    async def _handle_matrix_location(self, client, message, reply_to):
+        try:
+            lat, long = message["geo_uri"][len("geo:"):].split(",")
+            lat, long = float(lat), float(long)
+        except (KeyError, ValueError):
+            self.log.exception("Failed to parse location")
+            return None
+        message, entities = await self._matrix_event_to_entities(client, message)
+        media = MessageMediaGeo(geo=GeoPoint(lat, long))
+        return await client.send_media(self.peer, media, reply_to=reply_to, caption=message,
+                                       entities=entities)
 
     async def handle_matrix_message(self, sender, message, event_id):
         client = sender.client if sender.logged_in else self.bot.client
@@ -612,16 +654,24 @@ class Portal:
                  else (sender.tgid if sender.logged_in else self.bot.tgid))
         reply_to = formatter.matrix_reply_to_telegram(message, space, room_id=self.mxid)
 
+        message["mxtg_filename"] = message["body"]
         self._preprocess_matrix_message(sender, message)
         type = message["msgtype"]
 
         if type == "m.text" or (self.bridge_notices and type == "m.notice"):
             response = await self._handle_matrix_text(client, message, reply_to)
+        elif type == "m.location":
+            response = await self._handle_matrix_location(client, message, reply_to)
         elif type in ("m.image", "m.file", "m.audio", "m.video"):
             response = await self._handle_matrix_file(client, message, reply_to)
         else:
             self.log.debug("Unhandled Matrix event: %s", message)
+            response = None
+
+        if not response:
             return
+
+        self.log.debug("Handled Matrix message: %s", response)
         self.is_duplicate(response, (event_id, space))
         self.db.add(DBMessage(
             tgid=response.id,
@@ -629,6 +679,20 @@ class Portal:
             mx_room=self.mxid,
             mxid=event_id))
         self.db.commit()
+
+    async def handle_matrix_pin(self, sender, pinned_message):
+        if self.peer_type != "channel":
+            return
+        try:
+            if not pinned_message:
+                await sender.client(UpdatePinnedMessageRequest(channel=self.peer, id=0))
+            else:
+                message = DBMessage.query.filter(DBMessage.mxid == pinned_message,
+                                                 DBMessage.tg_space == self.tgid,
+                                                 DBMessage.mx_room == self.mxid).one_or_none()
+                await sender.client(UpdatePinnedMessageRequest(channel=self.peer, id=message.tgid))
+        except ChatNotModifiedError:
+            pass
 
     async def handle_matrix_deletion(self, deleter, event_id):
         space = self.tgid if self.peer_type == "channel" else deleter.tgid
@@ -650,7 +714,7 @@ class Portal:
                                         edit_messages=moderator, delete_messages=moderator,
                                         ban_users=moderator, invite_users=moderator,
                                         invite_link=moderator, pin_messages=moderator,
-                                        add_admins=admin, manage_call=moderator)
+                                        add_admins=admin)
             await sender.client(
                 EditAdminRequest(channel=await self.get_input_entity(sender),
                                  user_id=user_id, admin_rights=rights))
@@ -823,12 +887,19 @@ class Portal:
         if self.mxid:
             await user.intent.set_typing(self.mxid, is_typing=True)
 
-    async def handle_telegram_photo(self, source, intent, evt, relates_to=None):
+    async def handle_telegram_photo(self, source: u.User, intent, evt: Message, relates_to=None):
         largest_size = self._get_largest_photo_size(evt.media.photo)
         file = await util.transfer_file_to_matrix(self.db, source.client, intent,
                                                   largest_size.location)
         if not file:
             return None
+        if config["bridge.inline_images"] and (evt.message or evt.fwd_from or evt.reply_to_msg_id):
+            text, html, relates_to = await formatter.telegram_to_matrix(
+                evt, source, self.main_intent,
+                prefix_html=f"<img src='{file.mxc}' alt='Inline Telegram photo'/><br/>",
+                prefix_text="Inline image: ")
+            await intent.set_typing(self.mxid, is_typing=False)
+            return await intent.send_text(self.mxid, text, html=html, relates_to=relates_to)
         info = {
             "h": largest_size.h,
             "w": largest_size.w,
@@ -842,25 +913,40 @@ class Portal:
         return await intent.send_image(self.mxid, file.mxc, info=info, text=name,
                                        relates_to=relates_to)
 
-    async def handle_telegram_document(self, source, intent, evt, relates_to=None):
+    async def handle_telegram_document(self, source, intent, evt: Message, relates_to=None):
         document = evt.media.document
-        file = await util.transfer_file_to_matrix(self.db, source.client, intent, document)
+        file = await util.transfer_file_to_matrix(self.db, source.client, intent, document,
+                                                  document.thumb)
         if not file:
             return None
         name = evt.message
+        width, height = file.width, file.height
         for attr in document.attributes:
-            if not name and isinstance(attr, DocumentAttributeFilename):
-                name = attr.file_name
+            if isinstance(attr, DocumentAttributeFilename):
+                name = name or attr.file_name
                 if not file.was_converted:
                     (mime_from_name, _) = mimetypes.guess_type(name)
                     file.mime_type = mime_from_name or file.mime_type
             elif isinstance(attr, DocumentAttributeSticker):
                 name = f"Sticker for {attr.alt}"
+            elif isinstance(attr, DocumentAttributeVideo) and (not width or not height):
+                width, height = attr.w, attr.h
         mime_type = document.mime_type or file.mime_type
         info = {
-            "size": document.size,
+            "size": file.size,
             "mimetype": mime_type,
         }
+        if file.thumbnail:
+            info["thumbnail_url"] = file.thumbnail.mxc
+            info["thumbnail_info"] = {
+                "mimetype": file.thumbnail.mime_type,
+                "h": file.thumbnail.height or document.thumb.h,
+                "w": file.thumbnail.width or document.thumb.w,
+                "size": file.thumbnail.size,
+            }
+        if height and width:
+            info["h"] = height
+            info["w"] = width
         type = "m.file"
         if mime_type.startswith("video/"):
             type = "m.video"
@@ -900,11 +986,7 @@ class Portal:
 
     async def handle_telegram_text(self, source, intent, evt):
         self.log.debug(f"Sending {evt.message} to {self.mxid} by {intent.mxid}")
-        text, html, relates_to = await formatter.telegram_to_matrix(
-            evt, source,
-            config["bridge.native_replies"],
-            config["bridge.link_in_reply"],
-            self.main_intent)
+        text, html, relates_to = await formatter.telegram_to_matrix(evt, source, self.main_intent)
         await intent.set_typing(self.mxid, is_typing=False)
         return await intent.send_text(self.mxid, text, html=html, relates_to=relates_to)
 
@@ -928,11 +1010,8 @@ class Portal:
             return
 
         evt.reply_to_msg_id = evt.id
-        text, html, relates_to = await formatter.telegram_to_matrix(
-            evt, source,
-            config["bridge.native_replies"],
-            config["bridge.link_in_reply"],
-            self.main_intent, reply_text="Edit")
+        text, html, relates_to = await formatter.telegram_to_matrix(evt, source, self.main_intent,
+                                                                    is_edit=True)
         intent = sender.intent if sender else self.main_intent
         await intent.set_typing(self.mxid, is_typing=False)
         response = await intent.send_text(self.mxid, text, html=html, relates_to=relates_to)
@@ -966,7 +1045,9 @@ class Portal:
                     DBMessage(tgid=evt.id, mx_room=self.mxid, mxid=mxid, tg_space=tg_space))
                 self.db.commit()
             return
-        media = evt.media if hasattr(evt, "media") else None
+        allowed_media = (MessageMediaPhoto, MessageMediaDocument, MessageMediaGeo)
+        media = evt.media if hasattr(evt, "media") and isinstance(evt.media,
+                                                                  allowed_media) else None
         intent = sender.intent if sender else self.main_intent
         if not media and evt.message:
             response = await self.handle_telegram_text(source, intent, evt)
@@ -988,7 +1069,7 @@ class Portal:
 
         if not response:
             return
-
+        self.log.debug("Handled Telegram message: %s", evt)
         mxid = response["event_id"]
         DBMessage.query \
             .filter(DBMessage.mx_room == self.mxid,
@@ -1013,7 +1094,6 @@ class Portal:
                          or self.is_duplicate_action(update))
         if should_ignore:
             return
-
         # TODO figure out how to see changes to about text / channel username
         if isinstance(action, MessageActionChatEditTitle):
             await self.update_title(action.title, save=True)
@@ -1031,6 +1111,8 @@ class Portal:
             self.peer_type = "channel"
             self.migrate_and_save(action.channel_id)
             await sender.intent.send_emote(self.mxid, "upgraded this group to a supergroup.")
+        elif isinstance(action, MessageActionPinMessage):
+            await self.receive_telegram_pin_sender(sender)
         else:
             self.log.debug("Unhandled Telegram action in %s: %s", self.title, action)
 
@@ -1045,13 +1127,30 @@ class Portal:
             levels["users"][puppet.mxid] = 50
         await self.main_intent.set_power_levels(self.mxid, levels)
 
-    async def update_telegram_pin(self, source, id):
-        space = self.tgid if self.peer_type == "channel" else source.tgid
-        message = DBMessage.query.get((id, space))
+    async def receive_telegram_pin_sender(self, sender):
+        self._temp_pinned_message_sender = sender
+        if self._temp_pinned_message_id:
+            await self.update_telegram_pin()
+
+    async def update_telegram_pin(self):
+        intent = (self._temp_pinned_message_sender.intent
+                  if self._temp_pinned_message_sender else self.main_intent)
+        id = self._temp_pinned_message_id
+        self._temp_pinned_message_id = None
+        self._temp_pinned_message_sender = None
+
+        message = DBMessage.query.get((id, self.tgid))
         if message:
-            await self.main_intent.set_pinned_messages(self.mxid, [message.mxid])
+            await intent.set_pinned_messages(self.mxid, [message.mxid])
         else:
-            await self.main_intent.set_pinned_messages(self.mxid, [])
+            await intent.set_pinned_messages(self.mxid, [])
+
+    async def receive_telegram_pin_id(self, id):
+        if id == 0:
+            return await self.update_telegram_pin()
+        self._temp_pinned_message_id = id
+        if self._temp_pinned_message_sender:
+            await self.update_telegram_pin()
 
     @staticmethod
     def _get_level_from_participant(participant, _):

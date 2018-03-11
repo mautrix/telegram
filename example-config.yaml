@@ -2,6 +2,7 @@
 homeserver:
     address: https://matrix.org
     domain: matrix.org
+    verify_ssl: true
 
 # Application service host/registration related details
 # Changing these values requires regeneration of the registration.
@@ -70,15 +71,11 @@ bridge:
     - username
     - phone number
 
-    # Whether or not to use native Matrix replies. At the time of writing, only riot-web supports
-    # replies and the format of them is subject to change.
-    native_replies: true
-    # If native replies are disabled, should the custom replies contain a link to the message being
-    # replied to?
-    link_in_reply: false
     # Show message editing as a reply to the original message.
     # If this is false, message edits are not shown at all, as Matrix does not support editing yet.
     edits_as_replies: false
+    # Highlight changed/added parts in edits. Requires lxml.
+    highlight_edits: false
     # Whether or not Matrix bot messages (type m.notice) should be bridged.
     bridge_notices: false
     # The maximum number of simultaneous Telegram deletions to handle.
@@ -87,8 +84,13 @@ bridge:
     # Allow logging in within Matrix. If false, the only way to log in is using the out-of-Matrix
     # login website (see appservice.public config section)
     allow_matrix_login: true
-    # Whether or not to allow creating portals from Telegram.
-    authless_relaybot_portals: true
+    # Use inline images instead of m.image to make rich captions possible.
+    # N.B. Inline images are not supported on all clients (e.g. Riot iOS).
+    inline_images: false
+    # Whether or not to bridge plaintext highlights.
+    # Only enable this if your displayname_template has some static part that the bridge can use to
+    # reliably identify what is a plaintext highlight.
+    plaintext_highlights: false
 
     # The prefix for commands. Only required in non-management rooms.
     command_prefix: "!tg"
@@ -108,6 +110,17 @@ bridge:
         "public.example.com": "full"
         "@admin:example.com": "admin"
 
+    # Options related to the message relay Telegram bot.
+    relaybot:
+        # Whether or not to allow creating portals from Telegram.
+        authless_portals: true
+        # Whether or not to allow Telegram group admins to use the bot commands.
+        whitelist_group_admins: true
+        # List of usernames/user IDs who are also allowed to use the bot commands.
+        whitelist:
+        - myusername
+        - 12345678
+
 # Telegram config
 telegram:
     # Get your own API keys at https://my.telegram.org/apps
@@ -118,4 +131,4 @@ telegram:
 
 # The version of the config. The bridge will read this and automatically update the config if
 # the schema has changed. For the latest version, check the example config.
-version: 1
+version: 2

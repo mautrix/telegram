@@ -3,17 +3,17 @@
 # Copyright (C) 2018 Tulir Asokan
 #
 # This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
+# it under the terms of the GNU Affero General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
 # This program is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
+# GNU Affero General Public License for more details.
 #
-# You should have received a copy of the GNU General Public License
-# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
 import asyncio
 
 from telethon_aio.errors import *
@@ -21,6 +21,24 @@ from mautrix_appservice import MatrixRequestError
 
 from .. import portal as po
 from . import command_handler, CommandEvent
+
+
+@command_handler(needs_admin=True, needs_auth=False, name="set-pl")
+async def set_power_level(evt: CommandEvent):
+    try:
+        level = int(evt.args[0])
+    except KeyError:
+        return await evt.reply("**Usage:** `$cmdprefix+sp set-power <level> [mxid]`")
+    except ValueError:
+        return await evt.reply("The level must be an integer.")
+    levels = await evt.az.intent.get_power_levels(evt.room_id)
+    mxid = evt.args[1] if len(evt.args) > 1 else evt.sender.mxid
+    levels["users"][mxid] = level
+    try:
+        await evt.az.intent.set_power_levels(evt.room_id, levels)
+    except MatrixRequestError:
+        evt.log.exception("Failed to set power level.")
+        return await evt.reply("Failed to set power level.")
 
 
 @command_handler()

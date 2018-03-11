@@ -3,17 +3,17 @@
 # Copyright (C) 2018 Tulir Asokan
 #
 # This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
+# it under the terms of the GNU Affero General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
 # This program is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
+# GNU Affero General Public License for more details.
 #
-# You should have received a copy of the GNU General Public License
-# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from difflib import SequenceMatcher
 import re
 import logging
@@ -186,6 +186,21 @@ class Puppet:
                 return puppet
 
         puppet = DBPuppet.query.filter(DBPuppet.username == username).one_or_none()
+        if puppet:
+            return cls.from_db(puppet)
+
+        return None
+
+    @classmethod
+    def find_by_displayname(cls, displayname):
+        if not displayname:
+            return None
+
+        for _, puppet in cls.cache.items():
+            if puppet.displayname and puppet.displayname == displayname:
+                return puppet
+
+        puppet = DBPuppet.query.filter(DBPuppet.displayname == displayname).one_or_none()
         if puppet:
             return cls.from_db(puppet)
 

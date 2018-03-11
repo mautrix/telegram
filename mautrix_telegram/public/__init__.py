@@ -3,17 +3,17 @@
 # Copyright (C) 2018 Tulir Asokan
 #
 # This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
+# it under the terms of the GNU Affero General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
 # This program is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
+# GNU Affero General Public License for more details.
 #
-# You should have received a copy of the GNU General Public License
-# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from aiohttp import web
 from mako.template import Template
 import asyncio
@@ -46,7 +46,9 @@ class PublicBridgeWebsite:
         user = (User.get_by_mxid(request.rel_url.query["mxid"], create=False)
                 if "mxid" in request.rel_url.query else None)
         if not user:
-            return self.render_login(mxid=request.rel_url.query["mxid"], state="request")
+            return self.render_login(
+                mxid=request.rel_url.query["mxid"] if "mxid" in request.rel_url.query else None,
+                state="request")
         elif not user.whitelisted:
             return self.render_login(mxid=user.mxid, error="You are not whitelisted.", status=403)
         await user.ensure_started()
@@ -144,7 +146,7 @@ class PublicBridgeWebsite:
         if "mxid" not in data:
             return self.render_login(error="Please enter your Matrix ID.", status=400)
 
-        user = await User.get_by_mxid(data["mxid"]).ensure_started()
+        user = await User.get_by_mxid(data["mxid"]).ensure_started(even_if_no_session=True)
         if not user.whitelisted:
             return self.render_login(mxid=user.mxid, error="You are not whitelisted.", status=403)
         elif user.logged_in:
@@ -153,7 +155,8 @@ class PublicBridgeWebsite:
         if "phone" in data:
             return await self.post_login_phone(user, data["phone"])
         elif "code" in data:
-            resp = await self.post_login_code(user, data["code"], password_in_data="password" in data)
+            resp = await self.post_login_code(user, data["code"],
+                                              password_in_data="password" in data)
             if resp or "password" not in data:
                 return resp
         elif "password" not in data:

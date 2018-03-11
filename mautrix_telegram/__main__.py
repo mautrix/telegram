@@ -3,17 +3,17 @@
 # Copyright (C) 2018 Tulir Asokan
 #
 # This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
+# it under the terms of the GNU Affero General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
 # This program is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
+# GNU Affero General Public License for more details.
 #
-# You should have received a copy of the GNU General Public License
-# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
 import argparse
 import sys
 import logging
@@ -35,6 +35,7 @@ from .user import init as init_user, User
 from .bot import init as init_bot
 from .portal import init as init_portal
 from .puppet import init as init_puppet
+from .formatter import init as init_formatter
 from .public import PublicBridgeWebsite
 from .context import Context
 
@@ -85,7 +86,8 @@ loop = asyncio.get_event_loop()
 
 appserv = AppService(config["homeserver.address"], config["homeserver.domain"],
                      config["appservice.as_token"], config["appservice.hs_token"],
-                     config["appservice.bot_username"], log="mau.as", loop=loop)
+                     config["appservice.bot_username"], log="mau.as", loop=loop,
+                     verify_ssl=config["homeserver.verify_ssl"])
 
 context = Context(appserv, db_session, config, loop, None, None, telethon_session_container)
 
@@ -98,6 +100,7 @@ with appserv.run(config["appservice.hostname"], config["appservice.port"]) as st
     init_abstract_user(context)
     context.bot = init_bot(context)
     context.mx = MatrixHandler(context)
+    init_formatter(context)
     init_portal(context)
     init_puppet(context)
     startup_actions = init_user(context) + [start, context.mx.init_as_bot()]
