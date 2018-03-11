@@ -494,10 +494,13 @@ class Portal:
         except MatrixRequestError:
             members = []
         for user in members:
-            is_puppet = p.Puppet.get_id_from_mxid(user)
-            if user != intent.mxid and (not puppets_only or is_puppet):
+            puppet = p.Puppet.get_by_mxid(user, create=False)
+            if user != intent.mxid and (not puppets_only or puppet):
                 try:
-                    await intent.kick(room_id, user, message)
+                    if puppet:
+                        await puppet.intent.leave_room(room_id)
+                    else:
+                        await intent.kick(room_id, user, message)
                 except (MatrixRequestError, IntentError):
                     pass
         await intent.leave_room(room_id)
