@@ -447,7 +447,7 @@ class Portal:
                         break
                     participants += response.participants
                     users += response.users
-                    offset += len(response.users)
+                    offset += len(response.participants)
                 return users, participants
             except ChatAdminRequiredError:
                 return [], []
