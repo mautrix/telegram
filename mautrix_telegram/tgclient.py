@@ -58,7 +58,7 @@ class MautrixTelegramClient(TelegramClient):
 
         file_handle = await self.upload_file(file, file_name=file_name, use_cache=False)
 
-        if mime_type == "image/png":
+        if mime_type == "image/png" or mime_type == "image/jpeg":
             media = InputMediaUploadedPhoto(file_handle)
         else:
             attributes = attributes or []
