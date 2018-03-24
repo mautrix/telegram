@@ -28,7 +28,7 @@ from telethon.tl.types import (MessageEntityMention, MessageEntityMentionName,
                                MessageEntityEmail, MessageEntityUrl, MessageEntityTextUrl,
                                MessageEntityBold, MessageEntityItalic, MessageEntityCode,
                                MessageEntityPre, MessageEntityBotCommand, Message, PeerChannel,
-                               MessageEntityHashtag, TypeMessageEntity)
+                               MessageEntityHashtag, TypeMessageEntity, MessageFwdHeader)
 
 from mautrix_appservice import MatrixRequestError
 from mautrix_appservice.intent_api import IntentAPI
@@ -60,26 +60,37 @@ def telegram_reply_to_matrix(evt: Message, source: u.User) -> dict:
 
 
 async def _add_forward_header(source, text: str, html: Optional[str],
-                              fwd_from_id: Optional[int]) -> Tuple[str, str]:
+                              fwd_from: MessageFwdHeader) -> Tuple[str, str]:
     if not html:
         html = escape(text)
-    user = u.User.get_by_tgid(fwd_from_id)
-    if user:
-        fwd_from = f"<a href='https://matrix.to/#/{user.mxid}'>{user.mxid}</a>"
-    else:
-        puppet = pu.Puppet.get(fwd_from_id, create=False)
-        if puppet and puppet.displayname:
-            fwd_from = f"<a href='https://matrix.to/#/{puppet.mxid}'>{puppet.displayname}</a>"
-        else:
-            user = await source.client.get_entity(fwd_from_id)
+    fwd_from_html, fwd_from_text = None, None
+    if fwd_from.from_id:
+        user = u.User.get_by_tgid(fwd_from.from_id)
+        if user:
+            fwd_from_text = user.displayname or user.mxid
+            fwd_from_html = f"<a href='https://matrix.to/#/{user.mxid}'>{fwd_from_text}</a>"
+
+        if not fwd_from_text:
+            puppet = pu.Puppet.get(fwd_from.from_id, create=False)
+            if puppet and puppet.displayname:
+                fwd_from_text = puppet.displayname or puppet.mxid
+                fwd_from_html = f"<a href='https://matrix.to/#/{puppet.mxid}'>{fwd_from_text}</a>"
+
+        if not fwd_from_text:
+            user = await source.client.get_entity(fwd_from.from_id)
             if user:
-                fwd_from = f"<b>{pu.Puppet.get_displayname(user, format=False)}</b>"
-            else:
-                fwd_from = None
-    if not fwd_from:
-        fwd_from = "<b>Unknown user</b>"
+                fwd_from_text = pu.Puppet.get_displayname(user, format=False)
+                fwd_from_html = f"<b>{fwd_from_text}</b>"
+
+    if not fwd_from_text:
+        if fwd_from.from_id:
+            fwd_from_text = "Unknown user"
+        else:
+            fwd_from_text = "Unknown source"
+        fwd_from_html = f"<b>{fwd_from_text}</b>"
+
     text = f"Forwarded from {fwd_from}:\n{text}"
-    html = (f"Forwarded message from {fwd_from}<br/>"
+    html = (f"Forwarded message from {fwd_from_html}<br/>"
             f"<blockquote>{html}</blockquote>")
     return text, html
 
@@ -169,7 +180,7 @@ async def telegram_to_matrix(evt: Message, source: u.User, main_intent: Optional
         text = prefix_text + text
 
     if evt.fwd_from:
-        text, html = await _add_forward_header(source, text, html, evt.fwd_from.from_id)
+        text, html = await _add_forward_header(source, text, html, evt.fwd_from)
 
     if evt.reply_to_msg_id:
         text, html = await _add_reply_header(source, text, html, evt, relates_to, main_intent,
