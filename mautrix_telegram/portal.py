@@ -25,10 +25,10 @@ import re
 
 import magic
 
-from telethon_aio.tl.functions.messages import *
-from telethon_aio.tl.functions.channels import *
-from telethon_aio.errors.rpc_error_list import *
-from telethon_aio.tl.types import *
+from telethon.tl.functions.messages import *
+from telethon.tl.functions.channels import *
+from telethon.errors.rpc_error_list import *
+from telethon.tl.types import *
 from mautrix_appservice import MatrixRequestError, IntentError
 
 from .db import Portal as DBPortal, Message as DBMessage

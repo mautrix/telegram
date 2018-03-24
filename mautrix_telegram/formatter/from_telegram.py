@@ -24,19 +24,11 @@ except ImportError:
 import logging
 import re
 
-from telethon_aio.tl.types import (MessageEntityMention, MessageEntityMentionName,
-                                   MessageEntityEmail, MessageEntityUrl, MessageEntityTextUrl,
-                                   MessageEntityBold, MessageEntityItalic, MessageEntityCode,
-                                   MessageEntityPre, MessageEntityBotCommand, Message, PeerChannel,
-                                   MessageEntityHashtag)
-
-try:
-    from telethon_aio.tl.types import TypeMessageEntity
-except ImportError:
-    TypeMessageEntity = Union[
-        MessageEntityMention, MessageEntityHashtag, MessageEntityBotCommand, MessageEntityUrl,
-        MessageEntityEmail, MessageEntityBold, MessageEntityItalic, MessageEntityCode,
-        MessageEntityPre, MessageEntityTextUrl, MessageEntityMentionName]
+from telethon.tl.types import (MessageEntityMention, MessageEntityMentionName,
+                               MessageEntityEmail, MessageEntityUrl, MessageEntityTextUrl,
+                               MessageEntityBold, MessageEntityItalic, MessageEntityCode,
+                               MessageEntityPre, MessageEntityBotCommand, Message, PeerChannel,
+                               MessageEntityHashtag, TypeMessageEntity)
 
 from mautrix_appservice import MatrixRequestError
 from mautrix_appservice.intent_api import IntentAPI

@@ -6,3 +6,4 @@ SQLAlchemy
 alembic
 Markdown
 future-fstrings
+telethon-session-sqlalchemy

@@ -33,10 +33,11 @@ setuptools.setup(
         "ruamel.yaml>=0.15.35,<0.16",
         "future-fstrings>=0.4.2",
         "python-magic>=0.4.15,<0.5",
-        "telethon-aio>=0.18,<0.19" if sys.version_info >= (3, 6) else "telethon-aio-git",
+        "telethon-aio==0.18.1" if sys.version_info >= (3, 6) else "telethon-aio-git",
+        "telethon-session-sqlalchemy>=0.1,<0.2",
     ],
     dependency_links=[
-        "https://github.com/tulir/telethon-asyncio/tarball/9b389cfb4b6d3876e9661c23507f17e96897e4b0#egg=telethon-aio-git-0.18.0+1"
+        "https://github.com/tulir/telethon-asyncio/tarball/f4fa3278185f823dc1dceb34604529246cb6a4c8#egg=telethon-aio-git-0.18.1+1"
     ],
     extras_require=extras,
 

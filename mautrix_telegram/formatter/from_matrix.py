@@ -22,20 +22,12 @@ import math
 import re
 import logging
 
-from telethon_aio.tl.types import (MessageEntityMention,
-                                   InputMessageEntityMentionName, MessageEntityEmail,
-                                   MessageEntityUrl, MessageEntityTextUrl, MessageEntityBold,
-                                   MessageEntityItalic, MessageEntityCode, MessageEntityPre,
-                                   MessageEntityBotCommand, MessageEntityHashtag,
-                                   MessageEntityMentionName, InputUser)
-
-try:
-    from telethon_aio.tl.types import TypeMessageEntity
-except ImportError:
-    TypeMessageEntity = Union[
-        MessageEntityMention, MessageEntityHashtag, MessageEntityBotCommand, MessageEntityUrl,
-        MessageEntityEmail, MessageEntityBold, MessageEntityItalic, MessageEntityCode,
-        MessageEntityPre, MessageEntityTextUrl, MessageEntityMentionName]
+from telethon.tl.types import (MessageEntityMention,
+                               InputMessageEntityMentionName, MessageEntityEmail,
+                               MessageEntityUrl, MessageEntityTextUrl, MessageEntityBold,
+                               MessageEntityItalic, MessageEntityCode, MessageEntityPre,
+                               MessageEntityBotCommand, MessageEntityHashtag,
+                               MessageEntityMentionName, InputUser, TypeMessageEntity)
 
 from ..context import Context
 from .. import user as u, puppet as pu, portal as po

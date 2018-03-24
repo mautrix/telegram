@@ -14,10 +14,10 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from telethon_aio.errors import *
-from telethon_aio.tl.types import User as TLUser
-from telethon_aio.tl.functions.messages import ImportChatInviteRequest, CheckChatInviteRequest
-from telethon_aio.tl.functions.channels import JoinChannelRequest
+from telethon.errors import *
+from telethon.tl.types import User as TLUser
+from telethon.tl.functions.messages import ImportChatInviteRequest, CheckChatInviteRequest
+from telethon.tl.functions.channels import JoinChannelRequest
 
 from .. import puppet as pu, portal as po
 from . import command_handler

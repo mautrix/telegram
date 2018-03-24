@@ -21,6 +21,7 @@ import logging
 import magic
 from sqlalchemy.exc import IntegrityError, InvalidRequestError
 from sqlalchemy.orm.exc import FlushError
+
 try:
     from PIL import Image
 except ImportError:
@@ -34,9 +35,9 @@ try:
 except ImportError:
     VideoFileClip = random = string = os = mimetypes = None
 
-from telethon_aio.tl.types import (Document, FileLocation, InputFileLocation,
-                                   InputDocumentFileLocation, PhotoSize, PhotoCachedSize)
-from telethon_aio.errors import LocationInvalidError
+from telethon.tl.types import (Document, FileLocation, InputFileLocation,
+                               InputDocumentFileLocation, PhotoSize, PhotoCachedSize)
+from telethon.errors import LocationInvalidError
 
 from ..db import TelegramFile as DBTelegramFile
 

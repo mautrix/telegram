@@ -18,17 +18,16 @@ from typing import Awaitable, Callable
 import logging
 import re
 
-from telethon_aio.tl.types import *
-from telethon_aio.tl.functions.messages import GetChatsRequest, GetFullChatRequest
-from telethon_aio.tl.functions.channels import GetChannelsRequest, GetParticipantRequest
-from telethon_aio.errors import ChannelInvalidError, ChannelPrivateError
+from telethon.tl.types import *
+from telethon.tl.functions.messages import GetChatsRequest, GetFullChatRequest
+from telethon.tl.functions.channels import GetChannelsRequest, GetParticipantRequest
+from telethon.errors import ChannelInvalidError, ChannelPrivateError
 
 from .abstract_user import AbstractUser
 from .db import BotChat
 from . import puppet as pu, portal as po, user as u
 
 config = None
-
 
 ReplyFunc = Callable[[str], Awaitable[Message]]
 

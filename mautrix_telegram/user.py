@@ -18,9 +18,9 @@ import logging
 import asyncio
 import re
 
-from telethon_aio.tl.types import *
-from telethon_aio.tl.types.contacts import ContactsNotModified
-from telethon_aio.tl.functions.contacts import GetContactsRequest, SearchRequest
+from telethon.tl.types import *
+from telethon.tl.types.contacts import ContactsNotModified
+from telethon.tl.functions.contacts import GetContactsRequest, SearchRequest
 from mautrix_appservice import MatrixRequestError
 
 from .db import User as DBUser, Contact as DBContact

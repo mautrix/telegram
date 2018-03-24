@@ -17,7 +17,7 @@
 import platform
 import os
 
-from telethon_aio.tl.types import *
+from telethon.tl.types import *
 from mautrix_appservice import MatrixRequestError
 
 from .tgclient import MautrixTelegramClient

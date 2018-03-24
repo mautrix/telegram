@@ -22,7 +22,7 @@ import asyncio
 import sqlalchemy as sql
 from sqlalchemy import orm
 
-from telethon_aio.sessions import AlchemySessionContainer
+from alchemysession import AlchemySessionContainer
 from mautrix_appservice import AppService
 
 from .base import Base
@@ -70,7 +70,7 @@ if args.generate_registration:
     sys.exit(0)
 
 if config["appservice.debug"]:
-    telethon_log = logging.getLogger("telethon_aio")
+    telethon_log = logging.getLogger("telethon")
     telethon_log.addHandler(handler)
     telethon_log.setLevel(logging.DEBUG)
     log.setLevel(logging.DEBUG)
