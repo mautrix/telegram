@@ -891,6 +891,11 @@ class Portal:
         if self.mxid:
             await user.intent.set_typing(self.mxid, is_typing=True)
 
+    def get_external_url(self, evt: Message):
+        if self.peer_type == "channel" and self.username is not None:
+            return f"https://t.me/{self.username}/{evt.id}"
+        return None
+
     async def handle_telegram_photo(self, source: u.User, intent, evt: Message, relates_to=None):
         largest_size = self._get_largest_photo_size(evt.media.photo)
         file = await util.transfer_file_to_matrix(self.db, source.client, intent,
@@ -903,7 +908,9 @@ class Portal:
                 prefix_html=f"<img src='{file.mxc}' alt='Inline Telegram photo'/><br/>",
                 prefix_text="Inline image: ")
             await intent.set_typing(self.mxid, is_typing=False)
-            return await intent.send_text(self.mxid, text, html=html, relates_to=relates_to)
+            return await intent.send_text(self.mxid, text, html=html, relates_to=relates_to,
+                                          timestamp=evt.date,
+                                          external_url=self.get_external_url(evt))
         info = {
             "h": largest_size.h,
             "w": largest_size.w,
@@ -915,7 +922,8 @@ class Portal:
         name = evt.message
         await intent.set_typing(self.mxid, is_typing=False)
         return await intent.send_image(self.mxid, file.mxc, info=info, text=name,
-                                       relates_to=relates_to)
+                                       relates_to=relates_to, timestamp=evt.date,
+                                       external_url=self.get_external_url(evt))
 
     async def handle_telegram_document(self, source, intent, evt: Message, relates_to=None):
         document = evt.media.document
@@ -960,9 +968,11 @@ class Portal:
             type = "m.image"
         await intent.set_typing(self.mxid, is_typing=False)
         return await intent.send_file(self.mxid, file.mxc, info=info, text=name, file_type=type,
-                                      relates_to=relates_to)
+                                      relates_to=relates_to, timestamp=evt.date,
+                                      external_url=self.get_external_url(evt))
 
-    def handle_telegram_location(self, source, intent, location, relates_to=None):
+    def handle_telegram_location(self, source, intent, evt, relates_to=None):
+        location = evt.media.geo
         long = location.long
         lat = location.lat
         long_char = "E" if long > 0 else "W"
@@ -986,13 +996,14 @@ class Portal:
             "format": "org.matrix.custom.html",
             "formatted_body": formatted_body,
             "m.relates_to": relates_to or None,
-        })
+        }, timestamp=evt.date, external_url=self.get_external_url(evt))
 
     async def handle_telegram_text(self, source, intent, evt):
         self.log.debug(f"Sending {evt.message} to {self.mxid} by {intent.mxid}")
         text, html, relates_to = await formatter.telegram_to_matrix(evt, source, self.main_intent)
         await intent.set_typing(self.mxid, is_typing=False)
-        return await intent.send_text(self.mxid, text, html=html, relates_to=relates_to)
+        return await intent.send_text(self.mxid, text, html=html, relates_to=relates_to,
+                                      timestamp=evt.date, external_url=self.get_external_url(evt))
 
     async def handle_telegram_edit(self, source, sender, evt):
         if not self.mxid:
@@ -1018,7 +1029,9 @@ class Portal:
                                                                     is_edit=True)
         intent = sender.intent if sender else self.main_intent
         await intent.set_typing(self.mxid, is_typing=False)
-        response = await intent.send_text(self.mxid, text, html=html, relates_to=relates_to)
+        response = await intent.send_text(self.mxid, text, html=html, relates_to=relates_to,
+                                          timestamp=evt.date,
+                                          external_url=self.get_external_url(evt))
 
         mxid = response["event_id"]
 
@@ -1062,8 +1075,7 @@ class Portal:
             elif isinstance(media, MessageMediaDocument):
                 response = await self.handle_telegram_document(source, intent, evt, relates_to)
             elif isinstance(media, MessageMediaGeo):
-                response = await self.handle_telegram_location(source, intent, media.geo,
-                                                               relates_to)
+                response = await self.handle_telegram_location(source, intent, evt, relates_to)
             else:
                 self.log.debug("Unhandled Telegram media: %s", media)
                 return
