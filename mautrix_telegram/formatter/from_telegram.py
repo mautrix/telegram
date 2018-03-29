@@ -15,7 +15,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from html import escape
-from typing import Optional, List, Tuple, Union
+from typing import Optional, List, Tuple
 
 try:
     from lxml.html.diff import htmldiff
@@ -296,10 +296,26 @@ def _parse_name_mention(html: List[str], entity_text: str, user_id: int) -> bool
     return False
 
 
+message_link_regex = re.compile(
+    r"https?://t(?:elegram)?\.(?:me|dog)/([A-Za-z][A-Za-z0-9_]{3,}[A-Za-z0-9])/([0-9]{1,50})")
+
+
 def _parse_url(html: List[str], entity_text: str, url: str) -> bool:
     url = escape(url) if url else entity_text
     if not url.startswith(("https://", "http://", "ftp://", "magnet://")):
         url = "http://" + url
+
+    message_link_match = message_link_regex.match(url)
+    if message_link_match:
+        group, msgid = message_link_match.groups()
+        msgid = int(msgid)
+
+        portal = po.Portal.find_by_username(group)
+        if portal:
+            message = DBMessage.query.get((msgid, portal.tgid))
+            if message:
+                url = f"https://matrix.to/#/{portal.mxid}/{message.mxid}"
+
     html.append(f"<a href='{url}'>{entity_text}</a>")
     return False
 
