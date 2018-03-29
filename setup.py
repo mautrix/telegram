@@ -26,7 +26,7 @@ setuptools.setup(
 
     install_requires=[
         "aiohttp>=3.0.1,<4",
-        "mautrix-appservice>=0.1.1,<0.2.0",
+        "mautrix-appservice>=0.1.2,<0.2.0",
         "SQLAlchemy>=1.2.3,<2",
         "alembic>=0.9.8,<0.10",
         "Markdown>=2.6.11,<3",
@@ -37,7 +37,7 @@ setuptools.setup(
         "telethon-session-sqlalchemy>=0.1,<0.2",
     ],
     dependency_links=[
-        "https://github.com/tulir/telethon-asyncio/tarball/f4fa3278185f823dc1dceb34604529246cb6a4c8#egg=telethon-aio-git-0.18.1+1"
+        "https://github.com/tulir/telethon-asyncio/tarball/b7cd8f38fb640f21d2affc4f96b41e46524c9a51#egg=telethon-aio-git-0.18.1+2"
     ],
     extras_require=extras,
 
