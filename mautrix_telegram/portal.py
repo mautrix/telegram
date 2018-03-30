@@ -332,7 +332,7 @@ class Portal:
     async def add_telegram_user(self, user_id, source=None):
         puppet = p.Puppet.get(user_id)
         if source:
-            entity = await source.client.get_entity(user_id)
+            entity = await source.client.get_entity(PeerUser(user_id))
             await puppet.update_info(source, entity)
             await puppet.intent.join_room(self.mxid)
 
@@ -611,7 +611,8 @@ class Portal:
                 # TODO remove this crap
                 for entity in entities:
                     if isinstance(entity, InputMessageEntityMentionName):
-                        entity.user_id = await client.get_input_entity(entity.user_id.user_id)
+                        entity.user_id = await client.get_input_entity(
+                            PeerUser(entity.user_id.user_id))
             else:
                 message, entities = formatter.matrix_text_to_telegram(event["body"])
         except KeyError:

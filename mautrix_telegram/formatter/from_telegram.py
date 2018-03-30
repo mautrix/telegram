@@ -28,7 +28,7 @@ from telethon.tl.types import (MessageEntityMention, MessageEntityMentionName,
                                MessageEntityEmail, MessageEntityUrl, MessageEntityTextUrl,
                                MessageEntityBold, MessageEntityItalic, MessageEntityCode,
                                MessageEntityPre, MessageEntityBotCommand, Message, PeerChannel,
-                               MessageEntityHashtag, TypeMessageEntity, MessageFwdHeader)
+                               MessageEntityHashtag, TypeMessageEntity, MessageFwdHeader, PeerUser)
 
 from mautrix_appservice import MatrixRequestError
 from mautrix_appservice.intent_api import IntentAPI
@@ -77,7 +77,7 @@ async def _add_forward_header(source, text: str, html: Optional[str],
                 fwd_from_html = f"<a href='https://matrix.to/#/{puppet.mxid}'>{fwd_from_text}</a>"
 
         if not fwd_from_text:
-            user = await source.client.get_entity(fwd_from.from_id)
+            user = await source.client.get_entity(PeerUser(fwd_from.from_id))
             if user:
                 fwd_from_text = pu.Puppet.get_displayname(user, format=False)
                 fwd_from_html = f"<b>{fwd_from_text}</b>"
