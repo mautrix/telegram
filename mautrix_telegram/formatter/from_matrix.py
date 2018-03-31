@@ -17,7 +17,7 @@
 from html import unescape
 from html.parser import HTMLParser
 from collections import deque
-from typing import Optional, List, Tuple, Type, Callable, Dict, Union
+from typing import Optional, List, Tuple, Type, Callable, Dict, Any
 import math
 import re
 import logging
@@ -26,8 +26,7 @@ from telethon.tl.types import (MessageEntityMention,
                                InputMessageEntityMentionName, MessageEntityEmail,
                                MessageEntityUrl, MessageEntityTextUrl, MessageEntityBold,
                                MessageEntityItalic, MessageEntityCode, MessageEntityPre,
-                               MessageEntityBotCommand, MessageEntityHashtag,
-                               MessageEntityMentionName, InputUser, TypeMessageEntity)
+                               MessageEntityBotCommand, InputUser, TypeMessageEntity)
 
 from ..context import Context
 from .. import user as u, puppet as pu, portal as po
@@ -58,7 +57,7 @@ class MatrixParser(HTMLParser):
         self._line_is_new = True
         self._list_entry_is_new = False
 
-    def _parse_url(self, url: str, args: Dict[str, str]
+    def _parse_url(self, url: str, args: Dict[str, Any]
                    ) -> Tuple[Optional[Type[TypeMessageEntity]], Optional[str]]:
         mention = self.mention_regex.match(url)
         if mention:
@@ -69,9 +68,11 @@ class MatrixParser(HTMLParser):
                 return None, None
             if user.username:
                 return MessageEntityMention, f"@{user.username}"
-            else:
+            elif user.tgid:
                 args["user_id"] = InputUser(user.tgid, 0)
                 return InputMessageEntityMentionName, user.displayname or None
+            else:
+                return None, None
 
         room = self.room_regex.match(url)
         if room:
