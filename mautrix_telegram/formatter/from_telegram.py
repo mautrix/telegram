@@ -20,7 +20,7 @@ from typing import Optional, List, Tuple
 try:
     from lxml.html.diff import htmldiff
 except ImportError:
-    htmldiff = None
+    htmldiff = None  # type: function
 import logging
 import re
 
@@ -89,9 +89,10 @@ async def _add_forward_header(source, text: str, html: Optional[str],
             fwd_from_text = "Unknown source"
         fwd_from_html = f"<b>{fwd_from_text}</b>"
 
-    text = f"Forwarded from {fwd_from}:\n{text}"
+    text = "\n".join([f"> {line}" for line in text.split("\n")])
+    text = f"Forwarded from {fwd_from_text}:\n{text}"
     html = (f"Forwarded message from {fwd_from_html}<br/>"
-            f"<blockquote>{html}</blockquote>")
+            f"<blockquote><forward>{html}</forward></blockquote>")
     return text, html
 
 
@@ -142,9 +143,9 @@ async def _add_reply_header(source: u.User, text: str, html: str, evt: Message, 
 
         if is_edit and should_highlight_edits:
             html = highlight_edits(html or escape(text), r_html_body)
-    except (ValueError, KeyError, MatrixRequestError):
+    except (ValueError, KeyError, MatrixRequestError) as e:
         r_sender_link = "unknown user"
-        # r_sender = "unknown user"
+        r_displayname = "unknown user"
         r_text_body = "Failed to fetch message"
         r_html_body = "<em>Failed to fetch message</em>"
 
