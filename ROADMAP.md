@@ -1,16 +1,9 @@
 # Features & roadmap
 
 * Matrix → Telegram
-  * [x] Message content
-    * [x] Plaintext messages
-    * [x] Formatted messages
-    * [x] Bot commands (!command -> /command)
-    * [x] Mentions
-    * [x] Rich quotes
-    * [x] Locations (not implemented in Riot)
-    * [x] Images
-    * [x] Files
+  * [x] Message content (text, formatting, files, etc..)
   * [x] Message redactions
+  * [ ] ‡ Message history
   * [ ] † Presence
   * [ ] † Typing notifications
   * [ ] † Read receipts
@@ -20,32 +13,17 @@
       * [ ] Non-hardcoded PL requirements
 	* [x] Supergroups/channels
 	  * [ ] Precise bridging (non-hardcoded PL requirements, bridge specific permissions, etc..)
-  * [x] Membership actions
-    * [x] Inviting (both puppets and Matrix users)
-    * [x] Kicking
-    * [x] Joining (chat username as alias)
-    * [x] Leaving
+  * [x] Membership actions (invite/kick/join/leave)
   * [x] Room metadata changes (name, topic, avatar)
   * [x] Initial room metadata
   * [ ] User metadata
     * [ ] Initial displayname/username/avatar at register
     * [ ] ‡ Changes to displayname/avatar
 * Telegram → Matrix
-  * [x] Message content
-    * [x] Plaintext messages
-    * [x] Formatted messages
-    * [x] Bot commands (/command -> !command)
-    * [x] Mentions
-    * [x] Replies
-    * [x] Forwards
-    * [x] Images
-    * [x] Locations
-    * [x] Stickers
-    * [x] Audio messages
-    * [x] Video messages
-    * [x] Documents
+  * [x] Message content (text, formatting, files, etc..)
   * [x] Message deletions
   * [x] Message edits
+  * [ ] Message history
   * [x] Avatars
   * [x] Presence
   * [x] Typing notifications
@@ -53,19 +31,14 @@
   * [x] Pinning messages
   * [x] Admin/chat creator status
   * [ ] Supergroup/channel permissions (precise per-user permissions not supported in Matrix)
-  * [x] Membership actions
-    * [x] Inviting
-    * [x] Kicking
-    * [x] Joining/leaving
+  * [x] Membership actions (invite/kick/join/leave)
   * [ ] Chat metadata changes
     * [x] Title
     * [x] Avatar
     * [ ] † About text
     * [ ] † Public channel username
   * [x] Initial chat metadata (about text missing)
-  * [x] User metadata
-    * [x] Initial displayname/avatar
-    * [x] Changes to displayname/avatar
+  * [x] User metadata (displayname/avatar)
   * [x] Supergroup upgrade
 * Misc
   * [x] Automatic portal creation
@@ -74,6 +47,7 @@
   * [x] Private chat creation by inviting Matrix puppet of Telegram user to new room
   * [x] Option to use bot to relay messages for unauthenticated Matrix users
   * [ ] Option to use own Matrix account for messages sent from other Telegram clients
+  * [ ] ‡ Calls (hard, not yet supported by Telethon)
 
 † Information not automatically sent from source, i.e. implementation may not be possible  
 ‡ Maybe, i.e. this feature may or may not be implemented at some point
