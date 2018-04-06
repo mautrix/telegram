@@ -940,7 +940,7 @@ class Portal:
         for attr in attributes:
             if isinstance(attr, DocumentAttributeFilename):
                 attrs["name"] = attrs["name"] or attr.file_name
-                attrs["mime_type"] = mimetypes.guess_type(attr.file_name)
+                attrs["mime_type"], _ = mimetypes.guess_type(attr.file_name)
             elif isinstance(attr, DocumentAttributeSticker):
                 attrs["is_sticker"] = True
                 attrs["sticker_alt"] = attr.alt
