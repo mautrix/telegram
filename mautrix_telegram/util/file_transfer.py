@@ -44,18 +44,20 @@ from ..db import TelegramFile as DBTelegramFile
 log = logging.getLogger("mau.util")
 
 
-def _convert_webp(file, to="png"):
+def _convert_webp(file, to="png", thumbnail_to=None):
     if not Image:
-        return "image/webp", file
+        return "image/webp", file, None, None
     try:
         image = Image.open(BytesIO(file)).convert("RGBA")
+        if thumbnail_to:
+            image.thumbnail(thumbnail_to, Image.ANTIALIAS)
         new_file = BytesIO()
         image.save(new_file, to)
         w, h = image.size
         return f"image/{to}", new_file.getvalue(), w, h
     except Exception:
         log.exception(f"Failed to convert webp to {to}")
-        return "image/webp", file
+        return "image/webp", file, None, None
 
 
 def _temp_file_name(ext):
@@ -123,7 +125,7 @@ async def transfer_thumbnail_to_matrix(client, intent, thumbnail_loc, video, mim
                           width=width, height=height)
 
 
-async def transfer_file_to_matrix(db, client, intent, location, thumbnail=None):
+async def transfer_file_to_matrix(db, client, intent, location, thumbnail=None, is_sticker=False):
     id = _location_to_id(location)
     if not id:
         return None
@@ -141,7 +143,8 @@ async def transfer_file_to_matrix(db, client, intent, location, thumbnail=None):
 
     image_converted = False
     if mime_type == "image/webp":
-        mime_type, file, width, height = _convert_webp(file, to="png")
+        mime_type, file, width, height = _convert_webp(file, to="png", thumbnail_to=(
+            256, 256) if is_sticker else None)
         thumbnail = None
         image_converted = True
 

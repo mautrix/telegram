@@ -19,6 +19,7 @@ from datetime import datetime
 import asyncio
 import random
 import mimetypes
+import unicodedata
 import hashlib
 import logging
 import re
@@ -926,29 +927,51 @@ class Portal:
                                        relates_to=relates_to, timestamp=evt.date,
                                        external_url=self.get_external_url(evt))
 
-    async def handle_telegram_document(self, source, intent, evt: Message, relates_to=None):
-        document = evt.media.document
-        file = await util.transfer_file_to_matrix(self.db, source.client, intent, document,
-                                                  document.thumb)
-        if not file:
-            return None
-        name = evt.message
-        width, height = file.width, file.height
-        for attr in document.attributes:
+    @staticmethod
+    def _parse_telegram_document_attributes(attributes):
+        attrs = {
+            "name": None,
+            "mime_type": None,
+            "is_sticker": False,
+            "sticker_alt": None,
+            "width": None,
+            "height": None,
+        }
+        for attr in attributes:
             if isinstance(attr, DocumentAttributeFilename):
-                name = name or attr.file_name
-                if not file.was_converted:
-                    (mime_from_name, _) = mimetypes.guess_type(name)
-                    file.mime_type = mime_from_name or file.mime_type
+                attrs["name"] = attrs["name"] or attr.file_name
+                attrs["mime_type"] = mimetypes.guess_type(attr.file_name)
             elif isinstance(attr, DocumentAttributeSticker):
-                name = f"Sticker for {attr.alt}"
-            elif isinstance(attr, DocumentAttributeVideo) and (not width or not height):
-                width, height = attr.w, attr.h
+                attrs["is_sticker"] = True
+                attrs["sticker_alt"] = attr.alt
+                attrs["name"] = f"{attr.alt} ({unicodedata.name(attr.alt[0]).lower()})"
+            elif isinstance(attr, DocumentAttributeVideo):
+                attrs["width"], attrs["height"] = attr.w, attr.h
+        print([str(attr) for attr in attributes])
+        print(attrs)
+        return attrs
+
+    @staticmethod
+    def _parse_telegram_document_meta(evt, file, attrs):
+        document = evt.media.document
+        name = evt.message or attrs["name"]
+        if attrs["is_sticker"]:
+            alt = attrs["sticker_alt"]
+            name = f"{alt} ({unicodedata.name(alt[0]).lower()})"
+
         mime_type = document.mime_type or file.mime_type
         info = {
             "size": file.size,
             "mimetype": mime_type,
         }
+
+        if attrs["mime_type"] and not file.was_converted:
+            file.mime_type = attrs["mime_type"] or file.mime_type
+        if file.width and file.height:
+            info["w"], info["h"] = file.width, file.height
+        elif attrs["width"] and attrs["height"]:
+            info["w"], info["h"] = attrs["width"], attrs["height"]
+
         if file.thumbnail:
             info["thumbnail_url"] = file.thumbnail.mxc
             info["thumbnail_info"] = {
@@ -957,20 +980,45 @@ class Portal:
                 "w": file.thumbnail.width or document.thumb.w,
                 "size": file.thumbnail.size,
             }
-        if height and width:
-            info["h"] = height
-            info["w"] = width
-        type = "m.file"
-        if mime_type.startswith("video/"):
-            type = "m.video"
-        elif mime_type.startswith("audio/"):
-            type = "m.audio"
-        elif mime_type.startswith("image/"):
-            type = "m.image"
+
+        return info, name
+
+    async def handle_telegram_document(self, source, intent, evt: Message, relates_to=None):
+        document = evt.media.document
+        attrs = self._parse_telegram_document_attributes(document.attributes)
+
+        file = await util.transfer_file_to_matrix(self.db, source.client, intent, document,
+                                                  document.thumb, is_sticker=attrs["is_sticker"])
+        if not file:
+            return None
+
+        info, name = self._parse_telegram_document_meta(evt, file, attrs)
+
         await intent.set_typing(self.mxid, is_typing=False)
-        return await intent.send_file(self.mxid, file.mxc, info=info, text=name, file_type=type,
-                                      relates_to=relates_to, timestamp=evt.date,
-                                      external_url=self.get_external_url(evt))
+
+        kwargs = {
+            "room_id": self.mxid,
+            "url": file.mxc,
+            "info": info,
+            "text": name,
+            "relates_to": relates_to,
+            "timestamp": evt.date,
+            "external_url": self.get_external_url(evt)
+        }
+
+        if attrs["is_sticker"]:
+            return await intent.send_sticker(**kwargs)
+
+        mime_type = info["mimetype"]
+        if mime_type.startswith("video/"):
+            kwargs["type"] = "m.video"
+        elif mime_type.startswith("audio/"):
+            kwargs["type"] = "m.audio"
+        elif mime_type.startswith("image/"):
+            kwargs["type"] = "m.image"
+        else:
+            kwargs["type"] = "m.file"
+        return await intent.send_file(**kwargs)
 
     def handle_telegram_location(self, source, intent, evt, relates_to=None):
         location = evt.media.geo
