@@ -944,7 +944,6 @@ class Portal:
             elif isinstance(attr, DocumentAttributeSticker):
                 attrs["is_sticker"] = True
                 attrs["sticker_alt"] = attr.alt
-                attrs["name"] = f"{attr.alt} ({unicodedata.name(attr.alt[0]).lower()})"
             elif isinstance(attr, DocumentAttributeVideo):
                 attrs["width"], attrs["height"] = attr.w, attr.h
         print([str(attr) for attr in attributes])
@@ -957,7 +956,8 @@ class Portal:
         name = evt.message or attrs["name"]
         if attrs["is_sticker"]:
             alt = attrs["sticker_alt"]
-            name = f"{alt} ({unicodedata.name(alt[0]).lower()})"
+            if len(alt) > 0:
+                name = f"{alt} ({unicodedata.name(alt[0]).lower()})"
 
         mime_type = document.mime_type or file.mime_type
         info = {
