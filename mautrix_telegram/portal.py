@@ -1011,13 +1011,13 @@ class Portal:
 
         mime_type = info["mimetype"]
         if mime_type.startswith("video/"):
-            kwargs["type"] = "m.video"
+            kwargs["file_type"] = "m.video"
         elif mime_type.startswith("audio/"):
-            kwargs["type"] = "m.audio"
+            kwargs["file_type"] = "m.audio"
         elif mime_type.startswith("image/"):
-            kwargs["type"] = "m.image"
+            kwargs["file_type"] = "m.image"
         else:
-            kwargs["type"] = "m.file"
+            kwargs["file_type"] = "m.file"
         return await intent.send_file(**kwargs)
 
     def handle_telegram_location(self, source, intent, evt, relates_to=None):
