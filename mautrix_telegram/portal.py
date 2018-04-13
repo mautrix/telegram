@@ -1079,7 +1079,6 @@ class Portal:
         intent = sender.intent if sender else self.main_intent
         await intent.set_typing(self.mxid, is_typing=False)
         response = await intent.send_text(self.mxid, text, html=html, relates_to=relates_to,
-                                          timestamp=evt.date,
                                           external_url=self.get_external_url(evt))
 
         mxid = response["event_id"]
