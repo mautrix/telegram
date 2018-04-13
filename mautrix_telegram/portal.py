@@ -153,6 +153,18 @@ class Portal:
             self._dedup_action.popleft()
         return False
 
+    def update_duplicate(self, event, mxid=None, expected_mxid=None, force_hash=False):
+        hash = self._hash_event(event) if self.peer_type != "channel" or force_hash else event.id
+        try:
+            found_mxid = self._dedup_mxid[hash]
+        except KeyError:
+            return 0, "None"
+
+        if found_mxid != expected_mxid:
+            return found_mxid
+        self._dedup_mxid[hash] = mxid
+        return None
+
     def is_duplicate(self, event, mxid=None, force_hash=False):
         hash = self._hash_event(event) if self.peer_type != "channel" or force_hash else event.id
         if hash in self._dedup:
@@ -1133,8 +1145,21 @@ class Portal:
 
         if not response:
             return
-        self.log.debug("Handled Telegram message: %s", evt)
+
         mxid = response["event_id"]
+
+        prev_id = self.update_duplicate(evt, (mxid, tg_space), (temporary_identifier, tg_space))
+        if prev_id:
+            self.log.debug(f"Sent message {evt.id}@{tg_space} to Matrix as {mxid}. "
+                           f"Temporary dedup identifier was {temporary_identifier}, "
+                           f"but dedup map contained {prev_id[1]} instead! -- "
+                           "This was probably a race condition caused by Telegram sending updates"
+                           "to other clients before responding to the sender. I'll just redact "
+                           "the likely duplicate message now.")
+            await intent.redact(self.mxid, mxid)
+            return
+
+        self.log.debug("Handled Telegram message: %s", evt)
         DBMessage.query \
             .filter(DBMessage.mx_room == self.mxid,
                     DBMessage.mxid == temporary_identifier) \
