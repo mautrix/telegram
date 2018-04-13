@@ -103,8 +103,10 @@ class Bot(AbstractUser):
             del self.chats[id]
         except KeyError:
             pass
-        self.db.delete(BotChat.query.get(id))
-        self.db.commit()
+        existing_chat = BotChat.query.get(id)
+        if existing_chat:
+            self.db.delete(existing_chat)
+            self.db.commit()
 
     async def _can_use_commands(self, chat, tgid):
         if tgid in self.tg_whitelist:
