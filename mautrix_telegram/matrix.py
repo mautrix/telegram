@@ -88,6 +88,7 @@ class MatrixHandler:
                                                   "Telegram chat is created for this room.")
 
     async def handle_invite(self, room, user, inviter):
+        self.log.debug(f"{inviter} invited {user} to {room}")
         inviter = await User.get_by_mxid(inviter).ensure_started()
         if not inviter.whitelisted:
             return
@@ -110,7 +111,6 @@ class MatrixHandler:
             return
 
         # The rest can probably be ignored
-        self.log.debug(f"{inviter} invited {user} to {room}")
 
     async def handle_join(self, room, user, event_id):
         user = await User.get_by_mxid(user).ensure_started()
