@@ -209,7 +209,7 @@ async def enter_password(evt):
                                "Please use `$cmdprefix+sp login` to get login instructions")
     try:
         await evt.sender.ensure_started(even_if_no_session=True)
-        user = await evt.sender.client.sign_in(password=evt.args[0])
+        user = await evt.sender.client.sign_in(password=" ".join(evt.args))
         asyncio.ensure_future(evt.sender.post_login(user), loop=evt.loop)
         evt.sender.command_status = None
         return await evt.reply(f"Successfully logged in as @{user.username}")
