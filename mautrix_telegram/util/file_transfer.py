@@ -143,10 +143,11 @@ async def transfer_file_to_matrix(db, client, intent, location, thumbnail=None, 
 
     image_converted = False
     if mime_type == "image/webp":
-        mime_type, file, width, height = _convert_webp(file, to="png", thumbnail_to=(
+        new_mime_type, file, width, height = _convert_webp(file, to="png", thumbnail_to=(
             256, 256) if is_sticker else None)
+        image_converted = new_mime_type != mime_type
+        mime_type = new_mime_type
         thumbnail = None
-        image_converted = True
 
     uploaded = await intent.upload_file(file, mime_type)
 

@@ -960,8 +960,6 @@ class Portal:
                 attrs["sticker_alt"] = attr.alt
             elif isinstance(attr, DocumentAttributeVideo):
                 attrs["width"], attrs["height"] = attr.w, attr.h
-        print([str(attr) for attr in attributes])
-        print(attrs)
         return attrs
 
     @staticmethod
