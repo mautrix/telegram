@@ -25,6 +25,8 @@ import logging
 import re
 
 import magic
+from sqlalchemy.exc import IntegrityError, InvalidRequestError
+from sqlalchemy.orm.exc import FlushError
 
 from telethon.tl.functions.messages import *
 from telethon.tl.functions.channels import *
@@ -1160,12 +1162,20 @@ class Portal:
             return
 
         self.log.debug("Handled Telegram message: %s", evt)
-        DBMessage.query \
-            .filter(DBMessage.mx_room == self.mxid,
-                    DBMessage.mxid == temporary_identifier) \
-            .update({"mxid": mxid})
-        self.db.add(DBMessage(tgid=evt.id, mx_room=self.mxid, mxid=mxid, tg_space=tg_space))
-        self.db.commit()
+        try:
+            self.db.add(DBMessage(tgid=evt.id, mx_room=self.mxid, mxid=mxid, tg_space=tg_space))
+            self.db.commit()
+            DBMessage.query \
+                .filter(DBMessage.mx_room == self.mxid,
+                        DBMessage.mxid == temporary_identifier) \
+                .update({"mxid": mxid})
+        except FlushError as e:
+            self.log.exception(f"{e.__class__.__name__} while saving message mapping.")
+            await intent.redact(self.mxid, mxid)
+        except (IntegrityError, InvalidRequestError) as e:
+            self.log.exception(f"{e.__class__.__name__} while saving message mapping.")
+            self.db.rollback()
+            await intent.redact(self.mxid, mxid)
 
     async def _create_room_on_action(self, source, action):
         create_and_exit = (MessageActionChatCreate, MessageActionChannelCreate)
