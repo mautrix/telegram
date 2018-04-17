@@ -147,6 +147,8 @@ class Config(DictWithRecursion):
         copy("appservice.hostname")
         copy("appservice.port")
 
+        copy("appservice.database")
+
         copy("appservice.public.enabled")
         copy("appservice.public.prefix")
         copy("appservice.public.external")
