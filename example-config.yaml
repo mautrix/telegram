@@ -35,7 +35,7 @@ appservice:
         external: https://example.com/public
 
     # Whether or not to enable debug messages in the console.
-    debug: false
+    debug: true
 
     # The unique ID of this appservice.
     id: telegram
