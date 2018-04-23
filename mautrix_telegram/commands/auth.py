@@ -59,9 +59,11 @@ async def register(evt):
         return await evt.reply("**Usage:** `$cmdprefix+sp register <phone> <full name>`")
 
     phone_number = evt.args[0]
-    full_name = evt.args[1:].split(" ", 1)
-    if len(full_name) == 1:
-        full_name.append("")
+    if len(evt.args) == 2:
+        full_name = evt.args[1], ""
+    else:
+        full_name = " ".join(evt.args[1:-1]), evt.args[-1]
+
     await request_code(evt, phone_number, {
         "next": enter_code_register,
         "action": "Register",
