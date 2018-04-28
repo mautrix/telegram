@@ -128,7 +128,7 @@ class MatrixParser(HTMLParser):
             self._open_tags_meta.popleft()
             self._open_tags_meta.appendleft(url)
 
-        if tag in self.block_tags:
+        if tag in self.block_tags and ("blockquote" not in self._open_tags or tag == "br"):
             self._newline()
 
         if entity_type and tag not in self._building_entities:
@@ -241,7 +241,7 @@ class MatrixParser(HTMLParser):
         if entity:
             self.entities.append(entity)
 
-        if tag in self.block_tags:
+        if tag in self.block_tags and tag != "br" and "blockquote" not in self._open_tags:
             self._newline(allow_multi=tag == "br")
 
 
