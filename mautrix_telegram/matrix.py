@@ -263,7 +263,9 @@ class MatrixHandler:
                                        evt["event_id"])
             elif membership == "join":
                 await self.handle_join(evt["room_id"], evt["state_key"], evt["event_id"])
-        elif type == "m.room.message":
+        elif type in ("m.room.message", "m.sticker"):
+            if type != "m.room.message":
+                content["msgtype"] = type
             await self.handle_message(evt["room_id"], evt["sender"], content, evt["event_id"])
         elif type == "m.room.redaction":
             await self.handle_redaction(evt["room_id"], evt["sender"], evt["redacts"])

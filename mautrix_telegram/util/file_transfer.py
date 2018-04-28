@@ -45,20 +45,20 @@ from ..db import TelegramFile as DBTelegramFile
 log = logging.getLogger("mau.util")
 
 
-def _convert_webp(file, to="png", thumbnail_to=None):
+def convert_image(file, source_mime="image/webp", target_type="png", thumbnail_to=None):
     if not Image:
-        return "image/webp", file, None, None
+        return source_mime, file, None, None
     try:
         image = Image.open(BytesIO(file)).convert("RGBA")
         if thumbnail_to:
             image.thumbnail(thumbnail_to, Image.ANTIALIAS)
         new_file = BytesIO()
-        image.save(new_file, to)
+        image.save(new_file, target_type)
         w, h = image.size
-        return f"image/{to}", new_file.getvalue(), w, h
+        return f"image/{target_type}", new_file.getvalue(), w, h
     except Exception:
-        log.exception(f"Failed to convert webp to {to}")
-        return "image/webp", file, None, None
+        log.exception(f"Failed to convert {source_mime} to {target_type}")
+        return source_mime, file, None, None
 
 
 def _temp_file_name(ext):
@@ -163,7 +163,7 @@ async def _unlocked_transfer_file_to_matrix(db, client, intent, id, location, th
 
     image_converted = False
     if mime_type == "image/webp":
-        new_mime_type, file, width, height = _convert_webp(file, to="png", thumbnail_to=(
+        new_mime_type, file, width, height = convert_image(file, source_mime="image/webp", target_type="png", thumbnail_to=(
             256, 256) if is_sticker else None)
         image_converted = new_mime_type != mime_type
         mime_type = new_mime_type

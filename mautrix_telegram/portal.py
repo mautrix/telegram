@@ -682,17 +682,24 @@ class Portal:
             response = await client.send_message(self.peer, message, entities=entities, reply_to=reply_to)
             self._add_telegram_message_to_db(event_id, space, response)
 
-    async def _handle_matrix_file(self, sender_id, event_id, space, client, message, reply_to):
+    async def _handle_matrix_file(self, type, sender_id, event_id, space, client, message, reply_to):
         file = await self.main_intent.download_file(message["url"])
 
         info = message["info"]
         mime = info["mimetype"]
 
+        if type == "m.sticker":
+            mime, file, w, h = util.convert_image(file, source_mime=mime, target_type="webp")
+        elif "w" in info and "h" in info:
+            w, h = info["w"], info["h"]
+        else:
+            w, h = None, None
+
         file_name = self._get_file_meta(message["mxtg_filename"], mime)
 
         attributes = [DocumentAttributeFilename(file_name=file_name)]
-        if "w" in info and "h" in info:
-            attributes.append(DocumentAttributeImageSize(w=info["w"], h=info["h"]))
+        if w and h:
+            attributes.append(DocumentAttributeImageSize(w, h))
 
         caption = message["body"] if message["body"] != file_name else None
 
@@ -743,8 +750,8 @@ class Portal:
             await self._handle_matrix_text(sender_id, event_id, space, client, message, reply_to)
         elif type == "m.location":
             await self._handle_matrix_location(sender_id, event_id, space, client, message, reply_to)
-        elif type in ("m.image", "m.file", "m.audio", "m.video"):
-            await self._handle_matrix_file(sender_id, event_id, space, client, message, reply_to)
+        elif type in ("m.sticker", "m.image", "m.file", "m.audio", "m.video"):
+            await self._handle_matrix_file(type, sender_id, event_id, space, client, message, reply_to)
         else:
             self.log.debug("Unhandled Matrix event: %s", message)
 
