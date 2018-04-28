@@ -64,7 +64,11 @@ async def private_message(evt):
     if len(evt.args) == 0:
         return await evt.reply("**Usage:** `$cmdprefix+sp pm <user identifier>`")
 
-    user = await evt.sender.client.get_entity(evt.args[0])
+    try:
+        user = await evt.sender.client.get_entity(evt.args[0])
+    except ValueError:
+        return await evt.reply("Invalid user identifier or user not found.")
+
     if not user:
         return await evt.reply("User not found.")
     elif not isinstance(user, TLUser):
