@@ -175,6 +175,7 @@ class Config(DictWithRecursion):
         copy("bridge.allow_matrix_login")
         copy("bridge.inline_images")
         copy("bridge.plaintext_highlights")
+        copy("bridge.public_portals")
 
         copy("bridge.command_prefix")
 

@@ -244,7 +244,7 @@ class Portal:
         self._main_intent = puppet.intent if direct else self.az.intent
 
         if self.peer_type == "channel" and entity.username:
-            public = True
+            public = config["bridge.public_portals"]
             alias = self._get_alias_localpart(entity.username)
             self.username = entity.username
         else:
@@ -403,7 +403,8 @@ class Portal:
             self.username = username or None
             if self.username:
                 await self.main_intent.add_room_alias(self.mxid, self._get_alias_localpart())
-                await self.main_intent.set_join_rule(self.mxid, "public")
+                if config["bridge.public_portals"]:
+                    await self.main_intent.set_join_rule(self.mxid, "public")
             else:
                 await self.main_intent.set_join_rule(self.mxid, "invite")
 
