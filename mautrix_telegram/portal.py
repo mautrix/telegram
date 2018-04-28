@@ -438,6 +438,12 @@ class Portal:
         return max(photo.sizes, key=(lambda photo2: (
             len(photo2.bytes) if isinstance(photo2, PhotoCachedSize) else photo2.size)))
 
+    async def remove_avatar(self, user, save=False):
+        await self.main_intent.set_room_avatar(self.mxid, None)
+        self.photo_id = None
+        if save:
+            self.save()
+
     async def update_avatar(self, user, photo, save=False):
         photo_id = f"{photo.volume_id}-{photo.local_id}"
         if self.photo_id != photo_id:
@@ -1241,6 +1247,8 @@ class Portal:
         elif isinstance(action, MessageActionChatEditPhoto):
             largest_size = self._get_largest_photo_size(action.photo)
             await self.update_avatar(source, largest_size.location, save=True)
+        elif isinstance(action, MessageActionChatDeletePhoto):
+            await self.remove_avatar(source, save=True)
         elif isinstance(action, MessageActionChatAddUser):
             for user_id in action.users:
                 await self.add_telegram_user(user_id, source)
