@@ -223,12 +223,13 @@ class User(AbstractUser):
 
         return await self._search_remote(query), True
 
-    async def sync_dialogs(self):
+    async def sync_dialogs(self, synchronous_create=False):
         creators = []
         for entity in await self._get_dialogs(limit=30):
             portal = po.Portal.get_by_entity(entity)
             self.portals[portal.tgid_full] = portal
-            creators.append(portal.create_matrix_room(self, entity, invites=[self.mxid]))
+            creators.append(
+                portal.create_matrix_room(self, entity, invites=[self.mxid], synchronous=synchronous_create))
         self.save()
         await asyncio.gather(*creators, loop=self.loop)
 

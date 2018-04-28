@@ -130,7 +130,7 @@ async def sync(evt):
         sync_only = None
 
     if not sync_only or sync_only == "chats":
-        await evt.sender.sync_dialogs()
+        await evt.sender.sync_dialogs(synchronous_create=True)
     if not sync_only or sync_only == "contacts":
         await evt.sender.sync_contacts()
     if not sync_only or sync_only == "me":

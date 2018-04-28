@@ -210,14 +210,16 @@ class Portal:
             await puppet.update_info(user, entity)
             await puppet.intent.join_room(self.mxid)
 
-    async def create_matrix_room(self, user, entity=None, invites=None, update_if_exists=True):
+    async def create_matrix_room(self, user, entity=None, invites=None, update_if_exists=True, synchronous=False):
         if self.mxid:
             if update_if_exists:
                 if not entity:
                     entity = await user.client.get_entity(self.peer)
-                asyncio.ensure_future(
-                    self.update_matrix_room(user, entity, self.peer_type == "user"),
-                    loop=self.loop)
+                update = self.update_matrix_room(user, entity, self.peer_type == "user")
+                if synchronous:
+                    await update
+                else:
+                    asyncio.ensure_future(update, loop=self.loop)
                 await self.invite_to_matrix(invites or [])
             return self.mxid
         async with self._room_create_lock:
