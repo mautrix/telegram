@@ -665,6 +665,18 @@ class Portal:
     async def _handle_matrix_text(self, sender_id, event_id, space, client, message, reply_to):
         message, entities = await self._matrix_event_to_entities(client, message)
 
+        if len(message) > 4096:
+            message = message[0:4082] + " [message cut]"
+            new_entities = []
+            for entity in entities:
+                if entity.offset > 4082:
+                    continue
+                if entity.offset + entity.length > 4082:
+                    entity.length = 4082 - entity.offset
+                new_entities.append(entity)
+            new_entities.append(MessageEntityItalic(4082, len(" [message cut]")))
+            entities = new_entities
+
         lock = self.require_send_lock(sender_id)
         async with lock:
             response = await client.send_message(self.peer, message, entities=entities, reply_to=reply_to)
@@ -703,7 +715,7 @@ class Portal:
         lock = self.require_send_lock(sender_id)
         async with lock:
             response = await client.send_media(self.peer, media, reply_to=reply_to, caption=message,
-                                    entities=entities)
+                                               entities=entities)
             self._add_telegram_message_to_db(event_id, space, response)
 
     def _add_telegram_message_to_db(self, event_id, space, response):
