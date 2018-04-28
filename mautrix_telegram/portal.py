@@ -1231,7 +1231,7 @@ class Portal:
 
     async def handle_telegram_action(self, source, sender, update):
         action = update.action
-        should_ignore = (not self.mxid and not await self._create_room_on_action(source, action)
+        should_ignore = ((not self.mxid and not await self._create_room_on_action(source, action))
                          or self.is_duplicate_action(update))
         if should_ignore:
             return
@@ -1240,7 +1240,7 @@ class Portal:
             await self.update_title(action.title, save=True)
         elif isinstance(action, MessageActionChatEditPhoto):
             largest_size = self._get_largest_photo_size(action.photo)
-            self.update_avatar(source, largest_size.location, save=True)
+            await self.update_avatar(source, largest_size.location, save=True)
         elif isinstance(action, MessageActionChatAddUser):
             for user_id in action.users:
                 await self.add_telegram_user(user_id, source)
