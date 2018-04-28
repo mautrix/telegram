@@ -17,6 +17,7 @@
 from io import BytesIO
 import time
 import logging
+import asyncio
 
 import magic
 from sqlalchemy.exc import IntegrityError, InvalidRequestError
@@ -125,11 +126,30 @@ async def transfer_thumbnail_to_matrix(client, intent, thumbnail_loc, video, mim
                           width=width, height=height)
 
 
+transfer_locks = {}
+transfer_locks_lock = asyncio.Lock()
+
+
 async def transfer_file_to_matrix(db, client, intent, location, thumbnail=None, is_sticker=False):
     id = _location_to_id(location)
     if not id:
         return None
 
+    db_file = DBTelegramFile.query.get(id)
+    if db_file:
+        return db_file
+
+    async with transfer_locks_lock:
+        try:
+            lock = transfer_locks[id]
+        except KeyError:
+            lock = asyncio.Lock()
+            transfer_locks[id] = lock
+    async with lock:
+        return await _unlocked_transfer_file_to_matrix(db, client, intent, id, location, thumbnail, is_sticker)
+
+
+async def _unlocked_transfer_file_to_matrix(db, client, intent, id, location, thumbnail, is_sticker):
     db_file = DBTelegramFile.query.get(id)
     if db_file:
         return db_file
