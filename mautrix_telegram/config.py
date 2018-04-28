@@ -176,6 +176,7 @@ class Config(DictWithRecursion):
         copy("bridge.inline_images")
         copy("bridge.plaintext_highlights")
         copy("bridge.public_portals")
+        copy("bridge.native_stickers")
 
         copy("bridge.command_prefix")
 

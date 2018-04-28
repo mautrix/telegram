@@ -100,6 +100,11 @@ bridge:
     plaintext_highlights: false
     # Whether or not to make portals of publicly joinable channels/supergroups publicly joinable on Matrix.
     public_portals: true
+    # Whether to send stickers as the new native m.sticker type or normal m.images.
+    # Old versions of Riot don't support the new type at all.
+    #
+    # Remember that proper sticker support always requires Pillow to convert webp into png.
+    native_stickers: true
 
     # The prefix for commands. Only required in non-management rooms.
     command_prefix: "!tg"

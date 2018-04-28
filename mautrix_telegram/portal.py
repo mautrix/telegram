@@ -1050,7 +1050,7 @@ class Portal:
             "external_url": self.get_external_url(evt)
         }
 
-        if attrs["is_sticker"]:
+        if attrs["is_sticker"] and config["bridge.native_stickers"]:
             return await intent.send_sticker(**kwargs)
 
         mime_type = info["mimetype"]
