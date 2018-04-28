@@ -198,10 +198,15 @@ class MatrixHandler:
                                        is_portal=portal is not None)
 
     async def handle_redaction(self, room, sender, event_id):
-        portal = Portal.get_by_mxid(room)
         sender = await User.get_by_mxid(sender).ensure_started()
-        if sender.has_full_access and portal:
-            await portal.handle_matrix_deletion(sender, event_id)
+        if not sender.relaybot_whitelisted:
+            return
+
+        portal = Portal.get_by_mxid(room)
+        if not portal:
+            return
+
+        await portal.handle_matrix_deletion(sender, event_id)
 
     async def handle_power_levels(self, room, sender, new, old):
         portal = Portal.get_by_mxid(room)
@@ -244,8 +249,8 @@ class MatrixHandler:
         self.log.debug("Received event: %s", evt)
         type = evt["type"]
         content = evt.get("content", {})
-        prev_content = evt.get("unsigned", {}).get("prev_content", {})
         if type == "m.room.member":
+            prev_content = evt.get("unsigned", {}).get("prev_content", {})
             membership = content.get("membership", "")
             prev_membership = prev_content.get("membership", "leave")
             if membership == prev_membership:
