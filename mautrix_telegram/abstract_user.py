@@ -54,7 +54,8 @@ class AbstractUser:
                                             loop=self.loop,
                                             app_version=__version__,
                                             system_version=sysversion,
-                                            device_model=device)
+                                            device_model=device,
+                                            report_errors=False)
         await self.client.add_event_handler(self._update_catch)
 
     async def update(self, update):
