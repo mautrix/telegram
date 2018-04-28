@@ -244,11 +244,16 @@ class MatrixHandler:
         self.log.debug("Received event: %s", evt)
         type = evt["type"]
         content = evt.get("content", {})
+        prev_content = evt.get("unsigned", {}).get("prev_content", {})
         if type == "m.room.member":
             membership = content.get("membership", "")
-            if membership == "invite":
+            prev_membership = prev_content.get("membership", "leave")
+            if membership == prev_membership:
+                # TODO handle displayname/avatar changes
+                pass
+            elif membership == "invite":
                 await self.handle_invite(evt["room_id"], evt["state_key"], evt["sender"])
-            elif membership == "leave":
+            elif prev_membership == "join" and membership == "leave":
                 await self.handle_part(evt["room_id"], evt["state_key"], evt["sender"],
                                        evt["event_id"])
             elif membership == "join":
