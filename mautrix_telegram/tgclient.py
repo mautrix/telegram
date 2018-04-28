@@ -51,29 +51,23 @@ class MautrixTelegramClient(TelegramClient):
 
         return self._get_response_message(request, result)
 
-    async def send_file(self, entity, file, mime_type=None, caption=None, entities=None,
-                        attributes=None, file_name=None, reply_to=None, **kwargs):
-        entity = await self.get_input_entity(entity)
-        reply_to = self._get_message_id(reply_to)
-
-        file_handle = await self.upload_file(file, file_name=file_name, use_cache=False)
+    async def upload_file(self, file, mime_type=None, attributes=None, file_name=None):
+        file_handle = await super().upload_file(file, file_name=file_name, use_cache=False)
 
         if mime_type == "image/png" or mime_type == "image/jpeg":
-            media = InputMediaUploadedPhoto(file_handle)
+            return InputMediaUploadedPhoto(file_handle)
         else:
             attributes = attributes or []
             attr_dict = {type(attr): attr for attr in attributes}
 
-            media = InputMediaUploadedDocument(
+            return InputMediaUploadedDocument(
                 file=file_handle,
                 mime_type=mime_type or "application/octet-stream",
                 attributes=list(attr_dict.values()))
 
-        request = SendMediaRequest(entity, media, message=caption or "", entities=entities or [],
-                                   reply_to_msg_id=reply_to)
-        return self._get_response_message(request, await self(request))
-
     async def send_media(self, entity, media, caption=None, entities=None, reply_to=None):
+        entity = await self.get_input_entity(entity)
+        reply_to = self._get_message_id(reply_to)
         request = SendMediaRequest(entity, media, message=caption or "", entities=entities or [],
                                    reply_to_msg_id=reply_to)
         return self._get_response_message(request, await self(request))
