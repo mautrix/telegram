@@ -716,12 +716,17 @@ class Portal:
         info = message.get("info", {})
         mime = info.get("mimetype", None)
 
+        w, h = None, None
+
         if type == "m.sticker":
-            mime, file, w, h = util.convert_image(file, source_mime=mime, target_type="webp")
+            if mime != "image/gif":
+                mime, file, w, h = util.convert_image(file, source_mime=mime, target_type="webp")
+            else:
+                # Remove sticker description
+                message["mxtg_filename"] = "sticker.gif"
+                message["body"] = ""
         elif "w" in info and "h" in info:
             w, h = info["w"], info["h"]
-        else:
-            w, h = None, None
 
         file_name = self._get_file_meta(message["mxtg_filename"], mime)
 
