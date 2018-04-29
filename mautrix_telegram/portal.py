@@ -55,8 +55,8 @@ class Portal:
     by_mxid = {}
     by_tgid = {}
 
-    def __init__(self, tgid, peer_type, tg_receiver=None, mxid=None, username=None, megagroup=False, title=None,
-                 about=None, photo_id=None, db_instance=None):
+    def __init__(self, tgid, peer_type, tg_receiver=None, mxid=None, username=None,
+                 megagroup=False, title=None, about=None, photo_id=None, db_instance=None):
         self.mxid = mxid
         self.tgid = tgid
         self.tg_receiver = tg_receiver or tgid
@@ -211,7 +211,8 @@ class Portal:
             await puppet.update_info(user, entity)
             await puppet.intent.join_room(self.mxid)
 
-    async def create_matrix_room(self, user, entity=None, invites=None, update_if_exists=True, synchronous=False):
+    async def create_matrix_room(self, user, entity=None, invites=None, update_if_exists=True,
+                                 synchronous=False):
         if self.mxid:
             if update_if_exists:
                 if not entity:
@@ -487,7 +488,8 @@ class Portal:
                     users, participants = [], []
                     offset = 0
                     remaining_quota = limit if limit > 0 else 1000000
-                    query = ChannelParticipantsSearch("") if limit == -1 else ChannelParticipantsRecent()
+                    query = (ChannelParticipantsSearch("") if limit == -1
+                             else ChannelParticipantsRecent())
                     while True:
                         if remaining_quota <= 0:
                             break
@@ -707,10 +709,12 @@ class Portal:
 
         lock = self.require_send_lock(sender_id)
         async with lock:
-            response = await client.send_message(self.peer, message, entities=entities, reply_to=reply_to)
+            response = await client.send_message(self.peer, message, entities=entities,
+                                                 reply_to=reply_to)
             self._add_telegram_message_to_db(event_id, space, response)
 
-    async def _handle_matrix_file(self, type, sender_id, event_id, space, client, message, reply_to):
+    async def _handle_matrix_file(self, type, sender_id, event_id, space, client, message,
+                                  reply_to):
         file = await self.main_intent.download_file(message["url"])
 
         info = message.get("info", {})
@@ -739,7 +743,8 @@ class Portal:
         media = await client.upload_file(file, mime, attributes, file_name)
         lock = self.require_send_lock(sender_id)
         async with lock:
-            response = await client.send_media(self.peer, media, reply_to=reply_to, caption=caption)
+            response = await client.send_media(self.peer, media, reply_to=reply_to,
+                                               caption=caption)
             self._add_telegram_message_to_db(event_id, space, response)
 
     async def _handle_matrix_location(self, sender_id, event_id, space, client, message, reply_to):
@@ -754,8 +759,8 @@ class Portal:
 
         lock = self.require_send_lock(sender_id)
         async with lock:
-            response = await client.send_media(self.peer, media, reply_to=reply_to, caption=message,
-                                               entities=entities)
+            response = await client.send_media(self.peer, media, reply_to=reply_to,
+                                               caption=message, entities=entities)
             self._add_telegram_message_to_db(event_id, space, response)
 
     def _add_telegram_message_to_db(self, event_id, space, response):
@@ -782,9 +787,11 @@ class Portal:
         if type == "m.text" or (self.bridge_notices and type == "m.notice"):
             await self._handle_matrix_text(sender_id, event_id, space, client, message, reply_to)
         elif type == "m.location":
-            await self._handle_matrix_location(sender_id, event_id, space, client, message, reply_to)
+            await self._handle_matrix_location(sender_id, event_id, space, client, message,
+                                               reply_to)
         elif type in ("m.sticker", "m.image", "m.file", "m.audio", "m.video"):
-            await self._handle_matrix_file(type, sender_id, event_id, space, client, message, reply_to)
+            await self._handle_matrix_file(type, sender_id, event_id, space, client, message,
+                                           reply_to)
         else:
             self.log.debug("Unhandled Matrix event: %s", message)
 
@@ -1444,9 +1451,9 @@ class Portal:
         return self._db_instance
 
     def new_db_instance(self):
-        return DBPortal(tgid=self.tgid, tg_receiver=self.tg_receiver, peer_type=self.peer_type, mxid=self.mxid,
-                        username=self.username, megagroup=self.megagroup, title=self.title, about=self.about,
-                        photo_id=self.photo_id)
+        return DBPortal(tgid=self.tgid, tg_receiver=self.tg_receiver, peer_type=self.peer_type,
+                        mxid=self.mxid, username=self.username, megagroup=self.megagroup,
+                        title=self.title, about=self.about, photo_id=self.photo_id)
 
     def migrate_and_save(self, new_id):
         existing = DBPortal.query.get(self.tgid_full)
@@ -1484,8 +1491,9 @@ class Portal:
 
     @classmethod
     def from_db(cls, db_portal):
-        return Portal(tgid=db_portal.tgid, tg_receiver=db_portal.tg_receiver, peer_type=db_portal.peer_type,
-                      mxid=db_portal.mxid, username=db_portal.username, megagroup=db_portal.megagroup,
+        return Portal(tgid=db_portal.tgid, tg_receiver=db_portal.tg_receiver,
+                      peer_type=db_portal.peer_type, mxid=db_portal.mxid,
+                      username=db_portal.username, megagroup=db_portal.megagroup,
                       title=db_portal.title, about=db_portal.about, photo_id=db_portal.photo_id,
                       db_instance=db_portal)
 

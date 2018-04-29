@@ -93,10 +93,11 @@ class MatrixHandler:
         if user == self.az.bot_mxid:
             await self.az.intent.join_room(room)
             if not inviter.whitelisted:
-                await self.az.intent.send_notice(room, text=None,
-                                                 html="You are not whitelisted to use this bridge.<br/><br/>"
-                                                      "If you are the owner of this bridge, see the "
-                                                      "<code>bridge.permissions</code> section in your config file.")
+                await self.az.intent.send_notice(
+                    room, text=None,
+                    html="You are not whitelisted to use this bridge.<br/><br/>"
+                         "If you are the owner of this bridge, see the "
+                         "<code>bridge.permissions</code> section in your config file.")
                 await self.az.intent.leave_room(room)
             return
         elif not inviter.whitelisted:

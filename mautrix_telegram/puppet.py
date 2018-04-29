@@ -36,7 +36,8 @@ class Puppet:
     hs_domain = None
     cache = {}
 
-    def __init__(self, id=None, username=None, displayname=None, photo_id=None, is_bot=None, db_instance=None):
+    def __init__(self, id=None, username=None, displayname=None, photo_id=None, is_bot=None,
+                 db_instance=None):
         self.id = id
         self.mxid = self.get_mxid_from_id(self.id)
 
@@ -67,8 +68,8 @@ class Puppet:
 
     @classmethod
     def from_db(cls, db_puppet):
-        return Puppet(db_puppet.id, db_puppet.username, db_puppet.displayname, db_puppet.photo_id, db_puppet.is_bot,
-                      db_instance=db_puppet)
+        return Puppet(db_puppet.id, db_puppet.username, db_puppet.displayname, db_puppet.photo_id,
+                      db_puppet.is_bot, db_instance=db_puppet)
 
     def save(self):
         self.db_instance.username = self.username
