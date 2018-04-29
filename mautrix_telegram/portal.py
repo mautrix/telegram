@@ -575,7 +575,10 @@ class Portal:
                 return body
         except (ValueError, KeyError):
             pass
-        return f"matrix_upload{mimetypes.guess_extension(mime)}"
+        if mime:
+            return f"matrix_upload{mimetypes.guess_extension(mime)}"
+        else:
+            return ""
 
     async def leave_matrix(self, user, source, event_id):
         if not user.logged_in:
@@ -710,8 +713,8 @@ class Portal:
     async def _handle_matrix_file(self, type, sender_id, event_id, space, client, message, reply_to):
         file = await self.main_intent.download_file(message["url"])
 
-        info = message["info"]
-        mime = info["mimetype"]
+        info = message.get("info", {})
+        mime = info.get("mimetype", None)
 
         if type == "m.sticker":
             mime, file, w, h = util.convert_image(file, source_mime=mime, target_type="webp")
