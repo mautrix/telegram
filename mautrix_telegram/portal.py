@@ -331,22 +331,27 @@ class Portal:
             await puppet.intent.ensure_joined(self.mxid)
             await puppet.update_info(source, entity)
 
-        joined_mxids = await self.main_intent.get_room_members(self.mxid)
-        for user in joined_mxids:
-            if user == self.az.bot_mxid:
-                continue
-            puppet_id = p.Puppet.get_id_from_mxid(user)
-            if puppet_id and puppet_id not in allowed_tgids:
-                if self.bot and puppet_id == self.bot.tgid:
-                    self.bot.remove_chat(self.tgid)
-                await self.main_intent.kick(self.mxid, user,
-                                            "User had left this Telegram chat.")
-                continue
-            mx_user = u.User.get_by_mxid(user, create=False)
-            if mx_user and not self.has_bot and mx_user.tgid not in allowed_tgids:
-                await self.main_intent.kick(self.mxid, mx_user.mxid,
-                                            "You had left this Telegram chat.")
-                continue
+        # We can't trust the member list if any of the following cases is true:
+        #  * There are close to 10 000 users, because Telegram might not be sending all members.
+        #  * The member sync count is limited, because then we might ignore some members.
+        #  * It's a channel, because non-admins don't have access to the member list.
+        if len(allowed_tgids) < 9900 and config["bridge.max_initial_member_sync"] == -1:
+            joined_mxids = await self.main_intent.get_room_members(self.mxid)
+            for user in joined_mxids:
+                if user == self.az.bot_mxid:
+                    continue
+                puppet_id = p.Puppet.get_id_from_mxid(user)
+                if puppet_id and puppet_id not in allowed_tgids:
+                    if self.bot and puppet_id == self.bot.tgid:
+                        self.bot.remove_chat(self.tgid)
+                    await self.main_intent.kick(self.mxid, user,
+                                                "User had left this Telegram chat.")
+                    continue
+                mx_user = u.User.get_by_mxid(user, create=False)
+                if mx_user and not self.has_bot and mx_user.tgid not in allowed_tgids:
+                    await self.main_intent.kick(self.mxid, mx_user.mxid,
+                                                "You had left this Telegram chat.")
+                    continue
 
     async def add_telegram_user(self, user_id, source=None):
         puppet = p.Puppet.get(user_id)
@@ -462,19 +467,32 @@ class Portal:
             chat = await user.client(GetFullChatRequest(chat_id=self.tgid))
             return chat.users, chat.full_chat.participants.participants
         elif self.peer_type == "channel":
+            limit = config["bridge.max_initial_member_sync"]
+            if limit == 0:
+                return [], []
+
             try:
-                users, participants = [], []
-                offset = 0
-                while True:
+                if 0 < limit <= 200:
                     response = await user.client(GetParticipantsRequest(
-                        entity, ChannelParticipantsSearch(""), offset=offset, limit=100, hash=0
-                    ))
-                    if not response.users:
-                        break
-                    participants += response.participants
-                    users += response.users
-                    offset += len(response.participants)
-                return users, participants
+                        entity, ChannelParticipantsRecent(), offset=0, limit=limit, hash=0))
+                    return response.users, response.participants
+                elif limit > 200 or limit == -1:
+                    users, participants = [], []
+                    offset = 0
+                    remaining_quota = limit if limit > 0 else 1000000
+                    query = ChannelParticipantsSearch("") if limit == -1 else ChannelParticipantsRecent()
+                    while True:
+                        if remaining_quota <= 0:
+                            break
+                        response = await user.client(GetParticipantsRequest(
+                            entity, query, offset=offset, limit=min(remaining_quota, 100), hash=0))
+                        if not response.users:
+                            break
+                        participants += response.participants
+                        users += response.users
+                        offset += len(response.participants)
+                        remaining_quota -= len(response.participants)
+                    return users, participants
             except ChatAdminRequiredError:
                 return [], []
         elif self.peer_type == "user":

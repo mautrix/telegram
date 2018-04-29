@@ -84,7 +84,12 @@ bridge:
     # Highlight changed/added parts in edits. Requires lxml.
     highlight_edits: false
     # Whether or not Matrix bot messages (type m.notice) should be bridged.
-    bridge_notices: false
+    bridge_notices: true
+    # Maximum number of members to sync per portal when starting up. Other members will be
+    # synced when they send messages. The maximum is 10000, after which the Telegram server
+    # will not send any more members.
+    # Defaults to no local limit (-> limited to 10000 by server)
+    max_initial_member_sync: -1
     # The maximum number of simultaneous Telegram deletions to handle.
     # A large number of simultaneous redactions could put strain on your homeserver.
     max_telegram_delete: 10
