@@ -55,13 +55,14 @@ class Portal:
     by_mxid = {}
     by_tgid = {}
 
-    def __init__(self, tgid, peer_type, tg_receiver=None, mxid=None, username=None, title=None,
+    def __init__(self, tgid, peer_type, tg_receiver=None, mxid=None, username=None, megagroup=False, title=None,
                  about=None, photo_id=None, db_instance=None):
         self.mxid = mxid
         self.tgid = tgid
         self.tg_receiver = tg_receiver or tgid
         self.peer_type = peer_type
         self.username = username
+        self.megagroup = megagroup
         self.title = title
         self.about = about
         self.photo_id = photo_id
@@ -245,6 +246,9 @@ class Portal:
         puppet = p.Puppet.get(self.tgid) if direct else None
         self._main_intent = puppet.intent if direct else self.az.intent
 
+        if self.peer_type == "channel":
+            self.megagroup = entity.megagroup
+
         if self.peer_type == "channel" and entity.username:
             public = config["bridge.public_portals"]
             alias = self._get_alias_localpart(entity.username)
@@ -335,7 +339,10 @@ class Portal:
         #  * There are close to 10 000 users, because Telegram might not be sending all members.
         #  * The member sync count is limited, because then we might ignore some members.
         #  * It's a channel, because non-admins don't have access to the member list.
-        if len(allowed_tgids) < 9900 and config["bridge.max_initial_member_sync"] == -1:
+        trust_member_list = (len(allowed_tgids) < 9900
+                             and config["bridge.max_initial_member_sync"] == -1
+                             and (self.megagroup or self.peer_type != "channel"))
+        if trust_member_list:
             joined_mxids = await self.main_intent.get_room_members(self.mxid)
             for user in joined_mxids:
                 if user == self.az.bot_mxid:
@@ -1426,8 +1433,8 @@ class Portal:
         return self._db_instance
 
     def new_db_instance(self):
-        return DBPortal(tgid=self.tgid, tg_receiver=self.tg_receiver, peer_type=self.peer_type,
-                        mxid=self.mxid, username=self.username, title=self.title, about=self.about,
+        return DBPortal(tgid=self.tgid, tg_receiver=self.tg_receiver, peer_type=self.peer_type, mxid=self.mxid,
+                        username=self.username, megagroup=self.megagroup, title=self.title, about=self.about,
                         photo_id=self.photo_id)
 
     def migrate_and_save(self, new_id):
@@ -1466,10 +1473,9 @@ class Portal:
 
     @classmethod
     def from_db(cls, db_portal):
-        return Portal(tgid=db_portal.tgid, tg_receiver=db_portal.tg_receiver,
-                      peer_type=db_portal.peer_type, mxid=db_portal.mxid,
-                      username=db_portal.username, title=db_portal.title,
-                      about=db_portal.about, photo_id=db_portal.photo_id,
+        return Portal(tgid=db_portal.tgid, tg_receiver=db_portal.tg_receiver, peer_type=db_portal.peer_type,
+                      mxid=db_portal.mxid, username=db_portal.username, megagroup=db_portal.megagroup,
+                      title=db_portal.title, about=db_portal.about, photo_id=db_portal.photo_id,
                       db_instance=db_portal)
 
     # endregion

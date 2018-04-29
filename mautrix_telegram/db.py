@@ -29,6 +29,7 @@ class Portal(Base):
     tgid = Column(Integer, primary_key=True)
     tg_receiver = Column(Integer, primary_key=True)
     peer_type = Column(String)
+    megagroup = Column(Boolean)
 
     # Matrix portal information
     mxid = Column(String, unique=True, nullable=True)
