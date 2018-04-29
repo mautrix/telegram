@@ -85,6 +85,8 @@ bridge:
     highlight_edits: false
     # Whether or not Matrix bot messages (type m.notice) should be bridged.
     bridge_notices: true
+    # Whether to bridge Telegram bot messages as m.notices or m.texts.
+    bot_messages_as_notices: true
     # Maximum number of members to sync per portal when starting up. Other members will be
     # synced when they send messages. The maximum is 10000, after which the Telegram server
     # will not send any more members.

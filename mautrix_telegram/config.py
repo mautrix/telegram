@@ -171,6 +171,7 @@ class Config(DictWithRecursion):
         copy("bridge.edits_as_replies")
         copy("bridge.highlight_edits")
         copy("bridge.bridge_notices")
+        copy("bridge.bot_messages_as_notices")
         copy("bridge.max_initial_member_sync")
         copy("bridge.max_telegram_delete")
         copy("bridge.allow_matrix_login")

@@ -36,13 +36,14 @@ class Puppet:
     hs_domain = None
     cache = {}
 
-    def __init__(self, id=None, username=None, displayname=None, photo_id=None, db_instance=None):
+    def __init__(self, id=None, username=None, displayname=None, photo_id=None, is_bot=None, db_instance=None):
         self.id = id
         self.mxid = self.get_mxid_from_id(self.id)
 
         self.username = username
         self.displayname = displayname
         self.photo_id = photo_id
+        self.is_bot = is_bot
         self._db_instance = db_instance
 
         self.intent = self.az.intent.user(self.mxid)
@@ -62,17 +63,18 @@ class Puppet:
 
     def new_db_instance(self):
         return DBPuppet(id=self.id, username=self.username, displayname=self.displayname,
-                        photo_id=self.photo_id)
+                        photo_id=self.photo_id, is_bot=self.is_bot)
 
     @classmethod
     def from_db(cls, db_puppet):
-        return Puppet(db_puppet.id, db_puppet.username, db_puppet.displayname, db_puppet.photo_id,
+        return Puppet(db_puppet.id, db_puppet.username, db_puppet.displayname, db_puppet.photo_id, db_puppet.is_bot,
                       db_instance=db_puppet)
 
     def save(self):
         self.db_instance.username = self.username
         self.db_instance.displayname = self.displayname
         self.db_instance.photo_id = self.photo_id
+        self.db_instance.is_bot = self.is_bot
         self.db.commit()
 
     def similarity(self, query):
@@ -120,6 +122,8 @@ class Puppet:
         changed = await self.update_displayname(source, info) or changed
         if isinstance(info.photo, UserProfilePhoto):
             changed = await self.update_avatar(source, info.photo.photo_big) or changed
+
+        self.is_bot = info.bot
 
         if changed:
             self.save()

@@ -1149,12 +1149,14 @@ class Portal:
             "m.relates_to": relates_to or None,
         }, timestamp=evt.date, external_url=self.get_external_url(evt))
 
-    async def handle_telegram_text(self, source, intent, evt):
+    async def handle_telegram_text(self, source, intent, is_bot, evt):
         self.log.debug(f"Sending {evt.message} to {self.mxid} by {intent.mxid}")
         text, html, relates_to = await formatter.telegram_to_matrix(evt, source, self.main_intent)
         await intent.set_typing(self.mxid, is_typing=False)
+        msgtype = "m.notice" if is_bot and config["bridge.bot_messages_as_notices"] else "m.text"
         return await intent.send_text(self.mxid, text, html=html, relates_to=relates_to,
-                                      timestamp=evt.date, external_url=self.get_external_url(evt))
+                                      msgtype=msgtype, timestamp=evt.date,
+                                      external_url=self.get_external_url(evt))
 
     async def handle_telegram_edit(self, source, sender, evt):
         if not self.mxid:
@@ -1229,7 +1231,8 @@ class Portal:
                                                                   allowed_media) else None
         intent = sender.intent if sender else self.main_intent
         if not media and evt.message:
-            response = await self.handle_telegram_text(source, intent, evt)
+            is_bot = sender.is_bot if sender else False
+            response = await self.handle_telegram_text(source, intent, is_bot, evt)
         elif media:
             relates_to = formatter.telegram_reply_to_matrix(evt, source)
             if isinstance(media, MessageMediaPhoto):

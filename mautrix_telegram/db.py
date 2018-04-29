@@ -94,6 +94,7 @@ class Puppet(Base):
     displayname = Column(String, nullable=True)
     username = Column(String, nullable=True)
     photo_id = Column(String, nullable=True)
+    is_bot = Column(Boolean, nullable=True)
 
 
 # Fucking Telegram not telling bots what chats they are in 3:<
