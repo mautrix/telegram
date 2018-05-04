@@ -47,8 +47,7 @@ def trim_reply_fallback_text(text: str) -> str:
 
 html_reply_fallback_regex = re.compile("^<blockquote data-mx-reply>"
                                        r"[\s\S]+?"
-                                       "(</forward></blockquote>)?"
-                                       "</blockquote>")
+                                       "<!--end-mx-reply--></blockquote>")
 
 
 def trim_reply_fallback_html(html: str) -> str:
