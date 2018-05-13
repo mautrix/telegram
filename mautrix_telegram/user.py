@@ -150,6 +150,8 @@ class User(AbstractUser):
             await self.update_info(info)
             await self.sync_dialogs()
             await self.sync_contacts()
+            if config["bridge.catch_up"]:
+                await self.client.catch_up()
         except Exception:
             self.log.exception("Failed to run post-login functions")
 

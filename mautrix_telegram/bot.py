@@ -86,6 +86,12 @@ class Bot(AbstractUser):
             except (ChannelPrivateError, ChannelInvalidError):
                 self.remove_chat(id.channel_id)
 
+        if config["bridge.catch_up"]:
+            try:
+                await self.client.catch_up()
+            except Exception:
+                self.log.exception("Failed to run catch_up() for bot")
+
     def register_portal(self, portal: po.Portal):
         self.add_chat(portal.tgid, portal.peer_type)
 
