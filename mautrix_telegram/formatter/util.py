@@ -45,9 +45,9 @@ def trim_reply_fallback_text(text: str) -> str:
     return "\n".join(lines)
 
 
-html_reply_fallback_regex = re.compile("^<blockquote data-mx-reply>"
+html_reply_fallback_regex = re.compile("^<mx-reply>"
                                        r"[\s\S]+?"
-                                       "<!--end-mx-reply--></blockquote>")
+                                       "</mx-reply>")
 
 
 def trim_reply_fallback_html(html: str) -> str:

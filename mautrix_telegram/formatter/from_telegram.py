@@ -92,7 +92,7 @@ async def _add_forward_header(source, text: str, html: Optional[str],
     text = "\n".join([f"> {line}" for line in text.split("\n")])
     text = f"Forwarded from {fwd_from_text}:\n{text}"
     html = (f"Forwarded message from {fwd_from_html}<br/>"
-            f"<blockquote data-tg-forward>{html}</blockquote>")
+            f"<tg-forward><blockquote>{html}</blockquote></tg-forward>")
     return text, html
 
 
@@ -155,7 +155,7 @@ async def _add_reply_header(source: u.User, text: str, html: str, evt: Message, 
 
     r_keyword = "In reply to" if not is_edit else "Edit to"
     r_msg_link = f"<a href='https://matrix.to/#/{msg.mx_room}/{msg.mxid}'>{r_keyword}</a>"
-    html = (f"<blockquote data-mx-reply>{r_msg_link} {r_sender_link}\n{r_html_body}<!--end-mx-reply--></blockquote>"
+    html = (f"<mx-reply><blockquote>{r_msg_link} {r_sender_link}\n{r_html_body}</blockquote></mx-reply>"
             + (html or escape(text)))
 
     lines = r_text_body.strip().split("\n")
