@@ -1,2 +1,0 @@
--r base.txt
-git+https://github.com/tulir/telethon-asyncio@asyncio-3.5#egg=telethon
