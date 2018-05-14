@@ -26,7 +26,7 @@ setuptools.setup(
 
     install_requires=[
         "aiohttp>=3.0.1,<4",
-        "mautrix-appservice>=0.2.3,<0.3.0",
+        "mautrix-appservice>=0.1.4,<0.2.0",
         "SQLAlchemy>=1.2.3,<2",
         "alembic>=0.9.8,<0.10",
         "Markdown>=2.6.11,<3",
@@ -34,7 +34,7 @@ setuptools.setup(
         "future-fstrings>=0.4.2",
         "python-magic>=0.4.15,<0.5",
         "telethon-aio>=0.19.0,<0.19.1",
-        "telethon-session-sqlalchemy>=0.1.2,<0.3",
+        "telethon-session-sqlalchemy>=0.2.3,<0.3",
     ],
     extras_require=extras,
 
