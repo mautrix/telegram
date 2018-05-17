@@ -89,7 +89,7 @@ async def _join(evt, arg):
         except InviteHashExpiredError:
             return None, await evt.reply("Invite link expired.")
         try:
-            return evt.sender.client(ImportChatInviteRequest(invite_hash)), None
+            return (await evt.sender.client(ImportChatInviteRequest(invite_hash))), None
         except UserAlreadyParticipantError:
             return None, await evt.reply("You are already in that chat.")
     else:
