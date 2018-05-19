@@ -245,7 +245,8 @@ class MatrixParser(HTMLParser):
             self._newline(allow_multi=tag == "br")
 
 
-command_regex = re.compile("(\s|^)!([A-Za-z0-9@]+)")
+command_regex = re.compile(r"^!([A-Za-z0-9@]+)")
+not_command_regex = re.compile(r"^\\(![A-Za-z0-9@]+)")
 plain_mention_regex = None
 
 
@@ -262,7 +263,8 @@ def plain_mention_to_html(match):
 def matrix_to_telegram(html: str) -> Tuple[str, List[TypeMessageEntity]]:
     try:
         parser = MatrixParser()
-        html = command_regex.sub(r"\1<command>\2</command>", html)
+        html = command_regex.sub(r"<command>\1</command>", html)
+        html = not_command_regex.sub(r"\1", html)
         if should_bridge_plaintext_highlights:
             html = plain_mention_regex.sub(plain_mention_to_html, html)
         parser.feed(add_surrogates(html))
@@ -296,7 +298,8 @@ def matrix_reply_to_telegram(content: dict, tg_space: int, room_id: Optional[str
 
 
 def matrix_text_to_telegram(text: str) -> Tuple[str, List[TypeMessageEntity]]:
-    text = command_regex.sub(r"\1/\2", text)
+    text = command_regex.sub(r"/\1", text)
+    text = not_command_regex.sub(r"\1", text)
     if should_bridge_plaintext_highlights:
         entities, pmr_replacer = plain_mention_to_text()
         text = plain_mention_regex.sub(pmr_replacer, text)
