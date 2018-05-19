@@ -48,6 +48,8 @@ class Portal:
     az = None
     bot = None
     loop = None
+    filter_mode = None
+    filter_list = None
     bridge_notices = False
     alias_template = None
     mx_alias_regex = None
@@ -116,6 +118,26 @@ class Portal:
             puppet = p.Puppet.get(self.tgid) if direct else None
             self._main_intent = puppet.intent if direct else self.az.intent
         return self._main_intent
+
+    # endregion
+    # region Filtering
+
+    def allow_bridging(self, tgid=None):
+        tgid = tgid or self.tgid
+        if self.peer_type == "user":
+            self.log.debug(f"!!!!!!!!!!!!!!!!!!!!!!!!!!!! allow_bridging(User {tgid}) -> True")
+            return True
+        elif self.filter_mode == "whitelist":
+            self.log.debug(
+                f"!!!!!!!!!!!!!!!!!!!!!!!!!!!! allow_bridging(Chat {tgid}) -> {tgid in self.filter_list} (whitelist={self.filter_list})")
+            return tgid in self.filter_list
+        elif self.filter_mode == "blacklist":
+            self.log.debug(
+                f"!!!!!!!!!!!!!!!!!!!!!!!!!!!! allow_bridging(Chat {tgid}) -> {tgid not in self.filter_list} (blacklist={self.filter_list})")
+            return tgid not in self.filter_list
+        else:
+            self.log.debug("!!!!!!!!!!!!!!??????????????? Unknown filter mode", self.filter_mode)
+        return True
 
     # endregion
     # region Deduplication
@@ -233,6 +255,9 @@ class Portal:
         if self.mxid:
             return self.mxid
 
+        if not self.allow_bridging():
+            return None
+
         if not entity:
             entity = await user.client.get_entity(self.peer)
             self.log.debug("Fetched data: %s", entity)
@@ -336,6 +361,10 @@ class Portal:
             await puppet.intent.ensure_joined(self.mxid)
             await puppet.update_info(source, entity)
 
+            user = u.User.get_by_tgid(entity.id)
+            if user:
+                await self.invite_to_matrix(user.mxid)
+
         # We can't trust the member list if any of the following cases is true:
         #  * There are close to 10 000 users, because Telegram might not be sending all members.
         #  * The member sync count is limited, because then we might ignore some members.
@@ -371,7 +400,7 @@ class Portal:
         user = u.User.get_by_tgid(user_id)
         if user:
             user.register_portal(self)
-            await self.main_intent.invite(self.mxid, user.mxid)
+            await self.invite_to_matrix(user.mxid)
 
     async def delete_telegram_user(self, user_id, sender):
         puppet = p.Puppet.get(user_id)
@@ -1592,7 +1621,9 @@ def init(context):
     global config
     Portal.az, Portal.db, config, Portal.loop, Portal.bot = context
     Portal.bridge_notices = config["bridge.bridge_notices"]
+    Portal.filter_mode = config["bridge.filter.mode"]
+    Portal.filter_list = config["bridge.filter.list"]
     Portal.alias_template = config.get("bridge.alias_template", "telegram_{groupname}")
-    Portal.hs_domain = config["homeserver"]["domain"]
+    Portal.hs_domain = config["homeserver.domain"]
     localpart = Portal.alias_template.format(groupname="(.+)")
     Portal.mx_alias_regex = re.compile(f"#{localpart}:{Portal.hs_domain}")

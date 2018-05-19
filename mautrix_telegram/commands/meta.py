@@ -80,5 +80,9 @@ def help(evt):
 **group-name** <_name_|`-`> - Change the username of a supergroup/channel. To disable, use a dash
                              (`-`) as the name.  
 **clean-rooms**             - Clean up unused portal/management rooms.
+
+**filter** <`whitelist`|`blacklist`> <_chat ID_> - Allow or disallow bridging  
+**filter-mode** <`whitelist`|`blacklist`>      - Change whether the bridge will allow or disallow
+                                                 bridging rooms by default.
 """
     return evt.reply(management_status + help)

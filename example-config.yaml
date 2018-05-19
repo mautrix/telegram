@@ -109,12 +109,20 @@ bridge:
     public_portals: true
     # Whether to send stickers as the new native m.sticker type or normal m.images.
     # Old versions of Riot don't support the new type at all.
-    #
     # Remember that proper sticker support always requires Pillow to convert webp into png.
     native_stickers: true
     # Whether or not to fetch and handle Telegram updates at startup from the time the bridge was down.
     # WARNING: Probably buggy, might get stuck in infinite loop.
     catch_up: false
+
+    filter:
+        # Filter mode to use. Either "blacklist" or "whitelist".
+        # If the mode is "blacklist", the listed chats will never be bridged. An empty blacklist disables the filter.
+        # If the mode is "whitelist", only the listed chats can be bridged.
+        # Direct chats are not affected.
+        mode: blacklist
+        # The list of group/channel IDs to filter.
+        list: []
 
     # The prefix for commands. Only required in non-management rooms.
     command_prefix: "!tg"

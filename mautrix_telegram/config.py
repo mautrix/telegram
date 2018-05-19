@@ -181,6 +181,9 @@ class Config(DictWithRecursion):
         copy("bridge.native_stickers")
         copy("bridge.catch_up")
 
+        copy("bridge.filter.mode")
+        copy("bridge.filter.list")
+
         copy("bridge.command_prefix")
 
         migrate_permissions = ("bridge.permissions" not in self

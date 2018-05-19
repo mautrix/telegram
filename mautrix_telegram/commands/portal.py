@@ -161,6 +161,10 @@ async def bridge(evt: CommandEvent):
                                "Bridging private chats to existing rooms is not allowed.")
 
     portal = po.Portal.get_by_tgid(tgid, peer_type=peer_type)
+    if not portal.allow_bridging():
+        return await evt.reply("This bridge doesn't allow bridging that Telegram chat.\n"
+                               "If you're the bridge admin, try"
+                               "`$cmdprefix+sp whitelist <Telegram chat ID>` first.")
     if portal.mxid:
         has_portal_message = (
             "That Telegram chat already has a portal at "
@@ -353,3 +357,70 @@ async def group_name(evt: CommandEvent):
         return await evt.reply("That username is already in use.")
     except UsernameInvalidError:
         return await evt.reply("Invalid username")
+
+
+@command_handler(needs_admin=True)
+async def filter_mode(evt: CommandEvent):
+    try:
+        mode = evt.args[0]
+        if mode not in ("whitelist", "blacklist"):
+            raise ValueError()
+    except (IndexError, ValueError):
+        return await evt.reply("**Usage:** `$cmdprefix+sp filter-mode <whitelist/blacklist>`")
+
+    evt.config["bridge.filter.mode"] = mode
+    evt.config.save()
+    po.Portal.filter_mode = mode
+    if mode == "whitelist":
+        return await evt.reply("The bridge will now disallow bridging chats by default.\n"
+                               "To allow bridging a specific chat, use"
+                               "`!filter whitelist <chat ID>`.")
+    else:
+        return await evt.reply("The bridge will now allow bridging chats by default.\n"
+                               "To disallow bridging a specific chat, use"
+                               "`!filter blacklist <chat ID>`.")
+
+
+@command_handler(needs_admin=True)
+async def filter(evt: CommandEvent):
+    try:
+        action = evt.args[0]
+        if action not in ("whitelist", "blacklist", "add", "remove"):
+            raise ValueError()
+
+        id = evt.args[1]
+        if id.startswith("-100"):
+            id = int(id[4:])
+        elif id.startswith("-"):
+            id = int(id[1:])
+        else:
+            id = int(id)
+    except (IndexError, ValueError):
+        return await evt.reply("**Usage:** `$cmdprefix+sp filter <whitelist/blacklist> <chat ID>`")
+
+    mode = evt.config["bridge.filter.mode"]
+    if mode not in ("blacklist", "whitelist"):
+        return await evt.reply(f"Unknown filter mode \"{mode}\". Please fix the bridge config.")
+
+    list = evt.config["bridge.filter.list"]
+
+    if action in ("blacklist", "whitelist"):
+        action = "add" if mode == action else "remove"
+
+    def save():
+        evt.config["bridge.filter.list"] = list
+        evt.config.save()
+        po.Portal.filter_list = list
+
+    if action == "add":
+        if id in list:
+            return await evt.reply(f"That chat is already {mode}ed.")
+        list.append(id)
+        save()
+        return await evt.reply(f"Chat ID added to {mode}.")
+    elif action == "remove":
+        if id not in list:
+            return await evt.reply(f"That chat is not {mode}ed.")
+        list.remove(id)
+        save()
+        return await evt.reply(f"Chat ID removed from {mode}.")

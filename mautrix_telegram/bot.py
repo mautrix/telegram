@@ -145,6 +145,9 @@ class Bot(AbstractUser):
         if not config["bridge.relaybot.authless_portals"]:
             return await reply("This bridge doesn't allow portal creation from Telegram.")
 
+        if not portal.allow_bridging():
+            return await reply("This bridge doesn't allow bridging this chat.")
+
         await portal.create_matrix_room(self)
         if portal.mxid:
             if portal.username:
