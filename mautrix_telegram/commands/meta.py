@@ -81,7 +81,7 @@ def help(evt):
                              (`-`) as the name.  
 **clean-rooms**             - Clean up unused portal/management rooms.
 
-**filter** <`whitelist`|`blacklist`> <_chat ID_> - Allow or disallow bridging  
+**filter** <`whitelist`|`blacklist`> <_chat ID_> - Allow or disallow bridging a specific chat.  
 **filter-mode** <`whitelist`|`blacklist`>      - Change whether the bridge will allow or disallow
                                                  bridging rooms by default.
 """
