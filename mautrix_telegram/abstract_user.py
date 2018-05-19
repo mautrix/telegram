@@ -42,6 +42,7 @@ class AbstractUser:
         self.client = None
         self.tgid = None
         self.mxid = None
+        self.is_relaybot = False
 
     async def _init_client(self):
         self.log.debug(f"Initializing client for {self.name}")

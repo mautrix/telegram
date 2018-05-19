@@ -92,6 +92,7 @@ class Puppet(Base):
 
     id = Column(Integer, primary_key=True)
     displayname = Column(String, nullable=True)
+    displayname_source = Column(Integer, nullable=True)
     username = Column(String, nullable=True)
     photo_id = Column(String, nullable=True)
     is_bot = Column(Boolean, nullable=True)
