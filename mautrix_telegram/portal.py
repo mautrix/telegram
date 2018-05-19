@@ -125,18 +125,11 @@ class Portal:
     def allow_bridging(self, tgid=None):
         tgid = tgid or self.tgid
         if self.peer_type == "user":
-            self.log.debug(f"!!!!!!!!!!!!!!!!!!!!!!!!!!!! allow_bridging(User {tgid}) -> True")
             return True
         elif self.filter_mode == "whitelist":
-            self.log.debug(
-                f"!!!!!!!!!!!!!!!!!!!!!!!!!!!! allow_bridging(Chat {tgid}) -> {tgid in self.filter_list} (whitelist={self.filter_list})")
             return tgid in self.filter_list
         elif self.filter_mode == "blacklist":
-            self.log.debug(
-                f"!!!!!!!!!!!!!!!!!!!!!!!!!!!! allow_bridging(Chat {tgid}) -> {tgid not in self.filter_list} (blacklist={self.filter_list})")
             return tgid not in self.filter_list
-        else:
-            self.log.debug("!!!!!!!!!!!!!!??????????????? Unknown filter mode", self.filter_mode)
         return True
 
     # endregion

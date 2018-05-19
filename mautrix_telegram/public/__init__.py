@@ -141,7 +141,6 @@ class PublicBridgeWebsite:
                                      error="Internal server error while sending password.")
 
     async def post_login(self, request):
-        self.log.debug(request)
         data = await request.post()
         if "mxid" not in data:
             return self.render_login(error="Please enter your Matrix ID.", status=400)
