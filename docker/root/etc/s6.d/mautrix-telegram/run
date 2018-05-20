@@ -1,0 +1,40 @@
+#!/bin/bash
+
+# Define functions
+function fixperms {
+	chown -R ${UID}:${GID} /data /opt/mautrixtelegram
+}
+
+
+# Go into env
+cd /opt/mautrixtelegram
+source .venv/bin/activate
+
+# Replace database path in alembic.ini
+sed -i "s#sqlite:///mautrix-telegram.db#sqlite:////data/mautrix-telegram.db#" alembic.ini
+sed -i "s#sqlite:///mautrix-telegram.db#sqlite:////data/mautrix-telegram.db#" /data/config.yaml
+
+# Check that database is in the right state
+alembic upgrade head
+
+if [[ ! -f /data/config.yaml ]]; then
+	cp example-config.yaml /data/config.yaml
+	echo "Didn't find a config file."
+	echo "Copied default config file to /data/config.yaml"
+	echo "Modify that config file to your liking."
+	echo "Start the container again after that to generate the registration file."
+	fixperms
+	exit
+fi
+
+if [[ ! -f /data/registration.yaml ]]; then
+	python -m mautrix_telegram -g -c /data/config.yaml -r /data/registration.yaml
+	echo "Didn't find a registration file."
+	echo "Generated ode for you."
+	echo "Copy that over to synapses app service directory."
+	fixperms
+	exit
+fi
+
+fixperms
+exec su-exec ${UID}:${GID} python -m mautrix_telegram -c /data/config.yaml
