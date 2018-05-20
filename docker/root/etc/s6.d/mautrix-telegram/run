@@ -36,5 +36,7 @@ if [[ ! -f /data/registration.yaml ]]; then
 	exit
 fi
 
+export FFMPEG_BINARY=/usr/bin/ffmpeg
+
 fixperms
 exec su-exec ${UID}:${GID} python -m mautrix_telegram -c /data/config.yaml
