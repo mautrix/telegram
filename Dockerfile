@@ -7,12 +7,14 @@ COPY . /opt/mautrixtelegram
 RUN apk add --no-cache \
       python3-dev \
       py3-virtualenv \
+      py3-pillow \
+      py3-aiohttp \
+      py3-lxml \
+      py3-magic \
+      py3-numpy \
+      py3-asn1crypto \
+      py3-sqlalchemy \
       build-base \
-      zlib-dev \
-      jpeg-dev \
-      libxslt-dev \
-      libxml2-dev \
-      libmagic \
       ffmpeg \
       bash \
       ca-certificates \
@@ -21,9 +23,7 @@ RUN apk add --no-cache \
  && cd /opt/mautrixtelegram \
  && cp -r docker/root/* / \
  && rm docker -rf \
- && virtualenv -p /usr/bin/python3 .venv \
- && source .venv/bin/activate \
- && pip install -r requirements.txt -r optional-requirements.txt
+ && pip3 install -r requirements.txt -r optional-requirements.txt
 
 VOLUME /data
 
