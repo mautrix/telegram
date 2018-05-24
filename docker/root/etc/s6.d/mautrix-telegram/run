@@ -8,7 +8,7 @@ function fixperms {
 
 # Go into env
 cd /opt/mautrixtelegram
-source .venv/bin/activate
+export FFMPEG_BINARY=/usr/bin/ffmpeg
 
 # Replace database path in alembic.ini
 sed -i "s#sqlite:///mautrix-telegram.db#sqlite:////data/mautrix-telegram.db#" alembic.ini
@@ -28,7 +28,7 @@ if [[ ! -f /data/config.yaml ]]; then
 fi
 
 if [[ ! -f /data/registration.yaml ]]; then
-	python -m mautrix_telegram -g -c /data/config.yaml -r /data/registration.yaml
+	python3 -m mautrix_telegram -g -c /data/config.yaml -r /data/registration.yaml
 	echo "Didn't find a registration file."
 	echo "Generated ode for you."
 	echo "Copy that over to synapses app service directory."
@@ -36,7 +36,5 @@ if [[ ! -f /data/registration.yaml ]]; then
 	exit
 fi
 
-export FFMPEG_BINARY=/usr/bin/ffmpeg
-
 fixperms
-exec su-exec ${UID}:${GID} python -m mautrix_telegram -c /data/config.yaml
+exec su-exec ${UID}:${GID} python3 -m mautrix_telegram -c /data/config.yaml
