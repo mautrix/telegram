@@ -70,7 +70,7 @@ class User(Base):
     __tablename__ = "user"
 
     mxid = Column(String, primary_key=True)
-    tgid = Column(Integer, nullable=True)
+    tgid = Column(Integer, nullable=True, unique=True)
     tg_username = Column(String, nullable=True)
     saved_contacts = Column(Integer, default=0)
     contacts = relationship("Contact", uselist=True,

@@ -18,7 +18,7 @@ depends_on = None
 def upgrade():
     op.add_column('telegram_file',
                   sa.Column('timestamp', sa.BigInteger(), nullable=False, default=0,
-                            server_default="true"))
+                            server_default="0"))
 
 
 def downgrade():

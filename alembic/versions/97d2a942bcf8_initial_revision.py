@@ -29,7 +29,7 @@ def upgrade():
                     sa.UniqueConstraint('mxid'))
     op.create_table('user',
                     sa.Column('mxid', sa.String),
-                    sa.Column('tgid', sa.Integer, nullable=True),
+                    sa.Column('tgid', sa.Integer, nullable=True, unique=True),
                     sa.Column('tg_username', sa.String, nullable=True),
                     sa.Column('saved_contacts', sa.Integer, nullable=False, default=0),
                     sa.PrimaryKeyConstraint('mxid'))
