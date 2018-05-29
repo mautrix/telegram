@@ -260,5 +260,5 @@ class Config(DictWithRecursion):
             },
             "url": url,
             "sender_localpart": self["appservice.bot_username"],
-            "rate_limited": False
+            "rate_limit": False
         }
