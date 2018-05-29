@@ -102,7 +102,7 @@ def _get_portal_murder_function(action, room_id, function, command, completed_me
     }
 
 
-@command_handler()
+@command_handler(needs_auth=False)
 async def delete_portal(evt: CommandEvent):
     portal, ok = await _get_portal_and_check_permission(evt, "delete_portal")
     if not ok:
@@ -117,7 +117,7 @@ async def delete_portal(evt: CommandEvent):
                            "by typing `$cmdprefix+sp confirm-delete`")
 
 
-@command_handler()
+@command_handler(needs_auth=False)
 async def unbridge(evt: CommandEvent):
     portal, ok = await _get_portal_and_check_permission(evt, "unbridge_room")
     if not ok:
@@ -131,7 +131,7 @@ async def unbridge(evt: CommandEvent):
                            "by typing `$cmdprefix+sp confirm-unbridge`")
 
 
-@command_handler()
+@command_handler(needs_auth=False)
 async def bridge(evt: CommandEvent):
     if len(evt.args) == 0:
         return await evt.reply("**Usage:** "
@@ -247,14 +247,25 @@ async def confirm_bridge(evt: CommandEvent):
         return await evt.reply("Please use `$cmdprefix+sp continue` to confirm the bridging or "
                                "`$cmdprefix+sp cancel` to cancel.")
 
+    user = evt.sender if evt.sender.logged_in else evt.tgbot
+    try:
+        entity = await user.client.get_entity(portal.peer)
+    except Exception:
+        evt.log.exception("Failed to get_entity(%s) for manual bridging.", portal.peer)
+        if evt.sender.logged_in:
+            return await evt.reply("Failed to get info of telegram chat. "
+                                   "You are logged in, are you in that chat?")
+        else:
+            return await evt.reply("Failed to get info of telegram chat. "
+                                   "You're not logged in, is the relay bot in the chat?")
+    direct = False
+
     portal.mxid = bridge_to_mxid
     portal.title, portal.about, levels = await _get_initial_state(evt)
     portal.photo_id = ""
     portal.save()
 
-    entity = await evt.sender.client.get_entity(portal.peer)
-    direct = False
-    asyncio.ensure_future(portal.update_matrix_room(evt.sender, entity, direct, levels=levels),
+    asyncio.ensure_future(portal.update_matrix_room(user, entity, direct, levels=levels),
                           loop=evt.loop)
 
     return await evt.reply("Bridging complete. Portal synchronization should begin momentarily.")
