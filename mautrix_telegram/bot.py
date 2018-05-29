@@ -166,7 +166,7 @@ class Bot(AbstractUser):
         if not self.mxid_regex.match(mxid):
             return await reply("That doesn't look like a Matrix ID.")
         user = await u.User.get_by_mxid(mxid).ensure_started()
-        if not user.whitelisted:
+        if not user.relaybot_whitelisted:
             return await reply("That user is not whitelisted to use the bridge.")
         elif user.logged_in:
             displayname = f"@{user.username}" if user.username else user.displayname
