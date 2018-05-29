@@ -26,7 +26,7 @@ from alchemysession import AlchemySessionContainer
 from mautrix_appservice import AppService
 
 from .base import Base
-from .config import Config, DictWithRecursion
+from .config import Config
 from .matrix import MatrixHandler
 
 from .db import init as init_db

@@ -10,12 +10,11 @@ function fixperms {
 cd /opt/mautrixtelegram
 export FFMPEG_BINARY=/usr/bin/ffmpeg
 
-# Replace database path in alembic.ini
-sed -i "s#sqlite:///mautrix-telegram.db#sqlite:////data/mautrix-telegram.db#" alembic.ini
+# Replace database path in config.
 sed -i "s#sqlite:///mautrix-telegram.db#sqlite:////data/mautrix-telegram.db#" /data/config.yaml
 
 # Check that database is in the right state
-alembic upgrade head
+alembic -x config=/data/config.yaml upgrade head
 
 if [[ ! -f /data/config.yaml ]]; then
 	cp example-config.yaml /data/config.yaml
