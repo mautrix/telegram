@@ -57,12 +57,14 @@ class UserPortal(Base):
     query = None
     __tablename__ = "user_portal"
 
-    user = Column(Integer, ForeignKey("user.tgid"), primary_key=True)
+    user = Column(Integer, ForeignKey("user.tgid", onupdate="CASCADE", ondelete="CASCADE"),
+                  primary_key=True)
     portal = Column(Integer, primary_key=True)
     portal_receiver = Column(Integer, primary_key=True)
 
     __table_args__ = (ForeignKeyConstraint(("portal", "portal_receiver"),
-                                           ("portal.tgid", "portal.tg_receiver")),)
+                                           ("portal.tgid", "portal.tg_receiver"),
+                                           onupdate="CASCADE", ondelete="CASCADE"),)
 
 
 class User(Base):
