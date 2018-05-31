@@ -17,6 +17,7 @@
 import asyncio
 
 from telethon.errors import *
+from telethon.tl.types import ChatForbidden, ChannelForbidden
 from mautrix_appservice import MatrixRequestError
 
 from .. import portal as po
@@ -258,6 +259,12 @@ async def confirm_bridge(evt: CommandEvent):
         else:
             return await evt.reply("Failed to get info of telegram chat. "
                                    "You're not logged in, is the relay bot in the chat?")
+    if isinstance(entity, (ChatForbidden, ChannelForbidden)):
+        if evt.sender.logged_in:
+            return await evt.reply("You don't seem to be in that chat.")
+        else:
+            return await evt.reply("The bot doesn't seem to be in that chat.")
+
     direct = False
 
     portal.mxid = bridge_to_mxid

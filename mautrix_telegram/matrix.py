@@ -154,7 +154,7 @@ class MatrixHandler:
 
         puppet = Puppet.get_by_mxid(user)
         if sender and puppet:
-            await portal.leave_matrix(puppet, sender)
+            await portal.leave_matrix(puppet, sender, event_id)
 
         user = User.get_by_mxid(user, create=False)
         if not user:
