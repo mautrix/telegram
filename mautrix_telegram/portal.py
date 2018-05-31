@@ -1318,6 +1318,8 @@ class Portal:
             await intent.redact(self.mxid, mxid)
 
     async def _create_room_on_action(self, source, action):
+        if source.is_relaybot:
+            return False
         create_and_exit = (MessageActionChatCreate, MessageActionChannelCreate)
         create_and_continue = (MessageActionChatAddUser, MessageActionChatJoinedByLink)
         if isinstance(action, create_and_exit + create_and_continue):
@@ -1331,7 +1333,7 @@ class Portal:
         action = update.action
         should_ignore = ((not self.mxid and not await self._create_room_on_action(source, action))
                          or self.is_duplicate_action(update))
-        if should_ignore:
+        if should_ignore or not self.mxid:
             return
         # TODO figure out how to see changes to about text / channel username
         if isinstance(action, MessageActionChatEditTitle):
