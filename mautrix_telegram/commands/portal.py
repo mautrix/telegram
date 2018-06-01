@@ -115,7 +115,11 @@ async def delete_portal(evt: CommandEvent):
     return await evt.reply("Please confirm deletion of portal "
                            f"[{portal.alias or portal.mxid}](https://matrix.to/#/{portal.mxid}) "
                            f"to Telegram chat \"{portal.title}\" "
-                           "by typing `$cmdprefix+sp confirm-delete`")
+                           "by typing `$cmdprefix+sp confirm-delete`"
+                           "\n\n"
+                           "**WARNING:** If the bridge bot has the power level to do so, **this "
+                           "will kick ALL users** in the room. If you just want to remove the "
+                           "bridge, use `$cmdprefix+sp unbridge` instead.")
 
 
 @command_handler(needs_auth=False)
