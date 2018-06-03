@@ -50,9 +50,13 @@ def upgrade():
                     sa.Column('portal', sa.Integer),
                     sa.Column('portal_receiver', sa.Integer),
                     sa.PrimaryKeyConstraint('user', 'portal', 'portal_receiver'),
-                    sa.ForeignKeyConstraint(("user",), ("user.tgid",)),
+                    sa.ForeignKeyConstraint(("user",), ("user.tgid",),
+                                            name="user_portal_user_fkey",
+                                            onupdate="CASCADE", ondelete="CASCADE"),
                     sa.ForeignKeyConstraint(("portal", "portal_receiver"),
-                                            ("portal.tgid", "portal.tg_receiver")))
+                                            ("portal.tgid", "portal.tg_receiver"),
+                                            name="user_portal_portal_fkey",
+                                            onupdate="CASCADE", ondelete="CASCADE"))
     op.create_table('message',
                     sa.Column('mxid', sa.String),
                     sa.Column('mx_room', sa.String),
