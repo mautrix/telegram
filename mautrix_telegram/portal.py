@@ -16,6 +16,8 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from collections import deque
 from datetime import datetime
+from string import Template
+from html import escape as escape_html
 import asyncio
 import random
 import mimetypes
@@ -656,16 +658,28 @@ class Portal:
         msgtype = message["msgtype"]
         if msgtype == "m.emote":
             if "formatted_body" in message:
-                message["formatted_body"] = f"* {sender.displayname} {message['formatted_body']}"
-            message["body"] = f"* {sender.displayname} {message['body']}"
+                tpl = config["bridge.message_formats.m_emote.html"]
+                tpl_args = dict(sender_display_name=sender.displayname,
+                            message=message['formatted_body'])
+                message["formatted_body"] = Template(tpl).safe_substitute(tpl_args)
+            tpl = config["bridge.message_formats.m_emote.plain"]
+            tpl_args = dict(sender_display_name=sender.displayname, message=message['body'])
+            message["body"] = Template(tpl).safe_substitute(tpl_args)
             message["msgtype"] = "m.text"
         elif not sender.logged_in:
             html = message["formatted_body"] if "formatted_body" in message else None
             text = message["body"]
             if msgtype == "m.text":
-                if html:
-                    html = f"&lt;{sender.displayname}&gt; {html}"
-                text = f"<{sender.displayname}> {text}"
+                # We use the plain text as HTML if available to ensure that we represent
+                # the event consistently.
+                if not html:
+                    html = escape_html(text)
+                tpl = config["bridge.message_formats.m_text.html"]
+                tpl_args = dict(sender_display_name=sender.displayname,message=html)
+                html = Template(tpl).safe_substitute(tpl_args)
+                tpl = config["bridge.message_formats.m_text.plain"]
+                tpl_args = dict(sender_display_name=sender.displayname, message=text)
+                text = Template(tpl).safe_substitute(tpl_args)
             else:
                 msgtype = msgtype[len("m."):]
                 prefix = {
@@ -681,6 +695,7 @@ class Portal:
                 text = f"{sender.displayname} sent {prefix}{msgtype}{text}"
             if html:
                 message["formatted_body"] = html
+                message["format"] = "org.matrix.custom.html"
             message["body"] = text
 
     async def _matrix_event_to_entities(self, client, event):

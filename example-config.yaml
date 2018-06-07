@@ -115,6 +115,15 @@ bridge:
     # WARNING: Probably buggy, might get stuck in infinite loop.
     catch_up: false
 
+    # The formats to use when sending messages to Telegram via the relay bot.
+    # Available variables:
+    #   $sender_display_name   - The display name of the sender
+    #   $message               - The message text itself
+    message_formats:
+        m_text:
+            plain: "<$sender_display_name> $message"
+            html: "&lt;$sender_display_name&gt; $message"
+
     filter:
         # Filter mode to use. Either "blacklist" or "whitelist".
         # If the mode is "blacklist", the listed chats will never be bridged. An empty blacklist disables the filter.
