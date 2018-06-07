@@ -183,6 +183,8 @@ class Config(DictWithRecursion):
 
         copy("bridge.message_formats.m_text.plain")
         copy("bridge.message_formats.m_text.html")
+        copy("bridge.message_formats.m_emote.plain")
+        copy("bridge.message_formats.m_emote.html")
 
         copy("bridge.filter.mode")
         copy("bridge.filter.list")

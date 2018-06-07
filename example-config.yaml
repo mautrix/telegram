@@ -123,6 +123,9 @@ bridge:
         m_text:
             plain: "<$sender_display_name> $message"
             html: "&lt;$sender_display_name&gt; $message"
+        m_emote:
+            plain: "* $sender_display_name $message"
+            html: "* $sender_display_name $message"
 
     filter:
         # Filter mode to use. Either "blacklist" or "whitelist".
