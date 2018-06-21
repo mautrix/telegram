@@ -16,7 +16,7 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from io import BytesIO
 
-from telethon import TelegramClient
+from telethon import TelegramClient, utils
 from telethon.tl.functions.messages import SendMessageRequest, SendMediaRequest
 from telethon.tl.types import *
 from telethon.extensions.markdown import parse as parse_md
@@ -35,7 +35,7 @@ class MautrixTelegramClient(TelegramClient):
             message=message,
             entities=entities,
             no_webpage=not link_preview,
-            reply_to_msg_id=self._get_message_id(reply_to)
+            reply_to_msg_id=utils.get_message_id(reply_to)
         )
         result = await self(request)
         if isinstance(result, UpdateShortSentMessage):
@@ -49,7 +49,7 @@ class MautrixTelegramClient(TelegramClient):
                 entities=result.entities
             )
 
-        return self._get_response_message(request, result)
+        return self._get_response_message(request, result, entity)
 
     async def upload_file(self, file, mime_type=None, attributes=None, file_name=None):
         file_handle = await super().upload_file(file, file_name=file_name, use_cache=False)
@@ -67,10 +67,10 @@ class MautrixTelegramClient(TelegramClient):
 
     async def send_media(self, entity, media, caption=None, entities=None, reply_to=None):
         entity = await self.get_input_entity(entity)
-        reply_to = self._get_message_id(reply_to)
+        reply_to = utils.get_message_id(reply_to)
         request = SendMediaRequest(entity, media, message=caption or "", entities=entities or [],
                                    reply_to_msg_id=reply_to)
-        return self._get_response_message(request, await self(request))
+        return self._get_response_message(request, await self(request), entity)
 
     async def download_file_bytes(self, location):
         if isinstance(location, Document):

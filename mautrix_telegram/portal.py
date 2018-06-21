@@ -32,7 +32,7 @@ from sqlalchemy.orm.exc import FlushError
 
 from telethon.tl.functions.messages import *
 from telethon.tl.functions.channels import *
-from telethon.errors.rpc_error_list import *
+from telethon.errors import *
 from telethon.tl.types import *
 from mautrix_appservice import MatrixRequestError, IntentError
 
