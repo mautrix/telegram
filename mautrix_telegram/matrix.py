@@ -113,7 +113,7 @@ class MatrixHandler:
             return
         await user.ensure_started()
         portal = Portal.get_by_mxid(room)
-        if user and await user.has_full_access() and portal:
+        if user and await user.has_full_access(allow_bot=True) and portal:
             await portal.invite_telegram(inviter, user)
             return
 
@@ -218,13 +218,13 @@ class MatrixHandler:
     async def handle_power_levels(self, room, sender, new, old):
         portal = Portal.get_by_mxid(room)
         sender = await User.get_by_mxid(sender).ensure_started()
-        if await sender.has_full_access() and portal:
+        if await sender.has_full_access(allow_bot=True) and portal:
             await portal.handle_matrix_power_levels(sender, new["users"], old["users"])
 
     async def handle_room_meta(self, type, room, sender, content):
         portal = Portal.get_by_mxid(room)
         sender = await User.get_by_mxid(sender).ensure_started()
-        if await sender.has_full_access() and portal:
+        if await sender.has_full_access(allow_bot=True) and portal:
             handler, content_key = {
                 "m.room.name": (portal.handle_matrix_title, "name"),
                 "m.room.topic": (portal.handle_matrix_about, "topic"),
@@ -237,7 +237,7 @@ class MatrixHandler:
     async def handle_room_pin(self, room, sender, new_events, old_events):
         portal = Portal.get_by_mxid(room)
         sender = await User.get_by_mxid(sender).ensure_started()
-        if await sender.has_full_access() and portal:
+        if await sender.has_full_access(allow_bot=True) and portal:
             events = new_events - old_events
             if len(events) > 0:
                 # New event pinned, set that as pinned in Telegram.

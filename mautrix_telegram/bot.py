@@ -42,6 +42,7 @@ class Bot(AbstractUser):
         self.whitelisted = True
         self.username = None
         self.is_relaybot = True
+        self.is_bot = True
         self.chats = {chat.id: chat.type for chat in BotChat.query.all()}
         self.tg_whitelist = []
         self.whitelist_group_admins = config["bridge.relaybot.whitelist_group_admins"] or False

@@ -45,15 +45,16 @@ class PublicBridgeWebsite:
     async def get_login(self, request):
         user = (User.get_by_mxid(request.rel_url.query["mxid"], create=False)
                 if "mxid" in request.rel_url.query else None)
+        state = "token" if request.rel_url.query.get("mode", "") == "bot" else "request"
         if not user:
             return self.render_login(
                 mxid=request.rel_url.query["mxid"] if "mxid" in request.rel_url.query else None,
-                state="request")
+                state=state)
         elif not user.whitelisted:
             return self.render_login(mxid=user.mxid, error="You are not whitelisted.", status=403)
         await user.ensure_started()
         if not await user.is_logged_in():
-            return self.render_login(mxid=user.mxid, state="request")
+            return self.render_login(mxid=user.mxid, state=state)
 
         return self.render_login(mxid=user.mxid, username=user.username)
 
@@ -61,6 +62,19 @@ class PublicBridgeWebsite:
         return web.Response(status=status, content_type="text/html",
                             text=self.login.render(username=username, state=state, error=error,
                                                    message=message, mxid=mxid))
+
+    async def post_login_token(self, user, token):
+        try:
+            user_info = await user.client.sign_in(bot_token=token)
+            asyncio.ensure_future(user.post_login(user_info), loop=self.loop)
+            if user.command_status and user.command_status["action"] == "Login":
+                user.command_status = None
+            return self.render_login(mxid=user.mxid, state="logged-in", status=200,
+                                     username=user_info.username)
+        except Exception:
+            self.log.exception("Error sending bot token")
+            return self.render_login(mxid=user.mxid, state="token", status=500,
+                                     error="Internal server error while sending token.")
 
     async def post_login_phone(self, user, phone):
         try:
@@ -153,6 +167,8 @@ class PublicBridgeWebsite:
 
         if "phone" in data:
             return await self.post_login_phone(user, data["phone"])
+        elif "token" in data:
+            return await self.post_login_token(user, data["token"])
         elif "code" in data:
             resp = await self.post_login_code(user, data["code"],
                                               password_in_data="password" in data)

@@ -104,8 +104,7 @@ class Puppet(Base):
 class BotChat(Base):
     query = None
     __tablename__ = "bot_chat"
-    bot_id = Column(Integer, primary_key=True, default=0)
-    chat_id = Column(Integer, primary_key=True)
+    id = Column(Integer, primary_key=True)
     type = Column(String, nullable=False)
 
 

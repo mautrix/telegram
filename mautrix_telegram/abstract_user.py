@@ -36,12 +36,16 @@ class AbstractUser:
     az = None
 
     def __init__(self):
-        self.connected = False
         self.whitelisted = False
         self.client = None
         self.tgid = None
         self.mxid = None
         self.is_relaybot = False
+        self.is_bot = False
+
+    @property
+    def connected(self):
+        return self.client and self.client.is_connected()
 
     def _init_client(self):
         self.log.debug(f"Initializing client for {self.name}")
@@ -72,6 +76,8 @@ class AbstractUser:
             self.log.exception("Failed to handle Telegram update")
 
     async def _get_dialogs(self, limit=None):
+        if self.is_bot:
+            return 
         dialogs = await self.client.get_dialogs(limit=limit)
         return [dialog.entity for dialog in dialogs if (
             not isinstance(dialog.entity, (User, ChatForbidden, ChannelForbidden))
@@ -85,32 +91,33 @@ class AbstractUser:
     async def is_logged_in(self):
         return self.client and await self.client.is_user_authorized()
 
-    async def has_full_access(self):
-        return await self.is_logged_in() and self.whitelisted
+    async def has_full_access(self, allow_bot=False):
+        return self.whitelisted and (not self.is_bot or allow_bot) and await self.is_logged_in()
 
     async def start(self):
         if not self.client:
             self._init_client()
-        self.connected = await self.client.connect()
+        await self.client.connect()
+        self.log.debug("%s connected: %s", self.mxid, self.connected)
+        return self
 
     async def ensure_started(self, even_if_no_session=False):
         if not self.whitelisted:
             return self
-        self.log.info("CONNECTING USER %s, connected=%s, even_if_no_session=%s, session_count=%s",
-                      self.mxid, self.connected, even_if_no_session,
-                      self.session_container.Session.query.filter(
-                          self.session_container.Session.session_id == self.mxid).count())
+        self.log.debug("ensure_started(%s, connected=%s, even_if_no_session=%s, session_count=%s)",
+                       self.mxid, self.connected, even_if_no_session,
+                       self.session_container.Session.query.filter(
+                           self.session_container.Session.session_id == self.mxid).count())
         should_connect = (even_if_no_session or
                           self.session_container.Session.query.filter(
                               self.session_container.Session.session_id == self.mxid).count() > 0)
         if not self.connected and should_connect:
-            return await self.start()
+            await self.start()
         return self
 
     def stop(self):
         self.client.disconnect()
         self.client = None
-        self.connected = False
 
     # region Telegram update handling
 

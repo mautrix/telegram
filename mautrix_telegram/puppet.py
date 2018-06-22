@@ -19,7 +19,6 @@ import re
 import logging
 
 from telethon.tl.types import UserProfilePhoto
-from telethon.errors import LocationInvalidError
 
 from .db import Puppet as DBPuppet
 from . import util

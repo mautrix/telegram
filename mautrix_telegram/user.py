@@ -36,10 +36,11 @@ class User(AbstractUser):
     by_tgid = {}
 
     def __init__(self, mxid, tgid=None, username=None, db_contacts=None, saved_contacts=0,
-                 db_portals=None, db_instance=None):
+                 is_bot=False, db_portals=None, db_instance=None):
         super().__init__()
         self.mxid = mxid
         self.tgid = tgid
+        self.is_bot = is_bot
         self.username = username
         self.contacts = []
         self.saved_contacts = saved_contacts
@@ -127,7 +128,7 @@ class User(AbstractUser):
     @classmethod
     def from_db(cls, db_user):
         return User(db_user.mxid, db_user.tgid, db_user.tg_username, db_user.contacts,
-                    db_user.saved_contacts, db_user.portals, db_instance=db_user)
+                    False, db_user.saved_contacts, db_user.portals, db_instance=db_user)
 
     # endregion
     # region Telegram connection management
@@ -148,19 +149,23 @@ class User(AbstractUser):
     async def post_login(self, info=None):
         try:
             await self.update_info(info)
-            await self.sync_dialogs()
-            await self.sync_contacts()
+            if not self.is_bot:
+                await self.sync_dialogs()
+                await self.sync_contacts()
             if config["bridge.catch_up"]:
                 await self.client.catch_up()
         except Exception:
-            self.log.exception("Failed to run post-login functions")
+            self.log.exception("Failed to run post-login functions for %s", self.mxid)
 
     # endregion
     # region Telegram actions that need custom methods
 
-    async def update_info(self, info=None):
+    async def update_info(self, info: User = None):
         info = info or await self.client.get_me()
         changed = False
+        if self.is_bot != info.bot:
+            self.is_bot = info.bot
+            changed = True
         if self.username != info.username:
             self.username = info.username
             changed = True
@@ -251,6 +256,10 @@ class User(AbstractUser):
             self.save()
         except KeyError:
             pass
+
+    async def needs_relaybot(self, portal):
+        return not await self.is_logged_in() or (
+                self.is_bot and portal.tgid_full not in self.portals)
 
     def _hash_contacts(self):
         acc = 0

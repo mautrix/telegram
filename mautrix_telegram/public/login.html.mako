@@ -29,11 +29,37 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 	<link rel="stylesheet"
 		  href="//cdn.rawgit.com/milligram/milligram/master/dist/milligram.min.css">
 	<link rel="stylesheet" href="login.css"/>
+
+	<script>
+		function switchToBotLogin() {
+			const params = new URLSearchParams(location.search.slice(1))
+			params.set("mode", "bot")
+			location.search = "?" + params.toString()
+			console.log(location.search)
+		}
+
+		function goBack() {
+			let params = new URLSearchParams(location.search.slice(1))
+			const mxid = params.get("mxid")
+			params = new URLSearchParams()
+			if (mxid) {
+				params.set("mxid", mxid)
+			}
+			location.replace(location.href.split("?")[0] + "?" + params.toString())
+		}
+	</script>
 </head>
 <body>
 <main class="container">
 	% if username:
 		% if state == "logged-in":
+			<h1>Logged in successfully!</h1>
+			<p>
+				Logged in as @${username}.
+				You can now close this page.
+				You should be invited to Telegram portals on Matrix momentarily.
+			</p>
+		% elif state == "bot-logged-in":
 			<h1>Logged in successfully!</h1>
 			<p>
 				Logged in as @${username}.
@@ -67,24 +93,26 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 					<label for="value">Phone number</label>
 					<input type="tel" id="value" name="phone" placeholder="Enter phone number"/>
 					<button type="submit">Request code</button>
+					<button class="button-clear" type="button" onclick="switchToBotLogin()">
+						Use bot token
+					</button>
+				% elif state == "token":
+					<label for="value">Bot token</label>
+					<input type="text" id="value" name="token" placeholder="Enter bot API token"/>
+					<button type="submit">Sign in</button>
 				% elif state == "code":
 					<label for="value">Phone code</label>
 					<input type="number" id="value" name="code" placeholder="Enter phone code"/>
 					<button type="submit">Sign in</button>
-					<div class="float-right">
-						<button class="button-clear" type="button"
-								onclick="location.replace(location.href)">
-							Go back
-						</button>
-					</div>
 				% elif state == "password":
 					<label for="value">Password</label>
 					<input type="password" id="value" name="password"
 						   placeholder="Enter password"/>
 					<button type="submit">Sign in</button>
+				% endif
+				% if state != "request":
 					<div class="float-right">
-						<button class="button-clear" type="button"
-								onclick="location.replace(location.href)">
+						<button class="button-clear" type="button" onclick="goBack()">
 							Go back
 						</button>
 					</div>
