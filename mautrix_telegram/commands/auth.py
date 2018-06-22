@@ -25,9 +25,7 @@ from ..util import format_duration
 
 @command_handler(needs_auth=False)
 async def ping(evt):
-    if not evt.sender.logged_in:
-        return await evt.reply("You're not logged in.")
-    me = await evt.sender.client.get_me()
+    me = await evt.sender.client.get_me() if await evt.sender.is_logged_in() else None
     if me:
         return await evt.reply(f"You're logged in as @{me.username}")
     else:
@@ -53,7 +51,7 @@ def register(evt):
 
 @command_handler(needs_auth=False, management_only=True)
 async def register(evt):
-    if evt.sender.logged_in:
+    if await evt.sender.is_logged_in():
         return await evt.reply("You are already logged in.")
     elif len(evt.args) < 1:
         return await evt.reply("**Usage:** `$cmdprefix+sp register <phone> <full name>`")
@@ -99,7 +97,7 @@ async def enter_code_register(evt):
 
 @command_handler(needs_auth=False, management_only=True)
 async def login(evt):
-    if evt.sender.logged_in:
+    if await evt.sender.is_logged_in():
         return await evt.reply("You are already logged in.")
 
     allow_matrix_login = evt.config.get("bridge.allow_matrix_login", True)
@@ -225,7 +223,7 @@ async def enter_password(evt):
 
 @command_handler(needs_auth=False)
 async def logout(evt):
-    if not evt.sender.logged_in:
+    if not await evt.sender.is_logged_in():
         return await evt.reply("You're not logged in.")
     if await evt.sender.log_out():
         return await evt.reply("Logged out successfully.")

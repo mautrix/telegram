@@ -52,7 +52,7 @@ class PublicBridgeWebsite:
         elif not user.whitelisted:
             return self.render_login(mxid=user.mxid, error="You are not whitelisted.", status=403)
         await user.ensure_started()
-        if not user.logged_in:
+        if not await user.is_logged_in():
             return self.render_login(mxid=user.mxid, state="request")
 
         return self.render_login(mxid=user.mxid, username=user.username)
@@ -148,7 +148,7 @@ class PublicBridgeWebsite:
         user = await User.get_by_mxid(data["mxid"]).ensure_started(even_if_no_session=True)
         if not user.whitelisted:
             return self.render_login(mxid=user.mxid, error="You are not whitelisted.", status=403)
-        elif user.logged_in:
+        elif await user.is_logged_in():
             return self.render_login(mxid=user.mxid, username=user.username)
 
         if "phone" in data:

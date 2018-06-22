@@ -560,7 +560,7 @@ class Portal:
             if p.Puppet.get_id_from_mxid(member) or member == self.main_intent.mxid:
                 continue
             user = await u.User.get_by_mxid(member).ensure_started()
-            if (has_bot and user.relaybot_whitelisted) or user.has_full_access:
+            if (has_bot and user.relaybot_whitelisted) or await user.has_full_access():
                 authenticated.append(user)
         return authenticated
 
@@ -607,7 +607,7 @@ class Portal:
             return ""
 
     async def leave_matrix(self, user, source, event_id):
-        if not user.logged_in:
+        if not await user.is_logged_in():
             async with self.require_send_lock(self.bot.tgid):
                 response = await self.bot.client.send_message(
                     self.peer, f"__{user.displayname} left the room.__", markdown=True)
@@ -639,7 +639,7 @@ class Portal:
             await user.client(LeaveChannelRequest(channel=channel))
 
     async def join_matrix(self, user, event_id):
-        if not user.logged_in:
+        if not await user.is_logged_in():
             async with self.require_send_lock(self.bot.tgid):
                 response = await self.bot.client.send_message(
                     self.peer, f"__{user.displayname} joined the room.__", markdown=True)
@@ -654,7 +654,7 @@ class Portal:
             pass
 
     @staticmethod
-    def _preprocess_matrix_message(sender, message):
+    def _preprocess_matrix_message(sender, is_logged_in, message):
         msgtype = message["msgtype"]
         if msgtype == "m.emote":
             if "formatted_body" in message:
@@ -666,7 +666,7 @@ class Portal:
             tpl_args = dict(sender_display_name=sender.displayname, message=message['body'])
             message["body"] = Template(tpl).safe_substitute(tpl_args)
             message["msgtype"] = "m.text"
-        elif not sender.logged_in:
+        elif not is_logged_in:
             html = message["formatted_body"] if "formatted_body" in message else None
             text = message["body"]
             if msgtype == "m.text":
@@ -813,14 +813,15 @@ class Portal:
         self.db.commit()
 
     async def handle_matrix_message(self, sender, message, event_id):
-        client = sender.client if sender.logged_in else self.bot.client
-        sender_id = sender.tgid if sender.logged_in else self.bot.tgid
+        logged_in = await sender.is_logged_in()
+        client = sender.client if logged_in else self.bot.client
+        sender_id = sender.tgid if logged_in else self.bot.tgid
         space = (self.tgid if self.peer_type == "channel"  # Channels have their own ID space
-                 else (sender.tgid if sender.logged_in else self.bot.tgid))
+                 else (sender.tgid if logged_in else self.bot.tgid))
         reply_to = formatter.matrix_reply_to_telegram(message, space, room_id=self.mxid)
 
         message["mxtg_filename"] = message["body"]
-        self._preprocess_matrix_message(sender, message)
+        self._preprocess_matrix_message(sender, logged_in, message)
         type = message["msgtype"]
 
         if type == "m.text" or (self.bridge_notices and type == "m.notice"):
@@ -849,7 +850,7 @@ class Portal:
             pass
 
     async def handle_matrix_deletion(self, deleter, event_id):
-        deleter = deleter if deleter.logged_in else self.bot
+        deleter = deleter if await deleter.is_logged_in() else self.bot
         space = self.tgid if self.peer_type == "channel" else deleter.tgid
         message = DBMessage.query.filter(DBMessage.mxid == event_id,
                                          DBMessage.tg_space == space,

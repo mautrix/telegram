@@ -252,19 +252,20 @@ async def confirm_bridge(evt: CommandEvent):
         return await evt.reply("Please use `$cmdprefix+sp continue` to confirm the bridging or "
                                "`$cmdprefix+sp cancel` to cancel.")
 
-    user = evt.sender if evt.sender.logged_in else evt.tgbot
+    is_logged_in = await evt.sender.is_logged_in()
+    user = evt.sender if is_logged_in  else evt.tgbot
     try:
         entity = await user.client.get_entity(portal.peer)
     except Exception:
         evt.log.exception("Failed to get_entity(%s) for manual bridging.", portal.peer)
-        if evt.sender.logged_in:
+        if is_logged_in:
             return await evt.reply("Failed to get info of telegram chat. "
                                    "You are logged in, are you in that chat?")
         else:
             return await evt.reply("Failed to get info of telegram chat. "
                                    "You're not logged in, is the relay bot in the chat?")
     if isinstance(entity, (ChatForbidden, ChannelForbidden)):
-        if evt.sender.logged_in:
+        if is_logged_in:
             return await evt.reply("You don't seem to be in that chat.")
         else:
             return await evt.reply("The bot doesn't seem to be in that chat.")

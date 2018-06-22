@@ -39,7 +39,7 @@ class MatrixHandler:
 
     async def handle_puppet_invite(self, room, puppet, inviter):
         self.log.debug(f"{inviter} invited puppet for {puppet.tgid} to {room}")
-        if not inviter.logged_in:
+        if not await inviter.is_logged_in():
             await puppet.intent.error_and_leave(
                 room, text="Please log in before inviting Telegram puppets.")
             return
@@ -113,7 +113,7 @@ class MatrixHandler:
             return
         await user.ensure_started()
         portal = Portal.get_by_mxid(room)
-        if user and user.has_full_access and portal:
+        if user and await user.has_full_access() and portal:
             await portal.invite_telegram(inviter, user)
             return
 
@@ -130,14 +130,14 @@ class MatrixHandler:
             await portal.main_intent.kick(room, user.mxid,
                                           "You are not whitelisted on this Telegram bridge.")
             return
-        elif not user.logged_in and not portal.has_bot:
+        elif not await user.is_logged_in() and not portal.has_bot:
             await portal.main_intent.kick(room, user.mxid,
                                           "This chat does not have a bot relaying "
                                           "messages for unauthenticated users.")
             return
 
         self.log.debug(f"{user} joined {room}")
-        if user.logged_in or portal.has_bot:
+        if await user.is_logged_in() or portal.has_bot:
             await portal.join_matrix(user, event_id)
 
     async def handle_part(self, room, user, sender, event_id):
@@ -160,7 +160,7 @@ class MatrixHandler:
         if not user:
             return
         await user.ensure_started()
-        if user.logged_in or portal.has_bot:
+        if await user.is_logged_in() or portal.has_bot:
             await portal.leave_matrix(user, sender, event_id)
 
     def is_command(self, message):
@@ -180,7 +180,7 @@ class MatrixHandler:
             return
 
         portal = Portal.get_by_mxid(room)
-        if not is_command and portal and (sender.logged_in or portal.has_bot):
+        if not is_command and portal and (await sender.is_logged_in() or portal.has_bot):
             await portal.handle_matrix_message(sender, message, event_id)
             return
 
@@ -218,13 +218,13 @@ class MatrixHandler:
     async def handle_power_levels(self, room, sender, new, old):
         portal = Portal.get_by_mxid(room)
         sender = await User.get_by_mxid(sender).ensure_started()
-        if sender.has_full_access and portal:
+        if await sender.has_full_access() and portal:
             await portal.handle_matrix_power_levels(sender, new["users"], old["users"])
 
     async def handle_room_meta(self, type, room, sender, content):
         portal = Portal.get_by_mxid(room)
         sender = await User.get_by_mxid(sender).ensure_started()
-        if sender.has_full_access and portal:
+        if await sender.has_full_access() and portal:
             handler, content_key = {
                 "m.room.name": (portal.handle_matrix_title, "name"),
                 "m.room.topic": (portal.handle_matrix_about, "topic"),
@@ -237,7 +237,7 @@ class MatrixHandler:
     async def handle_room_pin(self, room, sender, new_events, old_events):
         portal = Portal.get_by_mxid(room)
         sender = await User.get_by_mxid(sender).ensure_started()
-        if sender.has_full_access and portal:
+        if await sender.has_full_access() and portal:
             events = new_events - old_events
             if len(events) > 0:
                 # New event pinned, set that as pinned in Telegram.

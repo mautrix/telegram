@@ -49,13 +49,15 @@ class Puppet:
         self._db_instance = db_instance
 
         self.intent = self.az.intent.user(self.mxid)
-        self.logged_in = True
 
         self.cache[id] = self
 
     @property
     def tgid(self):
         return self.id
+
+    async def is_logged_in(self):
+        return True
 
     @property
     def db_instance(self):

@@ -60,7 +60,7 @@ class Bot(AbstractUser):
 
     async def start(self):
         await super().start()
-        if not self.logged_in:
+        if not await self.is_logged_in():
             await self.client.sign_in(bot_token=self.token)
         await self.post_login()
         return self
@@ -168,7 +168,7 @@ class Bot(AbstractUser):
         user = await u.User.get_by_mxid(mxid).ensure_started()
         if not user.relaybot_whitelisted:
             return await reply("That user is not whitelisted to use the bridge.")
-        elif user.logged_in:
+        elif await user.is_logged_in():
             displayname = f"@{user.username}" if user.username else user.displayname
             return await reply("That user seems to be logged in. "
                                f"Just invite [{displayname}](tg://user?id={user.tgid})")

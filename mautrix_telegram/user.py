@@ -134,7 +134,7 @@ class User(AbstractUser):
 
     async def start(self, delete_unless_authenticated=False):
         await super().start()
-        if self.logged_in:
+        if await self.is_logged_in():
             self.log.debug(f"Ensuring post_login() for {self.name}")
             asyncio.ensure_future(self.post_login(), loop=self.loop)
         elif delete_unless_authenticated:

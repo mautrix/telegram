@@ -44,7 +44,7 @@ class AbstractUser:
         self.mxid = None
         self.is_relaybot = False
 
-    async def _init_client(self):
+    def _init_client(self):
         self.log.debug(f"Initializing client for {self.name}")
         device = f"{platform.system()} {platform.release()}"
         sysversion = MautrixTelegramClient.__version__
@@ -57,7 +57,7 @@ class AbstractUser:
                                             system_version=sysversion,
                                             device_model=device,
                                             report_errors=False)
-        await self.client.add_event_handler(self._update_catch)
+        self.client.add_event_handler(self._update_catch)
 
     async def update(self, update):
         return False
@@ -83,17 +83,15 @@ class AbstractUser:
     def name(self):
         raise NotImplementedError()
 
-    @property
-    def logged_in(self):
-        return self.client and self.client.is_user_authorized()
+    async def is_logged_in(self):
+        return self.client and await self.client.is_user_authorized()
 
-    @property
-    def has_full_access(self):
-        return self.logged_in and self.whitelisted
+    async def has_full_access(self):
+        return await self.is_logged_in() and self.whitelisted
 
     async def start(self):
         if not self.client:
-            await self._init_client()
+            self._init_client()
         self.connected = await self.client.connect()
 
     async def ensure_started(self, even_if_no_session=False):
