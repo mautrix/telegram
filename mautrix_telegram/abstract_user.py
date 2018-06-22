@@ -15,7 +15,6 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 import platform
-import os
 
 from telethon.tl.types import *
 from mautrix_appservice import MatrixRequestError
@@ -97,7 +96,14 @@ class AbstractUser:
     async def ensure_started(self, even_if_no_session=False):
         if not self.whitelisted:
             return self
-        elif not self.connected and (even_if_no_session or os.path.exists(f"{self.name}.session")):
+        self.log.info("CONNECTING USER %s, connected=%s, even_if_no_session=%s, session_count=%s",
+                      self.mxid, self.connected, even_if_no_session,
+                      self.session_container.Session.query.filter(
+                          self.session_container.Session.session_id == self.mxid).count())
+        should_connect = (even_if_no_session or
+                          self.session_container.Session.query.filter(
+                              self.session_container.Session.session_id == self.mxid).count() > 0)
+        if not self.connected and should_connect:
             return await self.start()
         return self
 
