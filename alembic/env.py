@@ -4,10 +4,12 @@ from logging.config import fileConfig
 
 import sys
 from os.path import abspath, dirname
+
 sys.path.insert(0, dirname(dirname(abspath(__file__))))
 
 from mautrix_telegram.base import Base
 from mautrix_telegram.config import Config
+from alchemysession import AlchemySessionContainer
 import mautrix_telegram.db
 
 # this is the Alembic Config object, which provides
@@ -20,6 +22,15 @@ mxtg_config.load()
 config.set_main_option("sqlalchemy.url",
                        mxtg_config.get("appservice.database", "sqlite:///mautrix-telegram.db"))
 
+
+class FakeDB:
+    @staticmethod
+    def query_property():
+        return None
+
+
+AlchemySessionContainer.create_table_classes(FakeDB(), "telethon_", Base)
+
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.
 fileConfig(config.config_file_name)
@@ -29,6 +40,7 @@ fileConfig(config.config_file_name)
 # from myapp import mymodel
 # target_metadata = mymodel.Base.metadata
 target_metadata = Base.metadata
+
 
 # other values from the config, defined by the needs of env.py,
 # can be acquired:
@@ -76,6 +88,7 @@ def run_migrations_online():
 
         with context.begin_transaction():
             context.run_migrations()
+
 
 if context.is_offline_mode():
     run_migrations_offline()

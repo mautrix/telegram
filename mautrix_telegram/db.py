@@ -28,7 +28,7 @@ class Portal(Base):
     # Telegram chat information
     tgid = Column(Integer, primary_key=True)
     tg_receiver = Column(Integer, primary_key=True)
-    peer_type = Column(String)
+    peer_type = Column(String, nullable=False)
     megagroup = Column(Boolean)
 
     # Matrix portal information
@@ -74,7 +74,7 @@ class User(Base):
     mxid = Column(String, primary_key=True)
     tgid = Column(Integer, nullable=True, unique=True)
     tg_username = Column(String, nullable=True)
-    saved_contacts = Column(Integer, default=0)
+    saved_contacts = Column(Integer, default=0, nullable=False)
     contacts = relationship("Contact", uselist=True,
                             cascade="save-update, merge, delete, delete-orphan")
     portals = relationship("Portal", secondary="user_portal")
@@ -104,7 +104,8 @@ class Puppet(Base):
 class BotChat(Base):
     query = None
     __tablename__ = "bot_chat"
-    id = Column(Integer, primary_key=True)
+    bot_id = Column(Integer, primary_key=True, default=0)
+    chat_id = Column(Integer, primary_key=True)
     type = Column(String, nullable=False)
 
 
