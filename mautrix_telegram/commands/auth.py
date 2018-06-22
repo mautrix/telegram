@@ -111,10 +111,12 @@ async def login(evt):
         prefix = evt.config["appservice.public.external"]
         url = f"{prefix}/login?mxid={evt.sender.mxid}"
         if evt.config.get("bridge.allow_matrix_login", True):
-            return await evt.reply("\n\n".join((
-                "This bridge instance allows you to log in inside or outside Matrix.",
-                "If you would like to log in within Matrix, please send your phone number here.",
-                f"If you would like to log in outside of Matrix, [click here]({url}).")))
+            return await evt.reply(
+                "This bridge instance allows you to log in inside or outside Matrix.\n\n"
+                "If you would like to log in within Matrix, please send your phone number here.\n"
+                f"If you would like to log in outside of Matrix, [click here]({url}).\n\n"
+                "Logging in outside of Matrix is recommended if you have two-factor authentication "
+                "enabled, because in-Matrix login would save your password in the message history.")
         return await evt.reply("This bridge instance does not allow logging in inside Matrix.\n\n"
                                f"Please visit [the login page]({url}) to log in.")
     elif allow_matrix_login:
