@@ -1435,9 +1435,11 @@ class Portal:
     @staticmethod
     def _participant_to_power_levels(levels, user, new_level, bot_level):
         new_level = min(new_level, bot_level)
-        user_level_defined = user.mxid in levels["users"]
         default_level = levels["users_default"] if "users_default" in levels else 0
-        user_level = levels["users"][user.mxid] if user_level_defined else default_level
+        try:
+            user_level = int(levels["users"][user.mxid])
+        except (ValueError, KeyError):
+            user_level = default_level
         if user_level != new_level and user_level < bot_level:
             levels["users"][user.mxid] = new_level
             return True
