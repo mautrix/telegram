@@ -15,8 +15,9 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 import logging
+import asyncio
 
-from mautrix_appservice import MatrixRequestError
+from mautrix_appservice import MatrixRequestError, IntentError
 
 from .user import User
 from .portal import Portal
@@ -87,19 +88,36 @@ class MatrixHandler:
             await puppet.intent.send_notice(room, "This puppet will remain inactive until a "
                                                   "Telegram chat is created for this room.")
 
+    async def accept_bot_invite(self, room, inviter):
+        tries = 0
+        while tries < 5:
+            try:
+                await self.az.intent.join_room(room)
+                break
+            except (IntentError, MatrixRequestError) as e:
+                tries += 1
+                wait_for_seconds = (tries + 1) * 10
+                if tries < 5:
+                    self.log.exception(f"Failed to join room {room} with bridge bot, "
+                                       f"retrying in {wait_for_seconds} seconds...")
+                    await asyncio.sleep(wait_for_seconds)
+                else:
+                    self.log.exception("Failed to join room {room}, giving up.")
+                    return
+
+        if not inviter.whitelisted:
+            await self.az.intent.send_notice(
+                room, text=None,
+                html="You are not whitelisted to use this bridge.<br/><br/>"
+                     "If you are the owner of this bridge, see the "
+                     "<code>bridge.permissions</code> section in your config file.")
+            await self.az.intent.leave_room(room)
+
     async def handle_invite(self, room, user, inviter):
         self.log.debug(f"{inviter} invited {user} to {room}")
         inviter = await User.get_by_mxid(inviter).ensure_started()
         if user == self.az.bot_mxid:
-            await self.az.intent.join_room(room)
-            if not inviter.whitelisted:
-                await self.az.intent.send_notice(
-                    room, text=None,
-                    html="You are not whitelisted to use this bridge.<br/><br/>"
-                         "If you are the owner of this bridge, see the "
-                         "<code>bridge.permissions</code> section in your config file.")
-                await self.az.intent.leave_room(room)
-            return
+            return await self.accept_bot_invite(room, inviter)
         elif not inviter.whitelisted:
             return
 
