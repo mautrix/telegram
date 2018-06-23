@@ -132,10 +132,11 @@ class Config(DictWithRecursion):
             if from_path in self:
                 base[to_path or from_path] = self[from_path]
 
-        def copy_dict(from_path, to_path=None):
+        def copy_dict(from_path, to_path=None, override_existing_map=True):
             if from_path in self:
                 to_path = to_path or from_path
-                base[to_path] = CommentedMap()
+                if override_existing_map or to_path not in base:
+                    base[to_path] = CommentedMap()
                 for key, value in self[from_path].items():
                     base[to_path][key] = value
 
@@ -181,7 +182,9 @@ class Config(DictWithRecursion):
         copy("bridge.native_stickers")
         copy("bridge.catch_up")
 
-        copy_dict("bridge.message_formats")
+        if "bridge.message_formats.m_text" in self:
+            del self["bridge.message_formats"]
+        copy_dict("bridge.message_formats", override_existing_map=False)
         copy("bridge.state_event_formats.join")
         copy("bridge.state_event_formats.leave")
         copy("bridge.state_event_formats.name_change")
