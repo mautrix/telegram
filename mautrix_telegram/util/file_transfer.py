@@ -115,7 +115,7 @@ async def transfer_thumbnail_to_matrix(client, intent, thumbnail_loc, video, mim
             return None
         mime_type = "image/png"
     else:
-        file = await client.download_file_bytes(thumbnail_loc)
+        file = await client.download_file(thumbnail_loc)
         width, height = None, None
         mime_type = magic.from_buffer(file, mime=True)
 
@@ -155,7 +155,7 @@ async def _unlocked_transfer_file_to_matrix(db, client, intent, id, location, th
         return db_file
 
     try:
-        file = await client.download_file_bytes(location)
+        file = await client.download_file(location)
     except LocationInvalidError:
         return None
     except (AuthBytesInvalidError, AuthKeyInvalidError, SecurityError) as e:

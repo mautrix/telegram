@@ -14,8 +14,6 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from io import BytesIO
-
 from telethon import TelegramClient, utils
 from telethon.tl.functions.messages import SendMediaRequest
 from telethon.tl.types import *
@@ -42,18 +40,3 @@ class MautrixTelegramClient(TelegramClient):
         request = SendMediaRequest(entity, media, message=caption or "", entities=entities or [],
                                    reply_to_msg_id=reply_to)
         return self._get_response_message(request, await self(request), entity)
-
-    async def download_file_bytes(self, location):
-        if isinstance(location, Document):
-            location = InputDocumentFileLocation(location.id, location.access_hash,
-                                                 location.version)
-        elif not isinstance(location, (InputFileLocation, InputDocumentFileLocation)):
-            location = InputFileLocation(location.volume_id, location.local_id, location.secret)
-
-        file = BytesIO()
-
-        await self.download_file(location, file)
-
-        data = file.getvalue()
-        file.close()
-        return data
