@@ -182,6 +182,9 @@ class Config(DictWithRecursion):
         copy("bridge.catch_up")
 
         copy_dict("bridge.message_formats")
+        copy("bridge.state_event_formats.join")
+        copy("bridge.state_event_formats.leave")
+        copy("bridge.state_event_formats.name_change")
 
         copy("bridge.filter.mode")
         copy("bridge.filter.list")

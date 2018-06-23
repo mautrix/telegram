@@ -618,11 +618,42 @@ class Portal:
         else:
             return ""
 
+    async def _get_state_change_message(self, event, user, arguments={}):
+        tpl = config[f"bridge.state_event_formats.{event}"]
+        displayname = await self.get_displayname(user)
+
+        tpl_args = dict(mxid=user.mxid,
+                        username=user.mxid_localpart,
+                        displayname=displayname)
+        tpl_args = {**tpl_args, **arguments}
+        message = Template(tpl).safe_substitute(tpl_args)
+        return {
+            "format": "org.matrix.custom.html",
+            "formatted_body": message,
+        }
+
+    async def name_change_matrix(self, user, displayname, prev_displayname, event_id):
+        async with self.require_send_lock(self.bot.tgid):
+            message = await self._get_state_change_message(
+                "name_change", user,
+                dict(displayname=displayname, prev_displayname=prev_displayname))
+            response = await self.bot.client.send_message(
+                self.peer, message,
+                parse_mode=self._matrix_event_to_entities)
+            space = self.tgid if self.peer_type == "channel" else self.bot.tgid
+            self.is_duplicate(response, (event_id, space))
+
+    async def get_displayname(self, user):
+        return (await self.main_intent.get_displayname(self.mxid, user.mxid)
+                or user.mxid_localpart)
+
     async def leave_matrix(self, user, source, event_id):
         if await user.needs_relaybot(self):
             async with self.require_send_lock(self.bot.tgid):
+                message = await self._get_state_change_message("leave", user)
                 response = await self.bot.client.send_message(
-                    self.peer, f"__{user.displayname} left the room.__")
+                    self.peer, message,
+                    parse_mode=self._matrix_event_to_entities)
                 space = self.tgid if self.peer_type == "channel" else self.bot.tgid
                 self.is_duplicate(response, (event_id, space))
             return
@@ -653,8 +684,10 @@ class Portal:
     async def join_matrix(self, user, event_id):
         if await user.needs_relaybot(self):
             async with self.require_send_lock(self.bot.tgid):
+                message = await self._get_state_change_message("join", user)
                 response = await self.bot.client.send_message(
-                    self.peer, f"__{user.displayname} joined the room.__")
+                    self.peer, message,
+                    parse_mode=self._matrix_event_to_entities)
                 space = self.tgid if self.peer_type == "channel" else self.bot.tgid
                 self.is_duplicate(response, (event_id, space))
             return
@@ -665,29 +698,28 @@ class Portal:
             # We'll just assume the user is already in the chat.
             pass
 
-    @staticmethod
-    def _apply_msg_format(sender, msgtype, message):
+    async def _apply_msg_format(self, sender, msgtype, message):
         if "formatted_body" not in message:
             message["format"] = "org.matrix.custom.html"
-            message["formatted_body"] = escape_html(message["body"])
+            message["formatted_body"] = escape_html(message.get("body", ""))
         body = message["formatted_body"]
 
         tpl = config["bridge.message_formats"].get(msgtype,
                                                    "&lt;$sender_display_name&gt; $message")
+        displayname = await self.get_displayname(sender)
         tpl_args = dict(sender_mxid=sender.mxid,
                         sender_username=sender.mxid_localpart,
-                        sender_display_name=sender.displayname,
+                        sender_displayname=displayname,
                         message=body)
         message["formatted_body"] = Template(tpl).safe_substitute(tpl_args)
 
-    @classmethod
-    def _preprocess_matrix_message(cls, sender, use_relaybot, message):
-        msgtype = message["msgtype"]
+    async def _preprocess_matrix_message(self, sender, use_relaybot, message):
+        msgtype = message.get("msgtype", "m.text")
         if msgtype == "m.emote":
-            cls._apply_msg_format(sender, msgtype, message)
+            await self._apply_msg_format(sender, msgtype, message)
             message["msgtype"] = "m.text"
         elif use_relaybot:
-            cls._apply_msg_format(sender, msgtype, message)
+            await self._apply_msg_format(sender, msgtype, message)
 
     def _matrix_event_to_entities(self, event):
         try:
@@ -792,7 +824,7 @@ class Portal:
         reply_to = formatter.matrix_reply_to_telegram(message, space, room_id=self.mxid)
 
         message["mxtg_filename"] = message["body"]
-        self._preprocess_matrix_message(sender, not logged_in, message)
+        await self._preprocess_matrix_message(sender, not logged_in, message)
         type = message["msgtype"]
 
         if type == "m.text" or (self.bridge_notices and type == "m.notice"):

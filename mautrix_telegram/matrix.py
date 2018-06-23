@@ -16,6 +16,7 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 import logging
 import asyncio
+import re
 
 from mautrix_appservice import MatrixRequestError, IntentError
 
@@ -264,6 +265,15 @@ class MatrixHandler:
                 # All pinned events removed, remove pinned event in Telegram.
                 await portal.handle_matrix_pin(sender, None)
 
+    async def handle_name_change(self, room, user, displayname, prev_displayname, event_id):
+        portal = Portal.get_by_mxid(room)
+        if not portal or not portal.has_bot:
+            return
+
+        user = await User.get_by_mxid(user).ensure_started()
+        if await user.needs_relaybot(portal):
+            await portal.name_change_matrix(user, displayname, prev_displayname, event_id)
+
     def filter_matrix_event(self, event):
         return (event["sender"] == self.az.bot_mxid
                 or Puppet.get_id_from_mxid(event["sender"]) is not None)
@@ -273,36 +283,43 @@ class MatrixHandler:
             return
         self.log.debug("Received event: %s", evt)
         type = evt["type"]
+        room_id = evt["room_id"]
+        event_id = evt["event_id"]
+        sender = evt["sender"]
         content = evt.get("content", {})
         if type == "m.room.member":
+            state_key = evt["state_key"]
             prev_content = evt.get("unsigned", {}).get("prev_content", {})
             membership = content.get("membership", "")
             prev_membership = prev_content.get("membership", "leave")
             if membership == prev_membership:
-                # TODO handle displayname/avatar changes
-                pass
+                match = re.compile("@(.+):(.+)").match(state_key)
+                localpart = match.group(1)
+                displayname = content.get("displayname", localpart)
+                prev_displayname = prev_content.get("displayname", localpart)
+                if displayname != prev_displayname:
+                    await self.handle_name_change(room_id, state_key, displayname,
+                                                  prev_displayname, event_id)
             elif membership == "invite":
-                await self.handle_invite(evt["room_id"], evt["state_key"], evt["sender"])
+                await self.handle_invite(room_id, state_key, sender)
             elif prev_membership == "join" and membership == "leave":
-                await self.handle_part(evt["room_id"], evt["state_key"], evt["sender"],
-                                       evt["event_id"])
+                await self.handle_part(room_id, state_key, sender, event_id)
             elif membership == "join":
-                await self.handle_join(evt["room_id"], evt["state_key"], evt["event_id"])
+                await self.handle_join(room_id, state_key, event_id)
         elif type in ("m.room.message", "m.sticker"):
             if type != "m.room.message":
                 content["msgtype"] = type
-            await self.handle_message(evt["room_id"], evt["sender"], content, evt["event_id"])
+            await self.handle_message(room_id, sender, content, event_id)
         elif type == "m.room.redaction":
-            await self.handle_redaction(evt["room_id"], evt["sender"], evt["redacts"])
+            await self.handle_redaction(room_id, sender, evt["redacts"])
         elif type == "m.room.power_levels":
-            await self.handle_power_levels(evt["room_id"], evt["sender"], evt["content"],
-                                           evt["prev_content"])
+            await self.handle_power_levels(room_id, sender, evt["content"], evt["prev_content"])
         elif type in ("m.room.name", "m.room.avatar", "m.room.topic"):
-            await self.handle_room_meta(type, evt["room_id"], evt["sender"], evt["content"])
+            await self.handle_room_meta(type, room_id, sender, evt["content"])
         elif type == "m.room.pinned_events":
             new_events = set(evt["content"]["pinned"])
             try:
                 old_events = set(evt["unsigned"]["prev_content"]["pinned"])
             except KeyError:
                 old_events = set()
-            await self.handle_room_pin(evt["room_id"], evt["sender"], new_events, old_events)
+            await self.handle_room_pin(room_id, sender, new_events, old_events)

@@ -120,18 +120,27 @@ bridge:
     # Telegram doesn't have built-in emotes, so the m.emote format is also used for non-relaybot users.
     #
     # Available variables:
-    #   $sender_display_name   - The display name of the sender (e.g. Example User)
+    #   $sender_displayname    - The display name of the sender (e.g. Example User)
     #   $sender_username       - The username (Matrix ID localpart) of the sender (e.g. exampleuser)
     #   $sender_mxid           - The Matrix ID of the sender (e.g. @exampleuser:example.com)
     #   $message               - The message content as HTML
     message_formats:
-        m.text: "&lt;$sender_display_name&gt; $message"
-        m.emote: "* $sender_display_name $message"
-        m.file: "$sender_display_name sent a file: $message"
-        m.image: "$sender_display_name sent an image: $message"
-        m.audio: "$sender_display_name sent an audio file: $message"
-        m.video: "$sender_display_name sent a video: $message"
-        m.location: "$sender_display_name sent a location: $message"
+        m.text: "<b>$sender_displayname</b>: $message"
+        m.emote: "* <b>$sender_displayname</b> $message"
+        m.file: "<b>$sender_displayname</b> sent a file: $message"
+        m.image: "<b>$sender_displayname</b> sent an image: $message"
+        m.audio: "<b>$sender_displayname</b> sent an audio file: $message"
+        m.video: "<b>$sender_displayname</b> sent a video: $message"
+        m.location: "<b>$sender_displayname</b> sent a location: $message"
+
+    # The format sto use when sending state events to Telegram via the relay bot.
+    #
+    # Variables from `message_formats` that have the `sender_` prefix are available without the prefix.
+    # In name_change events, `$prev_displayname` is the previous displayname.
+    state_event_formats:
+        join: "<b>$displayname</b> joined the room."
+        leave: "<b>$displayname</b> left the room."
+        name_change: "<b>$prev_displayname</b> changed their name to <b>$displayname</b>"
 
     filter:
         # Filter mode to use. Either "blacklist" or "whitelist".

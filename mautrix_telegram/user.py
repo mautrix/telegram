@@ -68,9 +68,9 @@ class User(AbstractUser):
         match = re.compile("@(.+):(.+)").match(self.mxid)
         return match.group(1)
 
+    # TODO replace with proper displayname getting everywhere
     @property
     def displayname(self):
-        # TODO show better display name
         return self.mxid_localpart
 
     @property
