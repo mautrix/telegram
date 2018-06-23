@@ -264,6 +264,7 @@ def matrix_to_telegram(html: str) -> Tuple[str, List[TypeMessageEntity]]:
     try:
         parser = MatrixParser()
         html = command_regex.sub(r"<command>\1</command>", html)
+        html = html.replace("\t", " " * 4)
         html = not_command_regex.sub(r"\1", html)
         if should_bridge_plaintext_highlights:
             html = plain_mention_regex.sub(plain_mention_to_html, html)
@@ -299,6 +300,7 @@ def matrix_reply_to_telegram(content: dict, tg_space: int, room_id: Optional[str
 
 def matrix_text_to_telegram(text: str) -> Tuple[str, List[TypeMessageEntity]]:
     text = command_regex.sub(r"/\1", text)
+    text = text.replace("\t", " " * 4)
     text = not_command_regex.sub(r"\1", text)
     if should_bridge_plaintext_highlights:
         entities, pmr_replacer = plain_mention_to_text()
