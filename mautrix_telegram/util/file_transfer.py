@@ -38,7 +38,7 @@ except ImportError:
 
 from telethon.tl.types import (Document, FileLocation, InputFileLocation,
                                InputDocumentFileLocation, PhotoSize, PhotoCachedSize)
-from telethon.errors import LocationInvalidError
+from telethon.errors import *
 
 from ..db import TelegramFile as DBTelegramFile
 
@@ -158,6 +158,10 @@ async def _unlocked_transfer_file_to_matrix(db, client, intent, id, location, th
         file = await client.download_file_bytes(location)
     except LocationInvalidError:
         return None
+    except (AuthBytesInvalidError, AuthKeyInvalidError, SecurityError) as e:
+        log.exception(f"{e.__class__.__name__} while downloading a file.")
+        return None
+
     width, height = None, None
     mime_type = magic.from_buffer(file, mime=True)
 
