@@ -622,7 +622,7 @@ class Portal:
         if await user.needs_relaybot(self):
             async with self.require_send_lock(self.bot.tgid):
                 response = await self.bot.client.send_message(
-                    self.peer, f"__{user.displayname} left the room.__", markdown=True)
+                    self.peer, f"__{user.displayname} left the room.__")
                 space = self.tgid if self.peer_type == "channel" else self.bot.tgid
                 self.is_duplicate(response, (event_id, space))
             return
@@ -654,7 +654,7 @@ class Portal:
         if await user.needs_relaybot(self):
             async with self.require_send_lock(self.bot.tgid):
                 response = await self.bot.client.send_message(
-                    self.peer, f"__{user.displayname} joined the room.__", markdown=True)
+                    self.peer, f"__{user.displayname} joined the room.__")
                 space = self.tgid if self.peer_type == "channel" else self.bot.tgid
                 self.is_duplicate(response, (event_id, space))
             return
@@ -689,16 +689,10 @@ class Portal:
         elif use_relaybot:
             cls._apply_msg_format(sender, msgtype, message)
 
-    async def _matrix_event_to_entities(self, client, event):
+    def _matrix_event_to_entities(self, event):
         try:
             if event.get("format", None) == "org.matrix.custom.html":
                 message, entities = formatter.matrix_to_telegram(event["formatted_body"])
-
-                # TODO remove this crap
-                for entity in entities:
-                    if isinstance(entity, InputMessageEntityMentionName):
-                        entity.user_id = await client.get_input_entity(
-                            PeerUser(entity.user_id.user_id))
             else:
                 message, entities = formatter.matrix_text_to_telegram(event["body"])
         except KeyError:
@@ -723,24 +717,10 @@ class Portal:
             return None
 
     async def _handle_matrix_text(self, sender_id, event_id, space, client, message, reply_to):
-        message, entities = await self._matrix_event_to_entities(client, message)
-
-        if len(message) > 4096:
-            message = message[0:4082] + " [message cut]"
-            new_entities = []
-            for entity in entities:
-                if entity.offset > 4082:
-                    continue
-                if entity.offset + entity.length > 4082:
-                    entity.length = 4082 - entity.offset
-                new_entities.append(entity)
-            new_entities.append(MessageEntityItalic(4082, len(" [message cut]")))
-            entities = new_entities
-
         lock = self.require_send_lock(sender_id)
         async with lock:
-            response = await client.send_message(self.peer, message, entities=entities,
-                                                 reply_to=reply_to)
+            response = await client.send_message(self.peer, message, reply_to=reply_to,
+                                                 parse_mode=self._matrix_event_to_entities)
             self._add_telegram_message_to_db(event_id, space, response)
 
     async def _handle_matrix_file(self, type, sender_id, event_id, space, client, message,
@@ -784,7 +764,7 @@ class Portal:
         except (KeyError, ValueError):
             self.log.exception("Failed to parse location")
             return None
-        message, entities = await self._matrix_event_to_entities(client, message)
+        message, entities = self._matrix_event_to_entities(message)
         media = MessageMediaGeo(geo=GeoPoint(lat, long))
 
         lock = self.require_send_lock(sender_id)

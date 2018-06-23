@@ -201,8 +201,7 @@ class Bot(AbstractUser):
 
     async def handle_command(self, message: Message):
         def reply(reply_text):
-            return self.client.send_message(message.to_id, reply_text, markdown=True,
-                                            reply_to=message.id)
+            return self.client.send_message(message.to_id, reply_text, reply_to=message.id)
 
         text = message.message
 

@@ -22,11 +22,10 @@ import math
 import re
 import logging
 
-from telethon.tl.types import (MessageEntityMention,
-                               InputMessageEntityMentionName, MessageEntityEmail,
+from telethon.tl.types import (MessageEntityMention, MessageEntityMentionName, MessageEntityEmail,
                                MessageEntityUrl, MessageEntityTextUrl, MessageEntityBold,
                                MessageEntityItalic, MessageEntityCode, MessageEntityPre,
-                               MessageEntityBotCommand, InputUser, TypeMessageEntity)
+                               MessageEntityBotCommand, TypeMessageEntity)
 
 from ..context import Context
 from .. import user as u, puppet as pu, portal as po
@@ -69,8 +68,8 @@ class MatrixParser(HTMLParser):
             if user.username:
                 return MessageEntityMention, f"@{user.username}"
             elif user.tgid:
-                args["user_id"] = InputUser(user.tgid, 0)
-                return InputMessageEntityMentionName, user.displayname or None
+                args["user_id"] = user.tgid
+                return MessageEntityMentionName, user.displayname or None
             else:
                 return None, None
 
@@ -260,6 +259,22 @@ def plain_mention_to_html(match):
     return "".join(match.groups())
 
 
+def cut_long_message(message: str, entities: List[TypeMessageEntity]
+                     ) -> Tuple[str, List[TypeMessageEntity]]:
+    if len(message) > 4096:
+        message = message[0:4082] + " [message cut]"
+        new_entities = []
+        for entity in entities:
+            if entity.offset > 4082:
+                continue
+            if entity.offset + entity.length > 4082:
+                entity.length = 4082 - entity.offset
+            new_entities.append(entity)
+        new_entities.append(MessageEntityItalic(4082, len(" [message cut]")))
+        entities = new_entities
+    return message, entities
+
+
 def matrix_to_telegram(html: str) -> Tuple[str, List[TypeMessageEntity]]:
     try:
         parser = MatrixParser()
@@ -269,7 +284,13 @@ def matrix_to_telegram(html: str) -> Tuple[str, List[TypeMessageEntity]]:
         if should_bridge_plaintext_highlights:
             html = plain_mention_regex.sub(plain_mention_to_html, html)
         parser.feed(add_surrogates(html))
-        return remove_surrogates(parser.text.strip()), parser.entities
+
+        message_text = remove_surrogates(parser.text.strip())
+        message_entities = parser.entities
+
+        message_text, message_entities = cut_long_message(message_text, message_entities)
+
+        return message_text, message_entities
     except Exception:
         log.exception("Failed to convert Matrix format:\nhtml=%s", html)
 
@@ -322,8 +343,7 @@ def plain_mention_to_text() -> Tuple[List[TypeMessageEntity], Callable[[str], st
                 entity = MessageEntityMention(offset, length)
                 text = f"@{puppet.username}"
             else:
-                entity = InputMessageEntityMentionName(offset, length,
-                                                       user_id=InputUser(puppet.tgid, 0))
+                entity = MessageEntityMentionName(offset, length, user_id=puppet.tgid)
                 text = puppet.displayname
             entities.append(entity)
             return text

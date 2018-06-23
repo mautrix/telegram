@@ -17,40 +17,11 @@
 from io import BytesIO
 
 from telethon import TelegramClient, utils
-from telethon.tl.functions.messages import SendMessageRequest, SendMediaRequest
+from telethon.tl.functions.messages import SendMediaRequest
 from telethon.tl.types import *
-from telethon.extensions.markdown import parse as parse_md
 
 
 class MautrixTelegramClient(TelegramClient):
-    async def send_message(self, entity, message, reply_to=None, entities=None, markdown=False,
-                           link_preview=True):
-        entity = await self.get_input_entity(entity)
-
-        if markdown:
-            message, entities = parse_md(message)
-
-        request = SendMessageRequest(
-            peer=entity,
-            message=message,
-            entities=entities,
-            no_webpage=not link_preview,
-            reply_to_msg_id=utils.get_message_id(reply_to)
-        )
-        result = await self(request)
-        if isinstance(result, UpdateShortSentMessage):
-            return Message(
-                id=result.id,
-                to_id=entity,
-                message=message,
-                date=result.date,
-                out=result.out,
-                media=result.media,
-                entities=result.entities
-            )
-
-        return self._get_response_message(request, result, entity)
-
     async def upload_file(self, file, mime_type=None, attributes=None, file_name=None):
         file_handle = await super().upload_file(file, file_name=file_name, use_cache=False)
 
