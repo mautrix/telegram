@@ -618,14 +618,17 @@ class Portal:
         else:
             return ""
 
-    async def _get_state_change_message(self, event, user, arguments={}):
+    async def _get_state_change_message(self, event, user, arguments=None):
         tpl = config[f"bridge.state_event_formats.{event}"]
+        if len(tpl) == 0:
+            # Empty format means they don't want the message
+            return None
         displayname = await self.get_displayname(user)
 
         tpl_args = dict(mxid=user.mxid,
                         username=user.mxid_localpart,
                         displayname=displayname)
-        tpl_args = {**tpl_args, **arguments}
+        tpl_args = {**tpl_args, **(arguments or {})}
         message = Template(tpl).safe_substitute(tpl_args)
         return {
             "format": "org.matrix.custom.html",
@@ -637,6 +640,8 @@ class Portal:
             message = await self._get_state_change_message(
                 "name_change", user,
                 dict(displayname=displayname, prev_displayname=prev_displayname))
+            if not message:
+                return
             response = await self.bot.client.send_message(
                 self.peer, message,
                 parse_mode=self._matrix_event_to_entities)
@@ -651,6 +656,8 @@ class Portal:
         if await user.needs_relaybot(self):
             async with self.require_send_lock(self.bot.tgid):
                 message = await self._get_state_change_message("leave", user)
+                if not message:
+                    return
                 response = await self.bot.client.send_message(
                     self.peer, message,
                     parse_mode=self._matrix_event_to_entities)
@@ -685,6 +692,8 @@ class Portal:
         if await user.needs_relaybot(self):
             async with self.require_send_lock(self.bot.tgid):
                 message = await self._get_state_change_message("join", user)
+                if not message:
+                    return
                 response = await self.bot.client.send_message(
                     self.peer, message,
                     parse_mode=self._matrix_event_to_entities)
@@ -705,7 +714,7 @@ class Portal:
         body = message["formatted_body"]
 
         tpl = config["bridge.message_formats"].get(msgtype,
-                                                   "&lt;$sender_display_name&gt; $message")
+                                                   "<b>$sender_displayname</b>: $message")
         displayname = await self.get_displayname(sender)
         tpl_args = dict(sender_mxid=sender.mxid,
                         sender_username=sender.mxid_localpart,

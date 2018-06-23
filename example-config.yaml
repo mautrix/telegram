@@ -133,10 +133,12 @@ bridge:
         m.video: "<b>$sender_displayname</b> sent a video: $message"
         m.location: "<b>$sender_displayname</b> sent a location: $message"
 
-    # The format sto use when sending state events to Telegram via the relay bot.
+    # The formats to use when sending state events to Telegram via the relay bot.
     #
     # Variables from `message_formats` that have the `sender_` prefix are available without the prefix.
     # In name_change events, `$prev_displayname` is the previous displayname.
+    #
+    # Set format to an empty string to disable the messages for that event.
     state_event_formats:
         join: "<b>$displayname</b> joined the room."
         leave: "<b>$displayname</b> left the room."
