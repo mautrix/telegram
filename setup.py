@@ -1,5 +1,4 @@
 import setuptools
-import sys
 import glob
 import mautrix_telegram
 
