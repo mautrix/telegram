@@ -59,7 +59,8 @@ class AbstractUser:
                                             app_version=__version__,
                                             system_version=sysversion,
                                             device_model=device,
-                                            report_errors=False)
+                                            report_errors=False,
+                                            timeout=120)
         self.client.add_event_handler(self._update_catch)
 
     async def update(self, update):
@@ -77,7 +78,7 @@ class AbstractUser:
 
     async def _get_dialogs(self, limit=None):
         if self.is_bot:
-            return 
+            return
         dialogs = await self.client.get_dialogs(limit=limit)
         return [dialog.entity for dialog in dialogs if (
             not isinstance(dialog.entity, (User, ChatForbidden, ChannelForbidden))
