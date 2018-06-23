@@ -116,16 +116,22 @@ bridge:
     catch_up: false
 
     # The formats to use when sending messages to Telegram via the relay bot.
+    #
+    # Telegram doesn't have built-in emotes, so the m.emote format is also used for non-relaybot users.
+    #
     # Available variables:
-    #   $sender_display_name   - The display name of the sender
-    #   $message               - The message text itself
+    #   $sender_display_name   - The display name of the sender (e.g. Example User)
+    #   $sender_username       - The username (Matrix ID localpart) of the sender (e.g. exampleuser)
+    #   $sender_mxid           - The Matrix ID of the sender (e.g. @exampleuser:example.com)
+    #   $message               - The message content as HTML
     message_formats:
-        m_text:
-            plain: "<$sender_display_name> $message"
-            html: "&lt;$sender_display_name&gt; $message"
-        m_emote:
-            plain: "* $sender_display_name $message"
-            html: "* $sender_display_name $message"
+        m.text: "&lt;$sender_display_name&gt; $message"
+        m.emote: "* $sender_display_name $message"
+        m.file: "$sender_display_name sent a file: $message"
+        m.image: "$sender_display_name sent an image: $message"
+        m.audio: "$sender_display_name sent an audio file: $message"
+        m.video: "$sender_display_name sent a video: $message"
+        m.location: "$sender_display_name sent a location: $message"
 
     filter:
         # Filter mode to use. Either "blacklist" or "whitelist".

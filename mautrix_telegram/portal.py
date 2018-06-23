@@ -659,56 +659,35 @@ class Portal:
                 self.is_duplicate(response, (event_id, space))
             return
 
-        if self.peer_type == "channel":
+        if self.peer_type == "channel" and not user.is_bot:
             await user.client(JoinChannelRequest(channel=await self.get_input_entity(user)))
         else:
             # We'll just assume the user is already in the chat.
             pass
 
     @staticmethod
-    def _preprocess_matrix_message(sender, use_relaybot, message):
+    def _apply_msg_format(sender, msgtype, message):
+        if "formatted_body" not in message:
+            message["format"] = "org.matrix.custom.html"
+            message["formatted_body"] = escape_html(message["body"])
+        body = message["formatted_body"]
+
+        tpl = config["bridge.message_formats"].get(msgtype,
+                                                   "&lt;$sender_display_name&gt; $message")
+        tpl_args = dict(sender_mxid=sender.mxid,
+                        sender_username=sender.mxid_localpart,
+                        sender_display_name=sender.displayname,
+                        message=body)
+        message["formatted_body"] = Template(tpl).safe_substitute(tpl_args)
+
+    @classmethod
+    def _preprocess_matrix_message(cls, sender, use_relaybot, message):
         msgtype = message["msgtype"]
         if msgtype == "m.emote":
-            if "formatted_body" in message:
-                tpl = config["bridge.message_formats.m_emote.html"]
-                tpl_args = dict(sender_display_name=sender.displayname,
-                                message=message['formatted_body'])
-                message["formatted_body"] = Template(tpl).safe_substitute(tpl_args)
-            tpl = config["bridge.message_formats.m_emote.plain"]
-            tpl_args = dict(sender_display_name=sender.displayname, message=message['body'])
-            message["body"] = Template(tpl).safe_substitute(tpl_args)
+            cls._apply_msg_format(sender, msgtype, message)
             message["msgtype"] = "m.text"
-        elif not use_relaybot:
-            html = message["formatted_body"] if "formatted_body" in message else None
-            text = message["body"]
-            if msgtype == "m.text":
-                # We use the plain text as HTML if available to ensure that we represent
-                # the event consistently.
-                if not html:
-                    html = escape_html(text)
-                tpl = config["bridge.message_formats.m_text.html"]
-                tpl_args = dict(sender_display_name=sender.displayname, message=html)
-                html = Template(tpl).safe_substitute(tpl_args)
-                tpl = config["bridge.message_formats.m_text.plain"]
-                tpl_args = dict(sender_display_name=sender.displayname, message=text)
-                text = Template(tpl).safe_substitute(tpl_args)
-            else:
-                msgtype = msgtype[len("m."):]
-                prefix = {
-                    "file": "a ",
-                    "image": "an ",
-                    "audio": "",
-                    "video": "a ",
-                    "location": "a ",
-                }.get(msgtype, "")
-                if html:
-                    html = f"{sender.displayname} sent {prefix}{msgtype}: {html}"
-                text = ": " + text if text else ""
-                text = f"{sender.displayname} sent {prefix}{msgtype}{text}"
-            if html:
-                message["formatted_body"] = html
-                message["format"] = "org.matrix.custom.html"
-            message["body"] = text
+        elif use_relaybot:
+            cls._apply_msg_format(sender, msgtype, message)
 
     async def _matrix_event_to_entities(self, client, event):
         try:
@@ -833,7 +812,7 @@ class Portal:
         reply_to = formatter.matrix_reply_to_telegram(message, space, room_id=self.mxid)
 
         message["mxtg_filename"] = message["body"]
-        self._preprocess_matrix_message(sender, logged_in, message)
+        self._preprocess_matrix_message(sender, not logged_in, message)
         type = message["msgtype"]
 
         if type == "m.text" or (self.bridge_notices and type == "m.notice"):

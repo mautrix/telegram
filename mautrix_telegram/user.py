@@ -64,10 +64,14 @@ class User(AbstractUser):
         return self.mxid
 
     @property
-    def displayname(self):
-        # TODO show better username
+    def mxid_localpart(self):
         match = re.compile("@(.+):(.+)").match(self.mxid)
         return match.group(1)
+
+    @property
+    def displayname(self):
+        # TODO show better display name
+        return self.mxid_localpart
 
     @property
     def db_contacts(self):
