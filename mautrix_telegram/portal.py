@@ -862,7 +862,7 @@ class Portal:
             pass
 
     async def handle_matrix_deletion(self, deleter, event_id):
-        deleter = deleter if await deleter.needs_relaybot(self) else self.bot
+        deleter = deleter if not await deleter.needs_relaybot(self) else self.bot
         space = self.tgid if self.peer_type == "channel" else deleter.tgid
         message = DBMessage.query.filter(DBMessage.mxid == event_id,
                                          DBMessage.tg_space == space,
