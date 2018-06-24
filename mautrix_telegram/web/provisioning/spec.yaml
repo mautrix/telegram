@@ -1,0 +1,70 @@
+tags:
+  -
+    name: login
+    description: 'Authentication endpoints.'
+definitions:
+  Error:
+    x-oad-type: object
+    type: object
+    title: Error
+    properties:
+      errcode:
+        x-oad-type: string
+        type: string
+        title: 'Error code'
+        description: 'A machine-readable error code'
+      error:
+        x-oad-type: string
+        type: string
+        title: Error
+        description: 'A human-readable description of the error'
+      status:
+        x-oad-type: integer
+        type: integer
+        title: Status
+        description: 'The HTTP status code'
+        format: int32
+  AuthSuccess:
+    x-oad-type: object
+    type: object
+    properties:
+      state:
+        x-oad-type: string
+        type: string
+        enum:
+          - code
+          - request
+          - password
+          - token
+          - logged-in
+security:
+  -
+    Bearer: []
+securityDefinitions:
+  Bearer:
+    description: 'Required authentication for all endpoints'
+    name: Authorization
+    in: header
+    type: apiKey
+info:
+  title: 'mautrix-telegram provisioning'
+  version: 0.3.0
+  description: 'The provisioning API for mautrix-telegram.'
+  contact:
+    name: 'Tulir Asokan'
+    email: tulir@maunium.net
+    url: 'https://maunium.net'
+  license:
+    name: AGPLv3
+    url: 'https://github.com/tulir/mautrix-telegram/blob/master/LICENSE'
+externalDocs:
+  description: 'Provisioning API wiki page on GitHub.'
+  url: 'https://github.com/tulir/mautrix-telegram/wiki/Provisioning-API'
+basePath: /_matrix/provisioning
+schemes:
+  - https
+consumes:
+  - application/json
+produces:
+  - application/json
+swagger: '2.0'
