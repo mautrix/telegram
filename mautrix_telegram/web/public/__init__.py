@@ -20,13 +20,8 @@ import asyncio
 import pkg_resources
 import logging
 
-from telethon.errors import *
-
-from ..user import User
-from ..commands.auth import enter_password
-from ..util import format_duration
-
-from .auth_api import AuthAPI
+from ...user import User
+from ..common import AuthAPI
 
 
 class PublicBridgeWebsite(AuthAPI):

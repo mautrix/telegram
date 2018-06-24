@@ -38,8 +38,8 @@ from .bot import init as init_bot
 from .portal import init as init_portal
 from .puppet import init as init_puppet
 from .formatter import init as init_formatter
-from .public import PublicBridgeWebsite
-from .provisioning_api import ProvisioningAPI
+from .web.public import PublicBridgeWebsite
+from .web.provisioning import ProvisioningAPI
 from .context import Context
 
 parser = argparse.ArgumentParser(

@@ -21,8 +21,8 @@ import logging
 
 from telethon.errors import *
 
-from ..commands.auth import enter_password
-from ..util import format_duration
+from mautrix_telegram.commands.auth import enter_password
+from mautrix_telegram.util import format_duration
 
 
 class AuthAPI(abc.ABC):
@@ -33,20 +33,20 @@ class AuthAPI(abc.ABC):
 
     @abstractmethod
     def get_login_response(self, status=200, state="", username="", mxid="", message="", error="",
-                       errcode=""):
+                           errcode=""):
         raise NotImplementedError()
 
     async def post_login_phone(self, user, phone):
         try:
             await user.client.sign_in(phone or "+123")
             return self.get_login_response(mxid=user.mxid, state="code", status=200,
-                                     message="Code requested successfully.")
+                                           message="Code requested successfully.")
         except PhoneNumberInvalidError:
             return self.get_login_response(mxid=user.mxid, state="request", status=400,
-                                     error="Invalid phone number.")
+                                           error="Invalid phone number.")
         except PhoneNumberUnoccupiedError:
             return self.get_login_response(mxid=user.mxid, state="request", status=404,
-                                     error="That phone number has not been registered.")
+                                           error="That phone number has not been registered.")
         except PhoneNumberFloodError:
             return self.get_login_response(
                 mxid=user.mxid, state="request", status=429,
@@ -59,14 +59,14 @@ class AuthAPI(abc.ABC):
                       f"Please wait for {format_duration(e.seconds)} before trying again.")
         except PhoneNumberBannedError:
             return self.get_login_response(mxid=user.mxid, state="request", status=401,
-                                     error="Your phone number is banned from Telegram.")
+                                           error="Your phone number is banned from Telegram.")
         except PhoneNumberAppSignupForbiddenError:
             return self.get_login_response(mxid=user.mxid, state="request", status=401,
-                                     error="You have disabled 3rd party apps on your account.")
+                                           error="You have disabled 3rd party apps on your account.")
         except Exception:
             self.log.exception("Error requesting phone code")
             return self.get_login_response(mxid=user.mxid, state="request", status=500,
-                                     error="Internal server error while requesting code.")
+                                           error="Internal server error while requesting code.")
 
     async def post_login_code(self, user, code, password_in_data):
         try:
@@ -75,13 +75,13 @@ class AuthAPI(abc.ABC):
             if user.command_status and user.command_status["action"] == "Login":
                 user.command_status = None
             return self.get_login_response(mxid=user.mxid, state="logged-in", status=200,
-                                     username=user_info.username)
+                                           username=user_info.username)
         except PhoneCodeInvalidError:
             return self.get_login_response(mxid=user.mxid, state="code", status=403,
-                                     error="Incorrect phone code.")
+                                           error="Incorrect phone code.")
         except PhoneCodeExpiredError:
             return self.get_login_response(mxid=user.mxid, state="code", status=403,
-                                     error="Phone code expired.")
+                                           error="Phone code expired.")
         except SessionPasswordNeededError:
             if not password_in_data:
                 if user.command_status and user.command_status["action"] == "Login":
@@ -96,7 +96,7 @@ class AuthAPI(abc.ABC):
         except Exception:
             self.log.exception("Error sending phone code")
             return self.get_login_response(mxid=user.mxid, state="code", status=500,
-                                     error="Internal server error while sending code.")
+                                           error="Internal server error while sending code.")
 
     async def post_login_password(self, user, password):
         try:
@@ -105,11 +105,11 @@ class AuthAPI(abc.ABC):
             if user.command_status and user.command_status["action"] == "Login (password entry)":
                 user.command_status = None
             return self.get_login_response(mxid=user.mxid, state="logged-in", status=200,
-                                     username=user_info.username)
+                                           username=user_info.username)
         except (PasswordHashInvalidError, PasswordEmptyError):
             return self.get_login_response(mxid=user.mxid, state="password", status=400,
-                                     error="Incorrect password.")
+                                           error="Incorrect password.")
         except Exception:
             self.log.exception("Error sending password")
             return self.get_login_response(mxid=user.mxid, state="password", status=500,
-                                     error="Internal server error while sending password.")
+                                           error="Internal server error while sending password.")
