@@ -119,9 +119,9 @@ async def transfer_thumbnail_to_matrix(client, intent, thumbnail_loc, video, mim
         width, height = None, None
         mime_type = magic.from_buffer(file, mime=True)
 
-    uploaded = await intent.upload_file(file, mime_type)
+    content_uri = await intent.upload_file(file, mime_type)
 
-    return DBTelegramFile(id=id, mxc=uploaded["content_uri"], mime_type=mime_type,
+    return DBTelegramFile(id=id, mxc=content_uri, mime_type=mime_type,
                           was_converted=False, timestamp=int(time.time()), size=len(file),
                           width=width, height=height)
 
@@ -173,9 +173,9 @@ async def _unlocked_transfer_file_to_matrix(db, client, intent, id, location, th
         mime_type = new_mime_type
         thumbnail = None
 
-    uploaded = await intent.upload_file(file, mime_type)
+    content_uri = await intent.upload_file(file, mime_type)
 
-    db_file = DBTelegramFile(id=id, mxc=uploaded["content_uri"],
+    db_file = DBTelegramFile(id=id, mxc=content_uri,
                              mime_type=mime_type, was_converted=image_converted,
                              timestamp=int(time.time()), size=len(file),
                              width=width, height=height)

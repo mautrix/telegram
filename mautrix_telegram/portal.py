@@ -292,13 +292,13 @@ class Portal:
             "content": power_levels,
         }]
 
-        room = await self.main_intent.create_room(alias=alias, is_public=public, is_direct=direct,
-                                                  invitees=invites or [], name=self.title,
-                                                  initial_state=initial_state)
-        if not room:
+        room_id = await self.main_intent.create_room(alias=alias, is_public=public,
+                                                     is_direct=direct, invitees=invites or [],
+                                                     name=self.title, initial_state=initial_state)
+        if not room_id:
             raise Exception(f"Failed to create room for {self.tgid_log}")
 
-        self.mxid = room["room_id"]
+        self.mxid = room_id
         self.by_mxid[self.mxid] = self
         self.save()
         self.az.state_store.set_power_levels(self.mxid, power_levels)
