@@ -328,5 +328,5 @@ class AbstractUser:
 def init(context):
     global config, MAX_DELETIONS
     AbstractUser.az, AbstractUser.db, config, AbstractUser.loop, _ = context
-    AbstractUser.session_container = context.telethon_session_container
+    AbstractUser.session_container = context.session_container
     MAX_DELETIONS = config.get("bridge.max_telegram_delete", 10)

@@ -14,21 +14,14 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
+from aiohttp import web
+import logging
 
 
-class Context:
-    def __init__(self, az, db, config, loop, bot, mx, session_container):
-        self.az = az
-        self.db = db
-        self.config = config
+class ProvisioningAPI:
+    log = logging.getLogger("mau.provisioning")
+
+    def __init__(self, loop):
         self.loop = loop
-        self.bot = bot
-        self.mx = mx
-        self.session_container = session_container
 
-    def __iter__(self):
-        yield self.az
-        yield self.db
-        yield self.config
-        yield self.loop
-        yield self.bot
+        self.app = web.Application(loop=loop)

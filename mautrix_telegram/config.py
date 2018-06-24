@@ -159,6 +159,10 @@ class Config(DictWithRecursion):
         copy("appservice.public.prefix")
         copy("appservice.public.external")
 
+        copy("appservice.provisioning.enabled")
+        copy("appservice.provisioning.prefix")
+        copy("appservice.provisioning.shared_secret")
+
         copy("appservice.id")
         copy("appservice.bot_username")
         copy("appservice.bot_displayname")

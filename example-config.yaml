@@ -33,6 +33,17 @@ appservice:
         # implicitly.
         external: https://example.com/public
 
+    # Provisioning API part of the web server for automated portal creation and fetching information.
+    # Used by things like Dimension (https://dimension.t2bot.io/).
+    provisioning:
+        # Whether or not the provisioning API should be enabled.
+        enabled: true
+        # The prefix to use in the provisioning API endpoints.
+        prefix: /_matrix/provision
+        # The shared secret to authorize users of the API.
+        # You can generate a decent secret with `pwgen -snc 32 1`
+        shared_secret: "Very secret shared secret"
+
     # The unique ID of this appservice.
     id: telegram
     # Username of the appservice bot.
