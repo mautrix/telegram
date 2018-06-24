@@ -4,11 +4,12 @@ import mautrix_telegram
 
 extras = {
     "highlight_edits": ["lxml>=4.1.1,<5"],
+    "better_formatter": ["lxml>=4.1.1,<5"],
     "fast_crypto": ["cryptg>=0.1,<0.2"],
     "webp_convert": ["Pillow>=5.0.0,<6"],
     "hq_thumbnails": ["moviepy>=0.2,<0.3"],
 }
-extras["all"] = [deps[0] for deps in extras.values()]
+extras["all"] = list(set(deps[0] for deps in extras.values()))
 
 setuptools.setup(
     name="mautrix-telegram",
