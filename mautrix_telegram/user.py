@@ -143,11 +143,9 @@ class User(AbstractUser):
             self.log.debug(f"Ensuring post_login() for {self.name}")
             asyncio.ensure_future(self.post_login(), loop=self.loop)
         elif delete_unless_authenticated:
-            self.log.debug(f"Unauthenticated user {self.name} start()ed, deleting...")
-            # User not logged in -> forget user
+            self.log.debug(f"Unauthenticated user {self.name} start()ed, deleting session...")
             self.client.disconnect()
             self.client.session.delete()
-            self.delete()
         return self
 
     async def post_login(self, info=None):
@@ -343,4 +341,4 @@ def init(context):
     config = context.config
 
     users = [User.from_db(user) for user in DBUser.query.all()]
-    return [user.start(delete_unless_authenticated=True) for user in users]
+    return [user.ensure_started() for user in users]

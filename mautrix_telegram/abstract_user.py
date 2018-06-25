@@ -95,7 +95,7 @@ class AbstractUser:
     async def has_full_access(self, allow_bot=False):
         return self.whitelisted and (not self.is_bot or allow_bot) and await self.is_logged_in()
 
-    async def start(self):
+    async def start(self, delete_unless_authenticated=False):
         if not self.client:
             self._init_client()
         await self.client.connect()
@@ -113,7 +113,7 @@ class AbstractUser:
                           self.session_container.Session.query.filter(
                               self.session_container.Session.session_id == self.mxid).count() > 0)
         if not self.connected and should_connect:
-            await self.start()
+            await self.start(delete_unless_authenticated=not even_if_no_session)
         return self
 
     def stop(self):
