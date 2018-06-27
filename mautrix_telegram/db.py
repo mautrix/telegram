@@ -15,8 +15,10 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from sqlalchemy import (Column, UniqueConstraint, ForeignKey, ForeignKeyConstraint, Integer,
-                        BigInteger, String, Boolean)
+                        BigInteger, String, Boolean, Text)
+from sqlalchemy.sql import expression
 from sqlalchemy.orm import relationship
+import json
 
 from .base import Base
 
@@ -80,6 +82,48 @@ class User(Base):
     portals = relationship("Portal", secondary="user_portal")
 
 
+class RoomState(Base):
+    query = None
+    __tablename__ = "mx_room_state"
+
+    room_id = Column(String, primary_key=True)
+    _power_levels_text = Column("power_levels", Text, nullable=True)
+    _power_levels_json = None
+
+#    def __init__(self, *args, **kwargs):
+#        super().__init__(*args, **kwargs)
+#        self._power_levels_json = None
+
+    @property
+    def power_levels(self):
+        if not self._power_levels_json and self._power_levels_text:
+            self._power_levels_json = json.loads(self._power_levels_text)
+        return self._power_levels_json or {}
+
+    @power_levels.setter
+    def power_levels(self, val):
+        self._power_levels_json = val
+        self._power_levels_text = json.dumps(val)
+
+
+class UserProfile(Base):
+    query = None
+    __tablename__ = "mx_user_profile"
+
+    room_id = Column(String, primary_key=True)
+    user_id = Column(String, primary_key=True)
+    membership = Column(String, nullable=False, default="leave")
+    displayname = Column(String, nullable=True)
+    avatar_url = Column(String, nullable=True)
+
+    def dict(self):
+        return {
+            "membership": self.membership,
+            "displayname": self.displayname,
+            "avatar_url": self.avatar_url,
+        }
+
+
 class Contact(Base):
     query = None
     __tablename__ = "contact"
@@ -98,6 +142,7 @@ class Puppet(Base):
     username = Column(String, nullable=True)
     photo_id = Column(String, nullable=True)
     is_bot = Column(Boolean, nullable=True)
+    matrix_registered = Column(Boolean, nullable=False, server_default=expression.false())
 
 
 # Fucking Telegram not telling bots what chats they are in 3:<
@@ -132,3 +177,5 @@ def init(db_session):
     Puppet.query = db_session.query_property()
     BotChat.query = db_session.query_property()
     TelegramFile.query = db_session.query_property()
+    UserProfile.query = db_session.query_property()
+    RoomState.query = db_session.query_property()
