@@ -159,6 +159,26 @@ class User(AbstractUser):
         except Exception:
             self.log.exception("Failed to run post-login functions for %s", self.mxid)
 
+    async def update(self, update):
+        if not self.is_bot:
+            return
+
+        if isinstance(update, (UpdateNewMessage, UpdateNewChannelMessage)):
+            message = update.message
+            if isinstance(message.to_id, PeerUser) and not message.out:
+                portal = po.Portal.get_by_tgid(message.from_id, peer_type="user",
+                                               tg_receiver=self.tgid)
+            else:
+                portal = po.Portal.get_by_entity(message.to_id, receiver_id=self.tgid)
+        elif isinstance(update, UpdateShortChatMessage):
+            portal = po.Portal.get_by_tgid(update.chat_id, peer_type="chat")
+        elif isinstance(update, UpdateShortMessage):
+            portal = po.Portal.get_by_tgid(update.user_id, self.tgid, "user")
+        else:
+            return
+
+        self.register_portal(portal)
+
     # endregion
     # region Telegram actions that need custom methods
 
@@ -261,7 +281,7 @@ class User(AbstractUser):
 
     async def needs_relaybot(self, portal):
         return not await self.is_logged_in() or (
-                self.is_bot and portal.tgid_full not in self.portals)
+            self.is_bot and portal.tgid_full not in self.portals)
 
     def _hash_contacts(self):
         acc = 0
