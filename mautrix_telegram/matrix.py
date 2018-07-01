@@ -191,12 +191,13 @@ class MatrixHandler:
         return is_command, text
 
     async def handle_message(self, room, sender, message, event_id):
-        self.log.debug(f"{sender} sent {message} to ${room}")
-
         is_command, text = self.is_command(message)
         sender = await User.get_by_mxid(sender).ensure_started()
         if not sender.relaybot_whitelisted:
+            self.log.debug(f"Ignoring message \"{message}\" from {sender} to {room}:"
+                           " User is not whitelisted.")
             return
+        self.log.debug("Received Matrix event \"{message}\" from {sender} in {room}")
 
         portal = Portal.get_by_mxid(room)
         if not is_command and portal and (await sender.is_logged_in() or portal.has_bot):

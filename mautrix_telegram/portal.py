@@ -845,7 +845,7 @@ class Portal:
             await self._handle_matrix_file(type, sender_id, event_id, space, client, message,
                                            reply_to)
         else:
-            self.log.debug("Unhandled Matrix event: %s", message)
+            self.log.debug(f"Unhandled Matrix event: {message}")
 
     async def handle_matrix_pin(self, sender, pinned_message):
         if self.peer_type != "channel":
@@ -1279,6 +1279,8 @@ class Portal:
         duplicate_found = self.is_duplicate(evt, (temporary_identifier, tg_space))
         if duplicate_found:
             mxid, other_tg_space = duplicate_found
+            self.log.debug(f"Ignoring message {evt.id}@{tg_space} (src {source.tgid}) "
+                           f"as it was already handled (in space {other_tg_space})")
             if tg_space != other_tg_space:
                 self.db.add(
                     DBMessage(tgid=evt.id, mx_room=self.mxid, mxid=mxid, tg_space=tg_space))
