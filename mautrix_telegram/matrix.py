@@ -106,7 +106,7 @@ class MatrixHandler:
                     self.log.exception("Failed to join room {room}, giving up.")
                     return
 
-        if not inviter.whitelisted:
+        if not inviter.whitelisted and not inviter.is_user:
             await self.az.intent.send_notice(
                 room, text=None,
                 html="You are not whitelisted to use this bridge.<br/><br/>"
@@ -193,7 +193,7 @@ class MatrixHandler:
     async def handle_message(self, room, sender, message, event_id):
         is_command, text = self.is_command(message)
         sender = await User.get_by_mxid(sender).ensure_started()
-        if not sender.relaybot_whitelisted:
+        if not sender.relaybot_whitelisted and not sender.is_user:
             self.log.debug(f"Ignoring message \"{message}\" from {sender} to {room}:"
                            " User is not whitelisted.")
             return
@@ -204,7 +204,7 @@ class MatrixHandler:
             await portal.handle_matrix_message(sender, message, event_id)
             return
 
-        if not sender.whitelisted or message["msgtype"] != "m.text":
+        if (not sender.whitelisted and not sender.is_user) or message["msgtype"] != "m.text":
             return
 
         try:

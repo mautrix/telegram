@@ -24,7 +24,7 @@ from ..util import format_duration
 command_handlers = {}
 
 
-def command_handler(needs_auth=True, management_only=False, needs_admin=False, name=None):
+def command_handler(needs_auth=True, management_only=False, needs_admin=False, works_without_relay_bot=False, name=None):
     def decorator(func):
         async def wrapper(evt):
             if management_only and not evt.is_management:
@@ -34,6 +34,8 @@ def command_handler(needs_auth=True, management_only=False, needs_admin=False, n
                 return await evt.reply("This command requires you to be logged in.")
             elif needs_admin and not evt.sender.is_admin:
                 return await evt.reply("This is command requires administrator privileges.")
+            elif not works_without_relay_bot and not evt.sender.relaybot_whitelisted:
+                return await evt.reply("This command requires you to be allowed to use the relay bot.")
             return await func(evt)
 
         command_handlers[name or func.__name__.replace("_", "-")] = wrapper

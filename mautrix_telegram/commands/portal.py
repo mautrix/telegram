@@ -122,7 +122,7 @@ async def delete_portal(evt: CommandEvent):
                            "bridge, use `$cmdprefix+sp unbridge` instead.")
 
 
-@command_handler(needs_auth=False)
+@command_handler(needs_auth=False, works_without_relay_bot=True)
 async def unbridge(evt: CommandEvent):
     portal, ok = await _get_portal_and_check_permission(evt, "unbridge_room")
     if not ok:
@@ -136,7 +136,7 @@ async def unbridge(evt: CommandEvent):
                            "by typing `$cmdprefix+sp confirm-unbridge`")
 
 
-@command_handler(needs_auth=False)
+@command_handler(needs_auth=False, works_without_relay_bot=True)
 async def bridge(evt: CommandEvent):
     if len(evt.args) == 0:
         return await evt.reply("**Usage:** "

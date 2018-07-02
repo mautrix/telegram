@@ -158,6 +158,7 @@ bridge:
 
     # Permissions for using the bridge.
     # Permitted values:
+    #       user - Only allow use of the bridge and unbridge commands.
     #   relaybot - Only use the bridge via the relaybot, no access to commands.
     #       full - Full access to use the bridge via relaybot or logging in with Telegram account.
     #      admin - Full access to use the bridge and some extra administration commands.

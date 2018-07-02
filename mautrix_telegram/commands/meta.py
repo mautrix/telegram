@@ -32,7 +32,7 @@ def unknown_command(evt):
     return evt.reply("Unknown command. Try `$cmdprefix+sp help` for help.")
 
 
-@command_handler(needs_auth=False)
+@command_handler(needs_auth=False, works_without_relay_bot=True)
 def help(evt):
     if evt.is_management:
         management_status = ("This is a management room: prefixing commands "
@@ -84,5 +84,16 @@ def help(evt):
 **filter** <`whitelist`|`blacklist`> <_chat ID_> - Allow or disallow bridging a specific chat.  
 **filter-mode** <`whitelist`|`blacklist`>      - Change whether the bridge will allow or disallow
                                                  bridging rooms by default.
+"""
+
+    if not evt.sender.relaybot_whitelisted and evt.sender.is_user:
+        # Because the user can't do much, we'll just show them the few things they can do.
+        help = """
+#### Bridge commands
+**help**   - Show this help message.  
+**unbridge**                - Remove puppets from the current portal room and forget the portal.  
+**bridge** [_id_]           - Bridge the current Matrix room to the Telegram chat with the given
+                              ID. The ID must be the prefixed version that you get with the `/id`
+                              command of the Telegram-side bot.  
 """
     return evt.reply(management_status + help)
