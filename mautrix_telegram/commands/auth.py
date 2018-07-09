@@ -32,7 +32,7 @@ async def ping(evt):
         return await evt.reply("You're not logged in.")
 
 
-@command_handler()
+@command_handler(needs_auth=False, needs_puppeting=False)
 async def ping_bot(evt):
     if not evt.tgbot:
         return await evt.reply("Telegram message relay bot not configured.")

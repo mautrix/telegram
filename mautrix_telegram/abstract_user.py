@@ -36,7 +36,10 @@ class AbstractUser:
     az = None
 
     def __init__(self):
+        self.puppet_whitelisted = False
         self.whitelisted = False
+        self.relaybot_whitelisted = False
+        self.is_admin = False
         self.client = None
         self.tgid = None
         self.mxid = None
@@ -93,7 +96,7 @@ class AbstractUser:
         return self.client and await self.client.is_user_authorized()
 
     async def has_full_access(self, allow_bot=False):
-        return self.whitelisted and (not self.is_bot or allow_bot) and await self.is_logged_in()
+        return self.puppet_whitelisted and (not self.is_bot or allow_bot) and await self.is_logged_in()
 
     async def start(self, delete_unless_authenticated=False):
         if not self.client:
@@ -103,7 +106,7 @@ class AbstractUser:
         return self
 
     async def ensure_started(self, even_if_no_session=False):
-        if not self.whitelisted:
+        if not self.puppet_whitelisted:
             return self
         self.log.debug("ensure_started(%s, connected=%s, even_if_no_session=%s, session_count=%s)",
                        self.mxid, self.connected, even_if_no_session,

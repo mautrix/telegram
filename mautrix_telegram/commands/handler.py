@@ -24,7 +24,8 @@ from ..util import format_duration
 command_handlers = {}
 
 
-def command_handler(needs_auth=True, management_only=False, needs_admin=False, name=None):
+def command_handler(needs_auth=True, management_only=False, needs_puppeting=True,
+                    needs_admin=False, name=None):
     def decorator(func):
         async def wrapper(evt):
             if management_only and not evt.is_management:
@@ -32,8 +33,10 @@ def command_handler(needs_auth=True, management_only=False, needs_admin=False, n
                                        "you may only run it in management rooms.")
             elif needs_auth and not await evt.sender.is_logged_in():
                 return await evt.reply("This command requires you to be logged in.")
+            elif needs_puppeting and not evt.sender.puppet_whitelisted:
+                return await evt.reply("This command requires puppeting privileges.")
             elif needs_admin and not evt.sender.is_admin:
-                return await evt.reply("This is command requires administrator privileges.")
+                return await evt.reply("This command requires administrator privileges.")
             return await func(evt)
 
         command_handlers[name or func.__name__.replace("_", "-")] = wrapper

@@ -39,7 +39,9 @@ class Bot(AbstractUser):
     def __init__(self, token: str):
         super().__init__()
         self.token = token
+        self.puppet_whitelisted = True
         self.whitelisted = True
+        self.relaybot_whitelisted = True
         self.username = None
         self.is_relaybot = True
         self.is_bot = True

@@ -144,11 +144,15 @@ bridge:
         leave: "<b>$displayname</b> left the room."
         name_change: "<b>$prev_displayname</b> changed their name to <b>$displayname</b>"
 
+    # Filter rooms that can/can't be bridged. Can also be managed using the `filter` and
+    # `filter-mode` management commands.
+    #
+    # Filters do not affect direct chats.
+    # An empty blacklist will essentially disable the filter.
     filter:
         # Filter mode to use. Either "blacklist" or "whitelist".
-        # If the mode is "blacklist", the listed chats will never be bridged. An empty blacklist disables the filter.
+        # If the mode is "blacklist", the listed chats will never be bridged.
         # If the mode is "whitelist", only the listed chats can be bridged.
-        # Direct chats are not affected.
         mode: blacklist
         # The list of group/channel IDs to filter.
         list: []
@@ -159,6 +163,7 @@ bridge:
     # Permissions for using the bridge.
     # Permitted values:
     #   relaybot - Only use the bridge via the relaybot, no access to commands.
+    #       user - Relaybot level + access to commands to create bridges (no puppeting)
     #       full - Full access to use the bridge via relaybot or logging in with Telegram account.
     #      admin - Full access to use the bridge and some extra administration commands.
     # Permitted keys:
@@ -167,8 +172,8 @@ bridge:
     #     mxid - Specific user
     permissions:
         "*": "relaybot"
+        "public.example.com": "user"
         "example.com": "full"
-        "public.example.com": "full"
         "@admin:example.com": "admin"
 
     # Options related to the message relay Telegram bot.

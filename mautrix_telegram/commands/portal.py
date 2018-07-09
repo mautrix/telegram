@@ -103,7 +103,7 @@ def _get_portal_murder_function(action, room_id, function, command, completed_me
     }
 
 
-@command_handler(needs_auth=False)
+@command_handler(needs_auth=False, needs_puppeting=False)
 async def delete_portal(evt: CommandEvent):
     portal, ok = await _get_portal_and_check_permission(evt, "delete_portal")
     if not ok:

@@ -50,7 +50,7 @@ class PublicBridgeWebsite:
             return self.render_login(
                 mxid=request.rel_url.query["mxid"] if "mxid" in request.rel_url.query else None,
                 state=state)
-        elif not user.whitelisted:
+        elif not user.puppet_whitelisted:
             return self.render_login(mxid=user.mxid, error="You are not whitelisted.", status=403)
         await user.ensure_started()
         if not await user.is_logged_in():
@@ -160,7 +160,7 @@ class PublicBridgeWebsite:
             return self.render_login(error="Please enter your Matrix ID.", status=400)
 
         user = await User.get_by_mxid(data["mxid"]).ensure_started()
-        if not user.whitelisted:
+        if not user.puppet_whitelisted:
             return self.render_login(mxid=user.mxid, error="You are not whitelisted.", status=403)
         elif await user.is_logged_in():
             return self.render_login(mxid=user.mxid, username=user.username)

@@ -17,7 +17,7 @@
 from . import command_handler
 
 
-@command_handler(needs_auth=False)
+@command_handler(needs_auth=False, needs_puppeting=False)
 def cancel(evt):
     if evt.sender.command_status:
         action = evt.sender.command_status["action"]
@@ -27,12 +27,12 @@ def cancel(evt):
         return evt.reply("No ongoing command.")
 
 
-@command_handler(needs_auth=False)
+@command_handler(needs_auth=False, needs_puppeting=False)
 def unknown_command(evt):
     return evt.reply("Unknown command. Try `$cmdprefix+sp help` for help.")
 
 
-@command_handler(needs_auth=False)
+@command_handler(needs_auth=False, needs_puppeting=False)
 def help(evt):
     if evt.is_management:
         management_status = ("This is a management room: prefixing commands "
@@ -44,7 +44,24 @@ def help(evt):
     else:
         management_status = ("**This is not a management room**: you must "
                              "prefix commands with `$cmdprefix`.\n")
-    help = """\n
+    help = None
+    if not evt.sender.puppet_whitelisted:
+        help = """\n
+#### Generic bridge commands
+**help**   - Show this help message.  
+**cancel** - Cancel an ongoing action (such as login).
+**ping-bot**                         - Get info of the message relay Telegram bot.  
+**invite-link**             - Get a Telegram invite link to the current chat.  
+**delete-portal**           - Remove all users from the current portal room and forget the portal.
+                              Only works for group chats; to delete a private chat portal, simply
+                              leave the room.  
+**unbridge**                - Remove puppets from the current portal room and forget the portal.  
+**bridge** [_id_]           - Bridge the current Matrix room to the Telegram chat with the given
+                              ID. The ID must be the prefixed version that you get with the `/id`
+                              command of the Telegram-side bot.  
+
+"""
+    help = help or """\n
 #### Generic bridge commands
 **help**   - Show this help message.  
 **cancel** - Cancel an ongoing action (such as login).

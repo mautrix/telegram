@@ -224,9 +224,10 @@ class Config(DictWithRecursion):
     def _get_permissions(self, key):
         level = self["bridge.permissions"].get(key, "")
         admin = level == "admin"
-        whitelisted = level == "full" or admin
-        relaybot = level == "relaybot" or whitelisted
-        return relaybot, whitelisted, admin
+        puppeting = level == "full" or admin
+        user = level == "user" or puppeting
+        relaybot = level == "relaybot" or user
+        return relaybot, user, puppeting, admin
 
     def get_permissions(self, mxid):
         permissions = self["bridge.permissions"] or {}
