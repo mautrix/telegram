@@ -108,7 +108,7 @@ async def login(evt: CommandEvent):
     allow_matrix_login = evt.config.get("bridge.allow_matrix_login", True)
     if allow_matrix_login:
         evt.sender.command_status = {
-            "next": enter_phone,
+            "next": enter_phone_or_token,
             "action": "Login",
         }
 
@@ -118,7 +118,8 @@ async def login(evt: CommandEvent):
         if evt.config.get("bridge.allow_matrix_login", True):
             return await evt.reply(
                 "This bridge instance allows you to log in inside or outside Matrix.\n\n"
-                "If you would like to log in within Matrix, please send your phone number here.\n"
+                "If you would like to log in within Matrix, please send your phone number or bot "
+                "auth token here.\n"
                 f"If you would like to log in outside of Matrix, [click here]({url}).\n\n"
                 "Logging in outside of Matrix is recommended if you have two-factor authentication "
                 "enabled, because in-Matrix login would save your password in the message history.")
@@ -127,7 +128,7 @@ async def login(evt: CommandEvent):
     elif allow_matrix_login:
         return await evt.reply(
             "This bridge instance does not allow you to log in outside of Matrix.\n\n"
-            "Please send your phone number here to start the login process.")
+            "Please send your phone number or bot aut token here to start the login process.")
     return await evt.reply("This bridge instance has been configured to not allow logging in.")
 
 
@@ -163,18 +164,26 @@ async def request_code(evt: CommandEvent, phone_number: str, next_status: Dict[s
 
 
 @command_handler(needs_auth=False)
-async def enter_phone(evt: CommandEvent):
+async def enter_phone_or_token(evt: CommandEvent):
     if len(evt.args) == 0:
-        return await evt.reply("**Usage:** `$cmdprefix+sp enter-phone <phone>`")
+        return await evt.reply("**Usage:** `$cmdprefix+sp enter-phone-or-token <phone-or-token>`")
     elif not evt.config.get("bridge.allow_matrix_login", True):
         return await evt.reply("This bridge instance does not allow in-Matrix login. "
                                "Please use `$cmdprefix+sp login` to get login instructions")
 
-    phone_number = evt.args[0]
-    await request_code(evt, phone_number, {
-        "next": enter_code,
-        "action": "Login",
-    })
+    # phone numbers don't contain colons but telegram bot auth tokens do
+    if evt.args[0].find(":") > 0:
+        try:
+            await sign_in(bot_token=evt.args[0])
+        except Exception:
+            evt.log.exception("Error sending auth token")
+            return await evt.reply("Unhandled exception while sending auth token. "
+                                   "Check console for more details.")
+    else:
+        await request_code(evt, evt.args[0], {
+            "next": enter_code,
+            "action": "Login",
+        })
 
 
 @command_handler(needs_auth=False)
@@ -185,22 +194,7 @@ async def enter_code(evt: CommandEvent):
         return await evt.reply("This bridge instance does not allow in-Matrix login. "
                                "Please use `$cmdprefix+sp login` to get login instructions")
     try:
-        await evt.sender.ensure_started(even_if_no_session=True)
-        user = await evt.sender.client.sign_in(code=evt.args[0])
-        asyncio.ensure_future(evt.sender.post_login(user), loop=evt.loop)
-        evt.sender.command_status = None
-        return await evt.reply(f"Successfully logged in as @{user.username}")
-    except PhoneCodeExpiredError:
-        return await evt.reply("Phone code expired. Try again with `$cmdprefix+sp login`.")
-    except PhoneCodeInvalidError:
-        return await evt.reply("Invalid phone code.")
-    except SessionPasswordNeededError:
-        evt.sender.command_status = {
-            "next": enter_password,
-            "action": "Login (password entry)",
-        }
-        return await evt.reply("Your account has two-factor authentication. "
-                               "Please send your password here.")
+        await sign_in(code=evt.args[0])
     except Exception:
         evt.log.exception("Error sending phone code")
         return await evt.reply("Unhandled exception while sending code. "
@@ -215,54 +209,32 @@ async def enter_password(evt: CommandEvent):
         return await evt.reply("This bridge instance does not allow in-Matrix login. "
                                "Please use `$cmdprefix+sp login` to get login instructions")
     try:
-        await evt.sender.ensure_started(even_if_no_session=True)
-        user = await evt.sender.client.sign_in(password=" ".join(evt.args))
-        asyncio.ensure_future(evt.sender.post_login(user), loop=evt.loop)
-        evt.sender.command_status = None
-        return await evt.reply(f"Successfully logged in as @{user.username}")
-    except PasswordHashInvalidError:
-        return await evt.reply("Incorrect password.")
+        await sign_in(password=" ".join(evt.args))
     except Exception:
         evt.log.exception("Error sending password")
         return await evt.reply("Unhandled exception while sending password. "
                                "Check console for more details.")
 
-@command_handler(needs_auth=True,
-                management_only=True,
-                help_section=SECTION_AUTH,
-                help_text="Log in with a bot token.")
-async def bot_login(evt: CommandEvent):
-    if await evt.sender.is_logged_in():
-        return await evt.reply("You are already logged in.")
-    if evt.config["appservice.public.enabled"] && evt.config.get("bridge.allow_matrix_login", True):
-        evt.sender.command_status = {
-        "next": enter_token,
-        "action": "Login",
-        }
-        return await evt.reply(
-            "This bridge instance allows you to log in as a bot inside Matrix.\n\n"
-            "Please send your auth token here.\n"
-            )
-    else:
-        return await evt.reply("This bridge instance has been configured to not allow logging in.")
-
-@command_handler(needs_auth=False)
-async def enter_token(evt: CommandEvent):
-    if len(evt.args) == 0:
-        return await evt.reply("**Usage:** `$cmdprefix+sp enter-token <token>`")
-    elif not evt.config.get("bridge.allow_matrix_login", True):
-        return await evt.reply("This bridge instance does not allow in-Matrix logins, "
-                                "which is the only way to login in as a bot")
+async def sign_in(evt: CommandEvent, **sign_in_info):
     try:
         await evt.sender.ensure_started(even_if_no_session=True)
-        user = await evt.sender.client.sign_in(bot_token=evt.args[0])
+        user = await evt.sender.client.sign_in(**sign_in_info)
         asyncio.ensure_future(evt.sender.post_login(user), loop=evt.loop)
         evt.sender.command_status = None
         return await evt.reply(f"Successfully logged in as @{user.username}")
-    except Exception:
-        evt.log.exception("Error sending auth token")
-        return await evt.reply("Unhandled exception while sending code. "
-                               "Check console for more details.")
+    except PhoneCodeExpiredError:
+        return await evt.reply("Phone code expired. Try again with `$cmdprefix+sp login`.")
+    except PhoneCodeInvalidError:
+        return await evt.reply("Invalid phone code.")
+    except PasswordHashInvalidError:
+        return await evt.reply("Incorrect password.")
+    except SessionPasswordNeededError:
+        evt.sender.command_status = {
+            "next": enter_password,
+            "action": "Login (password entry)",
+        }
+        return await evt.reply("Your account has two-factor authentication. "
+                               "Please send your password here.")
 
 @command_handler(needs_auth=True,
                  help_section=SECTION_AUTH,
