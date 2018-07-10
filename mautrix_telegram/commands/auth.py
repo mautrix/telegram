@@ -227,6 +227,42 @@ async def enter_password(evt: CommandEvent):
         return await evt.reply("Unhandled exception while sending password. "
                                "Check console for more details.")
 
+@command_handler(needs_auth=True,
+                management_only=True,
+                help_section=SECTION_AUTH,
+                help_text="Log in with a bot token.")
+async def bot_login(evt: CommandEvent):
+    if await evt.sender.is_logged_in():
+        return await evt.reply("You are already logged in.")
+    if evt.config["appservice.public.enabled"] && evt.config.get("bridge.allow_matrix_login", True):
+        evt.sender.command_status = {
+        "next": enter_token,
+        "action": "Login",
+        }
+        return await evt.reply(
+            "This bridge instance allows you to log in as a bot inside Matrix.\n\n"
+            "Please send your auth token here.\n"
+            )
+    else:
+        return await evt.reply("This bridge instance has been configured to not allow logging in.")
+
+@command_handler(needs_auth=False)
+async def enter_token(evt: CommandEvent):
+    if len(evt.args) == 0:
+        return await evt.reply("**Usage:** `$cmdprefix+sp enter-token <token>`")
+    elif not evt.config.get("bridge.allow_matrix_login", True):
+        return await evt.reply("This bridge instance does not allow in-Matrix logins, "
+                                "which is the only way to login in as a bot")
+    try:
+        await evt.sender.ensure_started(even_if_no_session=True)
+        user = await evt.sender.client.sign_in(bot_token=evt.args[0])
+        asyncio.ensure_future(evt.sender.post_login(user), loop=evt.loop)
+        evt.sender.command_status = None
+        return await evt.reply(f"Successfully logged in as @{user.username}")
+    except Exception:
+        evt.log.exception("Error sending auth token")
+        return await evt.reply("Unhandled exception while sending code. "
+                               "Check console for more details.")
 
 @command_handler(needs_auth=True,
                  help_section=SECTION_AUTH,
