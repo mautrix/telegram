@@ -23,7 +23,7 @@ from mautrix_appservice import MatrixRequestError, IntentError
 from .user import User
 from .portal import Portal
 from .puppet import Puppet
-from .commands import CommandHandler
+from .commands import CommandProcessor
 
 
 class MatrixHandler:
@@ -31,7 +31,7 @@ class MatrixHandler:
 
     def __init__(self, context):
         self.az, self.db, self.config, _, self.tgbot = context
-        self.commands = CommandHandler(context)
+        self.commands = CommandProcessor(context)
 
         self.az.matrix_event_handler(self.handle_event)
 

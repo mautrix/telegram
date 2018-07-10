@@ -16,7 +16,7 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from mautrix_appservice import MatrixRequestError
 
-from . import command_handler
+from . import command_handler, CommandEvent, SECTION_ADMIN
 from .. import puppet as pu, portal as po
 
 
@@ -52,12 +52,10 @@ async def _find_rooms(intent):
     return management_rooms, unidentified_rooms, portals, empty_portals
 
 
-@command_handler(needs_admin=True, needs_auth=False, name="clean-rooms")
-async def clean_rooms(evt):
-    if not evt.is_management:
-        return await evt.reply("`clean-rooms` is a particularly spammy command. Please don't "
-                               "run it in non-management rooms.")
-
+@command_handler(needs_admin=True, needs_auth=False, management_only=True, name="clean-rooms",
+                 help_section=SECTION_ADMIN,
+                 help_text="Clean up unused portal/management rooms.")
+async def clean_rooms(evt: CommandEvent):
     management_rooms, unidentified_rooms, portals, empty_portals = await _find_rooms(evt.az.intent)
 
     reply = ["#### Management rooms (M)"]

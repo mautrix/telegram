@@ -14,11 +14,13 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from . import command_handler
+from . import command_handler, CommandEvent, _command_handlers, SECTION_GENERAL
 
 
-@command_handler(needs_auth=False, needs_puppeting=False)
-def cancel(evt):
+@command_handler(needs_auth=False, needs_puppeting=False,
+                 help_section=SECTION_GENERAL,
+                 help_text="Cancel an ongoing action (such as login)")
+def cancel(evt: CommandEvent):
     if evt.sender.command_status:
         action = evt.sender.command_status["action"]
         evt.sender.command_status = None
@@ -28,78 +30,39 @@ def cancel(evt):
 
 
 @command_handler(needs_auth=False, needs_puppeting=False)
-def unknown_command(evt):
+def unknown_command(evt: CommandEvent):
     return evt.reply("Unknown command. Try `$cmdprefix+sp help` for help.")
 
 
-@command_handler(needs_auth=False, needs_puppeting=False)
-def help(evt):
+help_cache = {}
+
+
+async def _get_help_text(evt: CommandEvent):
+    cache_key = (evt.is_management, evt.sender.puppet_whitelisted, evt.sender.is_admin,
+                 await evt.sender.is_logged_in())
+    if cache_key not in help_cache:
+        help = {}
+        for handler in _command_handlers.values():
+            if handler.has_help and handler.has_permission(*cache_key):
+                help.setdefault(handler.help_section, [])
+                help[handler.help_section].append(handler.help + "  ")
+        help = sorted(help.items(), key=lambda item: item[0].order)
+        help = ["#### {}\n{}\n".format(key.name, "\n".join(value)) for key, value in help]
+        help_cache[cache_key] = "\n".join(help)
+    return help_cache[cache_key]
+
+
+def _get_management_status(evt: CommandEvent):
     if evt.is_management:
-        management_status = ("This is a management room: prefixing commands "
-                             "with `$cmdprefix` is not required.\n")
+        return "This is a management room: prefixing commands with `$cmdprefix` is not required."
     elif evt.is_portal:
-        management_status = ("**This is a portal room**: you must always "
-                             "prefix commands with `$cmdprefix`.\n"
-                             "Management commands will not be sent to Telegram.")
-    else:
-        management_status = ("**This is not a management room**: you must "
-                             "prefix commands with `$cmdprefix`.\n")
-    help = None
-    if not evt.sender.puppet_whitelisted:
-        help = """\n
-#### Generic bridge commands
-**help**   - Show this help message.  
-**cancel** - Cancel an ongoing action (such as login).
-**ping-bot**                         - Get info of the message relay Telegram bot.  
-**invite-link**             - Get a Telegram invite link to the current chat.  
-**delete-portal**           - Remove all users from the current portal room and forget the portal.
-                              Only works for group chats; to delete a private chat portal, simply
-                              leave the room.  
-**unbridge**                - Remove puppets from the current portal room and forget the portal.  
-**bridge** [_id_]           - Bridge the current Matrix room to the Telegram chat with the given
-                              ID. The ID must be the prefixed version that you get with the `/id`
-                              command of the Telegram-side bot.  
+        return ("**This is a portal room**: you must always prefix commands with `$cmdprefix`.\n"
+                "Management commands will not be sent to Telegram.")
+    return "**This is not a management room**: you must prefix commands with `$cmdprefix`."
 
-"""
-    help = help or """\n
-#### Generic bridge commands
-**help**   - Show this help message.  
-**cancel** - Cancel an ongoing action (such as login).
 
-#### Authentication
-**login**  - Request an authentication code.  
-**logout** - Log out from Telegram.  
-**ping**   - Check if you're logged into Telegram.
-
-#### Miscellaneous things
-**search** [_-r|--remote_] <_query_> - Search your contacts or the Telegram servers for users.  
-**sync** [`chats`|`contacts`|`me`]   - Synchronize your chat portals, contacts and/or own info.  
-**ping-bot**                         - Get info of the message relay Telegram bot.  
-**set-pl** <_level_> [_mxid_]        - Set a temporary power level without affecting Telegram.
-
-#### Initiating chats
-**pm** <_identifier_> - Open a private chat with the given Telegram user. The identifier is either
-                        the internal user ID, the username or the phone number.  
-**join** <_link_>     - Join a chat with an invite link.  
-**create** [_type_]   - Create a Telegram chat of the given type for the current Matrix room. The
-                        type is either `group`, `supergroup` or `channel` (defaults to `group`).
-
-#### Portal management  
-**upgrade**                 - Upgrade a normal Telegram group to a supergroup.  
-**invite-link**             - Get a Telegram invite link to the current chat.  
-**delete-portal**           - Remove all users from the current portal room and forget the portal.
-                              Only works for group chats; to delete a private chat portal, simply
-                              leave the room.  
-**unbridge**                - Remove puppets from the current portal room and forget the portal.  
-**bridge** [_id_]           - Bridge the current Matrix room to the Telegram chat with the given
-                              ID. The ID must be the prefixed version that you get with the `/id`
-                              command of the Telegram-side bot.  
-**group-name** <_name_|`-`> - Change the username of a supergroup/channel. To disable, use a dash
-                             (`-`) as the name.  
-**clean-rooms**             - Clean up unused portal/management rooms.
-
-**filter** <`whitelist`|`blacklist`> <_chat ID_> - Allow or disallow bridging a specific chat.  
-**filter-mode** <`whitelist`|`blacklist`>      - Change whether the bridge will allow or disallow
-                                                 bridging rooms by default.
-"""
-    return evt.reply(management_status + help)
+@command_handler(needs_auth=False, needs_puppeting=False,
+                 help_section=SECTION_GENERAL,
+                 help_text="Show this help message.")
+async def help(evt: CommandEvent):
+    return await evt.reply(_get_management_status(evt) + "\n" + await _get_help_text(evt))

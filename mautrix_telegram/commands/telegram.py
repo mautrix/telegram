@@ -20,11 +20,13 @@ from telethon.tl.functions.messages import ImportChatInviteRequest, CheckChatInv
 from telethon.tl.functions.channels import JoinChannelRequest
 
 from .. import puppet as pu, portal as po
-from . import command_handler
+from . import command_handler, CommandEvent, SECTION_MISC, SECTION_CREATING_PORTALS
 
 
-@command_handler()
-async def search(evt):
+@command_handler(help_section=SECTION_MISC,
+                 help_args="[_-r|--remote_] <_query_>",
+                 help_text="Search your contacts or the Telegram servers for users.")
+async def search(evt: CommandEvent):
     if len(evt.args) == 0:
         return await evt.reply("**Usage:** `$cmdprefix+sp search [-r|--remote] <query>`")
 
@@ -59,8 +61,14 @@ async def search(evt):
     return await evt.reply("\n".join(reply))
 
 
-@command_handler(name="pm")
-async def private_message(evt):
+@command_handler(name="pm",
+                 help_section=SECTION_CREATING_PORTALS,
+                 help_args="<_identifier_>",
+                 help_text="Open a private chat with the given Telegram user. The identifier is "
+                           "either the internal user ID, the username or the phone number. "
+                           "**N.B.** The phone numbers you start chats with must already be in "
+                           "your contacts.")
+async def private_message(evt: CommandEvent):
     if len(evt.args) == 0:
         return await evt.reply("**Usage:** `$cmdprefix+sp pm <user identifier>`")
 
@@ -79,7 +87,7 @@ async def private_message(evt):
                            f"{pu.Puppet.get_displayname(user, False)}")
 
 
-async def _join(evt, arg):
+async def _join(evt: CommandEvent, arg: str):
     if arg.startswith("joinchat/"):
         invite_hash = arg[len("joinchat/"):]
         try:
@@ -99,8 +107,10 @@ async def _join(evt, arg):
         return await evt.sender.client(JoinChannelRequest(channel)), None
 
 
-@command_handler()
-async def join(evt):
+@command_handler(help_section=SECTION_CREATING_PORTALS,
+                 help_args="<_link_>",
+                 help_text="Join a chat with an invite link.")
+async def join(evt: CommandEvent):
     if len(evt.args) == 0:
         return await evt.reply("**Usage:** `$cmdprefix+sp join <invite link>`")
 
@@ -124,8 +134,10 @@ async def join(evt):
             return await evt.reply(f"Created room for {portal.title}")
 
 
-@command_handler()
-async def sync(evt):
+@command_handler(help_section=SECTION_MISC,
+                 help_args="[`chats`|`contacts`|`me`]",
+                 help_text="Synchronize your chat portals, contacts and/or own info.")
+async def sync(evt: CommandEvent):
     if len(evt.args) > 0:
         sync_only = evt.args[0]
         if sync_only not in ("chats", "contacts", "me"):
