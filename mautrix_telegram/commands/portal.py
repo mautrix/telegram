@@ -307,14 +307,18 @@ async def _get_initial_state(evt: CommandEvent):
     about = None
     levels = None
     for event in state:
-        if event["type"] == "m.room.name":
-            title = event["content"]["name"]
-        elif event["type"] == "m.room.topic":
-            about = event["content"]["topic"]
-        elif event["type"] == "m.room.power_levels":
-            levels = event["content"]
-        elif event["type"] == "m.room.canonical_alias":
-            title = title or event["content"]["alias"]
+        try:
+            if event["type"] == "m.room.name":
+                title = event["content"]["name"]
+            elif event["type"] == "m.room.topic":
+                about = event["content"]["topic"]
+            elif event["type"] == "m.room.power_levels":
+                levels = event["content"]
+            elif event["type"] == "m.room.canonical_alias":
+                title = title or event["content"]["alias"]
+        except KeyError:
+            # Some state event probably has empty content
+            pass
     return title, about, levels
 
 
