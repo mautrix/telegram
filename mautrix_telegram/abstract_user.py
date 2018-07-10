@@ -62,7 +62,6 @@ class AbstractUser:
                                             app_version=__version__,
                                             system_version=sysversion,
                                             device_model=device,
-                                            report_errors=False,
                                             timeout=120)
         self.client.add_event_handler(self._update_catch)
 

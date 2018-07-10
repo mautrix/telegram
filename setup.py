@@ -32,7 +32,7 @@ setuptools.setup(
         "ruamel.yaml>=0.15.35,<0.16",
         "future-fstrings>=0.4.2",
         "python-magic>=0.4.15,<0.5",
-        "telethon-aio>=1.0,<1.1",
+        "telethon>=1.0,<1.1",
         "telethon-session-sqlalchemy>=0.2.3,<0.3",
     ],
     extras_require=extras,

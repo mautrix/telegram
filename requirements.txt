@@ -6,5 +6,5 @@ SQLAlchemy
 alembic
 Markdown
 future-fstrings
-telethon-aio
+telethon
 telethon-session-sqlalchemy
