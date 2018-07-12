@@ -62,19 +62,6 @@ class PublicBridgeWebsite(AuthAPI):
                             text=self.login.render(username=username, state=state, error=error,
                                                    message=message, mxid=mxid))
 
-    async def post_login_token(self, user, token):
-        try:
-            user_info = await user.client.sign_in(bot_token=token)
-            asyncio.ensure_future(user.post_login(user_info), loop=self.loop)
-            if user.command_status and user.command_status["action"] == "Login":
-                user.command_status = None
-            return self.get_login_response(mxid=user.mxid, state="logged-in", status=200,
-                                           username=user_info.username)
-        except Exception:
-            self.log.exception("Error sending bot token")
-            return self.get_login_response(mxid=user.mxid, state="token", status=500,
-                                           error="Internal server error while sending token.")
-
     async def post_login(self, request):
         data = await request.post()
         if "mxid" not in data:
