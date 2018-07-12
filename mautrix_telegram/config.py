@@ -154,8 +154,6 @@ class Config(DictWithRecursion):
         copy("appservice.public.prefix")
         copy("appservice.public.external")
 
-        copy("appservice.debug")
-
         copy("appservice.id")
         copy("appservice.bot_username")
         copy("appservice.bot_displayname")
@@ -217,6 +215,14 @@ class Config(DictWithRecursion):
         copy("telegram.api_id")
         copy("telegram.api_hash")
         copy("telegram.bot_token")
+
+        if "appservice.debug" in self and "logging" not in self:
+            level = "DEBUG" if self["appservice.debug"] else "INFO"
+            base["logging.root.level"] = level
+            base["logging.loggers.mau.level"] = level
+            base["logging.loggers.telethon.level"] = level
+        else:
+            copy("logging")
 
         self._data = base._data
         self.save()

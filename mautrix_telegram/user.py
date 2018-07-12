@@ -145,7 +145,7 @@ class User(AbstractUser):
             asyncio.ensure_future(self.post_login(), loop=self.loop)
         elif delete_unless_authenticated:
             self.log.debug(f"Unauthenticated user {self.name} start()ed, deleting session...")
-            self.client.disconnect()
+            await self.client.disconnect()
             self.client.session.delete()
         return self
 

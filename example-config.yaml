@@ -34,9 +34,6 @@ appservice:
         # implicitly.
         external: https://example.com/public
 
-    # Whether or not to enable debug messages in the console.
-    debug: true
-
     # The unique ID of this appservice.
     id: telegram
     # Username of the appservice bot.
@@ -194,3 +191,31 @@ telegram:
     api_hash: tjyd5yge35lbodk1xwzw2jstp90k55qz
     # (Optional) Create your own bot at https://t.me/BotFather
     bot_token: disabled
+
+# Python logging configuration.
+#
+# See section 16.7.2 of the Python documentation for more info:
+# https://docs.python.org/3.6/library/logging.config.html#configuration-dictionary-schema
+logging:
+    version: 1
+    formatters:
+        precise:
+            format: "[%(asctime)s] [%(levelname)s@%(name)s] %(message)s"
+    handlers:
+        file:
+            class: logging.handlers.RotatingFileHandler
+            formatter: precise
+            filename: ./mautrix-telegram.log
+            maxBytes: 10485760
+            backupCount: 10
+        console:
+            class: logging.StreamHandler
+            formatter: precise
+    loggers:
+        mau:
+            level: DEBUG
+        telethon:
+            level: DEBUG
+    root:
+        level: DEBUG
+        handlers: [file, console]

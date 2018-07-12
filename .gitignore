@@ -7,6 +7,7 @@ __pycache__
 
 config.yaml
 registration.yaml
+logs/
 *.db
 *.session
 *.json

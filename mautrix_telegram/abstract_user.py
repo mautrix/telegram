@@ -118,8 +118,8 @@ class AbstractUser:
             await self.start(delete_unless_authenticated=not even_if_no_session)
         return self
 
-    def stop(self):
-        self.client.disconnect()
+    async def stop(self):
+        await self.client.disconnect()
         self.client = None
 
     # region Telegram update handling
