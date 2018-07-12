@@ -190,6 +190,19 @@ telegram:
     api_hash: tjyd5yge35lbodk1xwzw2jstp90k55qz
     # (Optional) Create your own bot at https://t.me/BotFather
     bot_token: disabled
+    # Telethon proxy configuration.
+    # You must install PySocks from pip for proxies to work.
+    proxy:
+        # Allowed types: disabled, socks4, socks5, http
+        type: disabled
+        # Proxy IP address and port.
+        address: 127.0.0.1
+        port: 1080
+        # Whether or not to perform DNS resolving remotely.
+        rdns: true
+        # Proxy authentication (optional).
+        username: ""
+        password: ""
 
 # Python logging configuration.
 #

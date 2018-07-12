@@ -220,6 +220,12 @@ class Config(DictWithRecursion):
         copy("telegram.api_id")
         copy("telegram.api_hash")
         copy("telegram.bot_token")
+        copy("telegram.proxy.type")
+        copy("telegram.proxy.address")
+        copy("telegram.proxy.port")
+        copy("telegram.proxy.rdns")
+        copy("telegram.proxy.username")
+        copy("telegram.proxy.password")
 
         if "appservice.debug" in self and "logging" not in self:
             level = "DEBUG" if self["appservice.debug"] else "INFO"
