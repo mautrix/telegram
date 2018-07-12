@@ -144,7 +144,12 @@ class Config(DictWithRecursion):
         copy("homeserver.verify_ssl")
         copy("homeserver.domain")
 
-        copy("appservice.protocol")
+        if "appservice.protocol" in self and "appservice.address" not in self:
+            protocol, hostname, port = (self["appservice.protocol"], self["appservice.hostname"],
+                                        self["appservice.port"])
+            base["appservice.address"] = f"{protocol}://{hostname}:{port}"
+        else:
+            copy("appservice.address")
         copy("appservice.hostname")
         copy("appservice.port")
 
@@ -257,10 +262,8 @@ class Config(DictWithRecursion):
         self.set("appservice.as_token", self._new_token())
         self.set("appservice.hs_token", self._new_token())
 
-        url = (f"{self['appservice.protocol']}://"
-               f"{self['appservice.hostname']}:{self['appservice.port']}")
         self._registration = {
-            "id": self.get("appservice.id", "telegram"),
+            "id": self["appservice.id"] or "telegram",
             "as_token": self["appservice.as_token"],
             "hs_token": self["appservice.hs_token"],
             "namespaces": {
@@ -273,7 +276,7 @@ class Config(DictWithRecursion):
                     "regex": f"#{alias_format}:{homeserver}"
                 }]
             },
-            "url": url,
+            "url": self["appservice.address"],
             "sender_localpart": self["appservice.bot_username"],
             "rate_limited": False
         }
