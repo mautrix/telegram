@@ -44,49 +44,55 @@ class ProvisioningAPI(AuthAPI):
             }
         elif message:
             resp = {
-                "message": message
+                "state": state,
+                "message": message,
             }
         else:
             resp = {
+                "state": state,
                 "error": error,
                 "errcode": errcode,
             }
         return web.json_response(resp, status=status)
 
-    async def get_user(self, request: web.Request):
+    async def get_request_info(self, request: web.Request):
         mxid = request.match_info["mxid"]
         user = await User.get_by_mxid(mxid).ensure_started(even_if_no_session=True)
         if not user.puppet_whitelisted:
-            return user, self.get_login_response(mxid=user.mxid, error="You are not whitelisted.",
-                                                 errcode="mxid_not_whitelisted", status=403)
+            return None, user, self.get_login_response(mxid=user.mxid,
+                                                       error="You are not whitelisted.",
+                                                       errcode="mxid_not_whitelisted", status=403)
         elif await user.is_logged_in():
-            return user, self.get_login_response(mxid=user.mxid, username=user.username, status=409)
-        return user, None
+            return None, user, self.get_login_response(mxid=user.mxid, username=user.username,
+                                                       status=409)
+
+        try:
+            data = await request.json()
+        except Exception:
+            return None, user, self.get_login_response(mxid=user.mxid, error="Invalid JSON.",
+                                                       errcode="invalid_json", status=400)
+        return data, user, None
 
     async def send_bot_token(self, request: web.Request):
-        user, err = await self.get_user(request)
+        data, user, err = await self.get_request_info(request)
         if err:
             return err
-        data = await request.json()
         return await self.post_login_token(user, data.get("token", ""))
 
     async def request_code(self, request: web.Request):
-        user, err = await self.get_user(request)
+        data, user, err = await self.get_request_info(request)
         if err:
             return err
-        data = await request.json()
         return await self.post_login_phone(user, data.get("phone", ""))
 
     async def send_code(self, request: web.Request):
-        user, err = await self.get_user(request)
+        data, user, err = await self.get_request_info(request)
         if err:
             return err
-        data = await request.json()
         return await self.post_login_code(user, data.get("code", 0), password_in_data=False)
 
     async def send_password(self, request: web.Request):
-        user, err = await self.get_user(request)
+        data, user, err = await self.get_request_info(request)
         if err:
             return err
-        data = await request.json()
         return await self.post_login_password(user, data.get("password", ""))
