@@ -17,6 +17,7 @@
 from aiohttp import web
 import logging
 
+from ...user import User
 from ..common import AuthAPI
 
 
@@ -24,7 +25,7 @@ class ProvisioningAPI(AuthAPI):
     log = logging.getLogger("mau.web.provisioning")
 
     def __init__(self, loop):
-        super(AuthAPI, self).__init__(loop)
+        super().__init__(loop)
 
         self.app = web.Application(loop=loop)
 

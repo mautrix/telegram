@@ -27,16 +27,16 @@ class PublicBridgeWebsite(AuthAPI):
     log = logging.getLogger("mau.web.public")
 
     def __init__(self, loop):
-        super(AuthAPI, self).__init__(loop)
+        super().__init__(loop)
 
         self.login = Template(
-            pkg_resources.resource_string("mautrix_telegram", "public/login.html.mako"))
+            pkg_resources.resource_string("mautrix_telegram", "web/public/login.html.mako"))
 
         self.app = web.Application(loop=loop)
         self.app.router.add_route("GET", "/login", self.get_login)
         self.app.router.add_route("POST", "/login", self.post_login)
-        self.app.router.add_static("/",
-                                   pkg_resources.resource_filename("mautrix_telegram", "public/"))
+        self.app.router.add_static("/", pkg_resources.resource_filename("mautrix_telegram",
+                                                                        "web/public/"))
 
     async def get_login(self, request):
         state = "token" if request.rel_url.query.get("mode", "") == "bot" else "request"
