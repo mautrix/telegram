@@ -24,7 +24,7 @@ from ..common import AuthAPI
 
 
 class PublicBridgeWebsite(AuthAPI):
-    log = logging.getLogger("mau.public")
+    log = logging.getLogger("mau.web.public")
 
     def __init__(self, loop):
         super(AuthAPI, self).__init__(loop)

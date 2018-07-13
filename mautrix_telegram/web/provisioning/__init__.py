@@ -21,7 +21,7 @@ from ..common import AuthAPI
 
 
 class ProvisioningAPI(AuthAPI):
-    log = logging.getLogger("mau.provisioning")
+    log = logging.getLogger("mau.web.provisioning")
 
     def __init__(self, loop):
         super(AuthAPI, self).__init__(loop)

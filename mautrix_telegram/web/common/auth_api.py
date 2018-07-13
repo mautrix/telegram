@@ -26,7 +26,7 @@ from mautrix_telegram.util import format_duration
 
 
 class AuthAPI(abc.ABC):
-    log = logging.getLogger("mau.public.auth")
+    log = logging.getLogger("mau.web.auth")
 
     def __init__(self, loop):
         self.loop = loop
