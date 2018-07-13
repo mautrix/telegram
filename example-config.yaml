@@ -41,7 +41,7 @@ appservice:
         # The prefix to use in the provisioning API endpoints.
         prefix: /_matrix/provision
         # The shared secret to authorize users of the API.
-        # You can generate a decent secret with `pwgen -snc 32 1`
+        # If you leave the default token, a random token will be generated and saved at startup.
         shared_secret: "Very secret shared secret"
 
     # The unique ID of this appservice.
