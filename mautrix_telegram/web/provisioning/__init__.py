@@ -31,6 +31,7 @@ class ProvisioningAPI(AuthAPI):
 
         self.app = web.Application(loop=loop)
 
+        self.app.router.add_route("GET", "/{mxid:@[^:]*:.+}/get_me", self.get_me)
         login_prefix = "/login/{mxid:@[^:]*:.+}"
         self.app.router.add_route("POST", f"{login_prefix}/bot_token", self.send_bot_token)
         self.app.router.add_route("POST", f"{login_prefix}/request_code", self.request_code)
@@ -57,7 +58,7 @@ class ProvisioningAPI(AuthAPI):
             }
         return web.json_response(resp, status=status)
 
-    async def get_request_info(self, request: web.Request):
+    async def get_request_info(self, request: web.Request, get_data=True, fail_on_logged_in=True):
         auth = request.headers.get("Authorization", "")
         if auth != f"Bearer {self.secret}":
             return None, None, self.get_login_response(error="Shared secret is not valid.",
@@ -65,22 +66,40 @@ class ProvisioningAPI(AuthAPI):
                                                        status=401)
 
         data = None
-        try:
-            data = await request.json()
-        except json.JSONDecodeError:
-            pass
-        if not data:
-            return None, None, self.get_login_response(error="Invalid JSON.",
-                                                       errcode="json_invalid", status=400)
+        if get_data:
+            try:
+                data = await request.json()
+            except json.JSONDecodeError:
+                pass
+            if not data:
+                return None, None, self.get_login_response(error="Invalid JSON.",
+                                                           errcode="json_invalid", status=400)
 
         mxid = request.match_info["mxid"]
         user = await User.get_by_mxid(mxid).ensure_started(even_if_no_session=True)
         if not user.puppet_whitelisted:
             return None, user, self.get_login_response(error="You are not whitelisted.",
                                                        errcode="mxid_not_whitelisted", status=403)
-        elif await user.is_logged_in():
+        elif fail_on_logged_in and await user.is_logged_in():
             return None, user, self.get_login_response(username=user.username, status=409)
         return data, user, None
+
+    async def get_me(self, request: web.Request):
+        data, user, err = await self.get_request_info(request, get_data=False,
+                                                      fail_on_logged_in=False)
+        if err is not None:
+            return err
+        if not await user.is_logged_in():
+            return self.get_login_response(status=403, error="You are not logged in.",
+                                           errcode="not_logged_in")
+        me = await user.client.get_me()
+        return web.json_response({
+            "username": me.username,
+            "first_name": me.first_name,
+            "last_name": me.last_name,
+            "phone": me.phone,
+            "is_bot": me.bot,
+        })
 
     async def send_bot_token(self, request: web.Request):
         data, user, err = await self.get_request_info(request)

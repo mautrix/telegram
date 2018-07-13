@@ -26,6 +26,51 @@ tags:
 - name: Authentication
 
 paths:
+  /{mxid}/get_me:
+    get:
+      operationId: get_me
+      summary: Get the info of the Telegram user the given Matrix user is logged in as
+      tags: [Authentication]
+      responses:
+        200:
+          description: User is logged in
+          schema:
+            $ref: "#/definitions/AuthInfo"
+        400:
+          $ref: "#/responses/MissingMXIDError"
+        403:
+          description: User is not logged in or not whitelisted
+          schema:
+            type: object
+            title: Error
+            properties:
+              errcode:
+                type: string
+                title: Error code
+                description: A machine-readable error code
+                enum:
+                - not_logged_in
+                - mxid_not_whitelisted
+              error:
+                $ref: "#/definitions/HumanReadableError"
+        500:
+          $ref: "#/responses/UnknownError"
+      parameters:
+        - name: mxid
+          in: path
+          description: The Matrix ID of the user who to log in as
+          required: true
+          type: string
+        - name: body
+          in: body
+          required: true
+          schema:
+            type: object
+            properties:
+              token:
+                type: string
+                description: The access token of the bot to log in as
+                example: "297900271:IXjeGEcAN61zHnjPgkWnYWyvVp9K4ulHBEv"
   /login/{mxid}/bot_token:
     post:
       operationId: post_bot_token
@@ -388,6 +433,25 @@ definitions:
     type: string
     description: A human-readable description of the error
     example: A human-readable description of the error
+  AuthInfo:
+    type: object
+    properties:
+      username:
+        type: string
+        example: username
+      first_name:
+        type: string
+        example: Usern
+      last_name:
+        type: string
+        example: A.
+      phone:
+        type: string
+        example: +123456789
+      is_bot:
+        type: boolean
+        example: false
+
   AuthSuccess:
     type: object
     properties:
