@@ -31,12 +31,12 @@ class ProvisioningAPI(AuthAPI):
 
         self.app = web.Application(loop=loop)
 
-        self.app.router.add_route("GET", "/{mxid:@[^:]*:.+}/get_me", self.get_me)
-        login_prefix = "/login/{mxid:@[^:]*:.+}"
-        self.app.router.add_route("POST", f"{login_prefix}/bot_token", self.send_bot_token)
-        self.app.router.add_route("POST", f"{login_prefix}/request_code", self.request_code)
-        self.app.router.add_route("POST", f"{login_prefix}/send_code", self.send_code)
-        self.app.router.add_route("POST", f"{login_prefix}/send_password", self.send_password)
+        auth_prefix = "/auth/{mxid:@[^:]*:.+}"
+        self.app.router.add_route("GET", f"{auth_prefix}/get_me", self.get_me)
+        self.app.router.add_route("POST", f"{auth_prefix}/send_bot_token", self.send_bot_token)
+        self.app.router.add_route("POST", f"{auth_prefix}/request_code", self.request_code)
+        self.app.router.add_route("POST", f"{auth_prefix}/send_code", self.send_code)
+        self.app.router.add_route("POST", f"{auth_prefix}/send_password", self.send_password)
 
     def get_login_response(self, status=200, state="", username="", mxid="", message="", error="",
                            errcode=""):

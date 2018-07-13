@@ -26,7 +26,7 @@ tags:
 - name: Authentication
 
 paths:
-  /{mxid}/get_me:
+  /auth/{mxid}/get_me:
     get:
       operationId: get_me
       summary: Get the info of the Telegram user the given Matrix user is logged in as
@@ -71,7 +71,7 @@ paths:
                 type: string
                 description: The access token of the bot to log in as
                 example: "297900271:IXjeGEcAN61zHnjPgkWnYWyvVp9K4ulHBEv"
-  /login/{mxid}/bot_token:
+  /auth/{mxid}/send_bot_token:
     post:
       operationId: post_bot_token
       summary: Log in with a bot token
@@ -122,7 +122,7 @@ paths:
                 type: string
                 description: The access token of the bot to log in as
                 example: "297900271:IXjeGEcAN61zHnjPgkWnYWyvVp9K4ulHBEv"
-  /login/{mxid}/request_code:
+  /auth/{mxid}/request_code:
     post:
       operationId: post_login_phone
       summary: Request a phone code from Telegram
@@ -229,7 +229,7 @@ paths:
                 type: string
                 description: The phone number to log in as.
                 example: "+123456789"
-  /login/{mxid}/send_code:
+  /auth/{mxid}/send_code:
     post:
       operationId: post_login_code
       summary: Send the login code
@@ -297,7 +297,7 @@ paths:
                 description: The phone code from Telegram.
                 format: int32
                 example: 123456
-  /login/{mxid}/send_password:
+  /auth/{mxid}/send_password:
     post:
       operationId: post_login_password
       summary: Send the two-factor auth password
