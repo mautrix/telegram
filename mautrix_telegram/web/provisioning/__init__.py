@@ -16,6 +16,7 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from aiohttp import web
 import logging
+import json
 
 from ...user import User
 from ..common import AuthAPI
@@ -24,8 +25,9 @@ from ..common import AuthAPI
 class ProvisioningAPI(AuthAPI):
     log = logging.getLogger("mau.web.provisioning")
 
-    def __init__(self, loop):
+    def __init__(self, config, loop):
         super().__init__(loop)
+        self.secret = config["appservice.provisioning.shared_secret"]
 
         self.app = web.Application(loop=loop)
 
@@ -56,43 +58,50 @@ class ProvisioningAPI(AuthAPI):
         return web.json_response(resp, status=status)
 
     async def get_request_info(self, request: web.Request):
+        auth = request.headers.get("Authorization", "")
+        if auth != f"Bearer {self.secret}":
+            return None, None, self.get_login_response(error="Shared secret is not valid.",
+                                                       errcode="shared_secret_invalid",
+                                                       status=401)
+
+        data = None
+        try:
+            data = await request.json()
+        except json.JSONDecodeError:
+            pass
+        if not data:
+            return None, None, self.get_login_response(error="Invalid JSON.",
+                                                       errcode="json_invalid", status=400)
+
         mxid = request.match_info["mxid"]
         user = await User.get_by_mxid(mxid).ensure_started(even_if_no_session=True)
         if not user.puppet_whitelisted:
-            return None, user, self.get_login_response(mxid=user.mxid,
-                                                       error="You are not whitelisted.",
+            return None, user, self.get_login_response(error="You are not whitelisted.",
                                                        errcode="mxid_not_whitelisted", status=403)
         elif await user.is_logged_in():
-            return None, user, self.get_login_response(mxid=user.mxid, username=user.username,
-                                                       status=409)
-
-        try:
-            data = await request.json()
-        except Exception:
-            return None, user, self.get_login_response(mxid=user.mxid, error="Invalid JSON.",
-                                                       errcode="invalid_json", status=400)
+            return None, user, self.get_login_response(username=user.username, status=409)
         return data, user, None
 
     async def send_bot_token(self, request: web.Request):
         data, user, err = await self.get_request_info(request)
-        if err:
+        if err is not None:
             return err
         return await self.post_login_token(user, data.get("token", ""))
 
     async def request_code(self, request: web.Request):
         data, user, err = await self.get_request_info(request)
-        if err:
+        if err is not None:
             return err
         return await self.post_login_phone(user, data.get("phone", ""))
 
     async def send_code(self, request: web.Request):
         data, user, err = await self.get_request_info(request)
-        if err:
+        if err is not None:
             return err
         return await self.post_login_code(user, data.get("code", 0), password_in_data=False)
 
     async def send_password(self, request: web.Request):
         data, user, err = await self.get_request_info(request)
-        if err:
+        if err is not None:
             return err
         return await self.post_login_password(user, data.get("password", ""))

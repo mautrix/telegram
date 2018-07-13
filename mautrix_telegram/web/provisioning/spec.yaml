@@ -39,7 +39,7 @@ paths:
         400:
           $ref: "#/responses/MissingMXIDError"
         401:
-          description: Invalid or expired bot token
+          description: Invalid or expired bot token or invalid shared secret
           schema:
             type: object
             title: Error
@@ -52,6 +52,7 @@ paths:
                 enum:
                 - bot_token_invalid
                 - bot_token_expired
+                - shared_secret_invalid
               error:
                 $ref: "#/definitions/HumanReadableError"
         403:
@@ -87,7 +88,7 @@ paths:
           schema:
             $ref: "#/definitions/AuthSuccess"
         400:
-          description: Invalid phone number or missing Matrix ID
+          description: Invalid phone number or JSON or missing Matrix ID
           schema:
             type: object
             title: Error
@@ -100,6 +101,21 @@ paths:
                 enum:
                 - phone_number_invalid
                 - mxid_empty
+                - json_invalid
+              error:
+                $ref: "#/definitions/HumanReadableError"
+        401:
+          description: Invalid shared secret
+          schema:
+            type: object
+            title: Error
+            properties:
+              errcode:
+                type: string
+                title: Error code
+                description: A machine-readable error code
+                enum:
+                - shared_secret_invalid
               error:
                 $ref: "#/definitions/HumanReadableError"
         403:
@@ -185,7 +201,7 @@ paths:
         400:
           $ref: "#/responses/MissingMXIDError"
         401:
-          description: Invalid phone code
+          description: Invalid phone code or shared secret
           schema:
             type: object
             title: Error
@@ -196,6 +212,7 @@ paths:
                 description: A machine-readable error code
                 enum:
                 - phone_code_invalid
+                - shared_secret_invalid
               error:
                 $ref: "#/definitions/HumanReadableError"
         403:
@@ -246,7 +263,7 @@ paths:
           schema:
             $ref: "#/definitions/AuthSuccess"
         400:
-          description: Missing password or Matrix ID
+          description: Missing password or Matrix ID or invalid JSON
           schema:
             type: object
             title: Error
@@ -259,10 +276,11 @@ paths:
                 enum:
                 - password_empty
                 - mxid_empty
+                - json_invalid
               error:
                 $ref: "#/definitions/HumanReadableError"
         401:
-          description: Incorrect password
+          description: Incorrect password or invalid shared secret
           schema:
             type: object
             title: Error
@@ -273,6 +291,7 @@ paths:
                 description: A machine-readable error code
                 enum:
                 - password_invalid
+                - shared_secret_invalid
               error:
                 $ref: "#/definitions/HumanReadableError"
         403:
@@ -327,7 +346,7 @@ responses:
           type: string
           description: The Telegram username the user is logged in as.
   MissingMXIDError:
-    description: Missing Matrix ID
+    description: Missing Matrix ID or invalid JSON.
     schema:
       type: object
       title: Error
@@ -338,6 +357,7 @@ responses:
           description: A machine-readable error code
           enum:
           - mxid_empty
+          - json_invalid
         error:
           $ref: "#/definitions/HumanReadableError"
   UnknownError:
