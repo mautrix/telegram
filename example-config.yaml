@@ -239,6 +239,8 @@ logging:
             level: DEBUG
         telethon:
             level: DEBUG
+        aiohttp:
+            level: INFO
     root:
         level: DEBUG
         handlers: [file, console]
