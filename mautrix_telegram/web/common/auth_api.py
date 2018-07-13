@@ -43,29 +43,34 @@ class AuthAPI(abc.ABC):
                                            message="Code requested successfully.")
         except PhoneNumberInvalidError:
             return self.get_login_response(mxid=user.mxid, state="request", status=400,
+                                           errcode="phone_number_invalid",
                                            error="Invalid phone number.")
+        except PhoneNumberBannedError:
+            return self.get_login_response(mxid=user.mxid, state="request", status=403,
+                                           errcode="phone_number_banned",
+                                           error="Your phone number is banned from Telegram.")
+        except PhoneNumberAppSignupForbiddenError:
+            return self.get_login_response(mxid=user.mxid, state="request", status=403,
+                                           errcode="phone_number_app_signup_forbidden",
+                                           error="You have disabled 3rd party apps on your account.")
         except PhoneNumberUnoccupiedError:
             return self.get_login_response(mxid=user.mxid, state="request", status=404,
+                                           errcode="phone_number_unoccupied",
                                            error="That phone number has not been registered.")
         except PhoneNumberFloodError:
             return self.get_login_response(
-                mxid=user.mxid, state="request", status=429,
+                mxid=user.mxid, state="request", status=429, errcode="phone_number_flood",
                 error="Your phone number has been temporarily blocked for flooding. "
                       "The ban is usually applied for around a day.")
         except FloodWaitError as e:
             return self.get_login_response(
-                mxid=user.mxid, state="request", status=429,
+                mxid=user.mxid, state="request", status=429, errcode="flood_wait",
                 error="Your phone number has been temporarily blocked for flooding. "
                       f"Please wait for {format_duration(e.seconds)} before trying again.")
-        except PhoneNumberBannedError:
-            return self.get_login_response(mxid=user.mxid, state="request", status=401,
-                                           error="Your phone number is banned from Telegram.")
-        except PhoneNumberAppSignupForbiddenError:
-            return self.get_login_response(mxid=user.mxid, state="request", status=401,
-                                           error="You have disabled 3rd party apps on your account.")
         except Exception:
             self.log.exception("Error requesting phone code")
             return self.get_login_response(mxid=user.mxid, state="request", status=500,
+                                           errcode="exception",
                                            error="Internal server error while requesting code.")
 
     async def post_login_token(self, user, token):
@@ -76,6 +81,14 @@ class AuthAPI(abc.ABC):
                 user.command_status = None
             return self.get_login_response(mxid=user.mxid, state="logged-in", status=200,
                                            username=user_info.username)
+        except AccessTokenInvalidError:
+            return self.get_login_response(mxid=user.mxid, state="token", status=401,
+                                           errcode="bot_token_invalid",
+                                           error="Bot token invalid.")
+        except AccessTokenExpiredError:
+            return self.get_login_response(mxid=user.mxid, state="token", status=403,
+                                           errcode="bot_token_expired",
+                                           error="Bot token expired.")
         except Exception:
             self.log.exception("Error sending bot token")
             return self.get_login_response(mxid=user.mxid, state="token", status=500,
@@ -90,10 +103,12 @@ class AuthAPI(abc.ABC):
             return self.get_login_response(mxid=user.mxid, state="logged-in", status=200,
                                            username=user_info.username)
         except PhoneCodeInvalidError:
-            return self.get_login_response(mxid=user.mxid, state="code", status=403,
+            return self.get_login_response(mxid=user.mxid, state="code", status=401,
+                                           errcode="phone_code_invalid",
                                            error="Incorrect phone code.")
         except PhoneCodeExpiredError:
             return self.get_login_response(mxid=user.mxid, state="code", status=403,
+                                           errcode="phone_code_expired",
                                            error="Phone code expired.")
         except SessionPasswordNeededError:
             if not password_in_data:
@@ -103,12 +118,13 @@ class AuthAPI(abc.ABC):
                         "action": "Login (password entry)",
                     }
                 return self.get_login_response(
-                    mxid=user.mxid, state="password", status=200,
+                    mxid=user.mxid, state="password", status=202,
                     message="Code accepted, but you have 2-factor authentication is enabled.")
             return None
         except Exception:
             self.log.exception("Error sending phone code")
             return self.get_login_response(mxid=user.mxid, state="code", status=500,
+                                           errcode="exception",
                                            error="Internal server error while sending code.")
 
     async def post_login_password(self, user, password):
@@ -119,10 +135,16 @@ class AuthAPI(abc.ABC):
                 user.command_status = None
             return self.get_login_response(mxid=user.mxid, state="logged-in", status=200,
                                            username=user_info.username)
-        except (PasswordHashInvalidError, PasswordEmptyError):
+        except PasswordEmptyError:
             return self.get_login_response(mxid=user.mxid, state="password", status=400,
+                                           errcode="password_empty",
+                                           error="Empty password.")
+        except PasswordHashInvalidError:
+            return self.get_login_response(mxid=user.mxid, state="password", status=401,
+                                           errcode="password_invalid",
                                            error="Incorrect password.")
         except Exception:
             self.log.exception("Error sending password")
             return self.get_login_response(mxid=user.mxid, state="password", status=500,
+                                           errcode="exception",
                                            error="Internal server error while sending password.")

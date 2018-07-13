@@ -16,7 +16,6 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from aiohttp import web
 from mako.template import Template
-import asyncio
 import pkg_resources
 import logging
 
