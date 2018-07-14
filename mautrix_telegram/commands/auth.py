@@ -174,7 +174,7 @@ async def enter_phone_or_token(evt: CommandEvent):
     # phone numbers don't contain colons but telegram bot auth tokens do
     if evt.args[0].find(":") > 0:
         try:
-            await sign_in(bot_token=evt.args[0])
+            await sign_in(evt, bot_token=evt.args[0])
         except Exception:
             evt.log.exception("Error sending auth token")
             return await evt.reply("Unhandled exception while sending auth token. "
@@ -194,7 +194,7 @@ async def enter_code(evt: CommandEvent):
         return await evt.reply("This bridge instance does not allow in-Matrix login. "
                                "Please use `$cmdprefix+sp login` to get login instructions")
     try:
-        await sign_in(code=evt.args[0])
+        await sign_in(evt, code=evt.args[0])
     except Exception:
         evt.log.exception("Error sending phone code")
         return await evt.reply("Unhandled exception while sending code. "
@@ -209,11 +209,16 @@ async def enter_password(evt: CommandEvent):
         return await evt.reply("This bridge instance does not allow in-Matrix login. "
                                "Please use `$cmdprefix+sp login` to get login instructions")
     try:
-        await sign_in(password=" ".join(evt.args))
+        await sign_in(evt, password=" ".join(evt.args))
+    except AccessTokenInvalidError:
+        return await evt.reply("That bot token is not valid.")
+    except AccessTokenExpiredError:
+        return await evt.reply("That bot token has expired.")
     except Exception:
         evt.log.exception("Error sending password")
         return await evt.reply("Unhandled exception while sending password. "
                                "Check console for more details.")
+
 
 async def sign_in(evt: CommandEvent, **sign_in_info):
     try:
@@ -235,6 +240,7 @@ async def sign_in(evt: CommandEvent, **sign_in_info):
         }
         return await evt.reply("Your account has two-factor authentication. "
                                "Please send your password here.")
+
 
 @command_handler(needs_auth=True,
                  help_section=SECTION_AUTH,
