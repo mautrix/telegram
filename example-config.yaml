@@ -39,7 +39,7 @@ appservice:
         # Whether or not the provisioning API should be enabled.
         enabled: true
         # The prefix to use in the provisioning API endpoints.
-        prefix: /_matrix/provision
+        prefix: /_matrix/provision/v1
         # The shared secret to authorize users of the API.
         # If you leave the default token, a random token will be generated and saved at startup.
         shared_secret: "Very secret shared secret"
