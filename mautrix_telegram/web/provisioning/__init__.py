@@ -16,32 +16,37 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from aiohttp import web
 from typing import Tuple, Optional, Callable, Awaitable
+import asyncio
 import logging
 import json
 
 from telethon.utils import get_peer_id, resolve_id
+from mautrix_appservice import AppService, MatrixRequestError, IntentError
 
 from ...user import User
 from ...portal import Portal
+from ...commands.portal import user_has_power_level, get_initial_state
+from ...config import Config
 from ..common import AuthAPI
 
 
 class ProvisioningAPI(AuthAPI):
     log = logging.getLogger("mau.web.provisioning")
 
-    def __init__(self, config, loop):
+    def __init__(self, config: Config, az: AppService, loop: asyncio.AbstractEventLoop):
         super().__init__(loop)
         self.secret = config["appservice.provisioning.shared_secret"]
+        self.az = az
 
         self.app = web.Application(loop=loop, middlewares=[self.error_middleware])
 
         portal_prefix = "/portal/{mxid:![^/]+}"
         self.app.router.add_route("GET", f"{portal_prefix}", self.get_portal_by_mxid)
         self.app.router.add_route("GET", "/portal/{tgid:-[0-9]+}", self.get_portal_by_tgid)
-        # self.app.router.add_route("POST", portal_prefix + "/connect/{chat_id:[0-9]+}",
-        #                          self.connect_chat)
-        # self.app.router.add_route("POST", f"{portal_prefix}/create", self.create_chat)
-        # self.app.router.add_route("POST", f"{portal_prefix}/disconnect", self.disconnect_chat)
+        self.app.router.add_route("POST", portal_prefix + "/connect/{chat_id:[0-9]+}",
+                                  self.connect_chat)
+        self.app.router.add_route("POST", f"{portal_prefix}/create", self.create_chat)
+        self.app.router.add_route("POST", f"{portal_prefix}/disconnect", self.disconnect_chat)
 
         user_prefix = "/user/{mxid:@[^:]*:[^/]+}"
         self.app.router.add_route("GET", f"{user_prefix}", self.get_user_info)
@@ -87,6 +92,69 @@ class ProvisioningAPI(AuthAPI):
             "username": portal.username,
             "megagroup": portal.megagroup,
         })
+
+    async def connect_chat(self, request: web.Request) -> web.Response:
+        return web.Response(status=501)
+
+    async def create_chat(self, request: web.Request) -> web.Response:
+        data = await self.get_data(request)
+        if not data:
+            return self.get_error_response(400, "json_invalid", "Invalid JSON.")
+
+        room_id = request.match_info["mxid"]
+        if Portal.get_by_mxid(room_id):
+            return self.get_error_response(409, "room_already_bridged",
+                                           "Room is already bridged to another Telegram chat.")
+
+        user, err = await self.get_user(request.query.get("user_id", None), expect_logged_in=None,
+                                        require_puppeting=False)
+        if err is not None:
+            return err
+        elif not await user.is_logged_in() or user.is_bot:
+            return self.get_error_response(403, "not_logged_in_real_account",
+                                           "You are not logged in with a real account.")
+        elif not await user_has_power_level(room_id, self.az.intent, user, "bridge"):
+            return self.get_error_response(403, "not_enough_permissions",
+                                           "You do not have the permissions to bridge that room.")
+
+        try:
+            title, about, _ = await get_initial_state(self.az.intent, room_id)
+        except (MatrixRequestError, IntentError):
+            return self.get_error_response(403, "bot_not_in_room",
+                                           "The bridge bot is not in the given room.")
+
+        about = data.get("about", about)
+
+        title = data.get("title", title)
+        if len(title) == 0:
+            return self.get_error_response(400, "body_value_invalid", "Title can not be empty.")
+
+        type = data.get("type", "")
+        if type not in ("group", "chat", "supergroup", "channel"):
+            return self.get_error_response(400, "body_value_invalid",
+                                           "Given chat type is not valid.")
+
+        supergroup = type == "supergroup"
+        type = {
+            "supergroup": "channel",
+            "channel": "channel",
+            "chat": "chat",
+            "group": "chat",
+        }[type]
+
+        portal = Portal(tgid=None, mxid=room_id, title=title, about=about, peer_type=type)
+        try:
+            await portal.create_telegram_chat(user, supergroup=supergroup)
+        except ValueError as e:
+            portal.delete()
+            return self.get_error_response(500, "unknown_error", e.args[0])
+
+        return web.json_response({
+            "chat_id": portal.tgid,
+        })
+
+    async def disconnect_chat(self, request: web.Request) -> web.Response:
+        return web.Response(status=501)
 
     async def get_user_info(self, request: web.Request) -> web.Response:
         data, user, err = await self.get_user_request_info(request, expect_logged_in=None,
@@ -187,10 +255,11 @@ class ProvisioningAPI(AuthAPI):
             }
         else:
             resp = {
-                "state": state,
                 "error": error,
                 "errcode": errcode,
             }
+            if state:
+                resp["state"] = state
         return web.json_response(resp, status=status)
 
     def check_authorization(self, request: web.Request) -> bool:
@@ -206,6 +275,10 @@ class ProvisioningAPI(AuthAPI):
     async def get_user(self, mxid: str, expect_logged_in: Optional[bool] = False,
                        require_puppeting: bool = True,
                        ) -> Tuple[Optional[User], Optional[web.Response]]:
+        if not mxid:
+            return None, self.get_login_response(error="User ID not given.",
+                                                 errcode="mxid_empty", status=400)
+
         user = await User.get_by_mxid(mxid).ensure_started(even_if_no_session=True)
         if require_puppeting and not user.puppet_whitelisted:
             return user, self.get_login_response(error="You are not whitelisted.",

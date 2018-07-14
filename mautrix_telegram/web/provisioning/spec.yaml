@@ -35,7 +35,7 @@ paths:
           schema:
             $ref: "#/definitions/PortalInfo"
         400:
-          $ref: "#/responses/MissingMXIDError"
+          $ref: "#/responses/BadRequest"
         404:
           description: Unknown portal
           schema:
@@ -127,9 +127,16 @@ paths:
           enum:
           - delete
           - unbridge
+        - name: user_id
+          in: query
+          description: Optional Matrix user ID to check if the user has permissions to do the bridging.
+          required: false
+          type: string
       responses:
         400:
-          $ref: "#/responses/MissingMXIDError"
+          $ref: "#/responses/BadRequest"
+        401:
+          $ref: "#/responses/PermissionError"
         409:
           description: Matrix room or Telegram chat is already bridged
           schema:
@@ -152,8 +159,33 @@ paths:
       summary: Create a new Telegram chat for the given room
       tags: [Bridging]
       responses:
+        200:
+          description: Telegram chat created
+          schema:
+            type: object
+            properties:
+              chat_id:
+                type: integer
         400:
-          $ref: "#/responses/MissingMXIDError"
+          $ref: "#/responses/BadRequest"
+        401:
+          $ref: "#/responses/PermissionError"
+        403:
+          description: "Given user isn't logged in with a real account or doesn't have permission to bridge the room, or the bridge bot is not in the room"
+          schema:
+            type: object
+            title: Error
+            properties:
+              errcode:
+                type: string
+                title: Error code
+                description: A machine-readable error code
+                enum:
+                - not_logged_in_real_account
+                - not_enough_permissions
+                - bot_not_in_room
+              error:
+                $ref: "#/definitions/HumanReadableError"
         409:
           description: Room is already bridged
           schema:
@@ -174,6 +206,34 @@ paths:
           description: The Matrix ID of the room whose bridging status to get
           required: true
           type: string
+        - name: body
+          in: body
+          required: true
+          schema:
+            type: object
+            required: [type]
+            properties:
+              type:
+                description: The type of chat to create
+                type: string
+                example: supergroup
+                enum:
+                - chat
+                - supergroup
+                - channel
+              title:
+                description: Title for the new chat
+                type: string
+                example: Mautrix-Telegram Bridge
+              about:
+                description: About text for the new chat
+                type: string
+                example: Discussion about mautrix-telegram
+        - name: user_id
+          in: query
+          description: Matrix user to create the chat as.
+          required: true
+          type: string
   /portal/{room_id}/disconnect:
     post:
       operationId: disconnect_portal
@@ -183,7 +243,9 @@ paths:
         202:
           description: Room unbridging initiated
         400:
-          $ref: "#/responses/MissingMXIDError"
+          $ref: "#/responses/BadRequest"
+        401:
+          $ref: "#/responses/PermissionError"
         404:
           description: Unknown portal
           schema:
@@ -204,6 +266,11 @@ paths:
           description: The Matrix ID of the room whose bridging status to get
           required: true
           type: string
+        - name: user_id
+          in: query
+          description: Optional Matrix user ID to check if the user has permissions to do the bridging.
+          required: false
+          type: string
 
   /user/{user_id}:
     get:
@@ -216,7 +283,7 @@ paths:
           schema:
             $ref: "#/definitions/UserInfo"
         400:
-          $ref: "#/responses/MissingMXIDError"
+          $ref: "#/responses/BadRequest"
         403:
           $ref: "#/responses/NotWhitelistedError"
         500:
@@ -238,7 +305,7 @@ paths:
           schema:
             $ref: "#/definitions/UserChats"
         400:
-          $ref: "#/responses/MissingMXIDError"
+          $ref: "#/responses/BadRequest"
         403:
           description: User is not logged in or not whitelisted
           schema:
@@ -274,7 +341,7 @@ paths:
           schema:
             $ref: "#/definitions/AuthSuccess"
         400:
-          $ref: "#/responses/MissingMXIDError"
+          $ref: "#/responses/BadRequest"
         401:
           description: Invalid or expired bot token or invalid shared secret
           schema:
@@ -325,7 +392,7 @@ paths:
           schema:
             $ref: "#/definitions/AuthSuccess"
         400:
-          description: Invalid phone number or JSON or missing Matrix ID
+          description: Invalid phone number or JSON
           schema:
             type: object
             title: Error
@@ -337,7 +404,6 @@ paths:
                 example: machine_readable_error
                 enum:
                 - phone_number_invalid
-                - mxid_empty
                 - json_invalid
               error:
                 $ref: "#/definitions/HumanReadableError"
@@ -436,7 +502,7 @@ paths:
           schema:
             $ref: "#/definitions/AuthSuccess"
         400:
-          $ref: "#/responses/MissingMXIDError"
+          $ref: "#/responses/BadRequest"
         401:
           description: Invalid phone code or shared secret
           schema:
@@ -500,7 +566,7 @@ paths:
           schema:
             $ref: "#/definitions/AuthSuccess"
         400:
-          description: Missing password or Matrix ID or invalid JSON
+          description: Missing password or invalid JSON
           schema:
             type: object
             title: Error
@@ -512,7 +578,6 @@ paths:
                 example: <field>_empty
                 enum:
                 - password_empty
-                - mxid_empty
                 - json_invalid
               error:
                 $ref: "#/definitions/HumanReadableError"
@@ -582,8 +647,8 @@ responses:
         username:
           type: string
           description: The Telegram username the user is logged in as.
-  MissingMXIDError:
-    description: Missing Matrix ID or invalid JSON.
+  BadRequest:
+    description: Invalid JSON.
     schema:
       type: object
       title: Error
@@ -593,8 +658,10 @@ responses:
           title: Error code
           description: A machine-readable error code
           enum:
-          - mxid_empty
           - json_invalid
+          - mxid_empty
+          - body_value_missing
+          - body_value_invalid
         error:
           $ref: "#/definitions/HumanReadableError"
   UnknownError:
@@ -608,23 +675,30 @@ responses:
           title: Error code
           description: A machine-readable error code
           enum:
-          - exception
+          - unknown_error
+          - unhandled_error
         error:
           type: string
           title: Error
           description: A human-readable description of the error
           example: Internal server error while <action>.
+  PermissionError:
+    description: The given Matrix user doesn't have the permissions to do that.
+    schema:
+      type: object
+      title: Error
+      properties:
+        errcode:
+          type: string
+          title: Error code
+          description: A machine-readable error code
+          example: not_enough_permissions
           enum:
-          - Internal server error while requesting code.
-          - Internal server error while sending code.
-          - Internal server error while sending password.
-          - Internal server error while sending token.
+          - not_enough_permissions
+        error:
+          $ref: "#/definitions/HumanReadableError"
 
 definitions:
-  HumanReadableError:
-    type: string
-    description: A human-readable description of the error
-    example: A human-readable description of the error
   UserInfo:
     type: object
     properties:
@@ -713,6 +787,10 @@ definitions:
         type: string
         description: The Telegram username the user is logged in as. Only applicable if state=logged-in
 
+  HumanReadableError:
+    type: string
+    description: A human-readable description of the error
+    example: A human-readable description of the error
 
 security:
   - Bearer: []

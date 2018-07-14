@@ -310,6 +310,9 @@ class User(AbstractUser):
 
     @classmethod
     def get_by_mxid(cls, mxid, create=True):
+        if not mxid:
+            raise ValueError("Matrix ID can't be empty")
+
         try:
             return cls.by_mxid[mxid]
         except KeyError:

@@ -19,10 +19,11 @@ import asyncio
 
 from telethon.errors import *
 from telethon.tl.types import ChatForbidden, ChannelForbidden
-from mautrix_appservice import MatrixRequestError
+from mautrix_appservice import MatrixRequestError, IntentAPI
 
 from .. import portal as po, user as u
-from . import command_handler, CommandEvent, SECTION_ADMIN, SECTION_CREATING_PORTALS, SECTION_PORTAL_MANAGEMENT
+from . import (command_handler, CommandEvent,
+               SECTION_ADMIN, SECTION_CREATING_PORTALS, SECTION_PORTAL_MANAGEMENT)
 
 
 @command_handler(needs_admin=True, needs_auth=False, name="set-pl",
@@ -65,7 +66,7 @@ async def invite_link(evt: CommandEvent):
         return await evt.reply("You don't have the permission to create an invite link.")
 
 
-async def _has_access_to(room: str, intent, sender: u.User, event: str, default: int = 50):
+async def user_has_power_level(room: str, intent, sender: u.User, event: str, default: int = 50):
     if sender.is_admin:
         return True
     # Make sure the state store contains the power levels.
@@ -87,7 +88,7 @@ async def _get_portal_and_check_permission(evt: CommandEvent, permission: str,
         that_this = "This" if room_id == evt.room_id else "That"
         return await evt.reply(f"{that_this} is not a portal room."), False
 
-    if not await _has_access_to(portal.mxid, evt.az.intent, evt.sender, permission):
+    if not await user_has_power_level(portal.mxid, evt.az.intent, evt.sender, permission):
         action = action or f"{permission.replace('_', ' ')}s"
         return await evt.reply(f"You do not have the permissions to {action} that portal."), False
     return portal, True
@@ -166,8 +167,8 @@ async def bridge(evt: CommandEvent):
     if portal:
         return await evt.reply(f"{that_this} room is already a portal room.")
 
-    if not await _has_access_to(room_id, evt.az.intent, evt.sender, "bridge"):
-        return await evt.reply("You do not have the permissions to bridge that room.")
+    if not await user_has_power_level(room_id, evt.az.intent, evt.sender, "bridge"):
+        return await evt.reply(f"You do not have the permissions to bridge {that_this} room.")
 
     # The /id bot command provides the prefixed ID, so we assume
     tgid = evt.args[0]
@@ -192,7 +193,7 @@ async def bridge(evt: CommandEvent):
         has_portal_message = (
             "That Telegram chat already has a portal at "
             f"[{portal.alias or portal.mxid}](https://matrix.to/#/{portal.mxid}). ")
-        if not await _has_access_to(portal.mxid, evt.az.intent, evt.sender, "unbridge"):
+        if not await user_has_power_level(portal.mxid, evt.az.intent, evt.sender, "unbridge"):
             return await evt.reply(f"{has_portal_message}"
                                    "Additionally, you do not have the permissions to unbridge "
                                    "that room.")
@@ -291,7 +292,7 @@ async def confirm_bridge(evt: CommandEvent):
     direct = False
 
     portal.mxid = bridge_to_mxid
-    portal.title, portal.about, levels = await _get_initial_state(evt)
+    portal.title, portal.about, levels = await get_initial_state(evt.az.intent, evt.room_id)
     portal.photo_id = ""
     portal.save()
 
@@ -301,8 +302,8 @@ async def confirm_bridge(evt: CommandEvent):
     return await evt.reply("Bridging complete. Portal synchronization should begin momentarily.")
 
 
-async def _get_initial_state(evt: CommandEvent):
-    state = await evt.az.intent.get_room_state(evt.room_id)
+async def get_initial_state(intent: IntentAPI, room_id: str):
+    state = await intent.get_room_state(room_id)
     title = None
     about = None
     levels = None
@@ -336,7 +337,10 @@ async def create(evt: CommandEvent):
     if po.Portal.get_by_mxid(evt.room_id):
         return await evt.reply("This is already a portal room.")
 
-    title, about, levels = await _get_initial_state(evt)
+    if not await user_has_power_level(evt.room_id, evt.az.intent, evt.sender, "bridge"):
+        return await evt.reply("You do not have the permissions to bridge this room.")
+
+    title, about, levels = await get_initial_state(evt.az.intent, evt.room_id)
     if not title:
         return await evt.reply("Please set a title before creating a Telegram chat.")
 

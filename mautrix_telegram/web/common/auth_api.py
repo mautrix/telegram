@@ -21,8 +21,8 @@ import logging
 
 from telethon.errors import *
 
-from mautrix_telegram.commands.auth import enter_password
-from mautrix_telegram.util import format_duration
+from ...commands.auth import enter_password
+from ...util import format_duration
 
 
 class AuthAPI(abc.ABC):
@@ -70,7 +70,7 @@ class AuthAPI(abc.ABC):
         except Exception:
             self.log.exception("Error requesting phone code")
             return self.get_login_response(mxid=user.mxid, state="request", status=500,
-                                           errcode="exception",
+                                           errcode="unknown_error",
                                            error="Internal server error while requesting code.")
 
     async def post_login_token(self, user, token):
@@ -124,7 +124,7 @@ class AuthAPI(abc.ABC):
         except Exception:
             self.log.exception("Error sending phone code")
             return self.get_login_response(mxid=user.mxid, state="code", status=500,
-                                           errcode="exception",
+                                           errcode="unknown_error",
                                            error="Internal server error while sending code.")
 
     async def post_login_password(self, user, password):
@@ -146,5 +146,5 @@ class AuthAPI(abc.ABC):
         except Exception:
             self.log.exception("Error sending password")
             return self.get_login_response(mxid=user.mxid, state="password", status=500,
-                                           errcode="exception",
+                                           errcode="unknown_error",
                                            error="Internal server error while sending password.")

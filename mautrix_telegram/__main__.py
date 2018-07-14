@@ -93,7 +93,7 @@ if config["appservice.public.enabled"]:
     appserv.app.add_subapp(config["appservice.public.prefix"] or "/public", public_website.app)
 
 if config["appservice.provisioning.enabled"]:
-    provisioning_api = ProvisioningAPI(config, loop)
+    provisioning_api = ProvisioningAPI(config, appserv, loop)
     appserv.app.add_subapp(config["appservice.provisioning.prefix"] or "/_matrix/provisioning",
                            provisioning_api.app)
 
