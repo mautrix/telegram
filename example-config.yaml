@@ -11,12 +11,11 @@ homeserver:
 # Application service host/registration related details
 # Changing these values requires regeneration of the registration.
 appservice:
-    # The protocol the homeserver should use when connecting to this appservice.
-    # Usually "http" or "https".
-    protocol: http
+    # The address that the homeserver can use to connect to this appservice.
+    address: http://localhost:8080
 
-    # The hostname and port where the homeserver can find this appservice.
-    hostname: localhost
+    # The hostname and port where this appservice should listen.
+    hostname: 0.0.0.0
     port: 8080
 
     # The full URI to the database.
@@ -33,9 +32,6 @@ appservice:
         # The base URL where the public-facing endpoints are available. The prefix is not added
         # implicitly.
         external: https://example.com/public
-
-    # Whether or not to enable debug messages in the console.
-    debug: true
 
     # The unique ID of this appservice.
     id: telegram
@@ -194,3 +190,44 @@ telegram:
     api_hash: tjyd5yge35lbodk1xwzw2jstp90k55qz
     # (Optional) Create your own bot at https://t.me/BotFather
     bot_token: disabled
+    # Telethon proxy configuration.
+    # You must install PySocks from pip for proxies to work.
+    proxy:
+        # Allowed types: disabled, socks4, socks5, http
+        type: disabled
+        # Proxy IP address and port.
+        address: 127.0.0.1
+        port: 1080
+        # Whether or not to perform DNS resolving remotely.
+        rdns: true
+        # Proxy authentication (optional).
+        username: ""
+        password: ""
+
+# Python logging configuration.
+#
+# See section 16.7.2 of the Python documentation for more info:
+# https://docs.python.org/3.6/library/logging.config.html#configuration-dictionary-schema
+logging:
+    version: 1
+    formatters:
+        precise:
+            format: "[%(asctime)s] [%(levelname)s@%(name)s] %(message)s"
+    handlers:
+        file:
+            class: logging.handlers.RotatingFileHandler
+            formatter: precise
+            filename: ./mautrix-telegram.log
+            maxBytes: 10485760
+            backupCount: 10
+        console:
+            class: logging.StreamHandler
+            formatter: precise
+    loggers:
+        mau:
+            level: DEBUG
+        telethon:
+            level: DEBUG
+    root:
+        level: DEBUG
+        handlers: [file, console]

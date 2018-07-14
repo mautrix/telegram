@@ -144,7 +144,12 @@ class Config(DictWithRecursion):
         copy("homeserver.verify_ssl")
         copy("homeserver.domain")
 
-        copy("appservice.protocol")
+        if "appservice.protocol" in self and "appservice.address" not in self:
+            protocol, hostname, port = (self["appservice.protocol"], self["appservice.hostname"],
+                                        self["appservice.port"])
+            base["appservice.address"] = f"{protocol}://{hostname}:{port}"
+        else:
+            copy("appservice.address")
         copy("appservice.hostname")
         copy("appservice.port")
 
@@ -153,8 +158,6 @@ class Config(DictWithRecursion):
         copy("appservice.public.enabled")
         copy("appservice.public.prefix")
         copy("appservice.public.external")
-
-        copy("appservice.debug")
 
         copy("appservice.id")
         copy("appservice.bot_username")
@@ -217,6 +220,20 @@ class Config(DictWithRecursion):
         copy("telegram.api_id")
         copy("telegram.api_hash")
         copy("telegram.bot_token")
+        copy("telegram.proxy.type")
+        copy("telegram.proxy.address")
+        copy("telegram.proxy.port")
+        copy("telegram.proxy.rdns")
+        copy("telegram.proxy.username")
+        copy("telegram.proxy.password")
+
+        if "appservice.debug" in self and "logging" not in self:
+            level = "DEBUG" if self["appservice.debug"] else "INFO"
+            base["logging.root.level"] = level
+            base["logging.loggers.mau.level"] = level
+            base["logging.loggers.telethon.level"] = level
+        else:
+            copy("logging")
 
         self._data = base._data
         self.save()
@@ -251,10 +268,8 @@ class Config(DictWithRecursion):
         self.set("appservice.as_token", self._new_token())
         self.set("appservice.hs_token", self._new_token())
 
-        url = (f"{self['appservice.protocol']}://"
-               f"{self['appservice.hostname']}:{self['appservice.port']}")
         self._registration = {
-            "id": self.get("appservice.id", "telegram"),
+            "id": self["appservice.id"] or "telegram",
             "as_token": self["appservice.as_token"],
             "hs_token": self["appservice.hs_token"],
             "namespaces": {
@@ -267,7 +282,7 @@ class Config(DictWithRecursion):
                     "regex": f"#{alias_format}:{homeserver}"
                 }]
             },
-            "url": url,
+            "url": self["appservice.address"],
             "sender_localpart": self["appservice.bot_username"],
             "rate_limited": False
         }

@@ -17,6 +17,7 @@
 import argparse
 import sys
 import logging
+import logging.config
 import asyncio
 
 import sqlalchemy as sql
@@ -29,6 +30,7 @@ from .base import Base
 from .config import Config
 from .matrix import MatrixHandler
 
+from . import __version__
 from .db import init as init_db
 from .abstract_user import init as init_abstract_user
 from .user import init as init_user, User
@@ -39,12 +41,6 @@ from .formatter import init as init_formatter
 from .public import PublicBridgeWebsite
 from .context import Context
 from .sqlstatestore import SQLStateStore
-
-log = logging.getLogger("mau")
-time_formatter = logging.Formatter("[%(asctime)s] [%(levelname)s@%(name)s] %(message)s")
-handler = logging.StreamHandler()
-handler.setFormatter(time_formatter)
-log.addHandler(handler)
 
 parser = argparse.ArgumentParser(
     description="A Matrix-Telegram puppeting bridge.",
@@ -70,14 +66,11 @@ if args.generate_registration:
     print(f"Registration generated and saved to {config.registration_path}")
     sys.exit(0)
 
-if config["appservice.debug"]:
-    telethon_log = logging.getLogger("telethon")
-    telethon_log.addHandler(handler)
-    telethon_log.setLevel(logging.DEBUG)
-    log.setLevel(logging.DEBUG)
-    log.debug("Debug messages enabled.")
+logging.config.dictConfig(config["logging"])
+log = logging.getLogger("mau.init")
+log.debug(f"Initializing mautrix-telegram {__version__}")
 
-db_engine = sql.create_engine(config.get("appservice.database", "sqlite:///mautrix-telegram.db"))
+db_engine = sql.create_engine(config["appservice.database"] or "sqlite:///mautrix-telegram.db")
 db_factory = orm.sessionmaker(bind=db_engine)
 db_session = orm.scoping.scoped_session(db_factory)
 Base.metadata.bind = db_engine
@@ -114,9 +107,13 @@ with appserv.run(config["appservice.hostname"], config["appservice.port"]) as st
         startup_actions.append(context.bot.start())
 
     try:
+        log.debug("Initialization complete, running startup actions")
         loop.run_until_complete(asyncio.gather(*startup_actions, loop=loop))
+        log.debug("Startup actions complete, now running forever")
         loop.run_forever()
     except KeyboardInterrupt:
-        for user in User.by_tgid.values():
-            user.stop()
+        log.debug("Keyboard interrupt received, stopping clients")
+        loop.run_until_complete(
+            asyncio.gather(*[user.stop() for user in User.by_tgid.values()], loop=loop))
+        log.debug("Clients stopped, shutting down")
         sys.exit(0)

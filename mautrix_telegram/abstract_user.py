@@ -50,6 +50,23 @@ class AbstractUser:
     def connected(self):
         return self.client and self.client.is_connected()
 
+    @property
+    def _proxy_settings(self):
+        type = config["telegram.proxy.type"].lower()
+        if type == "disabled":
+            return None
+        elif type == "socks4":
+            type = 1
+        elif type == "socks5":
+            type = 2
+        elif type == "http":
+            type = 3
+
+        return (type,
+                config["telegram.proxy.address"], config["telegram.proxy.port"],
+                config["telegram.proxy.rdns"],
+                config["telegram.proxy.username"], config["telegram.proxy.password"])
+
     def _init_client(self):
         self.log.debug(f"Initializing client for {self.name}")
         device = f"{platform.system()} {platform.release()}"
@@ -62,7 +79,8 @@ class AbstractUser:
                                             app_version=__version__,
                                             system_version=sysversion,
                                             device_model=device,
-                                            timeout=120)
+                                            timeout=120,
+                                            proxy=self._proxy_settings)
         self.client.add_event_handler(self._update_catch)
 
     async def update(self, update):
@@ -95,7 +113,9 @@ class AbstractUser:
         return self.client and await self.client.is_user_authorized()
 
     async def has_full_access(self, allow_bot=False):
-        return self.puppet_whitelisted and (not self.is_bot or allow_bot) and await self.is_logged_in()
+        return (self.puppet_whitelisted
+                and (not self.is_bot or allow_bot)
+                and await self.is_logged_in())
 
     async def start(self, delete_unless_authenticated=False):
         if not self.client:
@@ -118,8 +138,8 @@ class AbstractUser:
             await self.start(delete_unless_authenticated=not even_if_no_session)
         return self
 
-    def stop(self):
-        self.client.disconnect()
+    async def stop(self):
+        await self.client.disconnect()
         self.client = None
 
     # region Telegram update handling
