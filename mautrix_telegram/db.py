@@ -90,9 +90,9 @@ class RoomState(Base):
     _power_levels_text = Column("power_levels", Text, nullable=True)
     _power_levels_json = None
 
-#    def __init__(self, *args, **kwargs):
-#        super().__init__(*args, **kwargs)
-#        self._power_levels_json = None
+    @property
+    def has_power_levels(self):
+        return bool(self._power_levels_text)
 
     @property
     def power_levels(self):
