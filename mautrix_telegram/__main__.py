@@ -85,17 +85,20 @@ appserv = AppService(config["homeserver.address"], config["homeserver.domain"],
                      config["appservice.as_token"], config["appservice.hs_token"],
                      config["appservice.bot_username"], log="mau.as", loop=loop,
                      verify_ssl=config["homeserver.verify_ssl"])
-
-context = Context(appserv, db_session, config, loop, None, None, session_container)
+public_website = None
+provisioning_api = None
 
 if config["appservice.public.enabled"]:
-    public = PublicBridgeWebsite(loop)
-    appserv.app.add_subapp(config["appservice.public.prefix"] or "/public", public.app)
+    public_website = PublicBridgeWebsite(loop)
+    appserv.app.add_subapp(config["appservice.public.prefix"] or "/public", public_website.app)
 
 if config["appservice.provisioning.enabled"]:
     provisioning_api = ProvisioningAPI(config, loop)
     appserv.app.add_subapp(config["appservice.provisioning.prefix"] or "/_matrix/provisioning",
                            provisioning_api.app)
+
+context = Context(appserv, db_session, config, loop, None, None, session_container, public_website,
+                  provisioning_api)
 
 with appserv.run(config["appservice.hostname"], config["appservice.port"]) as start:
     init_db(db_session)

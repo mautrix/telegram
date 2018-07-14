@@ -114,7 +114,7 @@ async def login(evt: CommandEvent):
 
     if evt.config["appservice.public.enabled"]:
         prefix = evt.config["appservice.public.external"]
-        url = f"{prefix}/login?mxid={evt.sender.mxid}"
+        url = f"{prefix}/login?token={evt.public_website.make_token(evt.sender.mxid)}"
         if evt.config.get("bridge.allow_matrix_login", True):
             return await evt.reply(
                 "This bridge instance allows you to log in inside or outside Matrix.\n\n"

@@ -76,6 +76,9 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 				management command first.
 			</p>
 		% endif
+	% elif state == "invalid-token":
+		<h1>Invalid or expired token</h1>
+		<div class="error">Please ask the bridge bot for a new login link.</div>
 	% else:
 		<h1>Log in to Telegram</h1>
 	% if error:
@@ -87,8 +90,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 		<form method="post">
 			<fieldset>
 				<label for="mxid">Matrix ID</label>
-				<input type="text" id="mxid" name="mxid" placeholder="Enter Matrix ID"
-					   value="${mxid}"/>
+				<input type="text" id="mxid" name="mxid" disabled value="${mxid}"/>
 				% if state == "request":
 					<label for="value">Phone number</label>
 					<input type="tel" id="value" name="phone" placeholder="Enter phone number"/>
@@ -96,9 +98,9 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 					<button class="button-clear" type="button" onclick="switchToBotLogin()">
 						Use bot token
 					</button>
-				% elif state == "token":
+				% elif state == "bot_token":
 					<label for="value">Bot token</label>
-					<input type="text" id="value" name="token" placeholder="Enter bot API token"/>
+					<input type="text" id="value" name="bot_token" placeholder="Enter bot API token"/>
 					<button type="submit">Sign in</button>
 				% elif state == "code":
 					<label for="value">Phone code</label>

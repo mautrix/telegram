@@ -18,7 +18,11 @@ from aiohttp import web
 from mako.template import Template
 import pkg_resources
 import logging
+import random
+import string
+import time
 
+from ...util import sign_token, verify_token
 from ...user import User
 from ..common import AuthAPI
 
@@ -28,6 +32,8 @@ class PublicBridgeWebsite(AuthAPI):
 
     def __init__(self, loop):
         super().__init__(loop)
+        self.secret_key = "".join(
+            random.choice(string.ascii_lowercase + string.digits) for _ in range(64))
 
         self.login = Template(
             pkg_resources.resource_string("mautrix_telegram", "web/public/login.html.mako"))
@@ -38,10 +44,24 @@ class PublicBridgeWebsite(AuthAPI):
         self.app.router.add_static("/", pkg_resources.resource_filename("mautrix_telegram",
                                                                         "web/public/"))
 
-    async def get_login(self, request):
-        state = "token" if request.rel_url.query.get("mode", "") == "bot" else "request"
+    def make_token(self, mxid, expires_in=900):
+        return sign_token(self.secret_key, {
+            "mxid": mxid,
+            "expiry": int(time.time()) + expires_in,
+        })
 
-        mxid = request.rel_url.query.get("mxid", None)
+    def verify_token(self, token):
+        token = verify_token(self.secret_key, token)
+        if token and token.get("expiry", 0) > int(time.time()):
+            return token.get("mxid", None)
+        return None
+
+    async def get_login(self, request):
+        state = "bot_token" if request.rel_url.query.get("mode", "") == "bot" else "request"
+
+        mxid = self.verify_token(request.rel_url.query.get("token", None))
+        if not mxid:
+            return self.get_login_response(status=401, state="invalid-token")
         user = User.get_by_mxid(mxid, create=False) if mxid else None
 
         if not user:
@@ -62,11 +82,13 @@ class PublicBridgeWebsite(AuthAPI):
                                                    message=message, mxid=mxid))
 
     async def post_login(self, request):
-        data = await request.post()
-        if "mxid" not in data:
-            return self.get_login_response(error="Please enter your Matrix ID.", status=400)
+        mxid = self.verify_token(request.rel_url.query.get("token", None))
+        if not mxid:
+            return self.get_login_response(status=401, state="invalid-token")
 
-        user = await User.get_by_mxid(data["mxid"]).ensure_started(even_if_no_session=True)
+        data = await request.post()
+
+        user = await User.get_by_mxid(mxid).ensure_started(even_if_no_session=True)
         if not user.puppet_whitelisted:
             return self.get_login_response(mxid=user.mxid, error="You are not whitelisted.",
                                            status=403)
@@ -77,8 +99,8 @@ class PublicBridgeWebsite(AuthAPI):
 
         if "phone" in data:
             return await self.post_login_phone(user, data["phone"])
-        elif "token" in data:
-            return await self.post_login_token(user, data["token"])
+        elif "bot_token" in data:
+            return await self.post_login_token(user, data["bot_token"])
         elif "code" in data:
             resp = await self.post_login_code(user, data["code"],
                                               password_in_data="password" in data)
