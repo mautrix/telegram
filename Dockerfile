@@ -1,11 +1,14 @@
-FROM docker.io/alpine:3.7
+FROM docker.io/alpine:3.8
 
 ENV UID=1337 \
-    GID=1337
+    GID=1337 \
+    FFMPEG_BINARY=/usr/bin/ffmpeg
 
-COPY . /opt/mautrixtelegram
+COPY . /opt/mautrix-telegram
+WORKDIR /opt/mautrix-telegram
 RUN apk add --no-cache \
       python3-dev \
+      build-base \
       py3-virtualenv \
       py3-pillow \
       py3-aiohttp \
@@ -14,17 +17,12 @@ RUN apk add --no-cache \
       py3-numpy \
       py3-asn1crypto \
       py3-sqlalchemy \
-      build-base \
+      py3-markdown \
       ffmpeg \
-      bash \
       ca-certificates \
       su-exec \
-      s6 \
- && cd /opt/mautrixtelegram \
- && cp -r docker/root/* / \
- && rm docker -rf \
  && pip3 install -r requirements.txt -r optional-requirements.txt
 
 VOLUME /data
 
-CMD ["/bin/s6-svscan", "/etc/s6.d"]
+CMD ["/opt/mautrix-telegram/run.sh"]
