@@ -25,4 +25,4 @@ RUN apk add --no-cache \
 
 VOLUME /data
 
-CMD ["/opt/mautrix-telegram/run.sh"]
+CMD ["/opt/mautrix-telegram/docker-run.sh"]
