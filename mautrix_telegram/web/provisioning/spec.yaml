@@ -56,6 +56,52 @@ paths:
           description: The Matrix ID of the room whose bridging status to get
           required: true
           type: string
+          pattern: "![^/]+"
+  /portal/{chat_id}:
+    get:
+      operationId: get_portal_by_tgid
+      summary: Get the bridging status and info of the connected Telegram chat
+      tags: [Bridging]
+      responses:
+        200:
+          description: Chat is bridged
+          schema:
+            $ref: "#/definitions/PortalInfo"
+        400:
+          description: Invalid Telegram chat ID
+          schema:
+            type: object
+            title: Error
+            properties:
+              errcode:
+                type: string
+                title: Error code
+                description: A machine-readable error code
+                enum:
+                - tgid_invalid
+              error:
+                $ref: "#/definitions/HumanReadableError"
+        404:
+          description: Unknown portal
+          schema:
+            type: object
+            title: Error
+            properties:
+              errcode:
+                type: string
+                title: Error code
+                description: A machine-readable error code
+                enum:
+                - portal_not_found
+              error:
+                $ref: "#/definitions/HumanReadableError"
+      parameters:
+        - name: chat_id
+          in: path
+          description: The Matrix ID of the room whose bridging status to get
+          required: true
+          type: integer
+          pattern: "-[0-9]+"
   /portal/{room_id}/connect/{chat_id}:
     post:
       operationId: connect_portal
@@ -72,12 +118,20 @@ paths:
           description: The ID of the Telegram chat to connect
           required: true
           type: integer
-          format: int32
+          pattern: "-[0-9]+"
+        - name: force
+          in: query
+          description: Set to force bridging by unbridging or deleting existing portal rooms.
+          required: false
+          type: string
+          enum:
+          - delete
+          - unbridge
       responses:
         400:
           $ref: "#/responses/MissingMXIDError"
         409:
-          description: Room is already bridged
+          description: Matrix room or Telegram chat is already bridged
           schema:
             type: object
             title: Error
@@ -86,8 +140,10 @@ paths:
                 type: string
                 title: Error code
                 description: A machine-readable error code
+                example: <room|chat>_already_bridged
                 enum:
                 - room_already_bridged
+                - chat_already_bridged
               error:
                 $ref: "#/definitions/HumanReadableError"
   /portal/{room_id}/create:
@@ -156,26 +212,13 @@ paths:
       tags: [User info]
       responses:
         200:
-          description: User is logged in
+          description: User found
           schema:
-            $ref: "#/definitions/AuthInfo"
+            $ref: "#/definitions/UserInfo"
         400:
           $ref: "#/responses/MissingMXIDError"
         403:
-          description: User is not logged in or not whitelisted
-          schema:
-            type: object
-            title: Error
-            properties:
-              errcode:
-                type: string
-                title: Error code
-                description: A machine-readable error code
-                enum:
-                - not_logged_in
-                - mxid_not_whitelisted
-              error:
-                $ref: "#/definitions/HumanReadableError"
+          $ref: "#/responses/NotWhitelistedError"
         500:
           $ref: "#/responses/UnknownError"
       parameters:
@@ -582,24 +625,42 @@ definitions:
     type: string
     description: A human-readable description of the error
     example: A human-readable description of the error
-  AuthInfo:
+  UserInfo:
     type: object
     properties:
-      username:
+      mxid:
         type: string
-        example: username
-      first_name:
+        example: "@usern:example.com"
+      permissions:
         type: string
-        example: Usern
-      last_name:
-        type: string
-        example: A.
-      phone:
-        type: string
-        example: +123456789
-      is_bot:
-        type: boolean
-        example: false
+        example: user
+        enum:
+        - none
+        - relaybot
+        - user
+        - full
+        - admin
+      telegram:
+        type: object
+        properties:
+          id:
+            type: integer
+            example: 123456789
+          username:
+            type: string
+            example: username
+          first_name:
+            type: string
+            example: Usern
+          last_name:
+            type: string
+            example: A.
+          phone:
+            type: string
+            example: +123456789
+          is_bot:
+            type: boolean
+            example: false
   UserChats:
     type: array
     items:

@@ -250,7 +250,7 @@ class Config(DictWithRecursion):
         puppeting = level == "full" or admin
         user = level == "user" or puppeting
         relaybot = level == "relaybot" or user
-        return relaybot, user, puppeting, admin
+        return relaybot, user, puppeting, admin, level
 
     def get_permissions(self, mxid):
         permissions = self["bridge.permissions"] or {}

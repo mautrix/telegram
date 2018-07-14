@@ -55,7 +55,8 @@ class User(AbstractUser):
         (self.relaybot_whitelisted,
          self.whitelisted,
          self.puppet_whitelisted,
-         self.is_admin) = config.get_permissions(self.mxid)
+         self.is_admin,
+         self.permissions) = config.get_permissions(self.mxid)
 
         self.by_mxid[mxid] = self
         if tgid:

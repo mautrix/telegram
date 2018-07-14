@@ -36,14 +36,15 @@ class ProvisioningAPI(AuthAPI):
         self.app = web.Application(loop=loop, middlewares=[self.error_middleware])
 
         portal_prefix = "/portal/{mxid:![^/]+}"
-        self.app.router.add_route("GET", f"{portal_prefix}", self.get_portal)
+        self.app.router.add_route("GET", f"{portal_prefix}", self.get_portal_by_mxid)
+        self.app.router.add_route("GET", "/portal/{tgid:-[0-9]+}", self.get_portal_by_tgid)
         # self.app.router.add_route("POST", portal_prefix + "/connect/{chat_id:[0-9]+}",
         #                          self.connect_chat)
         # self.app.router.add_route("POST", f"{portal_prefix}/create", self.create_chat)
         # self.app.router.add_route("POST", f"{portal_prefix}/disconnect", self.disconnect_chat)
 
         user_prefix = "/user/{mxid:@[^:]*:[^/]+}"
-        self.app.router.add_route("GET", f"{user_prefix}", self.get_me)
+        self.app.router.add_route("GET", f"{user_prefix}", self.get_user_info)
         self.app.router.add_route("GET", f"{user_prefix}/chats", self.get_chats)
 
         self.app.router.add_route("POST", f"{user_prefix}/send_bot_token", self.send_bot_token)
@@ -51,11 +52,11 @@ class ProvisioningAPI(AuthAPI):
         self.app.router.add_route("POST", f"{user_prefix}/send_code", self.send_code)
         self.app.router.add_route("POST", f"{user_prefix}/send_password", self.send_password)
 
-    async def get_portal(self, request: web.Request) -> web.Response:
+    async def get_portal_by_mxid(self, request: web.Request) -> web.Response:
         mxid = request.match_info["mxid"]
         portal = Portal.get_by_mxid(mxid)
         if not portal:
-            return self.get_error_response(404, "room_not_found",
+            return self.get_error_response(404, "portal_not_found",
                                            "Portal with given Matrix ID not found.")
         return web.json_response({
             "mxid": portal.mxid,
@@ -67,22 +68,53 @@ class ProvisioningAPI(AuthAPI):
             "megagroup": portal.megagroup,
         })
 
-    async def get_me(self, request: web.Request) -> web.Response:
-        data, user, err = await self.get_user_request_info(request, require_logged_in=True)
+    async def get_portal_by_tgid(self, request: web.Request) -> web.Response:
+        try:
+            tgid = int(request.match_info["tgid"])
+        except ValueError:
+            return self.get_error_response(400, "tgid_invalid",
+                                           "Given chat ID is not an integer.")
+
+        portal = Portal.get_by_tgid(tgid)
+        if not portal:
+            return self.get_error_response(404, "portal_not_found",
+                                           "Portal to given Telegram chat not found.")
+        return web.json_response({
+            "mxid": portal.mxid,
+            "chat_id": get_peer_id(portal.peer),
+            "peer_type": portal.peer_type,
+            "title": portal.title,
+            "about": portal.about,
+            "username": portal.username,
+            "megagroup": portal.megagroup,
+        })
+
+    async def get_user_info(self, request: web.Request) -> web.Response:
+        data, user, err = await self.get_user_request_info(request, expect_logged_in=None,
+                                                           require_puppeting=False)
         if err is not None:
             return err
 
-        me = await user.client.get_me()
+        user_data = None
+        if await user.is_logged_in():
+            me = await user.client.get_me()
+            await user.update_info(me)
+            user_data = {
+                "id": user.tgid,
+                "username": user.username,
+                "first_name": me.first_name,
+                "last_name": me.last_name,
+                "phone": me.phone,
+                "is_bot": user.is_bot,
+            }
         return web.json_response({
-            "username": me.username,
-            "first_name": me.first_name,
-            "last_name": me.last_name,
-            "phone": me.phone,
-            "is_bot": me.bot,
+            "telegram": user_data,
+            "mxid": user.mxid,
+            "permissions": user.permissions,
         })
 
     async def get_chats(self, request: web.Request) -> web.Response:
-        data, user, err = await self.get_user_request_info(request, require_logged_in=True)
+        data, user, err = await self.get_user_request_info(request, expect_logged_in=True)
         if err is not None:
             return err
 
@@ -172,23 +204,27 @@ class ProvisioningAPI(AuthAPI):
         except json.JSONDecodeError:
             return None
 
-    async def get_user(self, mxid: str, require_logged_in: bool = False
+    async def get_user(self, mxid: str, expect_logged_in: Optional[bool] = False,
+                       require_puppeting: bool = True,
                        ) -> Tuple[Optional[User], Optional[web.Response]]:
         user = await User.get_by_mxid(mxid).ensure_started(even_if_no_session=True)
-        if not user.puppet_whitelisted:
+        if require_puppeting and not user.puppet_whitelisted:
             return user, self.get_login_response(error="You are not whitelisted.",
                                                  errcode="mxid_not_whitelisted", status=403)
-        logged_in = await user.is_logged_in()
-        if not require_logged_in and logged_in:
-            return user, self.get_login_response(username=user.username, status=409,
-                                                 error="You are already logged in.",
-                                                 errcode="already_logged_in")
-        elif require_logged_in and not logged_in:
-            return user, self.get_login_response(status=403, error="You are not logged in.",
-                                                 errcode="not_logged_in")
+        if expect_logged_in is not None:
+            logged_in = await user.is_logged_in()
+            if not expect_logged_in and logged_in:
+                return user, self.get_login_response(username=user.username, status=409,
+                                                     error="You are already logged in.",
+                                                     errcode="already_logged_in")
+            elif expect_logged_in and not logged_in:
+                return user, self.get_login_response(status=403, error="You are not logged in.",
+                                                     errcode="not_logged_in")
         return user, None
 
-    async def get_user_request_info(self, request: web.Request, require_logged_in: bool = False
+    async def get_user_request_info(self, request: web.Request,
+                                    expect_logged_in: Optional[bool] = False,
+                                    require_puppeting: bool = False,
                                     ) -> (Tuple[Optional[dict],
                                                 Optional[User],
                                                 Optional[web.Response]]):
@@ -206,6 +242,6 @@ class ProvisioningAPI(AuthAPI):
                                                            errcode="json_invalid", status=400)
 
         mxid = request.match_info["mxid"]
-        user, err = await self.get_user(mxid, require_logged_in)
+        user, err = await self.get_user(mxid, expect_logged_in, require_puppeting)
 
         return data, user, err
