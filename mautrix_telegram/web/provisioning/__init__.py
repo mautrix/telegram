@@ -19,7 +19,7 @@ from typing import Tuple, Optional, Callable, Awaitable
 import logging
 import json
 
-from telethon.utils import get_peer_id
+from telethon.utils import get_peer_id, resolve_id
 
 from ...user import User
 from ...portal import Portal
@@ -70,11 +70,10 @@ class ProvisioningAPI(AuthAPI):
 
     async def get_portal_by_tgid(self, request: web.Request) -> web.Response:
         try:
-            tgid = int(request.match_info["tgid"])
+            tgid, _ = resolve_id(int(request.match_info["tgid"]))
         except ValueError:
             return self.get_error_response(400, "tgid_invalid",
-                                           "Given chat ID is not an integer.")
-
+                                           "Given chat ID is not valid.")
         portal = Portal.get_by_tgid(tgid)
         if not portal:
             return self.get_error_response(404, "portal_not_found",
