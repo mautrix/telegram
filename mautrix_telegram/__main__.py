@@ -40,6 +40,7 @@ from .puppet import init as init_puppet
 from .formatter import init as init_formatter
 from .public import PublicBridgeWebsite
 from .context import Context
+from .sqlstatestore import SQLStateStore
 
 parser = argparse.ArgumentParser(
     description="A Matrix-Telegram puppeting bridge.",
@@ -80,10 +81,11 @@ telethon_session_container = AlchemySessionContainer(engine=db_engine, session=d
 
 loop = asyncio.get_event_loop()
 
+state_store = SQLStateStore(db_session)
 appserv = AppService(config["homeserver.address"], config["homeserver.domain"],
                      config["appservice.as_token"], config["appservice.hs_token"],
                      config["appservice.bot_username"], log="mau.as", loop=loop,
-                     verify_ssl=config["homeserver.verify_ssl"])
+                     verify_ssl=config["homeserver.verify_ssl"], state_store=state_store)
 
 context = Context(appserv, db_session, config, loop, None, None, telethon_session_container)
 

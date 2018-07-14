@@ -36,7 +36,7 @@ class Puppet:
     cache = {}
 
     def __init__(self, id=None, username=None, displayname=None, displayname_source=None,
-                 photo_id=None, is_bot=None, db_instance=None):
+                 photo_id=None, is_bot=None, is_registered=False, db_instance=None):
         self.id = id
         self.mxid = self.get_mxid_from_id(self.id)
 
@@ -45,6 +45,7 @@ class Puppet:
         self.displayname_source = displayname_source
         self.photo_id = photo_id
         self.is_bot = is_bot
+        self.is_registered = is_registered
         self._db_instance = db_instance
 
         self.intent = self.az.intent.user(self.mxid)
@@ -67,13 +68,13 @@ class Puppet:
     def new_db_instance(self):
         return DBPuppet(id=self.id, username=self.username, displayname=self.displayname,
                         displayname_source=self.displayname_source, photo_id=self.photo_id,
-                        is_bot=self.is_bot)
+                        is_bot=self.is_bot, matrix_registered=self.is_registered)
 
     @classmethod
     def from_db(cls, db_puppet):
         return Puppet(db_puppet.id, db_puppet.username, db_puppet.displayname,
                       db_puppet.displayname_source, db_puppet.photo_id, db_puppet.is_bot,
-                      db_instance=db_puppet)
+                      db_puppet.matrix_registered, db_instance=db_puppet)
 
     def save(self):
         self.db_instance.username = self.username
@@ -81,6 +82,7 @@ class Puppet:
         self.db_instance.displayname_source = self.displayname_source
         self.db_instance.photo_id = self.photo_id
         self.db_instance.is_bot = self.is_bot
+        self.db_instance.matrix_registered = self.is_registered
         self.db.commit()
 
     def similarity(self, query):
