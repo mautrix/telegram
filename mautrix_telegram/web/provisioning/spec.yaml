@@ -4,16 +4,12 @@ info:
   title: mautrix-telegram provisioning
   version: 0.3.0
   description: The provisioning API for mautrix-telegram.
-  contact:
-    name: Tulir Asokan
-    email: tulir@maunium.net
-    url: https://maunium.net
   license:
     name: AGPLv3
     url: https://github.com/tulir/mautrix-telegram/blob/master/LICENSE
 
 externalDocs:
-  description: Provisioning API wiki page on GitHub.
+  description: Provisioning API wiki page on GitHub
   url: https://github.com/tulir/mautrix-telegram/wiki/Provisioning-API
 
 basePath: /_matrix/provision
@@ -23,14 +19,141 @@ consumes: [application/json]
 produces: [application/json]
 
 tags:
+- name: User info
 - name: Authentication
+- name: Bridging
 
 paths:
-  /auth/{mxid}/get_me:
+  /portal/{room_id}:
+    get:
+      operationId: get_portal
+      summary: Get the bridging status and info of the connected Telegram chat
+      tags: [Bridging]
+      responses:
+        200:
+          description: Room is bridged
+          schema:
+            $ref: "#/definitions/PortalInfo"
+        400:
+          $ref: "#/responses/MissingMXIDError"
+        404:
+          description: Unknown portal
+          schema:
+            type: object
+            title: Error
+            properties:
+              errcode:
+                type: string
+                title: Error code
+                description: A machine-readable error code
+                enum:
+                - portal_not_found
+              error:
+                $ref: "#/definitions/HumanReadableError"
+      parameters:
+        - name: room_id
+          in: path
+          description: The Matrix ID of the room whose bridging status to get
+          required: true
+          type: string
+  /portal/{room_id}/connect/{chat_id}:
+    post:
+      operationId: connect_portal
+      summary: Connect an existing Telegram chat to the given room
+      tags: [Bridging]
+      parameters:
+        - name: room_id
+          in: path
+          description: The Matrix ID of the room to which the Telegram chat should be connected
+          required: true
+          type: string
+        - name: chat_id
+          in: path
+          description: The ID of the Telegram chat to connect
+          required: true
+          type: integer
+          format: int32
+      responses:
+        400:
+          $ref: "#/responses/MissingMXIDError"
+        409:
+          description: Room is already bridged
+          schema:
+            type: object
+            title: Error
+            properties:
+              errcode:
+                type: string
+                title: Error code
+                description: A machine-readable error code
+                enum:
+                - room_already_bridged
+              error:
+                $ref: "#/definitions/HumanReadableError"
+  /portal/{room_id}/create:
+    post:
+      operationId: create_portal
+      summary: Create a new Telegram chat for the given room
+      tags: [Bridging]
+      responses:
+        400:
+          $ref: "#/responses/MissingMXIDError"
+        409:
+          description: Room is already bridged
+          schema:
+            type: object
+            title: Error
+            properties:
+              errcode:
+                type: string
+                title: Error code
+                description: A machine-readable error code
+                enum:
+                - room_already_bridged
+              error:
+                $ref: "#/definitions/HumanReadableError"
+      parameters:
+        - name: room_id
+          in: path
+          description: The Matrix ID of the room whose bridging status to get
+          required: true
+          type: string
+  /portal/{room_id}/disconnect:
+    post:
+      operationId: disconnect_portal
+      summary: Disconnect the Telegram chat from the room
+      tags: [Bridging]
+      responses:
+        202:
+          description: Room unbridging initiated
+        400:
+          $ref: "#/responses/MissingMXIDError"
+        404:
+          description: Unknown portal
+          schema:
+            type: object
+            title: Error
+            properties:
+              errcode:
+                type: string
+                title: Error code
+                description: A machine-readable error code
+                enum:
+                - portal_not_found
+              error:
+                $ref: "#/definitions/HumanReadableError"
+      parameters:
+        - name: room_id
+          in: path
+          description: The Matrix ID of the room whose bridging status to get
+          required: true
+          type: string
+
+  /user/{user_id}:
     get:
       operationId: get_me
       summary: Get the info of the Telegram user the given Matrix user is logged in as
-      tags: [Authentication]
+      tags: [User info]
       responses:
         200:
           description: User is logged in
@@ -56,22 +179,48 @@ paths:
         500:
           $ref: "#/responses/UnknownError"
       parameters:
-        - name: mxid
+        - name: user_id
           in: path
           description: The Matrix ID of the user who to log in as
           required: true
           type: string
-        - name: body
-          in: body
-          required: true
+  /user/{user_id}/chats:
+    get:
+      operationId: get_chats
+      summary: Get the list of Telegram chats the given Matrix user has access to
+      tags: [User info]
+      responses:
+        200:
+          description: User is logged in
+          schema:
+            $ref: "#/definitions/UserChats"
+        400:
+          $ref: "#/responses/MissingMXIDError"
+        403:
+          description: User is not logged in or not whitelisted
           schema:
             type: object
+            title: Error
             properties:
-              token:
+              errcode:
                 type: string
-                description: The access token of the bot to log in as
-                example: "297900271:IXjeGEcAN61zHnjPgkWnYWyvVp9K4ulHBEv"
-  /auth/{mxid}/send_bot_token:
+                title: Error code
+                description: A machine-readable error code
+                enum:
+                - not_logged_in
+                - mxid_not_whitelisted
+              error:
+                $ref: "#/definitions/HumanReadableError"
+        500:
+          $ref: "#/responses/UnknownError"
+      parameters:
+        - name: user_id
+          in: path
+          description: The Matrix ID of the user who to log in as
+          required: true
+          type: string
+
+  /user/{user_id}/login/bot_token:
     post:
       operationId: post_bot_token
       summary: Log in with a bot token
@@ -107,7 +256,7 @@ paths:
         500:
           $ref: "#/responses/UnknownError"
       parameters:
-        - name: mxid
+        - name: user_id
           in: path
           description: The Matrix ID of the user who to log in as
           required: true
@@ -122,7 +271,7 @@ paths:
                 type: string
                 description: The access token of the bot to log in as
                 example: "297900271:IXjeGEcAN61zHnjPgkWnYWyvVp9K4ulHBEv"
-  /auth/{mxid}/request_code:
+  /user/{user_id}/login/request_code:
     post:
       operationId: post_login_phone
       summary: Request a phone code from Telegram
@@ -214,7 +363,7 @@ paths:
         500:
           $ref: "#/responses/UnknownError"
       parameters:
-        - name: mxid
+        - name: user_id
           in: path
           description: The Matrix ID of the user who to log in as
           required: true
@@ -229,7 +378,7 @@ paths:
                 type: string
                 description: The phone number to log in as.
                 example: "+123456789"
-  /auth/{mxid}/send_code:
+  /user/{user_id}/login/send_code:
     post:
       operationId: post_login_code
       summary: Send the login code
@@ -281,7 +430,7 @@ paths:
         500:
           $ref: "#/responses/UnknownError"
       parameters:
-        - name: mxid
+        - name: user_id
           in: path
           description: The Matrix ID of the user who to log in as
           required: true
@@ -297,7 +446,7 @@ paths:
                 description: The phone code from Telegram.
                 format: int32
                 example: 123456
-  /auth/{mxid}/send_password:
+  /user/{user_id}/login/send_password:
     post:
       operationId: post_login_password
       summary: Send the two-factor auth password
@@ -346,7 +495,7 @@ paths:
         500:
           $ref: "#/responses/UnknownError"
       parameters:
-        - name: mxid
+        - name: user_id
           in: path
           description: The Matrix ID of the user who to log in as
           required: true
@@ -451,6 +600,41 @@ definitions:
       is_bot:
         type: boolean
         example: false
+  UserChats:
+    type: array
+    items:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: -123456789
+          description: A bot API style chat ID.
+        title:
+          type: string
+
+  PortalInfo:
+    type: object
+    properties:
+      mxid:
+        type: string
+        example: "!foo:example.com"
+      chat_id:
+        type: integer
+        example: -100123456789
+      peer_type:
+        type: string
+        enum:
+        - user
+        - chat
+        - channel
+      megagroup:
+        type: boolean
+      username:
+        type: string
+      title:
+        type: string
+      about:
+        type: string
 
   AuthSuccess:
     type: object

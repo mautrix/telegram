@@ -96,9 +96,9 @@ class AbstractUser:
         except Exception:
             self.log.exception("Failed to handle Telegram update")
 
-    async def _get_dialogs(self, limit=None):
+    async def get_dialogs(self, limit=None) -> List[Union[Chat, Channel]]:
         if self.is_bot:
-            return
+            return []
         dialogs = await self.client.get_dialogs(limit=limit)
         return [dialog.entity for dialog in dialogs if (
             not isinstance(dialog.entity, (User, ChatForbidden, ChannelForbidden))
