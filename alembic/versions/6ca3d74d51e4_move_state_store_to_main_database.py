@@ -77,8 +77,11 @@ def upgrade():
     session = orm.scoping.scoped_session(session)
     Puppet.query = session.query_property()
 
-    with open("mx-state.json") as file:
-        data = json.load(file)
+    try:
+        with open("mx-state.json") as file:
+            data = json.load(file)
+    except FileNotFoundError:
+        return
     if not data:
         return
     registrations = data.get("registrations", [])
