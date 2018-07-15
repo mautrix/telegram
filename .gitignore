@@ -7,5 +7,5 @@ __pycache__
 
 config.yaml
 registration.yaml
-logs/
+*.log
 *.db
