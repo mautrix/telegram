@@ -14,6 +14,7 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
+from typing import Dict
 import logging
 import asyncio
 import re
@@ -38,23 +39,24 @@ class User(AbstractUser):
     def __init__(self, mxid, tgid=None, username=None, db_contacts=None, saved_contacts=0,
                  is_bot=False, db_portals=None, db_instance=None):
         super().__init__()
-        self.mxid = mxid
-        self.tgid = tgid
-        self.is_bot = is_bot
-        self.username = username
+        self.mxid = mxid  # type: str
+        self.tgid = tgid  # type: int
+        self.is_bot = is_bot  # type: bool
+        self.username = username  # type: str
         self.contacts = []
         self.saved_contacts = saved_contacts
         self.db_contacts = db_contacts
-        self.portals = {}
+        self.portals = {}  # type: Dict[str, po.Portal]
         self.db_portals = db_portals
         self._db_instance = db_instance
 
-        self.command_status = None
+        self.command_status = None  # type: dict
 
         (self.relaybot_whitelisted,
          self.whitelisted,
          self.puppet_whitelisted,
-         self.is_admin) = config.get_permissions(self.mxid)
+         self.is_admin,
+         self.permissions) = config.get_permissions(self.mxid)
 
         self.by_mxid[mxid] = self
         if tgid:
@@ -255,7 +257,7 @@ class User(AbstractUser):
 
     async def sync_dialogs(self, synchronous_create=False):
         creators = []
-        for entity in await self._get_dialogs(limit=30):
+        for entity in await self.get_dialogs(limit=30):
             portal = po.Portal.get_by_entity(entity)
             self.portals[portal.tgid_full] = portal
             creators.append(
@@ -308,6 +310,9 @@ class User(AbstractUser):
 
     @classmethod
     def get_by_mxid(cls, mxid, create=True):
+        if not mxid:
+            raise ValueError("Matrix ID can't be empty")
+
         try:
             return cls.by_mxid[mxid]
         except KeyError:

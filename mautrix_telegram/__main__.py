@@ -38,7 +38,8 @@ from .bot import init as init_bot
 from .portal import init as init_portal
 from .puppet import init as init_puppet
 from .formatter import init as init_formatter
-from .public import PublicBridgeWebsite
+from .web.public import PublicBridgeWebsite
+from .web.provisioning import ProvisioningAPI
 from .context import Context
 from .sqlstatestore import SQLStateStore
 
@@ -75,9 +76,9 @@ db_factory = orm.sessionmaker(bind=db_engine)
 db_session = orm.scoping.scoped_session(db_factory)
 Base.metadata.bind = db_engine
 
-telethon_session_container = AlchemySessionContainer(engine=db_engine, session=db_session,
-                                                     table_base=Base, table_prefix="telethon_",
-                                                     manage_tables=False)
+session_container = AlchemySessionContainer(engine=db_engine, session=db_session,
+                                            table_base=Base, table_prefix="telethon_",
+                                            manage_tables=False)
 
 loop = asyncio.get_event_loop()
 
@@ -87,11 +88,20 @@ appserv = AppService(config["homeserver.address"], config["homeserver.domain"],
                      config["appservice.bot_username"], log="mau.as", loop=loop,
                      verify_ssl=config["homeserver.verify_ssl"], state_store=state_store)
 
-context = Context(appserv, db_session, config, loop, None, None, telethon_session_container)
+public_website = None
+provisioning_api = None
 
 if config["appservice.public.enabled"]:
-    public = PublicBridgeWebsite(loop)
-    appserv.app.add_subapp(config.get("appservice.public.prefix", "/public"), public.app)
+    public_website = PublicBridgeWebsite(loop)
+    appserv.app.add_subapp(config["appservice.public.prefix"] or "/public", public_website.app)
+
+if config["appservice.provisioning.enabled"]:
+    provisioning_api = ProvisioningAPI(config, appserv, loop)
+    appserv.app.add_subapp(config["appservice.provisioning.prefix"] or "/_matrix/provisioning",
+                           provisioning_api.app)
+
+context = Context(appserv, db_session, config, loop, None, None, session_container, public_website,
+                  provisioning_api)
 
 with appserv.run(config["appservice.hostname"], config["appservice.port"]) as start:
     init_db(db_session)

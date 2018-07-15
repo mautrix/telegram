@@ -159,6 +159,12 @@ class Config(DictWithRecursion):
         copy("appservice.public.prefix")
         copy("appservice.public.external")
 
+        copy("appservice.provisioning.enabled")
+        copy("appservice.provisioning.prefix")
+        copy("appservice.provisioning.shared_secret")
+        if base["appservice.provisioning.shared_secret"] == "Very secret shared secret":
+            base["appservice.provisioning.shared_secret"] = self._new_token()
+
         copy("appservice.id")
         copy("appservice.bot_username")
         copy("appservice.bot_displayname")
@@ -244,7 +250,7 @@ class Config(DictWithRecursion):
         puppeting = level == "full" or admin
         user = level == "user" or puppeting
         relaybot = level == "relaybot" or user
-        return relaybot, user, puppeting, admin
+        return relaybot, user, puppeting, admin, level
 
     def get_permissions(self, mxid):
         permissions = self["bridge.permissions"] or {}

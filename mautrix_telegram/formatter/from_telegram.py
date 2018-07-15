@@ -33,8 +33,7 @@ from telethon.tl.types import (MessageEntityMention, MessageEntityMentionName,
 from mautrix_appservice import MatrixRequestError
 from mautrix_appservice.intent_api import IntentAPI
 
-from .. import user as u, puppet as pu, portal as po
-from ..context import Context
+from .. import user as u, puppet as pu, portal as po, context as c
 from ..db import Message as DBMessage
 from .util import (add_surrogates, remove_surrogates, trim_reply_fallback_html,
                    trim_reply_fallback_text, unicode_to_html)
@@ -321,6 +320,6 @@ def _parse_url(html: List[str], entity_text: str, url: str) -> bool:
     return False
 
 
-def init_tg(context: Context):
+def init_tg(context: c.Context):
     global should_highlight_edits
     should_highlight_edits = htmldiff and context.config["bridge.highlight_edits"]

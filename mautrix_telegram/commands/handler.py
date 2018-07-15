@@ -22,8 +22,7 @@ import logging
 from telethon.errors import FloodWaitError
 
 from ..util import format_duration
-from ..context import Context
-from .. import user as u
+from .. import user as u, context as c
 
 command_handlers = {}  # type: Dict[str, CommandHandler]
 
@@ -45,6 +44,7 @@ class CommandEvent:
         self.loop = processor.loop
         self.tgbot = processor.tgbot
         self.config = processor.config
+        self.public_website = processor.public_website
         self.command_prefix = processor.command_prefix
         self.room_id = room
         self.sender = sender
@@ -131,8 +131,9 @@ def command_handler(_func: Optional[Callable[[CommandEvent], None]] = None, *, n
 class CommandProcessor:
     log = logging.getLogger("mau.commands")
 
-    def __init__(self, context: Context):
+    def __init__(self, context: c.Context):
         self.az, self.db, self.config, self.loop, self.tgbot = context
+        self.public_website = context.public_website
         self.command_prefix = self.config["bridge.command_prefix"]
 
     async def handle(self, room: str, sender: u.User, command: str, args: List[str],

@@ -27,8 +27,7 @@ from telethon.tl.types import (MessageEntityMention, MessageEntityMentionName, M
                                MessageEntityItalic, MessageEntityCode, MessageEntityPre,
                                MessageEntityBotCommand, TypeMessageEntity)
 
-from ..context import Context
-from .. import user as u, puppet as pu, portal as po
+from .. import user as u, puppet as pu, portal as po, context as c
 from ..db import Message as DBMessage
 from .util import (add_surrogates, remove_surrogates, trim_reply_fallback_html,
                    trim_reply_fallback_text, html_to_unicode)
@@ -352,7 +351,7 @@ def plain_mention_to_text() -> Tuple[List[TypeMessageEntity], Callable[[str], st
     return entities, replacer
 
 
-def init_mx(context: Context):
+def init_mx(context: c.Context):
     global plain_mention_regex, should_bridge_plaintext_highlights
     config = context.config
     dn_template = config.get("bridge.displayname_template", "{displayname} (Telegram)")

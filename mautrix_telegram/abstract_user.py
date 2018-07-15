@@ -96,9 +96,9 @@ class AbstractUser:
         except Exception:
             self.log.exception("Failed to handle Telegram update")
 
-    async def _get_dialogs(self, limit=None):
+    async def get_dialogs(self, limit=None) -> List[Union[Chat, Channel]]:
         if self.is_bot:
-            return
+            return []
         dialogs = await self.client.get_dialogs(limit=limit)
         return [dialog.entity for dialog in dialogs if (
             not isinstance(dialog.entity, (User, ChatForbidden, ChannelForbidden))
@@ -328,5 +328,5 @@ class AbstractUser:
 def init(context):
     global config, MAX_DELETIONS
     AbstractUser.az, AbstractUser.db, config, AbstractUser.loop, _ = context
-    AbstractUser.session_container = context.telethon_session_container
+    AbstractUser.session_container = context.session_container
     MAX_DELETIONS = config.get("bridge.max_telegram_delete", 10)

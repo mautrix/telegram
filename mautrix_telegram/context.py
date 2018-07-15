@@ -14,17 +14,30 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
+import asyncio
+
+from sqlalchemy.orm import scoped_session
+from alchemysession import AlchemySessionContainer
+from mautrix_appservice import AppService
 
 
 class Context:
-    def __init__(self, az, db, config, loop, bot, mx, telethon_session_container):
-        self.az = az
-        self.db = db
-        self.config = config
-        self.loop = loop
-        self.bot = bot
-        self.mx = mx
-        self.telethon_session_container = telethon_session_container
+    def __init__(self, az, db, config, loop, bot, mx, session_container, public_website,
+                 provisioning_api):
+        from .web import PublicBridgeWebsite, ProvisioningAPI
+        from .config import Config
+        from .bot import Bot
+        from .matrix import MatrixHandler
+
+        self.az = az  # type: AppService
+        self.db = db  # type: scoped_session
+        self.config = config  # type: Config
+        self.loop = loop  # type: asyncio.AbstractEventLoop
+        self.bot = bot  # type: Bot
+        self.mx = mx  # type: MatrixHandler
+        self.session_container = session_container  # type: AlchemySessionContainer
+        self.public_website = public_website  # type: PublicBridgeWebsite
+        self.provisioning_api = provisioning_api  # type: ProvisioningAPI
 
     def __iter__(self):
         yield self.az
