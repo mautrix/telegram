@@ -36,8 +36,13 @@ class MatrixHandler:
         self.az.matrix_event_handler(self.handle_event)
 
     async def init_as_bot(self):
-        await self.az.intent.set_display_name(
-            self.config.get("appservice.bot_displayname", "Telegram bridge bot"))
+        displayname = self.config["appservice.bot_displayname"]
+        if displayname:
+            await self.az.intent.set_display_name(displayname if displayname != "remove" else "")
+
+        avatar = self.config["appservice.bot_avatar"]
+        if avatar:
+            await self.az.intent.set_avatar(avatar if avatar != "remove" else "")
 
     async def handle_puppet_invite(self, room, puppet, inviter):
         self.log.debug(f"{inviter} invited puppet for {puppet.tgid} to {room}")

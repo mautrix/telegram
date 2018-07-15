@@ -162,12 +162,13 @@ class Config(DictWithRecursion):
         copy("appservice.provisioning.enabled")
         copy("appservice.provisioning.prefix")
         copy("appservice.provisioning.shared_secret")
-        if base["appservice.provisioning.shared_secret"] == "Very secret shared secret":
+        if base["appservice.provisioning.shared_secret"] == "generate":
             base["appservice.provisioning.shared_secret"] = self._new_token()
 
         copy("appservice.id")
         copy("appservice.bot_username")
         copy("appservice.bot_displayname")
+        copy("appservice.bot_avatar")
 
         copy("appservice.as_token")
         copy("appservice.hs_token")

@@ -14,12 +14,12 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
+from typing import Tuple
 import asyncio
 
 from sqlalchemy.orm import scoped_session
 from alchemysession import AlchemySessionContainer
 from mautrix_appservice import AppService
-
 
 class Context:
     def __init__(self, az, db, config, loop, bot, mx, session_container, public_website,
@@ -38,10 +38,7 @@ class Context:
         self.session_container = session_container  # type: AlchemySessionContainer
         self.public_website = public_website  # type: PublicBridgeWebsite
         self.provisioning_api = provisioning_api  # type: ProvisioningAPI
+        self.t = (self.az, self.db, self.config, self.loop, self.bot)
 
     def __iter__(self):
-        yield self.az
-        yield self.db
-        yield self.config
-        yield self.loop
-        yield self.bot
+        return iter(self.t)
