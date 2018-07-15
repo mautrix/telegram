@@ -52,10 +52,11 @@ class ProvisioningAPI(AuthAPI):
         self.app.router.add_route("GET", f"{user_prefix}", self.get_user_info)
         self.app.router.add_route("GET", f"{user_prefix}/chats", self.get_chats)
 
-        self.app.router.add_route("POST", f"{user_prefix}/send_bot_token", self.send_bot_token)
-        self.app.router.add_route("POST", f"{user_prefix}/request_code", self.request_code)
-        self.app.router.add_route("POST", f"{user_prefix}/send_code", self.send_code)
-        self.app.router.add_route("POST", f"{user_prefix}/send_password", self.send_password)
+        self.app.router.add_route("POST", f"{user_prefix}/logout", self.logout)
+        self.app.router.add_route("POST", f"{user_prefix}/login/bot_token", self.send_bot_token)
+        self.app.router.add_route("POST", f"{user_prefix}/login/request_code", self.request_code)
+        self.app.router.add_route("POST", f"{user_prefix}/login/send_code", self.send_code)
+        self.app.router.add_route("POST", f"{user_prefix}/login/send_password", self.send_password)
 
     async def get_portal_by_mxid(self, request: web.Request) -> web.Response:
         mxid = request.match_info["mxid"]
@@ -221,6 +222,14 @@ class ProvisioningAPI(AuthAPI):
             return err
         return await self.post_login_password(user, data.get("password", ""))
 
+    async def logout(self, request: web.Request) -> web.Response:
+        _, user, err = await self.get_user_request_info(request, expect_logged_in=True,
+                                                        require_puppeting=False,
+                                                        want_data=False)
+        if err is not None:
+            return err
+        await user.log_out()
+
     @staticmethod
     async def error_middleware(_, handler) -> Callable[[web.Request], Awaitable[web.Response]]:
         async def middleware_handler(request: web.Request) -> web.Response:
@@ -297,6 +306,7 @@ class ProvisioningAPI(AuthAPI):
     async def get_user_request_info(self, request: web.Request,
                                     expect_logged_in: Optional[bool] = False,
                                     require_puppeting: bool = False,
+                                    want_data: bool = True,
                                     ) -> (Tuple[Optional[dict],
                                                 Optional[User],
                                                 Optional[web.Response]]):
@@ -307,7 +317,7 @@ class ProvisioningAPI(AuthAPI):
                                                        status=401)
 
         data = None
-        if request.method == "POST" or request.method == "PUT":
+        if want_data and (request.method == "POST" or request.method == "PUT"):
             data = await self.get_data(request)
             if not data:
                 return None, None, self.get_login_response(error="Invalid JSON.",

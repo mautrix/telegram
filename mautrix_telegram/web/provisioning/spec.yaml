@@ -619,6 +619,36 @@ paths:
                 description: The two-factor auth password
                 format: password
                 example: hunter2
+  /user/{user_id}/logout:
+    post:
+      operationId: logout
+      summary: Log out
+      tags: [Authentication]
+      responses:
+        200:
+          description: Logout successful
+        403:
+          description: User was not logged in
+          schema:
+            type: object
+            title: Error
+            properties:
+              errcode:
+                type: string
+                title: Error code
+                description: A machine-readable error code
+                enum:
+                - not_logged_in
+              error:
+                $ref: "#/definitions/HumanReadableError"
+        500:
+          $ref: "#/responses/UnknownError"
+      parameters:
+        - name: user_id
+          in: path
+          description: The Matrix ID of the user who to log out as
+          required: true
+          type: string
 
 responses:
   NotWhitelistedError:
