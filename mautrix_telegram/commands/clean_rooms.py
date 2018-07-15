@@ -14,17 +14,24 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from mautrix_appservice import MatrixRequestError
+from typing import Tuple, List
+
+from mautrix_appservice import MatrixRequestError, IntentAPI
 
 from . import command_handler, CommandEvent, SECTION_ADMIN
 from .. import puppet as pu, portal as po
 
+ManagementRoomList = List[Tuple[str, str]]
+RoomIDList = List[str]
+PortalList = List[po.Portal]
 
-async def _find_rooms(intent):
-    management_rooms = []
-    unidentified_rooms = []
-    portals = []
-    empty_portals = []
+
+async def _find_rooms(intent: IntentAPI) -> Tuple[
+    ManagementRoomList, RoomIDList, PortalList, PortalList]:
+    management_rooms = []  # type: ManagementRoomList
+    unidentified_rooms = []  # type: RoomIDList
+    portals = []  # type: PortalList
+    empty_portals = []  # type: PortalList
 
     rooms = await intent.get_joined_rooms()
     for room in rooms:
@@ -88,7 +95,7 @@ async def clean_rooms(evt: CommandEvent):
                "where `range` is the range (e.g. `5-21`) prefixed with the first letter of"
                "the group name."),
               "",
-              ("Please note that you will have to re-run `$cmdprefix+sp cleanrooms` "
+              ("Please note that you will have to re-run `$cmdprefix+sp clean-rooms` "
                "between each use of the commands above.")]
 
     evt.sender.command_status = {
@@ -100,7 +107,9 @@ async def clean_rooms(evt: CommandEvent):
     return await evt.reply("\n".join(reply))
 
 
-async def set_rooms_to_clean(evt, management_rooms, unidentified_rooms, portals, empty_portals):
+async def set_rooms_to_clean(evt, management_rooms: ManagementRoomList,
+                             unidentified_rooms: RoomIDList, portals: PortalList,
+                             empty_portals: PortalList):
     command = evt.args[0]
     rooms_to_clean = []
     if command == "clean-recommended":
@@ -110,7 +119,7 @@ async def set_rooms_to_clean(evt, management_rooms, unidentified_rooms, portals,
             return await evt.reply("**Usage:** `$cmdprefix+sp clean-groups [M][A][U][I]")
         groups_to_clean = evt.args[1]
         if "M" in groups_to_clean:
-            rooms_to_clean += management_rooms
+            rooms_to_clean += [room_id for (room_id, user_id) in management_rooms]
         if "A" in groups_to_clean:
             rooms_to_clean += portals
         if "U" in groups_to_clean:
@@ -124,7 +133,7 @@ async def set_rooms_to_clean(evt, management_rooms, unidentified_rooms, portals,
             start, end = range.split("-")
             start, end = int(start), int(end)
             if group == "M":
-                group = management_rooms
+                group = [room_id for (room_id, user_id) in management_rooms]
             elif group == "A":
                 group = portals
             elif group == "U":
