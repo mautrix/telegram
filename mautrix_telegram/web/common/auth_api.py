@@ -29,7 +29,7 @@ class AuthAPI(abc.ABC):
     log = logging.getLogger("mau.web.auth")
 
     def __init__(self, loop):
-        self.loop = loop
+        self.loop = loop  # type: asyncio.AbstractEventLoop
 
     @abstractmethod
     def get_login_response(self, status=200, state="", username="", mxid="", message="", error="",

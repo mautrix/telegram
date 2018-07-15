@@ -271,6 +271,18 @@ paths:
           description: Optional Matrix user ID to check if the user has permissions to do the bridging.
           required: false
           type: string
+        - name: delete
+          in: query
+          description: Whether or not to delete the room completely (kick all users instead of just Telegram puppets)
+          required: false
+          type: boolean
+          default: false
+        - name: sync
+          in: query
+          description: Whether or not to wait for the unbridging to be completed before responding. **Could cause timeouts in large rooms**
+          required: false
+          type: boolean
+          default: false
 
   /user/{user_id}:
     get:

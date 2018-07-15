@@ -59,6 +59,10 @@ class ProvisioningAPI(AuthAPI):
         self.app.router.add_route("POST", f"{user_prefix}/login/send_password", self.send_password)
 
     async def get_portal_by_mxid(self, request: web.Request) -> web.Response:
+        err = self.check_authorization(request)
+        if err is not None:
+            return err
+
         mxid = request.match_info["mxid"]
         portal = Portal.get_by_mxid(mxid)
         if not portal:
@@ -75,6 +79,10 @@ class ProvisioningAPI(AuthAPI):
         })
 
     async def get_portal_by_tgid(self, request: web.Request) -> web.Response:
+        err = self.check_authorization(request)
+        if err is not None:
+            return err
+
         try:
             tgid, _ = resolve_id(int(request.match_info["tgid"]))
         except ValueError:
@@ -95,9 +103,19 @@ class ProvisioningAPI(AuthAPI):
         })
 
     async def connect_chat(self, request: web.Request) -> web.Response:
-        return web.Response(status=501)
+        err = self.check_authorization(request)
+        if err is not None:
+            return err
+
+        return self.get_error_response(501, "not_implemented",
+                                       "Connecting existing Matrix rooms to existing Telegram "
+                                       "chats via the provisioning API is not yet implemented.")
 
     async def create_chat(self, request: web.Request) -> web.Response:
+        err = self.check_authorization(request)
+        if err is not None:
+            return err
+
         data = await self.get_data(request)
         if not data:
             return self.get_error_response(400, "json_invalid", "Invalid JSON.")
@@ -155,7 +173,36 @@ class ProvisioningAPI(AuthAPI):
         })
 
     async def disconnect_chat(self, request: web.Request) -> web.Response:
-        return web.Response(status=501)
+        err = self.check_authorization(request)
+        if err is not None:
+            return err
+
+        portal = Portal.get_by_mxid(request.match_info["mxid"])
+        if not portal or not portal.tgid:
+            return self.get_error_response(404, "portal_not_found",
+                                           "Room is not a portal.")
+
+        user, err = await self.get_user(request.query.get("user_id", None), expect_logged_in=None,
+                                        require_puppeting=False, require_user=False)
+        if err is not None:
+            return err
+        elif user and not await user_has_power_level(portal.mxid, self.az.intent, user, "unbridge"):
+            return self.get_error_response(403, "not_enough_permissions",
+                                           "You do not have the permissions to unbridge that room.")
+
+        delete = request.query.get("delete", "").lower() in ("true", "t", "1", "yes", "y")
+        sync = request.query.get("delete", "").lower() in ("true", "t", "1", "yes", "y")
+
+        coro = portal.cleanup_and_delete() if delete else portal.unbridge()
+        if sync:
+            try:
+                await coro
+            except Exception:
+                self.log.exception("Failed to disconnect chat")
+                return self.get_error_response(500, "exception", "Failed to disconnect chat")
+        else:
+            asyncio.ensure_future(coro, loop=self.loop)
+        return web.json_response({}, status=200 if sync else 202)
 
     async def get_user_info(self, request: web.Request) -> web.Response:
         data, user, err = await self.get_user_request_info(request, expect_logged_in=None,
@@ -271,8 +318,13 @@ class ProvisioningAPI(AuthAPI):
                 resp["state"] = state
         return web.json_response(resp, status=status)
 
-    def check_authorization(self, request: web.Request) -> bool:
-        return request.headers.get("Authorization", "") == f"Bearer {self.secret}"
+    def check_authorization(self, request: web.Request) -> Optional[web.Response]:
+        auth = request.headers.get("Authorization", "")
+        if auth != f"Bearer {self.secret}":
+            return self.get_error_response(error="Shared secret is not valid.",
+                                           errcode="shared_secret_invalid",
+                                           status=401)
+        return None
 
     @staticmethod
     async def get_data(request: web.Request) -> Optional[dict]:
@@ -282,9 +334,11 @@ class ProvisioningAPI(AuthAPI):
             return None
 
     async def get_user(self, mxid: str, expect_logged_in: Optional[bool] = False,
-                       require_puppeting: bool = True,
+                       require_puppeting: bool = True, require_user: bool = True
                        ) -> Tuple[Optional[User], Optional[web.Response]]:
         if not mxid:
+            if not require_user:
+                return None, None
             return None, self.get_login_response(error="User ID not given.",
                                                  errcode="mxid_empty", status=400)
 
@@ -310,11 +364,9 @@ class ProvisioningAPI(AuthAPI):
                                     ) -> (Tuple[Optional[dict],
                                                 Optional[User],
                                                 Optional[web.Response]]):
-        auth = request.headers.get("Authorization", "")
-        if auth != f"Bearer {self.secret}":
-            return None, None, self.get_login_response(error="Shared secret is not valid.",
-                                                       errcode="shared_secret_invalid",
-                                                       status=401)
+        err = self.check_authorization(request)
+        if err is not None:
+            return err
 
         data = None
         if want_data and (request.method == "POST" or request.method == "PUT"):
