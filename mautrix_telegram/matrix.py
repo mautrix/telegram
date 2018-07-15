@@ -38,11 +38,17 @@ class MatrixHandler:
     async def init_as_bot(self):
         displayname = self.config["appservice.bot_displayname"]
         if displayname:
-            await self.az.intent.set_display_name(displayname if displayname != "remove" else "")
+            try:
+                await self.az.intent.set_display_name(displayname if displayname != "remove" else "")
+            except asyncio.TimeoutError:
+                self.log.exception("TimeoutError when trying to set displayname")
 
         avatar = self.config["appservice.bot_avatar"]
         if avatar:
-            await self.az.intent.set_avatar(avatar if avatar != "remove" else "")
+            try:
+                await self.az.intent.set_avatar(avatar if avatar != "remove" else "")
+            except asyncio.TimeoutError:
+                self.log.exception("TimeoutError when trying to set avatar")
 
     async def handle_puppet_invite(self, room, puppet, inviter):
         self.log.debug(f"{inviter} invited puppet for {puppet.tgid} to {room}")
