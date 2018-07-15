@@ -4,3 +4,5 @@ engines:
     checks:
       python:S107:
         enabled: false
+exclude_patterns:
+- "alembic/"

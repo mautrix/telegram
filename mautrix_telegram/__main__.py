@@ -41,6 +41,7 @@ from .formatter import init as init_formatter
 from .web.public import PublicBridgeWebsite
 from .web.provisioning import ProvisioningAPI
 from .context import Context
+from .sqlstatestore import SQLStateStore
 
 parser = argparse.ArgumentParser(
     description="A Matrix-Telegram puppeting bridge.",
@@ -81,10 +82,12 @@ session_container = AlchemySessionContainer(engine=db_engine, session=db_session
 
 loop = asyncio.get_event_loop()
 
+state_store = SQLStateStore(db_session)
 appserv = AppService(config["homeserver.address"], config["homeserver.domain"],
                      config["appservice.as_token"], config["appservice.hs_token"],
                      config["appservice.bot_username"], log="mau.as", loop=loop,
-                     verify_ssl=config["homeserver.verify_ssl"])
+                     verify_ssl=config["homeserver.verify_ssl"], state_store=state_store)
+
 public_website = None
 provisioning_api = None
 

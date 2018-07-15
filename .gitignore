@@ -9,5 +9,3 @@ config.yaml
 registration.yaml
 logs/
 *.db
-*.session
-*.json
