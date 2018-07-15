@@ -1,9 +1,9 @@
 swagger: "2.0"
 
 info:
-  title: mautrix-telegram provisioning
+  title: Mautrix-Telegram provisioning
   version: 0.3.0
-  description: The provisioning API for mautrix-telegram.
+  description: The provisioning API for Mautrix-Telegram, the Matrix-Telegram puppeting/relaybot bridge.
   license:
     name: AGPLv3
     url: https://github.com/tulir/mautrix-telegram/blob/master/LICENSE
