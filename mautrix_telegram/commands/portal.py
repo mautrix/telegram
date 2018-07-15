@@ -117,7 +117,7 @@ def _get_portal_murder_function(action: str, room_id: str, function: Callable, c
                            "Only works for group chats; to delete a private chat portal, simply "
                            "leave the room.")
 async def delete_portal(evt: CommandEvent):
-    portal, ok = await _get_portal_and_check_permission(evt, "delete_portal")
+    portal, ok = await _get_portal_and_check_permission(evt, "unbridge")
     if not ok:
         return
 
@@ -138,7 +138,7 @@ async def delete_portal(evt: CommandEvent):
                  help_section=SECTION_PORTAL_MANAGEMENT,
                  help_text="Remove puppets from the current portal room and forget the portal.")
 async def unbridge(evt: CommandEvent):
-    portal, ok = await _get_portal_and_check_permission(evt, "unbridge_room")
+    portal, ok = await _get_portal_and_check_permission(evt, "unbridge")
     if not ok:
         return
 
