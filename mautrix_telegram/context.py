@@ -39,6 +39,14 @@ class Context:
         self.public_website = public_website  # type: PublicBridgeWebsite
         self.provisioning_api = provisioning_api  # type: ProvisioningAPI
         self.t = (self.az, self.db, self.config, self.loop, self.bot)
+    
+    def set_bot(self, bot):
+        self.bot = bot
+        self.t = (self.az, self.db, self.config, self.loop, self.bot)
+    
+    def set_mx(self, mx):
+        self.mx = mx
+        self.t = (self.az, self.db, self.config, self.loop, self.bot)
 
     def __iter__(self):
         return iter(self.t)
