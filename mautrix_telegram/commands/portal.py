@@ -134,7 +134,7 @@ async def delete_portal(evt: CommandEvent):
                            "bridge, use `$cmdprefix+sp unbridge` instead.")
 
 
-@command_handler(needs_auth=False,
+@command_handler(needs_auth=False, needs_puppeting=False,
                  help_section=SECTION_PORTAL_MANAGEMENT,
                  help_text="Remove puppets from the current portal room and forget the portal.")
 async def unbridge(evt: CommandEvent):
@@ -150,7 +150,7 @@ async def unbridge(evt: CommandEvent):
                            "by typing `$cmdprefix+sp confirm-unbridge`")
 
 
-@command_handler(needs_auth=False,
+@command_handler(needs_auth=False, needs_puppeting=False,
                  help_section=SECTION_PORTAL_MANAGEMENT,
                  help_args="[_id_]",
                  help_text="Bridge the current Matrix room to the Telegram chat with the given "
