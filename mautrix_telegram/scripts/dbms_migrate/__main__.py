@@ -5,11 +5,11 @@ from sqlalchemy.ext.declarative import declarative_base
 
 from alchemysession import AlchemySessionContainer
 
-parser = argparse.ArgumentParser(description="mautrix-telegram database migration script",
-                                 prog="python -m mautrix_telegram.scripts.db_migrate")
-parser.add_argument("-f", "--from-uri", type=str, required=True, metavar="<uri>",
+parser = argparse.ArgumentParser(description="mautrix-telegram dbms migration script",
+                                 prog="python -m mautrix_telegram.scripts.dbms_migrate")
+parser.add_argument("-f", "--from-url", type=str, required=True, metavar="<url>",
                     help="the old database path")
-parser.add_argument("-t", "--to-uri", type=str, required=True, metavar="<uri>",
+parser.add_argument("-t", "--to-url", type=str, required=True, metavar="<url>",
                     help="the new database path")
 args = parser.parse_args()
 
@@ -46,13 +46,13 @@ def connect(to):
     }
 
 
-session, tables = connect(args.from_uri)
+session, tables = connect(args.from_url)
 
 data = {}
 for name, table in tables.items():
     data[name] = session.query(table).all()
 
-session, tables = connect(args.to_uri)
+session, tables = connect(args.to_url)
 for name, table in tables.items():
     for row in data[name]:
         session.merge(row)
