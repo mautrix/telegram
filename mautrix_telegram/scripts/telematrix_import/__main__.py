@@ -9,7 +9,7 @@ from .models import ChatLink, TgUser, MatrixUser, Message as TMMessage, Base as 
 
 parser = argparse.ArgumentParser(
     description="mautrix-telegram telematrix import script",
-    prog="python -m scripts/telematrix_import")
+    prog="python -m mautrix_telegram.scripts.telematrix_import")
 parser.add_argument("-c", "--config", type=str, default="config.yaml",
                     metavar="<path>", help="the path to your mautrix-telegram config file")
 parser.add_argument("-b", "--bot-id", type=int, required=True,
