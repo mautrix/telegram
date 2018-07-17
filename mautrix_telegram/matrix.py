@@ -208,7 +208,7 @@ class MatrixHandler:
             self.log.debug(f"Ignoring message \"{message}\" from {sender} to {room}:"
                            " User is not whitelisted.")
             return
-        self.log.debug("Received Matrix event \"{message}\" from {sender} in {room}")
+        self.log.debug(f"Received Matrix event \"{message}\" from {sender} in {room}")
 
         portal = Portal.get_by_mxid(room)
         if not is_command and portal and (await sender.is_logged_in() or portal.has_bot):

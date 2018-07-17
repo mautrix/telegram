@@ -38,7 +38,10 @@ class Context:
         self.session_container = session_container  # type: AlchemySessionContainer
         self.public_website = public_website  # type: PublicBridgeWebsite
         self.provisioning_api = provisioning_api  # type: ProvisioningAPI
-        self.t = (self.az, self.db, self.config, self.loop, self.bot)
 
     def __iter__(self):
-        return iter(self.t)
+        yield self.az
+        yield self.db
+        yield self.config
+        yield self.loop
+        yield self.bot
