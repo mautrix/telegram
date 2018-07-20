@@ -51,7 +51,7 @@ setuptools.setup(
         mautrix-telegram=mautrix_telegram.__main__:main
     """,
     package_data={"mautrix_telegram": [
-        "public/*.mako", "public/*.png", "public/*.css",
+        "web/public/*.mako", "web/public/*.png", "web/public/*.css",
     ]},
     data_files=[
         (".", ["example-config.yaml", "alembic.ini"]),
