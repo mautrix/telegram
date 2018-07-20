@@ -137,6 +137,8 @@ class Puppet(Base):
     __tablename__ = "puppet"
 
     id = Column(Integer, primary_key=True)
+    custom_mxid = Column(String, nullable=True)
+    access_token = Column(String, nullable=True)
     displayname = Column(String, nullable=True)
     displayname_source = Column(Integer, nullable=True)
     username = Column(String, nullable=True)

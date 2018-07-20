@@ -111,14 +111,14 @@ class User(AbstractUser):
 
     def new_db_instance(self):
         return DBUser(mxid=self.mxid, tgid=self.tgid, tg_username=self.username,
-                      contacts=self.db_contacts, saved_contacts=self.saved_contacts,
+                      contacts=self.db_contacts, saved_contacts=self.saved_contacts or 0,
                       portals=self.db_portals)
 
     def save(self):
         self.db_instance.tgid = self.tgid
         self.db_instance.username = self.username
         self.db_instance.contacts = self.db_contacts
-        self.db_instance.saved_contacts = self.saved_contacts
+        self.db_instance.saved_contacts = self.saved_contacts or 0
         self.db_instance.portals = self.db_portals
         self.db.commit()
 

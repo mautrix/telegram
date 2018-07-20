@@ -39,7 +39,8 @@ class MatrixHandler:
         displayname = self.config["appservice.bot_displayname"]
         if displayname:
             try:
-                await self.az.intent.set_display_name(displayname if displayname != "remove" else "")
+                await self.az.intent.set_display_name(
+                    displayname if displayname != "remove" else "")
             except asyncio.TimeoutError:
                 self.log.exception("TimeoutError when trying to set displayname")
 
@@ -51,19 +52,20 @@ class MatrixHandler:
                 self.log.exception("TimeoutError when trying to set avatar")
 
     async def handle_puppet_invite(self, room, puppet, inviter):
+        intent = puppet.default_mxid_intent
         self.log.debug(f"{inviter} invited puppet for {puppet.tgid} to {room}")
         if not await inviter.is_logged_in():
-            await puppet.intent.error_and_leave(
+            await intent.error_and_leave(
                 room, text="Please log in before inviting Telegram puppets.")
             return
         portal = Portal.get_by_mxid(room)
         if portal:
             if portal.peer_type == "user":
-                await puppet.intent.error_and_leave(
+                await intent.error_and_leave(
                     room, text="You can not invite additional users to private chats.")
                 return
             await portal.invite_telegram(inviter, puppet)
-            await puppet.intent.join_room(room)
+            await intent.join_room(room)
             return
         try:
             members = await self.az.intent.get_room_members(room)
@@ -71,34 +73,34 @@ class MatrixHandler:
             members = []
         if self.az.bot_mxid not in members:
             if len(members) > 1:
-                await puppet.intent.error_and_leave(room, text=None, html=(
+                await intent.error_and_leave(room, text=None, html=(
                     f"Please invite "
                     f"<a href='https://matrix.to/#/{self.az.bot_mxid}'>the bridge bot</a> "
                     f"first if you want to create a Telegram chat."))
                 return
 
-            await puppet.intent.join_room(room)
+            await intent.join_room(room)
             portal = Portal.get_by_tgid(puppet.tgid, inviter.tgid, "user")
             if portal.mxid:
                 try:
-                    await puppet.intent.invite(portal.mxid, inviter.mxid)
-                    await puppet.intent.send_notice(room, text=None, html=(
+                    await intent.invite(portal.mxid, inviter.mxid)
+                    await intent.send_notice(room, text=None, html=(
                         "You already have a private chat with me: "
                         f"<a href='https://matrix.to/#/{portal.mxid}'>"
                         "Link to room"
                         "</a>"))
-                    await puppet.intent.leave_room(room)
+                    await intent.leave_room(room)
                     return
                 except MatrixRequestError:
                     pass
             portal.mxid = room
             portal.save()
             inviter.register_portal(portal)
-            await puppet.intent.send_notice(room, "Portal to private chat created.")
+            await intent.send_notice(room, "Portal to private chat created.")
         else:
-            await puppet.intent.join_room(room)
-            await puppet.intent.send_notice(room, "This puppet will remain inactive until a "
-                                                  "Telegram chat is created for this room.")
+            await intent.join_room(room)
+            await intent.send_notice(room, "This puppet will remain inactive until a "
+                                           "Telegram chat is created for this room.")
 
     async def accept_bot_invite(self, room, inviter):
         tries = 0
@@ -215,7 +217,7 @@ class MatrixHandler:
             await portal.handle_matrix_message(sender, message, event_id)
             return
 
-        if not sender.whitelisted or message["msgtype"] != "m.text":
+        if not sender.whitelisted or message.get("msgtype", "m.unknown") != "m.text":
             return
 
         try:

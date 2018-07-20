@@ -229,9 +229,9 @@ class AbstractUser:
     async def update_status(self, update):
         puppet = pu.Puppet.get(update.user_id)
         if isinstance(update.status, UserStatusOnline):
-            await puppet.intent.set_presence("online")
+            await puppet.default_mxid_intent.set_presence("online")
         elif isinstance(update.status, UserStatusOffline):
-            await puppet.intent.set_presence("offline")
+            await puppet.default_mxid_intent.set_presence("offline")
         else:
             self.log.warning("Unexpected user status update: %s", update)
         return

@@ -15,10 +15,12 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from difflib import SequenceMatcher
+from typing import Optional
 import re
 import logging
 
 from telethon.tl.types import UserProfilePhoto
+from mautrix_appservice import MatrixError, IntentAPI
 
 from .db import Puppet as DBPuppet
 from . import util
@@ -35,10 +37,15 @@ class Puppet:
     hs_domain = None
     cache = {}
 
-    def __init__(self, id=None, username=None, displayname=None, displayname_source=None,
-                 photo_id=None, is_bot=None, is_registered=False, db_instance=None):
+    def __init__(self, id=None, access_token=None, custom_mxid=None, username=None,
+                 displayname=None, displayname_source=None, photo_id=None, is_bot=None,
+                 is_registered=False, db_instance=None):
         self.id = id
-        self.mxid = self.get_mxid_from_id(self.id)
+        self.access_token = access_token
+        self.custom_mxid = custom_mxid
+        self.is_real_user = self.custom_mxid and self.access_token
+        self.default_mxid = self.get_mxid_from_id(self.id)
+        self.mxid = self.custom_mxid or self.default_mxid
 
         self.username = username
         self.displayname = displayname
@@ -48,9 +55,22 @@ class Puppet:
         self.is_registered = is_registered
         self._db_instance = db_instance
 
-        self.intent = self.az.intent.user(self.mxid)
+        self.default_mxid_intent = self.az.intent.user(self.default_mxid)
+        self.intent = None  # type: IntentAPI
+        self.refresh_intents()
 
         self.cache[id] = self
+
+    def refresh_intents(self):
+        self.is_real_user = self.custom_mxid and self.access_token
+        self.intent = (self.az.intent.user(self.custom_mxid, self.access_token)
+                       if self.is_real_user else self.default_mxid_intent)
+
+    async def get_profile(self):
+        try:
+            return await self.intent.get_profile(self.custom_mxid)
+        except MatrixError:
+            return None
 
     @property
     def tgid(self):
@@ -66,17 +86,21 @@ class Puppet:
         return self._db_instance
 
     def new_db_instance(self):
-        return DBPuppet(id=self.id, username=self.username, displayname=self.displayname,
+        return DBPuppet(id=self.id, access_token=self.access_token, custom_mxid=self.custom_mxid,
+                        username=self.username, displayname=self.displayname,
                         displayname_source=self.displayname_source, photo_id=self.photo_id,
                         is_bot=self.is_bot, matrix_registered=self.is_registered)
 
     @classmethod
     def from_db(cls, db_puppet):
-        return Puppet(db_puppet.id, db_puppet.username, db_puppet.displayname,
-                      db_puppet.displayname_source, db_puppet.photo_id, db_puppet.is_bot,
-                      db_puppet.matrix_registered, db_instance=db_puppet)
+        return Puppet(db_puppet.id, db_puppet.access_token, db_puppet.custom_mxid,
+                      db_puppet.username, db_puppet.displayname, db_puppet.displayname_source,
+                      db_puppet.photo_id, db_puppet.is_bot, db_puppet.matrix_registered,
+                      db_instance=db_puppet)
 
     def save(self):
+        self.db_instance.access_token = self.access_token
+        self.db_instance.custom_mxid = self.custom_mxid
         self.db_instance.username = self.username
         self.db_instance.displayname = self.displayname
         self.db_instance.displayname_source = self.displayname_source
@@ -145,7 +169,7 @@ class Puppet:
 
         displayname = self.get_displayname(info)
         if displayname != self.displayname:
-            await self.intent.set_display_name(displayname)
+            await self.default_mxid_intent.set_display_name(displayname)
             self.displayname = displayname
             self.displayname_source = source.tgid
             return True
@@ -156,15 +180,16 @@ class Puppet:
     async def update_avatar(self, source, photo):
         photo_id = f"{photo.volume_id}-{photo.local_id}"
         if self.photo_id != photo_id:
-            file = await util.transfer_file_to_matrix(self.db, source.client, self.intent, photo)
+            file = await util.transfer_file_to_matrix(self.db, source.client,
+                                                      self.default_mxid_intent, photo)
             if file:
-                await self.intent.set_avatar(file.mxc)
+                await self.default_mxid_intent.set_avatar(file.mxc)
                 self.photo_id = photo_id
                 return True
         return False
 
     @classmethod
-    def get(cls, id, create=True):
+    def get(cls, id, create=True) -> "Optional[Puppet]":
         try:
             return cls.cache[id]
         except KeyError:
@@ -183,7 +208,7 @@ class Puppet:
         return None
 
     @classmethod
-    def get_by_mxid(cls, mxid, create=True):
+    def get_by_mxid(cls, mxid, create=True) -> "Optional[Puppet]":
         tgid = cls.get_id_from_mxid(mxid)
         return cls.get(tgid, create) if tgid else None
 
@@ -199,7 +224,7 @@ class Puppet:
         return f"@{cls.username_template.format(userid=id)}:{cls.hs_domain}"
 
     @classmethod
-    def find_by_username(cls, username):
+    def find_by_username(cls, username) -> "Optional[Puppet]":
         if not username:
             return None
 
@@ -214,7 +239,7 @@ class Puppet:
         return None
 
     @classmethod
-    def find_by_displayname(cls, displayname):
+    def find_by_displayname(cls, displayname) -> "Optional[Puppet]":
         if not displayname:
             return None
 
