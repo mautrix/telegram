@@ -93,7 +93,7 @@ def upgrade():
     username_template = mxtg_config.get("bridge.username_template", "telegram_{userid}")
     hs_domain = mxtg_config["homeserver.domain"]
     localpart = username_template.format(userid="(.+)")
-    mxid_regex = re.compile(f"@{localpart}:{hs_domain}")
+    mxid_regex = re.compile("@{}:{}".format(localpart, hs_domain))
     for user in registrations:
         match = mxid_regex.match(user)
         if not match:
