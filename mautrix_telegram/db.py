@@ -17,14 +17,14 @@
 from sqlalchemy import (Column, UniqueConstraint, ForeignKey, ForeignKeyConstraint, Integer,
                         BigInteger, String, Boolean, Text)
 from sqlalchemy.sql import expression
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import relationship, Query
 import json
 
 from .base import Base
 
 
 class Portal(Base):
-    query = None
+    query = None  # type: Query
     __tablename__ = "portal"
 
     # Telegram chat information
@@ -42,9 +42,8 @@ class Portal(Base):
     about = Column(String, nullable=True)
     photo_id = Column(String, nullable=True)
 
-
 class Message(Base):
-    query = None
+    query = None  # type: Query
     __tablename__ = "message"
 
     mxid = Column(String)
@@ -56,7 +55,7 @@ class Message(Base):
 
 
 class UserPortal(Base):
-    query = None
+    query = None  # type: Query
     __tablename__ = "user_portal"
 
     user = Column(Integer, ForeignKey("user.tgid", onupdate="CASCADE", ondelete="CASCADE"),
@@ -70,7 +69,7 @@ class UserPortal(Base):
 
 
 class User(Base):
-    query = None
+    query = None  # type: Query
     __tablename__ = "user"
 
     mxid = Column(String, primary_key=True)
@@ -83,7 +82,7 @@ class User(Base):
 
 
 class RoomState(Base):
-    query = None
+    query = None  # type: Query
     __tablename__ = "mx_room_state"
 
     room_id = Column(String, primary_key=True)
@@ -107,7 +106,7 @@ class RoomState(Base):
 
 
 class UserProfile(Base):
-    query = None
+    query = None  # type: Query
     __tablename__ = "mx_user_profile"
 
     room_id = Column(String, primary_key=True)
@@ -125,7 +124,7 @@ class UserProfile(Base):
 
 
 class Contact(Base):
-    query = None
+    query = None  # type: Query
     __tablename__ = "contact"
 
     user = Column(Integer, ForeignKey("user.tgid"), primary_key=True)
@@ -133,7 +132,7 @@ class Contact(Base):
 
 
 class Puppet(Base):
-    query = None
+    query = None  # type: Query
     __tablename__ = "puppet"
 
     id = Column(Integer, primary_key=True)
@@ -149,14 +148,14 @@ class Puppet(Base):
 
 # Fucking Telegram not telling bots what chats they are in 3:<
 class BotChat(Base):
-    query = None
+    query = None  # type: Query
     __tablename__ = "bot_chat"
     id = Column(Integer, primary_key=True)
     type = Column(String, nullable=False)
 
 
 class TelegramFile(Base):
-    query = None
+    query = None  # type: Query
     __tablename__ = "telegram_file"
 
     id = Column(String, primary_key=True)

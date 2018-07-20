@@ -14,7 +14,7 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import Dict
+from typing import Dict, Awaitable, Optional
 import logging
 import asyncio
 import re
@@ -185,6 +185,9 @@ class User(AbstractUser):
     # endregion
     # region Telegram actions that need custom methods
 
+    def ensure_started(self, even_if_no_session=False) -> "Awaitable[User]":
+        return super().ensure_started(even_if_no_session)
+
     async def update_info(self, info: User = None):
         info = info or await self.client.get_me()
         changed = False
@@ -309,7 +312,7 @@ class User(AbstractUser):
     # region Class instance lookup
 
     @classmethod
-    def get_by_mxid(cls, mxid, create=True):
+    def get_by_mxid(cls, mxid, create=True) -> "Optional[User]":
         if not mxid:
             raise ValueError("Matrix ID can't be empty")
 
@@ -332,7 +335,7 @@ class User(AbstractUser):
         return None
 
     @classmethod
-    def get_by_tgid(cls, tgid):
+    def get_by_tgid(cls, tgid) -> "Optional[User]":
         try:
             return cls.by_tgid[tgid]
         except KeyError:
@@ -346,7 +349,7 @@ class User(AbstractUser):
         return None
 
     @classmethod
-    def find_by_username(cls, username):
+    def find_by_username(cls, username) -> "Optional[User]":
         if not username:
             return None
 

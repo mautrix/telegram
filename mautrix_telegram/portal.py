@@ -824,7 +824,12 @@ class Portal:
             mxid=event_id))
         self.db.commit()
 
-    async def handle_matrix_message(self, sender, message, event_id):
+    async def handle_matrix_message(self, sender: u.User, message: dict, event_id: str):
+        puppet = p.Puppet.get_by_custom_mxid(sender.mxid)
+        if puppet and message.get("net.maunium.telegram.puppet", False):
+            self.log.debug("Ignoring puppet-sent message by confirmed puppet user %s", sender.mxid)
+            return
+
         logged_in = not await sender.needs_relaybot(self)
         client = sender.client if logged_in else self.bot.client
         sender_id = sender.tgid if logged_in else self.bot.tgid

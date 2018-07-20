@@ -110,8 +110,10 @@ with appserv.run(config["appservice.hostname"], config["appservice.port"]) as st
     context.mx = MatrixHandler(context)
     init_formatter(context)
     init_portal(context)
-    init_puppet(context)
-    startup_actions = init_user(context) + [start, context.mx.init_as_bot()]
+    startup_actions = (init_puppet(context) +
+                       init_user(context) +
+                       [start,
+                        context.mx.init_as_bot()])
 
     if context.bot:
         startup_actions.append(context.bot.start())

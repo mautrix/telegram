@@ -56,15 +56,11 @@ async def ping_bot(evt: CommandEvent):
                            "account")
 async def login_matrix(evt: CommandEvent):
     puppet = pu.Puppet.get(evt.sender.tgid)
-    prev_info = puppet.custom_mxid, puppet.access_token
-    puppet.custom_mxid = evt.sender.mxid
-    puppet.access_token = " ".join(evt.args)
-    puppet.refresh_intents()
-    if not await puppet.get_profile():
-        puppet.custom_mxid, puppet.access_token = prev_info
-        puppet.refresh_intents()
+    resp = puppet.switch_mxid(" ".join(evt.args), evt.sender.mxid)
+    if resp == 2:
+        return await evt.reply("You can only log in as your own Matrix user.")
+    elif resp == 1:
         return await evt.reply("Failed to verify access token.")
-    puppet.save()
     return await evt.reply(
         f"Replaced your Telegram account's Matrix puppet with {puppet.custom_mxid}.")
 

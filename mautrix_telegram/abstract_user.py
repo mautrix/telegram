@@ -124,7 +124,7 @@ class AbstractUser:
         self.log.debug("%s connected: %s", self.mxid, self.connected)
         return self
 
-    async def ensure_started(self, even_if_no_session=False):
+    async def ensure_started(self, even_if_no_session=False) -> "AbstractUser":
         if not self.puppet_whitelisted:
             return self
         self.log.debug("ensure_started(%s, connected=%s, even_if_no_session=%s, session_count=%s)",
