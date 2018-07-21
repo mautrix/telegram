@@ -107,7 +107,8 @@ class Puppet:
             if mxid != self.custom_mxid:
                 return 2
             return 1
-        asyncio.ensure_future(self.sync(), loop=self.loop)
+        if config["bridge.sync_with_custom_puppets"]:
+            asyncio.ensure_future(self.sync(), loop=self.loop)
         return 0
 
     def create_sync_filter(self) -> Awaitable[str]:
