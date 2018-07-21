@@ -289,17 +289,26 @@ class MatrixHandler:
             await portal.name_change_matrix(user, displayname, prev_displayname, event_id)
 
     def filter_matrix_event(self, event):
-        return (event["sender"] == self.az.bot_mxid
-                or Puppet.get_id_from_mxid(event["sender"]) is not None)
+        sender = event.get("sender", None)
+        if not sender:
+            return False
+        return (sender == self.az.bot_mxid
+                or Puppet.get_id_from_mxid(sender) is not None)
+
+    async def try_handle_event(self, evt):
+        try:
+            await self.handle_event(evt)
+        except Exception:
+            self.log.exception("Error handling manually received Matrix event")
 
     async def handle_event(self, evt):
         if self.filter_matrix_event(evt):
             return
         self.log.debug("Received event: %s", evt)
-        type = evt["type"]
-        room_id = evt["room_id"]
-        event_id = evt["event_id"]
-        sender = evt["sender"]
+        type = evt.get("type", "m.unknown")
+        room_id = evt.get("room_id", None)
+        event_id = evt.get("event_id", None)
+        sender = evt.get("sender", None)
         content = evt.get("content", {})
         if type == "m.room.member":
             state_key = evt["state_key"]
