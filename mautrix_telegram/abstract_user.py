@@ -36,15 +36,15 @@ class AbstractUser:
     az = None
 
     def __init__(self):
-        self.puppet_whitelisted = False
-        self.whitelisted = False
-        self.relaybot_whitelisted = False
-        self.is_admin = False
-        self.client = None
-        self.tgid = None
-        self.mxid = None
-        self.is_relaybot = False
-        self.is_bot = False
+        self.puppet_whitelisted = False  # type: bool
+        self.whitelisted = False  # type: bool
+        self.relaybot_whitelisted = False  # type: bool
+        self.is_admin = False  # type: bool
+        self.client = None  # type: MautrixTelegramClient
+        self.tgid = None  # type: int
+        self.mxid = None  # type: str
+        self.is_relaybot = False  # type: bool
+        self.is_bot = False  # type: bool
 
     @property
     def connected(self):

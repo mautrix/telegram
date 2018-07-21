@@ -14,6 +14,7 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
+from typing import List
 import logging
 import asyncio
 import re
@@ -32,6 +33,7 @@ class MatrixHandler:
     def __init__(self, context):
         self.az, self.db, self.config, _, self.tgbot = context
         self.commands = CommandProcessor(context)
+        self.previously_typing = []
 
         self.az.matrix_event_handler(self.handle_event)
 
@@ -288,6 +290,37 @@ class MatrixHandler:
         if await user.needs_relaybot(portal):
             await portal.name_change_matrix(user, displayname, prev_displayname, event_id)
 
+    @staticmethod
+    def parse_read_receipts(content: dict) -> dict:
+        return {user_id: event_id
+                for event_id, receipts in content.items()
+                for user_id in receipts.get("m.read", {})}
+
+    async def handle_read_receipts(self, room_id: str, receipts: dict):
+        pass
+
+    async def handle_presence(self, user: str, presence: str):
+        pass
+
+    async def handle_typing(self, room_id: str, now_typing: List[str]):
+        portal = Portal.get_by_mxid(room_id)
+        if not portal:
+            return
+
+        for user_id in set(self.previously_typing + now_typing):
+            is_typing = user_id in now_typing
+            was_typing = user_id in self.previously_typing
+            if is_typing and was_typing:
+                continue
+
+            user = await User.get_by_mxid(user_id).ensure_started()
+            if not user.tgid:
+                continue
+
+            await user.set_typing(portal.peer, is_typing)
+
+        self.previously_typing = now_typing
+
     def filter_matrix_event(self, event):
         sender = event.get("sender", None)
         if not sender:
@@ -346,3 +379,9 @@ class MatrixHandler:
             except KeyError:
                 old_events = set()
             await self.handle_room_pin(room_id, sender, new_events, old_events)
+        elif type == "m.receipt":
+            await self.handle_read_receipts(room_id, self.parse_read_receipts(content))
+        elif type == "m.presence":
+            await self.handle_presence(sender, content.get("presence", "offline"))
+        elif type == "m.typing":
+            await self.handle_typing(room_id, content.get("user_ids", []))

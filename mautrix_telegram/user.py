@@ -22,6 +22,7 @@ import re
 from telethon.tl.types import *
 from telethon.tl.types.contacts import ContactsNotModified
 from telethon.tl.functions.contacts import GetContactsRequest, SearchRequest
+from telethon.tl.functions.messages import SetTypingRequest
 from mautrix_appservice import MatrixRequestError
 
 from .db import User as DBUser, Contact as DBContact
@@ -202,6 +203,10 @@ class User(AbstractUser):
             self.by_tgid[self.tgid] = self
         if changed:
             self.save()
+
+    def set_typing(self, peer, typing=True, action=SendMessageTypingAction):
+        return self.client(
+            SetTypingRequest(peer, action() if typing else SendMessageCancelAction()))
 
     async def log_out(self):
         for _, portal in self.portals.items():
