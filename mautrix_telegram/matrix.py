@@ -308,7 +308,10 @@ class MatrixHandler:
             await portal.mark_read(user, event_id)
 
     async def handle_presence(self, user: str, presence: str):
-        pass
+        user = await User.get_by_mxid(user).ensure_started()
+        if not await user.is_logged_in():
+            return
+        await user.set_presence(presence == "online")
 
     async def handle_typing(self, room_id: str, now_typing: List[str]):
         portal = Portal.get_by_mxid(room_id)

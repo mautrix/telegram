@@ -22,6 +22,7 @@ import re
 from telethon.tl.types import *
 from telethon.tl.types.contacts import ContactsNotModified
 from telethon.tl.functions.contacts import GetContactsRequest, SearchRequest
+from telethon.tl.functions.account import UpdateStatusRequest
 from mautrix_appservice import MatrixRequestError
 
 from .db import User as DBUser, Contact as DBContact
@@ -187,6 +188,9 @@ class User(AbstractUser):
 
     def ensure_started(self, even_if_no_session=False) -> "Awaitable[User]":
         return super().ensure_started(even_if_no_session)
+
+    def set_presence(self, online: bool = True):
+        return self.client(UpdateStatusRequest(offline=not online))
 
     async def update_info(self, info: User = None):
         info = info or await self.client.get_me()
