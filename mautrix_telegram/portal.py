@@ -31,6 +31,8 @@ from sqlalchemy.orm.exc import FlushError
 
 from telethon.tl.functions.messages import *
 from telethon.tl.functions.channels import *
+from telethon.tl.functions.messages import ReadHistoryRequest
+from telethon.tl.functions.channels import ReadHistoryRequest as ReadChannelHistoryRequest
 from telethon.errors import *
 from telethon.tl.types import *
 from mautrix_appservice import MatrixRequestError, IntentError
@@ -651,6 +653,23 @@ class Portal:
     async def get_displayname(self, user):
         return (await self.main_intent.get_displayname(self.mxid, user.mxid)
                 or user.mxid_localpart)
+
+    def set_typing(self, user, typing=True, action=SendMessageTypingAction):
+        return user.client(
+            SetTypingRequest(self.peer, action() if typing else SendMessageCancelAction()))
+
+    async def mark_read(self, user, event_id):
+        space = self.tgid if self.peer_type == "channel" else user.tgid
+        message = DBMessage.query.filter(DBMessage.mxid == event_id,
+                                         DBMessage.mx_room == self.mxid,
+                                         DBMessage.tg_space == space).one_or_none()
+        if not message:
+            return
+        if self.peer_type == "channel":
+            await user.client(ReadChannelHistoryRequest(
+                channel=await self.get_input_entity(user), max_id=message.tgid))
+        else:
+            await user.client(ReadHistoryRequest(peer=self.peer, max_id=message.tgid))
 
     async def leave_matrix(self, user, source, event_id):
         if await user.needs_relaybot(self):

@@ -14,7 +14,7 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import List
+from typing import List, Dict
 import logging
 import asyncio
 import re
@@ -291,13 +291,21 @@ class MatrixHandler:
             await portal.name_change_matrix(user, displayname, prev_displayname, event_id)
 
     @staticmethod
-    def parse_read_receipts(content: dict) -> dict:
+    def parse_read_receipts(content: dict) -> Dict[str, str]:
         return {user_id: event_id
                 for event_id, receipts in content.items()
                 for user_id in receipts.get("m.read", {})}
 
-    async def handle_read_receipts(self, room_id: str, receipts: dict):
-        pass
+    async def handle_read_receipts(self, room_id: str, receipts: Dict[str, str]):
+        portal = Portal.get_by_mxid(room_id)
+        if not portal:
+            return
+
+        for user_id, event_id in receipts.items():
+            user = await User.get_by_mxid(user_id).ensure_started()
+            if not await user.is_logged_in():
+                continue
+            await portal.mark_read(user, event_id)
 
     async def handle_presence(self, user: str, presence: str):
         pass
@@ -314,10 +322,10 @@ class MatrixHandler:
                 continue
 
             user = await User.get_by_mxid(user_id).ensure_started()
-            if not user.tgid:
+            if not await user.is_logged_in():
                 continue
 
-            await user.set_typing(portal.peer, is_typing)
+            await portal.set_typing(user, is_typing)
 
         self.previously_typing = now_typing
 
