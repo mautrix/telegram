@@ -169,7 +169,8 @@ class Puppet:
         self.log.debug(f"Starting syncer for {custom_mxid} with sync filter {filter_id}.")
         while access_token_at_start == self.access_token:
             try:
-                sync_resp = await self.intent.client.sync(filter=filter_id, since=next_batch)
+                sync_resp = await self.intent.client.sync(filter=filter_id, since=next_batch,
+                                                          set_presence="offline")
                 errors = 0
                 if next_batch is not None:
                     presence = sync_resp.get("presence", {}).get("events", [])
