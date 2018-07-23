@@ -23,6 +23,8 @@ from telethon.errors import *
 
 from ...commands.auth import enter_password
 from ...util import format_duration
+from ...puppet import Puppet
+from ...user import User
 
 
 class AuthAPI(abc.ABC):
@@ -35,6 +37,32 @@ class AuthAPI(abc.ABC):
     def get_login_response(self, status=200, state="", username="", mxid="", message="", error="",
                            errcode=""):
         raise NotImplementedError()
+
+    @abstractmethod
+    def get_mx_login_response(self, status=200, state="", username="", mxid="", message="",
+                              error="", errcode=""):
+        raise NotImplementedError()
+
+    async def post_matrix_token(self, user: User, token):
+        puppet = Puppet.get(user.tgid)
+        if puppet.is_real_user:
+            return self.get_mx_login_response(state="already-logged-in", status=409,
+                                              error="You have already logged in with your Matrix "
+                                                    "account.", errcode="already-logged-in")
+
+        resp = await puppet.switch_mxid(token, user.mxid)
+        if resp == 2:
+            return self.get_mx_login_response(status=403, errcode="only-login-self",
+                                              error="You can only log in as your own Matrix user.")
+        elif resp == 1:
+            return self.get_mx_login_response(status=401, errcode="invalid-access-token",
+                                              error="Failed to verify access token.")
+
+        return self.get_mx_login_response(mxid=user.mxid, status=200, state="logged-in")
+
+    async def post_matrix_password(self, user, password):
+        return self.get_mx_login_response(mxid=user.mxid, status=501, error="Not yet implemented",
+                                          errcode="not-yet-implemented")
 
     async def post_login_phone(self, user, phone):
         try:

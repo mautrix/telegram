@@ -21,7 +21,7 @@ import logging
 import asyncio
 
 from telethon.tl.types import UserProfilePhoto
-from mautrix_appservice import AppService, IntentAPI, MatrixRequestError
+from mautrix_appservice import AppService, IntentAPI, IntentError, MatrixRequestError
 
 from .db import Puppet as DBPuppet
 from . import util, matrix
@@ -67,14 +67,18 @@ class Puppet:
         if self.custom_mxid:
             self.by_custom_mxid[self.custom_mxid] = self
 
+    @property
+    def tgid(self):
+        return self.id
+
+    async def is_logged_in(self):
+        return True
+
+    # region Custom puppet management
     def refresh_intents(self):
         self.is_real_user = self.custom_mxid and self.access_token
         self.intent = (self.az.intent.user(self.custom_mxid, self.access_token)
                        if self.is_real_user else self.default_mxid_intent)
-
-    @property
-    def tgid(self):
-        return self.id
 
     async def switch_mxid(self, access_token, mxid):
         prev_mxid = self.custom_mxid
@@ -91,7 +95,9 @@ class Puppet:
         except KeyError:
             pass
         self.mxid = self.custom_mxid or self.default_mxid
-        self.by_custom_mxid[self.mxid] = self
+        if self.mxid != self.default_mxid:
+            self.by_custom_mxid[self.mxid] = self
+            await self.leave_rooms_with_default_user()
         self.save()
         return 0
 
@@ -110,6 +116,14 @@ class Puppet:
         if config["bridge.sync_with_custom_puppets"]:
             asyncio.ensure_future(self.sync(), loop=self.loop)
         return 0
+
+    async def leave_rooms_with_default_user(self):
+        for room_id in await self.default_mxid_intent.get_joined_rooms():
+            try:
+                await self.default_mxid_intent.leave_room(room_id)
+                await self.intent.ensure_joined(room_id)
+            except (IntentError, MatrixRequestError):
+                pass
 
     def create_sync_filter(self) -> Awaitable[str]:
         return self.intent.client.create_filter(self.custom_mxid, {
@@ -187,8 +201,8 @@ class Puppet:
                 await asyncio.sleep(wait)
         self.log.debug(f"Syncer for custom puppet {custom_mxid} stopped.")
 
-    async def is_logged_in(self):
-        return True
+    # endregion
+    # region DB conversion
 
     @property
     def db_instance(self):
@@ -220,6 +234,8 @@ class Puppet:
         self.db_instance.matrix_registered = self.is_registered
         self.db.commit()
 
+    # endregion
+    # region Info updating
     def similarity(self, query):
         username_similarity = (SequenceMatcher(None, self.username, query).ratio()
                                if self.username else 0)
@@ -298,6 +314,9 @@ class Puppet:
                 self.photo_id = photo_id
                 return True
         return False
+
+    # endregion
+    # region Getters
 
     @classmethod
     def get(cls, id, create=True) -> "Optional[Puppet]":
@@ -387,6 +406,7 @@ class Puppet:
             return cls.from_db(puppet)
 
         return None
+    # endregion
 
 
 def init(context):
