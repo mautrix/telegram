@@ -125,6 +125,9 @@ bridge:
     # Whether or not to fetch and handle Telegram updates at startup from the time the bridge was down.
     # WARNING: Probably buggy, might get stuck in infinite loop.
     catch_up: false
+    # Whether or not to use /sync to get presence, read receipts and typing notifications when using
+    # your own Matrix account as the Matrix puppet for your Telegram account.
+    sync_with_custom_puppets: true
 
     # The formats to use when sending messages to Telegram via the relay bot.
     #

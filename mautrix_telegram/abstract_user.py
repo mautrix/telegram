@@ -36,15 +36,15 @@ class AbstractUser:
     az = None
 
     def __init__(self):
-        self.puppet_whitelisted = False
-        self.whitelisted = False
-        self.relaybot_whitelisted = False
-        self.is_admin = False
-        self.client = None
-        self.tgid = None
-        self.mxid = None
-        self.is_relaybot = False
-        self.is_bot = False
+        self.puppet_whitelisted = False  # type: bool
+        self.whitelisted = False  # type: bool
+        self.relaybot_whitelisted = False  # type: bool
+        self.is_admin = False  # type: bool
+        self.client = None  # type: MautrixTelegramClient
+        self.tgid = None  # type: int
+        self.mxid = None  # type: str
+        self.is_relaybot = False  # type: bool
+        self.is_bot = False  # type: bool
 
     @property
     def connected(self):
@@ -124,7 +124,7 @@ class AbstractUser:
         self.log.debug("%s connected: %s", self.mxid, self.connected)
         return self
 
-    async def ensure_started(self, even_if_no_session=False):
+    async def ensure_started(self, even_if_no_session=False) -> "AbstractUser":
         if not self.puppet_whitelisted:
             return self
         self.log.debug("ensure_started(%s, connected=%s, even_if_no_session=%s, session_count=%s)",
@@ -229,9 +229,9 @@ class AbstractUser:
     async def update_status(self, update):
         puppet = pu.Puppet.get(update.user_id)
         if isinstance(update.status, UserStatusOnline):
-            await puppet.intent.set_presence("online")
+            await puppet.default_mxid_intent.set_presence("online")
         elif isinstance(update.status, UserStatusOffline):
-            await puppet.intent.set_presence("offline")
+            await puppet.default_mxid_intent.set_presence("offline")
         else:
             self.log.warning("Unexpected user status update: %s", update)
         return

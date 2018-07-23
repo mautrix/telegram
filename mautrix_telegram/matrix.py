@@ -14,6 +14,7 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
+from typing import List, Dict
 import logging
 import asyncio
 import re
@@ -32,6 +33,7 @@ class MatrixHandler:
     def __init__(self, context):
         self.az, self.db, self.config, _, self.tgbot = context
         self.commands = CommandProcessor(context)
+        self.previously_typing = []
 
         self.az.matrix_event_handler(self.handle_event)
 
@@ -39,7 +41,8 @@ class MatrixHandler:
         displayname = self.config["appservice.bot_displayname"]
         if displayname:
             try:
-                await self.az.intent.set_display_name(displayname if displayname != "remove" else "")
+                await self.az.intent.set_display_name(
+                    displayname if displayname != "remove" else "")
             except asyncio.TimeoutError:
                 self.log.exception("TimeoutError when trying to set displayname")
 
@@ -51,19 +54,20 @@ class MatrixHandler:
                 self.log.exception("TimeoutError when trying to set avatar")
 
     async def handle_puppet_invite(self, room, puppet, inviter):
+        intent = puppet.default_mxid_intent
         self.log.debug(f"{inviter} invited puppet for {puppet.tgid} to {room}")
         if not await inviter.is_logged_in():
-            await puppet.intent.error_and_leave(
+            await intent.error_and_leave(
                 room, text="Please log in before inviting Telegram puppets.")
             return
         portal = Portal.get_by_mxid(room)
         if portal:
             if portal.peer_type == "user":
-                await puppet.intent.error_and_leave(
+                await intent.error_and_leave(
                     room, text="You can not invite additional users to private chats.")
                 return
             await portal.invite_telegram(inviter, puppet)
-            await puppet.intent.join_room(room)
+            await intent.join_room(room)
             return
         try:
             members = await self.az.intent.get_room_members(room)
@@ -71,34 +75,34 @@ class MatrixHandler:
             members = []
         if self.az.bot_mxid not in members:
             if len(members) > 1:
-                await puppet.intent.error_and_leave(room, text=None, html=(
+                await intent.error_and_leave(room, text=None, html=(
                     f"Please invite "
                     f"<a href='https://matrix.to/#/{self.az.bot_mxid}'>the bridge bot</a> "
                     f"first if you want to create a Telegram chat."))
                 return
 
-            await puppet.intent.join_room(room)
+            await intent.join_room(room)
             portal = Portal.get_by_tgid(puppet.tgid, inviter.tgid, "user")
             if portal.mxid:
                 try:
-                    await puppet.intent.invite(portal.mxid, inviter.mxid)
-                    await puppet.intent.send_notice(room, text=None, html=(
+                    await intent.invite(portal.mxid, inviter.mxid)
+                    await intent.send_notice(room, text=None, html=(
                         "You already have a private chat with me: "
                         f"<a href='https://matrix.to/#/{portal.mxid}'>"
                         "Link to room"
                         "</a>"))
-                    await puppet.intent.leave_room(room)
+                    await intent.leave_room(room)
                     return
                 except MatrixRequestError:
                     pass
             portal.mxid = room
             portal.save()
             inviter.register_portal(portal)
-            await puppet.intent.send_notice(room, "Portal to private chat created.")
+            await intent.send_notice(room, "Portal to private chat created.")
         else:
-            await puppet.intent.join_room(room)
-            await puppet.intent.send_notice(room, "This puppet will remain inactive until a "
-                                                  "Telegram chat is created for this room.")
+            await intent.join_room(room)
+            await intent.send_notice(room, "This puppet will remain inactive until a "
+                                           "Telegram chat is created for this room.")
 
     async def accept_bot_invite(self, room, inviter):
         tries = 0
@@ -215,7 +219,7 @@ class MatrixHandler:
             await portal.handle_matrix_message(sender, message, event_id)
             return
 
-        if not sender.whitelisted or message["msgtype"] != "m.text":
+        if not sender.whitelisted or message.get("msgtype", "m.unknown") != "m.text":
             return
 
         try:
@@ -286,18 +290,69 @@ class MatrixHandler:
         if await user.needs_relaybot(portal):
             await portal.name_change_matrix(user, displayname, prev_displayname, event_id)
 
+    @staticmethod
+    def parse_read_receipts(content: dict) -> Dict[str, str]:
+        return {user_id: event_id
+                for event_id, receipts in content.items()
+                for user_id in receipts.get("m.read", {})}
+
+    async def handle_read_receipts(self, room_id: str, receipts: Dict[str, str]):
+        portal = Portal.get_by_mxid(room_id)
+        if not portal:
+            return
+
+        for user_id, event_id in receipts.items():
+            user = await User.get_by_mxid(user_id).ensure_started()
+            if not await user.is_logged_in():
+                continue
+            await portal.mark_read(user, event_id)
+
+    async def handle_presence(self, user: str, presence: str):
+        user = await User.get_by_mxid(user).ensure_started()
+        if not await user.is_logged_in():
+            return
+        await user.set_presence(presence == "online")
+
+    async def handle_typing(self, room_id: str, now_typing: List[str]):
+        portal = Portal.get_by_mxid(room_id)
+        if not portal:
+            return
+
+        for user_id in set(self.previously_typing + now_typing):
+            is_typing = user_id in now_typing
+            was_typing = user_id in self.previously_typing
+            if is_typing and was_typing:
+                continue
+
+            user = await User.get_by_mxid(user_id).ensure_started()
+            if not await user.is_logged_in():
+                continue
+
+            await portal.set_typing(user, is_typing)
+
+        self.previously_typing = now_typing
+
     def filter_matrix_event(self, event):
-        return (event["sender"] == self.az.bot_mxid
-                or Puppet.get_id_from_mxid(event["sender"]) is not None)
+        sender = event.get("sender", None)
+        if not sender:
+            return False
+        return (sender == self.az.bot_mxid
+                or Puppet.get_id_from_mxid(sender) is not None)
+
+    async def try_handle_event(self, evt):
+        try:
+            await self.handle_event(evt)
+        except Exception:
+            self.log.exception("Error handling manually received Matrix event")
 
     async def handle_event(self, evt):
         if self.filter_matrix_event(evt):
             return
         self.log.debug("Received event: %s", evt)
-        type = evt["type"]
-        room_id = evt["room_id"]
-        event_id = evt["event_id"]
-        sender = evt["sender"]
+        type = evt.get("type", "m.unknown")
+        room_id = evt.get("room_id", None)
+        event_id = evt.get("event_id", None)
+        sender = evt.get("sender", None)
         content = evt.get("content", {})
         if type == "m.room.member":
             state_key = evt["state_key"]
@@ -335,3 +390,9 @@ class MatrixHandler:
             except KeyError:
                 old_events = set()
             await self.handle_room_pin(room_id, sender, new_events, old_events)
+        elif type == "m.receipt":
+            await self.handle_read_receipts(room_id, self.parse_read_receipts(content))
+        elif type == "m.presence":
+            await self.handle_presence(sender, content.get("presence", "offline"))
+        elif type == "m.typing":
+            await self.handle_typing(room_id, content.get("user_ids", []))

@@ -297,6 +297,10 @@ class ProvisioningAPI(AuthAPI):
             "errcode": errcode,
         }, status=status)
 
+    def get_mx_login_response(self, status=200, state="", username="", mxid="", message="",
+                              error="", errcode=""):
+        raise NotImplementedError()
+
     def get_login_response(self, status=200, state="", username="", mxid="", message="", error="",
                            errcode="") -> web.Response:
         if username:

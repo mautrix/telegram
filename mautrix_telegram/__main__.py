@@ -86,7 +86,8 @@ state_store = SQLStateStore(db_session)
 appserv = AppService(config["homeserver.address"], config["homeserver.domain"],
                      config["appservice.as_token"], config["appservice.hs_token"],
                      config["appservice.bot_username"], log="mau.as", loop=loop,
-                     verify_ssl=config["homeserver.verify_ssl"], state_store=state_store)
+                     verify_ssl=config["homeserver.verify_ssl"], state_store=state_store,
+                     real_user_content_key="net.maunium.telegram.puppet")
 
 public_website = None
 provisioning_api = None
@@ -110,8 +111,10 @@ with appserv.run(config["appservice.hostname"], config["appservice.port"]) as st
     context.mx = MatrixHandler(context)
     init_formatter(context)
     init_portal(context)
-    init_puppet(context)
-    startup_actions = init_user(context) + [start, context.mx.init_as_bot()]
+    startup_actions = (init_puppet(context) +
+                       init_user(context) +
+                       [start,
+                        context.mx.init_as_bot()])
 
     if context.bot:
         startup_actions.append(context.bot.start())

@@ -191,6 +191,7 @@ class Config(DictWithRecursion):
         copy("bridge.public_portals")
         copy("bridge.native_stickers")
         copy("bridge.catch_up")
+        copy("bridge.sync_with_custom_puppets")
 
         if "bridge.message_formats.m_text" in self:
             del self["bridge.message_formats"]

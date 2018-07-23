@@ -18,9 +18,9 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 <!DOCTYPE html>
 <html>
 <head>
-	<title>Mautrix-Telegram bridge</title>
+	<title>Login - Mautrix-Telegram bridge</title>
 	<link rel="icon" type="image/png" href="favicon.png"/>
-	<meta property="og:title" content="Mautrix-Telegram bridge">
+	<meta property="og:title" content="Login - Mautrix-Telegram bridge">
 	<meta property="og:description" content="A hybrid puppeting/relaybot Matrix-Telegram bridge">
 	<meta property="og:image" content="favicon.png">
 	<meta charset="utf-8">
@@ -40,10 +40,10 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 		function goBack() {
 			let params = new URLSearchParams(location.search.slice(1))
-			const mxid = params.get("mxid")
+			const token = params.get("token")
 			params = new URLSearchParams()
-			if (mxid) {
-				params.set("mxid", mxid)
+			if (token) {
+				params.set("token", token)
 			}
 			location.replace(location.href.split("?")[0] + "?" + params.toString())
 		}
