@@ -62,7 +62,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 				<input id="access_token" type="radio" name="mode" value="access_token" checked>
 				<label for="access_token">Access token</label><br>
-				<input id="password" type="radio" name="mode" value="password">
+				<input id="password" type="radio" name="mode" value="password" disabled>
 				<label for="password">Password</label><br>
 
 				<label for="value">Value</label>
