@@ -137,7 +137,6 @@ class Puppet:
                 },
                 "ephemeral": {
                     "types": ["m.typing", "m.receipt"],
-                    "senders": [self.custom_mxid],
                 },
                 "account_data": {
                     "types": []
@@ -152,6 +151,33 @@ class Puppet:
             },
         })
 
+    def filter_events(self, events):
+        new_events = []
+        for event in events:
+            type = event.get("type", None)
+            event.setdefault("content", {})
+            if type == "m.typing":
+                is_typing = self.custom_mxid in event["content"].get("user_ids", [])
+                event["content"]["user_ids"] = [self.custom_mxid] if is_typing else []
+            elif type == "m.receipt":
+                val = None
+                evt = None
+                for event_id in event["content"]:
+                    try:
+                        val = event["content"][event_id]["m.read"][self.custom_mxid]
+                        evt = event_id
+                        break
+                    except KeyError:
+                        pass
+                if val and evt:
+                    event["content"] = {evt: {"m.read": {
+                        self.custom_mxid: val
+                    }}}
+                else:
+                    continue
+            new_events.append(event)
+        return new_events
+
     def handle_sync(self, presence, ephemeral):
         presence = [self.mx.try_handle_event(event) for event in presence]
 
@@ -161,7 +187,7 @@ class Puppet:
 
         ephemeral = [self.mx.try_handle_event(event)
                      for events in ephemeral.values()
-                     for event in events]
+                     for event in self.filter_events(events)]
 
         events = ephemeral + presence
         coro = asyncio.gather(*events, loop=self.loop)
