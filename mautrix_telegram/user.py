@@ -190,6 +190,8 @@ class User(AbstractUser):
         return super().ensure_started(even_if_no_session)
 
     def set_presence(self, online: bool = True):
+        if self.is_bot:
+            return
         return self.client(UpdateStatusRequest(offline=not online))
 
     async def update_info(self, info: User = None):

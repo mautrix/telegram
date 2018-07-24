@@ -659,6 +659,8 @@ class Portal:
             SetTypingRequest(self.peer, action() if typing else SendMessageCancelAction()))
 
     async def mark_read(self, user, event_id):
+        if user.is_bot:
+            return
         space = self.tgid if self.peer_type == "channel" else user.tgid
         message = DBMessage.query.filter(DBMessage.mxid == event_id,
                                          DBMessage.mx_room == self.mxid,
