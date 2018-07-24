@@ -136,7 +136,8 @@ class Puppet:
                     "types": [],
                 },
                 "ephemeral": {
-                    "types": ["m.typing", "m.receipt"]
+                    "types": ["m.typing", "m.receipt"],
+                    "senders": [self.custom_mxid],
                 },
                 "account_data": {
                     "types": []
@@ -146,7 +147,8 @@ class Puppet:
                 "types": [],
             },
             "presence": {
-                "types": ["m.presence"]
+                "types": ["m.presence"],
+                "senders": [self.custom_mxid],
             },
         })
 
