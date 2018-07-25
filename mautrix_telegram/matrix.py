@@ -14,26 +14,23 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import List, Dict
+from typing import List, Dict, Tuple, Set, Match
 import logging
 import asyncio
 import re
 
 from mautrix_appservice import MatrixRequestError, IntentError
 
-from .user import User
-from .portal import Portal
-from .puppet import Puppet
-from .commands import CommandProcessor
+from . import user as u, portal as po, puppet as pu, commands as com
 
 
 class MatrixHandler:
-    log = logging.getLogger("mau.mx")
+    log = logging.getLogger("mau.mx")  # type: logging.Logger
 
     def __init__(self, context):
         self.az, self.db, self.config, _, self.tgbot = context
-        self.commands = CommandProcessor(context)
-        self.previously_typing = []
+        self.commands = com.CommandProcessor(context)  # type: com.CommandProcessor
+        self.previously_typing = []  # type: List[str]
 
         self.az.matrix_event_handler(self.handle_event)
 
@@ -53,68 +50,68 @@ class MatrixHandler:
             except asyncio.TimeoutError:
                 self.log.exception("TimeoutError when trying to set avatar")
 
-    async def handle_puppet_invite(self, room, puppet, inviter):
+    async def handle_puppet_invite(self, room_id, puppet: pu.Puppet, inviter: u.User):
         intent = puppet.default_mxid_intent
-        self.log.debug(f"{inviter} invited puppet for {puppet.tgid} to {room}")
+        self.log.debug(f"{inviter} invited puppet for {puppet.tgid} to {room_id}")
         if not await inviter.is_logged_in():
             await intent.error_and_leave(
-                room, text="Please log in before inviting Telegram puppets.")
+                room_id, text="Please log in before inviting Telegram puppets.")
             return
-        portal = Portal.get_by_mxid(room)
+        portal = po.Portal.get_by_mxid(room_id)
         if portal:
             if portal.peer_type == "user":
                 await intent.error_and_leave(
-                    room, text="You can not invite additional users to private chats.")
+                    room_id, text="You can not invite additional users to private chats.")
                 return
             await portal.invite_telegram(inviter, puppet)
-            await intent.join_room(room)
+            await intent.join_room(room_id)
             return
         try:
-            members = await self.az.intent.get_room_members(room)
+            members = await self.az.intent.get_room_members(room_id)
         except MatrixRequestError:
             members = []
         if self.az.bot_mxid not in members:
             if len(members) > 1:
-                await intent.error_and_leave(room, text=None, html=(
+                await intent.error_and_leave(room_id, text=None, html=(
                     f"Please invite "
                     f"<a href='https://matrix.to/#/{self.az.bot_mxid}'>the bridge bot</a> "
                     f"first if you want to create a Telegram chat."))
                 return
 
-            await intent.join_room(room)
-            portal = Portal.get_by_tgid(puppet.tgid, inviter.tgid, "user")
+            await intent.join_room(room_id)
+            portal = po.Portal.get_by_tgid(puppet.tgid, inviter.tgid, "user")
             if portal.mxid:
                 try:
                     await intent.invite(portal.mxid, inviter.mxid)
-                    await intent.send_notice(room, text=None, html=(
+                    await intent.send_notice(room_id, text=None, html=(
                         "You already have a private chat with me: "
                         f"<a href='https://matrix.to/#/{portal.mxid}'>"
                         "Link to room"
                         "</a>"))
-                    await intent.leave_room(room)
+                    await intent.leave_room(room_id)
                     return
                 except MatrixRequestError:
                     pass
-            portal.mxid = room
+            portal.mxid = room_id
             portal.save()
             inviter.register_portal(portal)
-            await intent.send_notice(room, "Portal to private chat created.")
+            await intent.send_notice(room_id, "po.Portal to private chat created.")
         else:
-            await intent.join_room(room)
-            await intent.send_notice(room, "This puppet will remain inactive until a "
-                                           "Telegram chat is created for this room.")
+            await intent.join_room(room_id)
+            await intent.send_notice(room_id, "This puppet will remain inactive until a "
+                                              "Telegram chat is created for this room.")
 
-    async def accept_bot_invite(self, room, inviter):
+    async def accept_bot_invite(self, room_id: str, inviter: u.User):
         tries = 0
         while tries < 5:
             try:
-                await self.az.intent.join_room(room)
+                await self.az.intent.join_room(room_id)
                 break
-            except (IntentError, MatrixRequestError) as e:
+            except (IntentError, MatrixRequestError):
                 tries += 1
                 wait_for_seconds = (tries + 1) * 10
                 if tries < 5:
-                    self.log.exception(f"Failed to join room {room} with bridge bot, "
+                    self.log.exception(f"Failed to join room {room_id} with bridge bot, "
                                        f"retrying in {wait_for_seconds} seconds...")
                     await asyncio.sleep(wait_for_seconds)
                 else:
@@ -123,81 +120,81 @@ class MatrixHandler:
 
         if not inviter.whitelisted:
             await self.az.intent.send_notice(
-                room, text=None,
+                room_id, text=None,
                 html="You are not whitelisted to use this bridge.<br/><br/>"
                      "If you are the owner of this bridge, see the "
                      "<code>bridge.permissions</code> section in your config file.")
-            await self.az.intent.leave_room(room)
+            await self.az.intent.leave_room(room_id)
 
-    async def handle_invite(self, room, user, inviter):
-        self.log.debug(f"{inviter} invited {user} to {room}")
-        inviter = await User.get_by_mxid(inviter).ensure_started()
-        if user == self.az.bot_mxid:
-            return await self.accept_bot_invite(room, inviter)
+    async def handle_invite(self, room_id: str, user_id: str, inviter_mxid: str):
+        self.log.debug(f"{inviter_mxid} invited {user_id} to {room_id}")
+        inviter = await u.User.get_by_mxid(inviter_mxid).ensure_started()
+        if user_id == self.az.bot_mxid:
+            return await self.accept_bot_invite(room_id, inviter)
         elif not inviter.whitelisted:
             return
 
-        puppet = Puppet.get_by_mxid(user)
+        puppet = pu.Puppet.get_by_mxid(user_id)
         if puppet:
-            await self.handle_puppet_invite(room, puppet, inviter)
+            await self.handle_puppet_invite(room_id, puppet, inviter)
             return
 
-        user = User.get_by_mxid(user, create=False)
+        user = u.User.get_by_mxid(user_id, create=False)
         if not user:
             return
         await user.ensure_started()
-        portal = Portal.get_by_mxid(room)
+        portal = po.Portal.get_by_mxid(room_id)
         if user and await user.has_full_access(allow_bot=True) and portal:
             await portal.invite_telegram(inviter, user)
             return
 
         # The rest can probably be ignored
 
-    async def handle_join(self, room, user, event_id):
-        user = await User.get_by_mxid(user).ensure_started()
+    async def handle_join(self, room_id: str, user_id: str, event_id: str):
+        user = await u.User.get_by_mxid(user_id).ensure_started()
 
-        portal = Portal.get_by_mxid(room)
+        portal = po.Portal.get_by_mxid(room_id)
         if not portal:
             return
 
         if not user.relaybot_whitelisted:
-            await portal.main_intent.kick(room, user.mxid,
+            await portal.main_intent.kick(room_id, user.mxid,
                                           "You are not whitelisted on this Telegram bridge.")
             return
         elif not await user.is_logged_in() and not portal.has_bot:
-            await portal.main_intent.kick(room, user.mxid,
+            await portal.main_intent.kick(room_id, user.mxid,
                                           "This chat does not have a bot relaying "
                                           "messages for unauthenticated users.")
             return
 
-        self.log.debug(f"{user} joined {room}")
+        self.log.debug(f"{user} joined {room_id}")
         if await user.is_logged_in() or portal.has_bot:
             await portal.join_matrix(user, event_id)
 
-    async def handle_part(self, room, user, sender, event_id):
-        self.log.debug(f"{user} left {room}")
+    async def handle_part(self, room_id: str, user_id, sender_mxid: str, event_id: str):
+        self.log.debug(f"{user_id} left {room_id}")
 
-        sender = User.get_by_mxid(sender, create=False)
+        sender = u.User.get_by_mxid(sender_mxid, create=False)
         if not sender:
             return
         await sender.ensure_started()
 
-        portal = Portal.get_by_mxid(room)
+        portal = po.Portal.get_by_mxid(room_id)
         if not portal:
             return
 
-        puppet = Puppet.get_by_mxid(user)
+        puppet = pu.Puppet.get_by_mxid(user_id)
         if sender and puppet:
             await portal.leave_matrix(puppet, sender, event_id)
 
-        user = User.get_by_mxid(user, create=False)
+        user = u.User.get_by_mxid(user_id, create=False)
         if not user:
             return
         await user.ensure_started()
         if await user.is_logged_in() or portal.has_bot:
             await portal.leave_matrix(user, sender, event_id)
 
-    def is_command(self, message):
+    def is_command(self, message: dict) -> Tuple[bool, str]:
         text = message.get("body", "")
         prefix = self.config["bridge.command_prefix"]
         is_command = text.startswith(prefix)
@@ -207,14 +204,14 @@ class MatrixHandler:
 
     async def handle_message(self, room, sender, message, event_id):
         is_command, text = self.is_command(message)
-        sender = await User.get_by_mxid(sender).ensure_started()
+        sender = await u.User.get_by_mxid(sender).ensure_started()
         if not sender.relaybot_whitelisted:
             self.log.debug(f"Ignoring message \"{message}\" from {sender} to {room}:"
-                           " User is not whitelisted.")
+                           " u.User is not whitelisted.")
             return
         self.log.debug(f"Received Matrix event \"{message}\" from {sender} in {room}")
 
-        portal = Portal.get_by_mxid(room)
+        portal = po.Portal.get_by_mxid(room)
         if not is_command and portal and (await sender.is_logged_in() or portal.has_bot):
             await portal.handle_matrix_message(sender, message, event_id)
             return
@@ -239,39 +236,44 @@ class MatrixHandler:
             await self.commands.handle(room, sender, command, args, is_management,
                                        is_portal=portal is not None)
 
-    async def handle_redaction(self, room, sender, event_id):
-        sender = await User.get_by_mxid(sender).ensure_started()
+    @staticmethod
+    async def handle_redaction(room_id: str, sender_mxid: str, event_id: str):
+        sender = await u.User.get_by_mxid(sender_mxid).ensure_started()
         if not sender.relaybot_whitelisted:
             return
 
-        portal = Portal.get_by_mxid(room)
+        portal = po.Portal.get_by_mxid(room_id)
         if not portal:
             return
 
         await portal.handle_matrix_deletion(sender, event_id)
 
-    async def handle_power_levels(self, room, sender, new, old):
-        portal = Portal.get_by_mxid(room)
-        sender = await User.get_by_mxid(sender).ensure_started()
+    @staticmethod
+    async def handle_power_levels(room_id: str, sender_mxid: str, new: dict, old: dict):
+        portal = po.Portal.get_by_mxid(room_id)
+        sender = await u.User.get_by_mxid(sender_mxid).ensure_started()
         if await sender.has_full_access(allow_bot=True) and portal:
             await portal.handle_matrix_power_levels(sender, new["users"], old["users"])
 
-    async def handle_room_meta(self, type, room, sender, content):
-        portal = Portal.get_by_mxid(room)
-        sender = await User.get_by_mxid(sender).ensure_started()
+    @staticmethod
+    async def handle_room_meta(evt_type: str, room_id: str, sender_mxid: str, content: dict):
+        portal = po.Portal.get_by_mxid(room_id)
+        sender = await u.User.get_by_mxid(sender_mxid).ensure_started()
         if await sender.has_full_access(allow_bot=True) and portal:
             handler, content_key = {
                 "m.room.name": (portal.handle_matrix_title, "name"),
                 "m.room.topic": (portal.handle_matrix_about, "topic"),
                 "m.room.avatar": (portal.handle_matrix_avatar, "url"),
-            }[type]
+            }[evt_type]
             if content_key not in content:
                 return
             await handler(sender, content[content_key])
 
-    async def handle_room_pin(self, room, sender, new_events, old_events):
-        portal = Portal.get_by_mxid(room)
-        sender = await User.get_by_mxid(sender).ensure_started()
+    @staticmethod
+    async def handle_room_pin(room_id: str, sender_mxid: str, new_events: Set[str],
+                              old_events: Set[str]):
+        portal = po.Portal.get_by_mxid(room_id)
+        sender = await u.User.get_by_mxid(sender_mxid).ensure_started()
         if await sender.has_full_access(allow_bot=True) and portal:
             events = new_events - old_events
             if len(events) > 0:
@@ -281,12 +283,14 @@ class MatrixHandler:
                 # All pinned events removed, remove pinned event in Telegram.
                 await portal.handle_matrix_pin(sender, None)
 
-    async def handle_name_change(self, room, user, displayname, prev_displayname, event_id):
-        portal = Portal.get_by_mxid(room)
+    @staticmethod
+    async def handle_name_change(room_id: str, user_id: str, displayname: str,
+                                 prev_displayname: str, event_id: str):
+        portal = po.Portal.get_by_mxid(room_id)
         if not portal or not portal.has_bot:
             return
 
-        user = await User.get_by_mxid(user).ensure_started()
+        user = await u.User.get_by_mxid(user_id).ensure_started()
         if await user.needs_relaybot(portal):
             await portal.name_change_matrix(user, displayname, prev_displayname, event_id)
 
@@ -296,25 +300,27 @@ class MatrixHandler:
                 for event_id, receipts in content.items()
                 for user_id in receipts.get("m.read", {})}
 
-    async def handle_read_receipts(self, room_id: str, receipts: Dict[str, str]):
-        portal = Portal.get_by_mxid(room_id)
+    @staticmethod
+    async def handle_read_receipts(room_id: str, receipts: Dict[str, str]):
+        portal = po.Portal.get_by_mxid(room_id)
         if not portal:
             return
 
         for user_id, event_id in receipts.items():
-            user = await User.get_by_mxid(user_id).ensure_started()
+            user = await u.User.get_by_mxid(user_id).ensure_started()
             if not await user.is_logged_in():
                 continue
             await portal.mark_read(user, event_id)
 
-    async def handle_presence(self, user: str, presence: str):
-        user = await User.get_by_mxid(user).ensure_started()
+    @staticmethod
+    async def handle_presence(user_id: str, presence: str):
+        user = await u.User.get_by_mxid(user_id).ensure_started()
         if not await user.is_logged_in():
             return
         await user.set_presence(presence == "online")
 
     async def handle_typing(self, room_id: str, now_typing: List[str]):
-        portal = Portal.get_by_mxid(room_id)
+        portal = po.Portal.get_by_mxid(room_id)
         if not portal:
             return
 
@@ -324,7 +330,7 @@ class MatrixHandler:
             if is_typing and was_typing:
                 continue
 
-            user = await User.get_by_mxid(user_id).ensure_started()
+            user = await u.User.get_by_mxid(user_id).ensure_started()
             if not await user.is_logged_in():
                 continue
 
@@ -332,38 +338,38 @@ class MatrixHandler:
 
         self.previously_typing = now_typing
 
-    def filter_matrix_event(self, event):
+    def filter_matrix_event(self, event: dict):
         sender = event.get("sender", None)
         if not sender:
             return False
         return (sender == self.az.bot_mxid
-                or Puppet.get_id_from_mxid(sender) is not None)
+                or pu.Puppet.get_id_from_mxid(sender) is not None)
 
-    async def try_handle_event(self, evt):
+    async def try_handle_event(self, evt: dict):
         try:
             await self.handle_event(evt)
         except Exception:
             self.log.exception("Error handling manually received Matrix event")
 
-    async def handle_event(self, evt):
+    async def handle_event(self, evt: dict):
         if self.filter_matrix_event(evt):
             return
         self.log.debug("Received event: %s", evt)
-        type = evt.get("type", "m.unknown")
-        room_id = evt.get("room_id", None)
-        event_id = evt.get("event_id", None)
-        sender = evt.get("sender", None)
-        content = evt.get("content", {})
-        if type == "m.room.member":
-            state_key = evt["state_key"]
-            prev_content = evt.get("unsigned", {}).get("prev_content", {})
-            membership = content.get("membership", "")
-            prev_membership = prev_content.get("membership", "leave")
+        evt_type = evt.get("type", "m.unknown")  # type: str
+        room_id = evt.get("room_id", None)  # type: str
+        event_id = evt.get("event_id", None)  # type: str
+        sender = evt.get("sender", None)  # type: str
+        content = evt.get("content", {})  # type: dict
+        if evt_type == "m.room.member":
+            state_key = evt["state_key"]  # type: str
+            prev_content = evt.get("unsigned", {}).get("prev_content", {})  # type: dict
+            membership = content.get("membership", "")  # type: str
+            prev_membership = prev_content.get("membership", "leave")  # type: str
             if membership == prev_membership:
-                match = re.compile("@(.+):(.+)").match(state_key)
-                localpart = match.group(1)
-                displayname = content.get("displayname", localpart)
-                prev_displayname = prev_content.get("displayname", localpart)
+                match = re.compile("@(.+):(.+)").match(state_key)  # type: Match
+                localpart = match.group(1)  # type: str
+                displayname = content.get("displayname", localpart)  # type: str
+                prev_displayname = prev_content.get("displayname", localpart)  # type: str
                 if displayname != prev_displayname:
                     await self.handle_name_change(room_id, state_key, displayname,
                                                   prev_displayname, event_id)
@@ -373,26 +379,26 @@ class MatrixHandler:
                 await self.handle_part(room_id, state_key, sender, event_id)
             elif membership == "join":
                 await self.handle_join(room_id, state_key, event_id)
-        elif type in ("m.room.message", "m.sticker"):
-            if type != "m.room.message":
-                content["msgtype"] = type
+        elif evt_type in ("m.room.message", "m.sticker"):
+            if evt_type != "m.room.message":
+                content["msgtype"] = evt_type
             await self.handle_message(room_id, sender, content, event_id)
-        elif type == "m.room.redaction":
+        elif evt_type == "m.room.redaction":
             await self.handle_redaction(room_id, sender, evt["redacts"])
-        elif type == "m.room.power_levels":
+        elif evt_type == "m.room.power_levels":
             await self.handle_power_levels(room_id, sender, evt["content"], evt["prev_content"])
-        elif type in ("m.room.name", "m.room.avatar", "m.room.topic"):
-            await self.handle_room_meta(type, room_id, sender, evt["content"])
-        elif type == "m.room.pinned_events":
+        elif evt_type in ("m.room.name", "m.room.avatar", "m.room.topic"):
+            await self.handle_room_meta(evt_type, room_id, sender, evt["content"])
+        elif evt_type == "m.room.pinned_events":
             new_events = set(evt["content"]["pinned"])
             try:
                 old_events = set(evt["unsigned"]["prev_content"]["pinned"])
             except KeyError:
                 old_events = set()
             await self.handle_room_pin(room_id, sender, new_events, old_events)
-        elif type == "m.receipt":
+        elif evt_type == "m.receipt":
             await self.handle_read_receipts(room_id, self.parse_read_receipts(content))
-        elif type == "m.presence":
+        elif evt_type == "m.presence":
             await self.handle_presence(sender, content.get("presence", "offline"))
-        elif type == "m.typing":
+        elif evt_type == "m.typing":
             await self.handle_typing(room_id, content.get("user_ids", []))

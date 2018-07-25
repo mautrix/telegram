@@ -23,15 +23,14 @@ from .. import puppet as pu, portal as po
 
 ManagementRoomList = List[Tuple[str, str]]
 RoomIDList = List[str]
-PortalList = List[po.Portal]
 
 
-async def _find_rooms(intent: IntentAPI) -> Tuple[
-    ManagementRoomList, RoomIDList, PortalList, PortalList]:
+async def _find_rooms(intent: IntentAPI) -> Tuple[ManagementRoomList, RoomIDList,
+                                                  List["po.Portal"], List["po.Portal"]]:
     management_rooms = []  # type: ManagementRoomList
     unidentified_rooms = []  # type: RoomIDList
-    portals = []  # type: PortalList
-    empty_portals = []  # type: PortalList
+    portals = []  # type: List[po.Portal]
+    empty_portals = []  # type: List[po.Portal]
 
     rooms = await intent.get_joined_rooms()
     for room in rooms:
@@ -108,8 +107,8 @@ async def clean_rooms(evt: CommandEvent):
 
 
 async def set_rooms_to_clean(evt, management_rooms: ManagementRoomList,
-                             unidentified_rooms: RoomIDList, portals: PortalList,
-                             empty_portals: PortalList):
+                             unidentified_rooms: RoomIDList, portals: List["po.Portal"],
+                             empty_portals: List["po.Portal"]):
     command = evt.args[0]
     rooms_to_clean = []
     if command == "clean-recommended":

@@ -16,10 +16,12 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 
-def format_duration(seconds):
-    def pluralize(count, singular): return singular if count == 1 else singular + "s"
+def format_duration(seconds: int) -> str:
+    def pluralize(count, singular):
+        return singular if count == 1 else singular + "s"
 
-    def include(count, word): return f"{count} {pluralize(count, word)}" if count > 0 else ""
+    def include(count, word):
+        return f"{count} {pluralize(count, word)}" if count > 0 else ""
 
     minutes, seconds = divmod(seconds, 60)
     hours, minutes = divmod(minutes, 60)

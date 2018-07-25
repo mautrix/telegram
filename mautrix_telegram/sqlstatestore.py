@@ -16,6 +16,8 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from typing import Dict, Tuple
 
+from sqlalchemy import orm
+
 from mautrix_appservice import StateStore
 
 from . import puppet as pu
@@ -25,15 +27,17 @@ from .db import RoomState, UserProfile
 class SQLStateStore(StateStore):
     def __init__(self, db):
         super().__init__()
-        self.db = db
+        self.db = db  # type: orm.Session
         self.profile_cache = {}  # type: Dict[Tuple[str, str], UserProfile]
         self.room_state_cache = {}  # type: Dict[str, RoomState]
 
-    def is_registered(self, user: str) -> bool:
+    @staticmethod
+    def is_registered(user: str) -> bool:
         puppet = pu.Puppet.get_by_mxid(user)
         return puppet.is_registered if puppet else False
 
-    def registered(self, user: str):
+    @staticmethod
+    def registered(user: str):
         puppet = pu.Puppet.get_by_mxid(user)
         if puppet:
             puppet.is_registered = True

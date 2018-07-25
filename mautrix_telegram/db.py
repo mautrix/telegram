@@ -42,6 +42,7 @@ class Portal(Base):
     about = Column(String, nullable=True)
     photo_id = Column(String, nullable=True)
 
+
 class Message(Base):
     query = None  # type: Query
     __tablename__ = "message"

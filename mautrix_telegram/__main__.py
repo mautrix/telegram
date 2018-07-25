@@ -14,34 +14,33 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
+from typing import Optional
 import argparse
-import sys
-import logging
-import logging.config
 import asyncio
+import logging.config
+import sys
 
-import sqlalchemy as sql
 from sqlalchemy import orm
+import sqlalchemy as sql
 
-from alchemysession import AlchemySessionContainer
 from mautrix_appservice import AppService
+from alchemysession import AlchemySessionContainer
 
-from .base import Base
-from .config import Config
-from .matrix import MatrixHandler
-
-from . import __version__
-from .db import init as init_db
+from .web.provisioning import ProvisioningAPI
+from .web.public import PublicBridgeWebsite
 from .abstract_user import init as init_abstract_user
-from .user import init as init_user, User
+from .base import Base
 from .bot import init as init_bot
+from .config import Config
+from .context import Context
+from .db import init as init_db
+from .formatter import init as init_formatter
+from .matrix import MatrixHandler
 from .portal import init as init_portal
 from .puppet import init as init_puppet
-from .formatter import init as init_formatter
-from .web.public import PublicBridgeWebsite
-from .web.provisioning import ProvisioningAPI
-from .context import Context
 from .sqlstatestore import SQLStateStore
+from .user import User, init as init_user
+from . import __version__
 
 parser = argparse.ArgumentParser(
     description="A Matrix-Telegram puppeting bridge.",
@@ -68,7 +67,7 @@ if args.generate_registration:
     sys.exit(0)
 
 logging.config.dictConfig(config["logging"])
-log = logging.getLogger("mau.init")
+log = logging.getLogger("mau.init")  # type: logging.Logger
 log.debug(f"Initializing mautrix-telegram {__version__}")
 
 db_engine = sql.create_engine(config["appservice.database"] or "sqlite:///mautrix-telegram.db")
@@ -80,7 +79,7 @@ session_container = AlchemySessionContainer(engine=db_engine, session=db_session
                                             table_base=Base, table_prefix="telethon_",
                                             manage_tables=False)
 
-loop = asyncio.get_event_loop()
+loop = asyncio.get_event_loop()  # type: asyncio.AbstractEventLoop
 
 state_store = SQLStateStore(db_session)
 appserv = AppService(config["homeserver.address"], config["homeserver.domain"],
@@ -89,8 +88,8 @@ appserv = AppService(config["homeserver.address"], config["homeserver.domain"],
                      verify_ssl=config["homeserver.verify_ssl"], state_store=state_store,
                      real_user_content_key="net.maunium.telegram.puppet")
 
-public_website = None
-provisioning_api = None
+public_website = None  # type: Optional[PublicBridgeWebsite]
+provisioning_api = None  # type: Optional[ProvisioningAPI]
 
 if config["appservice.public.enabled"]:
     public_website = PublicBridgeWebsite(loop)

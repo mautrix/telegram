@@ -14,21 +14,27 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import Tuple
-import asyncio
+from typing import TYPE_CHECKING
 
-from sqlalchemy.orm import scoped_session
-from alchemysession import AlchemySessionContainer
-from mautrix_appservice import AppService
+if TYPE_CHECKING:
+    import asyncio
+
+    from sqlalchemy.orm import scoped_session
+
+    from alchemysession import AlchemySessionContainer
+    from mautrix_appservice import AppService
+
+    from .web import PublicBridgeWebsite, ProvisioningAPI
+    from .config import Config
+    from .bot import Bot
+    from .matrix import MatrixHandler
+
 
 class Context:
-    def __init__(self, az, db, config, loop, bot, mx, session_container, public_website,
-                 provisioning_api):
-        from .web import PublicBridgeWebsite, ProvisioningAPI
-        from .config import Config
-        from .bot import Bot
-        from .matrix import MatrixHandler
-
+    def __init__(self, az: "AppService", db: "scoped_session", config: "Config",
+                 loop: "asyncio.AbstractEventLoop", bot: "Bot", mx: "MatrixHandler",
+                 session_container: "AlchemySessionContainer",
+                 public_website: "PublicBridgeWebsite", provisioning_api: "ProvisioningAPI"):
         self.az = az  # type: AppService
         self.db = db  # type: scoped_session
         self.config = config  # type: Config

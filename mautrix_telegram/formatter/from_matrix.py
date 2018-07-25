@@ -14,10 +14,10 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
+from typing import (Optional, List, Tuple, Type, Callable, Dict, Any, Pattern, Deque, Match, TYPE_CHECKING)
 from html import unescape
 from html.parser import HTMLParser
 from collections import deque
-from typing import Optional, List, Tuple, Type, Callable, Dict, Any
 import math
 import re
 import logging
@@ -27,37 +27,40 @@ from telethon.tl.types import (MessageEntityMention, MessageEntityMentionName, M
                                MessageEntityItalic, MessageEntityCode, MessageEntityPre,
                                MessageEntityBotCommand, TypeMessageEntity)
 
-from .. import user as u, puppet as pu, portal as po, context as c
+from .. import user as u, puppet as pu, portal as po
 from ..db import Message as DBMessage
 from .util import (add_surrogates, remove_surrogates, trim_reply_fallback_html,
                    trim_reply_fallback_text, html_to_unicode)
 
-log = logging.getLogger("mau.fmt.mx")
-should_bridge_plaintext_highlights = False
+if TYPE_CHECKING:
+    from ..context import Context
+
+log = logging.getLogger("mau.fmt.mx")  # type: logging.Logger
+should_bridge_plaintext_highlights = False  # type: bool
 
 
 class MatrixParser(HTMLParser):
-    mention_regex = re.compile("https://matrix.to/#/(@.+:.+)")
-    room_regex = re.compile("https://matrix.to/#/(#.+:.+)")
+    mention_regex = re.compile("https://matrix.to/#/(@.+:.+)")  # type: Pattern
+    room_regex = re.compile("https://matrix.to/#/(#.+:.+)")  # type: Pattern
     block_tags = ("br", "p", "pre", "blockquote",
                   "ol", "ul", "li",
                   "h1", "h2", "h3", "h4", "h5", "h6",
-                  "div", "hr", "table")
+                  "div", "hr", "table")  # type: Tuple[str, ...]
 
     def __init__(self):
         super().__init__()
-        self.text = ""
-        self.entities = []
-        self._building_entities = {}
-        self._list_counter = 0
-        self._open_tags = deque()
-        self._open_tags_meta = deque()
-        self._line_is_new = True
-        self._list_entry_is_new = False
+        self.text = ""  # type: str
+        self.entities = []  # type: List[TypeMessageEntity]
+        self._building_entities = {}  # type: Dict[str, TypeMessageEntity]
+        self._list_counter = 0  # type: int
+        self._open_tags = deque()  # type: Deque[str]
+        self._open_tags_meta = deque()  # type: Deque[Any]
+        self._line_is_new = True  # type: bool
+        self._list_entry_is_new = False  # type: bool
 
     def _parse_url(self, url: str, args: Dict[str, Any]
                    ) -> Tuple[Optional[Type[TypeMessageEntity]], Optional[str]]:
-        mention = self.mention_regex.match(url)
+        mention = self.mention_regex.match(url)  # type: Match
         if mention:
             mxid = mention.group(1)
             user = (pu.Puppet.get_by_mxid(mxid)
@@ -72,7 +75,7 @@ class MatrixParser(HTMLParser):
             else:
                 return None, None
 
-        room = self.room_regex.match(url)
+        room = self.room_regex.match(url)  # type: Match
         if room:
             username = po.Portal.get_username_from_mx_alias(room.group(1))
             portal = po.Portal.find_by_username(username)
@@ -92,8 +95,8 @@ class MatrixParser(HTMLParser):
         self._open_tags_meta.appendleft(0)
 
         attrs = dict(attrs)
-        entity_type = None
-        args = {}
+        entity_type = None  # type: type(TypeMessageEntity)
+        args = {}  # type: Dict[str, Any]
         if tag in ("strong", "b"):
             entity_type = MessageEntityBold
         elif tag in ("em", "i"):
@@ -243,12 +246,12 @@ class MatrixParser(HTMLParser):
             self._newline(allow_multi=tag == "br")
 
 
-command_regex = re.compile(r"^!([A-Za-z0-9@]+)")
-not_command_regex = re.compile(r"^\\(![A-Za-z0-9@]+)")
-plain_mention_regex = None
+command_regex = re.compile(r"^!([A-Za-z0-9@]+)")  # type: Pattern
+not_command_regex = re.compile(r"^\\(![A-Za-z0-9@]+)")  # type: Pattern
+plain_mention_regex = None  # type: Pattern
 
 
-def plain_mention_to_html(match):
+def plain_mention_to_html(match: Match) -> str:
     puppet = pu.Puppet.find_by_displayname(match.group(2))
     if puppet:
         return (f"{match.group(1)}"
@@ -351,7 +354,7 @@ def plain_mention_to_text() -> Tuple[List[TypeMessageEntity], Callable[[str], st
     return entities, replacer
 
 
-def init_mx(context: c.Context):
+def init_mx(context: "Context"):
     global plain_mention_regex, should_bridge_plaintext_highlights
     config = context.config
     dn_template = config.get("bridge.displayname_template", "{displayname} (Telegram)")

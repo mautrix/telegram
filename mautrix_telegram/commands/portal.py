@@ -222,7 +222,7 @@ async def bridge(evt: CommandEvent):
                            "chat to this room, use `$cmdprefix+sp continue`")
 
 
-async def cleanup_old_portal_while_bridging(evt: CommandEvent, portal: po.Portal):
+async def cleanup_old_portal_while_bridging(evt: CommandEvent, portal: "po.Portal"):
     if not portal.mxid:
         await evt.reply("The portal seems to have lost its Matrix room between you"
                         "calling `$cmdprefix+sp bridge` and this command.\n\n"
