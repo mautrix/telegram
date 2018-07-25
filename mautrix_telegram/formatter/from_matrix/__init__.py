@@ -78,7 +78,7 @@ def matrix_to_telegram(html: str) -> ParsedMessage:
 
         html = add_surrogates(html)
         text, entities = parse_html(add_surrogates(html))
-        text = remove_surrogates(html.strip())
+        text = remove_surrogates(text.strip())
         text, entities = cut_long_message(text, entities)
 
         return text, entities

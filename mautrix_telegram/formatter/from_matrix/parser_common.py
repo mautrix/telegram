@@ -15,17 +15,17 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 import re
-from typing import List, Tuple
+from typing import List, Tuple, Pattern
 from telethon.tl.types import TypeMessageEntity
 
 
 class MatrixParserCommon:
-    mention_regex = re.compile("https://matrix.to/#/(@.+:.+)")
-    room_regex = re.compile("https://matrix.to/#/(#.+:.+)")
+    mention_regex = re.compile("https://matrix.to/#/(@.+:.+)")  # type: Pattern
+    room_regex = re.compile("https://matrix.to/#/(#.+:.+)")  # type: Pattern
     block_tags = ("br", "p", "pre", "blockquote",
                   "ol", "ul", "li",
                   "h1", "h2", "h3", "h4", "h5", "h6",
-                  "div", "hr", "table")
+                  "div", "hr", "table")  # type: Tuple[str, ...]
 
 
 ParsedMessage = Tuple[str, List[TypeMessageEntity]]

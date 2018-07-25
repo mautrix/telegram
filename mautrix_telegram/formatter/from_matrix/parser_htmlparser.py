@@ -38,7 +38,7 @@ def parse_html(html: str) -> ParsedMessage:
 
 class MatrixParser(HTMLParser, MatrixParserCommon):
     def __init__(self):
-        super(HTMLParser, self).__init__()
+        super(MatrixParser, self).__init__()
         self.text = ""  # type: str
         self.entities = []  # type: List[TypeMessageEntity]
         self._building_entities = {}  # type: Dict[str, TypeMessageEntity]

@@ -789,9 +789,9 @@ class Portal:
     def _matrix_event_to_entities(event: dict) -> Tuple[str, Optional[List[TypeMessageEntity]]]:
         try:
             if event.get("format", None) == "org.matrix.custom.html":
-                message, entities = formatter.matrix_to_telegram(event["formatted_body"])
+                message, entities = formatter.matrix_to_telegram(event.get("formatted_body", ""))
             else:
-                message, entities = formatter.matrix_text_to_telegram(event["body"])
+                message, entities = formatter.matrix_text_to_telegram(event.get("body", ""))
         except KeyError:
             message, entities = None, None
         return message, entities
