@@ -9,7 +9,7 @@ from .models import ChatLink, TgUser, MatrixUser, Message as TMMessage, Base as 
 
 parser = argparse.ArgumentParser(
     description="mautrix-telegram telematrix import script",
-    prog="python -m scripts/telematrix_import")
+    prog="python -m mautrix_telegram.scripts.telematrix_import")
 parser.add_argument("-c", "--config", type=str, default="config.yaml",
                     metavar="<path>", help="the path to your mautrix-telegram config file")
 parser.add_argument("-b", "--bot-id", type=int, required=True,
@@ -38,8 +38,14 @@ telematrix.close()
 telematrix_db_engine.dispose()
 
 portals = {}
+chats = {}
+messages = {}
+puppets = {}
 
 for chat_link in chat_links:
+    if type(chat_link.tg_room) is str:
+        print("Expected tg_room to be a number, got a string. Ignoring %s" % chat_link.tg_room)
+        continue
     if chat_link.tg_room >= 0:
         print("Unexpected unprefixed telegram chat ID: %s, ignoring..." % chat_link.tg_room)
         continue
@@ -55,11 +61,9 @@ for chat_link in chat_links:
 
     portal = Portal(tgid=tgid, tg_receiver=tgid, peer_type=peer_type, megagroup=megagroup,
                     mxid=chat_link.matrix_room)
-    portals[chat_link.tg_room] = portal
-    mxtg.add(portal)
-
     bot_chat = BotChat(id=tgid, type=peer_type)
-    mxtg.add(bot_chat)
+    portals[chat_link.tg_room] = portal
+    chats[tgid] = bot_chat
 
 for tm_msg in messages:
     try:
@@ -70,8 +74,18 @@ for tm_msg in messages:
     tg_space = portal.tgid if portal.peer_type == "channel" else args.bot_id
     message = Message(mxid=tm_msg.matrix_event_id, mx_room=tm_msg.matrix_room_id,
                       tgid=tm_msg.tg_message_id, tg_space=tg_space)
-    mxtg.add(message)
+    messages[tm_msg.matrix_event_id] = message
 
-mxtg.add_all(Puppet(id=user.tg_id, displayname=user.name, displayname_source=args.bot_id)
-             for user in tg_users)
+for user in tg_users:
+    puppets[user.tg_id] = Puppet(id=user.tg_id, displayname=user.name, displayname_source=args.bot_id)
+
+for k, v in portals.items():
+    mxtg.add(v)
+for k, v in chats.items():
+    mxtg.add(v)
+for k, v in messages.items():
+    mxtg.add(v)
+for k, v in puppets.items():
+    mxtg.add(v)
+
 mxtg.commit()

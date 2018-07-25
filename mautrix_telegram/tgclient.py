@@ -17,10 +17,14 @@
 from telethon import TelegramClient, utils
 from telethon.tl.functions.messages import SendMediaRequest
 from telethon.tl.types import *
+from telethon.tl import custom
 
 
 class MautrixTelegramClient(TelegramClient):
-    async def upload_file(self, file, mime_type=None, attributes=None, file_name=None):
+    async def upload_file_direct(self, file: bytes, mime_type: str = None,
+                                 attributes: List[TypeDocumentAttribute] = None,
+                                 file_name: str = None
+                                 ) -> Union[InputMediaUploadedDocument, InputMediaUploadedPhoto]:
         file_handle = await super().upload_file(file, file_name=file_name, use_cache=False)
 
         if mime_type == "image/png" or mime_type == "image/jpeg":
@@ -34,7 +38,10 @@ class MautrixTelegramClient(TelegramClient):
                 mime_type=mime_type or "application/octet-stream",
                 attributes=list(attr_dict.values()))
 
-    async def send_media(self, entity, media, caption=None, entities=None, reply_to=None):
+    async def send_media(self, entity: Union[TypeInputPeer, TypePeer],
+                         media: Union[TypeInputMedia, TypeMessageMedia],
+                         caption: str = None, entities: List[TypeMessageEntity] = None,
+                         reply_to: int = None) -> Optional[custom.Message]:
         entity = await self.get_input_entity(entity)
         reply_to = utils.get_message_id(reply_to)
         request = SendMediaRequest(entity, media, message=caption or "", entities=entities or [],

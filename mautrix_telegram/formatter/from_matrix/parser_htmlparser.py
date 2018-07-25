@@ -14,10 +14,10 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
+from typing import (Optional, List, Tuple, Type, Dict, Any, Deque, Match)
 from html import unescape
 from html.parser import HTMLParser
 from collections import deque
-from typing import Optional, List, Tuple, Type, Dict, Any
 import math
 
 from telethon.tl.types import (MessageEntityMention, MessageEntityMentionName, MessageEntityEmail,
@@ -39,18 +39,18 @@ def parse_html(html: str) -> ParsedMessage:
 class MatrixParser(HTMLParser, MatrixParserCommon):
     def __init__(self):
         super(HTMLParser, self).__init__()
-        self.text = ""
-        self.entities = []
-        self._building_entities = {}
-        self._list_counter = 0
-        self._open_tags = deque()
-        self._open_tags_meta = deque()
-        self._line_is_new = True
-        self._list_entry_is_new = False
+        self.text = ""  # type: str
+        self.entities = []  # type: List[TypeMessageEntity]
+        self._building_entities = {}  # type: Dict[str, TypeMessageEntity]
+        self._list_counter = 0  # type: int
+        self._open_tags = deque()  # type: Deque[str]
+        self._open_tags_meta = deque()  # type: Deque[Any]
+        self._line_is_new = True  # type: bool
+        self._list_entry_is_new = False  # type: bool
 
     def _parse_url(self, url: str, args: Dict[str, Any]
                    ) -> Tuple[Optional[Type[TypeMessageEntity]], Optional[str]]:
-        mention = self.mention_regex.match(url)
+        mention = self.mention_regex.match(url)  # type: Match
         if mention:
             mxid = mention.group(1)
             user = (pu.Puppet.get_by_mxid(mxid)
@@ -65,7 +65,7 @@ class MatrixParser(HTMLParser, MatrixParserCommon):
             else:
                 return None, None
 
-        room = self.room_regex.match(url)
+        room = self.room_regex.match(url)  # type: Match
         if room:
             username = po.Portal.get_username_from_mx_alias(room.group(1))
             portal = po.Portal.find_by_username(username)
@@ -85,8 +85,8 @@ class MatrixParser(HTMLParser, MatrixParserCommon):
         self._open_tags_meta.appendleft(0)
 
         attrs = dict(attrs)
-        entity_type = None
-        args = {}
+        entity_type = None  # type: type(TypeMessageEntity)
+        args = {}  # type: Dict[str, Any]
         if tag in ("strong", "b"):
             entity_type = MessageEntityBold
         elif tag in ("em", "i"):

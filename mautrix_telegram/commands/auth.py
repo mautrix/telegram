@@ -49,6 +49,70 @@ async def ping_bot(evt: CommandEvent):
                            "To use the bot, simply invite it to a portal room.")
 
 
+@command_handler(needs_auth=True,
+                 help_section=SECTION_AUTH,
+                 help_text="Revert your Telegram account's Matrix puppet to use the default Matrix "
+                           "account.")
+async def logout_matrix(evt: CommandEvent):
+    puppet = pu.Puppet.get(evt.sender.tgid)
+    if not puppet.is_real_user:
+        return await evt.reply("You are not logged in with your Matrix account.")
+    await puppet.switch_mxid(None, None)
+    await evt.reply("Reverted your Telegram account's Matrix puppet back to the default.")
+
+
+@command_handler(needs_auth=True, management_only=True,
+                 help_section=SECTION_AUTH,
+                 help_text="Replace your Telegram account's Matrix puppet with your own Matrix "
+                           "account")
+async def login_matrix(evt: CommandEvent):
+    puppet = pu.Puppet.get(evt.sender.tgid)
+    if puppet.is_real_user:
+        return await evt.reply("You have already logged in with your Matrix account. "
+                               "Log out with `$cmdprefix+sp logout-matrix` first.")
+    allow_matrix_login = evt.config.get("bridge.allow_matrix_login", True)
+    if allow_matrix_login:
+        evt.sender.command_status = {
+            "next": enter_matrix_token,
+            "action": "Matrix login",
+        }
+    if evt.config["appservice.public.enabled"]:
+        prefix = evt.config["appservice.public.external"]
+        url = f"{prefix}/matrix-login?token={evt.public_website.make_token(evt.sender.mxid, '/matrix-login')}"
+        if allow_matrix_login:
+            return await evt.reply(
+                "This bridge instance allows you to log in inside or outside Matrix.\n\n"
+                "If you would like to log in within Matrix, please send your Matrix access token "
+                "here.\n"
+                f"If you would like to log in outside of Matrix, [click here]({url}).\n\n"
+                "Logging in outside of Matrix is recommended, because in-Matrix login would save "
+                "your access token in the message history.")
+        return await evt.reply("This bridge instance does not allow logging in inside Matrix.\n\n"
+                               f"Please visit [the login page]({url}) to log in.")
+    elif allow_matrix_login:
+        return await evt.reply(
+            "This bridge instance does not allow you to log in outside of Matrix.\n\n"
+            "Please send your Matrix access token here to log in.")
+    return await evt.reply("This bridge instance has been configured to not allow logging in.")
+
+
+async def enter_matrix_token(evt: CommandEvent):
+    evt.sender.command_status = None
+
+    puppet = pu.Puppet.get(evt.sender.tgid)
+    if puppet.is_real_user:
+        return await evt.reply("You have already logged in with your Matrix account. "
+                               "Log out with `$cmdprefix+sp logout-matrix` first.")
+
+    resp = await puppet.switch_mxid(" ".join(evt.args), evt.sender.mxid)
+    if resp == 2:
+        return await evt.reply("You can only log in as your own Matrix user.")
+    elif resp == 1:
+        return await evt.reply("Failed to verify access token.")
+    return await evt.reply(
+        f"Replaced your Telegram account's Matrix puppet with {puppet.custom_mxid}.")
+
+
 @command_handler(needs_auth=False, management_only=True,
                  help_section=SECTION_AUTH,
                  help_args="<_phone_> <_full name_>",
@@ -114,8 +178,8 @@ async def login(evt: CommandEvent):
 
     if evt.config["appservice.public.enabled"]:
         prefix = evt.config["appservice.public.external"]
-        url = f"{prefix}/login?mxid={evt.sender.mxid}"
-        if evt.config.get("bridge.allow_matrix_login", True):
+        url = f"{prefix}/login?token={evt.public_website.make_token(evt.sender.mxid, '/login')}"
+        if allow_matrix_login:
             return await evt.reply(
                 "This bridge instance allows you to log in inside or outside Matrix.\n\n"
                 "If you would like to log in within Matrix, please send your phone number or bot "
@@ -128,7 +192,7 @@ async def login(evt: CommandEvent):
     elif allow_matrix_login:
         return await evt.reply(
             "This bridge instance does not allow you to log in outside of Matrix.\n\n"
-            "Please send your phone number or bot aut token here to start the login process.")
+            "Please send your phone number or bot auth token here to start the login process.")
     return await evt.reply("This bridge instance has been configured to not allow logging in.")
 
 
@@ -174,7 +238,7 @@ async def enter_phone_or_token(evt: CommandEvent):
     # phone numbers don't contain colons but telegram bot auth tokens do
     if evt.args[0].find(":") > 0:
         try:
-            await sign_in(bot_token=evt.args[0])
+            await sign_in(evt, bot_token=evt.args[0])
         except Exception:
             evt.log.exception("Error sending auth token")
             return await evt.reply("Unhandled exception while sending auth token. "
@@ -194,7 +258,7 @@ async def enter_code(evt: CommandEvent):
         return await evt.reply("This bridge instance does not allow in-Matrix login. "
                                "Please use `$cmdprefix+sp login` to get login instructions")
     try:
-        await sign_in(code=evt.args[0])
+        await sign_in(evt, code=evt.args[0])
     except Exception:
         evt.log.exception("Error sending phone code")
         return await evt.reply("Unhandled exception while sending code. "
@@ -209,11 +273,16 @@ async def enter_password(evt: CommandEvent):
         return await evt.reply("This bridge instance does not allow in-Matrix login. "
                                "Please use `$cmdprefix+sp login` to get login instructions")
     try:
-        await sign_in(password=" ".join(evt.args))
+        await sign_in(evt, password=" ".join(evt.args))
+    except AccessTokenInvalidError:
+        return await evt.reply("That bot token is not valid.")
+    except AccessTokenExpiredError:
+        return await evt.reply("That bot token has expired.")
     except Exception:
         evt.log.exception("Error sending password")
         return await evt.reply("Unhandled exception while sending password. "
                                "Check console for more details.")
+
 
 async def sign_in(evt: CommandEvent, **sign_in_info):
     try:
@@ -235,6 +304,7 @@ async def sign_in(evt: CommandEvent, **sign_in_info):
         }
         return await evt.reply("Your account has two-factor authentication. "
                                "Please send your password here.")
+
 
 @command_handler(needs_auth=True,
                  help_section=SECTION_AUTH,

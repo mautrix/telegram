@@ -14,36 +14,33 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
+from typing import Optional
 import argparse
-import sys
-import logging
 import asyncio
+import logging.config
+import sys
 
-import sqlalchemy as sql
 from sqlalchemy import orm
+import sqlalchemy as sql
 
-from alchemysession import AlchemySessionContainer
 from mautrix_appservice import AppService
+from alchemysession import AlchemySessionContainer
 
-from .base import Base
-from .config import Config
-from .matrix import MatrixHandler
-
-from .db import init as init_db
+from .web.provisioning import ProvisioningAPI
+from .web.public import PublicBridgeWebsite
 from .abstract_user import init as init_abstract_user
-from .user import init as init_user, User
+from .base import Base
 from .bot import init as init_bot
+from .config import Config
+from .context import Context
+from .db import init as init_db
+from .formatter import init as init_formatter
+from .matrix import MatrixHandler
 from .portal import init as init_portal
 from .puppet import init as init_puppet
-from .formatter import init as init_formatter
-from .public import PublicBridgeWebsite
-from .context import Context
-
-log = logging.getLogger("mau")
-time_formatter = logging.Formatter("[%(asctime)s] [%(levelname)s@%(name)s] %(message)s")
-handler = logging.StreamHandler()
-handler.setFormatter(time_formatter)
-log.addHandler(handler)
+from .sqlstatestore import SQLStateStore
+from .user import User, init as init_user
+from . import __version__
 
 parser = argparse.ArgumentParser(
     description="A Matrix-Telegram puppeting bridge.",
@@ -69,34 +66,42 @@ if args.generate_registration:
     print(f"Registration generated and saved to {config.registration_path}")
     sys.exit(0)
 
-if config["appservice.debug"]:
-    telethon_log = logging.getLogger("telethon")
-    telethon_log.addHandler(handler)
-    telethon_log.setLevel(logging.DEBUG)
-    log.setLevel(logging.DEBUG)
-    log.debug("Debug messages enabled.")
+logging.config.dictConfig(config["logging"])
+log = logging.getLogger("mau.init")  # type: logging.Logger
+log.debug(f"Initializing mautrix-telegram {__version__}")
 
-db_engine = sql.create_engine(config.get("appservice.database", "sqlite:///mautrix-telegram.db"))
+db_engine = sql.create_engine(config["appservice.database"] or "sqlite:///mautrix-telegram.db")
 db_factory = orm.sessionmaker(bind=db_engine)
 db_session = orm.scoping.scoped_session(db_factory)
 Base.metadata.bind = db_engine
 
-telethon_session_container = AlchemySessionContainer(engine=db_engine, session=db_session,
-                                                     table_base=Base, table_prefix="telethon_",
-                                                     manage_tables=False)
+session_container = AlchemySessionContainer(engine=db_engine, session=db_session,
+                                            table_base=Base, table_prefix="telethon_",
+                                            manage_tables=False)
 
-loop = asyncio.get_event_loop()
+loop = asyncio.get_event_loop()  # type: asyncio.AbstractEventLoop
 
+state_store = SQLStateStore(db_session)
 appserv = AppService(config["homeserver.address"], config["homeserver.domain"],
                      config["appservice.as_token"], config["appservice.hs_token"],
                      config["appservice.bot_username"], log="mau.as", loop=loop,
-                     verify_ssl=config["homeserver.verify_ssl"])
+                     verify_ssl=config["homeserver.verify_ssl"], state_store=state_store,
+                     real_user_content_key="net.maunium.telegram.puppet")
 
-context = Context(appserv, db_session, config, loop, None, None, telethon_session_container)
+public_website = None  # type: Optional[PublicBridgeWebsite]
+provisioning_api = None  # type: Optional[ProvisioningAPI]
 
 if config["appservice.public.enabled"]:
-    public = PublicBridgeWebsite(loop)
-    appserv.app.add_subapp(config.get("appservice.public.prefix", "/public"), public.app)
+    public_website = PublicBridgeWebsite(loop)
+    appserv.app.add_subapp(config["appservice.public.prefix"] or "/public", public_website.app)
+
+if config["appservice.provisioning.enabled"]:
+    provisioning_api = ProvisioningAPI(config, appserv, loop)
+    appserv.app.add_subapp(config["appservice.provisioning.prefix"] or "/_matrix/provisioning",
+                           provisioning_api.app)
+
+context = Context(appserv, db_session, config, loop, None, None, session_container, public_website,
+                  provisioning_api)
 
 with appserv.run(config["appservice.hostname"], config["appservice.port"]) as start:
     init_db(db_session)
@@ -105,16 +110,22 @@ with appserv.run(config["appservice.hostname"], config["appservice.port"]) as st
     context.mx = MatrixHandler(context)
     init_formatter(context)
     init_portal(context)
-    init_puppet(context)
-    startup_actions = init_user(context) + [start, context.mx.init_as_bot()]
+    startup_actions = (init_puppet(context) +
+                       init_user(context) +
+                       [start,
+                        context.mx.init_as_bot()])
 
     if context.bot:
         startup_actions.append(context.bot.start())
 
     try:
+        log.debug("Initialization complete, running startup actions")
         loop.run_until_complete(asyncio.gather(*startup_actions, loop=loop))
+        log.debug("Startup actions complete, now running forever")
         loop.run_forever()
     except KeyboardInterrupt:
-        for user in User.by_tgid.values():
-            user.stop()
+        log.debug("Keyboard interrupt received, stopping clients")
+        loop.run_until_complete(
+            asyncio.gather(*[user.stop() for user in User.by_tgid.values()], loop=loop))
+        log.debug("Clients stopped, shutting down")
         sys.exit(0)

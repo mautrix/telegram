@@ -1,0 +1,844 @@
+swagger: "2.0"
+
+info:
+  title: Mautrix-Telegram provisioning
+  version: 0.3.0
+  description: The provisioning API for Mautrix-Telegram, the Matrix-Telegram puppeting/relaybot bridge.
+  license:
+    name: AGPLv3
+    url: https://github.com/tulir/mautrix-telegram/blob/master/LICENSE
+
+externalDocs:
+  description: Provisioning API wiki page on GitHub
+  url: https://github.com/tulir/mautrix-telegram/wiki/Provisioning-API
+
+basePath: /_matrix/provision/v1
+
+schemes: [https]
+consumes: [application/json]
+produces: [application/json]
+
+tags:
+- name: User info
+- name: Authentication
+- name: Bridging
+
+paths:
+  /portal/{room_id}:
+    get:
+      operationId: get_portal
+      summary: Get the bridging status and info of the connected Telegram chat
+      tags: [Bridging]
+      responses:
+        200:
+          description: Room is bridged
+          schema:
+            $ref: "#/definitions/PortalInfo"
+        400:
+          $ref: "#/responses/BadRequest"
+        404:
+          description: Unknown portal
+          schema:
+            type: object
+            title: Error
+            properties:
+              errcode:
+                type: string
+                title: Error code
+                description: A machine-readable error code
+                enum:
+                - portal_not_found
+              error:
+                $ref: "#/definitions/HumanReadableError"
+      parameters:
+        - name: room_id
+          in: path
+          description: The Matrix ID of the room whose bridging status to get
+          required: true
+          type: string
+          pattern: "![^/]+"
+  /portal/{chat_id}:
+    get:
+      operationId: get_portal_by_tgid
+      summary: Get the bridging status and info of the connected Telegram chat
+      tags: [Bridging]
+      responses:
+        200:
+          description: Chat is bridged
+          schema:
+            $ref: "#/definitions/PortalInfo"
+        400:
+          description: Invalid Telegram chat ID
+          schema:
+            type: object
+            title: Error
+            properties:
+              errcode:
+                type: string
+                title: Error code
+                description: A machine-readable error code
+                enum:
+                - tgid_invalid
+              error:
+                $ref: "#/definitions/HumanReadableError"
+        404:
+          description: Unknown portal
+          schema:
+            type: object
+            title: Error
+            properties:
+              errcode:
+                type: string
+                title: Error code
+                description: A machine-readable error code
+                enum:
+                - portal_not_found
+              error:
+                $ref: "#/definitions/HumanReadableError"
+      parameters:
+        - name: chat_id
+          in: path
+          description: The Matrix ID of the room whose bridging status to get
+          required: true
+          type: integer
+          pattern: "-[0-9]+"
+  /portal/{room_id}/connect/{chat_id}:
+    post:
+      operationId: connect_portal
+      summary: Connect an existing Telegram chat to the given room
+      tags: [Bridging]
+      parameters:
+        - name: room_id
+          in: path
+          description: The Matrix ID of the room to which the Telegram chat should be connected
+          required: true
+          type: string
+        - name: chat_id
+          in: path
+          description: The ID of the Telegram chat to connect
+          required: true
+          type: integer
+          pattern: "-[0-9]+"
+        - name: force
+          in: query
+          description: Set to force bridging by unbridging or deleting existing portal rooms.
+          required: false
+          type: string
+          enum:
+          - delete
+          - unbridge
+        - name: user_id
+          in: query
+          description: Optional Matrix user ID to check if the user has permissions to do the bridging.
+          required: false
+          type: string
+      responses:
+        400:
+          $ref: "#/responses/BadRequest"
+        401:
+          $ref: "#/responses/PermissionError"
+        409:
+          description: Matrix room or Telegram chat is already bridged
+          schema:
+            type: object
+            title: Error
+            properties:
+              errcode:
+                type: string
+                title: Error code
+                description: A machine-readable error code
+                example: <room|chat>_already_bridged
+                enum:
+                - room_already_bridged
+                - chat_already_bridged
+              error:
+                $ref: "#/definitions/HumanReadableError"
+  /portal/{room_id}/create:
+    post:
+      operationId: create_portal
+      summary: Create a new Telegram chat for the given room
+      tags: [Bridging]
+      responses:
+        200:
+          description: Telegram chat created
+          schema:
+            type: object
+            properties:
+              chat_id:
+                type: integer
+        400:
+          $ref: "#/responses/BadRequest"
+        401:
+          $ref: "#/responses/PermissionError"
+        403:
+          description: "Given user isn't logged in with a real account or doesn't have permission to bridge the room, or the bridge bot is not in the room"
+          schema:
+            type: object
+            title: Error
+            properties:
+              errcode:
+                type: string
+                title: Error code
+                description: A machine-readable error code
+                enum:
+                - not_logged_in_real_account
+                - not_enough_permissions
+                - bot_not_in_room
+              error:
+                $ref: "#/definitions/HumanReadableError"
+        409:
+          description: Room is already bridged
+          schema:
+            type: object
+            title: Error
+            properties:
+              errcode:
+                type: string
+                title: Error code
+                description: A machine-readable error code
+                enum:
+                - room_already_bridged
+              error:
+                $ref: "#/definitions/HumanReadableError"
+      parameters:
+        - name: room_id
+          in: path
+          description: The Matrix ID of the room whose bridging status to get
+          required: true
+          type: string
+        - name: body
+          in: body
+          required: true
+          schema:
+            type: object
+            required: [type]
+            properties:
+              type:
+                description: The type of chat to create
+                type: string
+                example: supergroup
+                enum:
+                - chat
+                - supergroup
+                - channel
+              title:
+                description: Title for the new chat
+                type: string
+                example: Mautrix-Telegram Bridge
+              about:
+                description: About text for the new chat
+                type: string
+                example: Discussion about mautrix-telegram
+        - name: user_id
+          in: query
+          description: Matrix user to create the chat as.
+          required: true
+          type: string
+  /portal/{room_id}/disconnect:
+    post:
+      operationId: disconnect_portal
+      summary: Disconnect the Telegram chat from the room
+      tags: [Bridging]
+      responses:
+        202:
+          description: Room unbridging initiated
+        400:
+          $ref: "#/responses/BadRequest"
+        401:
+          $ref: "#/responses/PermissionError"
+        404:
+          description: Unknown portal
+          schema:
+            type: object
+            title: Error
+            properties:
+              errcode:
+                type: string
+                title: Error code
+                description: A machine-readable error code
+                enum:
+                - portal_not_found
+              error:
+                $ref: "#/definitions/HumanReadableError"
+      parameters:
+        - name: room_id
+          in: path
+          description: The Matrix ID of the room whose bridging status to get
+          required: true
+          type: string
+        - name: user_id
+          in: query
+          description: Optional Matrix user ID to check if the user has permissions to do the bridging.
+          required: false
+          type: string
+        - name: delete
+          in: query
+          description: Whether or not to delete the room completely (kick all users instead of just Telegram puppets)
+          required: false
+          type: boolean
+          default: false
+        - name: sync
+          in: query
+          description: Whether or not to wait for the unbridging to be completed before responding. **Could cause timeouts in large rooms**
+          required: false
+          type: boolean
+          default: false
+
+  /user/{user_id}:
+    get:
+      operationId: get_me
+      summary: Get the info of the Telegram user the given Matrix user is logged in as
+      tags: [User info]
+      responses:
+        200:
+          description: User found
+          schema:
+            $ref: "#/definitions/UserInfo"
+        400:
+          $ref: "#/responses/BadRequest"
+        403:
+          $ref: "#/responses/NotWhitelistedError"
+        500:
+          $ref: "#/responses/UnknownError"
+      parameters:
+        - name: user_id
+          in: path
+          description: The Matrix ID of the user who to log in as
+          required: true
+          type: string
+  /user/{user_id}/chats:
+    get:
+      operationId: get_chats
+      summary: Get the list of Telegram chats the given Matrix user has access to
+      tags: [User info]
+      responses:
+        200:
+          description: User is logged in
+          schema:
+            $ref: "#/definitions/UserChats"
+        400:
+          $ref: "#/responses/BadRequest"
+        403:
+          description: User is not logged in or not whitelisted
+          schema:
+            type: object
+            title: Error
+            properties:
+              errcode:
+                type: string
+                title: Error code
+                description: A machine-readable error code
+                enum:
+                - not_logged_in
+                - mxid_not_whitelisted
+              error:
+                $ref: "#/definitions/HumanReadableError"
+        500:
+          $ref: "#/responses/UnknownError"
+      parameters:
+        - name: user_id
+          in: path
+          description: The Matrix ID of the user who to log in as
+          required: true
+          type: string
+
+  /user/{user_id}/login/bot_token:
+    post:
+      operationId: post_bot_token
+      summary: Log in with a bot token
+      tags: [Authentication]
+      responses:
+        200:
+          description: Login successful
+          schema:
+            $ref: "#/definitions/AuthSuccess"
+        400:
+          $ref: "#/responses/BadRequest"
+        401:
+          description: Invalid or expired bot token or invalid shared secret
+          schema:
+            type: object
+            title: Error
+            properties:
+              errcode:
+                type: string
+                title: Error code
+                description: A machine-readable error code
+                example: bot_token_<error>
+                enum:
+                - bot_token_invalid
+                - bot_token_expired
+                - shared_secret_invalid
+              error:
+                $ref: "#/definitions/HumanReadableError"
+        403:
+          $ref: "#/responses/NotWhitelistedError"
+        409:
+          $ref: "#/responses/AlreadyLoggedInError"
+        500:
+          $ref: "#/responses/UnknownError"
+      parameters:
+        - name: user_id
+          in: path
+          description: The Matrix ID of the user who to log in as
+          required: true
+          type: string
+        - name: body
+          in: body
+          required: true
+          schema:
+            type: object
+            properties:
+              token:
+                type: string
+                description: The access token of the bot to log in as
+                example: "297900271:IXjeGEcAN61zHnjPgkWnYWyvVp9K4ulHBEv"
+  /user/{user_id}/login/request_code:
+    post:
+      operationId: post_login_phone
+      summary: Request a phone code from Telegram
+      tags: [Authentication]
+      responses:
+        200:
+          description: Code requested successfully
+          schema:
+            $ref: "#/definitions/AuthSuccess"
+        400:
+          description: Invalid phone number or JSON
+          schema:
+            type: object
+            title: Error
+            properties:
+              errcode:
+                type: string
+                title: Error code
+                description: A machine-readable error code
+                example: machine_readable_error
+                enum:
+                - phone_number_invalid
+                - json_invalid
+              error:
+                $ref: "#/definitions/HumanReadableError"
+        401:
+          description: Invalid shared secret
+          schema:
+            type: object
+            title: Error
+            properties:
+              errcode:
+                type: string
+                title: Error code
+                description: A machine-readable error code
+                enum:
+                - shared_secret_invalid
+              error:
+                $ref: "#/definitions/HumanReadableError"
+        403:
+          description: Matrix ID is not whitelisted or phone number is banned or has forbidden 3rd party apps
+          schema:
+            type: object
+            title: Error
+            properties:
+              errcode:
+                type: string
+                title: Error code
+                description: A machine-readable error code
+                example: machine_readable_error
+                enum:
+                - mxid_not_whitelisted
+                - phone_number_banned
+                - phone_number_app_signup_forbidden
+              error:
+                $ref: "#/definitions/HumanReadableError"
+        404:
+          description: Unregistered phone number
+          schema:
+            type: object
+            title: Error
+            properties:
+              errcode:
+                type: string
+                title: Error code
+                description: A machine-readable error code
+                enum:
+                - phone_number_unoccupied
+              error:
+                $ref: "#/definitions/HumanReadableError"
+        409:
+          $ref: "#/responses/AlreadyLoggedInError"
+        429:
+          description: Phone number has been temporarily blocked for flooding
+          schema:
+            type: object
+            title: Error
+            properties:
+              errcode:
+                type: string
+                title: Error code
+                description: A machine-readable error code
+                enum:
+                - flood_wait
+                - phone_number_flood
+              error:
+                $ref: "#/definitions/HumanReadableError"
+        500:
+          $ref: "#/responses/UnknownError"
+      parameters:
+        - name: user_id
+          in: path
+          description: The Matrix ID of the user who to log in as
+          required: true
+          type: string
+        - name: body
+          in: body
+          required: true
+          schema:
+            type: object
+            properties:
+              phone:
+                type: string
+                description: The phone number to log in as.
+                example: "+123456789"
+  /user/{user_id}/login/send_code:
+    post:
+      operationId: post_login_code
+      summary: Send the login code
+      tags: [Authentication]
+      responses:
+        200:
+          description: Login successful
+          schema:
+            $ref: "#/definitions/AuthSuccess"
+        202:
+          description: Correct code, but two-factor authentication is enabled
+          schema:
+            $ref: "#/definitions/AuthSuccess"
+        400:
+          $ref: "#/responses/BadRequest"
+        401:
+          description: Invalid phone code or shared secret
+          schema:
+            type: object
+            title: Error
+            properties:
+              errcode:
+                type: string
+                title: Error code
+                description: A machine-readable error code
+                enum:
+                - phone_code_invalid
+                - shared_secret_invalid
+              error:
+                $ref: "#/definitions/HumanReadableError"
+        403:
+          description: Matrix ID not whitelisted or phone code expired
+          schema:
+            type: object
+            title: Error
+            properties:
+              errcode:
+                type: string
+                title: Error code
+                description: A machine-readable error code
+                example: machine_readable_error
+                enum:
+                - mxid_not_whitelisted
+                - phone_code_expired
+              error:
+                $ref: "#/definitions/HumanReadableError"
+        409:
+          $ref: "#/responses/AlreadyLoggedInError"
+        500:
+          $ref: "#/responses/UnknownError"
+      parameters:
+        - name: user_id
+          in: path
+          description: The Matrix ID of the user who to log in as
+          required: true
+          type: string
+        - name: body
+          in: body
+          required: true
+          schema:
+            type: object
+            properties:
+              code:
+                type: integer
+                description: The phone code from Telegram.
+                format: int32
+                example: 123456
+  /user/{user_id}/login/send_password:
+    post:
+      operationId: post_login_password
+      summary: Send the two-factor auth password
+      tags: [Authentication]
+      responses:
+        200:
+          description: Login successful
+          schema:
+            $ref: "#/definitions/AuthSuccess"
+        400:
+          description: Missing password or invalid JSON
+          schema:
+            type: object
+            title: Error
+            properties:
+              errcode:
+                type: string
+                title: Error code
+                description: A machine-readable error code
+                example: <field>_empty
+                enum:
+                - password_empty
+                - json_invalid
+              error:
+                $ref: "#/definitions/HumanReadableError"
+        401:
+          description: Incorrect password or invalid shared secret
+          schema:
+            type: object
+            title: Error
+            properties:
+              errcode:
+                type: string
+                title: Error code
+                description: A machine-readable error code
+                enum:
+                - password_invalid
+                - shared_secret_invalid
+              error:
+                $ref: "#/definitions/HumanReadableError"
+        403:
+          $ref: "#/responses/NotWhitelistedError"
+        409:
+          $ref: "#/responses/AlreadyLoggedInError"
+        500:
+          $ref: "#/responses/UnknownError"
+      parameters:
+        - name: user_id
+          in: path
+          description: The Matrix ID of the user who to log in as
+          required: true
+          type: string
+        - name: body
+          in: body
+          required: true
+          schema:
+            type: object
+            properties:
+              password:
+                type: string
+                description: The two-factor auth password
+                format: password
+                example: hunter2
+  /user/{user_id}/logout:
+    post:
+      operationId: logout
+      summary: Log out
+      tags: [Authentication]
+      responses:
+        200:
+          description: Logout successful
+        403:
+          description: User was not logged in
+          schema:
+            type: object
+            title: Error
+            properties:
+              errcode:
+                type: string
+                title: Error code
+                description: A machine-readable error code
+                enum:
+                - not_logged_in
+              error:
+                $ref: "#/definitions/HumanReadableError"
+        500:
+          $ref: "#/responses/UnknownError"
+      parameters:
+        - name: user_id
+          in: path
+          description: The Matrix ID of the user who to log out as
+          required: true
+          type: string
+
+responses:
+  NotWhitelistedError:
+    description: Matrix ID not whitelisted for puppeting
+    schema:
+      type: object
+      title: Error
+      properties:
+        errcode:
+          type: string
+          title: Error code
+          description: A machine-readable error code
+          enum:
+          - mxid_not_whitelisted
+        error:
+          $ref: "#/definitions/HumanReadableError"
+  AlreadyLoggedInError:
+    description: The Matrix user is already logged in
+    schema:
+      type: object
+      properties:
+        state:
+          type: string
+          enum:
+          - logged-in
+        username:
+          type: string
+          description: The Telegram username the user is logged in as.
+  BadRequest:
+    description: Invalid JSON.
+    schema:
+      type: object
+      title: Error
+      properties:
+        errcode:
+          type: string
+          title: Error code
+          description: A machine-readable error code
+          enum:
+          - json_invalid
+          - mxid_empty
+          - body_value_missing
+          - body_value_invalid
+        error:
+          $ref: "#/definitions/HumanReadableError"
+  UnknownError:
+    description: Unknown error
+    schema:
+      type: object
+      title: UnknownError
+      properties:
+        errcode:
+          type: string
+          title: Error code
+          description: A machine-readable error code
+          enum:
+          - unknown_error
+          - unhandled_error
+        error:
+          type: string
+          title: Error
+          description: A human-readable description of the error
+          example: Internal server error while <action>.
+  PermissionError:
+    description: The given Matrix user doesn't have the permissions to do that.
+    schema:
+      type: object
+      title: Error
+      properties:
+        errcode:
+          type: string
+          title: Error code
+          description: A machine-readable error code
+          example: not_enough_permissions
+          enum:
+          - not_enough_permissions
+        error:
+          $ref: "#/definitions/HumanReadableError"
+
+definitions:
+  UserInfo:
+    type: object
+    properties:
+      mxid:
+        type: string
+        example: "@usern:example.com"
+      permissions:
+        type: string
+        example: user
+        enum:
+        - none
+        - relaybot
+        - user
+        - full
+        - admin
+      telegram:
+        type: object
+        properties:
+          id:
+            type: integer
+            example: 123456789
+          username:
+            type: string
+            example: username
+          first_name:
+            type: string
+            example: Usern
+          last_name:
+            type: string
+            example: A.
+          phone:
+            type: string
+            example: +123456789
+          is_bot:
+            type: boolean
+            example: false
+  UserChats:
+    type: array
+    items:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: -123456789
+          description: A bot API style chat ID.
+        title:
+          type: string
+
+  PortalInfo:
+    type: object
+    properties:
+      mxid:
+        type: string
+        example: "!foo:example.com"
+      chat_id:
+        type: integer
+        example: -100123456789
+      peer_type:
+        type: string
+        enum:
+        - user
+        - chat
+        - channel
+      megagroup:
+        type: boolean
+      username:
+        type: string
+      title:
+        type: string
+      about:
+        type: string
+
+  AuthSuccess:
+    type: object
+    properties:
+      state:
+        type: string
+        description: The state/next step after the successful operation.
+        enum:
+        - code
+        - request
+        - password
+        - token
+        - logged-in
+      username:
+        type: string
+        description: The Telegram username the user is logged in as. Only applicable if state=logged-in
+
+  HumanReadableError:
+    type: string
+    description: A human-readable description of the error
+    example: A human-readable description of the error
+
+security:
+  - Bearer: []
+securityDefinitions:
+  Bearer:
+    description: Required authentication for all endpoints
+    name: Authorization
+    in: header
+    type: apiKey

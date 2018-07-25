@@ -14,7 +14,7 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import Awaitable, Callable
+from typing import Awaitable, Callable, Pattern, Dict, TYPE_CHECKING
 import logging
 import re
 
@@ -27,27 +27,31 @@ from .abstract_user import AbstractUser
 from .db import BotChat
 from . import puppet as pu, portal as po, user as u
 
-config = None
+if TYPE_CHECKING:
+    from .config import Config
+
+config = None  # type: Config
 
 ReplyFunc = Callable[[str], Awaitable[Message]]
 
 
 class Bot(AbstractUser):
-    log = logging.getLogger("mau.bot")
-    mxid_regex = re.compile("@.+:.+")
+    log = logging.getLogger("mau.bot")  # type: logging.Logger
+    mxid_regex = re.compile("@.+:.+")  # type: Pattern
 
     def __init__(self, token: str):
         super().__init__()
-        self.token = token
-        self.puppet_whitelisted = True
-        self.whitelisted = True
-        self.relaybot_whitelisted = True
-        self.username = None
-        self.is_relaybot = True
-        self.is_bot = True
-        self.chats = {chat.id: chat.type for chat in BotChat.query.all()}
-        self.tg_whitelist = []
-        self.whitelist_group_admins = config["bridge.relaybot.whitelist_group_admins"] or False
+        self.token = token  # type: str
+        self.puppet_whitelisted = True  # type: bool
+        self.whitelisted = True  # type: bool
+        self.relaybot_whitelisted = True  # type: bool
+        self.username = None  # type: str
+        self.is_relaybot = True  # type: bool
+        self.is_bot = True  # type: bool
+        self.chats = {chat.id: chat.type for chat in BotChat.query.all()}  # type: Dict[int, str]
+        self.tg_whitelist = []  # type: List[int]
+        self.whitelist_group_admins = (config["bridge.relaybot.whitelist_group_admins"]
+                                       or False)  # type: bool
 
     async def init_permissions(self):
         whitelist = config["bridge.relaybot.whitelist"] or []
@@ -61,7 +65,7 @@ class Bot(AbstractUser):
             if isinstance(id, int):
                 self.tg_whitelist.append(id)
 
-    async def start(self, delete_unless_authenticated=False):
+    async def start(self, delete_unless_authenticated: bool = False) -> "Bot":
         await super().start(delete_unless_authenticated)
         if not await self.is_logged_in():
             await self.client.sign_in(bot_token=self.token)
@@ -118,7 +122,7 @@ class Bot(AbstractUser):
             self.db.delete(existing_chat)
             self.db.commit()
 
-    async def _can_use_commands(self, chat, tgid):
+    async def _can_use_commands(self, chat: TypePeer, tgid: int) -> bool:
         if tgid in self.tg_whitelist:
             return True
 
@@ -138,7 +142,7 @@ class Bot(AbstractUser):
                     if p.user_id == tgid:
                         return isinstance(p, (ChatParticipantCreator, ChatParticipantAdmin))
 
-    async def check_can_use_commands(self, event: Message, reply: ReplyFunc):
+    async def check_can_use_commands(self, event: Message, reply: ReplyFunc) -> bool:
         if not await self._can_use_commands(event.to_id, event.from_id):
             await reply("You do not have the permission to use that command.")
             return False
@@ -262,7 +266,7 @@ class Bot(AbstractUser):
         return "bot"
 
 
-def init(context):
+def init(context) -> Optional[Bot]:
     global config
     config = context.config
     token = config["telegram.bot_token"]

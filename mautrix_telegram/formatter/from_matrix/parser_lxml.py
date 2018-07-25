@@ -35,8 +35,8 @@ from .parser_common import MatrixParserCommon, ParsedMessage
 
 class MatrixParser(MatrixParserCommon):
     def __init__(self):
-        self.text = ""
-        self.entities = []
+        self.text = ""  # type: str
+        self.entities = []  # type: List[TypeMessageEntity]
 
     def parse_node(self, node) -> ParsedMessage:
         pass

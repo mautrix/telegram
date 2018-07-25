@@ -14,13 +14,8 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
+from typing import Optional, List, Tuple, TYPE_CHECKING
 from html import escape
-from typing import Optional, List, Tuple
-
-try:
-    from lxml.html.diff import htmldiff
-except ImportError:
-    htmldiff = None  # type: function
 import logging
 import re
 
@@ -34,16 +29,25 @@ from mautrix_appservice import MatrixRequestError
 from mautrix_appservice.intent_api import IntentAPI
 
 from .. import user as u, puppet as pu, portal as po
-from ..context import Context
 from ..db import Message as DBMessage
 from .util import (add_surrogates, remove_surrogates, trim_reply_fallback_html,
                    trim_reply_fallback_text, unicode_to_html)
 
-log = logging.getLogger("mau.fmt.tg")
-should_highlight_edits = False
+if TYPE_CHECKING:
+    from ..abstract_user import AbstractUser
+    from ..context import Context
+
+try:
+    from lxml.html.diff import htmldiff
+except ImportError:
+    htmldiff = None  # type: function
 
 
-def telegram_reply_to_matrix(evt: Message, source: u.User) -> dict:
+log = logging.getLogger("mau.fmt.tg")  # type: logging.Logger
+should_highlight_edits = False  # type: bool
+
+
+def telegram_reply_to_matrix(evt: Message, source: "AbstractUser") -> dict:
     if evt.reply_to_msg_id:
         space = (evt.to_id.channel_id
                  if isinstance(evt, Message) and isinstance(evt.to_id, PeerChannel)
@@ -79,7 +83,7 @@ async def _add_forward_header(source, text: str, html: Optional[str],
         if not fwd_from_text:
             user = await source.client.get_entity(PeerUser(fwd_from.from_id))
             if user:
-                fwd_from_text = pu.Puppet.get_displayname(user, format=False)
+                fwd_from_text = pu.Puppet.get_displayname(user, False)
                 fwd_from_html = f"<b>{fwd_from_text}</b>"
 
     if not fwd_from_text:
@@ -111,8 +115,9 @@ def highlight_edits(new_html: str, old_html: str) -> str:
     return new_html
 
 
-async def _add_reply_header(source: u.User, text: str, html: str, evt: Message, relates_to: dict,
-                            main_intent: IntentAPI, is_edit: bool) -> Tuple[str, str]:
+async def _add_reply_header(source: "AbstractUser", text: str, html: str, evt: Message,
+                            relates_to: dict, main_intent: IntentAPI, is_edit: bool
+                            ) -> Tuple[str, str]:
     space = (evt.to_id.channel_id
              if isinstance(evt, Message) and isinstance(evt.to_id, PeerChannel)
              else source.tgid)
@@ -143,7 +148,7 @@ async def _add_reply_header(source: u.User, text: str, html: str, evt: Message, 
 
         if is_edit and should_highlight_edits:
             html = highlight_edits(html or escape(text), r_html_body)
-    except (ValueError, KeyError, MatrixRequestError) as e:
+    except (ValueError, KeyError, MatrixRequestError):
         r_sender_link = "unknown user"
         r_displayname = "unknown user"
         r_text_body = "Failed to fetch message"
@@ -155,8 +160,9 @@ async def _add_reply_header(source: u.User, text: str, html: str, evt: Message, 
 
     r_keyword = "In reply to" if not is_edit else "Edit to"
     r_msg_link = f"<a href='https://matrix.to/#/{msg.mx_room}/{msg.mxid}'>{r_keyword}</a>"
-    html = (f"<mx-reply><blockquote>{r_msg_link} {r_sender_link}\n{r_html_body}</blockquote></mx-reply>"
-            + (html or escape(text)))
+    html = (
+        f"<mx-reply><blockquote>{r_msg_link} {r_sender_link}\n{r_html_body}</blockquote></mx-reply>"
+        + (html or escape(text)))
 
     lines = r_text_body.strip().split("\n")
     text_with_quote = f"> <{r_displayname}> {lines.pop(0)}"
@@ -168,7 +174,8 @@ async def _add_reply_header(source: u.User, text: str, html: str, evt: Message, 
     return text_with_quote, html
 
 
-async def telegram_to_matrix(evt: Message, source: u.User, main_intent: Optional[IntentAPI] = None,
+async def telegram_to_matrix(evt: Message, source: "AbstractUser",
+                             main_intent: Optional[IntentAPI] = None,
                              is_edit: bool = False, prefix_text: Optional[str] = None,
                              prefix_html: Optional[str] = None) -> Tuple[str, str, dict]:
     text = add_surrogates(evt.message)
@@ -321,6 +328,6 @@ def _parse_url(html: List[str], entity_text: str, url: str) -> bool:
     return False
 
 
-def init_tg(context: Context):
+def init_tg(context: "Context"):
     global should_highlight_edits
     should_highlight_edits = htmldiff and context.config["bridge.highlight_edits"]

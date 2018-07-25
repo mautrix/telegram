@@ -26,9 +26,9 @@ setuptools.setup(
 
     install_requires=[
         "aiohttp>=3.0.1,<4",
-        "mautrix-appservice>=0.3.0,<0.4.0",
+        "mautrix-appservice>=0.3.1,<0.4.0",
         "SQLAlchemy>=1.2.3,<2",
-        "alembic>=0.9.8,<0.10",
+        "alembic>=1.0.0,<2",
         "Markdown>=2.6.11,<3",
         "ruamel.yaml>=0.15.35,<0.16",
         "future-fstrings>=0.4.2",
@@ -52,7 +52,7 @@ setuptools.setup(
         mautrix-telegram=mautrix_telegram.__main__:main
     """,
     package_data={"mautrix_telegram": [
-        "public/*.mako", "public/*.png", "public/*.css",
+        "web/public/*.mako", "web/public/*.png", "web/public/*.css",
     ]},
     data_files=[
         (".", ["example-config.yaml", "alembic.ini"]),

@@ -15,14 +15,16 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from sqlalchemy import (Column, UniqueConstraint, ForeignKey, ForeignKeyConstraint, Integer,
-                        BigInteger, String, Boolean)
-from sqlalchemy.orm import relationship
+                        BigInteger, String, Boolean, Text)
+from sqlalchemy.sql import expression
+from sqlalchemy.orm import relationship, Query
+import json
 
 from .base import Base
 
 
 class Portal(Base):
-    query = None
+    query = None  # type: Query
     __tablename__ = "portal"
 
     # Telegram chat information
@@ -42,7 +44,7 @@ class Portal(Base):
 
 
 class Message(Base):
-    query = None
+    query = None  # type: Query
     __tablename__ = "message"
 
     mxid = Column(String)
@@ -54,7 +56,7 @@ class Message(Base):
 
 
 class UserPortal(Base):
-    query = None
+    query = None  # type: Query
     __tablename__ = "user_portal"
 
     user = Column(Integer, ForeignKey("user.tgid", onupdate="CASCADE", ondelete="CASCADE"),
@@ -68,7 +70,7 @@ class UserPortal(Base):
 
 
 class User(Base):
-    query = None
+    query = None  # type: Query
     __tablename__ = "user"
 
     mxid = Column(String, primary_key=True)
@@ -80,8 +82,50 @@ class User(Base):
     portals = relationship("Portal", secondary="user_portal")
 
 
+class RoomState(Base):
+    query = None  # type: Query
+    __tablename__ = "mx_room_state"
+
+    room_id = Column(String, primary_key=True)
+    _power_levels_text = Column("power_levels", Text, nullable=True)
+    _power_levels_json = None
+
+    @property
+    def has_power_levels(self):
+        return bool(self._power_levels_text)
+
+    @property
+    def power_levels(self):
+        if not self._power_levels_json and self._power_levels_text:
+            self._power_levels_json = json.loads(self._power_levels_text)
+        return self._power_levels_json or {}
+
+    @power_levels.setter
+    def power_levels(self, val):
+        self._power_levels_json = val
+        self._power_levels_text = json.dumps(val)
+
+
+class UserProfile(Base):
+    query = None  # type: Query
+    __tablename__ = "mx_user_profile"
+
+    room_id = Column(String, primary_key=True)
+    user_id = Column(String, primary_key=True)
+    membership = Column(String, nullable=False, default="leave")
+    displayname = Column(String, nullable=True)
+    avatar_url = Column(String, nullable=True)
+
+    def dict(self):
+        return {
+            "membership": self.membership,
+            "displayname": self.displayname,
+            "avatar_url": self.avatar_url,
+        }
+
+
 class Contact(Base):
-    query = None
+    query = None  # type: Query
     __tablename__ = "contact"
 
     user = Column(Integer, ForeignKey("user.tgid"), primary_key=True)
@@ -89,27 +133,30 @@ class Contact(Base):
 
 
 class Puppet(Base):
-    query = None
+    query = None  # type: Query
     __tablename__ = "puppet"
 
     id = Column(Integer, primary_key=True)
+    custom_mxid = Column(String, nullable=True)
+    access_token = Column(String, nullable=True)
     displayname = Column(String, nullable=True)
     displayname_source = Column(Integer, nullable=True)
     username = Column(String, nullable=True)
     photo_id = Column(String, nullable=True)
     is_bot = Column(Boolean, nullable=True)
+    matrix_registered = Column(Boolean, nullable=False, server_default=expression.false())
 
 
 # Fucking Telegram not telling bots what chats they are in 3:<
 class BotChat(Base):
-    query = None
+    query = None  # type: Query
     __tablename__ = "bot_chat"
     id = Column(Integer, primary_key=True)
     type = Column(String, nullable=False)
 
 
 class TelegramFile(Base):
-    query = None
+    query = None  # type: Query
     __tablename__ = "telegram_file"
 
     id = Column(String, primary_key=True)
@@ -132,3 +179,5 @@ def init(db_session):
     Puppet.query = db_session.query_property()
     BotChat.query = db_session.query_property()
     TelegramFile.query = db_session.query_property()
+    UserProfile.query = db_session.query_property()
+    RoomState.query = db_session.query_property()

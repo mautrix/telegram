@@ -14,14 +14,13 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import Optional, List, Tuple, Callable
+from typing import Optional, List, Tuple, Callable, Pattern, Match, TYPE_CHECKING
 import re
 import logging
 
 from telethon.tl.types import (MessageEntityMention, MessageEntityMentionName, MessageEntityItalic,
                                TypeMessageEntity)
 
-from ...context import Context
 from ... import puppet as pu
 from ...db import Message as DBMessage
 from ..util import (add_surrogates, remove_surrogates, trim_reply_fallback_html,
@@ -33,15 +32,18 @@ try:
 except ImportError:
     from mautrix_telegram.formatter.from_matrix.parser_htmlparser import parse_html
 
-log = logging.getLogger("mau.fmt.mx")
-should_bridge_plaintext_highlights = False
+if TYPE_CHECKING:
+    from ...context import Context
 
-command_regex = re.compile(r"^!([A-Za-z0-9@]+)")
-not_command_regex = re.compile(r"^\\(![A-Za-z0-9@]+)")
-plain_mention_regex = None
+log = logging.getLogger("mau.fmt.mx")  # type: logging.Logger
+should_bridge_plaintext_highlights = False  # type: bool
+
+command_regex = re.compile(r"^!([A-Za-z0-9@]+)")  # type: Pattern
+not_command_regex = re.compile(r"^\\(![A-Za-z0-9@]+)")  # type: Pattern
+plain_mention_regex = None  # type: Pattern
 
 
-def plain_mention_to_html(match):
+def plain_mention_to_html(match: Match) -> str:
     puppet = pu.Puppet.find_by_displayname(match.group(2))
     if puppet:
         return (f"{match.group(1)}"
@@ -141,7 +143,7 @@ def plain_mention_to_text() -> Tuple[List[TypeMessageEntity], Callable[[str], st
     return entities, replacer
 
 
-def init_mx(context: Context):
+def init_mx(context: "Context"):
     global plain_mention_regex, should_bridge_plaintext_highlights
     config = context.config
     dn_template = config.get("bridge.displayname_template", "{displayname} (Telegram)")
