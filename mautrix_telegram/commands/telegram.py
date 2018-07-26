@@ -14,7 +14,9 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from telethon.errors import *
+
+from telethon.errors import (
+    InviteHashInvalidError, InviteHashExpiredError, UserAlreadyParticipantError)
 from telethon.tl.types import User as TLUser
 from telethon.tl.functions.messages import ImportChatInviteRequest, CheckChatInviteRequest
 from telethon.tl.functions.channels import JoinChannelRequest

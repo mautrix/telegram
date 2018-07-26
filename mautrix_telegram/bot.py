@@ -14,11 +14,15 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import Awaitable, Callable, Pattern, Dict, TYPE_CHECKING
+from typing import Awaitable, Callable, Dict, Optional, Pattern, TYPE_CHECKING
 import logging
 import re
 
-from telethon.tl.types import *
+from telethon.tl.types import (
+    ChannelParticipantAdmin, ChannelParticipantCreator, ChatForbidden, ChatParticipantAdmin,
+    ChatParticipantCreator, InputChannel, InputUser, Message, MessageActionChatAddUser,
+    MessageActionChatDeleteUser, MessageEntityBotCommand, MessageService, PeerChannel, PeerChat,
+    TypePeer, UpdateNewChannelMessage, UpdateNewMessage)
 from telethon.tl.functions.messages import GetChatsRequest, GetFullChatRequest
 from telethon.tl.functions.channels import GetChannelsRequest, GetParticipantRequest
 from telethon.errors import ChannelInvalidError, ChannelPrivateError

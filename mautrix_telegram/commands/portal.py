@@ -17,7 +17,8 @@
 from typing import Optional, Callable
 import asyncio
 
-from telethon.errors import *
+from telethon.errors import (ChatAdminRequiredError, UsernameInvalidError,
+                             UsernameNotModifiedError, UsernameOccupiedError)
 from telethon.tl.types import ChatForbidden, ChannelForbidden
 from mautrix_appservice import MatrixRequestError, IntentAPI
 

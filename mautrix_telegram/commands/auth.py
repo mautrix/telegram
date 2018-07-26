@@ -17,7 +17,11 @@
 from typing import Dict
 import asyncio
 
-from telethon.errors import *
+from telethon.errors import (
+    AccessTokenExpiredError, AccessTokenInvalidError, FirstNameInvalidError, FloodWaitError,
+    PasswordHashInvalidError, PhoneCodeExpiredError, PhoneCodeInvalidError,
+    PhoneNumberAppSignupForbiddenError, PhoneNumberBannedError, PhoneNumberFloodError,
+    PhoneNumberOccupiedError, PhoneNumberUnoccupiedError, SessionPasswordNeededError)
 
 from . import command_handler, CommandEvent, SECTION_AUTH
 from .. import puppet as pu

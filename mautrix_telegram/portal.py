@@ -14,7 +14,7 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import Pattern, Dict, Tuple, Awaitable, TYPE_CHECKING
+from typing import Awaitable, Dict, List, Optional, Pattern, Tuple, Union, TYPE_CHECKING
 from collections import deque
 from datetime import datetime
 from string import Template
@@ -32,13 +32,36 @@ from sqlalchemy import orm
 from sqlalchemy.exc import IntegrityError, InvalidRequestError
 from sqlalchemy.orm.exc import FlushError
 
-from telethon.tl.functions.messages import *
-from telethon.tl.functions.channels import *
+from telethon.tl.functions.messages import (
+    AddChatUserRequest, CreateChatRequest, DeleteChatUserRequest, EditChatAdminRequest,
+    EditChatPhotoRequest, EditChatTitleRequest, ExportChatInviteRequest, GetFullChatRequest,
+    MigrateChatRequest, SetTypingRequest)
+from telethon.tl.functions.channels import (
+    CreateChannelRequest, EditAboutRequest, EditAdminRequest, EditBannedRequest, EditPhotoRequest,
+    EditTitleRequest, ExportInviteRequest, GetParticipantsRequest, InviteToChannelRequest,
+    JoinChannelRequest, LeaveChannelRequest, UpdatePinnedMessageRequest, UpdateUsernameRequest)
 from telethon.tl.functions.messages import ReadHistoryRequest as ReadMessageHistoryRequest
 from telethon.tl.functions.channels import ReadHistoryRequest as ReadChannelHistoryRequest
 from telethon.errors import ChatAdminRequiredError, ChatNotModifiedError
-from telethon.tl.types import *
+from telethon.tl.types import (
+    Channel, ChannelAdminRights, ChannelBannedRights, ChannelFull, ChannelParticipantAdmin,
+    ChannelParticipantCreator, ChannelParticipantsRecent, ChannelParticipantsSearch, Chat,
+    ChatFull, ChatInviteEmpty, ChatParticipantAdmin, ChatParticipantCreator, ChatPhoto,
+    DocumentAttributeFilename, DocumentAttributeImageSize, DocumentAttributeSticker,
+    DocumentAttributeVideo, FileLocation, GeoPoint, InputChannel, InputChatUploadedPhoto,
+    InputPeerChannel, InputPeerChat, InputPeerUser, InputUser, InputUserSelf, Message,
+    MessageActionChannelCreate, MessageActionChatAddUser, MessageActionChatCreate,
+    MessageActionChatDeletePhoto, MessageActionChatDeleteUser, MessageActionChatEditPhoto,
+    MessageActionChatEditTitle, MessageActionChatJoinedByLink, MessageActionChatMigrateTo,
+    MessageActionPinMessage, MessageMediaContact, MessageMediaDocument, MessageMediaGeo,
+    MessageMediaPhoto, MessageService, PeerChannel, PeerChat, PeerUser, Photo, PhotoCachedSize,
+    SendMessageCancelAction, SendMessageTypingAction, TypeChannelParticipant, TypeChat,
+    TypeChatParticipant, TypeDocumentAttribute, TypeInputPeer, TypeMessageAction,
+    TypeMessageEntity, TypePeer, TypePhotoSize, TypeUpdates, TypeUser, TypeUserFull,
+    UpdateChatUserTyping, UpdateNewChannelMessage, UpdateNewMessage, UpdateUserTyping, User,
+    UserFull)
 from mautrix_appservice import MatrixRequestError, IntentError, AppService, IntentAPI
+
 
 from .context import Context
 from .db import Portal as DBPortal, Message as DBMessage, TelegramFile as DBTelegramFile
@@ -232,7 +255,7 @@ class Portal:
             del self._dedup_mxid[self._dedup.popleft()]
         return None
 
-    def get_input_entity(self, user: u.User) -> Awaitable[TypeInputPeer]:
+    def get_input_entity(self, user: 'u.User') -> Awaitable[TypeInputPeer]:
         return user.client.get_input_entity(self.peer)
 
     # endregion
@@ -587,7 +610,7 @@ class Portal:
         elif self.peer_type == "user":
             return [entity], []
 
-    async def get_invite_link(self, user: u.User) -> str:
+    async def get_invite_link(self, user: 'u.User') -> str:
         if self.peer_type == "user":
             raise ValueError("You can't invite users to private chats.")
         elif self.peer_type == "chat":
@@ -605,7 +628,7 @@ class Portal:
 
         return link.link
 
-    async def get_authenticated_matrix_users(self) -> List[u.User]:
+    async def get_authenticated_matrix_users(self) -> List['u.User']:
         try:
             members = await self.main_intent.get_room_members(self.mxid)
         except MatrixRequestError:
@@ -664,7 +687,7 @@ class Portal:
         else:
             return ""
 
-    async def _get_state_change_message(self, event: str, user: u.User,
+    async def _get_state_change_message(self, event: str, user: 'u.User',
                                         arguments: Optional[dict] = None) -> Optional[dict]:
         tpl = config[f"bridge.state_event_formats.{event}"]
         if len(tpl) == 0:
@@ -682,7 +705,7 @@ class Portal:
             "formatted_body": message,
         }
 
-    async def name_change_matrix(self, user: u.User, displayname: str, prev_displayname: str,
+    async def name_change_matrix(self, user: 'u.User', displayname: str, prev_displayname: str,
                                  event_id: str) -> None:
         async with self.require_send_lock(self.bot.tgid):
             message = await self._get_state_change_message(
@@ -696,16 +719,16 @@ class Portal:
             space = self.tgid if self.peer_type == "channel" else self.bot.tgid
             self.is_duplicate(response, (event_id, space))
 
-    async def get_displayname(self, user: u.User) -> str:
+    async def get_displayname(self, user: 'u.User') -> str:
         return (await self.main_intent.get_displayname(self.mxid, user.mxid)
                 or user.mxid_localpart)
 
-    def set_typing(self, user: u.User, typing: bool = True,
+    def set_typing(self, user: 'u.User', typing: bool = True,
                    action=SendMessageTypingAction) -> None:
         return user.client(SetTypingRequest(
             self.peer, action() if typing else SendMessageCancelAction()))
 
-    async def mark_read(self, user: u.User, event_id: str) -> None:
+    async def mark_read(self, user: 'u.User', event_id: str) -> None:
         if user.is_bot:
             return
         space = self.tgid if self.peer_type == "channel" else user.tgid
@@ -720,7 +743,7 @@ class Portal:
         else:
             await user.client(ReadMessageHistoryRequest(peer=self.peer, max_id=message.tgid))
 
-    async def leave_matrix(self, user: u.User, source: u.User, event_id: str) -> None:
+    async def leave_matrix(self, user: 'u.User', source: 'u.User', event_id: str) -> None:
         if await user.needs_relaybot(self):
             async with self.require_send_lock(self.bot.tgid):
                 message = await self._get_state_change_message("leave", user)
@@ -756,7 +779,7 @@ class Portal:
             channel = await self.get_input_entity(user)
             await user.client(LeaveChannelRequest(channel=channel))
 
-    async def join_matrix(self, user: u.User, event_id: str) -> None:
+    async def join_matrix(self, user: 'u.User', event_id: str) -> None:
         if await user.needs_relaybot(self):
             async with self.require_send_lock(self.bot.tgid):
                 message = await self._get_state_change_message("join", user)
@@ -775,7 +798,7 @@ class Portal:
             # We'll just assume the user is already in the chat.
             pass
 
-    async def _apply_msg_format(self, sender: u.User, msgtype: str, message: dict) -> None:
+    async def _apply_msg_format(self, sender: 'u.User', msgtype: str, message: dict) -> None:
         if "formatted_body" not in message:
             message["format"] = "org.matrix.custom.html"
             message["formatted_body"] = escape_html(message.get("body", ""))
@@ -790,7 +813,7 @@ class Portal:
                         message=body)
         message["formatted_body"] = Template(tpl).safe_substitute(tpl_args)
 
-    async def _pre_process_matrix_message(self, sender: u.User, use_relaybot: bool,
+    async def _pre_process_matrix_message(self, sender: 'u.User', use_relaybot: bool,
                                           message: dict) -> None:
         msgtype = message.get("msgtype", "m.text")
         if msgtype == "m.emote":
@@ -898,7 +921,7 @@ class Portal:
             mxid=event_id))
         self.db.commit()
 
-    async def handle_matrix_message(self, sender: u.User, message: dict, event_id: str) -> None:
+    async def handle_matrix_message(self, sender: 'u.User', message: dict, event_id: str) -> None:
         puppet = p.Puppet.get_by_custom_mxid(sender.mxid)
         if puppet and message.get("net.maunium.telegram.puppet", False):
             self.log.debug("Ignoring puppet-sent message by confirmed puppet user %s", sender.mxid)
@@ -926,7 +949,7 @@ class Portal:
         else:
             self.log.debug(f"Unhandled Matrix event: {message}")
 
-    async def handle_matrix_pin(self, sender: u.User, pinned_message: Optional[str]) -> None:
+    async def handle_matrix_pin(self, sender: 'u.User', pinned_message: Optional[str]) -> None:
         if self.peer_type != "channel":
             return
         try:
@@ -940,7 +963,7 @@ class Portal:
         except ChatNotModifiedError:
             pass
 
-    async def handle_matrix_deletion(self, deleter: u.User, event_id: str) -> None:
+    async def handle_matrix_deletion(self, deleter: 'u.User', event_id: str) -> None:
         deleter = deleter if not await deleter.needs_relaybot(self) else self.bot
         space = self.tgid if self.peer_type == "channel" else deleter.tgid
         message = DBMessage.query.filter(DBMessage.mxid == event_id,
@@ -950,7 +973,7 @@ class Portal:
             return
         await deleter.client.delete_messages(self.peer, [message.tgid])
 
-    async def _update_telegram_power_level(self, sender: u.User, user_id: int, level: int) -> None:
+    async def _update_telegram_power_level(self, sender: 'u.User', user_id: int, level: int) -> None:
         if self.peer_type == "chat":
             await sender.client(EditChatAdminRequest(
                 chat_id=self.tgid, user_id=user_id, is_admin=level >= 50))
@@ -966,7 +989,7 @@ class Portal:
                 EditAdminRequest(channel=await self.get_input_entity(sender),
                                  user_id=user_id, admin_rights=rights))
 
-    async def handle_matrix_power_levels(self, sender: u.User, new_users: Dict[str, int],
+    async def handle_matrix_power_levels(self, sender: 'u.User', new_users: Dict[str, int],
                                          old_users: Dict[str, int]) -> None:
         # TODO handle all power level changes and bridge exact admin rights to supergroups/channels
         for user, level in new_users.items():
@@ -983,7 +1006,7 @@ class Portal:
             if user not in old_users or level != old_users[user]:
                 await self._update_telegram_power_level(sender, user_id, level)
 
-    async def handle_matrix_about(self, sender: u.User, about: str) -> None:
+    async def handle_matrix_about(self, sender: 'u.User', about: str) -> None:
         if self.peer_type not in {"channel"}:
             return
         channel = await self.get_input_entity(sender)
@@ -991,7 +1014,7 @@ class Portal:
         self.about = about
         self.save()
 
-    async def handle_matrix_title(self, sender: u.User, title: str) -> None:
+    async def handle_matrix_title(self, sender: 'u.User', title: str) -> None:
         if self.peer_type not in {"chat", "channel"}:
             return
 
@@ -1004,7 +1027,7 @@ class Portal:
         self.title = title
         self.save()
 
-    async def handle_matrix_avatar(self, sender: u.User, url: str) -> None:
+    async def handle_matrix_avatar(self, sender: 'u.User', url: str) -> None:
         if self.peer_type not in {"chat", "channel"}:
             # Invalid peer type
             return
@@ -1055,7 +1078,7 @@ class Portal:
                 user_tgids.add(puppet_id)
         return list(user_tgids)
 
-    async def upgrade_telegram_chat(self, source: u.User) -> None:
+    async def upgrade_telegram_chat(self, source: 'u.User') -> None:
         if self.peer_type != "chat":
             raise ValueError("Only normal group chats are upgradable to supergroups.")
 
@@ -1071,7 +1094,7 @@ class Portal:
         self.migrate_and_save(entity.id)
         await self.update_info(source, entity)
 
-    async def set_telegram_username(self, source: u.User, username: str) -> None:
+    async def set_telegram_username(self, source: 'u.User', username: str) -> None:
         if self.peer_type != "channel":
             raise ValueError("Only channels and supergroups have usernames.")
         await source.client(
@@ -1079,7 +1102,7 @@ class Portal:
         if await self.update_username(username):
             self.save()
 
-    async def create_telegram_chat(self, source: u.User, supergroup: bool = False) -> None:
+    async def create_telegram_chat(self, source: 'u.User', supergroup: bool = False) -> None:
         if not self.mxid:
             raise ValueError("Can't create Telegram chat for portal without Matrix room.")
         elif self.tgid:
@@ -1120,7 +1143,7 @@ class Portal:
             await self.main_intent.set_power_levels(self.mxid, levels)
         await self.handle_matrix_power_levels(source, levels["users"], {})
 
-    async def invite_telegram(self, source: u.User,
+    async def invite_telegram(self, source: 'u.User',
                               puppet: Union[p.Puppet, "AbstractUser"]) -> None:
         if self.peer_type == "chat":
             await source.client(
@@ -1544,7 +1567,7 @@ class Portal:
         return 0
 
     @staticmethod
-    def _participant_to_power_levels(levels: dict, user: Union[u.User, p.Puppet], new_level: int,
+    def _participant_to_power_levels(levels: dict, user: Union['u.User', p.Puppet], new_level: int,
                                      bot_level: int) -> bool:
         new_level = min(new_level, bot_level)
         default_level = levels["users_default"] if "users_default" in levels else 0

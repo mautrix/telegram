@@ -27,7 +27,8 @@ from sqlalchemy.orm.exc import FlushError
 
 from telethon.tl.types import (Document, FileLocation, InputFileLocation,
                                InputDocumentFileLocation, PhotoSize, PhotoCachedSize)
-from telethon.errors import *
+from telethon.errors import (AuthBytesInvalidError, AuthKeyInvalidError, LocationInvalidError,
+                             SecurityError)
 from mautrix_appservice import IntentAPI
 
 from ..tgclient import MautrixTelegramClient
