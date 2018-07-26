@@ -14,41 +14,31 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import (Optional, List, Tuple, Type, Callable, Dict, Any, Pattern, Deque, Match, TYPE_CHECKING)
+from typing import (Optional, List, Tuple, Type, Dict, Any, Deque, Match)
 from html import unescape
 from html.parser import HTMLParser
 from collections import deque
 import math
-import re
-import logging
 
 from telethon.tl.types import (MessageEntityMention, MessageEntityMentionName, MessageEntityEmail,
                                MessageEntityUrl, MessageEntityTextUrl, MessageEntityBold,
                                MessageEntityItalic, MessageEntityCode, MessageEntityPre,
                                MessageEntityBotCommand, TypeMessageEntity)
 
-from .. import user as u, puppet as pu, portal as po
-from ..db import Message as DBMessage
-from .util import (add_surrogates, remove_surrogates, trim_reply_fallback_html,
-                   trim_reply_fallback_text, html_to_unicode)
-
-if TYPE_CHECKING:
-    from ..context import Context
-
-log = logging.getLogger("mau.fmt.mx")  # type: logging.Logger
-should_bridge_plaintext_highlights = False  # type: bool
+from ... import user as u, puppet as pu, portal as po
+from ..util import html_to_unicode
+from .parser_common import MatrixParserCommon, ParsedMessage
 
 
-class MatrixParser(HTMLParser):
-    mention_regex = re.compile("https://matrix.to/#/(@.+:.+)")  # type: Pattern
-    room_regex = re.compile("https://matrix.to/#/(#.+:.+)")  # type: Pattern
-    block_tags = ("br", "p", "pre", "blockquote",
-                  "ol", "ul", "li",
-                  "h1", "h2", "h3", "h4", "h5", "h6",
-                  "div", "hr", "table")  # type: Tuple[str, ...]
+def parse_html(html: str) -> ParsedMessage:
+    parser = MatrixParser()
+    parser.feed(html)
+    return parser.text, parser.entities
 
+
+class MatrixParser(HTMLParser, MatrixParserCommon):
     def __init__(self):
-        super().__init__()
+        super(MatrixParser, self).__init__()
         self.text = ""  # type: str
         self.entities = []  # type: List[TypeMessageEntity]
         self._building_entities = {}  # type: Dict[str, TypeMessageEntity]
@@ -244,120 +234,3 @@ class MatrixParser(HTMLParser):
 
         if tag in self.block_tags and tag != "br" and "blockquote" not in self._open_tags:
             self._newline(allow_multi=tag == "br")
-
-
-command_regex = re.compile(r"^!([A-Za-z0-9@]+)")  # type: Pattern
-not_command_regex = re.compile(r"^\\(![A-Za-z0-9@]+)")  # type: Pattern
-plain_mention_regex = None  # type: Pattern
-
-
-def plain_mention_to_html(match: Match) -> str:
-    puppet = pu.Puppet.find_by_displayname(match.group(2))
-    if puppet:
-        return (f"{match.group(1)}"
-                f"<a href='https://matrix.to/#/{puppet.mxid}'>"
-                f"{puppet.displayname}"
-                "</a>")
-    return "".join(match.groups())
-
-
-def cut_long_message(message: str, entities: List[TypeMessageEntity]
-                     ) -> Tuple[str, List[TypeMessageEntity]]:
-    if len(message) > 4096:
-        message = message[0:4082] + " [message cut]"
-        new_entities = []
-        for entity in entities:
-            if entity.offset > 4082:
-                continue
-            if entity.offset + entity.length > 4082:
-                entity.length = 4082 - entity.offset
-            new_entities.append(entity)
-        new_entities.append(MessageEntityItalic(4082, len(" [message cut]")))
-        entities = new_entities
-    return message, entities
-
-
-def matrix_to_telegram(html: str) -> Tuple[str, List[TypeMessageEntity]]:
-    try:
-        parser = MatrixParser()
-        html = command_regex.sub(r"<command>\1</command>", html)
-        html = html.replace("\t", " " * 4)
-        html = not_command_regex.sub(r"\1", html)
-        if should_bridge_plaintext_highlights:
-            html = plain_mention_regex.sub(plain_mention_to_html, html)
-        parser.feed(add_surrogates(html))
-
-        message_text = remove_surrogates(parser.text.strip())
-        message_entities = parser.entities
-
-        message_text, message_entities = cut_long_message(message_text, message_entities)
-
-        return message_text, message_entities
-    except Exception:
-        log.exception("Failed to convert Matrix format:\nhtml=%s", html)
-
-
-def matrix_reply_to_telegram(content: dict, tg_space: int, room_id: Optional[str] = None
-                             ) -> Optional[int]:
-    try:
-        reply = content["m.relates_to"]["m.in_reply_to"]
-        room_id = room_id or reply["room_id"]
-        event_id = reply["event_id"]
-
-        try:
-            if content["format"] == "org.matrix.custom.html":
-                content["formatted_body"] = trim_reply_fallback_html(content["formatted_body"])
-        except KeyError:
-            pass
-        content["body"] = trim_reply_fallback_text(content["body"])
-
-        message = DBMessage.query.filter(DBMessage.mxid == event_id,
-                                         DBMessage.tg_space == tg_space,
-                                         DBMessage.mx_room == room_id).one_or_none()
-        if message:
-            return message.tgid
-    except KeyError:
-        pass
-    return None
-
-
-def matrix_text_to_telegram(text: str) -> Tuple[str, List[TypeMessageEntity]]:
-    text = command_regex.sub(r"/\1", text)
-    text = text.replace("\t", " " * 4)
-    text = not_command_regex.sub(r"\1", text)
-    if should_bridge_plaintext_highlights:
-        entities, pmr_replacer = plain_mention_to_text()
-        text = plain_mention_regex.sub(pmr_replacer, text)
-    else:
-        entities = []
-    return text, entities
-
-
-def plain_mention_to_text() -> Tuple[List[TypeMessageEntity], Callable[[str], str]]:
-    entities = []
-
-    def replacer(match):
-        puppet = pu.Puppet.find_by_displayname(match.group(2))
-        if puppet:
-            offset = match.start()
-            length = match.end() - offset
-            if puppet.username:
-                entity = MessageEntityMention(offset, length)
-                text = f"@{puppet.username}"
-            else:
-                entity = MessageEntityMentionName(offset, length, user_id=puppet.tgid)
-                text = puppet.displayname
-            entities.append(entity)
-            return text
-        return "".join(match.groups())
-
-    return entities, replacer
-
-
-def init_mx(context: "Context"):
-    global plain_mention_regex, should_bridge_plaintext_highlights
-    config = context.config
-    dn_template = config.get("bridge.displayname_template", "{displayname} (Telegram)")
-    dn_template = re.escape(dn_template).replace(re.escape("{displayname}"), "[^>]+")
-    plain_mention_regex = re.compile(f"(\s|^)({dn_template})")
-    should_bridge_plaintext_highlights = config["bridge.plaintext_highlights"] or False
