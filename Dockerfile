@@ -18,6 +18,7 @@ RUN apk add --no-cache \
       py3-asn1crypto \
       py3-sqlalchemy \
       py3-markdown \
+      py3-psycopg2 \
       ffmpeg \
       ca-certificates \
       su-exec \
