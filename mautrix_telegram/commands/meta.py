@@ -20,7 +20,7 @@ from . import command_handler, CommandEvent, _command_handlers, SECTION_GENERAL
 @command_handler(needs_auth=False, needs_puppeting=False,
                  help_section=SECTION_GENERAL,
                  help_text="Cancel an ongoing action (such as login)")
-def cancel(evt: CommandEvent):
+def cancel(evt: CommandEvent) -> None:
     if evt.sender.command_status:
         action = evt.sender.command_status["action"]
         evt.sender.command_status = None
@@ -30,14 +30,14 @@ def cancel(evt: CommandEvent):
 
 
 @command_handler(needs_auth=False, needs_puppeting=False)
-def unknown_command(evt: CommandEvent):
+def unknown_command(evt: CommandEvent) -> None:
     return evt.reply("Unknown command. Try `$cmdprefix+sp help` for help.")
 
 
 help_cache = {}
 
 
-async def _get_help_text(evt: CommandEvent):
+async def _get_help_text(evt: CommandEvent) -> None:
     cache_key = (evt.is_management, evt.sender.puppet_whitelisted,
                  evt.sender.matrix_puppet_whitelisted, evt.sender.is_admin,
                  await evt.sender.is_logged_in())
@@ -53,7 +53,7 @@ async def _get_help_text(evt: CommandEvent):
     return help_cache[cache_key]
 
 
-def _get_management_status(evt: CommandEvent):
+def _get_management_status(evt: CommandEvent) -> None:
     if evt.is_management:
         return "This is a management room: prefixing commands with `$cmdprefix` is not required."
     elif evt.is_portal:
@@ -65,5 +65,5 @@ def _get_management_status(evt: CommandEvent):
 @command_handler(needs_auth=False, needs_puppeting=False,
                  help_section=SECTION_GENERAL,
                  help_text="Show this help message.")
-async def help(evt: CommandEvent):
+async def help(evt: CommandEvent) -> None:
     return await evt.reply(_get_management_status(evt) + "\n" + await _get_help_text(evt))

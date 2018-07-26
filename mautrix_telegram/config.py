@@ -25,7 +25,7 @@ yaml.indent(4)
 
 
 class DictWithRecursion:
-    def __init__(self, data: CommentedMap = None):
+    def __init__(self, data: CommentedMap = None) -> None:
         self._data = data or CommentedMap()  # type: CommentedMap
 
     def _recursive_get(self, data: CommentedMap, key: str, default_value: Any) -> Any:
@@ -46,7 +46,7 @@ class DictWithRecursion:
     def __contains__(self, key: str) -> bool:
         return self[key] is not None
 
-    def _recursive_set(self, data: CommentedMap, key: str, value: Any):
+    def _recursive_set(self, data: CommentedMap, key: str, value: Any) -> None:
         if '.' in key:
             key, next_key = key.split('.', 1)
             if key not in data:
@@ -56,16 +56,16 @@ class DictWithRecursion:
             return
         data[key] = value
 
-    def set(self, key: str, value: Any, allow_recursion: bool = True):
+    def set(self, key: str, value: Any, allow_recursion: bool = True) -> None:
         if allow_recursion and '.' in key:
             self._recursive_set(self._data, key, value)
             return
         self._data[key] = value
 
-    def __setitem__(self, key: str, value: Any):
+    def __setitem__(self, key: str, value: Any) -> None:
         self.set(key, value)
 
-    def _recursive_del(self, data: CommentedMap, key: str):
+    def _recursive_del(self, data: CommentedMap, key: str) -> None:
         if '.' in key:
             key, next_key = key.split('.', 1)
             if key not in data:
@@ -79,7 +79,7 @@ class DictWithRecursion:
         except KeyError:
             pass
 
-    def delete(self, key: str, allow_recursion: bool = True):
+    def delete(self, key: str, allow_recursion: bool = True) -> None:
         if allow_recursion and '.' in key:
             self._recursive_del(self._data, key)
             return
@@ -89,19 +89,19 @@ class DictWithRecursion:
         except KeyError:
             pass
 
-    def __delitem__(self, key: str):
+    def __delitem__(self, key: str) -> None:
         self.delete(key)
 
 
 class Config(DictWithRecursion):
-    def __init__(self, path: str, registration_path: str, base_path: str):
+    def __init__(self, path: str, registration_path: str, base_path: str) -> None:
         super().__init__()
         self.path = path  # type: str
         self.registration_path = registration_path  # type: str
         self.base_path = base_path  # type: str
         self._registration = None  # type: dict
 
-    def load(self):
+    def load(self) -> None:
         with open(self.path, 'r') as stream:
             self._data = yaml.load(stream)
 
@@ -113,7 +113,7 @@ class Config(DictWithRecursion):
             pass
         return None
 
-    def save(self):
+    def save(self) -> None:
         with open(self.path, 'w') as stream:
             yaml.dump(self._data, stream)
         if self._registration and self.registration_path:
@@ -124,16 +124,16 @@ class Config(DictWithRecursion):
     def _new_token() -> str:
         return "".join(random.choice(string.ascii_lowercase + string.digits) for _ in range(64))
 
-    def update(self):
+    def update(self) -> None:
         base = self.load_base()
         if not base:
             return
 
-        def copy(from_path, to_path=None):
+        def copy(from_path, to_path=None) -> None:
             if from_path in self:
                 base[to_path or from_path] = self[from_path]
 
-        def copy_dict(from_path, to_path=None, override_existing_map=True):
+        def copy_dict(from_path, to_path=None, override_existing_map=True) -> None:
             if from_path in self:
                 to_path = to_path or from_path
                 if override_existing_map or to_path not in base:
@@ -273,7 +273,7 @@ class Config(DictWithRecursion):
 
         return self._get_permissions("*")
 
-    def generate_registration(self):
+    def generate_registration(self) -> None:
         homeserver = self["homeserver.domain"]
 
         username_format = self.get("bridge.username_template", "telegram_{userid}") \

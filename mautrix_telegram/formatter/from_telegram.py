@@ -328,6 +328,6 @@ def _parse_url(html: List[str], entity_text: str, url: str) -> bool:
     return False
 
 
-def init_tg(context: "Context"):
+def init_tg(context: "Context") -> None:
     global should_highlight_edits
     should_highlight_edits = htmldiff and context.config["bridge.highlight_edits"]

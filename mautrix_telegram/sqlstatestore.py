@@ -25,7 +25,7 @@ from .db import RoomState, UserProfile
 
 
 class SQLStateStore(StateStore):
-    def __init__(self, db):
+    def __init__(self, db) -> None:
         super().__init__()
         self.db = db  # type: orm.Session
         self.profile_cache = {}  # type: Dict[Tuple[str, str], UserProfile]
@@ -37,13 +37,13 @@ class SQLStateStore(StateStore):
         return puppet.is_registered if puppet else False
 
     @staticmethod
-    def registered(user: str):
+    def registered(user: str) -> None:
         puppet = pu.Puppet.get_by_mxid(user)
         if puppet:
             puppet.is_registered = True
             puppet.save()
 
-    def update_state(self, event: dict):
+    def update_state(self, event: dict) -> None:
         event_type = event["type"]
         if event_type == "m.room.power_levels":
             self.set_power_levels(event["room_id"], event["content"])
@@ -70,14 +70,14 @@ class SQLStateStore(StateStore):
     def get_member(self, room: str, user: str) -> dict:
         return self._get_user_profile(room, user).dict()
 
-    def set_member(self, room: str, user: str, member: dict):
+    def set_member(self, room: str, user: str, member: dict) -> None:
         profile = self._get_user_profile(room, user)
         profile.membership = member.get("membership", profile.membership or "leave")
         profile.displayname = member.get("displayname", profile.displayname)
         profile.avatar_url = member.get("avatar_url", profile.avatar_url)
         self.db.commit()
 
-    def set_membership(self, room: str, user: str, membership: str):
+    def set_membership(self, room: str, user: str, membership: str) -> None:
         self.set_member(room, user, {
             "membership": membership,
         })
@@ -102,7 +102,7 @@ class SQLStateStore(StateStore):
     def get_power_levels(self, room: str) -> dict:
         return self._get_room_state(room).power_levels
 
-    def set_power_level(self, room: str, user: str, level: int):
+    def set_power_level(self, room: str, user: str, level: int) -> None:
         room_state = self._get_room_state(room)
         power_levels = room_state.power_levels
         if not power_levels:
@@ -114,7 +114,7 @@ class SQLStateStore(StateStore):
         room_state.power_levels = power_levels
         self.db.commit()
 
-    def set_power_levels(self, room: str, content: dict):
+    def set_power_levels(self, room: str, content: dict) -> None:
         state = self._get_room_state(room)
         state.power_levels = content
         self.db.commit()

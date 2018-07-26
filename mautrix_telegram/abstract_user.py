@@ -60,7 +60,7 @@ class AbstractUser(ABC):
     bot = None  # type: Bot
     ignore_incoming_bot_events = True  # type: bool
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.is_admin = False  # type: bool
         self.matrix_puppet_whitelisted = False  # type: bool
         self.puppet_whitelisted = False  # type: bool
@@ -93,7 +93,7 @@ class AbstractUser(ABC):
                 config["telegram.proxy.rdns"],
                 config["telegram.proxy.username"], config["telegram.proxy.password"])
 
-    def _init_client(self):
+    def _init_client(self) -> None:
         self.log.debug(f"Initializing client for {self.name}")
         device = f"{platform.system()} {platform.release()}"
         sysversion = MautrixTelegramClient.__version__
@@ -114,18 +114,18 @@ class AbstractUser(ABC):
         return False
 
     @abstractmethod
-    async def post_login(self):
+    async def post_login(self) -> None:
         raise NotImplementedError()
 
     @abstractmethod
-    def register_portal(self, portal: po.Portal):
+    def register_portal(self, portal: po.Portal) -> None:
         raise NotImplementedError()
 
     @abstractmethod
-    def unregister_portal(self, portal: po.Portal):
+    def unregister_portal(self, portal: po.Portal) -> None:
         raise NotImplementedError()
 
-    async def _update_catch(self, update: TypeUpdate):
+    async def _update_catch(self, update: TypeUpdate) -> None:
         try:
             if not await self.update(update):
                 await self._update(update)
@@ -175,13 +175,13 @@ class AbstractUser(ABC):
             await self.start(delete_unless_authenticated=not even_if_no_session)
         return self
 
-    async def stop(self):
+    async def stop(self) -> None:
         await self.client.disconnect()
         self.client = None
 
     # region Telegram update handling
 
-    async def _update(self, update: TypeUpdate):
+    async def _update(self, update: TypeUpdate) -> None:
         if isinstance(update, (UpdateShortChatMessage, UpdateShortMessage, UpdateNewChannelMessage,
                                UpdateNewMessage, UpdateEditMessage, UpdateEditChannelMessage)):
             await self.update_message(update)
@@ -207,18 +207,18 @@ class AbstractUser(ABC):
             self.log.debug("Unhandled update: %s", update)
 
     @staticmethod
-    async def update_pinned_messages(update: UpdateChannelPinnedMessage):
+    async def update_pinned_messages(update: UpdateChannelPinnedMessage) -> None:
         portal = po.Portal.get_by_tgid(update.channel_id)
         if portal and portal.mxid:
             await portal.receive_telegram_pin_id(update.id)
 
     @staticmethod
-    async def update_participants(update: UpdateChatParticipants):
+    async def update_participants(update: UpdateChatParticipants) -> None:
         portal = po.Portal.get_by_tgid(update.participants.chat_id)
         if portal and portal.mxid:
             await portal.update_telegram_participants(update.participants.participants)
 
-    async def update_read_receipt(self, update: UpdateReadHistoryOutbox):
+    async def update_read_receipt(self, update: UpdateReadHistoryOutbox) -> None:
         if not isinstance(update.peer, PeerUser):
             self.log.debug("Unexpected read receipt peer: %s", update.peer)
             return
@@ -235,7 +235,8 @@ class AbstractUser(ABC):
         puppet = pu.Puppet.get(update.peer.user_id)
         await puppet.intent.mark_read(portal.mxid, message.mxid)
 
-    async def update_admin(self, update: Union[UpdateChatAdmins, UpdateChatParticipantAdmin]):
+    async def update_admin(self,
+                           update: Union[UpdateChatAdmins, UpdateChatParticipantAdmin]) -> None:
         # TODO duplication not checked
         portal = po.Portal.get_by_tgid(update.chat_id, peer_type="chat")
         if isinstance(update, UpdateChatAdmins):
@@ -245,7 +246,7 @@ class AbstractUser(ABC):
         else:
             self.log.warning("Unexpected admin status update: %s", update)
 
-    async def update_typing(self, update: Union[UpdateUserTyping, UpdateChatUserTyping]):
+    async def update_typing(self, update: Union[UpdateUserTyping, UpdateChatUserTyping]) -> None:
         if isinstance(update, UpdateUserTyping):
             portal = po.Portal.get_by_tgid(update.user_id, self.tgid, "user")
         else:
@@ -253,7 +254,7 @@ class AbstractUser(ABC):
         sender = pu.Puppet.get(update.user_id)
         await portal.handle_telegram_typing(sender, update)
 
-    async def update_others_info(self, update: Union[UpdateUserName, UpdateUserPhoto]):
+    async def update_others_info(self, update: Union[UpdateUserName, UpdateUserPhoto]) -> None:
         # TODO duplication not checked
         puppet = pu.Puppet.get(update.user_id)
         if isinstance(update, UpdateUserName):
@@ -265,7 +266,7 @@ class AbstractUser(ABC):
         else:
             self.log.warning("Unexpected other user info update: %s", update)
 
-    async def update_status(self, update: UpdateUserStatus):
+    async def update_status(self, update: UpdateUserStatus) -> None:
         puppet = pu.Puppet.get(update.user_id)
         if isinstance(update.status, UserStatusOnline):
             await puppet.default_mxid_intent.set_presence("online")
@@ -300,7 +301,7 @@ class AbstractUser(ABC):
         return update, sender, portal
 
     @staticmethod
-    async def _try_redact(portal: po.Portal, message: DBMessage):
+    async def _try_redact(portal: po.Portal, message: DBMessage) -> None:
         if not portal:
             return
         try:
@@ -308,7 +309,7 @@ class AbstractUser(ABC):
         except MatrixRequestError:
             pass
 
-    async def delete_message(self, update: UpdateDeleteMessages):
+    async def delete_message(self, update: UpdateDeleteMessages) -> None:
         if len(update.messages) > MAX_DELETIONS:
             return
 
@@ -324,7 +325,7 @@ class AbstractUser(ABC):
                 await self._try_redact(portal, message)
         self.db.commit()
 
-    async def delete_channel_message(self, update: UpdateDeleteChannelMessages):
+    async def delete_channel_message(self, update: UpdateDeleteChannelMessages) -> None:
         if len(update.messages) > MAX_DELETIONS:
             return
 
@@ -340,7 +341,7 @@ class AbstractUser(ABC):
             await self._try_redact(portal, message)
         self.db.commit()
 
-    async def update_message(self, original_update: UpdateMessage):
+    async def update_message(self, original_update: UpdateMessage) -> None:
         update, sender, portal = self.get_message_details(original_update)
         if self.ignore_incoming_bot_events and self.bot and sender.id == self.bot.tgid:
             self.log.debug(f"Ignoring relaybot-sent message %s to %s", update, portal.tgid_log)
@@ -369,7 +370,7 @@ class AbstractUser(ABC):
     # endregion
 
 
-def init(context: "Context"):
+def init(context: "Context") -> None:
     global config, MAX_DELETIONS
     AbstractUser.az, AbstractUser.db, config, AbstractUser.loop, AbstractUser.relaybot = context
     AbstractUser.ignore_incoming_bot_events = config["bridge.relaybot.ignore_own_incoming_events"]

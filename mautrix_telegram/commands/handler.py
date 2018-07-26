@@ -38,7 +38,7 @@ SECTION_ADMIN = HelpSection("Administration", 50, "")
 
 class CommandEvent:
     def __init__(self, processor: "CommandProcessor", room: str, sender: u.User, command: str,
-                 args: List[str], is_management: bool, is_portal: bool):
+                 args: List[str], is_management: bool, is_portal: bool) -> None:
         self.az = processor.az
         self.log = processor.log
         self.loop = processor.loop
@@ -53,7 +53,7 @@ class CommandEvent:
         self.is_management = is_management
         self.is_portal = is_portal
 
-    def reply(self, message: str, allow_html: bool = False, render_markdown: bool = True):
+    def reply(self, message: str, allow_html: bool = False, render_markdown: bool = True) -> None:
         message = message.replace("$cmdprefix+sp ",
                                   "" if self.is_management else f"{self.command_prefix} ")
         message = message.replace("$cmdprefix", self.command_prefix)
@@ -69,7 +69,7 @@ class CommandHandler:
     def __init__(self, handler: Callable[[CommandEvent], None], needs_auth: bool,
                  needs_puppeting: bool, needs_matrix_puppeting: bool, needs_admin: bool,
                  management_only: bool, name: str, help_text: str, help_args: str,
-                 help_section: HelpSection):
+                 help_section: HelpSection) -> None:
         self._handler = handler
         self.needs_auth = needs_auth
         self.needs_puppeting = needs_puppeting
@@ -103,7 +103,7 @@ class CommandHandler:
                 (not self.needs_admin or is_admin) and
                 (not self.needs_auth or is_logged_in))
 
-    async def __call__(self, evt: CommandEvent):
+    async def __call__(self, evt: CommandEvent) -> None:
         error = await self.get_permission_error(evt)
         if error is not None:
             return await evt.reply(error)
@@ -121,10 +121,10 @@ class CommandHandler:
 def command_handler(_func: Optional[Callable[[CommandEvent], None]] = None, *, needs_auth=True,
                     needs_puppeting=True, needs_matrix_puppeting=False, needs_admin=False,
                     management_only=False, name=None, help_text="", help_args="",
-                    help_section=None):
+                    help_section=None) -> None:
     input_name = name
 
-    def decorator(func: Callable[[CommandEvent], None]):
+    def decorator(func: Callable[[CommandEvent], None]) -> None:
         name = input_name or func.__name__.replace("_", "-")
         handler = CommandHandler(func, needs_auth, needs_puppeting, needs_matrix_puppeting,
                                  needs_admin, management_only, name, help_text, help_args,
@@ -138,13 +138,13 @@ def command_handler(_func: Optional[Callable[[CommandEvent], None]] = None, *, n
 class CommandProcessor:
     log = logging.getLogger("mau.commands")
 
-    def __init__(self, context: c.Context):
+    def __init__(self, context: c.Context) -> None:
         self.az, self.db, self.config, self.loop, self.tgbot = context
         self.public_website = context.public_website
         self.command_prefix = self.config["bridge.command_prefix"]
 
     async def handle(self, room: str, sender: u.User, command: str, args: List[str],
-                     is_management: bool, is_portal: bool):
+                     is_management: bool, is_portal: bool) -> None:
         evt = CommandEvent(self, room, sender, command, args, is_management, is_portal)
         orig_command = command
         command = command.lower()

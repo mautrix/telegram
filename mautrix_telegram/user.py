@@ -47,7 +47,7 @@ class User(AbstractUser):
     def __init__(self, mxid: str, tgid: Optional[int] = None, username: Optional[str] = None,
                  db_contacts: Optional[List[DBContact]] = None, saved_contacts: int = 0,
                  is_bot: bool = False, db_portals: Optional[List[DBPortal]] = None,
-                 db_instance: Optional[DBUser] = None):
+                 db_instance: Optional[DBUser] = None) -> None:
         super().__init__()
         self.mxid = mxid  # type: str
         self.tgid = tgid  # type: int
@@ -93,7 +93,7 @@ class User(AbstractUser):
                 for puppet in self.contacts]
 
     @db_contacts.setter
-    def db_contacts(self, contacts: List[DBContact]):
+    def db_contacts(self, contacts: List[DBContact]) -> None:
         self.contacts = [pu.Puppet.get(entry.contact) for entry in contacts] if contacts else []
 
     @property
@@ -101,7 +101,7 @@ class User(AbstractUser):
         return [portal.db_instance for portal in self.portals.values() if not portal.deleted]
 
     @db_portals.setter
-    def db_portals(self, portals: List[DBPortal]):
+    def db_portals(self, portals: List[DBPortal]) -> None:
         self.portals = {(portal.tgid, portal.tg_receiver):
                             po.Portal.get_by_tgid(portal.tgid, portal.tg_receiver)
                         for portal in portals} if portals else {}
@@ -119,7 +119,7 @@ class User(AbstractUser):
                       contacts=self.db_contacts, saved_contacts=self.saved_contacts or 0,
                       portals=self.db_portals)
 
-    def save(self):
+    def save(self) -> None:
         self.db_instance.tgid = self.tgid
         self.db_instance.username = self.username
         self.db_instance.contacts = self.db_contacts
@@ -127,7 +127,7 @@ class User(AbstractUser):
         self.db_instance.portals = self.db_portals
         self.db.commit()
 
-    def delete(self):
+    def delete(self) -> None:
         try:
             del self.by_mxid[self.mxid]
             del self.by_tgid[self.tgid]
@@ -156,7 +156,7 @@ class User(AbstractUser):
             self.client.session.delete()
         return self
 
-    async def post_login(self, info: TLUser = None):
+    async def post_login(self, info: TLUser = None) -> None:
         try:
             await self.update_info(info)
             if not self.is_bot:
@@ -167,7 +167,7 @@ class User(AbstractUser):
         except Exception:
             self.log.exception("Failed to run post-login functions for %s", self.mxid)
 
-    async def update(self, update: TypeUpdate):
+    async def update(self, update: TypeUpdate) -> None:
         if not self.is_bot:
             return
 
@@ -193,12 +193,12 @@ class User(AbstractUser):
     def ensure_started(self, even_if_no_session: bool = False) -> "Awaitable[User]":
         return super().ensure_started(even_if_no_session)
 
-    def set_presence(self, online: bool = True):
+    def set_presence(self, online: bool = True) -> None:
         if self.is_bot:
             return
         return self.client(UpdateStatusRequest(offline=not online))
 
-    async def update_info(self, info: TLUser = None):
+    async def update_info(self, info: TLUser = None) -> None:
         info = info or await self.client.get_me()
         changed = False
         if self.is_bot != info.bot:
@@ -213,7 +213,7 @@ class User(AbstractUser):
         if changed:
             self.save()
 
-    async def log_out(self):
+    async def log_out(self) -> None:
         puppet = pu.Puppet.get(self.tgid)
         if puppet.is_real_user:
             await puppet.switch_mxid(None, None)
@@ -272,7 +272,7 @@ class User(AbstractUser):
 
         return await self._search_remote(query), True
 
-    async def sync_dialogs(self, synchronous_create: bool = False):
+    async def sync_dialogs(self, synchronous_create: bool = False) -> None:
         creators = []
         for entity in await self.get_dialogs(limit=30):
             portal = po.Portal.get_by_entity(entity)
@@ -283,7 +283,7 @@ class User(AbstractUser):
         self.save()
         await asyncio.gather(*creators, loop=self.loop)
 
-    def register_portal(self, portal: po.Portal):
+    def register_portal(self, portal: po.Portal) -> None:
         try:
             if self.portals[portal.tgid_full] == portal:
                 return
@@ -292,7 +292,7 @@ class User(AbstractUser):
         self.portals[portal.tgid_full] = portal
         self.save()
 
-    def unregister_portal(self, portal: po.Portal):
+    def unregister_portal(self, portal: po.Portal) -> None:
         try:
             del self.portals[portal.tgid_full]
             self.save()
@@ -309,7 +309,7 @@ class User(AbstractUser):
             acc = (acc * 20261 + id) & 0xffffffff
         return acc & 0x7fffffff
 
-    async def sync_contacts(self):
+    async def sync_contacts(self) -> None:
         response = await self.client(GetContactsRequest(hash=self._hash_contacts()))
         if isinstance(response, ContactsNotModified):
             return

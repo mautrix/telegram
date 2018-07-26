@@ -91,17 +91,17 @@ class RoomState(Base):
     _power_levels_json = None
 
     @property
-    def has_power_levels(self):
+    def has_power_levels(self) -> None:
         return bool(self._power_levels_text)
 
     @property
-    def power_levels(self):
+    def power_levels(self) -> None:
         if not self._power_levels_json and self._power_levels_text:
             self._power_levels_json = json.loads(self._power_levels_text)
         return self._power_levels_json or {}
 
     @power_levels.setter
-    def power_levels(self, val):
+    def power_levels(self, val) -> None:
         self._power_levels_json = val
         self._power_levels_text = json.dumps(val)
 
@@ -116,7 +116,7 @@ class UserProfile(Base):
     displayname = Column(String, nullable=True)
     avatar_url = Column(String, nullable=True)
 
-    def dict(self):
+    def dict(self) -> None:
         return {
             "membership": self.membership,
             "displayname": self.displayname,
@@ -171,7 +171,7 @@ class TelegramFile(Base):
     thumbnail = relationship("TelegramFile", uselist=False)
 
 
-def init(db_session):
+def init(db_session) -> None:
     Portal.query = db_session.query_property()
     Message.query = db_session.query_property()
     UserPortal.query = db_session.query_property()

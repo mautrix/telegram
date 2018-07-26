@@ -39,7 +39,7 @@ class Bot(AbstractUser):
     log = logging.getLogger("mau.bot")  # type: logging.Logger
     mxid_regex = re.compile("@.+:.+")  # type: Pattern
 
-    def __init__(self, token: str):
+    def __init__(self, token: str) -> None:
         super().__init__()
         self.token = token  # type: str
         self.puppet_whitelisted = True  # type: bool
@@ -53,7 +53,7 @@ class Bot(AbstractUser):
         self.whitelist_group_admins = (config["bridge.relaybot.whitelist_group_admins"]
                                        or False)  # type: bool
 
-    async def init_permissions(self):
+    async def init_permissions(self) -> None:
         whitelist = config["bridge.relaybot.whitelist"] or []
         for id in whitelist:
             if isinstance(id, str):
@@ -72,7 +72,7 @@ class Bot(AbstractUser):
         await self.post_login()
         return self
 
-    async def post_login(self):
+    async def post_login(self) -> None:
         await self.init_permissions()
         info = await self.client.get_me()
         self.tgid = info.id
@@ -100,19 +100,19 @@ class Bot(AbstractUser):
             except Exception:
                 self.log.exception("Failed to run catch_up() for bot")
 
-    def register_portal(self, portal: po.Portal):
+    def register_portal(self, portal: po.Portal) -> None:
         self.add_chat(portal.tgid, portal.peer_type)
 
-    def unregister_portal(self, portal: po.Portal):
+    def unregister_portal(self, portal: po.Portal) -> None:
         self.remove_chat(portal.tgid)
 
-    def add_chat(self, id: int, type: str):
+    def add_chat(self, id: int, type: str) -> None:
         if id not in self.chats:
             self.chats[id] = type
             self.db.add(BotChat(id=id, type=type))
             self.db.commit()
 
-    def remove_chat(self, id: int):
+    def remove_chat(self, id: int) -> None:
         try:
             del self.chats[id]
         except KeyError:
@@ -148,7 +148,7 @@ class Bot(AbstractUser):
             return False
         return True
 
-    async def handle_command_portal(self, portal: po.Portal, reply: ReplyFunc):
+    async def handle_command_portal(self, portal: po.Portal, reply: ReplyFunc) -> None:
         if not config["bridge.relaybot.authless_portals"]:
             return await reply("This bridge doesn't allow portal creation from Telegram.")
 
@@ -164,7 +164,7 @@ class Bot(AbstractUser):
                 return await reply(
                     "Portal is not public. Use `/invite <mxid>` to get an invite.")
 
-    async def handle_command_invite(self, portal: po.Portal, reply: ReplyFunc, mxid: str):
+    async def handle_command_invite(self, portal: po.Portal, reply: ReplyFunc, mxid: str) -> None:
         if len(mxid) == 0:
             return await reply("Usage: `/invite <mxid>`")
         elif not portal.mxid:
@@ -183,7 +183,7 @@ class Bot(AbstractUser):
             await portal.main_intent.invite(portal.mxid, user.mxid)
             return await reply(f"Invited `{user.mxid}` to the portal.")
 
-    def handle_command_id(self, message: Message, reply: ReplyFunc):
+    def handle_command_id(self, message: Message, reply: ReplyFunc) -> None:
         # Provide the prefixed ID to the user so that the user wouldn't need to specify whether the
         # chat is a normal group or a supergroup/channel when using the ID.
         if isinstance(message.to_id, PeerChannel):
@@ -205,8 +205,8 @@ class Bot(AbstractUser):
 
         return False
 
-    async def handle_command(self, message: Message):
-        def reply(reply_text):
+    async def handle_command(self, message: Message) -> None:
+        def reply(reply_text) -> None:
             return self.client.send_message(message.to_id, reply_text, reply_to=message.id)
 
         text = message.message
@@ -229,7 +229,7 @@ class Bot(AbstractUser):
                 mxid = ""
             await self.handle_command_invite(portal, reply, mxid=mxid)
 
-    def handle_service_message(self, message: MessageService):
+    def handle_service_message(self, message: MessageService) -> None:
         to_id = message.to_id
         if isinstance(to_id, PeerChannel):
             to_id = to_id.channel_id
@@ -246,7 +246,7 @@ class Bot(AbstractUser):
         elif isinstance(action, MessageActionChatDeleteUser) and action.user_id == self.tgid:
             self.remove_chat(to_id)
 
-    async def update(self, update):
+    async def update(self, update) -> None:
         if not isinstance(update, (UpdateNewMessage, UpdateNewChannelMessage)):
             return
         if isinstance(update.message, MessageService):

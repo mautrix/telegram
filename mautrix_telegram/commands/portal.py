@@ -30,7 +30,7 @@ from . import (command_handler, CommandEvent,
                  help_section=SECTION_ADMIN,
                  help_args="<_level_> [_mxid_]",
                  help_text="Set a temporary power level without affecting Telegram.")
-async def set_power_level(evt: CommandEvent):
+async def set_power_level(evt: CommandEvent) -> None:
     try:
         level = int(evt.args[0])
     except KeyError:
@@ -49,7 +49,7 @@ async def set_power_level(evt: CommandEvent):
 
 @command_handler(help_section=SECTION_PORTAL_MANAGEMENT,
                  help_text="Get a Telegram invite link to the current chat.")
-async def invite_link(evt: CommandEvent):
+async def invite_link(evt: CommandEvent) -> None:
     portal = po.Portal.get_by_mxid(evt.room_id)
     if not portal:
         return await evt.reply("This is not a portal room.")
@@ -66,7 +66,8 @@ async def invite_link(evt: CommandEvent):
         return await evt.reply("You don't have the permission to create an invite link.")
 
 
-async def user_has_power_level(room: str, intent, sender: u.User, event: str, default: int = 50):
+async def user_has_power_level(room: str, intent, sender: u.User, event: str, default: int = 50
+                               ) -> None:
     if sender.is_admin:
         return True
     # Make sure the state store contains the power levels.
@@ -80,7 +81,7 @@ async def user_has_power_level(room: str, intent, sender: u.User, event: str, de
 
 
 async def _get_portal_and_check_permission(evt: CommandEvent, permission: str,
-                                           action: Optional[str] = None):
+                                           action: Optional[str] = None) -> None:
     room_id = evt.args[0] if len(evt.args) > 0 else evt.room_id
 
     portal = po.Portal.get_by_mxid(room_id)
@@ -95,8 +96,8 @@ async def _get_portal_and_check_permission(evt: CommandEvent, permission: str,
 
 
 def _get_portal_murder_function(action: str, room_id: str, function: Callable, command: str,
-                                completed_message: str):
-    async def post_confirm(confirm):
+                                completed_message: str) -> None:
+    async def post_confirm(confirm) -> None:
         confirm.sender.command_status = None
         if len(confirm.args) > 0 and confirm.args[0] == f"confirm-{command}":
             await function()
@@ -116,7 +117,7 @@ def _get_portal_murder_function(action: str, room_id: str, function: Callable, c
                  help_text="Remove all users from the current portal room and forget the portal. "
                            "Only works for group chats; to delete a private chat portal, simply "
                            "leave the room.")
-async def delete_portal(evt: CommandEvent):
+async def delete_portal(evt: CommandEvent) -> None:
     portal, ok = await _get_portal_and_check_permission(evt, "unbridge")
     if not ok:
         return
@@ -137,7 +138,7 @@ async def delete_portal(evt: CommandEvent):
 @command_handler(needs_auth=False, needs_puppeting=False,
                  help_section=SECTION_PORTAL_MANAGEMENT,
                  help_text="Remove puppets from the current portal room and forget the portal.")
-async def unbridge(evt: CommandEvent):
+async def unbridge(evt: CommandEvent) -> None:
     portal, ok = await _get_portal_and_check_permission(evt, "unbridge")
     if not ok:
         return
@@ -156,7 +157,7 @@ async def unbridge(evt: CommandEvent):
                  help_text="Bridge the current Matrix room to the Telegram chat with the given "
                            "ID. The ID must be the prefixed version that you get with the `/id` "
                            "command of the Telegram-side bot.")
-async def bridge(evt: CommandEvent):
+async def bridge(evt: CommandEvent) -> None:
     if len(evt.args) == 0:
         return await evt.reply("**Usage:** "
                                "`$cmdprefix+sp bridge <Telegram chat ID> [Matrix room ID]`")
@@ -222,7 +223,7 @@ async def bridge(evt: CommandEvent):
                            "chat to this room, use `$cmdprefix+sp continue`")
 
 
-async def cleanup_old_portal_while_bridging(evt: CommandEvent, portal: "po.Portal"):
+async def cleanup_old_portal_while_bridging(evt: CommandEvent, portal: "po.Portal") -> None:
     if not portal.mxid:
         await evt.reply("The portal seems to have lost its Matrix room between you"
                         "calling `$cmdprefix+sp bridge` and this command.\n\n"
@@ -245,7 +246,7 @@ async def cleanup_old_portal_while_bridging(evt: CommandEvent, portal: "po.Porta
         return False, None
 
 
-async def confirm_bridge(evt: CommandEvent):
+async def confirm_bridge(evt: CommandEvent) -> None:
     status = evt.sender.command_status
     try:
         portal = po.Portal.get_by_tgid(status["tgid"], peer_type=status["peer_type"])
@@ -302,7 +303,7 @@ async def confirm_bridge(evt: CommandEvent):
     return await evt.reply("Bridging complete. Portal synchronization should begin momentarily.")
 
 
-async def get_initial_state(intent: IntentAPI, room_id: str):
+async def get_initial_state(intent: IntentAPI, room_id: str) -> None:
     state = await intent.get_room_state(room_id)
     title = None
     about = None
@@ -328,7 +329,7 @@ async def get_initial_state(intent: IntentAPI, room_id: str):
                  help_text="Create a Telegram chat of the given type for the current Matrix room. "
                            "The type is either `group`, `supergroup` or `channel` (defaults to "
                            "`group`).")
-async def create(evt: CommandEvent):
+async def create(evt: CommandEvent) -> None:
     type = evt.args[0] if len(evt.args) > 0 else "group"
     if type not in {"chat", "group", "supergroup", "channel"}:
         return await evt.reply(
@@ -363,7 +364,7 @@ async def create(evt: CommandEvent):
 
 @command_handler(help_section=SECTION_PORTAL_MANAGEMENT,
                  help_text="Upgrade a normal Telegram group to a supergroup.")
-async def upgrade(evt: CommandEvent):
+async def upgrade(evt: CommandEvent) -> None:
     portal = po.Portal.get_by_mxid(evt.room_id)
     if not portal:
         return await evt.reply("This is not a portal room.")
@@ -385,7 +386,7 @@ async def upgrade(evt: CommandEvent):
                  help_args="<_name_|`-`>",
                  help_text="Change the username of a supergroup/channel. "
                            "To disable, use a dash (`-`) as the name.")
-async def group_name(evt: CommandEvent):
+async def group_name(evt: CommandEvent) -> None:
     if len(evt.args) == 0:
         return await evt.reply("**Usage:** `$cmdprefix+sp group-name <name/->`")
 
@@ -421,7 +422,7 @@ async def group_name(evt: CommandEvent):
                  help_args="<`whitelist`|`blacklist`>",
                  help_text="Change whether the bridge will allow or disallow bridging rooms by "
                            "default.")
-async def filter_mode(evt: CommandEvent):
+async def filter_mode(evt: CommandEvent) -> None:
     try:
         mode = evt.args[0]
         if mode not in ("whitelist", "blacklist"):
@@ -446,7 +447,7 @@ async def filter_mode(evt: CommandEvent):
                  help_section=SECTION_ADMIN,
                  help_args="<`whitelist`|`blacklist`> <_chat ID_>",
                  help_text="Allow or disallow bridging a specific chat.")
-async def filter(evt: CommandEvent):
+async def filter(evt: CommandEvent) -> None:
     try:
         action = evt.args[0]
         if action not in ("whitelist", "blacklist", "add", "remove"):
@@ -471,7 +472,7 @@ async def filter(evt: CommandEvent):
     if action in ("blacklist", "whitelist"):
         action = "add" if mode == action else "remove"
 
-    def save():
+    def save() -> None:
         evt.config["bridge.filter.list"] = list
         evt.config.save()
         po.Portal.filter_list = list

@@ -50,7 +50,7 @@ class Puppet:
 
     def __init__(self, id=None, access_token=None, custom_mxid=None, username=None,
                  displayname=None, displayname_source=None, photo_id=None, is_bot=None,
-                 is_registered=False, db_instance=None):
+                 is_registered=False, db_instance=None) -> None:
         self.id = id
         self.access_token = access_token
         self.custom_mxid = custom_mxid
@@ -75,20 +75,20 @@ class Puppet:
             self.by_custom_mxid[self.custom_mxid] = self
 
     @property
-    def tgid(self):
+    def tgid(self) -> None:
         return self.id
 
     @staticmethod
-    async def is_logged_in():
+    async def is_logged_in() -> None:
         return True
 
     # region Custom puppet management
-    def refresh_intents(self):
+    def refresh_intents(self) -> None:
         self.is_real_user = self.custom_mxid and self.access_token
         self.intent = (self.az.intent.user(self.custom_mxid, self.access_token)
                        if self.is_real_user else self.default_mxid_intent)
 
-    async def switch_mxid(self, access_token, mxid):
+    async def switch_mxid(self, access_token, mxid) -> None:
         prev_mxid = self.custom_mxid
         self.custom_mxid = mxid
         self.access_token = access_token
@@ -109,7 +109,7 @@ class Puppet:
         self.save()
         return 0
 
-    async def init_custom_mxid(self):
+    async def init_custom_mxid(self) -> None:
         if not self.is_real_user:
             return 0
 
@@ -125,7 +125,7 @@ class Puppet:
             asyncio.ensure_future(self.sync(), loop=self.loop)
         return 0
 
-    async def leave_rooms_with_default_user(self):
+    async def leave_rooms_with_default_user(self) -> None:
         for room_id in await self.default_mxid_intent.get_joined_rooms():
             try:
                 await self.default_mxid_intent.leave_room(room_id)
@@ -159,7 +159,7 @@ class Puppet:
             },
         })
 
-    def filter_events(self, events):
+    def filter_events(self, events) -> None:
         new_events = []
         for event in events:
             evt_type = event.get("type", None)
@@ -186,7 +186,7 @@ class Puppet:
             new_events.append(event)
         return new_events
 
-    def handle_sync(self, presence, ephemeral):
+    def handle_sync(self, presence, ephemeral) -> None:
         presence = [self.mx.try_handle_event(event) for event in presence]
 
         for room_id, events in ephemeral.items():
@@ -201,13 +201,13 @@ class Puppet:
         coro = asyncio.gather(*events, loop=self.loop)
         asyncio.ensure_future(coro, loop=self.loop)
 
-    async def sync(self):
+    async def sync(self) -> None:
         try:
             await self._sync()
         except Exception:
             self.log.exception("Fatal error syncing")
 
-    async def _sync(self):
+    async def _sync(self) -> None:
         if not self.is_real_user:
             self.log.warning("Called sync() for non-custom puppet.")
             return
@@ -241,25 +241,25 @@ class Puppet:
     # region DB conversion
 
     @property
-    def db_instance(self):
+    def db_instance(self) -> None:
         if not self._db_instance:
             self._db_instance = self.new_db_instance()
         return self._db_instance
 
-    def new_db_instance(self):
+    def new_db_instance(self) -> None:
         return DBPuppet(id=self.id, access_token=self.access_token, custom_mxid=self.custom_mxid,
                         username=self.username, displayname=self.displayname,
                         displayname_source=self.displayname_source, photo_id=self.photo_id,
                         is_bot=self.is_bot, matrix_registered=self.is_registered)
 
     @classmethod
-    def from_db(cls, db_puppet):
+    def from_db(cls, db_puppet) -> None:
         return Puppet(db_puppet.id, db_puppet.access_token, db_puppet.custom_mxid,
                       db_puppet.username, db_puppet.displayname, db_puppet.displayname_source,
                       db_puppet.photo_id, db_puppet.is_bot, db_puppet.matrix_registered,
                       db_instance=db_puppet)
 
-    def save(self):
+    def save(self) -> None:
         self.db_instance.access_token = self.access_token
         self.db_instance.custom_mxid = self.custom_mxid
         self.db_instance.username = self.username
@@ -272,7 +272,7 @@ class Puppet:
 
     # endregion
     # region Info updating
-    def similarity(self, query):
+    def similarity(self, query) -> None:
         username_similarity = (SequenceMatcher(None, self.username, query).ratio()
                                if self.username else 0)
         displayname_similarity = (SequenceMatcher(None, self.displayname, query).ratio()
@@ -281,7 +281,7 @@ class Puppet:
         return round(similarity * 1000) / 10
 
     @staticmethod
-    def get_displayname(info, enable_format=True):
+    def get_displayname(info, enable_format=True) -> None:
         data = {
             "phone number": info.phone if hasattr(info, "phone") else None,
             "username": info.username,
@@ -308,7 +308,7 @@ class Puppet:
         return config.get("bridge.displayname_template", "{displayname} (Telegram)").format(
             displayname=name)
 
-    async def update_info(self, source, info):
+    async def update_info(self, source, info) -> None:
         changed = False
         if self.username != info.username:
             self.username = info.username
@@ -323,7 +323,7 @@ class Puppet:
         if changed:
             self.save()
 
-    async def update_displayname(self, source, info):
+    async def update_displayname(self, source, info) -> None:
         ignore_source = (not source.is_relaybot
                          and self.displayname_source is not None
                          and self.displayname_source != source.tgid)
@@ -340,7 +340,7 @@ class Puppet:
             self.displayname_source = source.tgid
             return True
 
-    async def update_avatar(self, source, photo):
+    async def update_avatar(self, source, photo) -> None:
         photo_id = f"{photo.volume_id}-{photo.local_id}"
         if self.photo_id != photo_id:
             file = await util.transfer_file_to_matrix(self.db, source.client,
@@ -379,7 +379,7 @@ class Puppet:
         return cls.get(tgid, create) if tgid else None
 
     @classmethod
-    def get_by_custom_mxid(cls, mxid):
+    def get_by_custom_mxid(cls, mxid) -> None:
         if not mxid:
             raise ValueError("Matrix ID can't be empty")
 
@@ -396,21 +396,21 @@ class Puppet:
         return None
 
     @classmethod
-    def get_all_with_custom_mxid(cls):
+    def get_all_with_custom_mxid(cls) -> None:
         return [cls.by_custom_mxid[puppet.mxid]
                 if puppet.custom_mxid in cls.by_custom_mxid
                 else cls.from_db(puppet)
                 for puppet in DBPuppet.query.filter(DBPuppet.custom_mxid is not None).all()]
 
     @classmethod
-    def get_id_from_mxid(cls, mxid):
+    def get_id_from_mxid(cls, mxid) -> None:
         match = cls.mxid_regex.match(mxid)
         if match:
             return int(match.group(1))
         return None
 
     @classmethod
-    def get_mxid_from_id(cls, tgid):
+    def get_mxid_from_id(cls, tgid) -> None:
         return f"@{cls.username_template.format(userid=tgid)}:{cls.hs_domain}"
 
     @classmethod

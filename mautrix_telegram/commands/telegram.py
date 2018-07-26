@@ -26,7 +26,7 @@ from . import command_handler, CommandEvent, SECTION_MISC, SECTION_CREATING_PORT
 @command_handler(help_section=SECTION_MISC,
                  help_args="[_-r|--remote_] <_query_>",
                  help_text="Search your contacts or the Telegram servers for users.")
-async def search(evt: CommandEvent):
+async def search(evt: CommandEvent) -> None:
     if len(evt.args) == 0:
         return await evt.reply("**Usage:** `$cmdprefix+sp search [-r|--remote] <query>`")
 
@@ -68,7 +68,7 @@ async def search(evt: CommandEvent):
                            "either the internal user ID, the username or the phone number. "
                            "**N.B.** The phone numbers you start chats with must already be in "
                            "your contacts.")
-async def private_message(evt: CommandEvent):
+async def private_message(evt: CommandEvent) -> None:
     if len(evt.args) == 0:
         return await evt.reply("**Usage:** `$cmdprefix+sp pm <user identifier>`")
 
@@ -87,7 +87,7 @@ async def private_message(evt: CommandEvent):
                            f"{pu.Puppet.get_displayname(user, False)}")
 
 
-async def _join(evt: CommandEvent, arg: str):
+async def _join(evt: CommandEvent, arg: str) -> None:
     if arg.startswith("joinchat/"):
         invite_hash = arg[len("joinchat/"):]
         try:
@@ -110,7 +110,7 @@ async def _join(evt: CommandEvent, arg: str):
 @command_handler(help_section=SECTION_CREATING_PORTALS,
                  help_args="<_link_>",
                  help_text="Join a chat with an invite link.")
-async def join(evt: CommandEvent):
+async def join(evt: CommandEvent) -> None:
     if len(evt.args) == 0:
         return await evt.reply("**Usage:** `$cmdprefix+sp join <invite link>`")
 
@@ -137,7 +137,7 @@ async def join(evt: CommandEvent):
 @command_handler(help_section=SECTION_MISC,
                  help_args="[`chats`|`contacts`|`me`]",
                  help_text="Synchronize your chat portals, contacts and/or own info.")
-async def sync(evt: CommandEvent):
+async def sync(evt: CommandEvent) -> None:
     if len(evt.args) > 0:
         sync_only = evt.args[0]
         if sync_only not in ("chats", "contacts", "me"):

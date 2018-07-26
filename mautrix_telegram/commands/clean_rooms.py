@@ -61,7 +61,7 @@ async def _find_rooms(intent: IntentAPI) -> Tuple[ManagementRoomList, RoomIDList
 @command_handler(needs_admin=True, needs_auth=False, management_only=True, name="clean-rooms",
                  help_section=SECTION_ADMIN,
                  help_text="Clean up unused portal/management rooms.")
-async def clean_rooms(evt: CommandEvent):
+async def clean_rooms(evt: CommandEvent) -> None:
     management_rooms, unidentified_rooms, portals, empty_portals = await _find_rooms(evt.az.intent)
 
     reply = ["#### Management rooms (M)"]
@@ -108,7 +108,7 @@ async def clean_rooms(evt: CommandEvent):
 
 async def set_rooms_to_clean(evt, management_rooms: ManagementRoomList,
                              unidentified_rooms: RoomIDList, portals: List["po.Portal"],
-                             empty_portals: List["po.Portal"]):
+                             empty_portals: List["po.Portal"]) -> None:
     command = evt.args[0]
     rooms_to_clean = []
     if command == "clean-recommended":
@@ -158,7 +158,7 @@ async def set_rooms_to_clean(evt, management_rooms: ManagementRoomList,
                     "`$cmdprefix+sp confirm-clean`.")
 
 
-async def execute_room_cleanup(evt, rooms_to_clean):
+async def execute_room_cleanup(evt, rooms_to_clean) -> None:
     if len(evt.args) > 0 and evt.args[0] == "confirm-clean":
         await evt.reply(f"Cleaning {len(rooms_to_clean)} rooms. "
                         "This might take a while.")

@@ -32,7 +32,8 @@ if TYPE_CHECKING:
 
 class Context:
     def __init__(self, az: "AppService", db: "scoped_session", config: "Config",
-                 loop: "asyncio.AbstractEventLoop", session_container: "AlchemySessionContainer"):
+                 loop: "asyncio.AbstractEventLoop", session_container: "AlchemySessionContainer"
+                 ) -> None:
         self.az = az  # type: AppService
         self.db = db  # type: scoped_session
         self.config = config  # type: Config
@@ -43,7 +44,7 @@ class Context:
         self.public_website = None  # type: PublicBridgeWebsite
         self.provisioning_api = None  # type: ProvisioningAPI
 
-    def __iter__(self):
+    def __iter__(self) -> None:
         yield self.az
         yield self.db
         yield self.config
