@@ -2,4 +2,3 @@ lxml
 cryptg
 Pillow
 moviepy
-psycopg2-binary
