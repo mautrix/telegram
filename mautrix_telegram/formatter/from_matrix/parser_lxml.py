@@ -36,7 +36,9 @@ def parse_html(html: str) -> ParsedMessage:
 
 class Entity:
     @staticmethod
-    def copy(entity: TypeMessageEntity) -> TypeMessageEntity:
+    def copy(entity: TypeMessageEntity) -> Optional[TypeMessageEntity]:
+        if not entity:
+            return None
         kwargs = {
             "offset": entity.offset,
             "length": entity.length,
@@ -52,9 +54,11 @@ class Entity:
     @classmethod
     def adjust(cls, entity: Union[TypeMessageEntity, List[TypeMessageEntity]],
                func: Callable[[TypeMessageEntity], None]
-               ) -> Union[TypeMessageEntity, List[TypeMessageEntity]]:
+               ) -> Union[Optional[TypeMessageEntity], List[TypeMessageEntity]]:
         if isinstance(entity, list):
-            return [Entity.adjust(element, func) for element in entity]
+            return [Entity.adjust(element, func) for element in entity if entity]
+        elif not entity:
+            return None
         entity = cls.copy(entity)
         func(entity)
         if entity.offset < 0:
@@ -84,7 +88,8 @@ class TelegramMessage:
         self.entities = entities or []  # type: List[TypeMessageEntity]
 
     def offset_entities(self, offset: int) -> "TelegramMessage":
-        def apply_offset(entity: TypeMessageEntity, inner_offset: int):
+        def apply_offset(entity: TypeMessageEntity, inner_offset: int
+                         ) -> Optional[TypeMessageEntity]:
             entity = Entity.copy(entity)
             entity.offset += inner_offset
             if entity.offset < 0:
@@ -96,6 +101,7 @@ class TelegramMessage:
             return entity
 
         self.entities = [apply_offset(entity, offset) for entity in self.entities if entity]
+        self.entities = [x for x in self.entities if x is not None]
         return self
 
     def append(self, *args: Union[str, "TelegramMessage"]) -> "TelegramMessage":
@@ -110,7 +116,7 @@ class TelegramMessage:
         for msg in args:
             if isinstance(msg, str):
                 msg = TelegramMessage(text=msg)
-            self.entities = msg.entities + Entity.adjust(self.entities, offset_diff(len(self.text)))
+            self.entities = msg.entities + Entity.adjust(self.entities, offset_diff(len(msg.text)))
             self.text = msg.text + self.text
         return self
 
