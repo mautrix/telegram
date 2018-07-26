@@ -14,7 +14,7 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import Optional, List, Tuple, Union
+from typing import Optional, List, Tuple, Union, Callable
 from lxml import html
 
 from telethon.tl.types import (MessageEntityMention as Mention,
@@ -26,6 +26,7 @@ from telethon.tl.types import (MessageEntityMention as Mention,
                                InputMessageEntityMentionName as InputMentionName)
 
 from ... import user as u, puppet as pu, portal as po
+from ..util import html_to_unicode
 from .parser_common import MatrixParserCommon, ParsedMessage
 
 
@@ -49,23 +50,32 @@ class Entity:
         return entity.__class__(**kwargs)
 
     @classmethod
-    def adjust(cls, entity: Union[TypeMessageEntity, List[TypeMessageEntity]], *,
-               length: int = None, offset: int = None, offset_diff: int = None
+    def adjust(cls, entity: Union[TypeMessageEntity, List[TypeMessageEntity]],
+               func: Callable[[TypeMessageEntity], None]
                ) -> Union[TypeMessageEntity, List[TypeMessageEntity]]:
         if isinstance(entity, list):
-            return [Entity.adjust(element, length=length, offset=offset, offset_diff=offset_diff)
-                    for element in entity]
+            return [Entity.adjust(element, func) for element in entity]
         entity = cls.copy(entity)
-        if length is not None:
-            entity.length = length
-        if offset is not None:
-            entity.offset = offset
-        if offset_diff is not None:
-            entity.offset += offset_diff
+        func(entity)
         if entity.offset < 0:
             entity.length += entity.offset
             entity.offset = 0
         return entity
+
+
+def offset_diff(amount: int):
+    def func(entity: TypeMessageEntity):
+        entity.offset += amount
+
+    return func
+
+
+def offset_length_multiply(amount: int):
+    def func(entity: TypeMessageEntity):
+        entity.offset *= amount
+        entity.length *= amount
+
+    return func
 
 
 class TelegramMessage:
@@ -74,9 +84,9 @@ class TelegramMessage:
         self.entities = entities or []  # type: List[TypeMessageEntity]
 
     def offset_entities(self, offset: int) -> "TelegramMessage":
-        def apply_offset(entity: TypeMessageEntity, offset: int):
+        def apply_offset(entity: TypeMessageEntity, inner_offset: int):
             entity = Entity.copy(entity)
-            entity.offset += offset
+            entity.offset += inner_offset
             if entity.offset < 0:
                 entity.offset = 0
             elif entity.offset > len(self.text):
@@ -92,7 +102,7 @@ class TelegramMessage:
         for msg in args:
             if isinstance(msg, str):
                 msg = TelegramMessage(text=msg)
-            self.entities += Entity.adjust(msg.entities, offset_diff=len(self.text))
+            self.entities += Entity.adjust(msg.entities, offset_diff(len(self.text)))
             self.text += msg.text
         return self
 
@@ -100,7 +110,7 @@ class TelegramMessage:
         for msg in args:
             if isinstance(msg, str):
                 msg = TelegramMessage(text=msg)
-            self.entities = msg.entities + Entity.adjust(self.entities, offset_diff=len(msg.text))
+            self.entities = msg.entities + Entity.adjust(self.entities, offset_diff(len(self.text)))
             self.text = msg.text + self.text
         return self
 
@@ -133,7 +143,7 @@ class TelegramMessage:
                 start_in_range = len(part) > entity.offset - offset >= 0
                 end_in_range = len(part) >= entity.offset - offset + entity.length > 0
                 if start_in_range and end_in_range:
-                    msg.entities.append(Entity.adjust(entity, offset_diff=-offset))
+                    msg.entities.append(Entity.adjust(entity, offset_diff(-offset)))
             output.append(msg)
 
             offset += len(part)
@@ -147,7 +157,7 @@ class TelegramMessage:
         for msg in items:
             if isinstance(msg, str):
                 msg = TelegramMessage(text=msg)
-            main.entities += Entity.adjust(msg.entities, offset_diff=len(main.text))
+            main.entities += Entity.adjust(msg.entities, offset_diff(len(main.text)))
             main.text += msg.text + separator
         main.text = main.text[:-len(separator)]
         return main
@@ -210,9 +220,13 @@ class MatrixParser(MatrixParserCommon):
         elif node.tag == "command":
             msg.format(Command)
         elif node.tag in ("s", "del"):
-            pass  # TODO
+            msg.text = html_to_unicode(msg.text, "\u0336")
         elif node.tag in ("u", "ins"):
-            pass  # TODO
+            msg.text = html_to_unicode(msg.text, "\u0332")
+
+        if node.tag in ("s", "del", "u", "ins"):
+            msg.entities = Entity.adjust(msg.entities, offset_length_multiply(2))
+
         return msg
 
     @classmethod
