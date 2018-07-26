@@ -2,14 +2,17 @@ import setuptools
 import glob
 import mautrix_telegram
 
-extras = {
-    "highlight_edits": ["lxml>=4.1.1,<5"],
-    "better_formatter": ["lxml>=4.1.1,<5"],
-    "fast_crypto": ["cryptg>=0.1,<0.2"],
-    "webp_convert": ["Pillow>=5.0.0,<6"],
-    "hq_thumbnails": ["moviepy>=0.2,<0.3"],
-}
-extras["all"] = list(set(deps[0] for deps in extras.values()))
+extras = dict(
+    highlight_edits=["lxml>=4.1.1,<5"],
+    better_formatter=["lxml>=4.1.1,<5"],
+    fast_crypto=["cryptg>=0.1,<0.2"],
+    webp_convert=["Pillow>=5.0.0,<6"],
+    hq_thumbnails=["moviepy>=0.2,<0.3"],
+    postgres=["psycopg2-binary>=2,<3"],
+)
+extras["all"] = list(set(dep
+                         for deps in extras.values()
+                         for dep in deps))
 
 setuptools.setup(
     name="mautrix-telegram",
@@ -60,4 +63,3 @@ setuptools.setup(
         ("alembic/versions", glob.glob("alembic/versions/*.py"))
     ],
 )
-
