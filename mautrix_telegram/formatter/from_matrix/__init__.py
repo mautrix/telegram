@@ -68,6 +68,10 @@ def cut_long_message(message: str, entities: List[TypeMessageEntity]) -> ParsedM
     return message, entities
 
 
+class FormatError(Exception):
+    pass
+
+
 def matrix_to_telegram(html: str) -> ParsedMessage:
     try:
         html = command_regex.sub(r"<command>\1</command>", html)
@@ -82,8 +86,8 @@ def matrix_to_telegram(html: str) -> ParsedMessage:
         text, entities = cut_long_message(text, entities)
 
         return text, entities
-    except Exception:
-        log.exception("Failed to convert Matrix format:\nhtml=%s", html)
+    except Exception as e:
+        raise FormatError(f"Failed to convert Matrix format: {html}") from e
 
 
 def matrix_reply_to_telegram(content: dict, tg_space: int, room_id: Optional[str] = None
