@@ -313,13 +313,11 @@ class MatrixParser(MatrixParserCommon):
         return output
 
     @classmethod
-    def node_to_tmessages(cls, node: html.HtmlElement, strip_linebreaks) -> List[
-        TelegramMessage]:
+    def node_to_tmessages(cls, node: html.HtmlElement, strip_linebreaks) -> List[TelegramMessage]:
         return [msg for (msg, tag) in cls.node_to_tagged_tmessages(node, strip_linebreaks)]
 
     @classmethod
-    def tag_aware_parse_node(cls, node: html.HtmlElement,
-                             strip_linebreaks: bool = True) -> TelegramMessage:
+    def tag_aware_parse_node(cls, node: html.HtmlElement, strip_linebreaks) -> TelegramMessage:
         msgs = cls.node_to_tagged_tmessages(node, strip_linebreaks)
         output = TelegramMessage()
         for msg, tag in msgs:
@@ -329,11 +327,11 @@ class MatrixParser(MatrixParserCommon):
         return output.trim()
 
     @classmethod
-    def parse_node(cls, node: html.HtmlElement, strip_linebreaks: bool = True) -> TelegramMessage:
+    def parse_node(cls, node: html.HtmlElement, strip_linebreaks) -> TelegramMessage:
         return TelegramMessage.join(cls.node_to_tmessages(node, strip_linebreaks))
 
     @classmethod
     def parse(cls, data: str) -> ParsedMessage:
         document = html.fromstring(f"<html>{data}</html>")
-        msg = cls.parse_node(document)
+        msg = cls.parse_node(document, strip_linebreaks=True)
         return msg.text, msg.entities
