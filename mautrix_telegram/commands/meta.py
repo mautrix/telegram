@@ -38,7 +38,8 @@ help_cache = {}
 
 
 async def _get_help_text(evt: CommandEvent):
-    cache_key = (evt.is_management, evt.sender.puppet_whitelisted, evt.sender.is_admin,
+    cache_key = (evt.is_management, evt.sender.puppet_whitelisted,
+                 evt.sender.matrix_puppet_whitelisted, evt.sender.is_admin,
                  await evt.sender.is_logged_in())
     if cache_key not in help_cache:
         help = {}

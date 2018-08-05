@@ -65,6 +65,7 @@ class User(AbstractUser):
         (self.relaybot_whitelisted,
          self.whitelisted,
          self.puppet_whitelisted,
+         self.matrix_puppet_whitelisted,
          self.is_admin,
          self.permissions) = config.get_permissions(self.mxid)
 

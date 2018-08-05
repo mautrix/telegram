@@ -66,12 +66,14 @@ class CommandEvent:
 
 
 class CommandHandler:
-    def __init__(self, handler: Callable[[CommandEvent], None],
-                 needs_auth: bool, needs_puppeting: bool, needs_admin: bool, management_only: bool,
-                 name: str, help_text: str, help_args: str, help_section: HelpSection):
+    def __init__(self, handler: Callable[[CommandEvent], None], needs_auth: bool,
+                 needs_puppeting: bool, needs_matrix_puppeting: bool, needs_admin: bool,
+                 management_only: bool, name: str, help_text: str, help_args: str,
+                 help_section: HelpSection):
         self._handler = handler
         self.needs_auth = needs_auth
         self.needs_puppeting = needs_puppeting
+        self.needs_matrix_puppeting = needs_matrix_puppeting
         self.needs_admin = needs_admin
         self.management_only = management_only
         self.name = name
@@ -85,16 +87,19 @@ class CommandHandler:
                     "you may only run it in management rooms.")
         elif self.needs_puppeting and not evt.sender.puppet_whitelisted:
             return "This command requires puppeting privileges."
+        elif self.needs_matrix_puppeting and not evt.sender.matrix_puppet_whitelisted:
+            return "This command requires Matrix puppeting privileges."
         elif self.needs_admin and not evt.sender.is_admin:
             return "This command requires administrator privileges."
         elif self.needs_auth and not await evt.sender.is_logged_in():
             return "This command requires you to be logged in."
         return None
 
-    def has_permission(self, is_management: bool, puppet_whitelisted: bool, is_admin: bool,
-                       is_logged_in: bool) -> bool:
+    def has_permission(self, is_management: bool, puppet_whitelisted: bool,
+                       matrix_puppet_whitelisted: bool, is_admin: bool, is_logged_in: bool) -> bool:
         return ((not self.management_only or is_management) and
                 (not self.needs_puppeting or puppet_whitelisted) and
+                (not self.needs_matrix_puppeting or matrix_puppet_whitelisted) and
                 (not self.needs_admin or is_admin) and
                 (not self.needs_auth or is_logged_in))
 
@@ -114,14 +119,16 @@ class CommandHandler:
 
 
 def command_handler(_func: Optional[Callable[[CommandEvent], None]] = None, *, needs_auth=True,
-                    needs_puppeting=True, needs_admin=False, management_only=False,
-                    name=None, help_text="", help_args="", help_section=None):
+                    needs_puppeting=True, needs_matrix_puppeting=False, needs_admin=False,
+                    management_only=False, name=None, help_text="", help_args="",
+                    help_section=None):
     input_name = name
 
     def decorator(func: Callable[[CommandEvent], None]):
         name = input_name or func.__name__.replace("_", "-")
-        handler = CommandHandler(func, needs_auth, needs_puppeting, needs_admin, management_only,
-                                 name, help_text, help_args, help_section)
+        handler = CommandHandler(func, needs_auth, needs_puppeting, needs_matrix_puppeting,
+                                 needs_admin, management_only, name, help_text, help_args,
+                                 help_section)
         command_handlers[handler.name] = handler
         return handler
 

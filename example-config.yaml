@@ -177,8 +177,9 @@ bridge:
     # Permissions for using the bridge.
     # Permitted values:
     #   relaybot - Only use the bridge via the relaybot, no access to commands.
-    #       user - Relaybot level + access to commands to create bridges (no puppeting)
-    #       full - Full access to use the bridge via relaybot or logging in with Telegram account.
+    #       user - Relaybot level + access to commands to create bridges.
+    #  puppeting - User level + logging in with a Telegram account.
+    #       full - Full access to use the bridge, i.e. previous levels + Matrix login.
     #      admin - Full access to use the bridge and some extra administration commands.
     # Permitted keys:
     #        * - All Matrix users

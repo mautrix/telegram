@@ -61,10 +61,11 @@ class AbstractUser(ABC):
     ignore_incoming_bot_events = True  # type: bool
 
     def __init__(self):
+        self.is_admin = False  # type: bool
+        self.matrix_puppet_whitelisted = False  # type: bool
         self.puppet_whitelisted = False  # type: bool
         self.whitelisted = False  # type: bool
         self.relaybot_whitelisted = False  # type: bool
-        self.is_admin = False  # type: bool
         self.client = None  # type: MautrixTelegramClient
         self.tgid = None  # type: int
         self.mxid = None  # type: str

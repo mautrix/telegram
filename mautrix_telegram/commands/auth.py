@@ -49,7 +49,7 @@ async def ping_bot(evt: CommandEvent):
                            "To use the bot, simply invite it to a portal room.")
 
 
-@command_handler(needs_auth=True,
+@command_handler(needs_auth=True, needs_matrix_puppeting=True,
                  help_section=SECTION_AUTH,
                  help_text="Revert your Telegram account's Matrix puppet to use the default Matrix "
                            "account.")
@@ -61,7 +61,7 @@ async def logout_matrix(evt: CommandEvent):
     await evt.reply("Reverted your Telegram account's Matrix puppet back to the default.")
 
 
-@command_handler(needs_auth=True, management_only=True,
+@command_handler(needs_auth=True, management_only=True, needs_matrix_puppeting=True,
                  help_section=SECTION_AUTH,
                  help_text="Replace your Telegram account's Matrix puppet with your own Matrix "
                            "account")

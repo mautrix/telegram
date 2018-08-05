@@ -248,15 +248,16 @@ class Config(DictWithRecursion):
         self._data = base._data
         self.save()
 
-    def _get_permissions(self, key: str) -> Tuple[bool, bool, bool, bool, bool]:
+    def _get_permissions(self, key: str) -> Tuple[bool, bool, bool, bool, bool, bool]:
         level = self["bridge.permissions"].get(key, "")
         admin = level == "admin"
-        puppeting = level == "full" or admin
+        matrix_puppeting = level == "full" or admin
+        puppeting = level == "puppeting" or matrix_puppeting
         user = level == "user" or puppeting
         relaybot = level == "relaybot" or user
-        return relaybot, user, puppeting, admin, level
+        return relaybot, user, puppeting, matrix_puppeting, admin, level
 
-    def get_permissions(self, mxid: str) -> Tuple[bool, bool, bool, bool, bool]:
+    def get_permissions(self, mxid: str) -> Tuple[bool, bool, bool, bool, bool, bool]:
         permissions = self["bridge.permissions"] or {}
         if mxid in permissions:
             return self._get_permissions(mxid)
