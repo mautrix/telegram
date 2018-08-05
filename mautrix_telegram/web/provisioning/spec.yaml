@@ -133,12 +133,31 @@ paths:
           required: false
           type: string
       responses:
+        200:
+          description: Telegram chat was already bridged to given room.
+        202:
+          description: Room bridging initiated
         400:
           $ref: "#/responses/BadRequest"
-        401:
-          $ref: "#/responses/PermissionError"
+        403:
+          description: "Given user doesn't have permission to bridge the room, or the bridge bot is not in the room"
+          schema:
+            type: object
+            title: Error
+            properties:
+              errcode:
+                type: string
+                title: Error code
+                description: A machine-readable error code
+                enum:
+                - not_enough_permissions
+                - bot_not_in_room
+                - bot_not_in_chat
+                - not_logged_in
+              error:
+                $ref: "#/definitions/HumanReadableError"
         409:
-          description: Matrix room or Telegram chat is already bridged
+          description: Matrix room or Telegram chat is already bridged to another chat/room
           schema:
             type: object
             title: Error
@@ -159,7 +178,7 @@ paths:
       summary: Create a new Telegram chat for the given room
       tags: [Bridging]
       responses:
-        200:
+        201:
           description: Telegram chat created
           schema:
             type: object
@@ -168,8 +187,6 @@ paths:
                 type: integer
         400:
           $ref: "#/responses/BadRequest"
-        401:
-          $ref: "#/responses/PermissionError"
         403:
           description: "Given user isn't logged in with a real account or doesn't have permission to bridge the room, or the bridge bot is not in the room"
           schema:
@@ -244,7 +261,7 @@ paths:
           description: Room unbridging initiated
         400:
           $ref: "#/responses/BadRequest"
-        401:
+        403:
           $ref: "#/responses/PermissionError"
         404:
           description: Unknown portal

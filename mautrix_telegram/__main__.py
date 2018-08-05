@@ -88,20 +88,19 @@ appserv = AppService(config["homeserver.address"], config["homeserver.domain"],
                      verify_ssl=config["homeserver.verify_ssl"], state_store=state_store,
                      real_user_content_key="net.maunium.telegram.puppet")
 
-public_website = None  # type: Optional[PublicBridgeWebsite]
-provisioning_api = None  # type: Optional[ProvisioningAPI]
+context = Context(appserv, db_session, config, loop, session_container)
 
 if config["appservice.public.enabled"]:
     public_website = PublicBridgeWebsite(loop)
     appserv.app.add_subapp(config["appservice.public.prefix"] or "/public", public_website.app)
+    context.public_website = public_website
 
 if config["appservice.provisioning.enabled"]:
-    provisioning_api = ProvisioningAPI(config, appserv, loop)
+    provisioning_api = ProvisioningAPI(context)
     appserv.app.add_subapp(config["appservice.provisioning.prefix"] or "/_matrix/provisioning",
                            provisioning_api.app)
+    context.provisioning_api = provisioning_api
 
-context = Context(appserv, db_session, config, loop, None, None, session_container, public_website,
-                  provisioning_api)
 
 with appserv.run(config["appservice.hostname"], config["appservice.port"]) as start:
     init_db(db_session)

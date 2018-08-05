@@ -14,7 +14,7 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 if TYPE_CHECKING:
     import asyncio
@@ -32,18 +32,16 @@ if TYPE_CHECKING:
 
 class Context:
     def __init__(self, az: "AppService", db: "scoped_session", config: "Config",
-                 loop: "asyncio.AbstractEventLoop", bot: "Bot", mx: "MatrixHandler",
-                 session_container: "AlchemySessionContainer",
-                 public_website: "PublicBridgeWebsite", provisioning_api: "ProvisioningAPI"):
+                 loop: "asyncio.AbstractEventLoop", session_container: "AlchemySessionContainer"):
         self.az = az  # type: AppService
         self.db = db  # type: scoped_session
         self.config = config  # type: Config
         self.loop = loop  # type: asyncio.AbstractEventLoop
-        self.bot = bot  # type: Bot
-        self.mx = mx  # type: MatrixHandler
+        self.bot = None  # type: Optional[Bot]
+        self.mx = None  # type: MatrixHandler
         self.session_container = session_container  # type: AlchemySessionContainer
-        self.public_website = public_website  # type: PublicBridgeWebsite
-        self.provisioning_api = provisioning_api  # type: ProvisioningAPI
+        self.public_website = None  # type: PublicBridgeWebsite
+        self.provisioning_api = None  # type: ProvisioningAPI
 
     def __iter__(self):
         yield self.az

@@ -15,30 +15,34 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from aiohttp import web
-from typing import Tuple, Optional, Callable, Awaitable
+from typing import Tuple, Optional, Callable, Awaitable, TYPE_CHECKING
 import asyncio
 import logging
 import json
 
 from telethon.utils import get_peer_id, resolve_id
+from telethon.tl.types import ChatForbidden, ChannelForbidden, TypeChat
 from mautrix_appservice import AppService, MatrixRequestError, IntentError
 
 from ...user import User
 from ...portal import Portal
 from ...commands.portal import user_has_power_level, get_initial_state
-from ...config import Config
 from ..common import AuthAPI
+
+if TYPE_CHECKING:
+    from ...context import Context
 
 
 class ProvisioningAPI(AuthAPI):
     log = logging.getLogger("mau.web.provisioning")
 
-    def __init__(self, config: Config, az: AppService, loop: asyncio.AbstractEventLoop):
-        super().__init__(loop)
-        self.secret = config["appservice.provisioning.shared_secret"]
-        self.az = az
+    def __init__(self, context: "Context"):
+        super().__init__(context.loop)
+        self.secret = context.config["appservice.provisioning.shared_secret"]
+        self.az = context.az  # type: AppService
+        self.context = context  # type: Context
 
-        self.app = web.Application(loop=loop, middlewares=[self.error_middleware])
+        self.app = web.Application(loop=context.loop, middlewares=[self.error_middleware])
 
         portal_prefix = "/portal/{mxid:![^/]+}"
         self.app.router.add_route("GET", f"{portal_prefix}", self.get_portal_by_mxid)
@@ -107,9 +111,79 @@ class ProvisioningAPI(AuthAPI):
         if err is not None:
             return err
 
-        return self.get_error_response(501, "not_implemented",
-                                       "Connecting existing Matrix rooms to existing Telegram "
-                                       "chats via the provisioning API is not yet implemented.")
+        room_id = request.match_info["mxid"]
+        if Portal.get_by_mxid(room_id):
+            return self.get_error_response(409, "room_already_bridged",
+                                           "Room is already bridged to another Telegram chat.")
+
+        chat_id = request.match_info["chat_id"]
+        if chat_id.startswith("-100"):
+            tgid = int(chat_id[4:])
+            peer_type = "channel"
+        elif chat_id.startswith("-"):
+            tgid = -int(chat_id)
+            peer_type = "chat"
+        else:
+            return self.get_error_response(400, "tgid_invalid", "Invalid Telegram chat ID.")
+
+        user, err = await self.get_user(request.query.get("user_id", None), expect_logged_in=None,
+                                        require_puppeting=False)
+        if err is not None:
+            return err
+        elif user and not await user_has_power_level(room_id, self.az.intent, user, "bridge"):
+            return self.get_error_response(403, "not_enough_permissions",
+                                           "You do not have the permissions to bridge that room.")
+
+        portal = Portal.get_by_tgid(tgid, peer_type=peer_type)
+        if portal.mxid == room_id:
+            return self.get_error_response(200, "bridge_exists",
+                                           "Telegram chat is already bridged to that Matrix room.")
+        elif portal.mxid:
+            force = request.query.get("force", None)
+            if force in ("delete", "unbridge"):
+                delete = force == "delete"
+                await portal.cleanup_room(portal.main_intent, portal.mxid, puppets_only=not delete,
+                                          message=("Portal deleted (moving to another room)"
+                                                   if delete
+                                                   else "Room unbridged (portal moving to another "
+                                                        "room)"))
+            else:
+                return self.get_error_response(409, "chat_already_bridged",
+                                               "Telegram chat is already bridged to another "
+                                               "Matrix room.")
+
+        is_logged_in = user is not None and await user.is_logged_in()
+        user = user if is_logged_in else self.context.bot
+        if not user:
+            return self.get_login_response(status=403, errcode="not_logged_in",
+                                           error="You are not logged in and there is no relay bot.")
+
+        entity = None  # type: Optional[TypeChat]
+        try:
+            entity = await user.client.get_entity(portal.peer)
+        except Exception:
+            self.log.exception("Failed to get_entity(%s) for manual bridging.", portal.peer)
+
+        if not entity or isinstance(entity, (ChatForbidden, ChannelForbidden)):
+            if is_logged_in:
+                return self.get_error_response(403, "user_not_in_chat",
+                                               "Failed to get info of Telegram chat. "
+                                               "Are you in the chat?")
+            return self.get_error_response(403, "bot_not_in_chat",
+                                           "Failed to get info of Telegram chat. "
+                                           "Is the relay bot in the chat?")
+
+        direct = False
+
+        portal.mxid = room_id
+        portal.title, portal.about, levels = await get_initial_state(self.az.intent, room_id)
+        portal.photo_id = ""
+        portal.save()
+
+        asyncio.ensure_future(portal.update_matrix_room(user, entity, direct, levels=levels),
+                              loop=self.loop)
+
+        return web.Response(status=202, body="{}")
 
     async def create_chat(self, request: web.Request) -> web.Response:
         err = self.check_authorization(request)
@@ -170,7 +244,7 @@ class ProvisioningAPI(AuthAPI):
 
         return web.json_response({
             "chat_id": portal.tgid,
-        })
+        }, status=201)
 
     async def disconnect_chat(self, request: web.Request) -> web.Response:
         err = self.check_authorization(request)
