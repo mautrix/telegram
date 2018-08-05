@@ -90,6 +90,7 @@ class Portal:
         self.about = about  # type: str
         self.photo_id = photo_id  # type: str
         self._db_instance = db_instance  # type: DBPortal
+        self.deleted = False  # type: bool
 
         self._main_intent = None  # type: IntentAPI
         self._room_create_lock = asyncio.Lock()  # type: asyncio.Lock
@@ -1632,6 +1633,7 @@ class Portal:
         if self._db_instance:
             self.db.delete(self._db_instance)
             self.db.commit()
+        self.deleted = True
 
     @classmethod
     def from_db(cls, db_portal: DBPortal) -> "Portal":

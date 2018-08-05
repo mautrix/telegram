@@ -98,7 +98,7 @@ class User(AbstractUser):
 
     @property
     def db_portals(self) -> List[DBPortal]:
-        return [portal.db_instance for portal in self.portals.values()]
+        return [portal.db_instance for portal in self.portals.values() if not portal.deleted]
 
     @db_portals.setter
     def db_portals(self, portals: List[DBPortal]):
@@ -214,8 +214,11 @@ class User(AbstractUser):
             self.save()
 
     async def log_out(self):
+        puppet = pu.Puppet.get(self.tgid)
+        if puppet.is_real_user:
+            await puppet.switch_mxid(None, None)
         for _, portal in self.portals.items():
-            if portal.has_bot:
+            if not portal.mxid or portal.has_bot:
                 continue
             try:
                 await portal.main_intent.kick(portal.mxid, self.mxid, "Logged out of Telegram.")
