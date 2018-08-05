@@ -17,6 +17,9 @@ appservice:
     # The hostname and port where this appservice should listen.
     hostname: 0.0.0.0
     port: 8080
+    # The maximum body size of appservice API requests (from the homeserver) in mebibytes
+    # Usually 1 is enough, but on high-traffic bridges you might need to increase this to avoid 413s
+    max_body_size: 1
 
     # The full URI to the database. SQLite and Postgres are fully supported.
     # Other DBMSes supported by SQLAlchemy may or may not work.

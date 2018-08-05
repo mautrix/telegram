@@ -153,6 +153,7 @@ class Config(DictWithRecursion):
             copy("appservice.address")
         copy("appservice.hostname")
         copy("appservice.port")
+        copy("appservice.max_body_size")
 
         copy("appservice.database")
 

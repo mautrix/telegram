@@ -86,7 +86,8 @@ appserv = AppService(config["homeserver.address"], config["homeserver.domain"],
                      config["appservice.as_token"], config["appservice.hs_token"],
                      config["appservice.bot_username"], log="mau.as", loop=loop,
                      verify_ssl=config["homeserver.verify_ssl"], state_store=state_store,
-                     real_user_content_key="net.maunium.telegram.puppet")
+                     real_user_content_key="net.maunium.telegram.puppet",
+                     aiohttp_params={"client_max_size": config["appservice.max_body_size"]})
 
 context = Context(appserv, db_session, config, loop, session_container)
 
@@ -100,7 +101,6 @@ if config["appservice.provisioning.enabled"]:
     appserv.app.add_subapp(config["appservice.provisioning.prefix"] or "/_matrix/provisioning",
                            provisioning_api.app)
     context.provisioning_api = provisioning_api
-
 
 with appserv.run(config["appservice.hostname"], config["appservice.port"]) as start:
     init_db(db_session)
