@@ -543,6 +543,9 @@ class Portal:
             chat = await user.client(GetFullChatRequest(chat_id=self.tgid))
             return chat.users, chat.full_chat.participants.participants
         elif self.peer_type == "channel":
+            if not self.megagroup and not config["bridge.sync_channel_members"]:
+                return [], []
+
             limit = config["bridge.max_initial_member_sync"]
             if limit == 0:
                 return [], []

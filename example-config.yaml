@@ -103,6 +103,10 @@ bridge:
     # will not send any more members.
     # Defaults to no local limit (-> limited to 10000 by server)
     max_initial_member_sync: -1
+    # Whether or not to sync the member list in channels.
+    # If no channel admins have logged into the bridge, the bridge won't be able to sync the member
+    # list regardless of this setting.
+    sync_channel_members: true
     # The maximum number of simultaneous Telegram deletions to handle.
     # A large number of simultaneous redactions could put strain on your homeserver.
     max_telegram_delete: 10
