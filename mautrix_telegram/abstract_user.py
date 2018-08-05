@@ -40,6 +40,7 @@ from .tgclient import MautrixTelegramClient
 if TYPE_CHECKING:
     from .context import Context
     from .config import Config
+    from .bot import Bot
 
 config = None  # type: Config
 # Value updated from config in init()
@@ -56,6 +57,8 @@ class AbstractUser(ABC):
     log = None  # type: logging.Logger
     db = None  # type: orm.Session
     az = None  # type: AppService
+    bot = None  # type: Bot
+    ignore_incoming_bot_events = True  # type: bool
 
     def __init__(self):
         self.puppet_whitelisted = False  # type: bool
@@ -338,6 +341,9 @@ class AbstractUser(ABC):
 
     async def update_message(self, original_update: UpdateMessage):
         update, sender, portal = self.get_message_details(original_update)
+        if self.ignore_incoming_bot_events and self.bot and sender.id == self.bot.tgid:
+            self.log.debug(f"Ignoring relaybot-sent message %s to %s", update, portal.tgid_log)
+            return
 
         if isinstance(update, MessageService):
             if isinstance(update.action, MessageActionChannelMigrateFrom):
@@ -364,6 +370,7 @@ class AbstractUser(ABC):
 
 def init(context: "Context"):
     global config, MAX_DELETIONS
-    AbstractUser.az, AbstractUser.db, config, AbstractUser.loop, _ = context
+    AbstractUser.az, AbstractUser.db, config, AbstractUser.loop, AbstractUser.relaybot = context
+    AbstractUser.ignore_incoming_bot_events = config["bridge.relaybot.ignore_own_incoming_events"]
     AbstractUser.session_container = context.session_container
     MAX_DELETIONS = config.get("bridge.max_telegram_delete", 10)

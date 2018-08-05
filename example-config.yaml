@@ -196,6 +196,8 @@ bridge:
         authless_portals: true
         # Whether or not to allow Telegram group admins to use the bot commands.
         whitelist_group_admins: true
+        # Whether or not to ignore incoming events sent by the relay bot.
+        ignore_own_incoming_events: true
         # List of usernames/user IDs who are also allowed to use the bot commands.
         whitelist:
         - myusername

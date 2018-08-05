@@ -225,6 +225,7 @@ class Config(DictWithRecursion):
             copy("bridge.relaybot.authless_portals")
             copy("bridge.relaybot.whitelist_group_admins")
             copy("bridge.relaybot.whitelist")
+            copy("bridge.relaybot.ignore_own_incoming_events")
 
         copy("telegram.api_id")
         copy("telegram.api_hash")
