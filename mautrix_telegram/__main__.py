@@ -82,12 +82,15 @@ session_container = AlchemySessionContainer(engine=db_engine, session=db_session
 loop = asyncio.get_event_loop()  # type: asyncio.AbstractEventLoop
 
 state_store = SQLStateStore(db_session)
+mebibyte = 1024 ** 2
 appserv = AppService(config["homeserver.address"], config["homeserver.domain"],
                      config["appservice.as_token"], config["appservice.hs_token"],
                      config["appservice.bot_username"], log="mau.as", loop=loop,
                      verify_ssl=config["homeserver.verify_ssl"], state_store=state_store,
                      real_user_content_key="net.maunium.telegram.puppet",
-                     aiohttp_params={"client_max_size": config["appservice.max_body_size"]})
+                     aiohttp_params={
+                         "client_max_size": config["appservice.max_body_size"] * mebibyte
+                     })
 
 context = Context(appserv, db_session, config, loop, session_container)
 
