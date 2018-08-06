@@ -386,7 +386,8 @@ class MatrixHandler:
         elif evt_type == "m.room.redaction":
             await self.handle_redaction(room_id, sender, evt["redacts"])
         elif evt_type == "m.room.power_levels":
-            await self.handle_power_levels(room_id, sender, evt["content"], evt["prev_content"])
+            prev_content = evt.get("unsigned", {}).get("prev_content", {})  # type: dict
+            await self.handle_power_levels(room_id, sender, evt["content"], prev_content)
         elif evt_type in ("m.room.name", "m.room.avatar", "m.room.topic"):
             await self.handle_room_meta(evt_type, room_id, sender, evt["content"])
         elif evt_type == "m.room.pinned_events":
