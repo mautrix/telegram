@@ -21,6 +21,7 @@ setuptools.setup(
 
     description="A Matrix-Telegram hybrid puppeting/relaybot bridge.",
     long_description=open("README.md").read(),
+    long_description_content_type="text/markdown",
 
     packages=setuptools.find_packages(),
 
