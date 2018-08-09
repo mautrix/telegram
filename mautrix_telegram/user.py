@@ -14,7 +14,7 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import Coroutine, Dict, List, Match, Optional, Tuple, cast, TYPE_CHECKING
+from typing import Coroutine, Dict, List, Match, NewType, Optional, Tuple, cast, TYPE_CHECKING
 import logging
 import asyncio
 import re
@@ -39,7 +39,7 @@ if TYPE_CHECKING:
 
 config = None  # type: Config
 
-SearchResults = List[Tuple["pu.Puppet", int]]
+SearchResult = NewType('SearchResult', Tuple['pu.Puppet', int])
 
 
 class User(AbstractUser):
@@ -247,28 +247,29 @@ class User(AbstractUser):
         return True
 
     def _search_local(self, query: str, max_results: int = 5, min_similarity: int = 45
-                      ) -> SearchResults:
-        results = []  # type: SearchResults
+                      ) -> List[SearchResult]:
+        results = []  # type: List[SearchResult]
         for contact in self.contacts:
             similarity = contact.similarity(query)
             if similarity >= min_similarity:
-                results.append((contact, similarity))
+                results.append(SearchResult((contact, similarity)))
         results.sort(key=lambda tup: tup[1], reverse=True)
         return results[0:max_results]
 
-    async def _search_remote(self, query: str, max_results: int = 5) -> SearchResults:
+    async def _search_remote(self, query: str, max_results: int = 5) -> List[SearchResult]:
         if len(query) < 5:
             return []
         server_results = await self.client(SearchRequest(q=query, limit=max_results))
-        results = []  # type: SearchResults
+        results = []  # type: List[SearchResult]
         for user in server_results.users:
             puppet = pu.Puppet.get(user.id)
             await puppet.update_info(self, user)
-            results.append((puppet, puppet.similarity(query)))
+            results.append(SearchResult((puppet, puppet.similarity(query))))
         results.sort(key=lambda tup: tup[1], reverse=True)
         return results[0:max_results]
 
-    async def search(self, query: str, force_remote: bool = False) -> Tuple[SearchResults, bool]:
+    async def search(self, query: str, force_remote: bool = False
+                     ) -> Tuple[List[SearchResult], bool]:
         if force_remote:
             return await self._search_remote(query), True
 
