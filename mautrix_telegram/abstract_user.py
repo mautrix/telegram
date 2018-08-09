@@ -156,14 +156,14 @@ class AbstractUser(ABC):
                 and (not self.is_bot or allow_bot)
                 and await self.is_logged_in())
 
-    async def start(self, delete_unless_authenticated: bool = False) -> "AbstractUser":
+    async def start(self, delete_unless_authenticated: bool = False) -> 'AbstractUser':
         if not self.client:
             self._init_client()
         await self.client.connect()
         self.log.debug("%s connected: %s", self.mxid, self.connected)
         return self
 
-    async def ensure_started(self, even_if_no_session=False) -> "AbstractUser":
+    async def ensure_started(self, even_if_no_session=False) -> 'AbstractUser':
         if not self.puppet_whitelisted:
             return self
         self.log.debug("ensure_started(%s, connected=%s, even_if_no_session=%s, session_count=%s)",

@@ -71,7 +71,7 @@ class Bot(AbstractUser):
             if isinstance(id, int):
                 self.tg_whitelist.append(id)
 
-    async def start(self, delete_unless_authenticated: bool = False) -> "Bot":
+    async def start(self, delete_unless_authenticated: bool = False) -> 'Bot':
         await super().start(delete_unless_authenticated)
         if not await self.is_logged_in():
             await self.client.sign_in(bot_token=self.token)

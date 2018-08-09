@@ -141,14 +141,14 @@ class User(AbstractUser):
             self.db.commit()
 
     @classmethod
-    def from_db(cls, db_user: DBUser) -> "User":
+    def from_db(cls, db_user: DBUser) -> 'User':
         return User(db_user.mxid, db_user.tgid, db_user.tg_username, db_user.contacts,
                     False, db_user.saved_contacts, db_user.portals, db_instance=db_user)
 
     # endregion
     # region Telegram connection management
 
-    async def start(self, delete_unless_authenticated: bool = False) -> "User":
+    async def start(self, delete_unless_authenticated: bool = False) -> 'User':
         await super().start()
         if await self.is_logged_in():
             self.log.debug(f"Ensuring post_login() for {self.name}")

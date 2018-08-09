@@ -1700,7 +1700,7 @@ class Portal:
         self.deleted = True
 
     @classmethod
-    def from_db(cls, db_portal: DBPortal) -> "Portal":
+    def from_db(cls, db_portal: DBPortal) -> 'Portal':
         return Portal(tgid=db_portal.tgid, tg_receiver=db_portal.tg_receiver,
                       peer_type=db_portal.peer_type, mxid=db_portal.mxid,
                       username=db_portal.username, megagroup=db_portal.megagroup,

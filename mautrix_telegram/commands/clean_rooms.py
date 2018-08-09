@@ -26,7 +26,7 @@ ManagementRoom = NewType('ManagementRoom', Tuple[MatrixRoomID, MatrixUserID])
 
 
 async def _find_rooms(intent: IntentAPI) -> Tuple[List[ManagementRoom], List[MatrixRoomID],
-                                                  List["po.Portal"], List["po.Portal"]]:
+                                                  List['po.Portal'], List['po.Portal']]:
     management_rooms = []  # type: List[ManagementRoom]
     unidentified_rooms = []  # type: List[MatrixRoomID]
     portals = []  # type: List[po.Portal]
