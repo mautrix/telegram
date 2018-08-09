@@ -22,7 +22,7 @@ from telethon.errors import (ChatAdminRequiredError, UsernameInvalidError,
 from telethon.tl.types import ChatForbidden, ChannelForbidden
 from mautrix_appservice import MatrixRequestError, IntentAPI
 
-from ..types import MatrixRoomId, TelegramId
+from ..types import MatrixRoomID, TelegramID
 from .. import portal as po, user as u
 from . import (command_handler, CommandEvent,
                SECTION_ADMIN, SECTION_CREATING_PORTALS, SECTION_PORTAL_MANAGEMENT)
@@ -86,7 +86,7 @@ async def user_has_power_level(room: str, intent, sender: u.User, event: str, de
 async def _get_portal_and_check_permission(evt: CommandEvent, permission: str,
                                            action: Optional[str] = None
                                            ) -> Tuple[Union[Dict, po.Portal], bool]:
-    room_id = MatrixRoomId(evt.args[0]) if len(evt.args) > 0 else evt.room_id
+    room_id = MatrixRoomID(evt.args[0]) if len(evt.args) > 0 else evt.room_id
 
     portal = po.Portal.get_by_mxid(room_id)
     if not portal:
@@ -168,7 +168,7 @@ async def bridge(evt: CommandEvent) -> Dict:
     if len(evt.args) == 0:
         return await evt.reply("**Usage:** "
                                "`$cmdprefix+sp bridge <Telegram chat ID> [Matrix room ID]`")
-    room_id = MatrixRoomId(evt.args[1]) if len(evt.args) > 1 else evt.room_id
+    room_id = MatrixRoomID(evt.args[1]) if len(evt.args) > 1 else evt.room_id
     that_this = "This" if room_id == evt.room_id else "That"
 
     portal = po.Portal.get_by_mxid(room_id)
@@ -181,10 +181,10 @@ async def bridge(evt: CommandEvent) -> Dict:
     # The /id bot command provides the prefixed ID, so we assume
     tgid_str = evt.args[0]
     if tgid_str.startswith("-100"):
-        tgid = TelegramId(int(tgid_str[4:]))
+        tgid = TelegramID(int(tgid_str[4:]))
         peer_type = "channel"
     elif tgid_str.startswith("-"):
-        tgid = TelegramId(-int(tgid_str))
+        tgid = TelegramID(-int(tgid_str))
         peer_type = "chat"
     else:
         return await evt.reply("That doesn't seem like a prefixed Telegram chat ID.\n\n"

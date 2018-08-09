@@ -38,7 +38,7 @@ from .db import Message as DBMessage
 from .tgclient import MautrixTelegramClient
 
 if TYPE_CHECKING:
-    from .types import TelegramId
+    from .types import TelegramID
     from .context import Context
     from .config import Config
     from .bot import Bot
@@ -68,7 +68,7 @@ class AbstractUser(ABC):
         self.whitelisted = False  # type: bool
         self.relaybot_whitelisted = False  # type: bool
         self.client = None  # type: MautrixTelegramClient
-        self.tgid = None  # type: TelegramId
+        self.tgid = None  # type: TelegramID
         self.mxid = None  # type: str
         self.is_relaybot = False  # type: bool
         self.is_bot = False  # type: bool

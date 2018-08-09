@@ -28,7 +28,7 @@ from telethon.tl.types import (MessageEntityMention, MessageEntityMentionName,
 from mautrix_appservice import MatrixRequestError
 from mautrix_appservice.intent_api import IntentAPI
 
-from ..types import TelegramId
+from ..types import TelegramID
 from .. import user as u, puppet as pu, portal as po
 from ..db import Message as DBMessage
 from .util import (add_surrogates, remove_surrogates, trim_reply_fallback_html,
@@ -292,7 +292,7 @@ def _parse_mention(html: List[str], entity_text: str) -> bool:
     return False
 
 
-def _parse_name_mention(html: List[str], entity_text: str, user_id: TelegramId) -> bool:
+def _parse_name_mention(html: List[str], entity_text: str, user_id: TelegramID) -> bool:
     user = u.User.get_by_tgid(user_id)
     if user:
         mxid = user.mxid

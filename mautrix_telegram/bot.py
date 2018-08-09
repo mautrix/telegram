@@ -27,7 +27,7 @@ from telethon.tl.functions.messages import GetChatsRequest, GetFullChatRequest
 from telethon.tl.functions.channels import GetChannelsRequest, GetParticipantRequest
 from telethon.errors import ChannelInvalidError, ChannelPrivateError
 
-from .types import MatrixUserId
+from .types import MatrixUserID
 from .abstract_user import AbstractUser
 from .db import BotChat
 from . import puppet as pu, portal as po, user as u
@@ -172,7 +172,7 @@ class Bot(AbstractUser):
                     "Portal is not public. Use `/invite <mxid>` to get an invite.")
 
     async def handle_command_invite(self, portal: po.Portal, reply: ReplyFunc,
-                                    mxid_input: MatrixUserId) -> Message:
+                                    mxid_input: MatrixUserID) -> Message:
         if len(mxid_input) == 0:
             return await reply("Usage: `/invite <mxid>`")
         elif not portal.mxid:
@@ -180,7 +180,7 @@ class Bot(AbstractUser):
                                "Create one with /portal first.")
         if not self.mxid_regex.match(mxid_input):
             return await reply("That doesn't look like a Matrix ID.")
-        user = await u.User.get_by_mxid(MatrixUserId(mxid_input)).ensure_started()
+        user = await u.User.get_by_mxid(MatrixUserID(mxid_input)).ensure_started()
         if not user.relaybot_whitelisted:
             return await reply("That user is not whitelisted to use the bridge.")
         elif await user.is_logged_in():

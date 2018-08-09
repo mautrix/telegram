@@ -26,7 +26,7 @@ from sqlalchemy import orm
 from telethon.tl.types import UserProfilePhoto, User, FileLocation
 from mautrix_appservice import AppService, IntentAPI, IntentError, MatrixRequestError
 
-from .types import MatrixUserId, TelegramId
+from .types import MatrixUserID, TelegramID
 from .db import Puppet as DBPuppet
 from . import util
 
@@ -52,28 +52,28 @@ class Puppet:
     mxid_regex = None  # type: Pattern
     username_template = None  # type: str
     hs_domain = None  # type: str
-    cache = {}  # type: Dict[TelegramId, Puppet]
+    cache = {}  # type: Dict[TelegramID, Puppet]
     by_custom_mxid = {}  # type: Dict[str, Puppet]
 
     def __init__(self,
-                 id: TelegramId,
+                 id: TelegramID,
                  access_token: Optional[str] = None,
-                 custom_mxid: Optional[MatrixUserId] = None,
+                 custom_mxid: Optional[MatrixUserID] = None,
                  username: Optional[str] = None,
                  displayname: Optional[str] = None,
-                 displayname_source: Optional[TelegramId] = None,
+                 displayname_source: Optional[TelegramID] = None,
                  photo_id: Optional[str] = None,
                  is_bot: bool = False,
                  is_registered: bool = False,
                  db_instance: Optional[DBPuppet] = None) -> None:
-        self.id = id  # type: TelegramId
+        self.id = id  # type: TelegramID
         self.access_token = access_token  # type: Optional[str]
-        self.custom_mxid = custom_mxid  # type: Optional[MatrixUserId]
-        self.default_mxid = self.get_mxid_from_id(self.id)  # type: MatrixUserId
+        self.custom_mxid = custom_mxid  # type: Optional[MatrixUserID]
+        self.default_mxid = self.get_mxid_from_id(self.id)  # type: MatrixUserID
 
         self.username = username  # type: Optional[str]
         self.displayname = displayname  # type: Optional[str]
-        self.displayname_source = displayname_source  # type: Optional[TelegramId]
+        self.displayname_source = displayname_source  # type: Optional[TelegramID]
         self.photo_id = photo_id  # type: Optional[str]
         self.is_bot = is_bot  # type: bool
         self.is_registered = is_registered  # type: bool
@@ -91,7 +91,7 @@ class Puppet:
         return self.custom_mxid or self.default_mxid
 
     @property
-    def tgid(self) -> TelegramId:
+    def tgid(self) -> TelegramID:
         return self.id
 
     @property
@@ -109,7 +109,7 @@ class Puppet:
         return (self.az.intent.user(self.custom_mxid, self.access_token)
                 if self.is_real_user else self.default_mxid_intent)
 
-    async def switch_mxid(self, access_token: str, mxid: MatrixUserId) -> PuppetError:
+    async def switch_mxid(self, access_token: str, mxid: MatrixUserID) -> PuppetError:
         prev_mxid = self.custom_mxid
         self.custom_mxid = mxid
         self.access_token = access_token
@@ -355,10 +355,10 @@ class Puppet:
         if displayname != self.displayname:
             await self.default_mxid_intent.set_display_name(displayname)
             self.displayname = displayname
-            self.displayname_source = TelegramId(source.tgid)
+            self.displayname_source = TelegramID(source.tgid)
             return True
         elif source.is_relaybot or self.displayname_source is None:
-            self.displayname_source = TelegramId(source.tgid)
+            self.displayname_source = TelegramID(source.tgid)
             return True
         else:
             return False
@@ -378,7 +378,7 @@ class Puppet:
     # region Getters
 
     @classmethod
-    def get(cls, tgid: TelegramId, create: bool = True) -> Optional['Puppet']:
+    def get(cls, tgid: TelegramID, create: bool = True) -> Optional['Puppet']:
         try:
             return cls.cache[tgid]
         except KeyError:
@@ -397,7 +397,7 @@ class Puppet:
         return None
 
     @classmethod
-    def get_by_mxid(cls, mxid: MatrixUserId, create: bool = True) -> Optional['Puppet']:
+    def get_by_mxid(cls, mxid: MatrixUserID, create: bool = True) -> Optional['Puppet']:
         tgid = cls.get_id_from_mxid(mxid)
         if tgid:
             return cls.get(tgid, create)
@@ -405,7 +405,7 @@ class Puppet:
         return None
 
     @classmethod
-    def get_by_custom_mxid(cls, mxid: MatrixUserId) -> Optional['Puppet']:
+    def get_by_custom_mxid(cls, mxid: MatrixUserID) -> Optional['Puppet']:
         if not mxid:
             raise ValueError("Matrix ID can't be empty")
 
@@ -429,15 +429,15 @@ class Puppet:
                 for puppet in DBPuppet.query.filter(DBPuppet.custom_mxid is not None).all()]
 
     @classmethod
-    def get_id_from_mxid(cls, mxid: MatrixUserId) -> Optional[TelegramId]:
+    def get_id_from_mxid(cls, mxid: MatrixUserID) -> Optional[TelegramID]:
         match = cls.mxid_regex.match(mxid)
         if match:
-            return TelegramId(int(match.group(1)))
+            return TelegramID(int(match.group(1)))
         return None
 
     @classmethod
-    def get_mxid_from_id(cls, tgid: TelegramId) -> MatrixUserId:
-        return MatrixUserId(f"@{cls.username_template.format(userid=tgid)}:{cls.hs_domain}")
+    def get_mxid_from_id(cls, tgid: TelegramID) -> MatrixUserID:
+        return MatrixUserID(f"@{cls.username_template.format(userid=tgid)}:{cls.hs_domain}")
 
     @classmethod
     def find_by_username(cls, username: str) -> Optional['Puppet']:

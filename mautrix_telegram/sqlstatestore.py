@@ -20,7 +20,7 @@ from sqlalchemy import orm
 
 from mautrix_appservice import StateStore
 
-from .types import MatrixUserId, MatrixRoomId
+from .types import MatrixUserID, MatrixRoomID
 from . import puppet as pu
 from .db import RoomState, UserProfile
 
@@ -33,12 +33,12 @@ class SQLStateStore(StateStore):
         self.room_state_cache = {}  # type: Dict[str, RoomState]
 
     @staticmethod
-    def is_registered(user: MatrixUserId) -> bool:
+    def is_registered(user: MatrixUserID) -> bool:
         puppet = pu.Puppet.get_by_mxid(user)
         return puppet.is_registered if puppet else False
 
     @staticmethod
-    def registered(user: MatrixUserId) -> None:
+    def registered(user: MatrixUserID) -> None:
         puppet = pu.Puppet.get_by_mxid(user)
         if puppet:
             puppet.is_registered = True
@@ -51,7 +51,7 @@ class SQLStateStore(StateStore):
         elif event_type == "m.room.member":
             self.set_member(event["room_id"], event["state_key"], event["content"])
 
-    def _get_user_profile(self, room_id: MatrixRoomId, user_id: MatrixUserId, create: bool = True
+    def _get_user_profile(self, room_id: MatrixRoomID, user_id: MatrixUserID, create: bool = True
                           ) -> UserProfile:
         key = (room_id, user_id)
         try:
@@ -69,22 +69,22 @@ class SQLStateStore(StateStore):
             self.profile_cache[key] = profile
         return profile
 
-    def get_member(self, room: MatrixRoomId, user: MatrixUserId) -> Dict:
+    def get_member(self, room: MatrixRoomID, user: MatrixUserID) -> Dict:
         return self._get_user_profile(room, user).dict()
 
-    def set_member(self, room: MatrixRoomId, user: MatrixUserId, member: Dict) -> None:
+    def set_member(self, room: MatrixRoomID, user: MatrixUserID, member: Dict) -> None:
         profile = self._get_user_profile(room, user)
         profile.membership = member.get("membership", profile.membership or "leave")
         profile.displayname = member.get("displayname", profile.displayname)
         profile.avatar_url = member.get("avatar_url", profile.avatar_url)
         self.db.commit()
 
-    def set_membership(self, room: MatrixRoomId, user: MatrixUserId, membership: str) -> None:
+    def set_membership(self, room: MatrixRoomID, user: MatrixUserID, membership: str) -> None:
         self.set_member(room, user, {
             "membership": membership,
         })
 
-    def _get_room_state(self, room_id: MatrixRoomId, create: bool = True) -> RoomState:
+    def _get_room_state(self, room_id: MatrixRoomID, create: bool = True) -> RoomState:
         try:
             return self.room_state_cache[room_id]
         except KeyError:
@@ -98,13 +98,13 @@ class SQLStateStore(StateStore):
             self.room_state_cache[room_id] = room
         return room
 
-    def has_power_levels(self, room: MatrixRoomId) -> bool:
+    def has_power_levels(self, room: MatrixRoomID) -> bool:
         return self._get_room_state(room).has_power_levels
 
-    def get_power_levels(self, room: MatrixRoomId) -> Dict:
+    def get_power_levels(self, room: MatrixRoomID) -> Dict:
         return self._get_room_state(room).power_levels
 
-    def set_power_level(self, room: MatrixRoomId, user: MatrixUserId, level: int) -> None:
+    def set_power_level(self, room: MatrixRoomID, user: MatrixUserID, level: int) -> None:
         room_state = self._get_room_state(room)
         power_levels = room_state.power_levels
         if not power_levels:
@@ -116,7 +116,7 @@ class SQLStateStore(StateStore):
         room_state.power_levels = power_levels
         self.db.commit()
 
-    def set_power_levels(self, room: MatrixRoomId, content: Dict) -> None:
+    def set_power_levels(self, room: MatrixRoomID, content: Dict) -> None:
         state = self._get_room_state(room)
         state.power_levels = content
         self.db.commit()

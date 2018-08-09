@@ -62,7 +62,7 @@ from telethon.tl.types import (
     UserFull)
 from mautrix_appservice import MatrixRequestError, IntentError, AppService, IntentAPI
 
-from .types import MatrixEventId, MatrixRoomId, MatrixUserId, TelegramId
+from .types import MatrixEventID, MatrixRoomID, MatrixUserID, TelegramID
 from .context import Context
 from .db import Portal as DBPortal, Message as DBMessage, TelegramFile as DBTelegramFile
 from . import puppet as p, user as u, formatter, util
@@ -105,13 +105,13 @@ class Portal:
     by_mxid = {}  # type: Dict[str, Portal]
     by_tgid = {}  # type: Dict[Tuple[int, int], Portal]
 
-    def __init__(self, tgid: TelegramId, peer_type: str, tg_receiver: Optional[int] = None,
-                 mxid: Optional[MatrixRoomId] = None, username: Optional[str] = None,
+    def __init__(self, tgid: TelegramID, peer_type: str, tg_receiver: Optional[int] = None,
+                 mxid: Optional[MatrixRoomID] = None, username: Optional[str] = None,
                  megagroup: Optional[bool] = False, title: Optional[str] = None,
                  about: Optional[str] = None, photo_id: Optional[str] = None,
                  db_instance: DBPortal = None) -> None:
-        self.mxid = mxid  # type: Optional[MatrixRoomId]
-        self.tgid = tgid  # type: TelegramId
+        self.mxid = mxid  # type: Optional[MatrixRoomID]
+        self.tgid = tgid  # type: TelegramID
         self.tg_receiver = tg_receiver or tgid  # type: int
         self.peer_type = peer_type  # type: str
         self.username = username  # type: str
@@ -304,7 +304,7 @@ class Portal:
             return await self._create_matrix_room(user, entity, invites)
 
     async def _create_matrix_room(self, user: 'AbstractUser', entity: TypeChat, invites: InviteList
-                                  ) -> Optional[MatrixRoomId]:
+                                  ) -> Optional[MatrixRoomID]:
         direct = self.peer_type == "user"
 
         if self.mxid:
@@ -439,7 +439,7 @@ class Portal:
                              and config["bridge.max_initial_member_sync"] == -1
                              and (self.megagroup or self.peer_type != "channel"))
         if trust_member_list:
-            joined_mxids = cast(List[MatrixUserId],
+            joined_mxids = cast(List[MatrixUserID],
                                 await self.main_intent.get_room_members(self.mxid))
             for user_mxid in joined_mxids:
                 if user_mxid == self.az.bot_mxid:
@@ -460,7 +460,7 @@ class Portal:
                                                 "You had left this Telegram chat.")
                     continue
 
-    async def add_telegram_user(self, user_id: TelegramId, source: Optional['AbstractUser'] = None
+    async def add_telegram_user(self, user_id: TelegramID, source: Optional['AbstractUser'] = None
                                 ) -> None:
         puppet = p.Puppet.get(user_id)
         if source:
@@ -473,7 +473,7 @@ class Portal:
             user.register_portal(self)
             await self.invite_to_matrix(user.mxid)
 
-    async def delete_telegram_user(self, user_id: TelegramId, sender: p.Puppet) -> None:
+    async def delete_telegram_user(self, user_id: TelegramID, sender: p.Puppet) -> None:
         puppet = p.Puppet.get(user_id)
         user = u.User.get_by_tgid(user_id)
         kick_message = (f"Kicked by {sender.displayname}"
@@ -733,7 +733,7 @@ class Portal:
         return user.client(SetTypingRequest(
             self.peer, action() if typing else SendMessageCancelAction()))
 
-    async def mark_read(self, user: 'u.User', event_id: MatrixEventId) -> None:
+    async def mark_read(self, user: 'u.User', event_id: MatrixEventID) -> None:
         if user.is_bot:
             return
         space = self.tgid if self.peer_type == "channel" else user.tgid
@@ -748,7 +748,7 @@ class Portal:
         else:
             await user.client(ReadMessageHistoryRequest(peer=self.peer, max_id=message.tgid))
 
-    async def leave_matrix(self, user: 'u.User', source: 'u.User', event_id: MatrixEventId
+    async def leave_matrix(self, user: 'u.User', source: 'u.User', event_id: MatrixEventID
                            ) -> None:
         if await user.needs_relaybot(self):
             async with self.require_send_lock(self.bot.tgid):
@@ -971,7 +971,7 @@ class Portal:
         except ChatNotModifiedError:
             pass
 
-    async def handle_matrix_deletion(self, deleter: 'u.User', event_id: MatrixEventId) -> None:
+    async def handle_matrix_deletion(self, deleter: 'u.User', event_id: MatrixEventID) -> None:
         real_deleter = deleter if not await deleter.needs_relaybot(self) else self.bot
         space = self.tgid if self.peer_type == "channel" else real_deleter.tgid
         message = DBMessage.query.filter(DBMessage.mxid == event_id,
@@ -981,7 +981,7 @@ class Portal:
             return
         await real_deleter.client.delete_messages(self.peer, [message.tgid])
 
-    async def _update_telegram_power_level(self, sender: 'u.User', user_id: TelegramId,
+    async def _update_telegram_power_level(self, sender: 'u.User', user_id: TelegramID,
                                            level: int) -> None:
         if self.peer_type == "chat":
             await sender.client(EditChatAdminRequest(
@@ -999,7 +999,7 @@ class Portal:
                                  user_id=user_id, admin_rights=rights))
 
     async def handle_matrix_power_levels(self, sender: 'u.User',
-                                         new_users: Dict[MatrixUserId, int],
+                                         new_users: Dict[MatrixUserID, int],
                                          old_users: Dict[str, int]) -> None:
         # TODO handle all power level changes and bridge exact admin rights to supergroups/channels
         for user, level in new_users.items():
@@ -1531,7 +1531,7 @@ class Portal:
         else:
             self.log.debug("Unhandled Telegram action in %s: %s", self.title, action)
 
-    async def set_telegram_admin(self, user_id: TelegramId) -> None:
+    async def set_telegram_admin(self, user_id: TelegramID) -> None:
         puppet = p.Puppet.get(user_id)
         user = u.User.get_by_tgid(user_id)
 
@@ -1664,7 +1664,7 @@ class Portal:
                         mxid=self.mxid, username=self.username, megagroup=self.megagroup,
                         title=self.title, about=self.about, photo_id=self.photo_id)
 
-    def migrate_and_save(self, new_id: TelegramId) -> None:
+    def migrate_and_save(self, new_id: TelegramID) -> None:
         existing = DBPortal.query.get(self.tgid_full)
         if existing:
             self.db.delete(existing)
@@ -1711,7 +1711,7 @@ class Portal:
     # region Class instance lookup
 
     @classmethod
-    def get_by_mxid(cls, mxid: MatrixRoomId) -> Optional['Portal']:
+    def get_by_mxid(cls, mxid: MatrixRoomID) -> Optional['Portal']:
         try:
             return cls.by_mxid[mxid]
         except KeyError:
@@ -1746,7 +1746,7 @@ class Portal:
         return None
 
     @classmethod
-    def get_by_tgid(cls, tgid: TelegramId, tg_receiver: Optional[TelegramId] = None,
+    def get_by_tgid(cls, tgid: TelegramID, tg_receiver: Optional[TelegramID] = None,
                     peer_type: str = None) -> Optional['Portal']:
         tg_receiver = tg_receiver or tgid
         tgid_full = (tgid, tg_receiver)
@@ -1770,7 +1770,7 @@ class Portal:
     @classmethod
     def get_by_entity(cls, entity: Union[TypeChat, TypePeer, TypeUser, TypeUserFull,
                                          TypeInputPeer],
-                      receiver_id: Optional[TelegramId] = None, create: bool = True
+                      receiver_id: Optional[TelegramID] = None, create: bool = True
                       ) -> Optional['Portal']:
         entity_type = type(entity)
         if entity_type in {Chat, ChatFull}:

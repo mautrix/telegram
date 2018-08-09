@@ -28,7 +28,7 @@ from telethon.tl.functions.contacts import GetContactsRequest, SearchRequest
 from telethon.tl.functions.account import UpdateStatusRequest
 from mautrix_appservice import MatrixRequestError
 
-from .types import MatrixUserId, TelegramId
+from .types import MatrixUserID, TelegramID
 from .db import User as DBUser, Contact as DBContact, Portal as DBPortal
 from .abstract_user import AbstractUser
 from . import portal as po, puppet as pu
@@ -47,13 +47,13 @@ class User(AbstractUser):
     by_mxid = {}  # type: Dict[str, User]
     by_tgid = {}  # type: Dict[int, User]
 
-    def __init__(self, mxid: MatrixUserId, tgid: Optional[TelegramId] = None,
+    def __init__(self, mxid: MatrixUserID, tgid: Optional[TelegramID] = None,
                  username: Optional[str] = None, db_contacts: Optional[List[DBContact]] = None,
                  saved_contacts: int = 0, is_bot: bool = False, db_portals: List[DBPortal] = [],
                  db_instance: Optional[DBUser] = None) -> None:
         super().__init__()
-        self.mxid = mxid  # type: MatrixUserId
-        self.tgid = tgid  # type: TelegramId
+        self.mxid = mxid  # type: MatrixUserID
+        self.tgid = tgid  # type: TelegramID
         self.is_bot = is_bot  # type: bool
         self.username = username  # type: str
         self.contacts = []  # type: List[pu.Puppet]
@@ -332,7 +332,7 @@ class User(AbstractUser):
     # region Class instance lookup
 
     @classmethod
-    def get_by_mxid(cls, mxid: MatrixUserId, create: bool = True) -> Optional['User']:
+    def get_by_mxid(cls, mxid: MatrixUserID, create: bool = True) -> Optional['User']:
         if not mxid:
             raise ValueError("Matrix ID can't be empty")
 

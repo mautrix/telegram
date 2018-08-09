@@ -21,7 +21,7 @@ import re
 
 from mautrix_appservice import MatrixRequestError, IntentError
 
-from .types import MatrixEvent, MatrixEventId, MatrixRoomId, MatrixUserId
+from .types import MatrixEvent, MatrixEventID, MatrixRoomID, MatrixUserID
 from . import user as u, portal as po, puppet as pu, commands as com
 
 if TYPE_CHECKING:
@@ -38,7 +38,7 @@ class MatrixHandler:
     def __init__(self, context: 'Context') -> None:
         self.az, self.db, self.config, _, self.tgbot = context.core
         self.commands = com.CommandProcessor(context)  # type: com.CommandProcessor
-        self.previously_typing = []  # type: List[MatrixUserId]
+        self.previously_typing = []  # type: List[MatrixUserID]
 
         self.az.matrix_event_handler(self.handle_event)
 
@@ -58,7 +58,7 @@ class MatrixHandler:
             except asyncio.TimeoutError:
                 self.log.exception("TimeoutError when trying to set avatar")
 
-    async def handle_puppet_invite(self, room_id: MatrixRoomId, puppet: pu.Puppet, inviter: u.User
+    async def handle_puppet_invite(self, room_id: MatrixRoomID, puppet: pu.Puppet, inviter: u.User
                                    ) -> None:
         intent = puppet.default_mxid_intent
         self.log.debug(f"{inviter} invited puppet for {puppet.tgid} to {room_id}")
@@ -111,7 +111,7 @@ class MatrixHandler:
             await intent.send_notice(room_id, "This puppet will remain inactive until a "
                                               "Telegram chat is created for this room.")
 
-    async def accept_bot_invite(self, room_id: MatrixRoomId, inviter: u.User) -> None:
+    async def accept_bot_invite(self, room_id: MatrixRoomID, inviter: u.User) -> None:
         tries = 0
         while tries < 5:
             try:
@@ -136,8 +136,8 @@ class MatrixHandler:
                      "<code>bridge.permissions</code> section in your config file.")
             await self.az.intent.leave_room(room_id)
 
-    async def handle_invite(self, room_id: MatrixRoomId, user_id: MatrixUserId,
-                            inviter_mxid: MatrixUserId) -> None:
+    async def handle_invite(self, room_id: MatrixRoomID, user_id: MatrixUserID,
+                            inviter_mxid: MatrixUserID) -> None:
         self.log.debug(f"{inviter_mxid} invited {user_id} to {room_id}")
         inviter = u.User.get_by_mxid(inviter_mxid)
         if inviter is None:
@@ -164,8 +164,8 @@ class MatrixHandler:
 
         # The rest can probably be ignored
 
-    async def handle_join(self, room_id: MatrixRoomId, user_id: MatrixUserId,
-                          event_id: MatrixEventId) -> None:
+    async def handle_join(self, room_id: MatrixRoomID, user_id: MatrixUserID,
+                          event_id: MatrixEventID) -> None:
         user = await u.User.get_by_mxid(user_id).ensure_started()
 
         portal = po.Portal.get_by_mxid(room_id)
@@ -186,8 +186,8 @@ class MatrixHandler:
         if await user.is_logged_in() or portal.has_bot:
             await portal.join_matrix(user, event_id)
 
-    async def handle_part(self, room_id: MatrixRoomId, user_id: MatrixUserId,
-                          sender_mxid: MatrixUserId, event_id: MatrixEventId) -> None:
+    async def handle_part(self, room_id: MatrixRoomID, user_id: MatrixUserID,
+                          sender_mxid: MatrixUserID, event_id: MatrixEventID) -> None:
         self.log.debug(f"{user_id} left {room_id}")
 
         sender = u.User.get_by_mxid(sender_mxid, create=False)
@@ -219,8 +219,8 @@ class MatrixHandler:
             text = text[len(prefix) + 1:]
         return is_command, text
 
-    async def handle_message(self, room: MatrixRoomId, sender_id: MatrixUserId, message: Dict,
-                             event_id: MatrixEventId) -> None:
+    async def handle_message(self, room: MatrixRoomID, sender_id: MatrixUserID, message: Dict,
+                             event_id: MatrixEventID) -> None:
         is_command, text = self.is_command(message)
         sender = await u.User.get_by_mxid(sender_id).ensure_started()
         if not sender.relaybot_whitelisted:
@@ -255,8 +255,8 @@ class MatrixHandler:
                                        is_portal=portal is not None)
 
     @staticmethod
-    async def handle_redaction(room_id: MatrixRoomId, sender_mxid: MatrixUserId,
-                               event_id: MatrixEventId) -> None:
+    async def handle_redaction(room_id: MatrixRoomID, sender_mxid: MatrixUserID,
+                               event_id: MatrixEventID) -> None:
         sender = await u.User.get_by_mxid(sender_mxid).ensure_started()
         if not sender.relaybot_whitelisted:
             return
@@ -268,7 +268,7 @@ class MatrixHandler:
         await portal.handle_matrix_deletion(sender, event_id)
 
     @staticmethod
-    async def handle_power_levels(room_id: MatrixRoomId, sender_mxid: MatrixUserId,
+    async def handle_power_levels(room_id: MatrixRoomID, sender_mxid: MatrixUserID,
                                   new: Dict, old: Dict) -> None:
         portal = po.Portal.get_by_mxid(room_id)
         sender = await u.User.get_by_mxid(sender_mxid).ensure_started()
@@ -276,7 +276,7 @@ class MatrixHandler:
             await portal.handle_matrix_power_levels(sender, new["users"], old["users"])
 
     @staticmethod
-    async def handle_room_meta(evt_type: str, room_id: MatrixRoomId, sender_mxid: MatrixUserId,
+    async def handle_room_meta(evt_type: str, room_id: MatrixRoomID, sender_mxid: MatrixUserID,
                                content: dict) -> None:
         portal = po.Portal.get_by_mxid(room_id)
         sender = await u.User.get_by_mxid(sender_mxid).ensure_started()
@@ -291,7 +291,7 @@ class MatrixHandler:
             await handler(sender, content[content_key])
 
     @staticmethod
-    async def handle_room_pin(room_id: MatrixRoomId, sender_mxid: MatrixUserId,
+    async def handle_room_pin(room_id: MatrixRoomID, sender_mxid: MatrixUserID,
                               new_events: Set[str], old_events: Set[str]) -> None:
         portal = po.Portal.get_by_mxid(room_id)
         sender = await u.User.get_by_mxid(sender_mxid).ensure_started()
@@ -305,8 +305,8 @@ class MatrixHandler:
                 await portal.handle_matrix_pin(sender, None)
 
     @staticmethod
-    async def handle_name_change(room_id: MatrixRoomId, user_id: MatrixUserId, displayname: str,
-                                 prev_displayname: str, event_id: MatrixEventId) -> None:
+    async def handle_name_change(room_id: MatrixRoomID, user_id: MatrixUserID, displayname: str,
+                                 prev_displayname: str, event_id: MatrixEventID) -> None:
         portal = po.Portal.get_by_mxid(room_id)
         if not portal or not portal.has_bot:
             return
@@ -316,14 +316,14 @@ class MatrixHandler:
             await portal.name_change_matrix(user, displayname, prev_displayname, event_id)
 
     @staticmethod
-    def parse_read_receipts(content: Dict) -> Dict[MatrixUserId, MatrixEventId]:
+    def parse_read_receipts(content: Dict) -> Dict[MatrixUserID, MatrixEventID]:
         return {user_id: event_id
                 for event_id, receipts in content.items()
                 for user_id in receipts.get("m.read", {})}
 
     @staticmethod
-    async def handle_read_receipts(room_id: MatrixRoomId,
-                                   receipts: Dict[MatrixUserId, MatrixEventId]) -> None:
+    async def handle_read_receipts(room_id: MatrixRoomID,
+                                   receipts: Dict[MatrixUserID, MatrixEventID]) -> None:
         portal = po.Portal.get_by_mxid(room_id)
         if not portal:
             return
@@ -335,13 +335,13 @@ class MatrixHandler:
             await portal.mark_read(user, event_id)
 
     @staticmethod
-    async def handle_presence(user_id: MatrixUserId, presence: str) -> None:
+    async def handle_presence(user_id: MatrixUserID, presence: str) -> None:
         user = await u.User.get_by_mxid(user_id).ensure_started()
         if not await user.is_logged_in():
             return
         user.set_presence(presence == "online")
 
-    async def handle_typing(self, room_id: MatrixRoomId, now_typing: List[MatrixUserId]) -> None:
+    async def handle_typing(self, room_id: MatrixRoomID, now_typing: List[MatrixUserID]) -> None:
         portal = po.Portal.get_by_mxid(room_id)
         if not portal:
             return
@@ -378,12 +378,12 @@ class MatrixHandler:
             return
         self.log.debug("Received event: %s", evt)
         evt_type = evt.get("type", "m.unknown")  # type: str
-        room_id = evt.get("room_id", None)  # type: Optional[MatrixRoomId]
-        event_id = evt.get("event_id", None)  # type: Optional[MatrixEventId]
-        sender = evt.get("sender", None)  # type: Optional[MatrixUserId]
+        room_id = evt.get("room_id", None)  # type: Optional[MatrixRoomID]
+        event_id = evt.get("event_id", None)  # type: Optional[MatrixEventID]
+        sender = evt.get("sender", None)  # type: Optional[MatrixUserID]
         content = evt.get("content", {})  # type: Dict
         if evt_type == "m.room.member":
-            state_key = evt["state_key"]  # type: MatrixUserId
+            state_key = evt["state_key"]  # type: MatrixUserID
             prev_content = evt.get("unsigned", {}).get("prev_content", {})  # type: Dict
             membership = content.get("membership", "")  # type: str
             prev_membership = prev_content.get("membership", "leave")  # type: str

@@ -1,10 +1,10 @@
 from typing import Dict, NewType
 
 # MatrixId = NewType('MatrixId', str)
-MatrixUserId = NewType('MatrixUserId', str)
-MatrixRoomId = NewType('MatrixRoomId', str)
-MatrixEventId = NewType('MatrixEventId', str)
+MatrixUserID = NewType('MatrixUserID', str)
+MatrixRoomID = NewType('MatrixRoomID', str)
+MatrixEventID = NewType('MatrixEventID', str)
 
 MatrixEvent = NewType('MatrixEvent', Dict)
 
-TelegramId = NewType('TelegramId', int)
+TelegramID = NewType('TelegramID', int)

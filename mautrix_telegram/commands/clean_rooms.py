@@ -18,17 +18,17 @@ from typing import Dict, List, NewType, Optional, Tuple, Union
 
 from mautrix_appservice import MatrixRequestError, IntentAPI
 
-from ..types import MatrixRoomId, MatrixUserId
+from ..types import MatrixRoomID, MatrixUserID
 from . import command_handler, CommandEvent, SECTION_ADMIN
 from .. import puppet as pu, portal as po
 
-ManagementRoom = NewType('ManagementRoom', Tuple[MatrixRoomId, MatrixUserId])
+ManagementRoom = NewType('ManagementRoom', Tuple[MatrixRoomID, MatrixUserID])
 
 
-async def _find_rooms(intent: IntentAPI) -> Tuple[List[ManagementRoom], List[MatrixRoomId],
+async def _find_rooms(intent: IntentAPI) -> Tuple[List[ManagementRoom], List[MatrixRoomID],
                                                   List["po.Portal"], List["po.Portal"]]:
     management_rooms = []  # type: List[ManagementRoom]
-    unidentified_rooms = []  # type: List[MatrixRoomId]
+    unidentified_rooms = []  # type: List[MatrixRoomID]
     portals = []  # type: List[po.Portal]
     empty_portals = []  # type: List[po.Portal]
 
@@ -107,10 +107,10 @@ async def clean_rooms(evt: CommandEvent) -> Optional[Dict]:
 
 
 async def set_rooms_to_clean(evt, management_rooms: List[ManagementRoom],
-                             unidentified_rooms: List[MatrixRoomId], portals: List["po.Portal"],
+                             unidentified_rooms: List[MatrixRoomID], portals: List["po.Portal"],
                              empty_portals: List["po.Portal"]) -> None:
     command = evt.args[0]
-    rooms_to_clean = []  # type: List[Union[po.Portal, MatrixRoomId]]
+    rooms_to_clean = []  # type: List[Union[po.Portal, MatrixRoomID]]
     if command == "clean-recommended":
         rooms_to_clean += empty_portals
         rooms_to_clean += unidentified_rooms
@@ -159,7 +159,7 @@ async def set_rooms_to_clean(evt, management_rooms: List[ManagementRoom],
                     "`$cmdprefix+sp confirm-clean`.")
 
 
-async def execute_room_cleanup(evt, rooms_to_clean: List[Union[po.Portal, MatrixRoomId]]) -> None:
+async def execute_room_cleanup(evt, rooms_to_clean: List[Union[po.Portal, MatrixRoomID]]) -> None:
     if len(evt.args) > 0 and evt.args[0] == "confirm-clean":
         await evt.reply(f"Cleaning {len(rooms_to_clean)} rooms. "
                         "This might take a while.")
@@ -168,7 +168,7 @@ async def execute_room_cleanup(evt, rooms_to_clean: List[Union[po.Portal, Matrix
             if isinstance(room, po.Portal):
                 await room.cleanup_and_delete()
                 cleaned += 1
-            elif isinstance(room, str):  # str is aliased by MatrixRoomId
+            elif isinstance(room, str):  # str is aliased by MatrixRoomID
                 await po.Portal.cleanup_room(evt.az.intent, room, message="Room deleted")
                 cleaned += 1
         evt.sender.command_status = None

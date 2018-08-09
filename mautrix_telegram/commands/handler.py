@@ -21,7 +21,7 @@ import logging
 
 from telethon.errors import FloodWaitError
 
-from ..types import MatrixRoomId
+from ..types import MatrixRoomID
 from ..util import format_duration
 from .. import user as u, context as c
 
@@ -38,7 +38,7 @@ SECTION_ADMIN = HelpSection("Administration", 50, "")
 
 
 class CommandEvent:
-    def __init__(self, processor: 'CommandProcessor', room: MatrixRoomId, sender: u.User,
+    def __init__(self, processor: 'CommandProcessor', room: MatrixRoomID, sender: u.User,
                  command: str, args: List[str], is_management: bool, is_portal: bool) -> None:
         self.az = processor.az
         self.log = processor.log
@@ -154,7 +154,7 @@ class CommandProcessor:
         self.public_website = context.public_website
         self.command_prefix = self.config["bridge.command_prefix"]
 
-    async def handle(self, room: MatrixRoomId, sender: u.User, command: str, args: List[str],
+    async def handle(self, room: MatrixRoomID, sender: u.User, command: str, args: List[str],
                      is_management: bool, is_portal: bool) -> Optional[Dict]:
         evt = CommandEvent(self, room, sender, command, args, is_management, is_portal)
         orig_command = command
