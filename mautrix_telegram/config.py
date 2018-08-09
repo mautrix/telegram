@@ -14,7 +14,7 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import Tuple, Any, Optional
+from typing import Any, Dict, Optional, Tuple
 from ruamel.yaml import YAML
 from ruamel.yaml.comments import CommentedMap
 import random
@@ -25,7 +25,7 @@ yaml.indent(4)
 
 
 class DictWithRecursion:
-    def __init__(self, data: CommentedMap = None) -> None:
+    def __init__(self, data: Optional[CommentedMap] = None) -> None:
         self._data = data or CommentedMap()  # type: CommentedMap
 
     def _recursive_get(self, data: CommentedMap, key: str, default_value: Any) -> Any:
@@ -99,7 +99,7 @@ class Config(DictWithRecursion):
         self.path = path  # type: str
         self.registration_path = registration_path  # type: str
         self.base_path = base_path  # type: str
-        self._registration = None  # type: dict
+        self._registration = None  # type: Optional[Dict]
 
     def load(self) -> None:
         with open(self.path, 'r') as stream:

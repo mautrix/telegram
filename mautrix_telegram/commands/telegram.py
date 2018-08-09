@@ -14,10 +14,13 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
+from typing import Awaitable, Dict, List, Optional, Tuple
+import re
 
 from telethon.errors import (
     InviteHashInvalidError, InviteHashExpiredError, UserAlreadyParticipantError)
 from telethon.tl.types import User as TLUser
+from telethon.tl.types import TypeUpdates
 from telethon.tl.functions.messages import ImportChatInviteRequest, CheckChatInviteRequest
 from telethon.tl.functions.channels import JoinChannelRequest
 
@@ -28,7 +31,7 @@ from . import command_handler, CommandEvent, SECTION_MISC, SECTION_CREATING_PORT
 @command_handler(help_section=SECTION_MISC,
                  help_args="[_-r|--remote_] <_query_>",
                  help_text="Search your contacts or the Telegram servers for users.")
-async def search(evt: CommandEvent) -> None:
+async def search(evt: CommandEvent) -> Optional[Dict]:
     if len(evt.args) == 0:
         return await evt.reply("**Usage:** `$cmdprefix+sp search [-r|--remote] <query>`")
 
@@ -49,7 +52,7 @@ async def search(evt: CommandEvent) -> None:
                                    "Minimum length of remote query is 5 characters.")
         return await evt.reply("No results 3:")
 
-    reply = []
+    reply = []  # type: List[str]
     if remote:
         reply += ["**Results from Telegram server:**", ""]
     else:
@@ -70,7 +73,7 @@ async def search(evt: CommandEvent) -> None:
                            "either the internal user ID, the username or the phone number. "
                            "**N.B.** The phone numbers you start chats with must already be in "
                            "your contacts.")
-async def private_message(evt: CommandEvent) -> None:
+async def private_message(evt: CommandEvent) -> Optional[Dict]:
     if len(evt.args) == 0:
         return await evt.reply("**Usage:** `$cmdprefix+sp pm <user identifier>`")
 
@@ -89,7 +92,7 @@ async def private_message(evt: CommandEvent) -> None:
                            f"{pu.Puppet.get_displayname(user, False)}")
 
 
-async def _join(evt: CommandEvent, arg: str) -> None:
+async def _join(evt: CommandEvent, arg: str) -> Tuple[TypeUpdates, Dict]:
     if arg.startswith("joinchat/"):
         invite_hash = arg[len("joinchat/"):]
         try:
@@ -112,7 +115,7 @@ async def _join(evt: CommandEvent, arg: str) -> None:
 @command_handler(help_section=SECTION_CREATING_PORTALS,
                  help_args="<_link_>",
                  help_text="Join a chat with an invite link.")
-async def join(evt: CommandEvent) -> None:
+async def join(evt: CommandEvent) -> Optional[Dict]:
     if len(evt.args) == 0:
         return await evt.reply("**Usage:** `$cmdprefix+sp join <invite link>`")
 
@@ -123,7 +126,7 @@ async def join(evt: CommandEvent) -> None:
 
     updates, _ = await _join(evt, arg.group(1))
     if not updates:
-        return
+        return None
 
     for chat in updates.chats:
         portal = po.Portal.get_by_entity(chat)
@@ -134,12 +137,13 @@ async def join(evt: CommandEvent) -> None:
             await evt.reply(f"Creating room for {chat.title}... This might take a while.")
             await portal.create_matrix_room(evt.sender, chat, [evt.sender.mxid])
             return await evt.reply(f"Created room for {portal.title}")
+    return None
 
 
 @command_handler(help_section=SECTION_MISC,
                  help_args="[`chats`|`contacts`|`me`]",
                  help_text="Synchronize your chat portals, contacts and/or own info.")
-async def sync(evt: CommandEvent) -> None:
+async def sync(evt: CommandEvent) -> Optional[Dict]:
     if len(evt.args) > 0:
         sync_only = evt.args[0]
         if sync_only not in ("chats", "contacts", "me"):

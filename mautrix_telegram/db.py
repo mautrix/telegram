@@ -14,6 +14,8 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
+from typing import Dict
+
 from sqlalchemy import (Column, UniqueConstraint, ForeignKey, ForeignKeyConstraint, Integer,
                         BigInteger, String, Boolean, Text)
 from sqlalchemy.sql import expression
@@ -88,20 +90,20 @@ class RoomState(Base):
 
     room_id = Column(String, primary_key=True)
     _power_levels_text = Column("power_levels", Text, nullable=True)
-    _power_levels_json = None
+    _power_levels_json = {}  # type: Dict
 
     @property
-    def has_power_levels(self) -> None:
+    def has_power_levels(self) -> bool:
         return bool(self._power_levels_text)
 
     @property
-    def power_levels(self) -> None:
+    def power_levels(self) -> Dict:
         if not self._power_levels_json and self._power_levels_text:
             self._power_levels_json = json.loads(self._power_levels_text)
-        return self._power_levels_json or {}
+        return self._power_levels_json
 
     @power_levels.setter
-    def power_levels(self, val) -> None:
+    def power_levels(self, val: Dict) -> None:
         self._power_levels_json = val
         self._power_levels_text = json.dumps(val)
 
@@ -116,7 +118,7 @@ class UserProfile(Base):
     displayname = Column(String, nullable=True)
     avatar_url = Column(String, nullable=True)
 
-    def dict(self) -> None:
+    def dict(self) -> Dict[str, Column]:
         return {
             "membership": self.membership,
             "displayname": self.displayname,

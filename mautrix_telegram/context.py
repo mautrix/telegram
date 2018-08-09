@@ -14,7 +14,7 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import TYPE_CHECKING, Optional
+from typing import Generator, Optional, Tuple, Union, TYPE_CHECKING
 
 if TYPE_CHECKING:
     import asyncio
@@ -44,9 +44,7 @@ class Context:
         self.public_website = None  # type: PublicBridgeWebsite
         self.provisioning_api = None  # type: ProvisioningAPI
 
-    def __iter__(self) -> None:
-        yield self.az
-        yield self.db
-        yield self.config
-        yield self.loop
-        yield self.bot
+    @property
+    def core(self) -> Tuple['AppService', 'scoped_session', 'Config',
+                            'asyncio.AbstractEventLoop', Optional['Bot']]:
+        return (self.az, self.db, self.config, self.loop, self.bot)

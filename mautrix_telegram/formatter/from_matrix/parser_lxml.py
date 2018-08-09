@@ -14,7 +14,7 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import Optional, List, Tuple, Union, Callable
+from typing import Callable, List, Optional, Sequence, Tuple, Type, Union
 from lxml import html
 
 from telethon.tl.types import (MessageEntityMention as Mention,
@@ -83,7 +83,7 @@ def offset_length_multiply(amount: int):
 
 
 class TelegramMessage:
-    def __init__(self, text: str = "", entities: Optional[List[TypeMessageEntity]] = None):
+    def __init__(self, text: str = "", entities: Optional[List[TypeMessageEntity]] = None) -> None:
         self.text = text  # type: str
         self.entities = entities or []  # type: List[TypeMessageEntity]
 
@@ -120,7 +120,7 @@ class TelegramMessage:
             self.text = msg.text + self.text
         return self
 
-    def format(self, entity_type: type(TypeMessageEntity), offset: int = None, length: int = None,
+    def format(self, entity_type: Type[TypeMessageEntity], offset: int = None, length: int = None,
                **kwargs) -> "TelegramMessage":
         self.entities.append(entity_type(offset=offset or 0,
                                          length=length if length is not None else len(self.text),
@@ -158,7 +158,8 @@ class TelegramMessage:
         return output
 
     @staticmethod
-    def join(items: List[Union[str, "TelegramMessage"]], separator: str = " ") -> "TelegramMessage":
+    def join(items: Sequence[Union[str, "TelegramMessage"]],
+             separator: str = " ") -> "TelegramMessage":
         main = TelegramMessage()
         for msg in items:
             if isinstance(msg, str):

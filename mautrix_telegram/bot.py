@@ -14,7 +14,7 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import Awaitable, Callable, Dict, Optional, Pattern, TYPE_CHECKING
+from typing import Awaitable, Callable, Dict, List, Optional, Pattern, TYPE_CHECKING
 import logging
 import re
 
@@ -27,12 +27,14 @@ from telethon.tl.functions.messages import GetChatsRequest, GetFullChatRequest
 from telethon.tl.functions.channels import GetChannelsRequest, GetParticipantRequest
 from telethon.errors import ChannelInvalidError, ChannelPrivateError
 
+from .types import MatrixUserId
 from .abstract_user import AbstractUser
 from .db import BotChat
 from . import puppet as pu, portal as po, user as u
 
 if TYPE_CHECKING:
     from .config import Config
+    from .context import Context
 
 config = None  # type: Config
 
@@ -145,6 +147,7 @@ class Bot(AbstractUser):
                 for p in participants:
                     if p.user_id == tgid:
                         return isinstance(p, (ChatParticipantCreator, ChatParticipantAdmin))
+        return False
 
     async def check_can_use_commands(self, event: Message, reply: ReplyFunc) -> bool:
         if not await self._can_use_commands(event.to_id, event.from_id):
@@ -168,15 +171,16 @@ class Bot(AbstractUser):
                 return await reply(
                     "Portal is not public. Use `/invite <mxid>` to get an invite.")
 
-    async def handle_command_invite(self, portal: po.Portal, reply: ReplyFunc, mxid: str) -> None:
-        if len(mxid) == 0:
+    async def handle_command_invite(self, portal: po.Portal, reply: ReplyFunc,
+                                    mxid_input: MatrixUserId) -> Message:
+        if len(mxid_input) == 0:
             return await reply("Usage: `/invite <mxid>`")
         elif not portal.mxid:
             return await reply("Portal does not have Matrix room. "
                                "Create one with /portal first.")
-        if not self.mxid_regex.match(mxid):
+        if not self.mxid_regex.match(mxid_input):
             return await reply("That doesn't look like a Matrix ID.")
-        user = await u.User.get_by_mxid(mxid).ensure_started()
+        user = await u.User.get_by_mxid(MatrixUserId(mxid_input)).ensure_started()
         if not user.relaybot_whitelisted:
             return await reply("That user is not whitelisted to use the bridge.")
         elif await user.is_logged_in():
@@ -187,7 +191,7 @@ class Bot(AbstractUser):
             await portal.main_intent.invite(portal.mxid, user.mxid)
             return await reply(f"Invited `{user.mxid}` to the portal.")
 
-    def handle_command_id(self, message: Message, reply: ReplyFunc) -> None:
+    def handle_command_id(self, message: Message, reply: ReplyFunc) -> Awaitable[Message]:
         # Provide the prefixed ID to the user so that the user wouldn't need to specify whether the
         # chat is a normal group or a supergroup/channel when using the ID.
         if isinstance(message.to_id, PeerChannel):
@@ -210,7 +214,7 @@ class Bot(AbstractUser):
         return False
 
     async def handle_command(self, message: Message) -> None:
-        def reply(reply_text) -> None:
+        def reply(reply_text: str) -> Awaitable[Message]:
             return self.client.send_message(message.to_id, reply_text, reply_to=message.id)
 
         text = message.message
@@ -231,7 +235,7 @@ class Bot(AbstractUser):
                 mxid = text[text.index(" ") + 1:]
             except ValueError:
                 mxid = ""
-            await self.handle_command_invite(portal, reply, mxid=mxid)
+            await self.handle_command_invite(portal, reply, mxid_input=mxid)
 
     def handle_service_message(self, message: MessageService) -> None:
         to_id = message.to_id
@@ -250,11 +254,12 @@ class Bot(AbstractUser):
         elif isinstance(action, MessageActionChatDeleteUser) and action.user_id == self.tgid:
             self.remove_chat(to_id)
 
-    async def update(self, update) -> None:
+    async def update(self, update) -> bool:
         if not isinstance(update, (UpdateNewMessage, UpdateNewChannelMessage)):
-            return
+            return False
         if isinstance(update.message, MessageService):
-            return self.handle_service_message(update.message)
+            self.handle_service_message(update.message)
+            return False
 
         is_command = (isinstance(update.message, Message)
                       and update.message.entities and len(update.message.entities) > 0
@@ -270,7 +275,7 @@ class Bot(AbstractUser):
         return "bot"
 
 
-def init(context) -> Optional[Bot]:
+def init(context: 'Context') -> Optional[Bot]:
     global config
     config = context.config
     token = config["telegram.bot_token"]

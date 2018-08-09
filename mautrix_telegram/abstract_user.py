@@ -38,6 +38,7 @@ from .db import Message as DBMessage
 from .tgclient import MautrixTelegramClient
 
 if TYPE_CHECKING:
+    from .types import TelegramId
     from .context import Context
     from .config import Config
     from .bot import Bot
@@ -67,10 +68,11 @@ class AbstractUser(ABC):
         self.whitelisted = False  # type: bool
         self.relaybot_whitelisted = False  # type: bool
         self.client = None  # type: MautrixTelegramClient
-        self.tgid = None  # type: int
+        self.tgid = None  # type: TelegramId
         self.mxid = None  # type: str
         self.is_relaybot = False  # type: bool
         self.is_bot = False  # type: bool
+        self.relaybot = None  # type: Optional[Bot]
 
     @property
     def connected(self) -> bool:
@@ -372,7 +374,7 @@ class AbstractUser(ABC):
 
 def init(context: "Context") -> None:
     global config, MAX_DELETIONS
-    AbstractUser.az, AbstractUser.db, config, AbstractUser.loop, AbstractUser.relaybot = context
+    AbstractUser.az, AbstractUser.db, config, AbstractUser.loop, AbstractUser.relaybot = context.core
     AbstractUser.ignore_incoming_bot_events = config["bridge.relaybot.ignore_own_incoming_events"]
     AbstractUser.session_container = context.session_container
     MAX_DELETIONS = config.get("bridge.max_telegram_delete", 10)
