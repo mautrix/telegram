@@ -23,6 +23,9 @@ appservice:
 
     # The full URI to the database. SQLite and Postgres are fully supported.
     # Other DBMSes supported by SQLAlchemy may or may not work.
+    # Format examples:
+    #   SQLite:   sqlite:///filename.db
+    #   Postgres: postgres://username:password@hostname/dbname
     database: sqlite:///mautrix-telegram.db
 
     # Public part of web server for out-of-Matrix interaction with the bridge.
