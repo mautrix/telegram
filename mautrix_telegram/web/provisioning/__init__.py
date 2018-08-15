@@ -15,7 +15,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from aiohttp import web
-from typing import Tuple, Optional, Callable, Awaitable, TYPE_CHECKING
+from typing import Awaitable, Callable, Dict, Optional, Tuple, TYPE_CHECKING
 import asyncio
 import logging
 import json
@@ -24,6 +24,7 @@ from telethon.utils import get_peer_id, resolve_id
 from telethon.tl.types import ChatForbidden, ChannelForbidden, TypeChat
 from mautrix_appservice import AppService, MatrixRequestError, IntentError
 
+from ...types import MatrixUserID, TelegramID
 from ...user import User
 from ...portal import Portal
 from ...commands.portal import user_has_power_level, get_initial_state
@@ -36,7 +37,7 @@ if TYPE_CHECKING:
 class ProvisioningAPI(AuthAPI):
     log = logging.getLogger("mau.web.provisioning")
 
-    def __init__(self, context: "Context"):
+    def __init__(self, context: "Context") -> None:
         super().__init__(context.loop)
         self.secret = context.config["appservice.provisioning.shared_secret"]
         self.az = context.az  # type: AppService
@@ -118,10 +119,10 @@ class ProvisioningAPI(AuthAPI):
 
         chat_id = request.match_info["chat_id"]
         if chat_id.startswith("-100"):
-            tgid = int(chat_id[4:])
+            tgid = TelegramID(int(chat_id[4:]))
             peer_type = "channel"
         elif chat_id.startswith("-"):
-            tgid = -int(chat_id)
+            tgid = TelegramID(-int(chat_id))
             peer_type = "chat"
         else:
             return self.get_error_response(400, "tgid_invalid", "Invalid Telegram chat ID.")
@@ -153,14 +154,14 @@ class ProvisioningAPI(AuthAPI):
                                                "Matrix room.")
 
         is_logged_in = user is not None and await user.is_logged_in()
-        user = user if is_logged_in else self.context.bot
-        if not user:
+        acting_user = user if is_logged_in else self.context.bot
+        if not acting_user:
             return self.get_login_response(status=403, errcode="not_logged_in",
                                            error="You are not logged in and there is no relay bot.")
 
         entity = None  # type: Optional[TypeChat]
         try:
-            entity = await user.client.get_entity(portal.peer)
+            entity = await acting_user.client.get_entity(portal.peer)
         except Exception:
             self.log.exception("Failed to get_entity(%s) for manual bridging.", portal.peer)
 
@@ -411,7 +412,7 @@ class ProvisioningAPI(AuthAPI):
         except json.JSONDecodeError:
             return None
 
-    async def get_user(self, mxid: str, expect_logged_in: Optional[bool] = False,
+    async def get_user(self, mxid: MatrixUserID, expect_logged_in: Optional[bool] = False,
                        require_puppeting: bool = True, require_user: bool = True
                        ) -> Tuple[Optional[User], Optional[web.Response]]:
         if not mxid:
@@ -439,7 +440,7 @@ class ProvisioningAPI(AuthAPI):
                                     expect_logged_in: Optional[bool] = False,
                                     require_puppeting: bool = False,
                                     want_data: bool = True,
-                                    ) -> (Tuple[Optional[dict],
+                                    ) -> (Tuple[Optional[Dict],
                                                 Optional[User],
                                                 Optional[web.Response]]):
         err = self.check_authorization(request)

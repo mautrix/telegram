@@ -80,12 +80,12 @@ class MatrixParser(HTMLParser, MatrixParserCommon):
             args["url"] = url
             return MessageEntityTextUrl, None
 
-    def handle_starttag(self, tag: str, attrs: List[Tuple[str, str]]):
+    def handle_starttag(self, tag: str, attrs_list: List[Tuple[str, str]]):
         self._open_tags.appendleft(tag)
         self._open_tags_meta.appendleft(0)
 
-        attrs = dict(attrs)
-        entity_type = None  # type: type(TypeMessageEntity)
+        attrs = dict(attrs_list)
+        entity_type = None  # type: Optional[Type[TypeMessageEntity]]
         args = {}  # type: Dict[str, Any]
         if tag in ("strong", "b"):
             entity_type = MessageEntityBold

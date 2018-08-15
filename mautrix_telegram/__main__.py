@@ -14,7 +14,7 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import Optional
+from typing import Coroutine, List, Optional
 import argparse
 import asyncio
 import logging.config
@@ -115,7 +115,7 @@ with appserv.run(config["appservice.hostname"], config["appservice.port"]) as st
     startup_actions = (init_puppet(context) +
                        init_user(context) +
                        [start,
-                        context.mx.init_as_bot()])
+                        context.mx.init_as_bot()])  # type: List[Coroutine]
 
     if context.bot:
         startup_actions.append(context.bot.start())

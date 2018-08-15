@@ -14,7 +14,7 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import Optional
+from typing import Dict, Optional
 import json
 import base64
 import hashlib
@@ -28,13 +28,13 @@ def _get_checksum(key: str, payload: bytes) -> str:
     return checksum
 
 
-def sign_token(key: str, payload: dict) -> str:
-    payload = base64.urlsafe_b64encode(json.dumps(payload).encode("utf-8"))
-    checksum = _get_checksum(key, payload)
-    return f"{checksum}:{payload.decode('utf-8')}"
+def sign_token(key: str, payload: Dict) -> str:
+    payload_b64 = base64.urlsafe_b64encode(json.dumps(payload).encode("utf-8"))
+    checksum = _get_checksum(key, payload_b64)
+    return f"{checksum}:{payload_b64.decode('utf-8')}"
 
 
-def verify_token(key: str, data: str) -> Optional[dict]:
+def verify_token(key: str, data: str) -> Optional[Dict]:
     if not data:
         return None
 

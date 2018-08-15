@@ -14,21 +14,27 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import Awaitable, Callable, Pattern, Dict, TYPE_CHECKING
+from typing import Awaitable, Callable, Dict, List, Optional, Pattern, TYPE_CHECKING
 import logging
 import re
 
-from telethon.tl.types import *
+from telethon.tl.types import (
+    ChannelParticipantAdmin, ChannelParticipantCreator, ChatForbidden, ChatParticipantAdmin,
+    ChatParticipantCreator, InputChannel, InputUser, Message, MessageActionChatAddUser,
+    MessageActionChatDeleteUser, MessageEntityBotCommand, MessageService, PeerChannel, PeerChat,
+    TypePeer, UpdateNewChannelMessage, UpdateNewMessage)
 from telethon.tl.functions.messages import GetChatsRequest, GetFullChatRequest
 from telethon.tl.functions.channels import GetChannelsRequest, GetParticipantRequest
 from telethon.errors import ChannelInvalidError, ChannelPrivateError
 
+from .types import MatrixUserID
 from .abstract_user import AbstractUser
 from .db import BotChat
 from . import puppet as pu, portal as po, user as u
 
 if TYPE_CHECKING:
     from .config import Config
+    from .context import Context
 
 config = None  # type: Config
 
@@ -39,7 +45,7 @@ class Bot(AbstractUser):
     log = logging.getLogger("mau.bot")  # type: logging.Logger
     mxid_regex = re.compile("@.+:.+")  # type: Pattern
 
-    def __init__(self, token: str):
+    def __init__(self, token: str) -> None:
         super().__init__()
         self.token = token  # type: str
         self.puppet_whitelisted = True  # type: bool
@@ -53,7 +59,7 @@ class Bot(AbstractUser):
         self.whitelist_group_admins = (config["bridge.relaybot.whitelist_group_admins"]
                                        or False)  # type: bool
 
-    async def init_permissions(self):
+    async def init_permissions(self) -> None:
         whitelist = config["bridge.relaybot.whitelist"] or []
         for id in whitelist:
             if isinstance(id, str):
@@ -65,14 +71,14 @@ class Bot(AbstractUser):
             if isinstance(id, int):
                 self.tg_whitelist.append(id)
 
-    async def start(self, delete_unless_authenticated: bool = False) -> "Bot":
+    async def start(self, delete_unless_authenticated: bool = False) -> 'Bot':
         await super().start(delete_unless_authenticated)
         if not await self.is_logged_in():
             await self.client.sign_in(bot_token=self.token)
         await self.post_login()
         return self
 
-    async def post_login(self):
+    async def post_login(self) -> None:
         await self.init_permissions()
         info = await self.client.get_me()
         self.tgid = info.id
@@ -100,19 +106,19 @@ class Bot(AbstractUser):
             except Exception:
                 self.log.exception("Failed to run catch_up() for bot")
 
-    def register_portal(self, portal: po.Portal):
+    def register_portal(self, portal: po.Portal) -> None:
         self.add_chat(portal.tgid, portal.peer_type)
 
-    def unregister_portal(self, portal: po.Portal):
+    def unregister_portal(self, portal: po.Portal) -> None:
         self.remove_chat(portal.tgid)
 
-    def add_chat(self, id: int, type: str):
+    def add_chat(self, id: int, type: str) -> None:
         if id not in self.chats:
             self.chats[id] = type
             self.db.add(BotChat(id=id, type=type))
             self.db.commit()
 
-    def remove_chat(self, id: int):
+    def remove_chat(self, id: int) -> None:
         try:
             del self.chats[id]
         except KeyError:
@@ -141,6 +147,7 @@ class Bot(AbstractUser):
                 for p in participants:
                     if p.user_id == tgid:
                         return isinstance(p, (ChatParticipantCreator, ChatParticipantAdmin))
+        return False
 
     async def check_can_use_commands(self, event: Message, reply: ReplyFunc) -> bool:
         if not await self._can_use_commands(event.to_id, event.from_id):
@@ -148,7 +155,7 @@ class Bot(AbstractUser):
             return False
         return True
 
-    async def handle_command_portal(self, portal: po.Portal, reply: ReplyFunc):
+    async def handle_command_portal(self, portal: po.Portal, reply: ReplyFunc) -> None:
         if not config["bridge.relaybot.authless_portals"]:
             return await reply("This bridge doesn't allow portal creation from Telegram.")
 
@@ -164,15 +171,16 @@ class Bot(AbstractUser):
                 return await reply(
                     "Portal is not public. Use `/invite <mxid>` to get an invite.")
 
-    async def handle_command_invite(self, portal: po.Portal, reply: ReplyFunc, mxid: str):
-        if len(mxid) == 0:
+    async def handle_command_invite(self, portal: po.Portal, reply: ReplyFunc,
+                                    mxid_input: MatrixUserID) -> Message:
+        if len(mxid_input) == 0:
             return await reply("Usage: `/invite <mxid>`")
         elif not portal.mxid:
             return await reply("Portal does not have Matrix room. "
                                "Create one with /portal first.")
-        if not self.mxid_regex.match(mxid):
+        if not self.mxid_regex.match(mxid_input):
             return await reply("That doesn't look like a Matrix ID.")
-        user = await u.User.get_by_mxid(mxid).ensure_started()
+        user = await u.User.get_by_mxid(MatrixUserID(mxid_input)).ensure_started()
         if not user.relaybot_whitelisted:
             return await reply("That user is not whitelisted to use the bridge.")
         elif await user.is_logged_in():
@@ -183,7 +191,7 @@ class Bot(AbstractUser):
             await portal.main_intent.invite(portal.mxid, user.mxid)
             return await reply(f"Invited `{user.mxid}` to the portal.")
 
-    def handle_command_id(self, message: Message, reply: ReplyFunc):
+    def handle_command_id(self, message: Message, reply: ReplyFunc) -> Awaitable[Message]:
         # Provide the prefixed ID to the user so that the user wouldn't need to specify whether the
         # chat is a normal group or a supergroup/channel when using the ID.
         if isinstance(message.to_id, PeerChannel):
@@ -205,8 +213,8 @@ class Bot(AbstractUser):
 
         return False
 
-    async def handle_command(self, message: Message):
-        def reply(reply_text):
+    async def handle_command(self, message: Message) -> None:
+        def reply(reply_text: str) -> Awaitable[Message]:
             return self.client.send_message(message.to_id, reply_text, reply_to=message.id)
 
         text = message.message
@@ -227,9 +235,9 @@ class Bot(AbstractUser):
                 mxid = text[text.index(" ") + 1:]
             except ValueError:
                 mxid = ""
-            await self.handle_command_invite(portal, reply, mxid=mxid)
+            await self.handle_command_invite(portal, reply, mxid_input=mxid)
 
-    def handle_service_message(self, message: MessageService):
+    def handle_service_message(self, message: MessageService) -> None:
         to_id = message.to_id
         if isinstance(to_id, PeerChannel):
             to_id = to_id.channel_id
@@ -246,11 +254,12 @@ class Bot(AbstractUser):
         elif isinstance(action, MessageActionChatDeleteUser) and action.user_id == self.tgid:
             self.remove_chat(to_id)
 
-    async def update(self, update):
+    async def update(self, update) -> bool:
         if not isinstance(update, (UpdateNewMessage, UpdateNewChannelMessage)):
-            return
+            return False
         if isinstance(update.message, MessageService):
-            return self.handle_service_message(update.message)
+            self.handle_service_message(update.message)
+            return False
 
         is_command = (isinstance(update.message, Message)
                       and update.message.entities and len(update.message.entities) > 0
@@ -266,7 +275,7 @@ class Bot(AbstractUser):
         return "bot"
 
 
-def init(context) -> Optional[Bot]:
+def init(context: 'Context') -> Optional[Bot]:
     global config
     config = context.config
     token = config["telegram.bot_token"]

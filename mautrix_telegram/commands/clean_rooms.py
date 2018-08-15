@@ -14,21 +14,21 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import Tuple, List
+from typing import Dict, List, NewType, Optional, Tuple, Union
 
 from mautrix_appservice import MatrixRequestError, IntentAPI
 
+from ..types import MatrixRoomID, MatrixUserID
 from . import command_handler, CommandEvent, SECTION_ADMIN
 from .. import puppet as pu, portal as po
 
-ManagementRoomList = List[Tuple[str, str]]
-RoomIDList = List[str]
+ManagementRoom = NewType('ManagementRoom', Tuple[MatrixRoomID, MatrixUserID])
 
 
-async def _find_rooms(intent: IntentAPI) -> Tuple[ManagementRoomList, RoomIDList,
-                                                  List["po.Portal"], List["po.Portal"]]:
-    management_rooms = []  # type: ManagementRoomList
-    unidentified_rooms = []  # type: RoomIDList
+async def _find_rooms(intent: IntentAPI) -> Tuple[List[ManagementRoom], List[MatrixRoomID],
+                                                  List['po.Portal'], List['po.Portal']]:
+    management_rooms = []  # type: List[ManagementRoom]
+    unidentified_rooms = []  # type: List[MatrixRoomID]
     portals = []  # type: List[po.Portal]
     empty_portals = []  # type: List[po.Portal]
 
@@ -45,7 +45,7 @@ async def _find_rooms(intent: IntentAPI) -> Tuple[ManagementRoomList, RoomIDList
                 if pu.Puppet.get_id_from_mxid(other_member):
                     unidentified_rooms.append(room)
                 else:
-                    management_rooms.append((room, other_member))
+                    management_rooms.append(ManagementRoom((room, other_member)))
             else:
                 unidentified_rooms.append(room)
         else:
@@ -61,7 +61,7 @@ async def _find_rooms(intent: IntentAPI) -> Tuple[ManagementRoomList, RoomIDList
 @command_handler(needs_admin=True, needs_auth=False, management_only=True, name="clean-rooms",
                  help_section=SECTION_ADMIN,
                  help_text="Clean up unused portal/management rooms.")
-async def clean_rooms(evt: CommandEvent):
+async def clean_rooms(evt: CommandEvent) -> Optional[Dict]:
     management_rooms, unidentified_rooms, portals, empty_portals = await _find_rooms(evt.az.intent)
 
     reply = ["#### Management rooms (M)"]
@@ -106,13 +106,14 @@ async def clean_rooms(evt: CommandEvent):
     return await evt.reply("\n".join(reply))
 
 
-async def set_rooms_to_clean(evt, management_rooms: ManagementRoomList,
-                             unidentified_rooms: RoomIDList, portals: List["po.Portal"],
-                             empty_portals: List["po.Portal"]):
+async def set_rooms_to_clean(evt, management_rooms: List[ManagementRoom],
+                             unidentified_rooms: List[MatrixRoomID], portals: List["po.Portal"],
+                             empty_portals: List["po.Portal"]) -> None:
     command = evt.args[0]
-    rooms_to_clean = []
+    rooms_to_clean = []  # type: List[Union[po.Portal, MatrixRoomID]]
     if command == "clean-recommended":
-        rooms_to_clean = empty_portals + unidentified_rooms
+        rooms_to_clean += empty_portals
+        rooms_to_clean += unidentified_rooms
     elif command == "clean-groups":
         if len(evt.args) < 2:
             return await evt.reply("**Usage:** `$cmdprefix+sp clean-groups [M][A][U][I]")
@@ -158,7 +159,7 @@ async def set_rooms_to_clean(evt, management_rooms: ManagementRoomList,
                     "`$cmdprefix+sp confirm-clean`.")
 
 
-async def execute_room_cleanup(evt, rooms_to_clean):
+async def execute_room_cleanup(evt, rooms_to_clean: List[Union[po.Portal, MatrixRoomID]]) -> None:
     if len(evt.args) > 0 and evt.args[0] == "confirm-clean":
         await evt.reply(f"Cleaning {len(rooms_to_clean)} rooms. "
                         "This might take a while.")
@@ -167,7 +168,7 @@ async def execute_room_cleanup(evt, rooms_to_clean):
             if isinstance(room, po.Portal):
                 await room.cleanup_and_delete()
                 cleaned += 1
-            elif isinstance(room, str):
+            elif isinstance(room, str):  # str is aliased by MatrixRoomID
                 await po.Portal.cleanup_room(evt.az.intent, room, message="Room deleted")
                 cleaned += 1
         evt.sender.command_status = None

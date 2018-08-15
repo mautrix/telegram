@@ -14,18 +14,21 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import Dict, Awaitable, Optional, Match, Tuple, TYPE_CHECKING
+from typing import Coroutine, Dict, List, Match, NewType, Optional, Tuple, cast, TYPE_CHECKING
 import logging
 import asyncio
 import re
 
-from telethon.tl.types import *
+from telethon.tl.types import (
+    TypeUpdate, UpdateNewMessage, UpdateNewChannelMessage, PeerUser,
+    UpdateShortChatMessage, UpdateShortMessage)
 from telethon.tl.types import User as TLUser
 from telethon.tl.types.contacts import ContactsNotModified
 from telethon.tl.functions.contacts import GetContactsRequest, SearchRequest
 from telethon.tl.functions.account import UpdateStatusRequest
 from mautrix_appservice import MatrixRequestError
 
+from .types import MatrixUserID, TelegramID
 from .db import User as DBUser, Contact as DBContact, Portal as DBPortal
 from .abstract_user import AbstractUser
 from . import portal as po, puppet as pu
@@ -36,7 +39,7 @@ if TYPE_CHECKING:
 
 config = None  # type: Config
 
-SearchResults = List[Tuple["pu.Puppet", int]]
+SearchResult = NewType('SearchResult', Tuple['pu.Puppet', int])
 
 
 class User(AbstractUser):
@@ -44,23 +47,23 @@ class User(AbstractUser):
     by_mxid = {}  # type: Dict[str, User]
     by_tgid = {}  # type: Dict[int, User]
 
-    def __init__(self, mxid: str, tgid: Optional[int] = None, username: Optional[str] = None,
-                 db_contacts: Optional[List[DBContact]] = None, saved_contacts: int = 0,
-                 is_bot: bool = False, db_portals: Optional[List[DBPortal]] = None,
-                 db_instance: Optional[DBUser] = None):
+    def __init__(self, mxid: MatrixUserID, tgid: Optional[TelegramID] = None,
+                 username: Optional[str] = None, db_contacts: Optional[List[DBContact]] = None,
+                 saved_contacts: int = 0, is_bot: bool = False, db_portals: List[DBPortal] = [],
+                 db_instance: Optional[DBUser] = None) -> None:
         super().__init__()
-        self.mxid = mxid  # type: str
-        self.tgid = tgid  # type: int
+        self.mxid = mxid  # type: MatrixUserID
+        self.tgid = tgid  # type: TelegramID
         self.is_bot = is_bot  # type: bool
         self.username = username  # type: str
         self.contacts = []  # type: List[pu.Puppet]
         self.saved_contacts = saved_contacts  # type: int
         self.db_contacts = db_contacts  # type: List[DBContact]
         self.portals = {}  # type: Dict[Tuple[int, int], po.Portal]
-        self.db_portals = db_portals  # type: List[DBPortal]
-        self._db_instance = db_instance  # type: DBUser
+        self.db_portals = db_portals or []  # type: List[DBPortal]
+        self._db_instance = db_instance  # type: Optional[DBUser]
 
-        self.command_status = None  # type: dict
+        self.command_status = None  # type: Dict
 
         (self.relaybot_whitelisted,
          self.whitelisted,
@@ -93,7 +96,7 @@ class User(AbstractUser):
                 for puppet in self.contacts]
 
     @db_contacts.setter
-    def db_contacts(self, contacts: List[DBContact]):
+    def db_contacts(self, contacts: List[DBContact]) -> None:
         self.contacts = [pu.Puppet.get(entry.contact) for entry in contacts] if contacts else []
 
     @property
@@ -101,7 +104,7 @@ class User(AbstractUser):
         return [portal.db_instance for portal in self.portals.values() if not portal.deleted]
 
     @db_portals.setter
-    def db_portals(self, portals: List[DBPortal]):
+    def db_portals(self, portals: List[DBPortal]) -> None:
         self.portals = {(portal.tgid, portal.tg_receiver):
                             po.Portal.get_by_tgid(portal.tgid, portal.tg_receiver)
                         for portal in portals} if portals else {}
@@ -119,7 +122,7 @@ class User(AbstractUser):
                       contacts=self.db_contacts, saved_contacts=self.saved_contacts or 0,
                       portals=self.db_portals)
 
-    def save(self):
+    def save(self) -> None:
         self.db_instance.tgid = self.tgid
         self.db_instance.username = self.username
         self.db_instance.contacts = self.db_contacts
@@ -127,7 +130,7 @@ class User(AbstractUser):
         self.db_instance.portals = self.db_portals
         self.db.commit()
 
-    def delete(self):
+    def delete(self) -> None:
         try:
             del self.by_mxid[self.mxid]
             del self.by_tgid[self.tgid]
@@ -138,14 +141,14 @@ class User(AbstractUser):
             self.db.commit()
 
     @classmethod
-    def from_db(cls, db_user: DBUser) -> "User":
+    def from_db(cls, db_user: DBUser) -> 'User':
         return User(db_user.mxid, db_user.tgid, db_user.tg_username, db_user.contacts,
                     False, db_user.saved_contacts, db_user.portals, db_instance=db_user)
 
     # endregion
     # region Telegram connection management
 
-    async def start(self, delete_unless_authenticated: bool = False) -> "User":
+    async def start(self, delete_unless_authenticated: bool = False) -> 'User':
         await super().start()
         if await self.is_logged_in():
             self.log.debug(f"Ensuring post_login() for {self.name}")
@@ -156,7 +159,7 @@ class User(AbstractUser):
             self.client.session.delete()
         return self
 
-    async def post_login(self, info: TLUser = None):
+    async def post_login(self, info: TLUser = None) -> None:
         try:
             await self.update_info(info)
             if not self.is_bot:
@@ -167,9 +170,9 @@ class User(AbstractUser):
         except Exception:
             self.log.exception("Failed to run post-login functions for %s", self.mxid)
 
-    async def update(self, update: TypeUpdate):
+    async def update(self, update: TypeUpdate) -> bool:
         if not self.is_bot:
-            return
+            return False
 
         if isinstance(update, (UpdateNewMessage, UpdateNewChannelMessage)):
             message = update.message
@@ -183,22 +186,25 @@ class User(AbstractUser):
         elif isinstance(update, UpdateShortMessage):
             portal = po.Portal.get_by_tgid(update.user_id, self.tgid, "user")
         else:
-            return
+            return False
 
-        self.register_portal(portal)
+        if portal:
+            self.register_portal(portal)
+
+        return True
 
     # endregion
     # region Telegram actions that need custom methods
 
-    def ensure_started(self, even_if_no_session: bool = False) -> "Awaitable[User]":
-        return super().ensure_started(even_if_no_session)
+    def ensure_started(self, even_if_no_session: bool = False) -> Coroutine[None, None, 'User']:
+        return cast(Coroutine[None, None, 'User'], super().ensure_started(even_if_no_session))
 
-    def set_presence(self, online: bool = True):
+    def set_presence(self, online: bool = True) -> bool:
         if self.is_bot:
-            return
+            return False
         return self.client(UpdateStatusRequest(offline=not online))
 
-    async def update_info(self, info: TLUser = None):
+    async def update_info(self, info: TLUser = None) -> None:
         info = info or await self.client.get_me()
         changed = False
         if self.is_bot != info.bot:
@@ -213,7 +219,7 @@ class User(AbstractUser):
         if changed:
             self.save()
 
-    async def log_out(self):
+    async def log_out(self) -> bool:
         puppet = pu.Puppet.get(self.tgid)
         if puppet.is_real_user:
             await puppet.switch_mxid(None, None)
@@ -241,28 +247,29 @@ class User(AbstractUser):
         return True
 
     def _search_local(self, query: str, max_results: int = 5, min_similarity: int = 45
-                      ) -> SearchResults:
-        results = []  # type: SearchResults
+                      ) -> List[SearchResult]:
+        results = []  # type: List[SearchResult]
         for contact in self.contacts:
             similarity = contact.similarity(query)
             if similarity >= min_similarity:
-                results.append((contact, similarity))
+                results.append(SearchResult((contact, similarity)))
         results.sort(key=lambda tup: tup[1], reverse=True)
         return results[0:max_results]
 
-    async def _search_remote(self, query: str, max_results: int = 5) -> SearchResults:
+    async def _search_remote(self, query: str, max_results: int = 5) -> List[SearchResult]:
         if len(query) < 5:
             return []
         server_results = await self.client(SearchRequest(q=query, limit=max_results))
-        results = []  # type: SearchResults
+        results = []  # type: List[SearchResult]
         for user in server_results.users:
             puppet = pu.Puppet.get(user.id)
             await puppet.update_info(self, user)
-            results.append((puppet, puppet.similarity(query)))
+            results.append(SearchResult((puppet, puppet.similarity(query))))
         results.sort(key=lambda tup: tup[1], reverse=True)
         return results[0:max_results]
 
-    async def search(self, query: str, force_remote: bool = False) -> Tuple[SearchResults, bool]:
+    async def search(self, query: str, force_remote: bool = False
+                     ) -> Tuple[List[SearchResult], bool]:
         if force_remote:
             return await self._search_remote(query), True
 
@@ -272,7 +279,7 @@ class User(AbstractUser):
 
         return await self._search_remote(query), True
 
-    async def sync_dialogs(self, synchronous_create: bool = False):
+    async def sync_dialogs(self, synchronous_create: bool = False) -> None:
         creators = []
         for entity in await self.get_dialogs(limit=30):
             portal = po.Portal.get_by_entity(entity)
@@ -283,7 +290,7 @@ class User(AbstractUser):
         self.save()
         await asyncio.gather(*creators, loop=self.loop)
 
-    def register_portal(self, portal: po.Portal):
+    def register_portal(self, portal: po.Portal) -> None:
         try:
             if self.portals[portal.tgid_full] == portal:
                 return
@@ -292,7 +299,7 @@ class User(AbstractUser):
         self.portals[portal.tgid_full] = portal
         self.save()
 
-    def unregister_portal(self, portal: po.Portal):
+    def unregister_portal(self, portal: po.Portal) -> None:
         try:
             del self.portals[portal.tgid_full]
             self.save()
@@ -309,7 +316,7 @@ class User(AbstractUser):
             acc = (acc * 20261 + id) & 0xffffffff
         return acc & 0x7fffffff
 
-    async def sync_contacts(self):
+    async def sync_contacts(self) -> None:
         response = await self.client(GetContactsRequest(hash=self._hash_contacts()))
         if isinstance(response, ContactsNotModified):
             return
@@ -326,7 +333,7 @@ class User(AbstractUser):
     # region Class instance lookup
 
     @classmethod
-    def get_by_mxid(cls, mxid: str, create: bool=True) -> "Optional[User]":
+    def get_by_mxid(cls, mxid: MatrixUserID, create: bool = True) -> Optional['User']:
         if not mxid:
             raise ValueError("Matrix ID can't be empty")
 
@@ -349,7 +356,7 @@ class User(AbstractUser):
         return None
 
     @classmethod
-    def get_by_tgid(cls, tgid: int) -> "Optional[User]":
+    def get_by_tgid(cls, tgid: int) -> Optional['User']:
         try:
             return cls.by_tgid[tgid]
         except KeyError:
@@ -363,7 +370,7 @@ class User(AbstractUser):
         return None
 
     @classmethod
-    def find_by_username(cls, username: str) -> "Optional[User]":
+    def find_by_username(cls, username: str) -> Optional['User']:
         if not username:
             return None
 
@@ -379,7 +386,7 @@ class User(AbstractUser):
     # endregion
 
 
-def init(context: "Context") -> List[Awaitable[User]]:
+def init(context: 'Context') -> List[Coroutine]:  # [None, None, AbstractUser]
     global config
     config = context.config
 

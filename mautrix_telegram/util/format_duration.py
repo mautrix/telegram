@@ -17,10 +17,10 @@
 
 
 def format_duration(seconds: int) -> str:
-    def pluralize(count, singular):
+    def pluralize(count: int, singular: str) -> str:
         return singular if count == 1 else singular + "s"
 
-    def include(count, word):
+    def include(count: int, word: str) -> str:
         return f"{count} {pluralize(count, word)}" if count > 0 else ""
 
     minutes, seconds = divmod(seconds, 60)

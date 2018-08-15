@@ -40,7 +40,7 @@ telematrix_db_engine.dispose()
 portals = {}
 chats = {}
 messages = {}
-puppets = {}
+puppets = {}  # Dict[int, Puppet]
 
 for chat_link in chat_links:
     if type(chat_link.tg_room) is str:

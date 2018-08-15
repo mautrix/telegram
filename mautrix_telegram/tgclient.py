@@ -14,9 +14,13 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
+from typing import List, Union, Optional
+
 from telethon import TelegramClient, utils
 from telethon.tl.functions.messages import SendMediaRequest
-from telethon.tl.types import *
+from telethon.tl.types import (
+    InputMediaUploadedDocument, InputMediaUploadedPhoto, TypeDocumentAttribute, TypeInputMedia,
+    TypeInputPeer, TypeMessageEntity, TypeMessageMedia, TypePeer)
 from telethon.tl import custom
 
 

@@ -14,7 +14,7 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import Optional, List, Tuple, TYPE_CHECKING
+from typing import Dict, List, Optional, Tuple, TYPE_CHECKING
 from html import escape
 import logging
 import re
@@ -28,6 +28,7 @@ from telethon.tl.types import (MessageEntityMention, MessageEntityMentionName,
 from mautrix_appservice import MatrixRequestError
 from mautrix_appservice.intent_api import IntentAPI
 
+from ..types import TelegramID
 from .. import user as u, puppet as pu, portal as po
 from ..db import Message as DBMessage
 from .util import (add_surrogates, remove_surrogates, trim_reply_fallback_html,
@@ -40,14 +41,14 @@ if TYPE_CHECKING:
 try:
     from lxml.html.diff import htmldiff
 except ImportError:
-    htmldiff = None  # type: function
+    htmldiff = None  # type: ignore
 
 
 log = logging.getLogger("mau.fmt.tg")  # type: logging.Logger
 should_highlight_edits = False  # type: bool
 
 
-def telegram_reply_to_matrix(evt: Message, source: "AbstractUser") -> dict:
+def telegram_reply_to_matrix(evt: Message, source: 'AbstractUser') -> Dict:
     if evt.reply_to_msg_id:
         space = (evt.to_id.channel_id
                  if isinstance(evt, Message) and isinstance(evt.to_id, PeerChannel)
@@ -116,7 +117,7 @@ def highlight_edits(new_html: str, old_html: str) -> str:
 
 
 async def _add_reply_header(source: "AbstractUser", text: str, html: str, evt: Message,
-                            relates_to: dict, main_intent: IntentAPI, is_edit: bool
+                            relates_to: Dict, main_intent: IntentAPI, is_edit: bool
                             ) -> Tuple[str, str]:
     space = (evt.to_id.channel_id
              if isinstance(evt, Message) and isinstance(evt.to_id, PeerChannel)
@@ -177,10 +178,10 @@ async def _add_reply_header(source: "AbstractUser", text: str, html: str, evt: M
 async def telegram_to_matrix(evt: Message, source: "AbstractUser",
                              main_intent: Optional[IntentAPI] = None,
                              is_edit: bool = False, prefix_text: Optional[str] = None,
-                             prefix_html: Optional[str] = None) -> Tuple[str, str, dict]:
+                             prefix_html: Optional[str] = None) -> Tuple[str, str, Dict]:
     text = add_surrogates(evt.message)
     html = _telegram_entities_to_matrix_catch(text, evt.entities) if evt.entities else None
-    relates_to = {}
+    relates_to = {}  # type: Dict
 
     if prefix_html:
         html = prefix_html + (html or escape(text))
@@ -217,6 +218,7 @@ def _telegram_entities_to_matrix_catch(text: str, entities: List[TypeMessageEnti
                       "message=%s\n"
                       "entities=%s",
                       text, entities)
+    return "[failed conversion in _telegram_entities_to_matrix]"
 
 
 def _telegram_entities_to_matrix(text: str, entities: List[TypeMessageEntity]) -> str:
@@ -290,7 +292,7 @@ def _parse_mention(html: List[str], entity_text: str) -> bool:
     return False
 
 
-def _parse_name_mention(html: List[str], entity_text: str, user_id: int) -> bool:
+def _parse_name_mention(html: List[str], entity_text: str, user_id: TelegramID) -> bool:
     user = u.User.get_by_tgid(user_id)
     if user:
         mxid = user.mxid
@@ -315,8 +317,8 @@ def _parse_url(html: List[str], entity_text: str, url: str) -> bool:
 
     message_link_match = message_link_regex.match(url)
     if message_link_match:
-        group, msgid = message_link_match.groups()
-        msgid = int(msgid)
+        group, msgid_str = message_link_match.groups()
+        msgid = int(msgid_str)
 
         portal = po.Portal.find_by_username(group)
         if portal:
@@ -328,6 +330,6 @@ def _parse_url(html: List[str], entity_text: str, url: str) -> bool:
     return False
 
 
-def init_tg(context: "Context"):
+def init_tg(context: "Context") -> None:
     global should_highlight_edits
     should_highlight_edits = htmldiff and context.config["bridge.highlight_edits"]

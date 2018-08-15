@@ -14,10 +14,14 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import Dict
+from typing import Any, Awaitable, Dict, Optional
 import asyncio
 
-from telethon.errors import *
+from telethon.errors import (
+    AccessTokenExpiredError, AccessTokenInvalidError, FirstNameInvalidError, FloodWaitError,
+    PasswordHashInvalidError, PhoneCodeExpiredError, PhoneCodeInvalidError,
+    PhoneNumberAppSignupForbiddenError, PhoneNumberBannedError, PhoneNumberFloodError,
+    PhoneNumberOccupiedError, PhoneNumberUnoccupiedError, SessionPasswordNeededError)
 
 from . import command_handler, CommandEvent, SECTION_AUTH
 from .. import puppet as pu
@@ -27,7 +31,7 @@ from ..util import format_duration
 @command_handler(needs_auth=False,
                  help_section=SECTION_AUTH,
                  help_text="Check if you're logged into Telegram.")
-async def ping(evt: CommandEvent):
+async def ping(evt: CommandEvent) -> Optional[Dict]:
     me = await evt.sender.client.get_me() if await evt.sender.is_logged_in() else None
     if me:
         return await evt.reply(f"You're logged in as @{me.username}")
@@ -38,7 +42,7 @@ async def ping(evt: CommandEvent):
 @command_handler(needs_auth=False, needs_puppeting=False,
                  help_section=SECTION_AUTH,
                  help_text="Get the info of the message relay Telegram bot.")
-async def ping_bot(evt: CommandEvent):
+async def ping_bot(evt: CommandEvent) -> Optional[Dict]:
     if not evt.tgbot:
         return await evt.reply("Telegram message relay bot not configured.")
     bot_info = await evt.tgbot.client.get_me()
@@ -53,19 +57,19 @@ async def ping_bot(evt: CommandEvent):
                  help_section=SECTION_AUTH,
                  help_text="Revert your Telegram account's Matrix puppet to use the default Matrix "
                            "account.")
-async def logout_matrix(evt: CommandEvent):
+async def logout_matrix(evt: CommandEvent) -> Optional[Dict]:
     puppet = pu.Puppet.get(evt.sender.tgid)
     if not puppet.is_real_user:
         return await evt.reply("You are not logged in with your Matrix account.")
     await puppet.switch_mxid(None, None)
-    await evt.reply("Reverted your Telegram account's Matrix puppet back to the default.")
+    return await evt.reply("Reverted your Telegram account's Matrix puppet back to the default.")
 
 
 @command_handler(needs_auth=True, management_only=True, needs_matrix_puppeting=True,
                  help_section=SECTION_AUTH,
                  help_text="Replace your Telegram account's Matrix puppet with your own Matrix "
                            "account")
-async def login_matrix(evt: CommandEvent):
+async def login_matrix(evt: CommandEvent) -> Optional[Dict]:
     puppet = pu.Puppet.get(evt.sender.tgid)
     if puppet.is_real_user:
         return await evt.reply("You have already logged in with your Matrix account. "
@@ -96,7 +100,7 @@ async def login_matrix(evt: CommandEvent):
     return await evt.reply("This bridge instance has been configured to not allow logging in.")
 
 
-async def enter_matrix_token(evt: CommandEvent):
+async def enter_matrix_token(evt: CommandEvent) -> Dict:
     evt.sender.command_status = None
 
     puppet = pu.Puppet.get(evt.sender.tgid)
@@ -105,10 +109,11 @@ async def enter_matrix_token(evt: CommandEvent):
                                "Log out with `$cmdprefix+sp logout-matrix` first.")
 
     resp = await puppet.switch_mxid(" ".join(evt.args), evt.sender.mxid)
-    if resp == 2:
+    if resp == pu.PuppetError.OnlyLoginSelf:
         return await evt.reply("You can only log in as your own Matrix user.")
-    elif resp == 1:
+    elif resp == pu.PuppetError.InvalidAccessToken:
         return await evt.reply("Failed to verify access token.")
+    assert resp == pu.PuppetError.Success, "Encountered an unhandled PuppetError."
     return await evt.reply(
         f"Replaced your Telegram account's Matrix puppet with {puppet.custom_mxid}.")
 
@@ -117,7 +122,7 @@ async def enter_matrix_token(evt: CommandEvent):
                  help_section=SECTION_AUTH,
                  help_args="<_phone_> <_full name_>",
                  help_text="Register to Telegram")
-async def register(evt: CommandEvent):
+async def register(evt: CommandEvent) -> Optional[Dict]:
     if await evt.sender.is_logged_in():
         return await evt.reply("You are already logged in.")
     elif len(evt.args) < 1:
@@ -134,9 +139,10 @@ async def register(evt: CommandEvent):
         "action": "Register",
         "full_name": full_name,
     })
+    return None
 
 
-async def enter_code_register(evt: CommandEvent):
+async def enter_code_register(evt: CommandEvent) -> Dict:
     if len(evt.args) == 0:
         return await evt.reply("**Usage:** `$cmdprefix+sp <code>`")
     try:
@@ -165,7 +171,7 @@ async def enter_code_register(evt: CommandEvent):
 @command_handler(needs_auth=False, management_only=True,
                  help_section=SECTION_AUTH,
                  help_text="Get instructions on how to log in.")
-async def login(evt: CommandEvent):
+async def login(evt: CommandEvent) -> Optional[Dict]:
     if await evt.sender.is_logged_in():
         return await evt.reply("You are already logged in.")
 
@@ -196,7 +202,8 @@ async def login(evt: CommandEvent):
     return await evt.reply("This bridge instance has been configured to not allow logging in.")
 
 
-async def request_code(evt: CommandEvent, phone_number: str, next_status: Dict[str, str]):
+async def request_code(evt: CommandEvent, phone_number: str, next_status: Dict[str, Any]
+                       ) -> Dict:
     ok = False
     try:
         await evt.sender.ensure_started(even_if_no_session=True)
@@ -228,7 +235,7 @@ async def request_code(evt: CommandEvent, phone_number: str, next_status: Dict[s
 
 
 @command_handler(needs_auth=False)
-async def enter_phone_or_token(evt: CommandEvent):
+async def enter_phone_or_token(evt: CommandEvent) -> Optional[Dict]:
     if len(evt.args) == 0:
         return await evt.reply("**Usage:** `$cmdprefix+sp enter-phone-or-token <phone-or-token>`")
     elif not evt.config.get("bridge.allow_matrix_login", True):
@@ -248,10 +255,11 @@ async def enter_phone_or_token(evt: CommandEvent):
             "next": enter_code,
             "action": "Login",
         })
+    return None
 
 
 @command_handler(needs_auth=False)
-async def enter_code(evt: CommandEvent):
+async def enter_code(evt: CommandEvent) -> Optional[Dict]:
     if len(evt.args) == 0:
         return await evt.reply("**Usage:** `$cmdprefix+sp enter-code <code>`")
     elif not evt.config.get("bridge.allow_matrix_login", True):
@@ -263,10 +271,11 @@ async def enter_code(evt: CommandEvent):
         evt.log.exception("Error sending phone code")
         return await evt.reply("Unhandled exception while sending code. "
                                "Check console for more details.")
+    return None
 
 
 @command_handler(needs_auth=False)
-async def enter_password(evt: CommandEvent):
+async def enter_password(evt: CommandEvent) -> Optional[Dict]:
     if len(evt.args) == 0:
         return await evt.reply("**Usage:** `$cmdprefix+sp enter-password <password>`")
     elif not evt.config.get("bridge.allow_matrix_login", True):
@@ -282,9 +291,10 @@ async def enter_password(evt: CommandEvent):
         evt.log.exception("Error sending password")
         return await evt.reply("Unhandled exception while sending password. "
                                "Check console for more details.")
+    return None
 
 
-async def sign_in(evt: CommandEvent, **sign_in_info):
+async def sign_in(evt: CommandEvent, **sign_in_info) -> Dict:
     try:
         await evt.sender.ensure_started(even_if_no_session=True)
         user = await evt.sender.client.sign_in(**sign_in_info)
@@ -309,7 +319,7 @@ async def sign_in(evt: CommandEvent, **sign_in_info):
 @command_handler(needs_auth=True,
                  help_section=SECTION_AUTH,
                  help_text="Log out from Telegram.")
-async def logout(evt: CommandEvent):
+async def logout(evt: CommandEvent) -> Optional[Dict]:
     if await evt.sender.log_out():
         return await evt.reply("Logged out successfully.")
     return await evt.reply("Failed to log out.")

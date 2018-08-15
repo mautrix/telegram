@@ -14,7 +14,7 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import Optional, List, Tuple, Union, Callable
+from typing import Callable, List, Optional, Sequence, Tuple, Type, Union
 from lxml import html
 
 from telethon.tl.types import (MessageEntityMention as Mention,
@@ -83,11 +83,11 @@ def offset_length_multiply(amount: int):
 
 
 class TelegramMessage:
-    def __init__(self, text: str = "", entities: Optional[List[TypeMessageEntity]] = None):
+    def __init__(self, text: str = "", entities: Optional[List[TypeMessageEntity]] = None) -> None:
         self.text = text  # type: str
         self.entities = entities or []  # type: List[TypeMessageEntity]
 
-    def offset_entities(self, offset: int) -> "TelegramMessage":
+    def offset_entities(self, offset: int) -> 'TelegramMessage':
         def apply_offset(entity: TypeMessageEntity, inner_offset: int
                          ) -> Optional[TypeMessageEntity]:
             entity = Entity.copy(entity)
@@ -104,7 +104,7 @@ class TelegramMessage:
         self.entities = [x for x in self.entities if x is not None]
         return self
 
-    def append(self, *args: Union[str, "TelegramMessage"]) -> "TelegramMessage":
+    def append(self, *args: Union[str, 'TelegramMessage']) -> 'TelegramMessage':
         for msg in args:
             if isinstance(msg, str):
                 msg = TelegramMessage(text=msg)
@@ -112,7 +112,7 @@ class TelegramMessage:
             self.text += msg.text
         return self
 
-    def prepend(self, *args: Union[str, "TelegramMessage"]) -> "TelegramMessage":
+    def prepend(self, *args: Union[str, 'TelegramMessage']) -> 'TelegramMessage':
         for msg in args:
             if isinstance(msg, str):
                 msg = TelegramMessage(text=msg)
@@ -120,17 +120,17 @@ class TelegramMessage:
             self.text = msg.text + self.text
         return self
 
-    def format(self, entity_type: type(TypeMessageEntity), offset: int = None, length: int = None,
-               **kwargs) -> "TelegramMessage":
+    def format(self, entity_type: Type[TypeMessageEntity], offset: int = None, length: int = None,
+               **kwargs) -> 'TelegramMessage':
         self.entities.append(entity_type(offset=offset or 0,
                                          length=length if length is not None else len(self.text),
                                          **kwargs))
         return self
 
-    def concat(self, *args: Union[str, "TelegramMessage"]) -> "TelegramMessage":
+    def concat(self, *args: Union[str, 'TelegramMessage']) -> 'TelegramMessage':
         return TelegramMessage().append(self, *args)
 
-    def trim(self) -> "TelegramMessage":
+    def trim(self) -> 'TelegramMessage':
         orig_len = len(self.text)
         self.text = self.text.lstrip()
         diff = orig_len - len(self.text)
@@ -138,7 +138,7 @@ class TelegramMessage:
         self.offset_entities(-diff)
         return self
 
-    def split(self, separator, max_items: int = 0) -> List["TelegramMessage"]:
+    def split(self, separator, max_items: int = 0) -> List['TelegramMessage']:
         text_parts = self.text.split(separator, max_items - 1)
         output = []  # type: List[TelegramMessage]
 
@@ -158,7 +158,8 @@ class TelegramMessage:
         return output
 
     @staticmethod
-    def join(items: List[Union[str, "TelegramMessage"]], separator: str = " ") -> "TelegramMessage":
+    def join(items: Sequence[Union[str, 'TelegramMessage']],
+             separator: str = " ") -> 'TelegramMessage':
         main = TelegramMessage()
         for msg in items:
             if isinstance(msg, str):

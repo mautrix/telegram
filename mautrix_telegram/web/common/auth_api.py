@@ -23,7 +23,7 @@ from telethon.errors import *
 
 from ...commands.auth import enter_password
 from ...util import format_duration
-from ...puppet import Puppet
+from ...puppet import Puppet, PuppetError
 from ...user import User
 
 
@@ -51,12 +51,13 @@ class AuthAPI(abc.ABC):
                                                     "account.", errcode="already-logged-in")
 
         resp = await puppet.switch_mxid(token, user.mxid)
-        if resp == 2:
+        if resp == PuppetError.OnlyLoginSelf:
             return self.get_mx_login_response(status=403, errcode="only-login-self",
                                               error="You can only log in as your own Matrix user.")
-        elif resp == 1:
+        elif resp == PuppetError.InvalidAccessToken:
             return self.get_mx_login_response(status=401, errcode="invalid-access-token",
                                               error="Failed to verify access token.")
+        assert resp == PuppetError.Success, "Encountered an unhandled PuppetError."
 
         return self.get_mx_login_response(mxid=user.mxid, status=200, state="logged-in")
 
