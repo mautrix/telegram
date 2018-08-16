@@ -299,7 +299,7 @@ class Puppet:
         displayname_similarity = (SequenceMatcher(None, self.displayname, query).ratio()
                                   if self.displayname else 0)
         similarity = max(username_similarity, displayname_similarity)
-        return int(round(similarity * 1000) / 10)
+        return int(round(similarity * 100))
 
     @staticmethod
     def get_displayname(info: User, enable_format: bool = True) -> str:
@@ -360,8 +360,7 @@ class Puppet:
         elif source.is_relaybot or self.displayname_source is None:
             self.displayname_source = TelegramID(source.tgid)
             return True
-        else:
-            return False
+        return False
 
     async def update_avatar(self, source: 'AbstractUser', photo: FileLocation) -> bool:
         photo_id = f"{photo.volume_id}-{photo.local_id}"
