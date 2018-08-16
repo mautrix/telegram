@@ -20,4 +20,5 @@ def upgrade():
 
 
 def downgrade():
-    op.drop_column('puppet', 'displayname_source')
+    with op.batch_alter_table("puppet") as batch_op:
+        batch_op.drop_column('displayname_source')

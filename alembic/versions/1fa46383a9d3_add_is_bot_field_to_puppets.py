@@ -21,4 +21,5 @@ def upgrade():
 
 
 def downgrade():
-    op.drop_column('puppet', 'is_bot')
+    with op.batch_alter_table("puppet") as batch_op:
+        batch_op.drop_column('is_bot')

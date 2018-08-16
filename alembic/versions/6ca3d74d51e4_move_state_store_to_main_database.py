@@ -72,10 +72,17 @@ def upgrade():
                     sa.Column("avatar_url", sa.String(), nullable=True),
                     sa.PrimaryKeyConstraint("room_id", "user_id"))
 
+    try:
+        migrate_state_store()
+    except Exception as e:
+        print("Failed to migrate state store:", e)
+        print("Migrating the state store isn't required, but you can retry by alembic downgrading "
+              "to revision 2228d49c383f and upgrading again.")
+
+
+def migrate_state_store():
     conn = op.get_bind()
-    session = orm.sessionmaker(bind=conn)
-    session = orm.scoping.scoped_session(session)
-    Puppet.query = session.query_property()
+    session = orm.sessionmaker(bind=conn)()  # type: orm.Session
 
     try:
         with open("mx-state.json") as file:
@@ -99,7 +106,7 @@ def upgrade():
         if not match:
             continue
 
-        puppet = Puppet.query.get(match.group(1))
+        puppet = session.query(Puppet).get(match.group(1))
         if not puppet:
             continue
 

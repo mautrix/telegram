@@ -20,4 +20,5 @@ def upgrade():
 
 
 def downgrade():
-    op.drop_column('portal', 'megagroup')
+    with op.batch_alter_table("portal") as batch_op:
+        batch_op.drop_column('megagroup')
