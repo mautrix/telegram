@@ -4,9 +4,9 @@
   * [x] Message content (text, formatting, files, etc..)
   * [x] Message redactions
   * [ ] ‡ Message history
-  * [ ] † Presence
-  * [ ] † Typing notifications
-  * [ ] † Read receipts
+  * [x] Presence
+  * [x] Typing notifications
+  * [x] Read receipts
   * [x] Pinning messages
   * [x] Power level
     * [x] Normal chats
@@ -46,7 +46,7 @@
     * [x] When receiving invite or message
   * [x] Private chat creation by inviting Matrix puppet of Telegram user to new room
   * [x] Option to use bot to relay messages for unauthenticated Matrix users
-  * [ ] Option to use own Matrix account for messages sent from other Telegram clients
+  * [x] Option to use own Matrix account for messages sent from other Telegram clients
   * [ ] ‡ Calls (hard, not yet supported by Telethon)
 
 † Information not automatically sent from source, i.e. implementation may not be possible  
