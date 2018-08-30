@@ -14,7 +14,7 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import (Optional, List, Tuple, Type, Dict, Any, Deque, Match)
+from typing import (Optional, List, Tuple, Type, Dict, Any, TYPE_CHECKING, Match)
 from html import unescape
 from html.parser import HTMLParser
 from collections import deque
@@ -28,6 +28,9 @@ from telethon.tl.types import (MessageEntityMention, MessageEntityMentionName, M
 from ... import user as u, puppet as pu, portal as po
 from ..util import html_to_unicode
 from .parser_common import MatrixParserCommon, ParsedMessage
+
+if TYPE_CHECKING:
+    from typing import Deque
 
 
 def parse_html(html: str) -> ParsedMessage:
