@@ -165,7 +165,7 @@ class CommandProcessor:
             if sender.command_status and "next" in sender.command_status:
                 args.insert(0, orig_command)
                 evt.command = ""
-                command = sender.command_status["next"]
+                command_handler = sender.command_status["next"]
             else:
                 command_handler = command_handlers["unknown-command"]
         try:
