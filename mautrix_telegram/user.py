@@ -199,10 +199,9 @@ class User(AbstractUser):
     def ensure_started(self, even_if_no_session: bool = False) -> Coroutine[None, None, 'User']:
         return cast(Coroutine[None, None, 'User'], super().ensure_started(even_if_no_session))
 
-    def set_presence(self, online: bool = True) -> bool:
-        if self.is_bot:
-            return False
-        return self.client(UpdateStatusRequest(offline=not online))
+    async def set_presence(self, online: bool = True) -> None:
+        if not self.is_bot:
+            await self.client(UpdateStatusRequest(offline=not online))
 
     async def update_info(self, info: TLUser = None) -> None:
         info = info or await self.client.get_me()
