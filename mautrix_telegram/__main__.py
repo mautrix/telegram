@@ -14,11 +14,12 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import Coroutine, List, Optional
+from typing import Coroutine, List
 import argparse
 import asyncio
 import logging.config
 import sys
+import copy
 
 from sqlalchemy import orm
 import sqlalchemy as sql
@@ -66,7 +67,7 @@ if args.generate_registration:
     print(f"Registration generated and saved to {config.registration_path}")
     sys.exit(0)
 
-logging.config.dictConfig(config["logging"])
+logging.config.dictConfig(copy.deepcopy(config["logging"]))
 log = logging.getLogger("mau.init")  # type: logging.Logger
 log.debug(f"Initializing mautrix-telegram {__version__}")
 
