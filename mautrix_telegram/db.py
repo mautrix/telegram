@@ -118,7 +118,7 @@ class UserProfile(Base):
     displayname = Column(String, nullable=True)
     avatar_url = Column(String, nullable=True)
 
-    def dict(self) -> Dict[str, Column]:
+    def dict(self) -> Dict[str, str]:
         return {
             "membership": self.membership,
             "displayname": self.displayname,
