@@ -48,7 +48,7 @@ class ProvisioningAPI(AuthAPI):
         portal_prefix = "/portal/{mxid:![^/]+}"
         self.app.router.add_route("GET", f"{portal_prefix}", self.get_portal_by_mxid)
         self.app.router.add_route("GET", "/portal/{tgid:-[0-9]+}", self.get_portal_by_tgid)
-        self.app.router.add_route("POST", portal_prefix + "/connect/{chat_id:[0-9]+}",
+        self.app.router.add_route("POST", portal_prefix + "/connect/{chat_id:-[0-9]+}",
                                   self.connect_chat)
         self.app.router.add_route("POST", f"{portal_prefix}/create", self.create_chat)
         self.app.router.add_route("POST", f"{portal_prefix}/disconnect", self.disconnect_chat)
