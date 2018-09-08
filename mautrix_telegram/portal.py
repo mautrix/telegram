@@ -1168,8 +1168,7 @@ class Portal:
 
     async def handle_telegram_typing(self, user: p.Puppet,
                                      _: Union[UpdateUserTyping, UpdateChatUserTyping]) -> None:
-        if self.mxid:
-            await user.intent.set_typing(self.mxid, is_typing=True)
+        await user.intent.set_typing(self.mxid, is_typing=True)
 
     def get_external_url(self, evt: Message) -> Optional[str]:
         if self.peer_type == "channel" and self.username is not None:

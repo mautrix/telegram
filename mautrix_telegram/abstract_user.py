@@ -241,6 +241,9 @@ class AbstractUser(ABC):
                            update: Union[UpdateChatAdmins, UpdateChatParticipantAdmin]) -> None:
         # TODO duplication not checked
         portal = po.Portal.get_by_tgid(update.chat_id, peer_type="chat")
+        if not portal or not portal.mxid:
+            return
+
         if isinstance(update, UpdateChatAdmins):
             await portal.set_telegram_admins_enabled(update.enabled)
         elif isinstance(update, UpdateChatParticipantAdmin):
@@ -253,6 +256,10 @@ class AbstractUser(ABC):
             portal = po.Portal.get_by_tgid(update.user_id, self.tgid, "user")
         else:
             portal = po.Portal.get_by_tgid(update.chat_id, peer_type="chat")
+
+        if not portal or not portal.mxid:
+            return
+
         sender = pu.Puppet.get(update.user_id)
         await portal.handle_telegram_typing(sender, update)
 
@@ -345,6 +352,12 @@ class AbstractUser(ABC):
 
     async def update_message(self, original_update: UpdateMessage) -> None:
         update, sender, portal = self.get_message_details(original_update)
+
+        if self.bot and not portal.mxid:
+            self.log.debug(f"Ignoring message received by bot in unbridged chat %s",
+                           portal.tgid_log)
+            return
+
         if self.ignore_incoming_bot_events and self.bot and sender.id == self.bot.tgid:
             self.log.debug(f"Ignoring relaybot-sent message %s to %s", update, portal.tgid_log)
             return
