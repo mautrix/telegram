@@ -353,7 +353,7 @@ class AbstractUser(ABC):
     async def update_message(self, original_update: UpdateMessage) -> None:
         update, sender, portal = self.get_message_details(original_update)
 
-        if self.bot and not portal.mxid:
+        if self.is_bot and not portal.mxid:
             self.log.debug(f"Ignoring message received by bot in unbridged chat %s",
                            portal.tgid_log)
             return

@@ -133,7 +133,7 @@ bridge:
     # Remember that proper sticker support always requires Pillow to convert webp into png.
     native_stickers: true
     # Whether or not to fetch and handle Telegram updates at startup from the time the bridge was down.
-    # WARNING: Probably buggy, might get stuck in infinite loop.
+    # Currently only works for private chats and normal groups.
     catch_up: false
     # Whether or not to use /sync to get presence, read receipts and typing notifications when using
     # your own Matrix account as the Matrix puppet for your Telegram account.
