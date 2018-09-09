@@ -280,6 +280,7 @@ async def confirm_bridge(evt: CommandEvent) -> Optional[Dict]:
         return await evt.reply("Please use `$cmdprefix+sp continue` to confirm the bridging or "
                                "`$cmdprefix+sp cancel` to cancel.")
 
+    evt.sender.command_status = None
     is_logged_in = await evt.sender.is_logged_in()
     user = evt.sender if is_logged_in else evt.tgbot
     try:
