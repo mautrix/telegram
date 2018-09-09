@@ -15,6 +15,9 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from abc import abstractmethod
+from typing import Optional
+
+from aiohttp import web
 import abc
 import asyncio
 import logging
@@ -28,22 +31,24 @@ from ...user import User
 
 
 class AuthAPI(abc.ABC):
-    log = logging.getLogger("mau.web.auth")
+    log = logging.getLogger("mau.web.auth")  # type: logging.Logger
 
-    def __init__(self, loop):
+    def __init__(self, loop: asyncio.AbstractEventLoop):
         self.loop = loop  # type: asyncio.AbstractEventLoop
 
     @abstractmethod
-    def get_login_response(self, status=200, state="", username="", mxid="", message="", error="",
-                           errcode=""):
+    def get_login_response(self, status: int = 200, state: str = "", username: str = "",
+                           mxid: str = "", message: str = "", error: str = "",
+                           errcode: str = "") -> web.Response:
         raise NotImplementedError()
 
     @abstractmethod
-    def get_mx_login_response(self, status=200, state="", username="", mxid="", message="",
-                              error="", errcode=""):
+    def get_mx_login_response(self, status: int = 200, state: str = "", username: str = "",
+                              mxid: str = "", message: str = "", error: str = "",
+                              errcode: str = "") -> web.Response:
         raise NotImplementedError()
 
-    async def post_matrix_token(self, user: User, token):
+    async def post_matrix_token(self, user: User, token: str) -> web.Response:
         puppet = Puppet.get(user.tgid)
         if puppet.is_real_user:
             return self.get_mx_login_response(state="already-logged-in", status=409,
@@ -61,11 +66,11 @@ class AuthAPI(abc.ABC):
 
         return self.get_mx_login_response(mxid=user.mxid, status=200, state="logged-in")
 
-    async def post_matrix_password(self, user, password):
+    async def post_matrix_password(self, user: User, password: str) -> web.Response:
         return self.get_mx_login_response(mxid=user.mxid, status=501, error="Not yet implemented",
                                           errcode="not-yet-implemented")
 
-    async def post_login_phone(self, user, phone):
+    async def post_login_phone(self, user: User, phone: str) -> web.Response:
         try:
             await user.client.sign_in(phone or "+123")
             return self.get_login_response(mxid=user.mxid, state="code", status=200,
@@ -102,7 +107,7 @@ class AuthAPI(abc.ABC):
                                            errcode="unknown_error",
                                            error="Internal server error while requesting code.")
 
-    async def post_login_token(self, user, token):
+    async def post_login_token(self, user: User, token: str) -> web.Response:
         try:
             user_info = await user.client.sign_in(bot_token=token)
             asyncio.ensure_future(user.post_login(user_info), loop=self.loop)
@@ -123,7 +128,8 @@ class AuthAPI(abc.ABC):
             return self.get_login_response(mxid=user.mxid, state="token", status=500,
                                            error="Internal server error while sending token.")
 
-    async def post_login_code(self, user, code, password_in_data):
+    async def post_login_code(self, user: User, code: int, password_in_data: bool
+                              ) -> Optional[web.Response]:
         try:
             user_info = await user.client.sign_in(code=code)
             asyncio.ensure_future(user.post_login(user_info), loop=self.loop)
@@ -156,7 +162,7 @@ class AuthAPI(abc.ABC):
                                            errcode="unknown_error",
                                            error="Internal server error while sending code.")
 
-    async def post_login_password(self, user, password):
+    async def post_login_password(self, user: User, password: str) -> web.Response:
         try:
             user_info = await user.client.sign_in(password=password)
             asyncio.ensure_future(user.post_login(user_info), loop=self.loop)

@@ -14,7 +14,7 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import Generator, Optional, Tuple, Union, TYPE_CHECKING
+from typing import Optional, Tuple, TYPE_CHECKING
 
 if TYPE_CHECKING:
     import asyncio

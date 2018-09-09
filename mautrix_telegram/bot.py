@@ -61,15 +61,15 @@ class Bot(AbstractUser):
 
     async def init_permissions(self) -> None:
         whitelist = config["bridge.relaybot.whitelist"] or []
-        for id in whitelist:
-            if isinstance(id, str):
-                entity = await self.client.get_input_entity(id)
+        for user_id in whitelist:
+            if isinstance(user_id, str):
+                entity = await self.client.get_input_entity(user_id)
                 if isinstance(entity, InputUser):
-                    id = entity.user_id
+                    user_id = entity.user_id
                 else:
-                    id = None
-            if isinstance(id, int):
-                self.tg_whitelist.append(id)
+                    user_id = None
+            if isinstance(user_id, int):
+                self.tg_whitelist.append(user_id)
 
     async def start(self, delete_unless_authenticated: bool = False) -> 'Bot':
         await super().start(delete_unless_authenticated)
@@ -85,20 +85,20 @@ class Bot(AbstractUser):
         self.username = info.username
         self.mxid = pu.Puppet.get_mxid_from_id(self.tgid)
 
-        chat_ids = [id for id, type in self.chats.items() if type == "chat"]
+        chat_ids = [chat_id for chat_id, chat_type in self.chats.items() if chat_type == "chat"]
         response = await self.client(GetChatsRequest(chat_ids))
         for chat in response.chats:
             if isinstance(chat, ChatForbidden) or chat.left or chat.deactivated:
                 self.remove_chat(chat.id)
 
-        channel_ids = [InputChannel(id, 0)
-                       for id, type in self.chats.items()
-                       if type == "channel"]
-        for id in channel_ids:
+        channel_ids = [InputChannel(chat_id, 0)
+                       for chat_id, chat_type in self.chats.items()
+                       if chat_type == "channel"]
+        for channel_id in channel_ids:
             try:
-                await self.client(GetChannelsRequest([id]))
+                await self.client(GetChannelsRequest([channel_id]))
             except (ChannelPrivateError, ChannelInvalidError):
-                self.remove_chat(id.channel_id)
+                self.remove_chat(channel_id.channel_id)
 
         if config["bridge.catch_up"]:
             try:
@@ -112,18 +112,18 @@ class Bot(AbstractUser):
     def unregister_portal(self, portal: po.Portal) -> None:
         self.remove_chat(portal.tgid)
 
-    def add_chat(self, id: int, type: str) -> None:
-        if id not in self.chats:
-            self.chats[id] = type
-            self.db.add(BotChat(id=id, type=type))
+    def add_chat(self, chat_id: int, chat_type: str) -> None:
+        if chat_id not in self.chats:
+            self.chats[chat_id] = chat_type
+            self.db.add(BotChat(id=chat_id, type=chat_type))
             self.db.commit()
 
-    def remove_chat(self, id: int) -> None:
+    def remove_chat(self, chat_id: int) -> None:
         try:
-            del self.chats[id]
+            del self.chats[chat_id]
         except KeyError:
             pass
-        existing_chat = BotChat.query.get(id)
+        existing_chat = BotChat.query.get(chat_id)
         if existing_chat:
             self.db.delete(existing_chat)
             self.db.commit()
@@ -191,7 +191,8 @@ class Bot(AbstractUser):
             await portal.main_intent.invite(portal.mxid, user.mxid)
             return await reply(f"Invited `{user.mxid}` to the portal.")
 
-    def handle_command_id(self, message: Message, reply: ReplyFunc) -> Awaitable[Message]:
+    @staticmethod
+    def handle_command_id(message: Message, reply: ReplyFunc) -> Awaitable[Message]:
         # Provide the prefixed ID to the user so that the user wouldn't need to specify whether the
         # chat is a normal group or a supergroup/channel when using the ID.
         if isinstance(message.to_id, PeerChannel):
@@ -241,16 +242,16 @@ class Bot(AbstractUser):
         to_id = message.to_id
         if isinstance(to_id, PeerChannel):
             to_id = to_id.channel_id
-            type = "channel"
+            chat_type = "channel"
         elif isinstance(to_id, PeerChat):
             to_id = to_id.chat_id
-            type = "chat"
+            chat_type = "chat"
         else:
             return
 
         action = message.action
         if isinstance(action, MessageActionChatAddUser) and self.tgid in action.users:
-            self.add_chat(to_id, type)
+            self.add_chat(to_id, chat_type)
         elif isinstance(action, MessageActionChatDeleteUser) and action.user_id == self.tgid:
             self.remove_chat(to_id)
 
@@ -265,7 +266,9 @@ class Bot(AbstractUser):
                       and update.message.entities and len(update.message.entities) > 0
                       and isinstance(update.message.entities[0], MessageEntityBotCommand))
         if is_command:
-            return await self.handle_command(update.message)
+            await self.handle_command(update.message)
+            return True
+        return False
 
     def is_in_chat(self, peer_id) -> bool:
         return peer_id in self.chats

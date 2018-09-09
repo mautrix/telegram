@@ -28,8 +28,8 @@ from telethon.tl.types import (MessageEntityMention, MessageEntityMentionName,
 from mautrix_appservice import MatrixRequestError
 from mautrix_appservice.intent_api import IntentAPI
 
-from ..types import TelegramID
 from .. import user as u, puppet as pu, portal as po
+from ..types import TelegramID
 from ..db import Message as DBMessage
 from .util import (add_surrogates, remove_surrogates, trim_reply_fallback_html,
                    trim_reply_fallback_text, unicode_to_html)
@@ -76,7 +76,7 @@ async def _add_forward_header(source, text: str, html: Optional[str],
             fwd_from_html = f"<a href='https://matrix.to/#/{user.mxid}'>{fwd_from_text}</a>"
 
         if not fwd_from_text:
-            puppet = pu.Puppet.get(fwd_from.from_id, create=False)
+            puppet = pu.Puppet.get(TelegramID(fwd_from.from_id), create=False)
             if puppet and puppet.displayname:
                 fwd_from_text = puppet.displayname or puppet.mxid
                 fwd_from_html = f"<a href='https://matrix.to/#/{puppet.mxid}'>{fwd_from_text}</a>"
@@ -247,7 +247,7 @@ def _telegram_entities_to_matrix(text: str, entities: List[TypeMessageEntity]) -
         elif entity_type == MessageEntityMention:
             skip_entity = _parse_mention(html, entity_text)
         elif entity_type == MessageEntityMentionName:
-            skip_entity = _parse_name_mention(html, entity_text, entity.user_id)
+            skip_entity = _parse_name_mention(html, entity_text, TelegramID(entity.user_id))
         elif entity_type == MessageEntityEmail:
             html.append(f"<a href='mailto:{entity_text}'>{entity_text}</a>")
         elif entity_type in {MessageEntityTextUrl, MessageEntityUrl}:

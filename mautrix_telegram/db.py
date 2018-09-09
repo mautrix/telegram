@@ -14,14 +14,15 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import Dict
-
 from sqlalchemy import (Column, UniqueConstraint, ForeignKey, ForeignKeyConstraint, Integer,
                         BigInteger, String, Boolean, Text)
 from sqlalchemy.sql import expression
 from sqlalchemy.orm import relationship, Query
+from typing import Dict, Optional, List
 import json
 
+from mautrix_telegram.types import MatrixUserID, MatrixRoomID, MatrixEventID
+from .types import TelegramID
 from .base import Base
 
 
@@ -30,13 +31,13 @@ class Portal(Base):
     __tablename__ = "portal"
 
     # Telegram chat information
-    tgid = Column(Integer, primary_key=True)
-    tg_receiver = Column(Integer, primary_key=True)
+    tgid = Column(Integer, primary_key=True)  # type: TelegramID
+    tg_receiver = Column(Integer, primary_key=True)  # type: TelegramID
     peer_type = Column(String, nullable=False)
     megagroup = Column(Boolean)
 
     # Matrix portal information
-    mxid = Column(String, unique=True, nullable=True)
+    mxid = Column(String, unique=True, nullable=True)  # type: Optional[MatrixRoomID]
 
     # Telegram chat metadata
     username = Column(String, nullable=True)
@@ -49,10 +50,10 @@ class Message(Base):
     query = None  # type: Query
     __tablename__ = "message"
 
-    mxid = Column(String)
-    mx_room = Column(String)
-    tgid = Column(Integer, primary_key=True)
-    tg_space = Column(Integer, primary_key=True)
+    mxid = Column(String)  # type: MatrixEventID
+    mx_room = Column(String)  # type: MatrixRoomID
+    tgid = Column(Integer, primary_key=True)  # type: TelegramID
+    tg_space = Column(Integer, primary_key=True)  # type: TelegramID
 
     __table_args__ = (UniqueConstraint("mxid", "mx_room", "tg_space", name="_mx_id_room"),)
 
@@ -62,9 +63,9 @@ class UserPortal(Base):
     __tablename__ = "user_portal"
 
     user = Column(Integer, ForeignKey("user.tgid", onupdate="CASCADE", ondelete="CASCADE"),
-                  primary_key=True)
-    portal = Column(Integer, primary_key=True)
-    portal_receiver = Column(Integer, primary_key=True)
+                  primary_key=True)  # type: TelegramID
+    portal = Column(Integer, primary_key=True)  # type: TelegramID
+    portal_receiver = Column(Integer, primary_key=True)  # type: TelegramID
 
     __table_args__ = (ForeignKeyConstraint(("portal", "portal_receiver"),
                                            ("portal.tgid", "portal.tg_receiver"),
@@ -75,12 +76,13 @@ class User(Base):
     query = None  # type: Query
     __tablename__ = "user"
 
-    mxid = Column(String, primary_key=True)
-    tgid = Column(Integer, nullable=True, unique=True)
+    mxid = Column(String, primary_key=True)  # type: MatrixUserID
+    tgid = Column(Integer, nullable=True, unique=True)  # type: Optional[TelegramID]
     tg_username = Column(String, nullable=True)
     saved_contacts = Column(Integer, default=0, nullable=False)
     contacts = relationship("Contact", uselist=True,
-                            cascade="save-update, merge, delete, delete-orphan")
+                            cascade="save-update, merge, delete, delete-orphan"
+                            )  # type: List[Contact]
     portals = relationship("Portal", secondary="user_portal")
 
 
@@ -88,7 +90,7 @@ class RoomState(Base):
     query = None  # type: Query
     __tablename__ = "mx_room_state"
 
-    room_id = Column(String, primary_key=True)
+    room_id = Column(String, primary_key=True)  # type: MatrixRoomID
     _power_levels_text = Column("power_levels", Text, nullable=True)
     _power_levels_json = {}  # type: Dict
 
@@ -112,8 +114,8 @@ class UserProfile(Base):
     query = None  # type: Query
     __tablename__ = "mx_user_profile"
 
-    room_id = Column(String, primary_key=True)
-    user_id = Column(String, primary_key=True)
+    room_id = Column(String, primary_key=True)  # type: MatrixRoomID
+    user_id = Column(String, primary_key=True)  # type: MatrixUserID
     membership = Column(String, nullable=False, default="leave")
     displayname = Column(String, nullable=True)
     avatar_url = Column(String, nullable=True)
@@ -130,19 +132,19 @@ class Contact(Base):
     query = None  # type: Query
     __tablename__ = "contact"
 
-    user = Column(Integer, ForeignKey("user.tgid"), primary_key=True)
-    contact = Column(Integer, ForeignKey("puppet.id"), primary_key=True)
+    user = Column(Integer, ForeignKey("user.tgid"), primary_key=True)  # type: TelegramID
+    contact = Column(Integer, ForeignKey("puppet.id"), primary_key=True)  # type: TelegramID
 
 
 class Puppet(Base):
     query = None  # type: Query
     __tablename__ = "puppet"
 
-    id = Column(Integer, primary_key=True)
-    custom_mxid = Column(String, nullable=True)
+    id = Column(Integer, primary_key=True)  # type: TelegramID
+    custom_mxid = Column(String, nullable=True)  # type: Optional[MatrixUserID]
     access_token = Column(String, nullable=True)
     displayname = Column(String, nullable=True)
-    displayname_source = Column(Integer, nullable=True)
+    displayname_source = Column(Integer, nullable=True)  # type: Optional[TelegramID]
     username = Column(String, nullable=True)
     photo_id = Column(String, nullable=True)
     is_bot = Column(Boolean, nullable=True)
@@ -153,7 +155,7 @@ class Puppet(Base):
 class BotChat(Base):
     query = None  # type: Query
     __tablename__ = "bot_chat"
-    id = Column(Integer, primary_key=True)
+    id = Column(Integer, primary_key=True)  # type: TelegramID
     type = Column(String, nullable=False)
 
 

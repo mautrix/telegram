@@ -35,10 +35,10 @@ from alchemysession import AlchemySessionContainer
 
 from . import portal as po, puppet as pu, __version__
 from .db import Message as DBMessage
+from .types import TelegramID
 from .tgclient import MautrixTelegramClient
 
 if TYPE_CHECKING:
-    from .types import TelegramID
     from .context import Context
     from .config import Config
     from .bot import Bot
@@ -210,13 +210,13 @@ class AbstractUser(ABC):
 
     @staticmethod
     async def update_pinned_messages(update: UpdateChannelPinnedMessage) -> None:
-        portal = po.Portal.get_by_tgid(update.channel_id)
+        portal = po.Portal.get_by_tgid(TelegramID(update.channel_id))
         if portal and portal.mxid:
             await portal.receive_telegram_pin_id(update.id)
 
     @staticmethod
     async def update_participants(update: UpdateChatParticipants) -> None:
-        portal = po.Portal.get_by_tgid(update.participants.chat_id)
+        portal = po.Portal.get_by_tgid(TelegramID(update.participants.chat_id))
         if portal and portal.mxid:
             await portal.update_telegram_participants(update.participants.participants)
 
@@ -225,7 +225,7 @@ class AbstractUser(ABC):
             self.log.debug("Unexpected read receipt peer: %s", update.peer)
             return
 
-        portal = po.Portal.get_by_tgid(update.peer.user_id, self.tgid)
+        portal = po.Portal.get_by_tgid(TelegramID(update.peer.user_id), self.tgid)
         if not portal or not portal.mxid:
             return
 
@@ -234,38 +234,38 @@ class AbstractUser(ABC):
         if not message:
             return
 
-        puppet = pu.Puppet.get(update.peer.user_id)
+        puppet = pu.Puppet.get(TelegramID(update.peer.user_id))
         await puppet.intent.mark_read(portal.mxid, message.mxid)
 
     async def update_admin(self,
                            update: Union[UpdateChatAdmins, UpdateChatParticipantAdmin]) -> None:
         # TODO duplication not checked
-        portal = po.Portal.get_by_tgid(update.chat_id, peer_type="chat")
+        portal = po.Portal.get_by_tgid(TelegramID(update.chat_id), peer_type="chat")
         if not portal or not portal.mxid:
             return
 
         if isinstance(update, UpdateChatAdmins):
             await portal.set_telegram_admins_enabled(update.enabled)
         elif isinstance(update, UpdateChatParticipantAdmin):
-            await portal.set_telegram_admin(update.user_id)
+            await portal.set_telegram_admin(TelegramID(update.user_id))
         else:
             self.log.warning("Unexpected admin status update: %s", update)
 
     async def update_typing(self, update: Union[UpdateUserTyping, UpdateChatUserTyping]) -> None:
         if isinstance(update, UpdateUserTyping):
-            portal = po.Portal.get_by_tgid(update.user_id, self.tgid, "user")
+            portal = po.Portal.get_by_tgid(TelegramID(update.user_id), self.tgid, "user")
         else:
-            portal = po.Portal.get_by_tgid(update.chat_id, peer_type="chat")
+            portal = po.Portal.get_by_tgid(TelegramID(update.chat_id), peer_type="chat")
 
         if not portal or not portal.mxid:
             return
 
-        sender = pu.Puppet.get(update.user_id)
+        sender = pu.Puppet.get(TelegramID(update.user_id))
         await portal.handle_telegram_typing(sender, update)
 
     async def update_others_info(self, update: Union[UpdateUserName, UpdateUserPhoto]) -> None:
         # TODO duplication not checked
-        puppet = pu.Puppet.get(update.user_id)
+        puppet = pu.Puppet.get(TelegramID(update.user_id))
         if isinstance(update, UpdateUserName):
             if await puppet.update_displayname(self, update):
                 puppet.save()
@@ -276,7 +276,7 @@ class AbstractUser(ABC):
             self.log.warning("Unexpected other user info update: %s", update)
 
     async def update_status(self, update: UpdateUserStatus) -> None:
-        puppet = pu.Puppet.get(update.user_id)
+        puppet = pu.Puppet.get(TelegramID(update.user_id))
         if isinstance(update.status, UserStatusOnline):
             await puppet.default_mxid_intent.set_presence("online")
         elif isinstance(update.status, UserStatusOffline):
@@ -289,10 +289,10 @@ class AbstractUser(ABC):
                                                                   Optional[pu.Puppet],
                                                                   Optional[po.Portal]]:
         if isinstance(update, UpdateShortChatMessage):
-            portal = po.Portal.get_by_tgid(update.chat_id, peer_type="chat")
-            sender = pu.Puppet.get(update.from_id)
+            portal = po.Portal.get_by_tgid(TelegramID(update.chat_id), peer_type="chat")
+            sender = pu.Puppet.get(TelegramID(update.from_id))
         elif isinstance(update, UpdateShortMessage):
-            portal = po.Portal.get_by_tgid(update.user_id, self.tgid, "user")
+            portal = po.Portal.get_by_tgid(TelegramID(update.user_id), self.tgid, "user")
             sender = pu.Puppet.get(self.tgid if update.out else update.user_id)
         elif isinstance(update, (UpdateNewMessage, UpdateNewChannelMessage,
                                  UpdateEditMessage, UpdateEditChannelMessage)):
@@ -338,7 +338,7 @@ class AbstractUser(ABC):
         if len(update.messages) > MAX_DELETIONS:
             return
 
-        portal = po.Portal.get_by_tgid(update.channel_id)
+        portal = po.Portal.get_by_tgid(TelegramID(update.channel_id))
         if not portal:
             return
 

@@ -26,12 +26,13 @@ from telethon.tl.types import (MessageEntityMention as Mention,
                                InputMessageEntityMentionName as InputMentionName)
 
 from ... import user as u, puppet as pu, portal as po
+from ...types import MatrixUserID
 from ..util import html_to_unicode
 from .parser_common import MatrixParserCommon, ParsedMessage
 
 
-def parse_html(html: str) -> ParsedMessage:
-    return MatrixParser.parse(html)
+def parse_html(input_html: str) -> ParsedMessage:
+    return MatrixParser.parse(input_html)
 
 
 class Entity:
@@ -248,7 +249,7 @@ class MatrixParser(MatrixParserCommon):
 
         mention = cls.mention_regex.match(href)
         if mention:
-            mxid = mention.group(1)
+            mxid = MatrixUserID(mention.group(1))
             user = (pu.Puppet.get_by_mxid(mxid)
                     or u.User.get_by_mxid(mxid, create=False))
             if not user:

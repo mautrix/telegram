@@ -49,7 +49,8 @@ class User(AbstractUser):
 
     def __init__(self, mxid: MatrixUserID, tgid: Optional[TelegramID] = None,
                  username: Optional[str] = None, db_contacts: Optional[List[DBContact]] = None,
-                 saved_contacts: int = 0, is_bot: bool = False, db_portals: List[DBPortal] = [],
+                 saved_contacts: int = 0, is_bot: bool = False,
+                 db_portals: Optional[List[DBPortal]] = None,
                  db_instance: Optional[DBUser] = None) -> None:
         super().__init__()
         self.mxid = mxid  # type: MatrixUserID
@@ -105,9 +106,11 @@ class User(AbstractUser):
 
     @db_portals.setter
     def db_portals(self, portals: List[DBPortal]) -> None:
-        self.portals = {(portal.tgid, portal.tg_receiver):
-                            po.Portal.get_by_tgid(portal.tgid, portal.tg_receiver)
-                        for portal in portals} if portals else {}
+        self.portals = {
+            (portal.tgid, portal.tg_receiver): po.Portal.get_by_tgid(portal.tgid,
+                                                                     portal.tg_receiver)
+            for portal in portals
+        } if portals else {}
 
     # region Database conversion
 
@@ -119,14 +122,14 @@ class User(AbstractUser):
 
     def new_db_instance(self) -> DBUser:
         return DBUser(mxid=self.mxid, tgid=self.tgid, tg_username=self.username,
-                      contacts=self.db_contacts, saved_contacts=self.saved_contacts or 0,
+                      contacts=self.db_contacts, saved_contacts=self.saved_contacts,
                       portals=self.db_portals)
 
     def save(self) -> None:
         self.db_instance.tgid = self.tgid
         self.db_instance.username = self.username
         self.db_instance.contacts = self.db_contacts
-        self.db_instance.saved_contacts = self.saved_contacts or 0
+        self.db_instance.saved_contacts = self.saved_contacts
         self.db_instance.portals = self.db_portals
         self.db.commit()
 
@@ -143,7 +146,7 @@ class User(AbstractUser):
     @classmethod
     def from_db(cls, db_user: DBUser) -> 'User':
         return User(db_user.mxid, db_user.tgid, db_user.tg_username, db_user.contacts,
-                    False, db_user.saved_contacts, db_user.portals, db_instance=db_user)
+                    db_user.saved_contacts, False, db_user.portals, db_instance=db_user)
 
     # endregion
     # region Telegram connection management
@@ -182,9 +185,9 @@ class User(AbstractUser):
             else:
                 portal = po.Portal.get_by_entity(message.to_id, receiver_id=self.tgid)
         elif isinstance(update, UpdateShortChatMessage):
-            portal = po.Portal.get_by_tgid(update.chat_id, peer_type="chat")
+            portal = po.Portal.get_by_tgid(TelegramID(update.chat_id), peer_type="chat")
         elif isinstance(update, UpdateShortMessage):
-            portal = po.Portal.get_by_tgid(update.user_id, self.tgid, "user")
+            portal = po.Portal.get_by_tgid(TelegramID(update.user_id), self.tgid, "user")
         else:
             return False
 

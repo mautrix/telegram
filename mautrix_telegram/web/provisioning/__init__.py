@@ -35,15 +35,16 @@ if TYPE_CHECKING:
 
 
 class ProvisioningAPI(AuthAPI):
-    log = logging.getLogger("mau.web.provisioning")
+    log = logging.getLogger("mau.web.provisioning")  # type: logging.Logger
 
     def __init__(self, context: "Context") -> None:
         super().__init__(context.loop)
-        self.secret = context.config["appservice.provisioning.shared_secret"]
+        self.secret = context.config["appservice.provisioning.shared_secret"]  # type: str
         self.az = context.az  # type: AppService
         self.context = context  # type: Context
 
-        self.app = web.Application(loop=context.loop, middlewares=[self.error_middleware])
+        self.app = web.Application(loop=context.loop, middlewares=[self.error_middleware]
+                                   )  # type: web.Application
 
         portal_prefix = "/portal/{mxid:![^/]+}"
         self.app.router.add_route("GET", f"{portal_prefix}", self.get_portal_by_mxid)
@@ -353,7 +354,8 @@ class ProvisioningAPI(AuthAPI):
         await user.log_out()
 
     @staticmethod
-    async def error_middleware(_, handler) -> Callable[[web.Request], Awaitable[web.Response]]:
+    async def error_middleware(_, handler: Callable[[web.Request], Awaitable[web.Response]]
+                               ) -> Callable[[web.Request], Awaitable[web.Response]]:
         async def middleware_handler(request: web.Request) -> web.Response:
             try:
                 return await handler(request)

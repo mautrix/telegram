@@ -14,8 +14,7 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import Any, Awaitable, Callable, Coroutine, Dict, List, NamedTuple, Optional, Union
-from collections import namedtuple
+from typing import Awaitable, Callable, Dict, List, NamedTuple, Optional
 import markdown
 import logging
 
@@ -160,16 +159,16 @@ class CommandProcessor:
         orig_command = command
         command = command.lower()
         try:
-            command_handler = command_handlers[command]
+            handler = command_handlers[command]
         except KeyError:
             if sender.command_status and "next" in sender.command_status:
                 args.insert(0, orig_command)
                 evt.command = ""
-                command_handler = sender.command_status["next"]
+                handler = sender.command_status["next"]
             else:
-                command_handler = command_handlers["unknown-command"]
+                handler = command_handlers["unknown-command"]
         try:
-            await command_handler(evt)
+            await handler(evt)
         except FloodWaitError as e:
             return await evt.reply(f"Flood error: Please wait {format_duration(e.seconds)}")
         except Exception:

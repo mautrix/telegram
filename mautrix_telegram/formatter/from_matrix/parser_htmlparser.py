@@ -26,6 +26,7 @@ from telethon.tl.types import (MessageEntityMention, MessageEntityMentionName, M
                                MessageEntityBotCommand, TypeMessageEntity)
 
 from ... import user as u, puppet as pu, portal as po
+from ...types import MatrixUserID
 from ..util import html_to_unicode
 from .parser_common import MatrixParserCommon, ParsedMessage
 
@@ -55,7 +56,7 @@ class MatrixParser(HTMLParser, MatrixParserCommon):
                    ) -> Tuple[Optional[Type[TypeMessageEntity]], Optional[str]]:
         mention = self.mention_regex.match(url)  # type: Match
         if mention:
-            mxid = mention.group(1)
+            mxid = MatrixUserID(mention.group(1))
             user = (pu.Puppet.get_by_mxid(mxid)
                     or u.User.get_by_mxid(mxid, create=False))
             if not user:

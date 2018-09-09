@@ -14,7 +14,7 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import Any, Awaitable, Dict, Optional
+from typing import Any, Dict, Optional
 import asyncio
 
 from telethon.errors import (

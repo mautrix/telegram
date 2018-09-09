@@ -92,7 +92,7 @@ async def private_message(evt: CommandEvent) -> Optional[Dict]:
                            f"{pu.Puppet.get_displayname(user, False)}")
 
 
-async def _join(evt: CommandEvent, arg: str) -> Tuple[TypeUpdates, Dict]:
+async def _join(evt: CommandEvent, arg: str) -> Tuple[Optional[TypeUpdates], Optional[Dict]]:
     if arg.startswith("joinchat/"):
         invite_hash = arg[len("joinchat/"):]
         try:

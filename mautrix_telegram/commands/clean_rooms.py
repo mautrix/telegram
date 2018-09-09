@@ -33,7 +33,8 @@ async def _find_rooms(intent: IntentAPI) -> Tuple[List[ManagementRoom], List[Mat
     empty_portals = []  # type: List[po.Portal]
 
     rooms = await intent.get_joined_rooms()
-    for room in rooms:
+    for room_str in rooms:
+        room = MatrixRoomID(room_str)
         portal = po.Portal.get_by_mxid(room)
         if not portal:
             try:
@@ -41,7 +42,7 @@ async def _find_rooms(intent: IntentAPI) -> Tuple[List[ManagementRoom], List[Mat
             except MatrixRequestError:
                 members = []
             if len(members) == 2:
-                other_member = members[0] if members[0] != intent.mxid else members[1]
+                other_member = MatrixUserID(members[0] if members[0] != intent.mxid else members[1])
                 if pu.Puppet.get_id_from_mxid(other_member):
                     unidentified_rooms.append(room)
                 else:
@@ -128,9 +129,9 @@ async def set_rooms_to_clean(evt, management_rooms: List[ManagementRoom],
             rooms_to_clean += empty_portals
     elif command == "clean-range":
         try:
-            range = evt.args[1]
-            group, range = range[0], range[1:]
-            start, end = range.split("-")
+            clean_range = evt.args[1]
+            group, clean_range = clean_range[0], clean_range[1:]
+            start, end = clean_range.split("-")
             start, end = int(start), int(end)
             if group == "M":
                 group = [room_id for (room_id, user_id) in management_rooms]

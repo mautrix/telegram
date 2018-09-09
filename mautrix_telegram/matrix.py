@@ -25,11 +25,7 @@ from .types import MatrixEvent, MatrixEventID, MatrixRoomID, MatrixUserID
 from . import user as u, portal as po, puppet as pu, commands as com
 
 if TYPE_CHECKING:
-    from mautrix_appservice import AppService
     from .context import Context
-    from sqlalchemy.orm import scoped_session
-    from .config import Config
-    from .bot import Bot
 
 
 class MatrixHandler:
@@ -130,7 +126,7 @@ class MatrixHandler:
 
         if not inviter.whitelisted:
             await self.az.intent.send_notice(
-                room_id, text=None,
+                room_id, text="",
                 html="You are not whitelisted to use this bridge.<br/><br/>"
                      "If you are the owner of this bridge, see the "
                      "<code>bridge.permissions</code> section in your config file.")

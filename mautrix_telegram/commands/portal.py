@@ -14,7 +14,7 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import Awaitable, Dict, Callable, Coroutine, Optional, Tuple, Union, cast
+from typing import Dict, Callable, Optional, Tuple, Coroutine
 import asyncio
 
 from telethon.errors import (ChatAdminRequiredError, UsernameInvalidError,
@@ -85,18 +85,20 @@ async def user_has_power_level(room: str, intent, sender: u.User, event: str, de
 
 async def _get_portal_and_check_permission(evt: CommandEvent, permission: str,
                                            action: Optional[str] = None
-                                           ) -> Tuple[Union[Dict, po.Portal], bool]:
+                                           ) -> Optional[po.Portal]:
     room_id = MatrixRoomID(evt.args[0]) if len(evt.args) > 0 else evt.room_id
 
     portal = po.Portal.get_by_mxid(room_id)
     if not portal:
         that_this = "This" if room_id == evt.room_id else "That"
-        return await evt.reply(f"{that_this} is not a portal room."), False
+        await evt.reply(f"{that_this} is not a portal room.")
+        return None
 
     if not await user_has_power_level(portal.mxid, evt.az.intent, evt.sender, permission):
         action = action or f"{permission.replace('_', ' ')}s"
-        return await evt.reply(f"You do not have the permissions to {action} that portal."), False
-    return portal, True
+        await evt.reply(f"You do not have the permissions to {action} that portal.")
+        return None
+    return portal
 
 
 def _get_portal_murder_function(action: str, room_id: str, function: Callable, command: str,
@@ -123,10 +125,9 @@ def _get_portal_murder_function(action: str, room_id: str, function: Callable, c
                            "Only works for group chats; to delete a private chat portal, simply "
                            "leave the room.")
 async def delete_portal(evt: CommandEvent) -> Optional[Dict]:
-    result, ok = await _get_portal_and_check_permission(evt, "unbridge")
-    if not ok:
+    portal = await _get_portal_and_check_permission(evt, "unbridge")
+    if not portal:
         return None
-    portal = cast('po.Portal', result)
 
     evt.sender.command_status = _get_portal_murder_function("Portal deletion", portal.mxid,
                                                             portal.cleanup_and_delete, "delete",
@@ -145,10 +146,9 @@ async def delete_portal(evt: CommandEvent) -> Optional[Dict]:
                  help_section=SECTION_PORTAL_MANAGEMENT,
                  help_text="Remove puppets from the current portal room and forget the portal.")
 async def unbridge(evt: CommandEvent) -> Optional[Dict]:
-    result, ok = await _get_portal_and_check_permission(evt, "unbridge")
-    if not ok:
+    portal = await _get_portal_and_check_permission(evt, "unbridge")
+    if not portal:
         return None
-    portal = cast('po.Portal', result)
 
     evt.sender.command_status = _get_portal_murder_function("Room unbridging", portal.mxid,
                                                             portal.unbridge, "unbridge",
@@ -231,7 +231,7 @@ async def bridge(evt: CommandEvent) -> Dict:
 
 
 async def cleanup_old_portal_while_bridging(evt: CommandEvent, portal: "po.Portal"
-                                            ) -> Tuple[bool, Coroutine[None, None, None]]:
+                                            ) -> Tuple[bool, Optional[Coroutine[None, None, None]]]:
     if not portal.mxid:
         await evt.reply("The portal seems to have lost its Matrix room between you"
                         "calling `$cmdprefix+sp bridge` and this command.\n\n"

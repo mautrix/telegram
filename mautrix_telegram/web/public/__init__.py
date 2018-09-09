@@ -14,14 +14,17 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
+from typing import Optional
 from aiohttp import web
 from mako.template import Template
 import pkg_resources
+import asyncio
 import logging
 import random
 import string
 import time
 
+from ...types import MatrixUserID
 from ...util import sign_token, verify_token
 from ...user import User
 from ...puppet import Puppet
@@ -29,20 +32,20 @@ from ..common import AuthAPI
 
 
 class PublicBridgeWebsite(AuthAPI):
-    log = logging.getLogger("mau.web.public")
+    log = logging.getLogger("mau.web.public")  # type: logging.Logger
 
-    def __init__(self, loop):
+    def __init__(self, loop: asyncio.AbstractEventLoop):
         super().__init__(loop)
         self.secret_key = "".join(
-            random.choice(string.ascii_lowercase + string.digits) for _ in range(64))
+            random.choice(string.ascii_lowercase + string.digits) for _ in range(64))  # type: str
 
-        self.login = Template(
-            pkg_resources.resource_string("mautrix_telegram", "web/public/login.html.mako"))
+        self.login = Template(pkg_resources.resource_string(
+            "mautrix_telegram", "web/public/login.html.mako"))  # type: Template
 
-        self.mx_login = Template(
-            pkg_resources.resource_string("mautrix_telegram", "web/public/matrix-login.html.mako"))
+        self.mx_login = Template(pkg_resources.resource_string(
+            "mautrix_telegram", "web/public/matrix-login.html.mako"))  # type: Template
 
-        self.app = web.Application(loop=loop)
+        self.app = web.Application(loop=loop)  # type: web.Application
         self.app.router.add_route("GET", "/login", self.get_login)
         self.app.router.add_route("POST", "/login", self.post_login)
         self.app.router.add_route("GET", "/matrix-login", self.get_matrix_login)
@@ -50,21 +53,21 @@ class PublicBridgeWebsite(AuthAPI):
         self.app.router.add_static("/", pkg_resources.resource_filename("mautrix_telegram",
                                                                         "web/public/"))
 
-    def make_token(self, mxid, endpoint="/login", expires_in=900):
+    def make_token(self, mxid: str, endpoint: str = "/login", expires_in: int = 900) -> str:
         return sign_token(self.secret_key, {
             "mxid": mxid,
             "endpoint": endpoint,
             "expiry": int(time.time()) + expires_in,
         })
 
-    def verify_token(self, token, endpoint="/login"):
+    def verify_token(self, token: str, endpoint: str = "/login") -> Optional[MatrixUserID]:
         token = verify_token(self.secret_key, token)
         if token and (token.get("expiry", 0) > int(time.time()) and
                       token.get("endpoint", None) == endpoint):
-            return token.get("mxid", None)
+            return MatrixUserID(token.get("mxid", None))
         return None
 
-    async def get_login(self, request):
+    async def get_login(self, request: web.Request) -> web.Response:
         state = "bot_token" if request.rel_url.query.get("mode", "") == "bot" else "request"
 
         mxid = self.verify_token(request.rel_url.query.get("token", None), endpoint="/login")
@@ -83,7 +86,7 @@ class PublicBridgeWebsite(AuthAPI):
 
         return self.get_login_response(mxid=user.mxid, username=user.username)
 
-    async def get_matrix_login(self, request):
+    async def get_matrix_login(self, request: web.Request) -> web.Response:
         mxid = self.verify_token(request.rel_url.query.get("token", None), endpoint="/matrix-login")
         if not mxid:
             return self.get_mx_login_response(status=401, state="invalid-token")
@@ -105,19 +108,21 @@ class PublicBridgeWebsite(AuthAPI):
 
         return self.get_mx_login_response(mxid=user.mxid)
 
-    def get_login_response(self, status=200, state="", username="", mxid="", message="", error="",
-                           errcode=""):
+    def get_login_response(self, status: int = 200, state: str = "", username: str = "",
+                           mxid: str = "", message: str = "", error: str = "",
+                           errcode: str = "") -> web.Response:
         return web.Response(status=status, content_type="text/html",
                             text=self.login.render(username=username, state=state, error=error,
                                                    message=message, mxid=mxid))
 
-    def get_mx_login_response(self, status=200, state="", username="", mxid="", message="",
-                              error="", errcode=""):
+    def get_mx_login_response(self, status: int = 200, state: str = "", username: str = "",
+                              mxid: str = "", message: str = "", error: str = "",
+                              errcode: str = "") -> web.Response:
         return web.Response(status=status, content_type="text/html",
                             text=self.mx_login.render(username=username, state=state, error=error,
                                                       message=message, mxid=mxid))
 
-    async def post_matrix_login(self, request):
+    async def post_matrix_login(self, request: web.Request) -> web.Response:
         mxid = self.verify_token(request.rel_url.query.get("token", None), endpoint="/matrix-login")
         if not mxid:
             return self.get_mx_login_response(status=401, state="invalid-token")
@@ -140,7 +145,7 @@ class PublicBridgeWebsite(AuthAPI):
                                           error="You must provide an access token or "
                                                 "password.")
 
-    async def post_login(self, request):
+    async def post_login(self, request: web.Request) -> web.Response:
         mxid = self.verify_token(request.rel_url.query.get("token", None), endpoint="/login")
         if not mxid:
             return self.get_login_response(status=401, state="invalid-token")

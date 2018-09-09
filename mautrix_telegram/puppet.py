@@ -14,7 +14,7 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import Awaitable, Coroutine, Dict, List, NewType, Optional, Pattern, TYPE_CHECKING
+from typing import Awaitable, Coroutine, Dict, List, Optional, Pattern, TYPE_CHECKING
 from difflib import SequenceMatcher
 import re
 import logging
@@ -36,7 +36,6 @@ if TYPE_CHECKING:
     from .context import Context
     from . import user as u
     from .abstract_user import AbstractUser
-
 
 PuppetError = Enum('PuppetError', 'Success OnlyLoginSelf InvalidAccessToken')
 
@@ -87,7 +86,7 @@ class Puppet:
             self.by_custom_mxid[self.custom_mxid] = self
 
     @property
-    def mxid(self):
+    def mxid(self) -> MatrixUserID:
         return self.custom_mxid or self.default_mxid
 
     @property
@@ -109,7 +108,8 @@ class Puppet:
         return (self.az.intent.user(self.custom_mxid, self.access_token)
                 if self.is_real_user else self.default_mxid_intent)
 
-    async def switch_mxid(self, access_token: str, mxid: MatrixUserID) -> PuppetError:
+    async def switch_mxid(self, access_token: Optional[str],
+                          mxid: Optional[MatrixUserID]) -> PuppetError:
         prev_mxid = self.custom_mxid
         self.custom_mxid = mxid
         self.access_token = access_token
@@ -217,7 +217,7 @@ class Puppet:
                             for events in ephemeral.values()
                             for event in self.filter_events(events)]
 
-        events = ephemeral_events + presence_events   # List[Callable[[int], Awaitable[None]]]
+        events = ephemeral_events + presence_events  # List[Callable[[int], Awaitable[None]]]
         coro = asyncio.gather(*events, loop=self.loop)
         asyncio.ensure_future(coro, loop=self.loop)
 
@@ -355,10 +355,10 @@ class Puppet:
         if displayname != self.displayname:
             await self.default_mxid_intent.set_display_name(displayname)
             self.displayname = displayname
-            self.displayname_source = TelegramID(source.tgid)
+            self.displayname_source = source.tgid
             return True
         elif source.is_relaybot or self.displayname_source is None:
-            self.displayname_source = TelegramID(source.tgid)
+            self.displayname_source = source.tgid
             return True
         return False
 
