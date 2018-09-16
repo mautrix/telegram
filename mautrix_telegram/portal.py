@@ -185,6 +185,21 @@ class Portal:
         return True
 
     # endregion
+    # region Permission checks
+
+    async def can_user_perform(self, user: 'u.User', event: str, default: int = 50) -> bool:
+        if user.is_admin:
+            return True
+        try:
+            await self.main_intent.get_power_levels(self.mxid)
+        except MatrixRequestError:
+            return False
+        return self.main_intent.state_store.has_power_level(
+            self.mxid, user.mxid,
+            event=f"net.maunium.telegram.{event}",
+            default=default)
+
+    # endregion
     # region Deduplication
 
     @staticmethod
