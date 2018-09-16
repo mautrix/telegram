@@ -74,6 +74,8 @@ class ProvisioningAPI(AuthAPI):
         if not portal:
             return self.get_error_response(404, "portal_not_found",
                                            "Portal with given Matrix ID not found.")
+        user, _ = await self.get_user(request.query.get("user_id", None), expect_logged_in=None,
+                                        require_puppeting=False)
         return web.json_response({
             "mxid": portal.mxid,
             "chat_id": get_peer_id(portal.peer),
@@ -82,6 +84,7 @@ class ProvisioningAPI(AuthAPI):
             "about": portal.about,
             "username": portal.username,
             "megagroup": portal.megagroup,
+            "can_unbridge": (await portal.can_user_perform(user, "unbridge")) if user else False,
         })
 
     async def get_portal_by_tgid(self, request: web.Request) -> web.Response:
@@ -98,6 +101,8 @@ class ProvisioningAPI(AuthAPI):
         if not portal:
             return self.get_error_response(404, "portal_not_found",
                                            "Portal to given Telegram chat not found.")
+        user, _ = await self.get_user(request.query.get("user_id", None), expect_logged_in=None,
+                                        require_puppeting=False)
         return web.json_response({
             "mxid": portal.mxid,
             "chat_id": get_peer_id(portal.peer),
@@ -106,6 +111,7 @@ class ProvisioningAPI(AuthAPI):
             "about": portal.about,
             "username": portal.username,
             "megagroup": portal.megagroup,
+            "can_unbridge": (await portal.can_user_perform(user, "unbridge")) if user else False,
         })
 
     async def connect_chat(self, request: web.Request) -> web.Response:
