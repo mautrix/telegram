@@ -24,6 +24,20 @@ tags:
 - name: Bridging
 
 paths:
+  /bridge:
+    get:
+      operationId: get_bridge
+      summary: Get the bridge's information
+      tags: [Misc]
+      responses:
+        200:
+          description: The bridge information
+          schama:
+            type: object
+            properties:
+              relay_username:
+                type: string
+                description: The relay bot's username on Telegram
   /portal/{room_id}:
     get:
       operationId: get_portal
