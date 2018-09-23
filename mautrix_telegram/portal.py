@@ -697,13 +697,18 @@ class Portal:
     @staticmethod
     def _get_file_meta(body: str, mime: str) -> str:
         try:
-            current_extension = body[body.rindex("."):]
+            current_extension = body[body.rindex("."):].lower()
+            body = body[:body.rindex(".")]
             if mimetypes.types_map[current_extension] == mime:
-                return body
+                return body + current_extension
         except (ValueError, KeyError):
             pass
+        ext_override = {
+            "image/jpeg": ".jpg"
+        }
         if mime:
-            return f"matrix_upload{mimetypes.guess_extension(mime)}"
+            ext = ext_override.get(mime, mimetypes.guess_extension(mime))
+            return f"matrix_upload{ext}"
         else:
             return ""
 
@@ -901,12 +906,11 @@ class Portal:
             w, h = info["w"], info["h"]
 
         file_name = self._get_file_meta(message["mxtg_filename"], mime)
-
         attributes = [DocumentAttributeFilename(file_name=file_name)]
         if w and h:
             attributes.append(DocumentAttributeImageSize(w, h))
 
-        caption = message["body"] if message["body"] != file_name else None
+        caption = message["body"] if message["body"].lower() != file_name.lower() else None
 
         media = await client.upload_file_direct(file, mime, attributes, file_name)
         lock = self.require_send_lock(sender_id)
