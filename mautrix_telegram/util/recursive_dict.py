@@ -17,6 +17,7 @@
 from typing import Dict, Any
 from ..config import DictWithRecursion
 
+
 def recursive_set(data: Dict[str, Any], key: str, value: Any) -> bool:
     key, next_key = DictWithRecursion._parse_key(key)
     if next_key is not None:
@@ -46,7 +47,7 @@ def recursive_del(data: Dict[str, any], key: str) -> bool:
         if key not in data:
             return False
         next_data = data.get(key, {})
-        recursive_del(next_data, next_key)
+        return recursive_del(next_data, next_key)
     if key in data:
         del data[key]
         return True

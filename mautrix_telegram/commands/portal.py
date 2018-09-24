@@ -393,7 +393,6 @@ async def upgrade(evt: CommandEvent) -> Dict:
         return await evt.reply(e.args[0])
 
 
-
 @command_handler(help_section=SECTION_PORTAL_MANAGEMENT,
                  help_text="View or change per-portal settings.",
                  help_args="<`help`|_subcommand_> [...]")
@@ -402,37 +401,43 @@ async def config(evt: CommandEvent) -> Dict:
     portal = po.Portal.get_by_mxid(evt.room_id)
     if not portal and cmd != "help":
         return await evt.reply("This is not a portal room.")
-    if cmd == "help":
-        return await evt.reply("""`$cmdprefix config`:
-* `help` - View this help text.
-* `view` - View the current config data.
-* `defaults` - View the default config values.
-* `set` <_key_> <_value_> - Set a config value.
-* `unset` <_key_> - Remove a config value.
-* `add` <_key_> <_value_> - Add a value to an array.
-* `del` <_key_> <_value_> - Remove a value from an array.
+    if cmd not in ("view", "defaults", "set", "unset", "add", "del"):
+        return await evt.reply("""**Usage:** `$cmdprefix config <subcommand> [...]`. Subcommands:
+
+* **help** - View this help text.
+* **view** - View the current config data.
+* **defaults** - View the default config values.
+* **set** <_key_> <_value_> - Set a config value.
+* **unset** <_key_> - Remove a config value.
+* **add** <_key_> <_value_> - Add a value to an array.
+* **del** <_key_> <_value_> - Remove a value from an array.
 """)
     elif cmd == "view":
         stream = StringIO()
         yaml.dump(portal.local_config, stream)
-        return await evt.reply(f"Room-specific config:\n```yaml\n{stream.getvalue()}\n```")
+        return await evt.reply(f"Room-specific config:\n\n```yaml\n{stream.getvalue()}\n```",
+                               allow_html=True)
     elif cmd == "defaults":
         stream = StringIO()
         yaml.dump({
             "edits_as_replies": evt.config["bridge.edits_as_replies"],
-            "bridge_notices": evt.config["bridge.bridge_notices"],
+            "bridge_notices": {
+                "default": evt.config["bridge.bridge_notices.default"],
+                "exceptions": evt.config["bridge.bridge_notices.exceptions"],
+            },
             "bot_messages_as_notices": evt.config["bridge.bot_messages_as_notices"],
             "inline_images": evt.config["bridge.inline_images"],
-            "native_stickers": evt.config["native_stickers"],
-            "message_formats": evt.config["message_formats"],
-            "state_event_formats": evt.config["state_event_formats"],
+            "native_stickers": evt.config["bridge.native_stickers"],
+            "message_formats": evt.config["bridge.message_formats"],
+            "state_event_formats": evt.config["bridge.state_event_formats"],
         }, stream)
-        return await evt.reply(f"Bridge instance wide config:\n```yaml\n{stream.getvalue()}\n```")
+        return await evt.reply(f"Bridge instance wide config:\n\n```yaml\n{stream.getvalue()}```",
+                               allow_html=True)
 
     key = evt.args[1] if len(evt.args) > 1 else None
-    value = yaml.load(evt.args[2:]) if len(evt.args) > 2 else None
+    value = yaml.load(" ".join(evt.args[2:])) if len(evt.args) > 2 else None
     if cmd == "set":
-        if not key or not value:
+        if not key or value is None:
             return await evt.reply(f"**Usage:** `$cmdprefix+sp config {cmd} <key> <value>`")
         elif util.recursive_set(portal.local_config, key, value):
             return await evt.reply(f"Successfully set the value of `{key}` to `{value}`.")
@@ -447,7 +452,7 @@ async def config(evt: CommandEvent) -> Dict:
         else:
             return await evt.reply(f"`{key}` not found in config.")
     elif cmd == "add" or cmd == "del":
-        if not key or not value:
+        if not key or value is None:
             return await evt.reply(f"**Usage:** `$cmdprefix+sp config {cmd} <key> <value>`")
 
         arr = util.recursive_get(portal.local_config, key)
@@ -466,6 +471,7 @@ async def config(evt: CommandEvent) -> Dict:
                 return await evt.reply(f"The array at `{key}` does not contain `{value}`.")
             arr.remove(value)
             return await evt.reply(f"Successfully removed `{value}` from the array at `{key}`")
+    portal.save()
 
 
 @command_handler(help_section=SECTION_PORTAL_MANAGEMENT,

@@ -30,7 +30,7 @@ setuptools.setup(
         "mautrix-appservice>=0.3.6,<0.4.0",
         "SQLAlchemy>=1.2.3,<2",
         "alembic>=1.0.0,<2",
-        "Markdown>=2.6.11,<3",
+        "commonmark>=0.8.1,<1",
         "ruamel.yaml>=0.15.35,<0.16",
         "future-fstrings>=0.4.2",
         "python-magic>=0.4.15,<0.5",
