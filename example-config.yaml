@@ -145,7 +145,7 @@ bridge:
         # e.g. if bridge_notices.default is false, notices from other users will not be bridged, but
         #      notices from users listed here will be bridged.
         exceptions:
-        - @importantbot:example.com
+        - "@importantbot:example.com"
     # Whether to bridge Telegram bot messages as m.notices or m.texts.
     bot_messages_as_notices: true
     # Use inline images instead of m.image to make rich captions possible.
