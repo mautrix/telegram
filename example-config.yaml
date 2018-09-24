@@ -95,15 +95,6 @@ bridge:
     - username
     - phone number
 
-    # Show message editing as a reply to the original message.
-    # If this is false, message edits are not shown at all, as Matrix does not support editing yet.
-    edits_as_replies: false
-    # Highlight changed/added parts in edits. Requires lxml.
-    highlight_edits: false
-    # Whether or not Matrix bot messages (type m.notice) should be bridged.
-    bridge_notices: true
-    # Whether to bridge Telegram bot messages as m.notices or m.texts.
-    bot_messages_as_notices: true
     # Maximum number of members to sync per portal when starting up. Other members will be
     # synced when they send messages. The maximum is 10000, after which the Telegram server
     # will not send any more members.
@@ -119,19 +110,14 @@ bridge:
     # Allow logging in within Matrix. If false, the only way to log in is using the out-of-Matrix
     # login website (see appservice.public config section)
     allow_matrix_login: true
-    # Use inline images instead of m.image to make rich captions possible.
-    # N.B. Inline images are not supported on all clients (e.g. Riot iOS).
-    inline_images: false
     # Whether or not to bridge plaintext highlights.
     # Only enable this if your displayname_template has some static part that the bridge can use to
     # reliably identify what is a plaintext highlight.
     plaintext_highlights: false
+    # Highlight changed/added parts in edits. Requires lxml.
+    highlight_edits: false
     # Whether or not to make portals of publicly joinable channels/supergroups publicly joinable on Matrix.
     public_portals: true
-    # Whether to send stickers as the new native m.sticker type or normal m.images.
-    # Old versions of Riot don't support the new type at all.
-    # Remember that proper sticker support always requires Pillow to convert webp into png.
-    native_stickers: true
     # Whether or not to fetch and handle Telegram updates at startup from the time the bridge was down.
     # Currently only works for private chats and normal groups.
     catch_up: false
@@ -148,6 +134,27 @@ bridge:
         # The number of latest events to keep when checking for duplicates.
         # You might need to increase this on high-traffic bridge instances.
         cache_queue_length: 20
+
+    # Show message editing as a reply to the original message.
+    # If this is false, message edits are not shown at all, as Matrix does not support editing yet.
+    edits_as_replies: false
+    bridge_notices:
+        # Whether or not Matrix bot messages (type m.notice) should be bridged.
+        default: false
+        # List of user IDs for whom the previous flag is flipped.
+        # e.g. if bridge_notices.default is false, notices from other users will not be bridged, but
+        #      notices from users listed here will be bridged.
+        exceptions:
+        - "@importantbot:example.com"
+    # Whether to bridge Telegram bot messages as m.notices or m.texts.
+    bot_messages_as_notices: true
+    # Use inline images instead of m.image to make rich captions possible.
+    # N.B. Inline images are not supported on all clients (e.g. Riot iOS).
+    inline_images: false
+    # Whether to send stickers as the new native m.sticker type or normal m.images.
+    # Old versions of Riot don't support the new type at all.
+    # Remember that proper sticker support always requires Pillow to convert webp into png.
+    native_stickers: true
 
     # The formats to use when sending messages to Telegram via the relay bot.
     #

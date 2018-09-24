@@ -14,7 +14,7 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import Awaitable, Dict, List, Optional, Pattern, Tuple, Union, cast, TYPE_CHECKING
+from typing import Awaitable, Dict, List, Optional, Pattern, Tuple, Union, cast, TYPE_CHECKING, Any
 from collections import deque
 from datetime import datetime
 from string import Template
@@ -25,6 +25,7 @@ import mimetypes
 import unicodedata
 import hashlib
 import logging
+import json
 import re
 
 import magic
@@ -79,8 +80,8 @@ config = None  # type: Config
 
 TypeMessage = Union[Message, MessageService]
 TypeParticipant = Union[TypeChatParticipant, TypeChannelParticipant]
-DedupMXID = Tuple[str, int]
-InviteList = Union[str, List[str]]
+DedupMXID = Tuple[MatrixEventID, TelegramID]
+InviteList = Union[MatrixUserID, List[MatrixUserID]]
 
 
 class Portal:
@@ -90,10 +91,13 @@ class Portal:
     bot = None  # type: Bot
     loop = None  # type: asyncio.AbstractEventLoop
 
+    # Config cache
     filter_mode = None  # type: str
     filter_list = None  # type: List[str]
 
-    bridge_notices = False  # type: bool
+    public_portals = False  # type: bool
+    max_initial_member_sync = -1  # type: int
+    sync_channel_members = True  # type: bool
 
     dedup_pre_db_check = False  # type: bool
     dedup_cache_queue_length = 20  # type: int
@@ -102,6 +106,7 @@ class Portal:
     mx_alias_regex = None  # type: Pattern
     hs_domain = None  # type: str
 
+    # Instance cache
     by_mxid = {}  # type: Dict[MatrixRoomID, Portal]
     by_tgid = {}  # type: Dict[Tuple[TelegramID, TelegramID], Portal]
 
@@ -109,7 +114,7 @@ class Portal:
                  mxid: Optional[MatrixRoomID] = None, username: Optional[str] = None,
                  megagroup: Optional[bool] = False, title: Optional[str] = None,
                  about: Optional[str] = None, photo_id: Optional[str] = None,
-                 db_instance: DBPortal = None) -> None:
+                 config: Optional[str] = None, db_instance: DBPortal = None) -> None:
         self.mxid = mxid  # type: Optional[MatrixRoomID]
         self.tgid = tgid  # type: TelegramID
         self.tg_receiver = tg_receiver or tgid  # type: TelegramID
@@ -119,6 +124,7 @@ class Portal:
         self.title = title  # type: Optional[str]
         self.about = about  # type: str
         self.photo_id = photo_id  # type: str
+        self.local_config = json.loads(config or "{}")  # type: Dict[str, Any]
         self._db_instance = db_instance  # type: DBPortal
         self.deleted = False  # type: bool
 
@@ -248,7 +254,7 @@ class Portal:
         try:
             found_mxid = self._dedup_mxid[evt_hash]
         except KeyError:
-            return "None", 0
+            return MatrixEventID("None"), TelegramID(0)
 
         if found_mxid != expected_mxid:
             return found_mxid
@@ -346,7 +352,7 @@ class Portal:
             self.megagroup = entity.megagroup
 
         if self.peer_type == "channel" and entity.username:
-            public = config["bridge.public_portals"]
+            public = Portal.public_portals
             alias = self._get_alias_localpart(entity.username)
             self.username = entity.username
         else:
@@ -451,7 +457,7 @@ class Portal:
         #  * The member sync count is limited, because then we might ignore some members.
         #  * It's a channel, because non-admins don't have access to the member list.
         trust_member_list = (len(allowed_tgids) < 9900
-                             and config["bridge.max_initial_member_sync"] == -1
+                             and Portal.max_initial_member_sync == -1
                              and (self.megagroup or self.peer_type != "channel"))
         if trust_member_list:
             joined_mxids = cast(List[MatrixUserID],
@@ -533,7 +539,7 @@ class Portal:
             self.username = username or None
             if self.username:
                 await self.main_intent.add_room_alias(self.mxid, self._get_alias_localpart())
-                if config["bridge.public_portals"]:
+                if Portal.public_portals:
                     await self.main_intent.set_join_rule(self.mxid, "public")
             else:
                 await self.main_intent.set_join_rule(self.mxid, "invite")
@@ -593,10 +599,10 @@ class Portal:
             chat = await user.client(GetFullChatRequest(chat_id=self.tgid))
             return chat.users, chat.full_chat.participants.participants
         elif self.peer_type == "channel":
-            if not self.megagroup and not config["bridge.sync_channel_members"]:
+            if not self.megagroup and not Portal.sync_channel_members:
                 return [], []
 
-            limit = config["bridge.max_initial_member_sync"]
+            limit = Portal.max_initial_member_sync
             if limit == 0:
                 return [], []
 
@@ -712,9 +718,15 @@ class Portal:
         else:
             return ""
 
+    def get_config(self, key: str) -> Any:
+        local = util.recursive_get(self.local_config, key)
+        if local is not None:
+            return local
+        return config[f"bridge.{key}"]
+
     async def _get_state_change_message(self, event: str, user: 'u.User',
                                         arguments: Optional[Dict] = None) -> Optional[Dict]:
-        tpl = config[f"bridge.state_event_formats.{event}"]
+        tpl = self.get_config(f"state_event_formats.{event}")
         if len(tpl) == 0:
             # Empty format means they don't want the message
             return None
@@ -731,7 +743,7 @@ class Portal:
         }
 
     async def name_change_matrix(self, user: 'u.User', displayname: str, prev_displayname: str,
-                                 event_id: str) -> None:
+                                 event_id: MatrixEventID) -> None:
         async with self.require_send_lock(self.bot.tgid):
             message = await self._get_state_change_message(
                 "name_change", user,
@@ -805,7 +817,7 @@ class Portal:
             channel = await self.get_input_entity(user)
             await user.client(LeaveChannelRequest(channel=channel))
 
-    async def join_matrix(self, user: 'u.User', event_id: str) -> None:
+    async def join_matrix(self, user: 'u.User', event_id: MatrixEventID) -> None:
         if await user.needs_relaybot(self):
             async with self.require_send_lock(self.bot.tgid):
                 message = await self._get_state_change_message("join", user)
@@ -824,14 +836,15 @@ class Portal:
             # We'll just assume the user is already in the chat.
             pass
 
-    async def _apply_msg_format(self, sender: 'u.User', msgtype: str, message: Dict) -> None:
+    async def _apply_msg_format(self, sender: 'u.User', msgtype: str, message: Dict[str, Any]
+                                ) -> None:
         if "formatted_body" not in message:
             message["format"] = "org.matrix.custom.html"
             message["formatted_body"] = escape_html(message.get("body", ""))
         body = message["formatted_body"]
 
-        tpl = config["bridge.message_formats"].get(msgtype,
-                                                   "<b>$sender_displayname</b>: $message")
+        tpl = (self.get_config(f"message_formats.[{msgtype}]")
+               or "<b>$sender_displayname</b>: $message")
         displayname = await self.get_displayname(sender)
         tpl_args = dict(sender_mxid=sender.mxid,
                         sender_username=sender.mxid_localpart,
@@ -840,7 +853,7 @@ class Portal:
         message["formatted_body"] = Template(tpl).safe_substitute(tpl_args)
 
     async def _pre_process_matrix_message(self, sender: 'u.User', use_relaybot: bool,
-                                          message: dict) -> None:
+                                          message: Dict[str, Any]) -> None:
         msgtype = message.get("msgtype", "m.text")
         if msgtype == "m.emote":
             await self._apply_msg_format(sender, msgtype, message)
@@ -849,7 +862,8 @@ class Portal:
             await self._apply_msg_format(sender, msgtype, message)
 
     @staticmethod
-    def _matrix_event_to_entities(event: Dict) -> Tuple[str, Optional[List[TypeMessageEntity]]]:
+    def _matrix_event_to_entities(event: Dict[str, Any]) -> Tuple[
+        str, Optional[List[TypeMessageEntity]]]:
         try:
             if event.get("format", None) == "org.matrix.custom.html":
                 message, entities = formatter.matrix_to_telegram(event.get("formatted_body", ""))
@@ -859,7 +873,7 @@ class Portal:
             message, entities = None, None
         return message, entities
 
-    def require_send_lock(self, user_id: int) -> asyncio.Lock:
+    def require_send_lock(self, user_id: TelegramID) -> asyncio.Lock:
         if user_id is None:
             raise ValueError("Required send lock for none id")
         try:
@@ -868,7 +882,7 @@ class Portal:
             self._send_locks[user_id] = asyncio.Lock()
             return self._send_locks[user_id]
 
-    def optional_send_lock(self, user_id: int) -> Optional[asyncio.Lock]:
+    def optional_send_lock(self, user_id: TelegramID) -> Optional[asyncio.Lock]:
         if user_id is None:
             return None
         try:
@@ -876,18 +890,19 @@ class Portal:
         except KeyError:
             return None
 
-    async def _handle_matrix_text(self, sender_id: int, event_id: str, space: int,
-                                  client: 'MautrixTelegramClient', message: Dict, reply_to: int
-                                  ) -> None:
+    async def _handle_matrix_text(self, sender_id: TelegramID, event_id: MatrixEventID,
+                                  space: TelegramID, client: 'MautrixTelegramClient', message: Dict,
+                                  reply_to: TelegramID) -> None:
         lock = self.require_send_lock(sender_id)
         async with lock:
             response = await client.send_message(self.peer, message, reply_to=reply_to,
                                                  parse_mode=self._matrix_event_to_entities)
             self._add_telegram_message_to_db(event_id, space, response)
 
-    async def _handle_matrix_file(self, msgtype: str, sender_id: int, event_id: str, space: int,
-                                  client: 'MautrixTelegramClient', message: dict, reply_to: int
-                                  ) -> None:
+    async def _handle_matrix_file(self, msgtype: str, sender_id: TelegramID,
+                                  event_id: MatrixEventID, space: TelegramID,
+                                  client: 'MautrixTelegramClient', message: dict,
+                                  reply_to: TelegramID) -> None:
         file = await self.main_intent.download_file(message["url"])
 
         info = message.get("info", {})
@@ -919,9 +934,9 @@ class Portal:
                                                caption=caption)
             self._add_telegram_message_to_db(event_id, space, response)
 
-    async def _handle_matrix_location(self, sender_id: int, event_id: str, space: int,
-                                      client: 'MautrixTelegramClient', message: Dict,
-                                      reply_to: int) -> None:
+    async def _handle_matrix_location(self, sender_id: TelegramID, event_id: MatrixEventID,
+                                      space: TelegramID, client: 'MautrixTelegramClient',
+                                      message: Dict[str, Any], reply_to: TelegramID) -> None:
         try:
             lat, long = message["geo_uri"][len("geo:"):].split(",")
             lat, long = float(lat), float(long)
@@ -937,7 +952,7 @@ class Portal:
                                                caption=caption, entities=entities)
             self._add_telegram_message_to_db(event_id, space, response)
 
-    def _add_telegram_message_to_db(self, event_id: str, space: int,
+    def _add_telegram_message_to_db(self, event_id: MatrixEventID, space: TelegramID,
                                     response: TypeMessage) -> None:
         self.log.debug("Handled Matrix message: %s", response)
         self.is_duplicate(response, (event_id, space))
@@ -948,7 +963,8 @@ class Portal:
             mxid=event_id))
         self.db.commit()
 
-    async def handle_matrix_message(self, sender: 'u.User', message: dict, event_id: str) -> None:
+    async def handle_matrix_message(self, sender: 'u.User', message: Dict[str, Any],
+                                    event_id: MatrixEventID) -> None:
         puppet = p.Puppet.get_by_custom_mxid(sender.mxid)
         if puppet and message.get("net.maunium.telegram.puppet", False):
             self.log.debug("Ignoring puppet-sent message by confirmed puppet user %s", sender.mxid)
@@ -965,7 +981,13 @@ class Portal:
         await self._pre_process_matrix_message(sender, not logged_in, message)
         msgtype = message["msgtype"]
 
-        if msgtype == "m.text" or (self.bridge_notices and msgtype == "m.notice"):
+        if msgtype == "m.notice":
+            bridge_notices = self.get_config("bridge_notices")
+            if not bridge_notices.get("default", False) and sender_id not in bridge_notices.get(
+                "exceptions"):
+                return
+
+        if msgtype == "m.text":
             await self._handle_matrix_text(sender_id, event_id, space, client, message, reply_to)
         elif msgtype == "m.location":
             await self._handle_matrix_location(sender_id, event_id, space, client, message,
@@ -976,7 +998,8 @@ class Portal:
         else:
             self.log.debug(f"Unhandled Matrix event: {message}")
 
-    async def handle_matrix_pin(self, sender: 'u.User', pinned_message: Optional[str]) -> None:
+    async def handle_matrix_pin(self, sender: 'u.User',
+                                pinned_message: Optional[MatrixEventID]) -> None:
         if self.peer_type != "channel":
             return
         try:
@@ -1093,7 +1116,7 @@ class Portal:
     # endregion
     # region Telegram chat info updating
 
-    async def _get_telegram_users_in_matrix_room(self) -> List[int]:
+    async def _get_telegram_users_in_matrix_room(self) -> List[TelegramID]:
         user_tgids = set()
         user_mxids = await self.main_intent.get_room_members(self.mxid, ("join", "invite"))
         for user_str in user_mxids:
@@ -1202,7 +1225,8 @@ class Portal:
                                                   largest_size.location)
         if not file:
             return None
-        if config["bridge.inline_images"] and (evt.message or evt.fwd_from or evt.reply_to_msg_id):
+        if self.get_config("inline_images") and (evt.message
+                                                 or evt.fwd_from or evt.reply_to_msg_id):
             text, html, relates_to = await formatter.telegram_to_matrix(
                 evt, source, self.main_intent,
                 prefix_html=f"<img src='{file.mxc}' alt='Inline Telegram photo'/><br/>",
@@ -1305,7 +1329,7 @@ class Portal:
             "external_url": self.get_external_url(evt)
         }
 
-        if attrs["is_sticker"] and config["bridge.native_stickers"]:
+        if attrs["is_sticker"] and self.get_config("native_stickers"):
             return await intent.send_sticker(**kwargs)
 
         mime_type = info["mimetype"]
@@ -1352,7 +1376,7 @@ class Portal:
         self.log.debug(f"Sending {evt.message} to {self.mxid} by {intent.mxid}")
         text, html, relates_to = await formatter.telegram_to_matrix(evt, source, self.main_intent)
         await intent.set_typing(self.mxid, is_typing=False)
-        msgtype = "m.notice" if is_bot and config["bridge.bot_messages_as_notices"] else "m.text"
+        msgtype = "m.notice" if is_bot and self.get_config("bot_messages_as_notices") else "m.text"
         return await intent.send_text(self.mxid, text, html=html, relates_to=relates_to,
                                       msgtype=msgtype, timestamp=evt.date,
                                       external_url=self.get_external_url(evt))
@@ -1361,7 +1385,7 @@ class Portal:
                                    evt: Message) -> None:
         if not self.mxid:
             return
-        elif not config["bridge.edits_as_replies"]:
+        elif not self.get_config("edits_as_replies"):
             self.log.debug("Edits as replies disabled, ignoring edit event...")
             return
 
@@ -1372,7 +1396,8 @@ class Portal:
 
         tg_space = self.tgid if self.peer_type == "channel" else source.tgid
 
-        temporary_identifier = f"${random.randint(1000000000000,9999999999999)}TGBRIDGEDITEMP"
+        temporary_identifier = MatrixEventID(
+            f"${random.randint(1000000000000,9999999999999)}TGBRIDGEDITEMP")
         duplicate_found = self.is_duplicate(evt, (temporary_identifier, tg_space), force_hash=True)
         if duplicate_found:
             mxid, other_tg_space = duplicate_found
@@ -1419,7 +1444,8 @@ class Portal:
 
         tg_space = self.tgid if self.peer_type == "channel" else source.tgid
 
-        temporary_identifier = f"${random.randint(1000000000000,9999999999999)}TGBRIDGETEMP"
+        temporary_identifier = MatrixEventID(
+            f"${random.randint(1000000000000,9999999999999)}TGBRIDGETEMP")
         duplicate_found = self.is_duplicate(evt, (temporary_identifier, tg_space))
         if duplicate_found:
             mxid, other_tg_space = duplicate_found
@@ -1681,7 +1707,8 @@ class Portal:
     def new_db_instance(self) -> DBPortal:
         return DBPortal(tgid=self.tgid, tg_receiver=self.tg_receiver, peer_type=self.peer_type,
                         mxid=self.mxid, username=self.username, megagroup=self.megagroup,
-                        title=self.title, about=self.about, photo_id=self.photo_id)
+                        title=self.title, about=self.about, photo_id=self.photo_id,
+                        config=json.dumps(self.local_config))
 
     def migrate_and_save(self, new_id: TelegramID) -> None:
         existing = DBPortal.query.get(self.tgid_full)
@@ -1702,6 +1729,7 @@ class Portal:
         self.db_instance.title = self.title
         self.db_instance.about = self.about
         self.db_instance.photo_id = self.photo_id
+        self.db_instance.config = json.dumps(self.local_config)
         self.db.commit()
 
     def delete(self) -> None:
@@ -1724,7 +1752,7 @@ class Portal:
                       peer_type=db_portal.peer_type, mxid=db_portal.mxid,
                       username=db_portal.username, megagroup=db_portal.megagroup,
                       title=db_portal.title, about=db_portal.about, photo_id=db_portal.photo_id,
-                      db_instance=db_portal)
+                      config=db_portal.config, db_instance=db_portal)
 
     # endregion
     # region Class instance lookup
@@ -1822,7 +1850,9 @@ class Portal:
 def init(context: Context) -> None:
     global config
     Portal.az, Portal.db, config, Portal.loop, Portal.bot = context.core
-    Portal.bridge_notices = config["bridge.bridge_notices"]
+    Portal.max_initial_member_sync = config["bridge.max_initial_member_sync"]
+    Portal.sync_channel_members = config["bridge.sync_channel_members"]
+    Portal.public_portals = config["bridge.public_portals"]
     Portal.filter_mode = config["bridge.filter.mode"]
     Portal.filter_list = config["bridge.filter.list"]
     Portal.dedup_pre_db_check = config["bridge.deduplication.pre_db_check"]

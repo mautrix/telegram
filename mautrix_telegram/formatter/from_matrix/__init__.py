@@ -14,7 +14,7 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import Optional, List, Tuple, Callable, Pattern, Match, TYPE_CHECKING
+from typing import Optional, List, Tuple, Callable, Pattern, Match, TYPE_CHECKING, Dict, Any
 import re
 import logging
 
@@ -22,6 +22,7 @@ from telethon.tl.types import (MessageEntityMention, MessageEntityMentionName, M
                                TypeMessageEntity)
 
 from ... import puppet as pu
+from ...types import TelegramID, MatrixRoomID
 from ...db import Message as DBMessage
 from ..util import (add_surrogates, remove_surrogates, trim_reply_fallback_html,
                     trim_reply_fallback_text)
@@ -90,8 +91,8 @@ def matrix_to_telegram(html: str) -> ParsedMessage:
         raise FormatError(f"Failed to convert Matrix format: {html}") from e
 
 
-def matrix_reply_to_telegram(content: dict, tg_space: int, room_id: Optional[str] = None
-                             ) -> Optional[int]:
+def matrix_reply_to_telegram(content: Dict[str, Any], tg_space: TelegramID,
+                             room_id: Optional[MatrixRoomID] = None) -> Optional[TelegramID]:
     try:
         reply = content["m.relates_to"]["m.in_reply_to"]
         room_id = room_id or reply["room_id"]

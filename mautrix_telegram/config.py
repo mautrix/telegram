@@ -20,7 +20,7 @@ from ruamel.yaml.comments import CommentedMap
 import random
 import string
 
-yaml = YAML()
+yaml = YAML()  # type: YAML
 yaml.indent(4)
 
 
@@ -28,9 +28,20 @@ class DictWithRecursion:
     def __init__(self, data: Optional[CommentedMap] = None) -> None:
         self._data = data or CommentedMap()  # type: CommentedMap
 
+    @staticmethod
+    def _parse_key(key: str) -> Tuple[str, Optional[str]]:
+        if '.' not in key:
+            return key, None
+        key, next_key = key.split('.', 1)
+        if len(key) > 0 and key[0] == "[":
+            end_index = next_key.index("]")
+            key = key[1:] + "." + next_key[:end_index]
+            next_key = next_key[end_index + 2:] if len(next_key) > end_index + 1 else None
+        return key, next_key
+
     def _recursive_get(self, data: CommentedMap, key: str, default_value: Any) -> Any:
-        if '.' in key:
-            key, next_key = key.split('.', 1)
+        key, next_key = self._parse_key(key)
+        if next_key is not None:
             next_data = data.get(key, CommentedMap())
             return self._recursive_get(next_data, next_key, default_value)
         return data.get(key, default_value)
@@ -47,13 +58,12 @@ class DictWithRecursion:
         return self[key] is not None
 
     def _recursive_set(self, data: CommentedMap, key: str, value: Any) -> None:
-        if '.' in key:
-            key, next_key = key.split('.', 1)
+        key, next_key = self._parse_key(key)
+        if next_key is not None:
             if key not in data:
                 data[key] = CommentedMap()
             next_data = data.get(key, CommentedMap())
-            self._recursive_set(next_data, next_key, value)
-            return
+            return self._recursive_set(next_data, next_key, value)
         data[key] = value
 
     def set(self, key: str, value: Any, allow_recursion: bool = True) -> None:
@@ -66,13 +76,12 @@ class DictWithRecursion:
         self.set(key, value)
 
     def _recursive_del(self, data: CommentedMap, key: str) -> None:
-        if '.' in key:
-            key, next_key = key.split('.', 1)
+        key, next_key = self._parse_key(key)
+        if next_key is not None:
             if key not in data:
                 return
             next_data = data[key]
-            self._recursive_del(next_data, next_key)
-            return
+            return self._recursive_del(next_data, next_key)
         try:
             del data[key]
             del data.ca.items[key]
@@ -183,7 +192,13 @@ class Config(DictWithRecursion):
 
         copy("bridge.edits_as_replies")
         copy("bridge.highlight_edits")
-        copy("bridge.bridge_notices")
+        if isinstance(self["bridge.bridge_notices"], bool):
+            base["bridge.bridge_notices"] = {
+                "default": self["bridge.bridge_notices"],
+                "exceptions": ["@importantbot:example.com"],
+            }
+        else:
+            copy("bridge.bridge_notices")
         copy("bridge.bot_messages_as_notices")
         copy("bridge.max_initial_member_sync")
         copy("bridge.sync_channel_members")

@@ -15,7 +15,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from typing import Awaitable, Callable, Dict, List, NamedTuple, Optional
-import markdown
+import commonmark
 import logging
 
 from telethon.errors import FloodWaitError
@@ -60,7 +60,8 @@ class CommandEvent:
         message = message.replace("$cmdprefix", self.command_prefix)
         html = None
         if render_markdown:
-            html = markdown.markdown(message, safe_mode="escape" if allow_html else False)
+            html = commonmark.commonmark(message if allow_html else
+                                         message.replace("<", "&lt;").replace(">", "&gt;"))
         elif allow_html:
             html = message
         return self.az.intent.send_notice(self.room_id, message, html=html)

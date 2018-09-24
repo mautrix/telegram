@@ -4,7 +4,7 @@ ruamel.yaml
 python-magic
 SQLAlchemy
 alembic
-Markdown
+commonmark
 future-fstrings
 telethon
 telethon-session-sqlalchemy
