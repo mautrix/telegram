@@ -35,7 +35,7 @@ from alchemysession import AlchemySessionContainer
 
 from . import portal as po, puppet as pu, __version__
 from .db import Message as DBMessage
-from .types import TelegramID
+from .types import TelegramID, MatrixUserID
 from .tgclient import MautrixTelegramClient
 
 if TYPE_CHECKING:
@@ -69,7 +69,7 @@ class AbstractUser(ABC):
         self.relaybot_whitelisted = False  # type: bool
         self.client = None  # type: MautrixTelegramClient
         self.tgid = None  # type: TelegramID
-        self.mxid = None  # type: str
+        self.mxid = None  # type: MatrixUserID
         self.is_relaybot = False  # type: bool
         self.is_bot = False  # type: bool
         self.relaybot = None  # type: Optional[Bot]

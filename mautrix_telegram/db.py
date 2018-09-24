@@ -39,6 +39,8 @@ class Portal(Base):
     # Matrix portal information
     mxid = Column(String, unique=True, nullable=True)  # type: Optional[MatrixRoomID]
 
+    config = Column(Text, nullable=True)
+
     # Telegram chat metadata
     username = Column(String, nullable=True)
     title = Column(String, nullable=True)

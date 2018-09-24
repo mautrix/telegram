@@ -183,7 +183,13 @@ class Config(DictWithRecursion):
 
         copy("bridge.edits_as_replies")
         copy("bridge.highlight_edits")
-        copy("bridge.bridge_notices")
+        if isinstance(self["bridge.bridge_notices"], bool):
+            base["bridge.bridge_notices"] = {
+                "default": self["bridge.bridge_notices"],
+                "exceptions": ["@importantbot:example.com"],
+            }
+        else:
+            copy("bridge.bridge_notices")
         copy("bridge.bot_messages_as_notices")
         copy("bridge.max_initial_member_sync")
         copy("bridge.sync_channel_members")
