@@ -983,9 +983,9 @@ class Portal:
 
         if msgtype == "m.notice":
             bridge_notices = self.get_config("bridge_notices")
-            if not bridge_notices.get("default", False):
-                if sender_id not in bridge_notices.get("exceptions"):
-                    return
+            if not bridge_notices.get("default", False) and sender_id not in bridge_notices.get(
+                "exceptions"):
+                return
 
         if msgtype == "m.text":
             await self._handle_matrix_text(sender_id, event_id, space, client, message, reply_to)
