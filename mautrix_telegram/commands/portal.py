@@ -15,6 +15,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from typing import Dict, Callable, Optional, Tuple, Coroutine
+from io import StringIO
 import asyncio
 
 from telethon.errors import (ChatAdminRequiredError, UsernameInvalidError,
@@ -23,7 +24,8 @@ from telethon.tl.types import ChatForbidden, ChannelForbidden
 from mautrix_appservice import MatrixRequestError, IntentAPI
 
 from ..types import MatrixRoomID, TelegramID
-from .. import portal as po, user as u
+from ..config import yaml
+from .. import portal as po, user as u, util
 from . import (command_handler, CommandEvent,
                SECTION_ADMIN, SECTION_CREATING_PORTALS, SECTION_PORTAL_MANAGEMENT)
 
@@ -389,6 +391,81 @@ async def upgrade(evt: CommandEvent) -> Dict:
         return await evt.reply("You don't have the permission to upgrade this group.")
     except ValueError as e:
         return await evt.reply(e.args[0])
+
+
+
+@command_handler(help_section=SECTION_PORTAL_MANAGEMENT,
+                 help_text="View or change per-portal settings.",
+                 help_args="<`help`|_subcommand_> [...]")
+async def config(evt: CommandEvent) -> Dict:
+    cmd = evt.args[0].lower() if len(evt.args) > 0 else "help"
+    portal = po.Portal.get_by_mxid(evt.room_id)
+    if not portal and cmd != "help":
+        return await evt.reply("This is not a portal room.")
+    if cmd == "help":
+        return await evt.reply("""`$cmdprefix config`:
+* `help` - View this help text.
+* `view` - View the current config data.
+* `defaults` - View the default config values.
+* `set` <_key_> <_value_> - Set a config value.
+* `unset` <_key_> - Remove a config value.
+* `add` <_key_> <_value_> - Add a value to an array.
+* `del` <_key_> <_value_> - Remove a value from an array.
+""")
+    elif cmd == "view":
+        stream = StringIO()
+        yaml.dump(portal.local_config, stream)
+        return await evt.reply(f"Room-specific config:\n```yaml\n{stream.getvalue()}\n```")
+    elif cmd == "defaults":
+        stream = StringIO()
+        yaml.dump({
+            "edits_as_replies": evt.config["bridge.edits_as_replies"],
+            "bridge_notices": evt.config["bridge.bridge_notices"],
+            "bot_messages_as_notices": evt.config["bridge.bot_messages_as_notices"],
+            "inline_images": evt.config["bridge.inline_images"],
+            "native_stickers": evt.config["native_stickers"],
+            "message_formats": evt.config["message_formats"],
+            "state_event_formats": evt.config["state_event_formats"],
+        }, stream)
+        return await evt.reply(f"Bridge instance wide config:\n```yaml\n{stream.getvalue()}\n```")
+
+    key = evt.args[1] if len(evt.args) > 1 else None
+    value = yaml.load(evt.args[2:]) if len(evt.args) > 2 else None
+    if cmd == "set":
+        if not key or not value:
+            return await evt.reply(f"**Usage:** `$cmdprefix+sp config {cmd} <key> <value>`")
+        elif util.recursive_set(portal.local_config, key, value):
+            return await evt.reply(f"Successfully set the value of `{key}` to `{value}`.")
+        else:
+            return await evt.reply(f"Failed to set value of `{key}`. "
+                                   "Does the path contain non-map types?")
+    elif cmd == "unset":
+        if not key:
+            return await evt.reply(f"**Usage:** `$cmdprefix+sp config {cmd} <key>`")
+        elif util.recursive_del(portal.local_config, key):
+            return await evt.reply(f"Successfully deleted `{key}` from config.")
+        else:
+            return await evt.reply(f"`{key}` not found in config.")
+    elif cmd == "add" or cmd == "del":
+        if not key or not value:
+            return await evt.reply(f"**Usage:** `$cmdprefix+sp config {cmd} <key> <value>`")
+
+        arr = util.recursive_get(portal.local_config, key)
+        if not arr:
+            return await evt.reply(f"`{key}` not found in config. "
+                                   f"Maybe do `$cmdprefix+sp config set {key} []` first?")
+        elif not isinstance(arr, list):
+            return await evt.reply("`{key}` does not seem to be an array.")
+        elif cmd == "add":
+            if value in arr:
+                return await evt.reply(f"The array at `{key}` already contains `{value}`.")
+            arr.append(value)
+            return await evt.reply(f"Successfully added `{value}` to the array at `{key}`")
+        else:
+            if value not in arr:
+                return await evt.reply(f"The array at `{key}` does not contain `{value}`.")
+            arr.remove(value)
+            return await evt.reply(f"Successfully removed `{value}` from the array at `{key}`")
 
 
 @command_handler(help_section=SECTION_PORTAL_MANAGEMENT,

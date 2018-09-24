@@ -114,6 +114,8 @@ bridge:
     # Only enable this if your displayname_template has some static part that the bridge can use to
     # reliably identify what is a plaintext highlight.
     plaintext_highlights: false
+    # Highlight changed/added parts in edits. Requires lxml.
+    highlight_edits: false
     # Whether or not to make portals of publicly joinable channels/supergroups publicly joinable on Matrix.
     public_portals: true
     # Whether or not to fetch and handle Telegram updates at startup from the time the bridge was down.
@@ -136,8 +138,6 @@ bridge:
     # Show message editing as a reply to the original message.
     # If this is false, message edits are not shown at all, as Matrix does not support editing yet.
     edits_as_replies: false
-    # Highlight changed/added parts in edits. Requires lxml.
-    highlight_edits: false
     bridge_notices:
         # Whether or not Matrix bot messages (type m.notice) should be bridged.
         default: false

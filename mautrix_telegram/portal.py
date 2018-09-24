@@ -719,14 +719,14 @@ class Portal:
             return ""
 
     def get_config(self, key: str) -> Any:
-        local = self.local_config.get("state_event_formats", None)
+        local = util.recursive_get(self.local_config, key)
         if local is not None:
             return local
         return config[f"bridge.{key}"]
 
     async def _get_state_change_message(self, event: str, user: 'u.User',
                                         arguments: Optional[Dict] = None) -> Optional[Dict]:
-        tpl = self.get_config("state_event_formats").get(event, "")
+        tpl = self.get_config(f"state_event_formats.{event}")
         if len(tpl) == 0:
             # Empty format means they don't want the message
             return None
@@ -843,7 +843,8 @@ class Portal:
             message["formatted_body"] = escape_html(message.get("body", ""))
         body = message["formatted_body"]
 
-        tpl = config.get("message_formats", {}).get(msgtype, "<b>$sender_displayname</b>: $message")
+        tpl = (self.get_config(f"message_formats.[{msgtype}]")
+               or "<b>$sender_displayname</b>: $message")
         displayname = await self.get_displayname(sender)
         tpl_args = dict(sender_mxid=sender.mxid,
                         sender_username=sender.mxid_localpart,
