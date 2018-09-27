@@ -36,6 +36,27 @@ SECTION_MISC = HelpSection("Miscellaneous", 40, "")
 SECTION_ADMIN = HelpSection("Administration", 50, "")
 
 
+class HtmlEscapingRenderer(commonmark.HtmlRenderer):
+    def __init__(self, allow_html: bool = False):
+        super().__init__()
+        self.allow_html = allow_html
+
+    def lit(self, s):
+        if self.allow_html:
+            return super().lit(s)
+        return super().lit(s.replace("<", "&lt;").replace(">", "&gt;"))
+
+    def image(self, node, entering):
+        prev = self.allow_html
+        self.allow_html = True
+        super().image(node, entering)
+        self.allow_html = prev
+
+
+md_parser = commonmark.Parser()
+md_renderer = HtmlEscapingRenderer()
+
+
 class CommandEvent:
     def __init__(self, processor: 'CommandProcessor', room: MatrixRoomID, sender: u.User,
                  command: str, args: List[str], is_management: bool, is_portal: bool) -> None:
@@ -60,8 +81,8 @@ class CommandEvent:
         message = message.replace("$cmdprefix", self.command_prefix)
         html = None
         if render_markdown:
-            html = commonmark.commonmark(message if allow_html else
-                                         message.replace("<", "&lt;").replace(">", "&gt;"))
+            md_renderer.allow_html = allow_html
+            html = md_renderer.render(md_parser.parse(message))
         elif allow_html:
             html = message
         return self.az.intent.send_notice(self.room_id, message, html=html)

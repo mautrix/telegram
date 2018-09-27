@@ -442,8 +442,7 @@ def config_help(evt: CommandEvent) -> Awaitable[Dict]:
 def config_view(evt: CommandEvent, portal: po.Portal) -> Awaitable[Dict]:
     stream = StringIO()
     yaml.dump(portal.local_config, stream)
-    return evt.reply(f"Room-specific config:\n\n```yaml\n{stream.getvalue()}```",
-                     allow_html=True)
+    return evt.reply(f"Room-specific config:\n\n```yaml\n{stream.getvalue()}```")
 
 
 def config_defaults(evt: CommandEvent) -> Awaitable[Dict]:
@@ -460,8 +459,7 @@ def config_defaults(evt: CommandEvent) -> Awaitable[Dict]:
         "message_formats": evt.config["bridge.message_formats"],
         "state_event_formats": evt.config["bridge.state_event_formats"],
     }, stream)
-    return evt.reply(f"Bridge instance wide config:\n\n```yaml\n{stream.getvalue()}```",
-                     allow_html=True)
+    return evt.reply(f"Bridge instance wide config:\n\n```yaml\n{stream.getvalue()}```")
 
 
 def config_set(evt: CommandEvent, portal: po.Portal, key: str, value: str) -> Awaitable[Dict]:
