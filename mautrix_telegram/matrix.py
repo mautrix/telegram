@@ -352,7 +352,7 @@ class MatrixHandler:
             if not await user.is_logged_in():
                 continue
 
-            portal.set_typing(user, is_typing)
+            await portal.set_typing(user, is_typing)
 
         self.previously_typing = now_typing
 
