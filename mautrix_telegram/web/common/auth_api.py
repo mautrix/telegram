@@ -38,14 +38,15 @@ class AuthAPI(abc.ABC):
 
     @abstractmethod
     def get_login_response(self, status: int = 200, state: str = "", username: str = "",
-                           mxid: str = "", message: str = "", error: str = "",
-                           errcode: str = "") -> web.Response:
+                           phone: str = "", human_tg_id: str = "", mxid: str = "",
+                           message: str = "", error: str = "", errcode: str = "") -> web.Response:
         raise NotImplementedError()
 
     @abstractmethod
     def get_mx_login_response(self, status: int = 200, state: str = "", username: str = "",
-                              mxid: str = "", message: str = "", error: str = "",
-                              errcode: str = "") -> web.Response:
+                              phone: str = "", human_tg_id: str = "", mxid: str = "",
+                              message: str = "", error: str = "", errcode: str = ""
+                              ) -> web.Response:
         raise NotImplementedError()
 
     async def post_matrix_token(self, user: User, token: str) -> web.Response:
@@ -114,7 +115,8 @@ class AuthAPI(abc.ABC):
             if user.command_status and user.command_status["action"] == "Login":
                 user.command_status = None
             return self.get_login_response(mxid=user.mxid, state="logged-in", status=200,
-                                           username=user_info.username)
+                                           username=user_info.username, phone=None,
+                                           human_tg_id=f"@{user_info.username}")
         except AccessTokenInvalidError:
             return self.get_login_response(mxid=user.mxid, state="token", status=401,
                                            errcode="bot_token_invalid",
@@ -135,8 +137,10 @@ class AuthAPI(abc.ABC):
             asyncio.ensure_future(user.post_login(user_info), loop=self.loop)
             if user.command_status and user.command_status["action"] == "Login":
                 user.command_status = None
+            human_tg_id = f"@{user_info.username}" if user_info.username else f"+{user_info.phone}"
             return self.get_login_response(mxid=user.mxid, state="logged-in", status=200,
-                                           username=user_info.username)
+                                           username=user_info.username, phone=user_info.phone,
+                                           human_tg_id=human_tg_id)
         except PhoneCodeInvalidError:
             return self.get_login_response(mxid=user.mxid, state="code", status=401,
                                            errcode="phone_code_invalid",
@@ -168,8 +172,10 @@ class AuthAPI(abc.ABC):
             asyncio.ensure_future(user.post_login(user_info), loop=self.loop)
             if user.command_status and user.command_status["action"] == "Login (password entry)":
                 user.command_status = None
+            human_tg_id = f"@{user_info.username}" if user_info.username else f"+{user_info.phone}"
             return self.get_login_response(mxid=user.mxid, state="logged-in", status=200,
-                                           username=user_info.username)
+                                           username=user_info.username, phone=user_info.phone,
+                                           human_tg_id=human_tg_id)
         except PasswordEmptyError:
             return self.get_login_response(mxid=user.mxid, state="password", status=400,
                                            errcode="password_empty",

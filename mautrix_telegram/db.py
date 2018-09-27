@@ -81,6 +81,7 @@ class User(Base):
     mxid = Column(String, primary_key=True)  # type: MatrixUserID
     tgid = Column(Integer, nullable=True, unique=True)  # type: Optional[TelegramID]
     tg_username = Column(String, nullable=True)
+    tg_phone = Column(String, nullable=True)
     saved_contacts = Column(Integer, default=0, nullable=False)
     contacts = relationship("Contact", uselist=True,
                             cascade="save-update, merge, delete, delete-orphan"

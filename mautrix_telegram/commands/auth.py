@@ -173,7 +173,7 @@ async def enter_code_register(evt: CommandEvent) -> Dict:
                  help_text="Get instructions on how to log in.")
 async def login(evt: CommandEvent) -> Optional[Dict]:
     if await evt.sender.is_logged_in():
-        return await evt.reply("You are already logged in.")
+        return await evt.reply(f"You are already logged in as {evt.sender.human_tg_id}.")
 
     allow_matrix_login = evt.config.get("bridge.allow_matrix_login", True)
     if allow_matrix_login:
@@ -300,7 +300,8 @@ async def sign_in(evt: CommandEvent, **sign_in_info) -> Dict:
         user = await evt.sender.client.sign_in(**sign_in_info)
         asyncio.ensure_future(evt.sender.post_login(user), loop=evt.loop)
         evt.sender.command_status = None
-        return await evt.reply(f"Successfully logged in as @{user.username}")
+        name = f"@{user.username}" if user.username else f"+{user.phone}"
+        return await evt.reply(f"Successfully logged in as {name}")
     except PhoneCodeExpiredError:
         return await evt.reply("Phone code expired. Try again with `$cmdprefix+sp login`.")
     except PhoneCodeInvalidError:

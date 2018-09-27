@@ -84,7 +84,7 @@ class PublicBridgeWebsite(AuthAPI):
         if not await user.is_logged_in():
             return self.get_login_response(mxid=user.mxid, state=state)
 
-        return self.get_login_response(mxid=user.mxid, username=user.username)
+        return self.get_login_response(mxid=user.mxid, human_tg_id=user.human_tg_id)
 
     async def get_matrix_login(self, request: web.Request) -> web.Response:
         mxid = self.verify_token(request.rel_url.query.get("token", None), endpoint="/matrix-login")
@@ -109,18 +109,19 @@ class PublicBridgeWebsite(AuthAPI):
         return self.get_mx_login_response(mxid=user.mxid)
 
     def get_login_response(self, status: int = 200, state: str = "", username: str = "",
-                           mxid: str = "", message: str = "", error: str = "",
-                           errcode: str = "") -> web.Response:
+                           phone: str = "", human_tg_id: str = "", mxid: str = "",
+                           message: str = "", error: str = "", errcode: str = "") -> web.Response:
         return web.Response(status=status, content_type="text/html",
-                            text=self.login.render(username=username, state=state, error=error,
-                                                   message=message, mxid=mxid))
+                            text=self.login.render(human_tg_id=human_tg_id, state=state,
+                                                   error=error, message=message, mxid=mxid))
 
     def get_mx_login_response(self, status: int = 200, state: str = "", username: str = "",
-                              mxid: str = "", message: str = "", error: str = "",
-                              errcode: str = "") -> web.Response:
+                              phone: str = "", human_tg_id: str = "", mxid: str = "",
+                              message: str = "", error: str = "", errcode: str = ""
+                              ) -> web.Response:
         return web.Response(status=status, content_type="text/html",
-                            text=self.mx_login.render(username=username, state=state, error=error,
-                                                      message=message, mxid=mxid))
+                            text=self.mx_login.render(human_tg_id=human_tg_id, state=state,
+                                                      error=error, message=message, mxid=mxid))
 
     async def post_matrix_login(self, request: web.Request) -> web.Response:
         mxid = self.verify_token(request.rel_url.query.get("token", None), endpoint="/matrix-login")
@@ -157,7 +158,7 @@ class PublicBridgeWebsite(AuthAPI):
             return self.get_login_response(mxid=user.mxid, error="You are not whitelisted.",
                                            status=403)
         elif await user.is_logged_in():
-            return self.get_login_response(mxid=user.mxid, username=user.username)
+            return self.get_login_response(mxid=user.mxid, human_tg_id=user.human_tg_id)
 
         await user.ensure_started(even_if_no_session=True)
 

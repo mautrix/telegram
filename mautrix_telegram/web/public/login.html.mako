@@ -51,25 +51,25 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 </head>
 <body>
 <main class="container">
-	% if username:
+	% if human_tg_id:
 		% if state == "logged-in":
 			<h1>Logged in successfully!</h1>
 			<p>
-				Logged in as @${username}.
+				Logged in as ${human_tg_id}.
 				You can now close this page.
 				You should be invited to Telegram portals on Matrix momentarily.
 			</p>
 		% elif state == "bot-logged-in":
 			<h1>Logged in successfully!</h1>
 			<p>
-				Logged in as @${username}.
+				Logged in as ${human_tg_id}.
 				You can now close this page.
 				You should be invited to Telegram portals on Matrix momentarily.
 			</p>
 		% else:
 			<h1>You're already logged in!</h1>
 			<p>
-				You're logged in as @${username}.
+				You're logged in as ${human_tg_id}.
 			</p>
 			<p>
 				If you want to log in with another account, log out using the <code>logout</code>

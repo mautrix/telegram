@@ -716,6 +716,9 @@ responses:
         username:
           type: string
           description: The Telegram username the user is logged in as.
+        phone:
+          type: string
+          description: The phone number of the account the user is logged into.
   BadRequest:
     description: Invalid JSON.
     schema:
@@ -800,7 +803,7 @@ definitions:
             example: A.
           phone:
             type: string
-            example: +123456789
+            example: 123456789
           is_bot:
             type: boolean
             example: false
@@ -858,6 +861,9 @@ definitions:
       username:
         type: string
         description: The Telegram username the user is logged in as. Only applicable if state=logged-in
+      phone:
+        type: string
+        description: The phone number of the account the user logged into. Only applicable if state=logged-in
 
   HumanReadableError:
     type: string

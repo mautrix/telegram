@@ -48,7 +48,8 @@ class User(AbstractUser):
     by_tgid = {}  # type: Dict[int, User]
 
     def __init__(self, mxid: MatrixUserID, tgid: Optional[TelegramID] = None,
-                 username: Optional[str] = None, db_contacts: Optional[List[DBContact]] = None,
+                 username: Optional[str] = None, phone: Optional[str] = None,
+                 db_contacts: Optional[List[DBContact]] = None,
                  saved_contacts: int = 0, is_bot: bool = False,
                  db_portals: Optional[List[DBPortal]] = None,
                  db_instance: Optional[DBUser] = None) -> None:
@@ -57,6 +58,7 @@ class User(AbstractUser):
         self.tgid = tgid  # type: TelegramID
         self.is_bot = is_bot  # type: bool
         self.username = username  # type: str
+        self.phone = phone  # type: str
         self.contacts = []  # type: List[pu.Puppet]
         self.saved_contacts = saved_contacts  # type: int
         self.db_contacts = db_contacts  # type: List[DBContact]
@@ -85,6 +87,10 @@ class User(AbstractUser):
     def mxid_localpart(self) -> str:
         match = re.compile("@(.+):(.+)").match(self.mxid)  # type: Match
         return match.group(1)
+
+    @property
+    def human_tg_id(self) -> str:
+        return f"@{self.username}" if self.username else f"+{self.phone}" or None
 
     # TODO replace with proper displayname getting everywhere
     @property
@@ -127,7 +133,8 @@ class User(AbstractUser):
 
     def save(self) -> None:
         self.db_instance.tgid = self.tgid
-        self.db_instance.username = self.username
+        self.db_instance.tg_username = self.username
+        self.db_instance.tg_phone = self.phone
         self.db_instance.contacts = self.db_contacts
         self.db_instance.saved_contacts = self.saved_contacts
         self.db_instance.portals = self.db_portals
@@ -145,8 +152,9 @@ class User(AbstractUser):
 
     @classmethod
     def from_db(cls, db_user: DBUser) -> 'User':
-        return User(db_user.mxid, db_user.tgid, db_user.tg_username, db_user.contacts,
-                    db_user.saved_contacts, False, db_user.portals, db_instance=db_user)
+        return User(db_user.mxid, db_user.tgid, db_user.tg_username, db_user.tg_phone,
+                    db_user.contacts, db_user.saved_contacts, False, db_user.portals,
+                    db_instance=db_user)
 
     # endregion
     # region Telegram connection management
@@ -214,6 +222,9 @@ class User(AbstractUser):
             changed = True
         if self.username != info.username:
             self.username = info.username
+            changed = True
+        if self.phone != info.phone:
+            self.phone = info.phone
             changed = True
         if self.tgid != info.id:
             self.tgid = info.id

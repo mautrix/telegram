@@ -75,7 +75,7 @@ class ProvisioningAPI(AuthAPI):
             return self.get_error_response(404, "portal_not_found",
                                            "Portal with given Matrix ID not found.")
         user, _ = await self.get_user(request.query.get("user_id", None), expect_logged_in=None,
-                                        require_puppeting=False)
+                                      require_puppeting=False)
         return web.json_response({
             "mxid": portal.mxid,
             "chat_id": get_peer_id(portal.peer),
@@ -102,7 +102,7 @@ class ProvisioningAPI(AuthAPI):
             return self.get_error_response(404, "portal_not_found",
                                            "Portal to given Telegram chat not found.")
         user, _ = await self.get_user(request.query.get("user_id", None), expect_logged_in=None,
-                                        require_puppeting=False)
+                                      require_puppeting=False)
         return web.json_response({
             "mxid": portal.mxid,
             "chat_id": get_peer_id(portal.peer),
@@ -380,16 +380,18 @@ class ProvisioningAPI(AuthAPI):
             "errcode": errcode,
         }, status=status)
 
-    def get_mx_login_response(self, status=200, state="", username="", mxid="", message="",
-                              error="", errcode=""):
+    def get_mx_login_response(self, status=200, state="", username="", phone="", human_tg_id="",
+                              mxid="", message="", error="", errcode=""):
         raise NotImplementedError()
 
-    def get_login_response(self, status=200, state="", username="", mxid="", message="", error="",
-                           errcode="") -> web.Response:
-        if username:
+    def get_login_response(self, status=200, state="", username="", phone: str = "",
+                           human_tg_id: str = "", mxid="", message="", error="", errcode=""
+                           ) -> web.Response:
+        if username or phone:
             resp = {
                 "state": "logged-in",
                 "username": username,
+                "phone": phone,
             }
         elif message:
             resp = {
@@ -436,7 +438,8 @@ class ProvisioningAPI(AuthAPI):
         if expect_logged_in is not None:
             logged_in = await user.is_logged_in()
             if not expect_logged_in and logged_in:
-                return user, self.get_login_response(username=user.username, status=409,
+                return user, self.get_login_response(username=user.username, phone=user.phone,
+                                                     status=409,
                                                      error="You are already logged in.",
                                                      errcode="already_logged_in")
             elif expect_logged_in and not logged_in:
