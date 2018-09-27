@@ -4,6 +4,6 @@ from .from_telegram import (telegram_reply_to_matrix, telegram_to_matrix, init_t
 from .. import context as c
 
 
-def init(context: c.Context):
+def init(context: c.Context) -> None:
     init_mx(context)
     init_tg(context)

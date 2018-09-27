@@ -32,14 +32,14 @@ TelematrixBase.metadata.bind = telematrix_db_engine
 chat_links = telematrix.query(ChatLink).all()
 tg_users = telematrix.query(TgUser).all()
 mx_users = telematrix.query(MatrixUser).all()
-messages = telematrix.query(TMMessage).all()
+tm_messages = telematrix.query(TMMessage).all()
 
 telematrix.close()
 telematrix_db_engine.dispose()
 
-portals = {}
-chats = {}
-messages = {}
+portals = {}  # Dict[int, Portal]
+chats = {}  # Dict[int, BotChat]
+messages = {}  # Dict[str, Message]
 puppets = {}  # Dict[int, Puppet]
 
 for chat_link in chat_links:
@@ -65,11 +65,12 @@ for chat_link in chat_links:
     portals[chat_link.tg_room] = portal
     chats[tgid] = bot_chat
 
-for tm_msg in messages:
+for tm_msg in tm_messages:
     try:
         portal = portals[tm_msg.tg_group_id]
     except KeyError:
-        print("Found message entry %d in unlinked chat %d, ignoring..." % (tm_msg.tg_message_id, tm_msg.tg_group_id))
+        print("Found message entry %d in unlinked chat %d, ignoring..." % (tm_msg.tg_message_id,
+                                                                           tm_msg.tg_group_id))
         continue
     tg_space = portal.tgid if portal.peer_type == "channel" else args.bot_id
     message = Message(mxid=tm_msg.matrix_event_id, mx_room=tm_msg.matrix_room_id,
@@ -77,7 +78,8 @@ for tm_msg in messages:
     messages[tm_msg.matrix_event_id] = message
 
 for user in tg_users:
-    puppets[user.tg_id] = Puppet(id=user.tg_id, displayname=user.name, displayname_source=args.bot_id)
+    puppets[user.tg_id] = Puppet(id=user.tg_id, displayname=user.name,
+                                 displayname_source=args.bot_id)
 
 for k, v in portals.items():
     mxtg.add(v)

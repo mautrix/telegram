@@ -202,7 +202,7 @@ class MatrixParser(HTMLParser, MatrixParserCommon):
                     else:
                         prefix = int(math.log(n, 10)) * 3 * " " + 4 * " "
                 else:
-                    prefix = (f"{self.list_bullet(self._open_tags.count('ul'))} "
+                    prefix = (self.list_bullet(self._open_tags.count('ul'))
                               if self._list_entry_is_new else 3 * " ")
                 if not self._list_entry_is_new and not self._line_is_new:
                     prefix = ""

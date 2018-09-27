@@ -148,7 +148,7 @@ def plain_mention_to_text() -> Tuple[List[TypeMessageEntity], Callable[[str], st
     return entities, replacer
 
 
-def init_mx(context: "Context"):
+def init_mx(context: "Context") -> None:
     global plain_mention_regex, should_bridge_plaintext_highlights
     config = context.config
     dn_template = config.get("bridge.displayname_template", "{displayname} (Telegram)")

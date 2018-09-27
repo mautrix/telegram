@@ -19,11 +19,11 @@ from html import escape
 import logging
 import re
 
-from telethon.tl.types import (MessageEntityMention, MessageEntityMentionName,
-                               MessageEntityEmail, MessageEntityUrl, MessageEntityTextUrl,
-                               MessageEntityBold, MessageEntityItalic, MessageEntityCode,
-                               MessageEntityPre, MessageEntityBotCommand, Message, PeerChannel,
-                               MessageEntityHashtag, TypeMessageEntity, MessageFwdHeader, PeerUser)
+from telethon.tl.types import (MessageEntityMention, MessageEntityMentionName, MessageEntityUrl,
+                               MessageEntityEmail, MessageEntityTextUrl, MessageEntityBold,
+                               MessageEntityItalic, MessageEntityCode, MessageEntityPre,
+                               MessageEntityBotCommand, Message, PeerChannel, MessageEntityHashtag,
+                               TypeMessageEntity, MessageFwdHeader, PeerUser)
 
 from mautrix_appservice import MatrixRequestError
 from mautrix_appservice.intent_api import IntentAPI

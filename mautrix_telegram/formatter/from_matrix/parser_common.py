@@ -26,11 +26,11 @@ class MatrixParserCommon:
                   "ol", "ul", "li",
                   "h1", "h2", "h3", "h4", "h5", "h6",
                   "div", "hr", "table")  # type: Tuple[str, ...]
-    list_bullets = ("●", "○", "■", "‣")
+    list_bullets = ("●", "○", "■", "‣")  # type: Tuple[str, ...]
 
     @classmethod
     def list_bullet(cls, depth: int) -> str:
-        return cls.list_bullets[(depth - 1) % len(cls.list_bullets)]
+        return cls.list_bullets[(depth - 1) % len(cls.list_bullets)] + " "
 
 
 ParsedMessage = Tuple[str, List[TypeMessageEntity]]

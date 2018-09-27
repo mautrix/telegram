@@ -5,7 +5,7 @@ Base = declarative_base()
 
 
 class ChatLink(Base):
-    __tablename__ = 'chat_link'
+    __tablename__ = "chat_link"
 
     id = sa.Column(sa.Integer, primary_key=True)
     matrix_room = sa.Column(sa.String)
@@ -14,7 +14,7 @@ class ChatLink(Base):
 
 
 class TgUser(Base):
-    __tablename__ = 'tg_user'
+    __tablename__ = "tg_user"
 
     id = sa.Column(sa.Integer, primary_key=True)
     tg_id = sa.Column(sa.BigInteger)
@@ -23,7 +23,7 @@ class TgUser(Base):
 
 
 class MatrixUser(Base):
-    __tablename__ = 'matrix_user'
+    __tablename__ = "matrix_user"
 
     id = sa.Column(sa.Integer, primary_key=True)
     matrix_id = sa.Column(sa.String)

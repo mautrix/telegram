@@ -80,7 +80,7 @@ class MatrixParser(MatrixParserCommon):
                 prefix = f"{counter}. "
                 counter += 1
             else:
-                prefix = f"{cls.list_bullet(ctx.ul_depth)} "
+                prefix = cls.list_bullet(ctx.ul_depth)
             child = child.prepend(prefix)
             parts = child.split("\n")
             parts = parts[:1] + [part.prepend(indent) for part in parts[1:]]
