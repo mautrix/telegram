@@ -123,7 +123,7 @@ class MatrixParser(HTMLParser, MatrixParserCommon):
             self._open_tags_meta.popleft()
             self._open_tags_meta.appendleft(url)
 
-        if tag in self.block_tags and ("blockquote" not in self._open_tags or tag == "br"):
+        if (tag in self.block_tags and ("blockquote" not in self._open_tags)) or tag == "br":
             self._newline()
 
         if entity_type and tag not in self._building_entities:
@@ -202,7 +202,8 @@ class MatrixParser(HTMLParser, MatrixParserCommon):
                     else:
                         prefix = int(math.log(n, 10)) * 3 * " " + 4 * " "
                 else:
-                    prefix = "* " if self._list_entry_is_new else 3 * " "
+                    prefix = (f"{self.list_bullet(self._open_tags.count('ul'))} "
+                              if self._list_entry_is_new else 3 * " ")
                 if not self._list_entry_is_new and not self._line_is_new:
                     prefix = ""
                 extra_offset += len(indent) + len(prefix)
