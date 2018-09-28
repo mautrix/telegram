@@ -52,7 +52,7 @@ class RecursionContext:
         return RecursionContext(strip_linebreaks=self.strip_linebreaks, ul_depth=self.ul_depth + 1)
 
     def enter_code_block(self) -> 'RecursionContext':
-        return RecursionContext(strip_linebreaks=True, ul_depth=self.ul_depth)
+        return RecursionContext(strip_linebreaks=False, ul_depth=self.ul_depth)
 
 
 class MatrixParser(MatrixParserCommon):
