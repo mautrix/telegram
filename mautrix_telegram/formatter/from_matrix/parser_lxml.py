@@ -101,7 +101,7 @@ class MatrixParser(MatrixParserCommon):
         children = cls.node_to_tmessages(node, ctx)
         length = int(node.tag[1])
         prefix = "#" * length + " "
-        return TelegramMessage.join(children, "").prepend(prefix)
+        return TelegramMessage.join(children, "").prepend(prefix).format(Bold)
 
     @classmethod
     def basic_format_to_tmessage(cls, node: html.HtmlElement, ctx: RecursionContext
@@ -113,12 +113,12 @@ class MatrixParser(MatrixParserCommon):
             msg.format(Italic)
         elif node.tag == "command":
             msg.format(Command)
-        elif node.tag in ("s", "del"):
+        elif node.tag in ("s", "strike", "del"):
             msg.text = html_to_unicode(msg.text, "\u0336")
         elif node.tag in ("u", "ins"):
             msg.text = html_to_unicode(msg.text, "\u0332")
 
-        if node.tag in ("s", "del", "u", "ins"):
+        if node.tag in ("s", "strike", "del", "u", "ins"):
             msg.entities = Entity.adjust(msg.entities, offset_length_multiply(2))
 
         return msg
@@ -218,9 +218,13 @@ class MatrixParser(MatrixParserCommon):
                              ) -> TelegramMessage:
         msgs = cls.node_to_tagged_tmessages(node, ctx)
         output = TelegramMessage()
+        prev_was_block = False
         for msg, tag in msgs:
             if tag in cls.block_tags:
-                msg = msg.append("\n").prepend("\n")
+                msg = msg.append("\n")
+                if not prev_was_block:
+                    msg = msg.prepend("\n")
+                prev_was_block = True
             output = output.append(msg)
         return output.trim()
 
