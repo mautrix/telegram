@@ -982,12 +982,12 @@ class Portal:
         msgtype = message["msgtype"]
 
         if msgtype == "m.notice":
-            bridge_notices = self.get_config("bridge_notices")
-            if not bridge_notices.get("default", False) and sender_id not in bridge_notices.get(
-                "exceptions"):
+            bridge_notices = self.get_config("bridge_notices.default")
+            excepted = sender.mxid in self.get_config("bridge_notices.exceptions")
+            if not bridge_notices and not excepted:
                 return
 
-        if msgtype == "m.text":
+        if msgtype == "m.text" or msgtype == "m.notice":
             await self._handle_matrix_text(sender_id, event_id, space, client, message, reply_to)
         elif msgtype == "m.location":
             await self._handle_matrix_location(sender_id, event_id, space, client, message,
