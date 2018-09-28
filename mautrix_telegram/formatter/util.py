@@ -20,40 +20,6 @@ import struct
 import re
 
 
-# add_surrogates and remove_surrogates are unicode surrogate utility functions from Telethon.
-# Licensed under the MIT license.
-# https://github.com/LonamiWebs/Telethon/blob/master/telethon/extensions/markdown.py
-def add_surrogates(text: Optional[str]) -> Optional[str]:
-    if text is None:
-        return None
-    return "".join("".join(chr(y) for y in struct.unpack("<HH", x.encode("utf-16-le")))
-                   if (0x10000 <= ord(x) <= 0x10FFFF) else x for x in text)
-
-
-def remove_surrogates(text: Optional[str]) -> Optional[str]:
-    if text is None:
-        return None
-    return text.encode("utf-16", "surrogatepass").decode("utf-16")
-
-
-def trim_reply_fallback_text(text: str) -> str:
-    if not text.startswith("> ") or "\n" not in text:
-        return text
-    lines = text.split("\n")
-    while len(lines) > 0 and lines[0].startswith("> "):
-        lines.pop(0)
-    return "\n".join(lines)
-
-
-html_reply_fallback_regex = re.compile("^<mx-reply>"
-                                       r"[\s\S]+?"
-                                       "</mx-reply>")  # type: Pattern
-
-
-def trim_reply_fallback_html(html: str) -> str:
-    return html_reply_fallback_regex.sub("", html)
-
-
 def unicode_to_html(text: str, html: str, ctrl: str, tag: str) -> str:
     if ctrl not in text:
         return html
@@ -84,3 +50,40 @@ def unicode_to_html(text: str, html: str, ctrl: str, tag: str) -> str:
 
 def html_to_unicode(text: str, ctrl: str) -> str:
     return ctrl.join(text) + ctrl
+
+
+# add_surrogates and remove_surrogates are unicode surrogate utility functions from Telethon.
+# Licensed under the MIT license.
+# https://github.com/LonamiWebs/Telethon/blob/7cce7aa3e4c6c7019a55530391b1761d33e5a04e/telethon/helpers.py
+def add_surrogates(text: Optional[str]) -> Optional[str]:
+    if text is None:
+        return None
+    return "".join("".join(chr(y) for y in struct.unpack("<HH", x.encode("utf-16-le")))
+                   if (0x10000 <= ord(x) <= 0x10FFFF) else x for x in text)
+
+
+def remove_surrogates(text: Optional[str]) -> Optional[str]:
+    if text is None:
+        return None
+    return text.encode("utf-16", "surrogatepass").decode("utf-16")
+
+
+# trim_reply_fallback_text, html_reply_fallback_regex and trim_reply_fallback_html are Matrix
+# reply fallback utility functions.
+# You may copy and use them under any OSI-approved license.
+def trim_reply_fallback_text(text: str) -> str:
+    if not text.startswith("> ") or "\n" not in text:
+        return text
+    lines = text.split("\n")
+    while len(lines) > 0 and lines[0].startswith("> "):
+        lines.pop(0)
+    return "\n".join(lines)
+
+
+html_reply_fallback_regex = re.compile("^<mx-reply>"
+                                       r"[\s\S]+?"
+                                       "</mx-reply>")  # type: Pattern
+
+
+def trim_reply_fallback_html(html: str) -> str:
+    return html_reply_fallback_regex.sub("", html)

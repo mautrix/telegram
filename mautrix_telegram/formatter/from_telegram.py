@@ -22,8 +22,9 @@ import re
 from telethon.tl.types import (MessageEntityMention, MessageEntityMentionName, MessageEntityUrl,
                                MessageEntityEmail, MessageEntityTextUrl, MessageEntityBold,
                                MessageEntityItalic, MessageEntityCode, MessageEntityPre,
-                               MessageEntityBotCommand, Message, PeerChannel, MessageEntityHashtag,
-                               TypeMessageEntity, MessageFwdHeader, PeerUser)
+                               MessageEntityBotCommand, MessageEntityHashtag, MessageEntityCashtag,
+                               MessageEntityPhone, TypeMessageEntity, Message, PeerChannel,
+                               MessageFwdHeader, PeerUser)
 
 from mautrix_appservice import MatrixRequestError
 from mautrix_appservice.intent_api import IntentAPI
@@ -252,12 +253,12 @@ def _telegram_entities_to_matrix(text: str, entities: List[TypeMessageEntity]) -
             skip_entity = _parse_name_mention(html, entity_text, TelegramID(entity.user_id))
         elif entity_type == MessageEntityEmail:
             html.append(f"<a href='mailto:{entity_text}'>{entity_text}</a>")
-        elif entity_type in {MessageEntityTextUrl, MessageEntityUrl}:
+        elif entity_type in (MessageEntityTextUrl, MessageEntityUrl):
             skip_entity = _parse_url(html, entity_text,
                                      entity.url if entity_type == MessageEntityTextUrl else None)
         elif entity_type == MessageEntityBotCommand:
             html.append(f"<font color='blue'>!{entity_text[1:]}</font>")
-        elif entity_type == MessageEntityHashtag:
+        elif entity_type in (MessageEntityHashtag, MessageEntityCashtag, MessageEntityPhone):
             html.append(f"<font color='blue'>{entity_text}</font>")
         else:
             skip_entity = True
