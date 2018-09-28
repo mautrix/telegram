@@ -758,7 +758,7 @@ class Portal:
 
     async def get_displayname(self, user: 'u.User') -> str:
         return (await self.main_intent.get_displayname(self.mxid, user.mxid)
-                or user.mxid_localpart)
+                or user.mxid)
 
     def set_typing(self, user: 'u.User', typing: bool = True,
                    action: type = SendMessageTypingAction) -> Awaitable[bool]:

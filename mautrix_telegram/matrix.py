@@ -385,9 +385,9 @@ class MatrixHandler:
             prev_membership = prev_content.get("membership", "leave")  # type: str
             if membership == prev_membership:
                 match = re.compile("@(.+):(.+)").match(state_key)  # type: Match
-                localpart = match.group(1)  # type: str
-                displayname = content.get("displayname", localpart)  # type: str
-                prev_displayname = prev_content.get("displayname", localpart)  # type: str
+                mxid = match.group(0)  # type: str
+                displayname = content.get("displayname", None) or mxid  # type: str
+                prev_displayname = prev_content.get("displayname", None) or mxid  # type: str
                 if displayname != prev_displayname:
                     await self.handle_name_change(room_id, state_key, displayname,
                                                   prev_displayname, event_id)
