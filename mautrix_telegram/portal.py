@@ -1243,11 +1243,19 @@ class Portal:
             "orientation": 0,
             "mimetype": file.mime_type,
         }
-        name = evt.message
+        ext_override = {
+            "image/jpeg": ".jpg"
+        }
+        name = "image" + ext_override.get(file.mime_type, mimetypes.guess_extension(file.mime_type))
         await intent.set_typing(self.mxid, is_typing=False)
-        return await intent.send_image(self.mxid, file.mxc, info=info, text=name,
-                                       relates_to=relates_to, timestamp=evt.date,
-                                       external_url=self.get_external_url(evt))
+        result = await intent.send_image(self.mxid, file.mxc, info=info, text=name,
+                                         relates_to=relates_to, timestamp=evt.date,
+                                         external_url=self.get_external_url(evt))
+        if evt.message:
+            text, html, _ = await formatter.telegram_to_matrix(evt, source, self.main_intent)
+            await intent.send_text(self.mxid, text, html=html, timestamp=evt.date,
+                                   external_url=self.get_external_url(evt))
+        return result
 
     @staticmethod
     def _parse_telegram_document_attributes(attributes: List[TypeDocumentAttribute]) -> Dict:
