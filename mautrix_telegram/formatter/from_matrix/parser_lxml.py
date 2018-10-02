@@ -35,13 +35,10 @@ def parse_html(input_html: str) -> ParsedMessage:
 
 
 class RecursionContext:
-    strip_linebreaks: bool
-    ul_depth: int
-
     def __init__(self, strip_linebreaks: bool = True, ul_depth: int = 0):
-        self.strip_linebreaks = strip_linebreaks
-        self.ul_depth = ul_depth
-        self._inited = True
+        self.strip_linebreaks = strip_linebreaks  # type: bool
+        self.ul_depth = ul_depth  # type: int
+        self._inited = True  # type: bool
 
     def __setattr__(self, key, value):
         if getattr(self, "_inited", False) is True:
