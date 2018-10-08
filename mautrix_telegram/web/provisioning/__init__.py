@@ -64,6 +64,8 @@ class ProvisioningAPI(AuthAPI):
         self.app.router.add_route("POST", f"{user_prefix}/login/send_code", self.send_code)
         self.app.router.add_route("POST", f"{user_prefix}/login/send_password", self.send_password)
 
+        self.app.router.add_route("GET", "/bridge", self.bridge_info)
+
     async def get_portal_by_mxid(self, request: web.Request) -> web.Response:
         err = self.check_authorization(request)
         if err is not None:
@@ -358,6 +360,11 @@ class ProvisioningAPI(AuthAPI):
         if err is not None:
             return err
         await user.log_out()
+
+    async def bridge_info(self, request: web.Request) -> web.Response:
+        return web.json_response({
+            "relaybot_username": self.context.bot.username,
+        }, status=200)
 
     @staticmethod
     async def error_middleware(_, handler: Callable[[web.Request], Awaitable[web.Response]]
