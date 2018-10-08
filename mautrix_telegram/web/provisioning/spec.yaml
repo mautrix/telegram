@@ -22,6 +22,7 @@ tags:
 - name: User info
 - name: Authentication
 - name: Bridging
+- name: Misc
 
 paths:
   /bridge:
@@ -32,10 +33,10 @@ paths:
       responses:
         200:
           description: The bridge information
-          schama:
+          schema:
             type: object
             properties:
-              relay_username:
+              relaybot_username:
                 type: string
                 description: The relay bot's username on Telegram
   /portal/{room_id}:
