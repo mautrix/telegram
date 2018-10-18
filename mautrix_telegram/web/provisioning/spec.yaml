@@ -127,6 +127,11 @@ paths:
           description: Optional Matrix user ID to check if the user has permissions to do bridging.
           required: false
           type: string
+        - name: room_id
+          in: query
+          description: The Matrix room ID to check for user permissions in. Required if user_id is supplied.
+          required: false
+          type: string
   /portal/{room_id}/connect/{chat_id}:
     post:
       operationId: connect_portal

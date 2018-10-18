@@ -103,8 +103,17 @@ class ProvisioningAPI(AuthAPI):
         if not portal:
             return self.get_error_response(404, "portal_not_found",
                                            "Portal to given Telegram chat not found.")
+
+        user_id = request.query.get("user_id", None)
+        room_id = None
+        if user_id is not None:
+            room_id = request.query.get("room_id", None)
+            if not room_id:
+                return self.get_error_response(400, "missing_room_id",
+                                               "No room_id supplied")
         user, _ = await self.get_user(request.query.get("user_id", None), expect_logged_in=None,
                                       require_puppeting=False)
+
         return web.json_response({
             "mxid": portal.mxid,
             "chat_id": get_peer_id(portal.peer),
@@ -113,7 +122,7 @@ class ProvisioningAPI(AuthAPI):
             "about": portal.about,
             "username": portal.username,
             "megagroup": portal.megagroup,
-            "can_unbridge": (await portal.can_user_perform(user, "unbridge")) if user else False,
+            "can_unbridge": (await portal.can_user_perform(user, "unbridge", ref_room_id=room_id)) if user else False,
         })
 
     async def connect_chat(self, request: web.Request) -> web.Response:

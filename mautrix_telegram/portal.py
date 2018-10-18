@@ -193,11 +193,12 @@ class Portal:
     # endregion
     # region Permission checks
 
-    async def can_user_perform(self, user: 'u.User', event: str, default: int = 50) -> bool:
+    async def can_user_perform(self, user: 'u.User', event: str, default: int = 50, ref_room_id: str = None) -> bool:
         if user.is_admin:
             return True
         try:
-            await self.main_intent.get_power_levels(self.mxid)
+            room_id = self.mxid if self.mxid else ref_room_id
+            await self.main_intent.get_power_levels(self.mxid, room_id)
         except MatrixRequestError:
             return False
         return self.main_intent.state_store.has_power_level(
