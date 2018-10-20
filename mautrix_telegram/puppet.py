@@ -16,10 +16,11 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from typing import Awaitable, Coroutine, Dict, List, Optional, Pattern, TYPE_CHECKING
 from difflib import SequenceMatcher
-import re
-import logging
-import asyncio
 from enum import Enum
+from aiohttp import ServerDisconnectedError
+import asyncio
+import logging
+import re
 
 from sqlalchemy import orm
 
@@ -250,7 +251,7 @@ class Puppet:
                                  }  # type: Dict
                     self.handle_sync(presence, ephemeral)
                 next_batch = sync_resp.get("next_batch", None)
-            except MatrixRequestError as e:
+            except (MatrixRequestError, ServerDisconnectedError) as e:
                 wait = min(errors, 11) ** 2
                 self.log.warning(f"Syncer for {custom_mxid} errored: {e}. "
                                  f"Waiting for {wait} seconds...")
