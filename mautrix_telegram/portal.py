@@ -196,6 +196,9 @@ class Portal:
     async def can_user_perform(self, user: 'u.User', event: str, default: int = 50) -> bool:
         if user.is_admin:
             return True
+        if not self.mxid:
+            # No room for anybody to perform actions in
+            return False
         try:
             await self.main_intent.get_power_levels(self.mxid)
         except MatrixRequestError:
