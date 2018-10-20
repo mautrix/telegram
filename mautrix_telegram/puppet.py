@@ -477,5 +477,5 @@ def init(context: 'Context') -> List[Coroutine]:  # [None, None, PuppetError]
     Puppet.username_template = config.get("bridge.username_template", "telegram_{userid}")
     Puppet.hs_domain = config["homeserver"]["domain"]
     Puppet.mxid_regex = re.compile(
-        f"@{Puppet.username_template.format(userid='(.+)')}:{Puppet.hs_domain}")
+        f"@{Puppet.username_template.format(userid='([0-9]+)')}:{Puppet.hs_domain}")
     return [puppet.init_custom_mxid() for puppet in Puppet.get_all_with_custom_mxid()]
