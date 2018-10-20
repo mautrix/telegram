@@ -20,6 +20,7 @@ import asyncio
 import logging.config
 import sys
 import copy
+import signal
 
 from sqlalchemy import orm
 import sqlalchemy as sql
@@ -126,13 +127,16 @@ with appserv.run(config["appservice.hostname"], config["appservice.port"]) as st
     if context.bot:
         startup_actions.append(context.bot.start())
 
+    signal.signal(signal.SIGINT, signal.default_int_handler)
+    signal.signal(signal.SIGTERM, signal.default_int_handler)
+
     try:
         log.debug("Initialization complete, running startup actions")
         loop.run_until_complete(asyncio.gather(*startup_actions, loop=loop))
         log.debug("Startup actions complete, now running forever")
         loop.run_forever()
     except KeyboardInterrupt:
-        log.debug("Keyboard interrupt received, stopping clients")
+        log.debug("Interrupt received, stopping clients")
         loop.run_until_complete(
             asyncio.gather(*[user.stop() for user in User.by_tgid.values()], loop=loop))
         log.debug("Clients stopped, shutting down")
