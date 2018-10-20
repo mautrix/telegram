@@ -165,6 +165,7 @@ class Config(DictWithRecursion):
         copy("appservice.max_body_size")
 
         copy("appservice.database")
+        copy("appservice.sqlalchemy_core_mode")
 
         copy("appservice.public.enabled")
         copy("appservice.public.prefix")
