@@ -15,9 +15,12 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from sqlalchemy import (Column, UniqueConstraint, ForeignKey, ForeignKeyConstraint, Integer,
-                        BigInteger, String, Boolean, Text)
+                        BigInteger, String, Boolean, Text, Table,
+                        and_, func, select)
+from sqlalchemy.engine import Engine, RowProxy
 from sqlalchemy.sql import expression
 from sqlalchemy.orm import relationship, Query
+from sqlalchemy.sql.base import ImmutableColumnCollection
 from typing import Dict, Optional, List
 import json
 
@@ -49,7 +52,9 @@ class Portal(Base):
 
 
 class Message(Base):
-    query = None  # type: Query
+    db = None  # type: Engine
+    t = None  # type: Table
+    c = None  # type: ImmutableColumnCollection
     __tablename__ = "message"
 
     mxid = Column(String)  # type: MatrixEventID
@@ -58,6 +63,67 @@ class Message(Base):
     tg_space = Column(Integer, primary_key=True)  # type: TelegramID
 
     __table_args__ = (UniqueConstraint("mxid", "mx_room", "tg_space", name="_mx_id_room"),)
+
+    @staticmethod
+    def _one_or_none(rows: RowProxy) -> Optional['Message']:
+        try:
+            mxid, mx_room, tgid, tg_space = next(rows)
+            return Message(mxid=mxid, mx_room=mx_room, tgid=tgid, tg_space=tg_space)
+        except StopIteration:
+            return None
+
+    @staticmethod
+    def _all(rows: RowProxy) -> List['Message']:
+        return [Message(mxid=row[0], mx_room=row[1], tgid=row[2], tg_space=row[3])
+                for row in rows]
+
+    @classmethod
+    def get_by_tgid(cls, tgid: TelegramID, tg_space: TelegramID) -> Optional['Message']:
+        rows = cls.db.execute(cls.t.select()
+                              .where(and_(cls.c.tgid == tgid, cls.c.tg_space == tg_space)))
+        return cls._one_or_none(rows)
+
+    @classmethod
+    def count_spaces_by_mxid(cls, mxid: MatrixEventID, mx_room: MatrixRoomID) -> int:
+        rows = cls.db.execute(select([func.count(cls.c.tg_space)])
+                              .where(and_(cls.c.mxid == mxid, cls.c.mx_room == mx_room)))
+        try:
+            count, = next(rows)
+            return count
+        except StopIteration:
+            return 0
+
+    @classmethod
+    def get_by_mxid(cls, mxid: MatrixEventID, mx_room: MatrixRoomID, tg_space: TelegramID
+                    ) -> Optional['Message']:
+        rows = cls.db.execute(cls.t.select().where(
+            and_(cls.c.mxid == mxid, cls.c.mx_room == mx_room, cls.c.tg_space == tg_space)))
+        return cls._one_or_none(rows)
+
+    @classmethod
+    def update_by_tgid(cls, s_tgid: TelegramID, s_tg_space: TelegramID, **values) -> None:
+        cls.db.execute(cls.t.update()
+                       .where(and_(cls.c.tgid == s_tgid, cls.c.tg_space == s_tg_space))
+                       .values(**values))
+
+    @classmethod
+    def update_by_mxid(cls, s_mxid: MatrixEventID, s_mx_room: MatrixRoomID, **values) -> None:
+        cls.db.execute(cls.t.update()
+                       .where(and_(cls.c.mxid == s_mxid, cls.c.mx_room == s_mx_room))
+                       .values(**values))
+
+    def update(self, **values) -> None:
+        for key, value in values.items():
+            setattr(self, key, value)
+        self.update_by_tgid(self.tgid, self.tg_space, **values)
+
+    def delete(self) -> None:
+        self.db.execute(self.t.delete().where(
+            and_(self.c.tgid == self.tgid, self.c.tg_space == self.tg_space)))
+
+    def insert(self) -> None:
+        self.db.execute(self.t.insert().values(mxid=self.mxid, mx_room=self.mx_room, tgid=self.tgid,
+                                               tg_space=self.tg_space))
 
 
 class UserPortal(Base):
@@ -178,9 +244,11 @@ class TelegramFile(Base):
     thumbnail = relationship("TelegramFile", uselist=False)
 
 
-def init(db_session) -> None:
+def init(db_session, db_engine) -> None:
     Portal.query = db_session.query_property()
-    Message.query = db_session.query_property()
+    Message.db = db_engine
+    Message.t = Message.__table__
+    Message.c = Message.t.c
     UserPortal.query = db_session.query_property()
     User.query = db_session.query_property()
     Puppet.query = db_session.query_property()

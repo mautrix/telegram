@@ -230,7 +230,7 @@ class AbstractUser(ABC):
             return
 
         # We check that these are user read receipts, so tg_space is always the user ID.
-        message = DBMessage.query.get((update.max_id, self.tgid))
+        message = DBMessage.get_by_tgid(update.max_id, self.tgid)
         if not message:
             return
 
@@ -323,12 +323,11 @@ class AbstractUser(ABC):
             return
 
         for message in update.messages:
-            message = DBMessage.query.get((message, self.tgid))
+            message = DBMessage.get_by_tgid(TelegramID(message), self.tgid)
             if not message:
                 continue
-            self.db.delete(message)
-            number_left = DBMessage.query.filter(DBMessage.mxid == message.mxid,
-                                                 DBMessage.mx_room == message.mx_room).count()
+            message.delete()
+            number_left = DBMessage.count_spaces_by_mxid(message.mxid, message.mx_room)
             if number_left == 0:
                 portal = po.Portal.get_by_mxid(message.mx_room)
                 await self._try_redact(portal, message)
@@ -343,10 +342,10 @@ class AbstractUser(ABC):
             return
 
         for message in update.messages:
-            message = DBMessage.query.get((message, portal.tgid))
+            message = DBMessage.get_by_tgid(TelegramID(message), portal.tgid)
             if not message:
                 continue
-            self.db.delete(message)
+            message.delete()
             await self._try_redact(portal, message)
         self.db.commit()
 
