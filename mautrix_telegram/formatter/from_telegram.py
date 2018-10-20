@@ -54,7 +54,7 @@ def telegram_reply_to_matrix(evt: Message, source: 'AbstractUser') -> Dict:
         space = (evt.to_id.channel_id
                  if isinstance(evt, Message) and isinstance(evt.to_id, PeerChannel)
                  else source.tgid)
-        msg = DBMessage.query.get((evt.reply_to_msg_id, space))
+        msg = DBMessage.get_by_tgid(evt.reply_to_msg_id, space)
         if msg:
             return {
                 "m.in_reply_to": {
@@ -124,7 +124,7 @@ async def _add_reply_header(source: "AbstractUser", text: str, html: str, evt: M
              if isinstance(evt, Message) and isinstance(evt.to_id, PeerChannel)
              else source.tgid)
 
-    msg = DBMessage.query.get((evt.reply_to_msg_id, space))
+    msg = DBMessage.get_by_tgid(evt.reply_to_msg_id, space)
     if not msg:
         return text, html
 
@@ -325,7 +325,7 @@ def _parse_url(html: List[str], entity_text: str, url: str) -> bool:
 
         portal = po.Portal.find_by_username(group)
         if portal:
-            message = DBMessage.query.get((msgid, portal.tgid))
+            message = DBMessage.get_by_tgid(TelegramID(msgid), portal.tgid)
             if message:
                 url = f"https://matrix.to/#/{portal.mxid}/{message.mxid}"
 

@@ -772,9 +772,7 @@ class Portal:
         if user.is_bot:
             return
         space = self.tgid if self.peer_type == "channel" else user.tgid
-        message = DBMessage.query.filter(DBMessage.mxid == event_id,
-                                         DBMessage.mx_room == self.mxid,
-                                         DBMessage.tg_space == space).one_or_none()
+        message = DBMessage.get_by_mxid(event_id, self.mxid, space)
         if not message:
             return
         if self.peer_type == "channel":
@@ -959,12 +957,11 @@ class Portal:
                                     response: TypeMessage) -> None:
         self.log.debug("Handled Matrix message: %s", response)
         self.is_duplicate(response, (event_id, space))
-        self.db.add(DBMessage(
+        DBMessage(
             tgid=response.id,
             tg_space=space,
             mx_room=self.mxid,
-            mxid=event_id))
-        self.db.commit()
+            mxid=event_id).insert()
 
     async def handle_matrix_message(self, sender: 'u.User', message: Dict[str, Any],
                                     event_id: MatrixEventID) -> None:
@@ -1009,9 +1006,10 @@ class Portal:
             if not pinned_message:
                 await sender.client(UpdatePinnedMessageRequest(channel=self.peer, id=0))
             else:
-                message = DBMessage.query.filter(DBMessage.mxid == pinned_message,
-                                                 DBMessage.tg_space == self.tgid,
-                                                 DBMessage.mx_room == self.mxid).one_or_none()
+                message = DBMessage.get_by_mxid(pinned_message, self.mxid, self.tgid)
+                if message is None:
+                    self.log.warning(f"Could not find pinned {pinned_message} in {self.mxid}")
+                    return
                 await sender.client(UpdatePinnedMessageRequest(channel=self.peer, id=message.tgid))
         except ChatNotModifiedError:
             pass
@@ -1019,9 +1017,7 @@ class Portal:
     async def handle_matrix_deletion(self, deleter: 'u.User', event_id: MatrixEventID) -> None:
         real_deleter = deleter if not await deleter.needs_relaybot(self) else self.bot
         space = self.tgid if self.peer_type == "channel" else real_deleter.tgid
-        message = DBMessage.query.filter(DBMessage.mxid == event_id,
-                                         DBMessage.tg_space == space,
-                                         DBMessage.mx_room == self.mxid).one_or_none()
+        message = DBMessage.get_by_mxid(event_id, self.mxid, space)
         if not message:
             return
         await real_deleter.client.delete_messages(self.peer, [message.tgid])
@@ -1413,10 +1409,9 @@ class Portal:
         if duplicate_found:
             mxid, other_tg_space = duplicate_found
             if tg_space != other_tg_space:
-                msg = DBMessage.query.get((evt.id, tg_space))
-                msg.mxid = mxid
-                msg.mx_room = self.mxid
-                self.db.commit()
+                DBMessage.update_by_tgid(evt.id, tg_space,
+                                         mxid=mxid,
+                                         mx_room=self.mxid)
             return
 
         evt.reply_to_msg_id = evt.id
@@ -1429,19 +1424,14 @@ class Portal:
 
         mxid = response["event_id"]
 
-        msg = DBMessage.query.get((evt.id, tg_space))
+        msg = DBMessage.get_by_tgid(evt.id, tg_space)
         if not msg:
             self.log.info(f"Didn't find edited message {evt.id}@{tg_space} (src {source.tgid}) "
                           "in database.")
             # Oh crap
             return
-        msg.mxid = mxid
-        msg.mx_room = self.mxid
-        DBMessage.query \
-            .filter(DBMessage.mx_room == self.mxid,
-                    DBMessage.mxid == temporary_identifier) \
-            .update({"mxid": mxid})
-        self.db.commit()
+        msg.update(mxid=mxid, mx_room=self.mxid)
+        DBMessage.update_by_mxid(temporary_identifier, self.mxid, mxid=mxid)
 
     async def handle_telegram_message(self, source: "AbstractUser", sender: p.Puppet,
                                       evt: Message) -> None:
@@ -1463,13 +1453,11 @@ class Portal:
             self.log.debug(f"Ignoring message {evt.id}@{tg_space} (src {source.tgid}) "
                            f"as it was already handled (in space {other_tg_space})")
             if tg_space != other_tg_space:
-                self.db.add(
-                    DBMessage(tgid=evt.id, mx_room=self.mxid, mxid=mxid, tg_space=tg_space))
-                self.db.commit()
+                DBMessage(tgid=evt.id, mx_room=self.mxid, mxid=mxid, tg_space=tg_space).insert()
             return
 
         if self.dedup_pre_db_check and self.peer_type == "channel":
-            msg = DBMessage.query.get((evt.id, tg_space))
+            msg = DBMessage.get_by_tgid(evt.id, tg_space)
             if msg:
                 self.log.debug(f"Ignoring message {evt.id} (src {source.tgid}) as it was already"
                                f"handled into {msg.mxid}. This duplicate was catched in the db "
@@ -1523,12 +1511,8 @@ class Portal:
 
         self.log.debug("Handled Telegram message: %s", evt)
         try:
-            self.db.add(DBMessage(tgid=evt.id, mx_room=self.mxid, mxid=mxid, tg_space=tg_space))
-            self.db.commit()
-            DBMessage.query \
-                .filter(DBMessage.mx_room == self.mxid,
-                        DBMessage.mxid == temporary_identifier) \
-                .update({"mxid": mxid})
+            DBMessage(tgid=evt.id, mx_room=self.mxid, mxid=mxid, tg_space=tg_space).insert()
+            DBMessage.update_by_mxid(temporary_identifier, self.mxid, mxid=mxid)
         except FlushError as e:
             self.log.exception(f"{e.__class__.__name__} while saving message mapping. "
                                "This might mean that an update was handled after it left the "
@@ -1610,7 +1594,7 @@ class Portal:
         self._temp_pinned_message_id = None
         self._temp_pinned_message_sender = None
 
-        message = DBMessage.query.get((msg_id, self.tgid))
+        message = DBMessage.get_by_tgid(msg_id, self.tgid)
         if message:
             await intent.set_pinned_messages(self.mxid, [message.mxid])
         else:

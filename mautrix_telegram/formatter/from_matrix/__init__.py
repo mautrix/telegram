@@ -105,9 +105,7 @@ def matrix_reply_to_telegram(content: Dict[str, Any], tg_space: TelegramID,
             pass
         content["body"] = trim_reply_fallback_text(content["body"])
 
-        message = DBMessage.query.filter(DBMessage.mxid == event_id,
-                                         DBMessage.tg_space == tg_space,
-                                         DBMessage.mx_room == room_id).one_or_none()
+        message = DBMessage.get_by_mxid(event_id, room_id, tg_space)
         if message:
             return message.tgid
     except KeyError:
