@@ -177,8 +177,8 @@ class MatrixParser(MatrixParserCommon):
             lang = ""
             try:
                 if node[0].tag == "code":
-                    lang = node[0].attrib["class"][len("language-"):]
                     node = node[0]
+                    lang = node.attrib["class"][len("language-"):]
             except (IndexError, KeyError):
                 pass
             return cls.parse_node(node, ctx.enter_code_block()).format(Pre, language=lang)
