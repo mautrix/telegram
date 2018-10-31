@@ -198,7 +198,7 @@ async def bridge(evt: CommandEvent) -> Dict:
     if not portal.allow_bridging():
         return await evt.reply("This bridge doesn't allow bridging that Telegram chat.\n"
                                "If you're the bridge admin, try "
-                               "`$cmdprefix+sp whitelist <Telegram chat ID>` first.")
+                               "`$cmdprefix+sp filter whitelist <Telegram chat ID>` first.")
     if portal.mxid:
         has_portal_message = (
             "That Telegram chat already has a portal at "
