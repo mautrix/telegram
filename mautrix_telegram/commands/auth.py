@@ -299,7 +299,7 @@ async def sign_in(evt: CommandEvent, **sign_in_info) -> Dict:
         await evt.sender.ensure_started(even_if_no_session=True)
         user = await evt.sender.client.sign_in(**sign_in_info)
         existing_user = u.User.get_by_tgid(user.id)
-        if existing_user != evt.sender:
+        if existing_user and existing_user != evt.sender:
             await existing_user.log_out()
             await evt.reply(f"[{existing_user.displayname}]"
                             f"(https://matrix.to/#/{existing_user.mxid})"
