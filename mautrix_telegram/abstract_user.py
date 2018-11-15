@@ -149,7 +149,7 @@ class AbstractUser(ABC):
         raise NotImplementedError()
 
     async def is_logged_in(self) -> bool:
-        return self.client and await self.client.is_user_authorized()
+        return self.client and self.client.is_connected() and await self.client.is_user_authorized()
 
     async def has_full_access(self, allow_bot: bool = False) -> bool:
         return (self.puppet_whitelisted
