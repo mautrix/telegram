@@ -196,9 +196,10 @@ class MatrixHandler:
             return
 
         puppet = pu.Puppet.get_by_mxid(user_id)
-        if sender and puppet:
-            # TODO: Puppet should probably be an AbstractUser
-            await portal.leave_matrix(puppet, sender, event_id)
+        if puppet:
+            if sender:
+                await portal.kick_matrix(puppet, sender)
+            return
 
         user = u.User.get_by_mxid(user_id, create=False)
         if not user:
