@@ -24,7 +24,7 @@ from telethon.errors import (
     PhoneNumberOccupiedError, PhoneNumberUnoccupiedError, SessionPasswordNeededError)
 
 from . import command_handler, CommandEvent, SECTION_AUTH
-from .. import puppet as pu
+from .. import puppet as pu, user as u
 from ..util import format_duration
 
 
@@ -298,6 +298,12 @@ async def sign_in(evt: CommandEvent, **sign_in_info) -> Dict:
     try:
         await evt.sender.ensure_started(even_if_no_session=True)
         user = await evt.sender.client.sign_in(**sign_in_info)
+        existing_user = u.User.get_by_tgid(user.id)
+        if existing_user != evt.sender:
+            await existing_user.log_out()
+            await evt.reply(f"[{existing_user.displayname}]"
+                            f"(https://matrix.to/#/{existing_user.mxid})"
+                            " was logged out from the account.")
         asyncio.ensure_future(evt.sender.post_login(user), loop=evt.loop)
         evt.sender.command_status = None
         name = f"@{user.username}" if user.username else f"+{user.phone}"

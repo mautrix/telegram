@@ -108,12 +108,19 @@ class AuthAPI(abc.ABC):
                                            errcode="unknown_error",
                                            error="Internal server error while requesting code.")
 
+    async def postprocess_login(self, user: User, user_info) -> None:
+        existing_user = User.get_by_tgid(user_info.id)
+        if existing_user != user:
+            await existing_user.log_out()
+        asyncio.ensure_future(user.post_login(user_info), loop=self.loop)
+        if user.command_status and user.command_status["action"] == "Login":
+            user.command_status = None
+
+
     async def post_login_token(self, user: User, token: str) -> web.Response:
         try:
             user_info = await user.client.sign_in(bot_token=token)
-            asyncio.ensure_future(user.post_login(user_info), loop=self.loop)
-            if user.command_status and user.command_status["action"] == "Login":
-                user.command_status = None
+            await self.postprocess_login(user, user_info)
             return self.get_login_response(mxid=user.mxid, state="logged-in", status=200,
                                            username=user_info.username, phone=None,
                                            human_tg_id=f"@{user_info.username}")
@@ -134,9 +141,7 @@ class AuthAPI(abc.ABC):
                               ) -> Optional[web.Response]:
         try:
             user_info = await user.client.sign_in(code=code)
-            asyncio.ensure_future(user.post_login(user_info), loop=self.loop)
-            if user.command_status and user.command_status["action"] == "Login":
-                user.command_status = None
+            await self.postprocess_login(user, user_info)
             human_tg_id = f"@{user_info.username}" if user_info.username else f"+{user_info.phone}"
             return self.get_login_response(mxid=user.mxid, state="logged-in", status=200,
                                            username=user_info.username, phone=user_info.phone,
@@ -169,9 +174,7 @@ class AuthAPI(abc.ABC):
     async def post_login_password(self, user: User, password: str) -> web.Response:
         try:
             user_info = await user.client.sign_in(password=password)
-            asyncio.ensure_future(user.post_login(user_info), loop=self.loop)
-            if user.command_status and user.command_status["action"] == "Login (password entry)":
-                user.command_status = None
+            await self.postprocess_login(user, user_info)
             human_tg_id = f"@{user_info.username}" if user_info.username else f"+{user_info.phone}"
             return self.get_login_response(mxid=user.mxid, state="logged-in", status=200,
                                            username=user_info.username, phone=user_info.phone,
