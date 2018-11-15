@@ -795,10 +795,8 @@ class Portal:
     async def kick_matrix(self, user: Union['u.User', 'p.Puppet'], source: 'u.User') -> None:
         if user.tgid == source.tgid:
             return
-        if await user.needs_relaybot(self):
-            user = self.bot
-        if not user:
-            return
+        if await source.needs_relaybot(self):
+            source = self.bot
         if self.peer_type == "chat":
             await source.client(DeleteChatUserRequest(chat_id=self.tgid, user_id=user.tgid))
         elif self.peer_type == "channel":
