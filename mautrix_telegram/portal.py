@@ -282,6 +282,17 @@ class Portal:
     def get_input_entity(self, user: 'u.User') -> Awaitable[TypeInputPeer]:
         return user.client.get_input_entity(self.peer)
 
+    async def get_entity(self, user: 'u.User') -> TypeChat:
+        try:
+            return await user.client.get_entity(self.peer)
+        except ValueError:
+            self.log.warning(f"Could not find entity for {self.tgid_log} with user {user.tgid} "
+                             f"falling back to get_dialogs.")
+            async for dialog in user.client.iter_dialogs():
+                if dialog.entity.id == self.tgid:
+                    return dialog.entity
+            raise
+
     # endregion
     # region Matrix room info updating
 
@@ -316,7 +327,7 @@ class Portal:
         if self.mxid:
             if update_if_exists:
                 if not entity:
-                    entity = await user.client.get_entity(self.peer)
+                    entity = await self.get_entity(user)
                 update = self.update_matrix_room(user, entity, self.peer_type == "user")
                 if synchronous:
                     await update
@@ -338,7 +349,7 @@ class Portal:
             return None
 
         if not entity:
-            entity = await user.client.get_entity(self.peer)
+            entity = await self.get_entity(user)
             self.log.debug("Fetched data: %s", entity)
 
         self.log.debug(f"Creating room for {self.tgid_log}")
@@ -518,7 +529,7 @@ class Portal:
 
         self.log.debug(f"Updating info of {self.tgid_log}")
         if not entity:
-            entity = await user.client.get_entity(self.peer)
+            entity = await self.get_entity(user)
             self.log.debug("Fetched data: %s", entity)
         changed = False
 
