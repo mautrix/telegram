@@ -153,5 +153,6 @@ class TelegramMessage:
                 msg = TelegramMessage(text=msg)
             main.entities += Entity.adjust(msg.entities, offset_diff(len(main.text)))
             main.text += msg.text + separator
-        main.text = main.text[:-len(separator)]
+        if len(separator) > 0:
+            main.text = main.text[:-len(separator)]
         return main

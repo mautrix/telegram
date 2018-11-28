@@ -14,20 +14,25 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import List, Tuple
-from lxml import html
+from typing import List, Tuple, Pattern
+import re
 
 from telethon.tl.types import (MessageEntityMention as Mention, MessageEntityBotCommand as Command,
                                MessageEntityMentionName as MentionName, MessageEntityEmail as Email,
                                MessageEntityUrl as URL, MessageEntityTextUrl as TextURL,
                                MessageEntityBold as Bold, MessageEntityItalic as Italic,
-                               MessageEntityCode as Code, MessageEntityPre as Pre)
+                               MessageEntityCode as Code, MessageEntityPre as Pre,
+                               TypeMessageEntity)
 
 from ... import user as u, puppet as pu, portal as po
 from ...types import MatrixUserID
 from ..util import html_to_unicode
-from .parser_common import MatrixParserCommon, ParsedMessage
 from .telegram_message import TelegramMessage, Entity, offset_length_multiply
+
+from .html_reader import HTMLNode, read_html
+
+
+ParsedMessage = Tuple[str, List[TypeMessageEntity]]
 
 
 def parse_html(input_html: str) -> ParsedMessage:
@@ -52,9 +57,21 @@ class RecursionContext:
         return RecursionContext(strip_linebreaks=False, ul_depth=self.ul_depth)
 
 
-class MatrixParser(MatrixParserCommon):
+class MatrixParser:
+    mention_regex = re.compile("https://matrix.to/#/(@.+:.+)")  # type: Pattern
+    room_regex = re.compile("https://matrix.to/#/(#.+:.+)")  # type: Pattern
+    block_tags = ("p", "pre", "blockquote",
+                  "ol", "ul", "li",
+                  "h1", "h2", "h3", "h4", "h5", "h6",
+                  "div", "hr", "table")  # type: Tuple[str, ...]
+    list_bullets = ("●", "○", "■", "‣")  # type: Tuple[str, ...]
+
     @classmethod
-    def list_to_tmessage(cls, node: html.HtmlElement, ctx: RecursionContext) -> TelegramMessage:
+    def list_bullet(cls, depth: int) -> str:
+        return cls.list_bullets[(depth - 1) % len(cls.list_bullets)] + " "
+
+    @classmethod
+    def list_to_tmessage(cls, node: HTMLNode, ctx: RecursionContext) -> TelegramMessage:
         ordered = node.tag == "ol"
         tagged_children = cls.node_to_tagged_tmessages(node, ctx)
         counter = 1
@@ -86,23 +103,21 @@ class MatrixParser(MatrixParserCommon):
         return TelegramMessage.join(children, "\n")
 
     @classmethod
-    def blockquote_to_tmessage(cls, node: html.HtmlElement, ctx: RecursionContext
-                               ) -> TelegramMessage:
+    def blockquote_to_tmessage(cls, node: HTMLNode, ctx: RecursionContext) -> TelegramMessage:
         msg = cls.tag_aware_parse_node(node, ctx)
         children = msg.trim().split("\n")
         children = [child.prepend("> ") for child in children]
         return TelegramMessage.join(children, "\n")
 
     @classmethod
-    def header_to_tmessage(cls, node: html.HtmlElement, ctx: RecursionContext) -> TelegramMessage:
+    def header_to_tmessage(cls, node: HTMLNode, ctx: RecursionContext) -> TelegramMessage:
         children = cls.node_to_tmessages(node, ctx)
         length = int(node.tag[1])
         prefix = "#" * length + " "
         return TelegramMessage.join(children, "").prepend(prefix).format(Bold)
 
     @classmethod
-    def basic_format_to_tmessage(cls, node: html.HtmlElement, ctx: RecursionContext
-                                 ) -> TelegramMessage:
+    def basic_format_to_tmessage(cls, node: HTMLNode, ctx: RecursionContext) -> TelegramMessage:
         msg = cls.tag_aware_parse_node(node, ctx)
         if node.tag in ("b", "strong"):
             msg.format(Bold)
@@ -121,7 +136,7 @@ class MatrixParser(MatrixParserCommon):
         return msg
 
     @classmethod
-    def link_to_tstring(cls, node: html.HtmlElement, ctx: RecursionContext) -> TelegramMessage:
+    def link_to_tstring(cls, node: HTMLNode, ctx: RecursionContext) -> TelegramMessage:
         msg = cls.tag_aware_parse_node(node, ctx)
         href = node.attrib.get("href", "")
         if not href:
@@ -156,7 +171,7 @@ class MatrixParser(MatrixParserCommon):
                 else msg.format(TextURL, url=href))
 
     @classmethod
-    def node_to_tmessage(cls, node: html.HtmlElement, ctx: RecursionContext) -> TelegramMessage:
+    def node_to_tmessage(cls, node: HTMLNode, ctx: RecursionContext) -> TelegramMessage:
         if node.tag == "blockquote":
             return cls.blockquote_to_tmessage(node, ctx)
         elif node.tag == "ol":
@@ -193,7 +208,7 @@ class MatrixParser(MatrixParserCommon):
         return TelegramMessage(text)
 
     @classmethod
-    def node_to_tagged_tmessages(cls, node: html.HtmlElement, ctx: RecursionContext
+    def node_to_tagged_tmessages(cls, node: HTMLNode, ctx: RecursionContext
                                  ) -> List[Tuple[TelegramMessage, str]]:
         output = []
 
@@ -206,12 +221,12 @@ class MatrixParser(MatrixParserCommon):
         return output
 
     @classmethod
-    def node_to_tmessages(cls, node: html.HtmlElement, ctx: RecursionContext
+    def node_to_tmessages(cls, node: HTMLNode, ctx: RecursionContext
                           ) -> List[TelegramMessage]:
         return [msg for (msg, tag) in cls.node_to_tagged_tmessages(node, ctx)]
 
     @classmethod
-    def tag_aware_parse_node(cls, node: html.HtmlElement, ctx: RecursionContext
+    def tag_aware_parse_node(cls, node: HTMLNode, ctx: RecursionContext
                              ) -> TelegramMessage:
         msgs = cls.node_to_tagged_tmessages(node, ctx)
         output = TelegramMessage()
@@ -226,11 +241,10 @@ class MatrixParser(MatrixParserCommon):
         return output.trim()
 
     @classmethod
-    def parse_node(cls, node: html.HtmlElement, ctx: RecursionContext) -> TelegramMessage:
+    def parse_node(cls, node: HTMLNode, ctx: RecursionContext) -> TelegramMessage:
         return TelegramMessage.join(cls.node_to_tmessages(node, ctx))
 
     @classmethod
     def parse(cls, data: str) -> ParsedMessage:
-        document = html.fromstring(f"<html>{data}</html>")
-        msg = cls.parse_node(document, RecursionContext())
+        msg = cls.node_to_tmessage(read_html(f"<body>{data}</body>"), RecursionContext())
         return msg.text, msg.entities

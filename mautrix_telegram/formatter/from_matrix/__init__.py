@@ -26,12 +26,7 @@ from ...types import TelegramID, MatrixRoomID
 from ...db import Message as DBMessage
 from ..util import (add_surrogates, remove_surrogates, trim_reply_fallback_html,
                     trim_reply_fallback_text)
-from .parser_common import ParsedMessage
-
-try:
-    from mautrix_telegram.formatter.from_matrix.parser_lxml import parse_html
-except ImportError:
-    from mautrix_telegram.formatter.from_matrix.parser_htmlparser import parse_html
+from .parser import ParsedMessage, parse_html
 
 if TYPE_CHECKING:
     from ...context import Context

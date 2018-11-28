@@ -14,23 +14,10 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-import re
-from typing import List, Tuple, Pattern
-from telethon.tl.types import TypeMessageEntity
+from lxml import html
+
+HTMLNode = html.HtmlElement
 
 
-class MatrixParserCommon:
-    mention_regex = re.compile("https://matrix.to/#/(@.+:.+)")  # type: Pattern
-    room_regex = re.compile("https://matrix.to/#/(#.+:.+)")  # type: Pattern
-    block_tags = ("p", "pre", "blockquote",
-                  "ol", "ul", "li",
-                  "h1", "h2", "h3", "h4", "h5", "h6",
-                  "div", "hr", "table")  # type: Tuple[str, ...]
-    list_bullets = ("●", "○", "■", "‣")  # type: Tuple[str, ...]
-
-    @classmethod
-    def list_bullet(cls, depth: int) -> str:
-        return cls.list_bullets[(depth - 1) % len(cls.list_bullets)] + " "
-
-
-ParsedMessage = Tuple[str, List[TypeMessageEntity]]
+def read_html(data: str) -> HTMLNode:
+    return html.fromstring(data)
