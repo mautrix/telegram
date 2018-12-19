@@ -1307,7 +1307,10 @@ class Portal:
         if attrs["is_sticker"]:
             alt = attrs["sticker_alt"]
             if len(alt) > 0:
-                name = f"{alt} ({unicodedata.name(alt[0]).lower()})"
+                try:
+                    name = f"{alt} ({unicodedata.name(alt[0]).lower()})"
+                except ValueError:
+                    name = alt
 
         mime_type = document.mime_type or file.mime_type
         info = {
