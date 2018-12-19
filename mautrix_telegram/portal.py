@@ -282,12 +282,16 @@ class Portal:
     def get_input_entity(self, user: 'u.User') -> Awaitable[TypeInputPeer]:
         return user.client.get_input_entity(self.peer)
 
-    async def get_entity(self, user: 'u.User') -> TypeChat:
+    async def get_entity(self, user: 'AbstractUser') -> TypeChat:
         try:
             return await user.client.get_entity(self.peer)
         except ValueError:
-            self.log.warning(f"Could not find entity for {self.tgid_log} with user {user.tgid} "
-                             f"falling back to get_dialogs.")
+            if user.is_bot:
+                self.log.warning(f"Could not find entity for {self.tgid_log} with bot {user.tgid}. "
+                                 "Failing...")
+                raise
+            self.log.warning(f"Could not find entity for {self.tgid_log} with user {user.tgid}. "
+                             "falling back to get_dialogs.")
             async for dialog in user.client.iter_dialogs():
                 if dialog.entity.id == self.tgid:
                     return dialog.entity
@@ -321,7 +325,7 @@ class Portal:
             await puppet.update_info(user, entity)
             await puppet.intent.join_room(self.mxid)
 
-    async def create_matrix_room(self, user: "AbstractUser", entity: TypeChat = None,
+    async def create_matrix_room(self, user: 'AbstractUser', entity: TypeChat = None,
                                  invites: InviteList = None, update_if_exists: bool = True,
                                  synchronous: bool = False) -> Optional[str]:
         if self.mxid:
@@ -452,7 +456,7 @@ class Portal:
         if user and user.is_bot:
             user.register_portal(self)
 
-    async def sync_telegram_users(self, source: "AbstractUser", users: List[User]) -> None:
+    async def sync_telegram_users(self, source: 'AbstractUser', users: List[User]) -> None:
         allowed_tgids = set()
         for entity in users:
             puppet = p.Puppet.get(TelegramID(entity.id))
@@ -522,7 +526,7 @@ class Portal:
             user.unregister_portal(self)
             await self.main_intent.kick(self.mxid, user.mxid, kick_message)
 
-    async def update_info(self, user: "AbstractUser", entity: TypeChat = None) -> None:
+    async def update_info(self, user: 'AbstractUser', entity: TypeChat = None) -> None:
         if self.peer_type == "user":
             self.log.warning(f"Called update_info() for direct chat portal {self.tgid_log}")
             return
@@ -586,13 +590,13 @@ class Portal:
         return max(photo.sizes, key=(lambda photo2: (
             len(photo2.bytes) if isinstance(photo2, PhotoCachedSize) else photo2.size)))
 
-    async def remove_avatar(self, _: "AbstractUser", save: bool = False) -> None:
+    async def remove_avatar(self, _: 'AbstractUser', save: bool = False) -> None:
         await self.main_intent.set_room_avatar(self.mxid, None)
         self.photo_id = None
         if save:
             self.save()
 
-    async def update_avatar(self, user: "AbstractUser", photo: FileLocation,
+    async def update_avatar(self, user: 'AbstractUser', photo: FileLocation,
                             save: bool = False) -> bool:
         photo_id = f"{photo.volume_id}-{photo.local_id}"
         if self.photo_id != photo_id:
@@ -1214,7 +1218,7 @@ class Portal:
         await self.handle_matrix_power_levels(source, levels["users"], {})
 
     async def invite_telegram(self, source: 'u.User',
-                              puppet: Union[p.Puppet, "AbstractUser"]) -> None:
+                              puppet: Union[p.Puppet, 'AbstractUser']) -> None:
         if self.peer_type == "chat":
             await source.client(
                 AddChatUserRequest(chat_id=self.tgid, user_id=puppet.tgid, fwd_limit=0))
@@ -1235,7 +1239,7 @@ class Portal:
             return f"https://t.me/{self.username}/{evt.id}"
         return None
 
-    async def handle_telegram_photo(self, source: "AbstractUser", intent: IntentAPI, evt: Message,
+    async def handle_telegram_photo(self, source: 'AbstractUser', intent: IntentAPI, evt: Message,
                                     relates_to: Dict = None) -> Optional[Dict]:
         largest_size = self._get_largest_photo_size(evt.media.photo)
         file = await util.transfer_file_to_matrix(self.db, source.client, intent,
@@ -1329,7 +1333,7 @@ class Portal:
 
         return info, name
 
-    async def handle_telegram_document(self, source: "AbstractUser", intent: IntentAPI,
+    async def handle_telegram_document(self, source: 'AbstractUser', intent: IntentAPI,
                                        evt: Message,
                                        relates_to: dict = None) -> Optional[Dict]:
         document = evt.media.document
@@ -1368,7 +1372,7 @@ class Portal:
             kwargs["file_type"] = "m.file"
         return await intent.send_file(**kwargs)
 
-    def handle_telegram_location(self, _: "AbstractUser", intent: IntentAPI, evt: Message,
+    def handle_telegram_location(self, _: 'AbstractUser', intent: IntentAPI, evt: Message,
                                  relates_to: dict = None) -> Awaitable[dict]:
         location = evt.media.geo
         long = location.long
@@ -1396,7 +1400,7 @@ class Portal:
             "m.relates_to": relates_to or None,
         }, timestamp=evt.date, external_url=self.get_external_url(evt))
 
-    async def handle_telegram_text(self, source: "AbstractUser", intent: IntentAPI, is_bot: bool,
+    async def handle_telegram_text(self, source: 'AbstractUser', intent: IntentAPI, is_bot: bool,
                                    evt: Message) -> dict:
         self.log.debug(f"Sending {evt.message} to {self.mxid} by {intent.mxid}")
         text, html, relates_to = await formatter.telegram_to_matrix(evt, source, self.main_intent)
@@ -1406,7 +1410,7 @@ class Portal:
                                       msgtype=msgtype, timestamp=evt.date,
                                       external_url=self.get_external_url(evt))
 
-    async def handle_telegram_edit(self, source: "AbstractUser", sender: p.Puppet,
+    async def handle_telegram_edit(self, source: 'AbstractUser', sender: p.Puppet,
                                    evt: Message) -> None:
         if not self.mxid:
             return
@@ -1451,7 +1455,7 @@ class Portal:
         msg.update(mxid=mxid, mx_room=self.mxid)
         DBMessage.update_by_mxid(temporary_identifier, self.mxid, mxid=mxid)
 
-    async def handle_telegram_message(self, source: "AbstractUser", sender: p.Puppet,
+    async def handle_telegram_message(self, source: 'AbstractUser', sender: p.Puppet,
                                       evt: Message) -> None:
         if not self.mxid:
             await self.create_matrix_room(source, invites=[source.mxid], update_if_exists=False)
@@ -1545,7 +1549,7 @@ class Portal:
             self.db.rollback()
             await intent.redact(self.mxid, mxid)
 
-    async def _create_room_on_action(self, source: "AbstractUser",
+    async def _create_room_on_action(self, source: 'AbstractUser',
                                      action: TypeMessageAction) -> bool:
         if source.is_relaybot:
             return False
@@ -1558,7 +1562,7 @@ class Portal:
             return False
         return True
 
-    async def handle_telegram_action(self, source: "AbstractUser", sender: p.Puppet,
+    async def handle_telegram_action(self, source: 'AbstractUser', sender: p.Puppet,
                                      update: MessageService) -> None:
         action = update.action
         should_ignore = ((not self.mxid and not await self._create_room_on_action(source, action))
@@ -1724,9 +1728,9 @@ class Portal:
                         config=json.dumps(self.local_config))
 
     def migrate_and_save(self, new_id: TelegramID) -> None:
-        existing = DBPortal.query.get(self.tgid_full)
-        if existing:
-            self.db.delete(existing)
+        self.db.delete(self.db_instance)
+        self.db.commit()
+        self._db_instance = None
         try:
             del self.by_tgid[self.tgid_full]
         except KeyError:
@@ -1734,7 +1738,8 @@ class Portal:
         self.tgid = new_id
         self.tg_receiver = new_id
         self.by_tgid[self.tgid_full] = self
-        self.save()
+        self.db.add(self.db_instance)
+        self.db.commit()
 
     def save(self) -> None:
         self.db_instance.mxid = self.mxid

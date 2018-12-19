@@ -386,7 +386,7 @@ async def upgrade(evt: CommandEvent) -> Dict:
 
     try:
         await portal.upgrade_telegram_chat(evt.sender)
-        return await evt.reply(f"Group upgraded to supergroup. New ID: {portal.tgid}")
+        return await evt.reply(f"Group upgraded to supergroup. New ID: -100{portal.tgid}")
     except ChatAdminRequiredError:
         return await evt.reply("You don't have the permission to upgrade this group.")
     except ValueError as e:
