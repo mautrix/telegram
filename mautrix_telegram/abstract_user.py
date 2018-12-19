@@ -100,6 +100,10 @@ class AbstractUser(ABC):
         device = f"{platform.system()} {platform.release()}"
         sysversion = MautrixTelegramClient.__version__
         self.session = self.session_container.new_session(self.name)
+        if config["telegram.server.enabled"]:
+            self.session.set_dc(config["telegram.server.dc"],
+                                config["telegram.server.ip"],
+                                config["telegram.server.port"])
         self.client = MautrixTelegramClient(session=self.session,
                                             api_id=config["telegram.api_id"],
                                             api_hash=config["telegram.api_hash"],

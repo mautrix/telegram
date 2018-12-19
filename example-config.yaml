@@ -241,6 +241,17 @@ telegram:
     api_hash: tjyd5yge35lbodk1xwzw2jstp90k55qz
     # (Optional) Create your own bot at https://t.me/BotFather
     bot_token: disabled
+    # Custom server to connect to.
+    server:
+        # Set to true to use these server settings. If false, will automatically
+        # use production server assigned by Telegram. Set to false in production.
+        enabled: false
+        # The DC ID to connect to.
+        dc: 2
+        # The IP to connect to.
+        ip: 149.154.167.40
+        # The port to connect to. 443 may not work, 80 is better and both are equally secure.
+        port: 80
     # Telethon proxy configuration.
     # You must install PySocks from pip for proxies to work.
     proxy:
