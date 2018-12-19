@@ -369,8 +369,8 @@ class Puppet:
     async def update_avatar(self, source: 'AbstractUser', photo: FileLocation) -> bool:
         photo_id = f"{photo.volume_id}-{photo.local_id}"
         if self.photo_id != photo_id:
-            file = await util.transfer_file_to_matrix(self.db, source.client,
-                                                      self.default_mxid_intent, photo)
+            file = await util.transfer_file_to_matrix(source.client, self.default_mxid_intent,
+                                                      photo)
             if file:
                 await self.default_mxid_intent.set_avatar(file.mxc)
                 self.photo_id = photo_id

@@ -600,8 +600,7 @@ class Portal:
                             save: bool = False) -> bool:
         photo_id = f"{photo.volume_id}-{photo.local_id}"
         if self.photo_id != photo_id:
-            file = await util.transfer_file_to_matrix(self.db, user.client, self.main_intent,
-                                                      photo)
+            file = await util.transfer_file_to_matrix(user.client, self.main_intent, photo)
             if file:
                 await self.main_intent.set_room_avatar(self.mxid, file.mxc)
                 self.photo_id = photo_id
@@ -1242,8 +1241,7 @@ class Portal:
     async def handle_telegram_photo(self, source: 'AbstractUser', intent: IntentAPI, evt: Message,
                                     relates_to: Dict = None) -> Optional[Dict]:
         largest_size = self._get_largest_photo_size(evt.media.photo)
-        file = await util.transfer_file_to_matrix(self.db, source.client, intent,
-                                                  largest_size.location)
+        file = await util.transfer_file_to_matrix(source.client, intent, largest_size.location)
         if not file:
             return None
         if self.get_config("inline_images") and (evt.message
@@ -1337,12 +1335,11 @@ class Portal:
         return info, name
 
     async def handle_telegram_document(self, source: 'AbstractUser', intent: IntentAPI,
-                                       evt: Message,
-                                       relates_to: dict = None) -> Optional[Dict]:
+                                       evt: Message, relates_to: dict = None) -> Optional[Dict]:
         document = evt.media.document
         attrs = self._parse_telegram_document_attributes(document.attributes)
 
-        file = await util.transfer_file_to_matrix(self.db, source.client, intent, document,
+        file = await util.transfer_file_to_matrix(source.client, intent, document,
                                                   document.thumb, is_sticker=attrs["is_sticker"])
         if not file:
             return None
