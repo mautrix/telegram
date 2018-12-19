@@ -336,7 +336,6 @@ class AbstractUser(ABC):
             if number_left == 0:
                 portal = po.Portal.get_by_mxid(message.mx_room)
                 await self._try_redact(portal, message)
-        self.db.commit()
 
     async def delete_channel_message(self, update: UpdateDeleteChannelMessages) -> None:
         if len(update.messages) > MAX_DELETIONS:
@@ -352,7 +351,6 @@ class AbstractUser(ABC):
                 continue
             message.delete()
             await self._try_redact(portal, message)
-        self.db.commit()
 
     async def update_message(self, original_update: UpdateMessage) -> None:
         update, sender, portal = self.get_message_details(original_update)
