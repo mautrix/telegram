@@ -118,7 +118,7 @@ async def set_rooms_to_clean(evt, management_rooms: List[ManagementRoom],
     elif command == "clean-groups":
         if len(evt.args) < 2:
             return await evt.reply("**Usage:** `$cmdprefix+sp clean-groups [M][A][U][I]")
-        groups_to_clean = evt.args[1]
+        groups_to_clean = evt.args[1].upper()
         if "M" in groups_to_clean:
             rooms_to_clean += [room_id for (room_id, user_id) in management_rooms]
         if "A" in groups_to_clean:
