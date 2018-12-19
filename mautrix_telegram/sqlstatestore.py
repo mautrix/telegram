@@ -59,13 +59,12 @@ class SQLStateStore(StateStore):
         except KeyError:
             pass
 
-        profile = UserProfile.query.get(key)
+        profile = UserProfile.get(*key)
         if profile:
             self.profile_cache[key] = profile
         elif create:
-            profile = UserProfile(room_id=room_id, user_id=user_id)
-            self.db.add(profile)
-            self.db.commit()
+            profile = UserProfile(room_id=room_id, user_id=user_id, membership="leave")
+            profile.insert()
             self.profile_cache[key] = profile
         return profile
 
@@ -77,7 +76,7 @@ class SQLStateStore(StateStore):
         profile.membership = member.get("membership", profile.membership or "leave")
         profile.displayname = member.get("displayname", profile.displayname)
         profile.avatar_url = member.get("avatar_url", profile.avatar_url)
-        self.db.commit()
+        profile.update()
 
     def set_membership(self, room: MatrixRoomID, user: MatrixUserID, membership: str) -> None:
         self.set_member(room, user, {
@@ -90,16 +89,17 @@ class SQLStateStore(StateStore):
         except KeyError:
             pass
 
-        room = RoomState.query.get(room_id)
+        room = RoomState.get(room_id)
         if room:
             self.room_state_cache[room_id] = room
         elif create:
             room = RoomState(room_id=room_id)
+            room.insert()
             self.room_state_cache[room_id] = room
         return room
 
     def has_power_levels(self, room: MatrixRoomID) -> bool:
-        return self._get_room_state(room).has_power_levels
+        return bool(self._get_room_state(room).power_levels)
 
     def get_power_levels(self, room: MatrixRoomID) -> Dict:
         return self._get_room_state(room).power_levels
@@ -114,9 +114,9 @@ class SQLStateStore(StateStore):
             }
         power_levels[room]["users"][user] = level
         room_state.power_levels = power_levels
-        self.db.commit()
+        room_state.update()
 
     def set_power_levels(self, room: MatrixRoomID, content: Dict) -> None:
         state = self._get_room_state(room)
         state.power_levels = content
-        self.db.commit()
+        state.update()
