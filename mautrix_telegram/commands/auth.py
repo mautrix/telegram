@@ -21,7 +21,9 @@ from telethon.errors import (
     AccessTokenExpiredError, AccessTokenInvalidError, FirstNameInvalidError, FloodWaitError,
     PasswordHashInvalidError, PhoneCodeExpiredError, PhoneCodeInvalidError,
     PhoneNumberAppSignupForbiddenError, PhoneNumberBannedError, PhoneNumberFloodError,
-    PhoneNumberOccupiedError, PhoneNumberUnoccupiedError, SessionPasswordNeededError)
+    PhoneNumberOccupiedError, PhoneNumberUnoccupiedError, SessionPasswordNeededError,
+    UsernameInvalidError, UsernameNotModifiedError, UsernameOccupiedError)
+from telethon.tl.functions.account import UpdateUsernameRequest
 
 from . import command_handler, CommandEvent, SECTION_AUTH
 from .. import puppet as pu, user as u
@@ -82,7 +84,8 @@ async def login_matrix(evt: CommandEvent) -> Optional[Dict]:
         }
     if evt.config["appservice.public.enabled"]:
         prefix = evt.config["appservice.public.external"]
-        url = f"{prefix}/matrix-login?token={evt.public_website.make_token(evt.sender.mxid, '/matrix-login')}"
+        token = evt.public_website.make_token(evt.sender.mxid, "/matrix-login")
+        url = f"{prefix}/matrix-login?token={token}"
         if allow_matrix_login:
             return await evt.reply(
                 "This bridge instance allows you to log in inside or outside Matrix.\n\n"
@@ -330,3 +333,27 @@ async def logout(evt: CommandEvent) -> Optional[Dict]:
     if await evt.sender.log_out():
         return await evt.reply("Logged out successfully.")
     return await evt.reply("Failed to log out.")
+
+
+@command_handler(needs_auth=True,
+                 help_section=SECTION_AUTH,
+                 help_text="Change your Telegram username")
+async def username(evt: CommandEvent) -> Optional[Dict]:
+    if len(evt.args) == 0:
+        return await evt.reply("**Usage:** `$cmdprefix+sp username <new username>`")
+    if evt.sender.is_bot:
+        return await evt.reply("Bots can't set their own username.")
+    try:
+        await evt.sender.client(UpdateUsernameRequest(username=evt.args[0]))
+    except UsernameInvalidError:
+        return await evt.reply("Invalid username. Usernames must be between 5 and 30 alphanumeric "
+                               "characters.")
+    except UsernameNotModifiedError:
+        return await evt.reply("That is your current username.")
+    except UsernameOccupiedError:
+        return await evt.reply("That username is already in use.")
+    await evt.sender.update_info()
+    if len(evt.sender.username) == 0:
+        await evt.reply("Username removed")
+    else:
+        await evt.reply(f"Username changed to {evt.sender.username}")

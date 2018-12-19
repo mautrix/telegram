@@ -14,7 +14,7 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import Awaitable, Coroutine, Dict, List, Optional, Pattern, TYPE_CHECKING
+from typing import Awaitable, Coroutine, Dict, List, Optional, Pattern, Union, TYPE_CHECKING
 from difflib import SequenceMatcher
 from enum import Enum
 from aiohttp import ServerDisconnectedError
@@ -24,7 +24,7 @@ import re
 
 from sqlalchemy import orm
 
-from telethon.tl.types import UserProfilePhoto, User, FileLocation
+from telethon.tl.types import UserProfilePhoto, User, FileLocation, UpdateUserName, PeerUser
 from mautrix_appservice import AppService, IntentAPI, IntentError, MatrixRequestError
 
 from .types import MatrixUserID, TelegramID
@@ -320,7 +320,7 @@ class Puppet:
             if name:
                 break
 
-        if info.deleted:
+        if isinstance(info, User) and info.deleted:
             name = f"Deleted account {info.id}"
         elif not name:
             name = info.id
@@ -345,12 +345,15 @@ class Puppet:
         if changed:
             self.save()
 
-    async def update_displayname(self, source: 'AbstractUser', info: User) -> bool:
+    async def update_displayname(self, source: 'AbstractUser', info: Union[User, UpdateUserName]
+                                 ) -> bool:
         ignore_source = (not source.is_relaybot
                          and self.displayname_source is not None
                          and self.displayname_source != source.tgid)
         if ignore_source:
             return False
+        if isinstance(info, UpdateUserName):
+            info = await source.client.get_entity(PeerUser(self.tgid))
 
         displayname = self.get_displayname(info)
         if displayname != self.displayname:

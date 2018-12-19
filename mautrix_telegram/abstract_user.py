@@ -271,6 +271,7 @@ class AbstractUser(ABC):
         # TODO duplication not checked
         puppet = pu.Puppet.get(TelegramID(update.user_id))
         if isinstance(update, UpdateUserName):
+            puppet.username = update.username
             if await puppet.update_displayname(self, update):
                 puppet.save()
         elif isinstance(update, UpdateUserPhoto):
