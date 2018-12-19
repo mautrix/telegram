@@ -23,7 +23,6 @@ import asyncio
 import magic
 from sqlalchemy import orm
 from sqlalchemy.exc import IntegrityError, InvalidRequestError
-from sqlalchemy.orm.exc import FlushError
 
 from telethon.tl.types import (Document, FileLocation, InputFileLocation,
                                InputDocumentFileLocation, PhotoSize, PhotoCachedSize)
@@ -117,6 +116,10 @@ async def transfer_thumbnail_to_matrix(client: MautrixTelegramClient, intent: In
     if not loc_id:
         return None
 
+    db_file = DBTelegramFile.get(loc_id)
+    if db_file:
+        return db_file
+
     video_ext = mimetypes.guess_extension(mime)
     if VideoFileClip and video_ext:
         try:
@@ -131,22 +134,29 @@ async def transfer_thumbnail_to_matrix(client: MautrixTelegramClient, intent: In
 
     content_uri = await intent.upload_file(file, mime_type)
 
-    return DBTelegramFile(id=loc_id, mxc=content_uri, mime_type=mime_type,
-                          was_converted=False, timestamp=int(time.time()), size=len(file),
-                          width=width, height=height)
+    db_file = DBTelegramFile(id=loc_id, mxc=content_uri, mime_type=mime_type,
+                             was_converted=False, timestamp=int(time.time()), size=len(file),
+                             width=width, height=height)
+    try:
+        db_file.insert()
+    except (IntegrityError, InvalidRequestError) as e:
+        log.exception(f"{e.__class__.__name__} while saving transferred file thumbnail data. "
+                      "This was probably caused by two simultaneous transfers of the same file, "
+                      "and might (but probably won't) cause problems with thumbnails or something.")
+    return db_file
 
 
 transfer_locks = {}  # type: Dict[str, asyncio.Lock]
 
 
-async def transfer_file_to_matrix(db: orm.Session, client: MautrixTelegramClient, intent: IntentAPI,
+async def transfer_file_to_matrix(client: MautrixTelegramClient, intent: IntentAPI,
                                   location: TypeLocation, thumbnail: Optional[TypeLocation] = None,
                                   is_sticker: bool = False) -> Optional[DBTelegramFile]:
     location_id = _location_to_id(location)
     if not location_id:
         return None
 
-    db_file = DBTelegramFile.query.get(location_id)
+    db_file = DBTelegramFile.get(location_id)
     if db_file:
         return db_file
 
@@ -156,15 +166,15 @@ async def transfer_file_to_matrix(db: orm.Session, client: MautrixTelegramClient
         lock = asyncio.Lock()
         transfer_locks[location_id] = lock
     async with lock:
-        return await _unlocked_transfer_file_to_matrix(db, client, intent, location_id, location,
+        return await _unlocked_transfer_file_to_matrix(client, intent, location_id, location,
                                                        thumbnail, is_sticker)
 
 
-async def _unlocked_transfer_file_to_matrix(db: orm.Session, client: MautrixTelegramClient,
-                                            intent: IntentAPI, loc_id: str, location: TypeLocation,
+async def _unlocked_transfer_file_to_matrix(client: MautrixTelegramClient, intent: IntentAPI,
+                                            loc_id: str, location: TypeLocation,
                                             thumbnail: Optional[TypeLocation],
                                             is_sticker: bool) -> Optional[DBTelegramFile]:
-    db_file = DBTelegramFile.query.get(loc_id)
+    db_file = DBTelegramFile.get(loc_id)
     if db_file:
         return db_file
 
@@ -201,16 +211,9 @@ async def _unlocked_transfer_file_to_matrix(db: orm.Session, client: MautrixTele
                                                                mime_type)
 
     try:
-        db.add(db_file)
-        db.commit()
-    except FlushError as e:
-        log.exception(f"{e.__class__.__name__} while saving transferred file data. "
-                      "This was probably caused by two simultaneous transfers of the same file, "
-                      "and should not cause any problems.")
+        db_file.insert()
     except (IntegrityError, InvalidRequestError) as e:
-        db.rollback()
         log.exception(f"{e.__class__.__name__} while saving transferred file data. "
                       "This was probably caused by two simultaneous transfers of the same file, "
                       "and should not cause any problems.")
-
     return db_file

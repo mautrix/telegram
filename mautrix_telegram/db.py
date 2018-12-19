@@ -278,7 +278,9 @@ class BotChat(Base):
 
 
 class TelegramFile(Base):
-    query = None  # type: Query
+    db = None  # type: Engine
+    t = None  # type: Table
+    c = None  # type: ImmutableColumnCollection
     __tablename__ = "telegram_file"
 
     id = Column(String, primary_key=True)
@@ -291,6 +293,25 @@ class TelegramFile(Base):
     height = Column(Integer, nullable=True)
     thumbnail_id = Column("thumbnail", String, ForeignKey("telegram_file.id"), nullable=True)
     thumbnail = relationship("TelegramFile", uselist=False)
+
+    @classmethod
+    def get(cls, id: str) -> Optional['TelegramFile']:
+        rows = cls.db.execute(cls.t.select().where(cls.c.id == id))
+        try:
+            id, mxc, mime, conv, ts, s, w, h, thumb_id = next(rows)
+            thumb = None
+            if thumb_id:
+                thumb = cls.get(thumb_id)
+            return TelegramFile(id=id, mxc=mxc, mime_type=mime, was_converted=conv, timestamp=ts,
+                                size=s, width=w, height=h, thumbnail_id=thumb_id, thumbnail=thumb)
+        except StopIteration:
+            return None
+
+    def insert(self) -> None:
+        self.db.execute(self.t.insert().values(
+            id=self.id, mxc=self.mxc, mime_type=self.mime_type, timestamp=self.timestamp,
+            size=self.size, width=self.width, height=self.height,
+            thumbnail_id=self.thumbnail.id if self.thumbnail else self.thumbnail_id))
 
 
 def init(db_session, db_engine) -> None:
