@@ -35,8 +35,9 @@ from ..util import format_duration
                  help_text="Check if you're logged into Telegram.")
 async def ping(evt: CommandEvent) -> Optional[Dict]:
     me = await evt.sender.client.get_me() if await evt.sender.is_logged_in() else None
+    human_tg_id = f"@{me.username}" if me.username else f"+{me.phone}"
     if me:
-        return await evt.reply(f"You're logged in as @{me.username}")
+        return await evt.reply(f"You're logged in as {human_tg_id}")
     else:
         return await evt.reply("You're not logged in.")
 
@@ -369,8 +370,11 @@ async def username(evt: CommandEvent) -> Optional[Dict]:
         return await evt.reply("**Usage:** `$cmdprefix+sp username <new username>`")
     if evt.sender.is_bot:
         return await evt.reply("Bots can't set their own username.")
+    new_name = evt.args[0]
+    if new_name == "-":
+        new_name = ""
     try:
-        await evt.sender.client(UpdateUsernameRequest(username=evt.args[0]))
+        await evt.sender.client(UpdateUsernameRequest(username=new_name))
     except UsernameInvalidError:
         return await evt.reply("Invalid username. Usernames must be between 5 and 30 alphanumeric "
                                "characters.")
@@ -379,7 +383,7 @@ async def username(evt: CommandEvent) -> Optional[Dict]:
     except UsernameOccupiedError:
         return await evt.reply("That username is already in use.")
     await evt.sender.update_info()
-    if len(evt.sender.username) == 0:
+    if not evt.sender.username:
         await evt.reply("Username removed")
     else:
         await evt.reply(f"Username changed to {evt.sender.username}")
