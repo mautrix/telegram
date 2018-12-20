@@ -168,16 +168,13 @@ class AbstractUser(ABC):
         return self
 
     async def ensure_started(self, even_if_no_session=False) -> 'AbstractUser':
-        if not self.puppet_whitelisted:
+        if not self.puppet_whitelisted or self.connected:
             return self
-        self.log.debug("ensure_started(%s, connected=%s, even_if_no_session=%s, session_count=%s)",
-                       self.mxid, self.connected, even_if_no_session,
-                       self.session_container.Session.query.filter(
-                           self.session_container.Session.session_id == self.mxid).count())
-        should_connect = (even_if_no_session or
-                          self.session_container.Session.query.filter(
-                              self.session_container.Session.session_id == self.mxid).count() > 0)
-        if not self.connected and should_connect:
+        session_count = self.session_container.Session.query.filter(
+            self.session_container.Session.session_id == self.mxid).count()
+        self.log.debug("ensure_started(%s, even_if_no_session=%s, session_count=%s)",
+                       self.mxid, even_if_no_session, session_count)
+        if even_if_no_session or session_count > 0:
             await self.start(delete_unless_authenticated=not even_if_no_session)
         return self
 

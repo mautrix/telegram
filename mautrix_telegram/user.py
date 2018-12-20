@@ -14,7 +14,7 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import Coroutine, Dict, List, Match, NewType, Optional, Tuple, cast, TYPE_CHECKING
+from typing import Awaitable, Dict, List, Match, NewType, Optional, Tuple, TYPE_CHECKING
 import logging
 import asyncio
 import re
@@ -207,9 +207,6 @@ class User(AbstractUser):
     # endregion
     # region Telegram actions that need custom methods
 
-    def ensure_started(self, even_if_no_session: bool = False) -> Coroutine[None, None, 'User']:
-        return cast(Coroutine[None, None, 'User'], super().ensure_started(even_if_no_session))
-
     async def set_presence(self, online: bool = True) -> None:
         if not self.is_bot:
             await self.client(UpdateStatusRequest(offline=not online))
@@ -399,9 +396,9 @@ class User(AbstractUser):
     # endregion
 
 
-def init(context: 'Context') -> List[Coroutine]:  # [None, None, AbstractUser]
+def init(context: 'Context') -> List[Awaitable['AbstractUser']]:
     global config
     config = context.config
 
     users = [User.from_db(user) for user in DBUser.query.all()]
-    return [user.ensure_started() for user in users]
+    return [user.ensure_started() for user in users if user.tgid]
