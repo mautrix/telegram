@@ -159,6 +159,9 @@ class User(AbstractUser):
     # endregion
     # region Telegram connection management
 
+    def ensure_started(self, even_if_no_session=False) -> Awaitable['User']:
+        return super().ensure_started(even_if_no_session)
+
     async def start(self, delete_unless_authenticated: bool = False) -> 'User':
         await super().start()
         if await self.is_logged_in():
@@ -396,7 +399,7 @@ class User(AbstractUser):
     # endregion
 
 
-def init(context: 'Context') -> List[Awaitable['AbstractUser']]:
+def init(context: 'Context') -> List[Awaitable['User']]:
     global config
     config = context.config
 
