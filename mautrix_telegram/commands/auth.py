@@ -137,7 +137,7 @@ async def register(evt: CommandEvent) -> Optional[Dict]:
     else:
         full_name = " ".join(evt.args[1:-1]), evt.args[-1]
 
-    await request_code(evt, phone_number, {
+    await _request_code(evt, phone_number, {
         "next": enter_code_register,
         "action": "Register",
         "full_name": full_name,
@@ -175,11 +175,15 @@ async def enter_code_register(evt: CommandEvent) -> Dict:
                  help_section=SECTION_AUTH,
                  help_text="Get instructions on how to log in.")
 async def login(evt: CommandEvent) -> Optional[Dict]:
+    override_sender = False
+    if len(evt.args) > 0 and evt.sender.is_admin:
+        evt.sender = await u.User.get_by_mxid(evt.args[0]).ensure_started()
+        override_sender = True
     if await evt.sender.is_logged_in():
         return await evt.reply(f"You are already logged in as {evt.sender.human_tg_id}.")
 
     allow_matrix_login = evt.config.get("bridge.allow_matrix_login", True)
-    if allow_matrix_login:
+    if allow_matrix_login and not override_sender:
         evt.sender.command_status = {
             "next": enter_phone_or_token,
             "action": "Login",
@@ -188,7 +192,14 @@ async def login(evt: CommandEvent) -> Optional[Dict]:
     if evt.config["appservice.public.enabled"]:
         prefix = evt.config["appservice.public.external"]
         url = f"{prefix}/login?token={evt.public_website.make_token(evt.sender.mxid, '/login')}"
+        as_user = (f" as [{evt.sender.mxid}](https://matrix.to/#/{evt.sender.mxid})"
+                   if override_sender else "")
         if allow_matrix_login:
+            if override_sender:
+                return await evt.reply(
+                    "This bridge instance allows you to log in inside or outside of Matrix, but "
+                    "logging in as another user is only possible via the web interface.\n\n"
+                    f"Please visit [the login page]({url}) to log in{as_user}.")
             return await evt.reply(
                 "This bridge instance allows you to log in inside or outside Matrix.\n\n"
                 "If you would like to log in within Matrix, please send your phone number or bot "
@@ -197,16 +208,20 @@ async def login(evt: CommandEvent) -> Optional[Dict]:
                 "Logging in outside of Matrix is recommended if you have two-factor authentication "
                 "enabled, because in-Matrix login would save your password in the message history.")
         return await evt.reply("This bridge instance does not allow logging in inside Matrix.\n\n"
-                               f"Please visit [the login page]({url}) to log in.")
+                               f"Please visit [the login page]({url}) to log in{as_user}.")
     elif allow_matrix_login:
+        if override_sender:
+            return await evt.reply(
+                "This bridge instance does not allow you to log in outside of Matrix. "
+                "Logging in as another user inside Matrix is not currently possible.")
         return await evt.reply(
             "This bridge instance does not allow you to log in outside of Matrix.\n\n"
             "Please send your phone number or bot auth token here to start the login process.")
     return await evt.reply("This bridge instance has been configured to not allow logging in.")
 
 
-async def request_code(evt: CommandEvent, phone_number: str, next_status: Dict[str, Any]
-                       ) -> Dict:
+async def _request_code(evt: CommandEvent, phone_number: str, next_status: Dict[str, Any]
+                        ) -> Dict:
     ok = False
     try:
         await evt.sender.ensure_started(even_if_no_session=True)
@@ -248,13 +263,13 @@ async def enter_phone_or_token(evt: CommandEvent) -> Optional[Dict]:
     # phone numbers don't contain colons but telegram bot auth tokens do
     if evt.args[0].find(":") > 0:
         try:
-            await sign_in(evt, bot_token=evt.args[0])
+            await _sign_in(evt, bot_token=evt.args[0])
         except Exception:
             evt.log.exception("Error sending auth token")
             return await evt.reply("Unhandled exception while sending auth token. "
                                    "Check console for more details.")
     else:
-        await request_code(evt, evt.args[0], {
+        await _request_code(evt, evt.args[0], {
             "next": enter_code,
             "action": "Login",
         })
@@ -269,7 +284,7 @@ async def enter_code(evt: CommandEvent) -> Optional[Dict]:
         return await evt.reply("This bridge instance does not allow in-Matrix login. "
                                "Please use `$cmdprefix+sp login` to get login instructions")
     try:
-        await sign_in(evt, code=evt.args[0])
+        await _sign_in(evt, code=evt.args[0])
     except Exception:
         evt.log.exception("Error sending phone code")
         return await evt.reply("Unhandled exception while sending code. "
@@ -285,7 +300,7 @@ async def enter_password(evt: CommandEvent) -> Optional[Dict]:
         return await evt.reply("This bridge instance does not allow in-Matrix login. "
                                "Please use `$cmdprefix+sp login` to get login instructions")
     try:
-        await sign_in(evt, password=" ".join(evt.args))
+        await _sign_in(evt, password=" ".join(evt.args))
     except AccessTokenInvalidError:
         return await evt.reply("That bot token is not valid.")
     except AccessTokenExpiredError:
@@ -297,7 +312,7 @@ async def enter_password(evt: CommandEvent) -> Optional[Dict]:
     return None
 
 
-async def sign_in(evt: CommandEvent, **sign_in_info) -> Dict:
+async def _sign_in(evt: CommandEvent, **sign_in_info) -> Dict:
     try:
         await evt.sender.ensure_started(even_if_no_session=True)
         user = await evt.sender.client.sign_in(**sign_in_info)
