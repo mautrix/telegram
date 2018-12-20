@@ -98,6 +98,10 @@ class User(AbstractUser):
         return self.mxid_localpart
 
     @property
+    def plain_displayname(self) -> str:
+        return self.displayname
+
+    @property
     def db_contacts(self) -> List[DBContact]:
         return [self.db.merge(DBContact(user=self.tgid, contact=puppet.id))
                 for puppet in self.contacts]

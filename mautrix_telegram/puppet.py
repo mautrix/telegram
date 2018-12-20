@@ -104,6 +104,16 @@ class Puppet:
         """ Is True if the puppet is logged in. """
         return True
 
+    @property
+    def plain_displayname(self) -> str:
+        tpl = config["bridge.displayname_template"]
+        if tpl == "{displayname}":
+            # Template has no extra stuff, no need to parse.
+            return self.displayname
+        regex = re.compile("^" + re.escape(tpl).replace(re.escape("{displayname}"), "(.+?)") + "$")
+        match = regex.match(self.displayname)
+        return match.group(1) or self.displayname
+
     # region Custom puppet management
     def _fresh_intent(self) -> IntentAPI:
         return (self.az.intent.user(self.custom_mxid, self.access_token)
@@ -312,8 +322,7 @@ class Puppet:
             "first name": info.first_name,
             "last name": info.last_name,
         }
-        preferences = config.get("bridge.displayname_preference",
-                                 ["full name", "username", "phone"])
+        preferences = config["bridge.displayname_preference"]
         name = None
         for preference in preferences:
             name = data[preference]
@@ -327,7 +336,7 @@ class Puppet:
 
         if not enable_format:
             return name
-        return config.get("bridge.displayname_template", "{displayname} (Telegram)").format(
+        return config["bridge.displayname_template"].format(
             displayname=name)
 
     async def update_info(self, source: 'AbstractUser', info: User) -> None:

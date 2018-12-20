@@ -31,7 +31,6 @@ from .telegram_message import TelegramMessage, Entity, offset_length_multiply
 
 from .html_reader import HTMLNode, read_html
 
-
 ParsedMessage = Tuple[str, List[TypeMessageEntity]]
 
 
@@ -155,8 +154,8 @@ class MatrixParser:
             if user.username:
                 return TelegramMessage(f"@{user.username}").format(Mention)
             elif user.tgid:
-                return TelegramMessage(user.displayname or msg.text).format(MentionName,
-                                                                            user_id=user.tgid)
+                displayname = user.plain_displayname or msg.text
+                return TelegramMessage(displayname).format(MentionName, user_id=user.tgid)
             return msg
 
         room = cls.room_regex.match(href)
