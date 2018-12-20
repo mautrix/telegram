@@ -458,6 +458,7 @@ def config_defaults(evt: CommandEvent) -> Awaitable[Dict]:
         "native_stickers": evt.config["bridge.native_stickers"],
         "message_formats": evt.config["bridge.message_formats"],
         "state_event_formats": evt.config["bridge.state_event_formats"],
+        "telegram_link_preview": evt.config["bridge.telegram_link_preview"],
     }, stream)
     return evt.reply(f"Bridge instance wide config:\n\n```yaml\n{stream.getvalue()}```")
 
