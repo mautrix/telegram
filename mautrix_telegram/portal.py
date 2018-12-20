@@ -98,6 +98,7 @@ class Portal:
     public_portals = False  # type: bool
     max_initial_member_sync = -1  # type: int
     sync_channel_members = True  # type: bool
+    tg_link_preview = True  # type: bool
 
     dedup_pre_db_check = False  # type: bool
     dedup_cache_queue_length = 20  # type: int
@@ -675,13 +676,13 @@ class Portal:
             members = await self.main_intent.get_room_members(self.mxid)
         except MatrixRequestError:
             return []
-        authenticated = []
+        authenticated = []  # type: List[u.User]
         has_bot = self.has_bot
         for member_str in members:
             member = MatrixUserID(member_str)
             if p.Puppet.get_id_from_mxid(member) or member == self.main_intent.mxid:
                 continue
-            user = await u.User.get_by_mxid(member).ensure_started()
+            user = await u.User.get_by_mxid(member).ensure_started()  # type: u.User
             authenticated_through_bot = has_bot and user.relaybot_whitelisted
             if authenticated_through_bot or await user.has_full_access(allow_bot=True):
                 authenticated.append(user)
@@ -918,7 +919,8 @@ class Portal:
         lock = self.require_send_lock(sender_id)
         async with lock:
             response = await client.send_message(self.peer, message, reply_to=reply_to,
-                                                 parse_mode=self._matrix_event_to_entities)
+                                                 parse_mode=self._matrix_event_to_entities,
+                                                 link_preview=self.tg_link_preview)
             self._add_telegram_message_to_db(event_id, space, response)
 
     async def _handle_matrix_file(self, msgtype: str, sender_id: TelegramID,
@@ -1875,6 +1877,7 @@ def init(context: Context) -> None:
     Portal.filter_list = config["bridge.filter.list"]
     Portal.dedup_pre_db_check = config["bridge.deduplication.pre_db_check"]
     Portal.dedup_cache_queue_length = config["bridge.deduplication.cache_queue_length"]
+    Portal.tg_link_preview = config["bridge.telegram_link_preview"]
     Portal.alias_template = config.get("bridge.alias_template", "telegram_{groupname}")
     Portal.hs_domain = config["homeserver.domain"]
     Portal.mx_alias_regex = re.compile(

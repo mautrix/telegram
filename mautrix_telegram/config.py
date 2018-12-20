@@ -211,6 +211,7 @@ class Config(DictWithRecursion):
         copy("bridge.native_stickers")
         copy("bridge.catch_up")
         copy("bridge.sync_with_custom_puppets")
+        copy("bridge.telegram_link_preview")
 
         copy("bridge.deduplication.pre_db_check")
         copy("bridge.deduplication.cache_queue_length")

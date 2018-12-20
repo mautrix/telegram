@@ -127,6 +127,8 @@ bridge:
     # Whether or not to use /sync to get presence, read receipts and typing notifications when using
     # your own Matrix account as the Matrix puppet for your Telegram account.
     sync_with_custom_puppets: true
+    # Set to false to disable link previews in messages sent to Telegram.
+    telegram_link_preview: true
 
     # Some config options related to Telegram message deduplication.
     # The default values are usually fine, but some debug messages/warnings might recommend you
