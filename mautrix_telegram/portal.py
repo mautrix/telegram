@@ -55,12 +55,12 @@ from telethon.tl.types import (
     MessageActionChatDeletePhoto, MessageActionChatDeleteUser, MessageActionChatEditPhoto,
     MessageActionChatEditTitle, MessageActionChatJoinedByLink, MessageActionChatMigrateTo,
     MessageActionPinMessage, MessageMediaContact, MessageMediaDocument, MessageMediaGeo,
-    MessageMediaPhoto, MessageService, PeerChannel, PeerChat, PeerUser, Photo, PhotoCachedSize,
-    SendMessageCancelAction, SendMessageTypingAction, TypeChannelParticipant, TypeChat,
-    TypeChatParticipant, TypeDocumentAttribute, TypeInputPeer, TypeMessageAction,
-    TypeMessageEntity, TypePeer, TypePhotoSize, TypeUpdates, TypeUser, TypeUserFull,
-    UpdateChatUserTyping, UpdateNewChannelMessage, UpdateNewMessage, UpdateUserTyping, User,
-    UserFull)
+    MessageMediaPhoto, MessageMediaUnsupported, MessageService, PeerChannel, PeerChat, PeerUser,
+    Photo, PhotoCachedSize, SendMessageCancelAction, SendMessageTypingAction,
+    TypeChannelParticipant, TypeChat, TypeChatParticipant, TypeDocumentAttribute, TypeInputPeer,
+    TypeMessageAction, TypeMessageEntity, TypePeer, TypePhotoSize, TypeUpdates, TypeUser,
+    TypeUserFull, UpdateChatUserTyping, UpdateNewChannelMessage, UpdateNewMessage, UpdateUserTyping,
+    User, UserFull)
 from mautrix_appservice import MatrixRequestError, IntentError, AppService, IntentAPI
 
 from .types import MatrixEventID, MatrixRoomID, MatrixUserID, TelegramID
@@ -1381,8 +1381,8 @@ class Portal:
         lat = location.lat
         long_char = "E" if long > 0 else "W"
         lat_char = "N" if lat > 0 else "S"
-        rounded_long = abs(round(long * 100000) / 100000)
-        rounded_lat = abs(round(lat * 100000) / 100000)
+        rounded_long = round(long, 5)
+        rounded_lat = round(lat, 5)
 
         body = f"{rounded_lat}° {lat_char}, {rounded_long}° {long_char}"
 
@@ -1412,6 +1412,25 @@ class Portal:
                                       msgtype=msgtype, timestamp=evt.date,
                                       external_url=self.get_external_url(evt))
 
+    async def handle_telegram_unsupported(self, source: 'AbstractUser', intent: IntentAPI,
+                                          evt: Message, relates_to: dict = None) -> dict:
+        prev = evt.message
+        evt.message = ("This message is not supported on your version of Mautrix-Telegram. "
+                       "Please check https://github.com/tulir/mautrix-telegram or ask your "
+                       "bridge administrator about possible updates.")
+        text, html, relates_to = await formatter.telegram_to_matrix(evt, source,
+                                                                    self.main_intent)
+        evt.message = prev
+        await intent.set_typing(self.mxid, is_typing=False)
+        return await intent.send_message(self.mxid, {
+            "body": text,
+            "msgtype": "m.notice",
+            "format": "org.matrix.custom.html",
+            "formatted_body": html,
+            "m.relates_to": relates_to,
+            "net.maunium.telegram.unsupported": True,
+        }, timestamp=evt.date, external_url=self.get_external_url(evt))
+
     async def handle_telegram_edit(self, source: 'AbstractUser', sender: p.Puppet,
                                    evt: Message) -> None:
         if not self.mxid:
@@ -1428,7 +1447,7 @@ class Portal:
         tg_space = self.tgid if self.peer_type == "channel" else source.tgid
 
         temporary_identifier = MatrixEventID(
-            f"${random.randint(1000000000000,9999999999999)}TGBRIDGEDITEMP")
+            f"${random.randint(1000000000000, 9999999999999)}TGBRIDGEDITEMP")
         duplicate_found = self.is_duplicate(evt, (temporary_identifier, tg_space), force_hash=True)
         if duplicate_found:
             mxid, other_tg_space = duplicate_found
@@ -1470,7 +1489,7 @@ class Portal:
         tg_space = self.tgid if self.peer_type == "channel" else source.tgid
 
         temporary_identifier = MatrixEventID(
-            f"${random.randint(1000000000000,9999999999999)}TGBRIDGETEMP")
+            f"${random.randint(1000000000000, 9999999999999)}TGBRIDGETEMP")
         duplicate_found = self.is_duplicate(evt, (temporary_identifier, tg_space))
         if duplicate_found:
             mxid, other_tg_space = duplicate_found
@@ -1495,7 +1514,8 @@ class Portal:
             entity = await source.client.get_entity(PeerUser(sender.tgid))
             await sender.update_info(source, entity)
 
-        allowed_media = (MessageMediaPhoto, MessageMediaDocument, MessageMediaGeo)
+        allowed_media = (MessageMediaPhoto, MessageMediaDocument, MessageMediaGeo,
+                         MessageMediaUnsupported)
         media = evt.media if hasattr(evt, "media") and isinstance(evt.media,
                                                                   allowed_media) else None
         intent = sender.intent if sender else self.main_intent
@@ -1503,16 +1523,13 @@ class Portal:
             is_bot = sender.is_bot if sender else False
             response = await self.handle_telegram_text(source, intent, is_bot, evt)
         elif media:
-            relates_to = formatter.telegram_reply_to_matrix(evt, source)
-            if isinstance(media, MessageMediaPhoto):
-                response = await self.handle_telegram_photo(source, intent, evt, relates_to)
-            elif isinstance(media, MessageMediaDocument):
-                response = await self.handle_telegram_document(source, intent, evt, relates_to)
-            elif isinstance(media, MessageMediaGeo):
-                response = await self.handle_telegram_location(source, intent, evt, relates_to)
-            else:
-                self.log.debug("Unhandled Telegram media: %s", media)
-                return
+            response = await {
+                MessageMediaPhoto: self.handle_telegram_photo,
+                MessageMediaDocument: self.handle_telegram_document,
+                MessageMediaGeo: self.handle_telegram_location,
+                MessageMediaUnsupported: self.handle_telegram_unsupported,
+            }[type(media)](source, intent, evt,
+                           relates_to=formatter.telegram_reply_to_matrix(evt, source))
         else:
             self.log.debug("Unhandled Telegram message: %s", evt)
             return
