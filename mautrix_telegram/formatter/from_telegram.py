@@ -179,9 +179,12 @@ async def _add_reply_header(source: "AbstractUser", text: str, html: str, evt: M
 async def telegram_to_matrix(evt: Message, source: "AbstractUser",
                              main_intent: Optional[IntentAPI] = None,
                              is_edit: bool = False, prefix_text: Optional[str] = None,
-                             prefix_html: Optional[str] = None) -> Tuple[str, str, Dict]:
-    text = add_surrogates(evt.message)
-    html = _telegram_entities_to_matrix_catch(text, evt.entities) if evt.entities else None
+                             prefix_html: Optional[str] = None, override_text: str = None,
+                             override_entities: List[TypeMessageEntity] = None
+                             ) -> Tuple[str, str, Dict]:
+    text = add_surrogates(override_text or evt.message)
+    entities = override_entities or evt.entities
+    html = _telegram_entities_to_matrix_catch(text, entities) if entities else None
     relates_to = {}  # type: Dict
 
     if prefix_html:

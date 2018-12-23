@@ -23,6 +23,7 @@ import asyncio
 import random
 import mimetypes
 import unicodedata
+import base64
 import hashlib
 import logging
 import json
@@ -55,12 +56,12 @@ from telethon.tl.types import (
     MessageActionChatDeletePhoto, MessageActionChatDeleteUser, MessageActionChatEditPhoto,
     MessageActionChatEditTitle, MessageActionChatJoinedByLink, MessageActionChatMigrateTo,
     MessageActionPinMessage, MessageMediaContact, MessageMediaDocument, MessageMediaGeo,
-    MessageMediaPhoto, MessageMediaUnsupported, MessageService, PeerChannel, PeerChat, PeerUser,
-    Photo, PhotoCachedSize, SendMessageCancelAction, SendMessageTypingAction,
+    MessageMediaPhoto, MessageMediaUnsupported, MessageMediaGame, MessageService, PeerChannel,
+    PeerChat, PeerUser, Photo, PhotoCachedSize, SendMessageCancelAction, SendMessageTypingAction,
     TypeChannelParticipant, TypeChat, TypeChatParticipant, TypeDocumentAttribute, TypeInputPeer,
     TypeMessageAction, TypeMessageEntity, TypePeer, TypePhotoSize, TypeUpdates, TypeUser,
     TypeUserFull, UpdateChatUserTyping, UpdateNewChannelMessage, UpdateNewMessage, UpdateUserTyping,
-    User, UserFull)
+    User, UserFull, MessageEntityCode)
 from mautrix_appservice import MatrixRequestError, IntentError, AppService, IntentAPI
 
 from .types import MatrixEventID, MatrixRoomID, MatrixUserID, TelegramID
@@ -1414,13 +1415,11 @@ class Portal:
 
     async def handle_telegram_unsupported(self, source: 'AbstractUser', intent: IntentAPI,
                                           evt: Message, relates_to: dict = None) -> dict:
-        prev = evt.message
-        evt.message = ("This message is not supported on your version of Mautrix-Telegram. "
-                       "Please check https://github.com/tulir/mautrix-telegram or ask your "
-                       "bridge administrator about possible updates.")
-        text, html, relates_to = await formatter.telegram_to_matrix(evt, source,
-                                                                    self.main_intent)
-        evt.message = prev
+        override_text = ("This message is not supported on your version of Mautrix-Telegram. "
+                         "Please check https://github.com/tulir/mautrix-telegram or ask your "
+                         "bridge administrator about possible updates.")
+        text, html, relates_to = await formatter.telegram_to_matrix(
+            evt, source, self.main_intent, override_text=override_text)
         await intent.set_typing(self.mxid, is_typing=False)
         return await intent.send_message(self.mxid, {
             "body": text,
@@ -1429,6 +1428,35 @@ class Portal:
             "formatted_body": html,
             "m.relates_to": relates_to,
             "net.maunium.telegram.unsupported": True,
+        }, timestamp=evt.date, external_url=self.get_external_url(evt))
+
+    async def handle_telegram_game(self, source: 'AbstractUser', intent: IntentAPI,
+                                   evt: Message, relates_to: dict = None):
+        game = evt.media.game
+        if self.peer_type == "channel":
+            play_id = base64.b64encode(f"chan-{self.tgid}-{evt.id}".encode("utf-8"))
+        elif self.peer_type == "chat":
+            play_id = base64.b64encode(f"chat-{self.tgid}-{source.tgid}-{evt.id}".encode("utf-8"))
+        elif self.peer_type == "user":
+            play_id = base64.b64encode(f"user-{self.tgid}-{evt.id}".encode("utf-8"))
+        else:
+            raise ValueError("Portal has invalid peer type")
+        play_id = play_id.decode("utf-8")
+        command = f"!tg play {play_id}"
+        override_text = (f"Run {command} in your bridge management room to "
+                         f"play {game.title}:\n\n{game.description}")
+        override_entities = [MessageEntityCode(offset=len("Run "), length=len(command))]
+        text, html, relates_to = await formatter.telegram_to_matrix(
+            evt, source, self.main_intent,
+            override_text=override_text, override_entities=override_entities)
+        await intent.set_typing(self.mxid, is_typing=False)
+        return await intent.send_message(self.mxid, {
+            "body": text,
+            "msgtype": "m.notice",
+            "format": "org.matrix.custom.html",
+            "formatted_body": html,
+            "m.relates_to": relates_to,
+            "net.maunium.telegram.game": play_id,
         }, timestamp=evt.date, external_url=self.get_external_url(evt))
 
     async def handle_telegram_edit(self, source: 'AbstractUser', sender: p.Puppet,
@@ -1514,7 +1542,7 @@ class Portal:
             entity = await source.client.get_entity(PeerUser(sender.tgid))
             await sender.update_info(source, entity)
 
-        allowed_media = (MessageMediaPhoto, MessageMediaDocument, MessageMediaGeo,
+        allowed_media = (MessageMediaPhoto, MessageMediaDocument, MessageMediaGeo, MessageMediaGame,
                          MessageMediaUnsupported)
         media = evt.media if hasattr(evt, "media") and isinstance(evt.media,
                                                                   allowed_media) else None
@@ -1528,6 +1556,7 @@ class Portal:
                 MessageMediaDocument: self.handle_telegram_document,
                 MessageMediaGeo: self.handle_telegram_location,
                 MessageMediaUnsupported: self.handle_telegram_unsupported,
+                MessageMediaGame: self.handle_telegram_game,
             }[type(media)](source, intent, evt,
                            relates_to=formatter.telegram_reply_to_matrix(evt, source))
         else:

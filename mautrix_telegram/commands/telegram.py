@@ -14,17 +14,21 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import Awaitable, Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
+import base64
 import re
 
-from telethon.errors import (
-    InviteHashInvalidError, InviteHashExpiredError, UserAlreadyParticipantError)
-from telethon.tl.types import User as TLUser
-from telethon.tl.types import TypeUpdates
-from telethon.tl.functions.messages import ImportChatInviteRequest, CheckChatInviteRequest
+from telethon.errors import (InviteHashInvalidError, InviteHashExpiredError,
+                             UserAlreadyParticipantError)
+from telethon.tl.types import User as TLUser, TypeUpdates, MessageMediaGame, PeerChat
+from telethon.tl.types.messages import BotCallbackAnswer
+from telethon.tl.functions.messages import (ImportChatInviteRequest, CheckChatInviteRequest,
+                                            GetBotCallbackAnswerRequest)
 from telethon.tl.functions.channels import JoinChannelRequest
 
 from .. import puppet as pu, portal as po
+from ..db import Message as DBMessage
+from ..types import TelegramID
 from . import command_handler, CommandEvent, SECTION_MISC, SECTION_CREATING_PORTALS
 
 
@@ -158,3 +162,54 @@ async def sync(evt: CommandEvent) -> Optional[Dict]:
     if not sync_only or sync_only == "me":
         await evt.sender.update_info()
     return await evt.reply("Synchronization complete.")
+
+
+@command_handler(help_section=SECTION_MISC,
+                 help_args="<play ID>",
+                 help_text="Play a Telegram game")
+async def play(evt: CommandEvent) -> Optional[Dict]:
+    if len(evt.args) < 1:
+        return await evt.reply("**Usage:** `$cmdprefix+sp play <play ID>`")
+    elif not await evt.sender.is_logged_in():
+        return await evt.reply("You must be logged in with a real account to play games.")
+    elif evt.sender.is_bot:
+        return await evt.reply("Bots can't play games :(")
+
+    try:
+        space = None
+        peer_type, play_id = base64.b64decode(evt.args[0]).decode("utf-8").split("-", 1)
+        if peer_type == "chan" or peer_type == "user":
+            tgid, msg_id = play_id.split("-")
+        elif peer_type == "chat":
+            tgid, space, msg_id = play_id.split("-")
+            space = TelegramID(int(space))
+        else:
+            raise ValueError()
+        tgid = TelegramID(int(tgid))
+        msg_id = TelegramID(int(msg_id))
+    except ValueError:
+        return await evt.reply("Invalid play ID (format)")
+
+    if peer_type == "chat":
+        orig_msg = DBMessage.get_by_tgid(msg_id, space)
+        if not orig_msg:
+            return await evt.reply("Invalid play ID (original message not found in db)")
+        new_msg = DBMessage.get_by_mxid(orig_msg.mxid, orig_msg.mx_room, evt.sender.tgid)
+        if not new_msg:
+            return await evt.reply("Invalid play ID (your copy of message not found in db)")
+        msg_id = new_msg.tgid
+    try:
+        peer = await evt.sender.client.get_input_entity(tgid)
+    except ValueError as e:
+        return await evt.reply("Invalid play ID (chat not found)")
+
+    msg = await evt.sender.client.get_messages(entity=peer, ids=msg_id)
+    if not msg or not isinstance(msg.media, MessageMediaGame):
+        return await evt.reply("Invalid play ID (message doesn't look like a game)")
+
+    game = await evt.sender.client(GetBotCallbackAnswerRequest(peer=peer, msg_id=msg_id, game=True))
+    if not isinstance(game, BotCallbackAnswer):
+        return await evt.reply("Game request response invalid")
+
+    await evt.reply(f"Click [here]({game.url}) to play {msg.media.game.title}:\n\n"
+                    f"{msg.media.game.description}")
