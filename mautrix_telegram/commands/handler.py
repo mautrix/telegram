@@ -15,8 +15,10 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from typing import Awaitable, Callable, Dict, List, NamedTuple, Optional
-import commonmark
+import traceback
 import logging
+
+import commonmark
 
 from telethon.errors import FloodWaitError
 
@@ -194,6 +196,11 @@ class CommandProcessor:
         except Exception:
             self.log.exception("Unhandled error while handling command "
                                f"{evt.command} {' '.join(args)} from {sender.mxid}")
+            if evt.sender.is_admin and evt.is_management:
+                return await evt.reply("Unhandled error while handling command:\n\n"
+                                       "```traceback\n"
+                                       f"{traceback.format_exc()}"
+                                       "```")
             return await evt.reply("Unhandled error while handling command. "
                                    "Check logs for more details.")
         return None
