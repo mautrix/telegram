@@ -29,13 +29,13 @@ from mautrix_appservice import AppService, IntentAPI, IntentError, MatrixRequest
 
 from .types import MatrixUserID, TelegramID
 from .db import Puppet as DBPuppet
+from .util import ignore_coro
 from . import util
 
 if TYPE_CHECKING:
     from .matrix import MatrixHandler
     from .config import Config
     from .context import Context
-    from . import user as u
     from .abstract_user import AbstractUser
 
 PuppetError = Enum('PuppetError', 'Success OnlyLoginSelf InvalidAccessToken')
@@ -153,7 +153,7 @@ class Puppet:
                 return PuppetError.OnlyLoginSelf
             return PuppetError.InvalidAccessToken
         if config["bridge.sync_with_custom_puppets"]:
-            asyncio.ensure_future(self.sync(), loop=self.loop)
+            ignore_coro(asyncio.ensure_future(self.sync(), loop=self.loop))
         return PuppetError.Success
 
     async def leave_rooms_with_default_user(self) -> None:

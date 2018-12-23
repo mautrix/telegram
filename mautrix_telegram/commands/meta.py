@@ -51,8 +51,8 @@ async def _get_help_text(evt: CommandEvent) -> str:
                 help_sections.setdefault(handler.help_section, [])
                 help_sections[handler.help_section].append(handler.help + "  ")
         help_sorted = sorted(help_sections.items(), key=lambda item: item[0].order)
-        help = ["#### {}\n{}\n".format(key.name, "\n".join(value)) for key, value in help_sorted]
-        help_cache[cache_key] = "\n".join(help)
+        helps = ["#### {}\n{}\n".format(key.name, "\n".join(value)) for key, value in help_sorted]
+        help_cache[cache_key] = "\n".join(helps)
     return help_cache[cache_key]
 
 

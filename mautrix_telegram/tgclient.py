@@ -21,7 +21,7 @@ from telethon.tl.functions.messages import SendMediaRequest
 from telethon.tl.types import (
     InputMediaUploadedDocument, InputMediaUploadedPhoto, TypeDocumentAttribute, TypeInputMedia,
     TypeInputPeer, TypeMessageEntity, TypeMessageMedia, TypePeer)
-from telethon.tl import custom
+from telethon.tl.patched import Message
 
 
 class MautrixTelegramClient(TelegramClient):
@@ -45,7 +45,7 @@ class MautrixTelegramClient(TelegramClient):
     async def send_media(self, entity: Union[TypeInputPeer, TypePeer],
                          media: Union[TypeInputMedia, TypeMessageMedia],
                          caption: str = None, entities: List[TypeMessageEntity] = None,
-                         reply_to: int = None) -> Optional[custom.Message]:
+                         reply_to: int = None) -> Optional[Message]:
         entity = await self.get_input_entity(entity)
         reply_to = utils.get_message_id(reply_to)
         request = SendMediaRequest(entity, media, message=caption or "", entities=entities or [],

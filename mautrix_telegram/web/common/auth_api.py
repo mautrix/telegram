@@ -25,7 +25,7 @@ import logging
 from telethon.errors import *
 
 from ...commands.auth import enter_password
-from ...util import format_duration
+from ...util import format_duration, ignore_coro
 from ...puppet import Puppet, PuppetError
 from ...user import User
 
@@ -112,7 +112,7 @@ class AuthAPI(abc.ABC):
         existing_user = User.get_by_tgid(user_info.id)
         if existing_user and existing_user != user:
             await existing_user.log_out()
-        asyncio.ensure_future(user.post_login(user_info), loop=self.loop)
+        ignore_coro(asyncio.ensure_future(user.post_login(user_info), loop=self.loop))
         if user.command_status and user.command_status["action"] == "Login":
             user.command_status = None
 

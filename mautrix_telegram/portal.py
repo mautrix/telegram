@@ -32,8 +32,7 @@ import re
 
 import magic
 from sqlalchemy import orm
-from sqlalchemy.exc import IntegrityError, InvalidRequestError
-from sqlalchemy.orm.exc import FlushError
+from sqlalchemy.exc import IntegrityError
 
 from telethon.tl.functions.messages import (
     AddChatUserRequest, CreateChatRequest, DeleteChatUserRequest, EditChatAdminRequest,
@@ -46,28 +45,30 @@ from telethon.tl.functions.channels import (
 from telethon.tl.functions.messages import ReadHistoryRequest as ReadMessageHistoryRequest
 from telethon.tl.functions.channels import ReadHistoryRequest as ReadChannelHistoryRequest
 from telethon.errors import ChatAdminRequiredError, ChatNotModifiedError
+from telethon.tl.patched import Message, MessageService
 from telethon.tl.types import (
     Channel, ChannelAdminRights, ChannelBannedRights, ChannelFull, ChannelParticipantAdmin,
     ChannelParticipantCreator, ChannelParticipantsRecent, ChannelParticipantsSearch, Chat,
     ChatFull, ChatInviteEmpty, ChatParticipantAdmin, ChatParticipantCreator, ChatPhoto,
     DocumentAttributeFilename, DocumentAttributeImageSize, DocumentAttributeSticker,
     DocumentAttributeVideo, FileLocation, GeoPoint, InputChannel, InputChatUploadedPhoto,
-    InputPeerChannel, InputPeerChat, InputPeerUser, InputUser, InputUserSelf, Message,
+    InputPeerChannel, InputPeerChat, InputPeerUser, InputUser, InputUserSelf,
     MessageActionChannelCreate, MessageActionChatAddUser, MessageActionChatCreate,
     MessageActionChatDeletePhoto, MessageActionChatDeleteUser, MessageActionChatEditPhoto,
     MessageActionChatEditTitle, MessageActionChatJoinedByLink, MessageActionChatMigrateTo,
-    MessageActionPinMessage, MessageMediaContact, MessageMediaDocument, MessageMediaGeo,
-    MessageMediaPhoto, MessageMediaUnsupported, MessageMediaGame, MessageService, PeerChannel,
+    MessageActionPinMessage, MessageActionGameScore, MessageMediaContact, MessageMediaDocument,
+    MessageMediaGeo, MessageMediaPhoto, MessageMediaUnsupported, MessageMediaGame, PeerChannel,
     PeerChat, PeerUser, Photo, PhotoCachedSize, SendMessageCancelAction, SendMessageTypingAction,
     TypeChannelParticipant, TypeChat, TypeChatParticipant, TypeDocumentAttribute, TypeInputPeer,
     TypeMessageAction, TypeMessageEntity, TypePeer, TypePhotoSize, TypeUpdates, TypeUser,
     TypeUserFull, UpdateChatUserTyping, UpdateNewChannelMessage, UpdateNewMessage, UpdateUserTyping,
-    User, UserFull, MessageEntityCode)
+    User, UserFull, MessageEntityPre)
 from mautrix_appservice import MatrixRequestError, IntentError, AppService, IntentAPI
 
 from .types import MatrixEventID, MatrixRoomID, MatrixUserID, TelegramID
 from .context import Context
 from .db import Portal as DBPortal, Message as DBMessage, TelegramFile as DBTelegramFile
+from .util import ignore_coro
 from . import puppet as p, user as u, formatter, util
 
 if TYPE_CHECKING:
@@ -75,6 +76,7 @@ if TYPE_CHECKING:
     from .abstract_user import AbstractUser
     from .config import Config
     from .tgclient import MautrixTelegramClient
+
 
 mimetypes.init()
 
@@ -338,7 +340,7 @@ class Portal:
                 if synchronous:
                     await update
                 else:
-                    asyncio.ensure_future(update, loop=self.loop)
+                    ignore_coro(asyncio.ensure_future(update, loop=self.loop))
                 await self.invite_to_matrix(invites or [])
             return self.mxid
         async with self._room_create_lock:
@@ -405,10 +407,10 @@ class Portal:
         self.save()
         self.az.state_store.set_power_levels(self.mxid, power_levels)
         user.register_portal(self)
-        asyncio.ensure_future(self.update_matrix_room(user, entity, direct, puppet,
-                                                      levels=power_levels, users=users,
-                                                      participants=participants),
-                              loop=self.loop)
+        ignore_coro(asyncio.ensure_future(self.update_matrix_room(user, entity, direct, puppet,
+                                                                  levels=power_levels, users=users,
+                                                                  participants=participants),
+                                          loop=self.loop))
 
         return self.mxid
 
@@ -631,7 +633,8 @@ class Portal:
                         entity, ChannelParticipantsRecent(), offset=0, limit=limit, hash=0))
                     return response.users, response.participants
                 elif limit > 200 or limit == -1:
-                    users, participants = [], []  # type: Tuple[List[TypeUser], List[TypeParticipant]]
+                    users = []  # type: List[TypeUser]
+                    participants = []  # type: List[TypeParticipant]
                     offset = 0
                     remaining_quota = limit if limit > 0 else 1000000
                     query = (ChannelParticipantsSearch("") if limit == -1
@@ -886,8 +889,8 @@ class Portal:
             await self._apply_msg_format(sender, msgtype, message)
 
     @staticmethod
-    def _matrix_event_to_entities(event: Dict[str, Any]) -> Tuple[
-        str, Optional[List[TypeMessageEntity]]]:
+    def _matrix_event_to_entities(event: Dict[str, Any]
+                                  ) -> Tuple[str, Optional[List[TypeMessageEntity]]]:
         try:
             if event.get("format", None) == "org.matrix.custom.html":
                 message, entities = formatter.matrix_to_telegram(event.get("formatted_body", ""))
@@ -983,7 +986,7 @@ class Portal:
         self.log.debug("Handled Matrix message: %s", response)
         self.is_duplicate(response, (event_id, space))
         DBMessage(
-            tgid=response.id,
+            tgid=TelegramID(response.id),
             tg_space=space,
             mx_room=self.mxid,
             mxid=event_id).insert()
@@ -1415,7 +1418,7 @@ class Portal:
                                       external_url=self.get_external_url(evt))
 
     async def handle_telegram_unsupported(self, source: 'AbstractUser', intent: IntentAPI,
-                                          evt: Message, relates_to: dict = None) -> dict:
+                                          evt: Message, _: dict = None) -> dict:
         override_text = ("This message is not supported on your version of Mautrix-Telegram. "
                          "Please check https://github.com/tulir/mautrix-telegram or ask your "
                          "bridge administrator about possible updates.")
@@ -1433,11 +1436,11 @@ class Portal:
 
     @staticmethod
     def _int_to_bytes(i: int) -> bytes:
-        hex = "{0:010x}".format(i)
-        return codecs.decode(hex, "hex_codec")
+        hex_value = "{0:010x}".format(i)
+        return codecs.decode(hex_value, "hex_codec")
 
     async def handle_telegram_game(self, source: 'AbstractUser', intent: IntentAPI,
-                                   evt: Message, relates_to: dict = None):
+                                   evt: Message, _: dict = None):
         game = evt.media.game
         if self.peer_type == "channel":
             play_id = base64.b64encode(b"c"
@@ -1457,7 +1460,7 @@ class Portal:
         play_id = play_id.decode("utf-8").rstrip("=")
         command = f"!tg play {play_id}"
         override_text = f"Run {command} in your bridge management room to play {game.title}"
-        override_entities = [MessageEntityCode(offset=len("Run "), length=len(command))]
+        override_entities = [MessageEntityPre(offset=len("Run "), length=len(command), language="")]
         text, html, relates_to = await formatter.telegram_to_matrix(
             evt, source, self.main_intent,
             override_text=override_text, override_entities=override_entities)
@@ -1478,6 +1481,9 @@ class Portal:
         elif not self.get_config("edits_as_replies"):
             self.log.debug("Edits as replies disabled, ignoring edit event...")
             return
+        elif hasattr(evt, "media") and isinstance(evt.media, (MessageMediaGame,)):
+            self.log.debug("Ignoring game message edit event")
+            return
 
         lock = self.optional_send_lock(sender.tgid if sender else None)
         if lock:
@@ -1492,7 +1498,7 @@ class Portal:
         if duplicate_found:
             mxid, other_tg_space = duplicate_found
             if tg_space != other_tg_space:
-                DBMessage.update_by_tgid(evt.id, tg_space,
+                DBMessage.update_by_tgid(TelegramID(evt.id), tg_space,
                                          mxid=mxid,
                                          mx_room=self.mxid)
             return
@@ -1507,7 +1513,7 @@ class Portal:
 
         mxid = response["event_id"]
 
-        msg = DBMessage.get_by_tgid(evt.id, tg_space)
+        msg = DBMessage.get_by_tgid(TelegramID(evt.id), tg_space)
         if not msg:
             self.log.info(f"Didn't find edited message {evt.id}@{tg_space} (src {source.tgid}) "
                           "in database.")
@@ -1536,11 +1542,12 @@ class Portal:
             self.log.debug(f"Ignoring message {evt.id}@{tg_space} (src {source.tgid}) "
                            f"as it was already handled (in space {other_tg_space})")
             if tg_space != other_tg_space:
-                DBMessage(tgid=evt.id, mx_room=self.mxid, mxid=mxid, tg_space=tg_space).insert()
+                DBMessage(tgid=TelegramID(evt.id), mx_room=self.mxid, mxid=mxid,
+                          tg_space=tg_space).insert()
             return
 
         if self.dedup_pre_db_check and self.peer_type == "channel":
-            msg = DBMessage.get_by_tgid(evt.id, tg_space)
+            msg = DBMessage.get_by_tgid(TelegramID(evt.id), tg_space)
             if msg:
                 self.log.debug(f"Ignoring message {evt.id} (src {source.tgid}) as it was already"
                                f"handled into {msg.mxid}. This duplicate was catched in the db "
@@ -1593,20 +1600,14 @@ class Portal:
 
         self.log.debug("Handled Telegram message: %s", evt)
         try:
-            DBMessage(tgid=evt.id, mx_room=self.mxid, mxid=mxid, tg_space=tg_space).insert()
+            DBMessage(tgid=TelegramID(evt.id), mx_room=self.mxid, mxid=mxid,
+                      tg_space=tg_space).insert()
             DBMessage.update_by_mxid(temporary_identifier, self.mxid, mxid=mxid)
-        except FlushError as e:
+        except IntegrityError as e:
             self.log.exception(f"{e.__class__.__name__} while saving message mapping. "
                                "This might mean that an update was handled after it left the "
                                "dedup cache queue. You can try enabling bridge.deduplication."
                                "pre_db_check in the config.")
-            await intent.redact(self.mxid, mxid)
-        except (IntegrityError, InvalidRequestError) as e:
-            self.log.exception(f"{e.__class__.__name__} while saving message mapping. "
-                               "This might mean that an update was handled after it left the "
-                               "dedup cache queue. You can try enabling bridge.deduplication."
-                               "pre_db_check in the config.")
-            self.db.rollback()
             await intent.redact(self.mxid, mxid)
 
     async def _create_room_on_action(self, source: 'AbstractUser',
@@ -1650,6 +1651,9 @@ class Portal:
             await sender.intent.send_emote(self.mxid, "upgraded this group to a supergroup.")
         elif isinstance(action, MessageActionPinMessage):
             await self.receive_telegram_pin_sender(sender)
+        elif isinstance(action, MessageActionGameScore):
+            # TODO handle game score
+            pass
         else:
             self.log.debug("Unhandled Telegram action in %s: %s", self.title, action)
 

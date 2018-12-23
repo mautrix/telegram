@@ -126,8 +126,7 @@ class CommandHandler:
                 (not self.needs_admin or is_admin) and
                 (not self.needs_auth or is_logged_in))
 
-    async def __call__(self, evt: CommandEvent
-                       ) -> Dict:
+    async def __call__(self, evt: CommandEvent) -> Dict:
         error = await self.get_permission_error(evt)
         if error is not None:
             return await evt.reply(error)
@@ -154,12 +153,11 @@ def command_handler(_func: Optional[Callable[[CommandEvent], Awaitable[Dict]]] =
                     help_section: HelpSection = None
                     ) -> Callable[[Callable[[CommandEvent], Awaitable[Optional[Dict]]]],
                                   CommandHandler]:
-    input_name = name
 
     def decorator(func: Callable[[CommandEvent], Awaitable[Optional[Dict]]]) -> CommandHandler:
-        name = input_name or func.__name__.replace("_", "-")
+        actual_name = name or func.__name__.replace("_", "-")
         handler = CommandHandler(func, needs_auth, needs_puppeting, needs_matrix_puppeting,
-                                 needs_admin, management_only, name, help_text, help_args,
+                                 needs_admin, management_only, actual_name, help_text, help_args,
                                  help_section)
         command_handlers[handler.name] = handler
         return handler

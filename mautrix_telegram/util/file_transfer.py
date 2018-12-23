@@ -21,7 +21,6 @@ import logging
 import asyncio
 
 import magic
-from sqlalchemy import orm
 from sqlalchemy.exc import IntegrityError, InvalidRequestError
 
 from telethon.tl.types import (Document, FileLocation, InputFileLocation,

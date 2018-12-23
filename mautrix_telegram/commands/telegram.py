@@ -21,7 +21,7 @@ import re
 
 from telethon.errors import (InviteHashInvalidError, InviteHashExpiredError,
                              UserAlreadyParticipantError)
-from telethon.tl.types import User as TLUser, TypeUpdates, MessageMediaGame, PeerChat
+from telethon.tl.types import User as TLUser, TypeUpdates, MessageMediaGame
 from telethon.tl.types.messages import BotCallbackAnswer
 from telethon.tl.functions.messages import (ImportChatInviteRequest, CheckChatInviteRequest,
                                             GetBotCallbackAnswerRequest)

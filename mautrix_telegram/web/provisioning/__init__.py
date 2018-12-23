@@ -27,6 +27,7 @@ from mautrix_appservice import AppService, MatrixRequestError, IntentError
 from ...types import MatrixUserID, TelegramID
 from ...user import User
 from ...portal import Portal
+from ...util import ignore_coro
 from ...commands.portal import user_has_power_level, get_initial_state
 from ..common import AuthAPI
 
@@ -190,8 +191,9 @@ class ProvisioningAPI(AuthAPI):
         portal.photo_id = ""
         portal.save()
 
-        asyncio.ensure_future(portal.update_matrix_room(user, entity, direct, levels=levels),
-                              loop=self.loop)
+        ignore_coro(asyncio.ensure_future(portal.update_matrix_room(user, entity, direct,
+                                                                    levels=levels),
+                                          loop=self.loop))
 
         return web.Response(status=202, body="{}")
 
@@ -285,7 +287,7 @@ class ProvisioningAPI(AuthAPI):
                 self.log.exception("Failed to disconnect chat")
                 return self.get_error_response(500, "exception", "Failed to disconnect chat")
         else:
-            asyncio.ensure_future(coro, loop=self.loop)
+            ignore_coro(asyncio.ensure_future(coro, loop=self.loop))
         return web.json_response({}, status=200 if sync else 202)
 
     async def get_user_info(self, request: web.Request) -> web.Response:

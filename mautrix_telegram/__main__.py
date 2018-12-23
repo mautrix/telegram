@@ -14,7 +14,7 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import Coroutine, List
+from typing import Awaitable, List, Any
 import argparse
 import asyncio
 import logging.config
@@ -88,7 +88,7 @@ if config["appservice.sqlalchemy_core_mode"]:
 
 loop = asyncio.get_event_loop()  # type: asyncio.AbstractEventLoop
 
-state_store = SQLStateStore(db_session)
+state_store = SQLStateStore()
 mebibyte = 1024 ** 2
 appserv = AppService(config["homeserver.address"], config["homeserver.domain"],
                      config["appservice.as_token"], config["appservice.hs_token"],
@@ -121,8 +121,7 @@ with appserv.run(config["appservice.hostname"], config["appservice.port"]) as st
     init_portal(context)
     startup_actions = (init_puppet(context) +
                        init_user(context) +
-                       [start,
-                        context.mx.init_as_bot()])  # type: List[Coroutine]
+                       [start, context.mx.init_as_bot()])  # type: List[Awaitable[Any]]
 
     if context.bot:
         startup_actions.append(context.bot.start())

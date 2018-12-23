@@ -18,11 +18,12 @@ from typing import Awaitable, Callable, Dict, List, Optional, Pattern, TYPE_CHEC
 import logging
 import re
 
+from telethon.tl.patched import Message, MessageService
 from telethon.tl.types import (
     ChannelParticipantAdmin, ChannelParticipantCreator, ChatForbidden, ChatParticipantAdmin,
-    ChatParticipantCreator, InputChannel, InputUser, Message, MessageActionChatAddUser,
-    MessageActionChatDeleteUser, MessageEntityBotCommand, MessageService, PeerChannel, PeerChat,
-    TypePeer, UpdateNewChannelMessage, UpdateNewMessage)
+    ChatParticipantCreator, InputChannel, InputUser, MessageActionChatAddUser,
+    MessageActionChatDeleteUser, MessageEntityBotCommand, PeerChannel, PeerChat, TypePeer,
+    UpdateNewChannelMessage, UpdateNewMessage)
 from telethon.tl.functions.messages import GetChatsRequest, GetFullChatRequest
 from telethon.tl.functions.channels import GetChannelsRequest, GetParticipantRequest
 from telethon.errors import ChannelInvalidError, ChannelPrivateError
@@ -30,6 +31,7 @@ from telethon.errors import ChannelInvalidError, ChannelPrivateError
 from .types import MatrixUserID
 from .abstract_user import AbstractUser
 from .db import BotChat
+from .types import TelegramID
 from . import puppet as pu, portal as po, user as u
 
 if TYPE_CHECKING:
@@ -115,7 +117,7 @@ class Bot(AbstractUser):
     def add_chat(self, chat_id: int, chat_type: str) -> None:
         if chat_id not in self.chats:
             self.chats[chat_id] = chat_type
-            self.db.add(BotChat(id=chat_id, type=chat_type))
+            self.db.add(BotChat(id=TelegramID(chat_id), type=chat_type))
             self.db.commit()
 
     def remove_chat(self, chat_id: int) -> None:
@@ -155,7 +157,7 @@ class Bot(AbstractUser):
             return False
         return True
 
-    async def handle_command_portal(self, portal: po.Portal, reply: ReplyFunc) -> None:
+    async def handle_command_portal(self, portal: po.Portal, reply: ReplyFunc) -> Message:
         if not config["bridge.relaybot.authless_portals"]:
             return await reply("This bridge doesn't allow portal creation from Telegram.")
 
@@ -221,7 +223,8 @@ class Bot(AbstractUser):
         text = message.message
 
         if self.match_command(text, "id"):
-            return await self.handle_command_id(message, reply)
+            await self.handle_command_id(message, reply)
+            return
 
         portal = po.Portal.get_by_entity(message.to_id)
 

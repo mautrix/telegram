@@ -16,8 +16,6 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from typing import Dict, Tuple
 
-from sqlalchemy import orm
-
 from mautrix_appservice import StateStore
 
 from .types import MatrixUserID, MatrixRoomID
@@ -26,9 +24,8 @@ from .db import RoomState, UserProfile
 
 
 class SQLStateStore(StateStore):
-    def __init__(self, db: orm.Session) -> None:
+    def __init__(self) -> None:
         super().__init__()
-        self.db = db  # type: orm.Session
         self.profile_cache = {}  # type: Dict[Tuple[str, str], UserProfile]
         self.room_state_cache = {}  # type: Dict[str, RoomState]
 

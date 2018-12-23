@@ -296,7 +296,7 @@ class MatrixHandler:
             events = new_events - old_events
             if len(events) > 0:
                 # New event pinned, set that as pinned in Telegram.
-                await portal.handle_matrix_pin(sender, events.pop())
+                await portal.handle_matrix_pin(sender, MatrixEventID(events.pop()))
             elif len(new_events) == 0:
                 # All pinned events removed, remove pinned event in Telegram.
                 await portal.handle_matrix_pin(sender, None)

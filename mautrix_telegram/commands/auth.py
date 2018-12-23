@@ -27,7 +27,7 @@ from telethon.tl.functions.account import UpdateUsernameRequest
 
 from . import command_handler, CommandEvent, SECTION_AUTH
 from .. import puppet as pu, user as u
-from ..util import format_duration
+from ..util import format_duration, ignore_coro
 
 
 @command_handler(needs_auth=False,
@@ -153,7 +153,7 @@ async def enter_code_register(evt: CommandEvent) -> Dict:
         await evt.sender.ensure_started(even_if_no_session=True)
         first_name, last_name = evt.sender.command_status["full_name"]
         user = await evt.sender.client.sign_up(evt.args[0], first_name, last_name)
-        asyncio.ensure_future(evt.sender.post_login(user), loop=evt.loop)
+        ignore_coro(asyncio.ensure_future(evt.sender.post_login(user), loop=evt.loop))
         evt.sender.command_status = None
         return await evt.reply(f"Successfully registered to Telegram.")
     except PhoneNumberOccupiedError:
@@ -334,7 +334,7 @@ async def _sign_in(evt: CommandEvent, **sign_in_info) -> Dict:
             await evt.reply(f"[{existing_user.displayname}]"
                             f"(https://matrix.to/#/{existing_user.mxid})"
                             " was logged out from the account.")
-        asyncio.ensure_future(evt.sender.post_login(user), loop=evt.loop)
+        ignore_coro(asyncio.ensure_future(evt.sender.post_login(user), loop=evt.loop))
         evt.sender.command_status = None
         name = f"@{user.username}" if user.username else f"+{user.phone}"
         return await evt.reply(f"Successfully logged in as {name}")

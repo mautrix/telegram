@@ -25,6 +25,7 @@ from mautrix_appservice import MatrixRequestError, IntentAPI
 
 from ..types import MatrixRoomID, TelegramID
 from ..config import yaml
+from ..util import ignore_coro
 from .. import portal as po, user as u, util
 from . import (command_handler, CommandEvent,
                SECTION_ADMIN, SECTION_CREATING_PORTALS, SECTION_PORTAL_MANAGEMENT)
@@ -271,7 +272,7 @@ async def confirm_bridge(evt: CommandEvent) -> Optional[Dict]:
         if not ok:
             return None
         elif coro:
-            asyncio.ensure_future(coro, loop=evt.loop)
+            ignore_coro(asyncio.ensure_future(coro, loop=evt.loop))
             await evt.reply("Cleaning up previous portal room...")
     elif portal.mxid:
         evt.sender.command_status = None
@@ -308,8 +309,9 @@ async def confirm_bridge(evt: CommandEvent) -> Optional[Dict]:
     portal.photo_id = ""
     portal.save()
 
-    asyncio.ensure_future(portal.update_matrix_room(user, entity, direct, levels=levels),
-                          loop=evt.loop)
+    ignore_coro(asyncio.ensure_future(portal.update_matrix_room(user, entity, direct,
+                                                                levels=levels),
+                                      loop=evt.loop))
 
     return await evt.reply("Bridging complete. Portal synchronization should begin momentarily.")
 

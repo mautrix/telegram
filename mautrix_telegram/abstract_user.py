@@ -21,14 +21,14 @@ import logging
 import platform
 
 from sqlalchemy import orm
-from telethon.tl.types import Channel, ChannelForbidden, Chat, ChatForbidden, Message, \
-    MessageActionChannelMigrateFrom, MessageService, PeerUser, TypeUpdate, \
-    UpdateChannelPinnedMessage, UpdateChatAdmins, UpdateChatParticipantAdmin, \
-    UpdateChatParticipants, UpdateChatUserTyping, UpdateDeleteChannelMessages, \
-    UpdateDeleteMessages, UpdateEditChannelMessage, UpdateEditMessage, UpdateNewChannelMessage, \
-    UpdateNewMessage, UpdateReadHistoryOutbox, UpdateShortChatMessage, UpdateShortMessage, \
-    UpdateUserName, UpdateUserPhoto, UpdateUserStatus, UpdateUserTyping, User, UserStatusOffline, \
-    UserStatusOnline
+from telethon.tl.patched import MessageService, Message
+from telethon.tl.types import (
+    Channel, ChannelForbidden, Chat, ChatForbidden, MessageActionChannelMigrateFrom, PeerUser,
+    TypeUpdate, UpdateChannelPinnedMessage, UpdateChatAdmins, UpdateChatParticipantAdmin,
+    UpdateChatParticipants, UpdateChatUserTyping, UpdateDeleteChannelMessages, UpdateDeleteMessages,
+    UpdateEditChannelMessage, UpdateEditMessage, UpdateNewChannelMessage, UpdateNewMessage,
+    UpdateReadHistoryOutbox, UpdateShortChatMessage, UpdateShortMessage, UpdateUserName,
+    UpdateUserPhoto, UpdateUserStatus, UpdateUserTyping, User, UserStatusOffline, UserStatusOnline)
 
 from mautrix_appservice import MatrixRequestError, AppService
 from alchemysession import AlchemySessionContainer
@@ -231,7 +231,7 @@ class AbstractUser(ABC):
             return
 
         # We check that these are user read receipts, so tg_space is always the user ID.
-        message = DBMessage.get_by_tgid(update.max_id, self.tgid)
+        message = DBMessage.get_by_tgid(TelegramID(update.max_id), self.tgid)
         if not message:
             return
 
