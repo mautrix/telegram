@@ -15,6 +15,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from typing import Dict, List, Optional, Tuple
+import codecs
 import base64
 import re
 
@@ -164,6 +165,9 @@ async def sync(evt: CommandEvent) -> Optional[Dict]:
     return await evt.reply("Synchronization complete.")
 
 
+PEER_TYPE_CHAT = b"g"
+
+
 @command_handler(help_section=SECTION_MISC,
                  help_args="<play ID>",
                  help_text="Play a Telegram game")
@@ -176,21 +180,19 @@ async def play(evt: CommandEvent) -> Optional[Dict]:
         return await evt.reply("Bots can't play games :(")
 
     try:
+        play_id = evt.args[0]
+        play_id += (4 - len(play_id) % 4) * "="
+        play_id = base64.b64decode(play_id)
+        peer_type, play_id = bytes([play_id[0]]), play_id[1:]
+        tgid = TelegramID(int(codecs.encode(play_id[0:5], "hex_codec"), 16))
+        msg_id = TelegramID(int(codecs.encode(play_id[5:10], "hex_codec"), 16))
         space = None
-        peer_type, play_id = base64.b64decode(evt.args[0]).decode("utf-8").split("-", 1)
-        if peer_type == "chan" or peer_type == "user":
-            tgid, msg_id = play_id.split("-")
-        elif peer_type == "chat":
-            tgid, space, msg_id = play_id.split("-")
-            space = TelegramID(int(space))
-        else:
-            raise ValueError()
-        tgid = TelegramID(int(tgid))
-        msg_id = TelegramID(int(msg_id))
+        if peer_type == PEER_TYPE_CHAT:
+            space = TelegramID(int(codecs.encode(play_id[10:15], "hex_codec"), 16))
     except ValueError:
         return await evt.reply("Invalid play ID (format)")
 
-    if peer_type == "chat":
+    if peer_type == PEER_TYPE_CHAT:
         orig_msg = DBMessage.get_by_tgid(msg_id, space)
         if not orig_msg:
             return await evt.reply("Invalid play ID (original message not found in db)")
@@ -200,7 +202,7 @@ async def play(evt: CommandEvent) -> Optional[Dict]:
         msg_id = new_msg.tgid
     try:
         peer = await evt.sender.client.get_input_entity(tgid)
-    except ValueError as e:
+    except ValueError:
         return await evt.reply("Invalid play ID (chat not found)")
 
     msg = await evt.sender.client.get_messages(entity=peer, ids=msg_id)

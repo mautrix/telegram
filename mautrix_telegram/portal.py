@@ -22,6 +22,7 @@ from html import escape as escape_html
 import asyncio
 import random
 import mimetypes
+import codecs
 import unicodedata
 import base64
 import hashlib
@@ -1430,21 +1431,32 @@ class Portal:
             "net.maunium.telegram.unsupported": True,
         }, timestamp=evt.date, external_url=self.get_external_url(evt))
 
+    @staticmethod
+    def _int_to_bytes(i: int) -> bytes:
+        hex = "{0:010x}".format(i)
+        return codecs.decode(hex, "hex_codec")
+
     async def handle_telegram_game(self, source: 'AbstractUser', intent: IntentAPI,
                                    evt: Message, relates_to: dict = None):
         game = evt.media.game
         if self.peer_type == "channel":
-            play_id = base64.b64encode(f"chan-{self.tgid}-{evt.id}".encode("utf-8"))
+            play_id = base64.b64encode(b"c"
+                                       + self._int_to_bytes(self.tgid)
+                                       + self._int_to_bytes(evt.id))
         elif self.peer_type == "chat":
-            play_id = base64.b64encode(f"chat-{self.tgid}-{source.tgid}-{evt.id}".encode("utf-8"))
+            play_id = base64.b64encode(b"g"
+                                       + self._int_to_bytes(self.tgid)
+                                       + self._int_to_bytes(evt.id)
+                                       + self._int_to_bytes(source.tgid))
         elif self.peer_type == "user":
-            play_id = base64.b64encode(f"user-{self.tgid}-{evt.id}".encode("utf-8"))
+            play_id = base64.b64encode(b"u"
+                                       + self._int_to_bytes(self.tgid)
+                                       + self._int_to_bytes(evt.id))
         else:
             raise ValueError("Portal has invalid peer type")
-        play_id = play_id.decode("utf-8")
+        play_id = play_id.decode("utf-8").rstrip("=")
         command = f"!tg play {play_id}"
-        override_text = (f"Run {command} in your bridge management room to "
-                         f"play {game.title}:\n\n{game.description}")
+        override_text = f"Run {command} in your bridge management room to play {game.title}"
         override_entities = [MessageEntityCode(offset=len("Run "), length=len(command))]
         text, html, relates_to = await formatter.telegram_to_matrix(
             evt, source, self.main_intent,
