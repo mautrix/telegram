@@ -37,11 +37,11 @@ from sqlalchemy.exc import IntegrityError
 from telethon.tl.functions.messages import (
     AddChatUserRequest, CreateChatRequest, DeleteChatUserRequest, EditChatAdminRequest,
     EditChatPhotoRequest, EditChatTitleRequest, ExportChatInviteRequest, GetFullChatRequest,
-    MigrateChatRequest, SetTypingRequest)
+    UpdatePinnedMessageRequest, MigrateChatRequest, SetTypingRequest)
 from telethon.tl.functions.channels import (
     CreateChannelRequest, EditAboutRequest, EditAdminRequest, EditBannedRequest, EditPhotoRequest,
     EditTitleRequest, ExportInviteRequest, GetParticipantsRequest, InviteToChannelRequest,
-    JoinChannelRequest, LeaveChannelRequest, UpdatePinnedMessageRequest, UpdateUsernameRequest)
+    JoinChannelRequest, LeaveChannelRequest, UpdateUsernameRequest)
 from telethon.tl.functions.messages import ReadHistoryRequest as ReadMessageHistoryRequest
 from telethon.tl.functions.channels import ReadHistoryRequest as ReadChannelHistoryRequest
 from telethon.errors import ChatAdminRequiredError, ChatNotModifiedError
@@ -135,6 +135,7 @@ class Portal:
         self._main_intent = None  # type: IntentAPI
         self._room_create_lock = asyncio.Lock()  # type: asyncio.Lock
         self._temp_pinned_message_id = None  # type: Optional[int]
+        self._temp_pinned_message_id_space = None  # type: Optional[TelegramID]
         self._temp_pinned_message_sender = None  # type: Optional[p.Puppet]
 
         self._dedup = deque()  # type: deque
@@ -1028,17 +1029,18 @@ class Portal:
 
     async def handle_matrix_pin(self, sender: 'u.User',
                                 pinned_message: Optional[MatrixEventID]) -> None:
-        if self.peer_type != "channel":
+        if self.peer_type != "chat" and self.peer_type != "channel":
             return
         try:
             if not pinned_message:
-                await sender.client(UpdatePinnedMessageRequest(channel=self.peer, id=0))
+                await sender.client(UpdatePinnedMessageRequest(peer=self.peer, id=0))
             else:
-                message = DBMessage.get_by_mxid(pinned_message, self.mxid, self.tgid)
+                tg_space = self.tgid if self.peer_type == "channel" else sender.tgid
+                message = DBMessage.get_by_mxid(pinned_message, self.mxid, tg_space)
                 if message is None:
                     self.log.warning(f"Could not find pinned {pinned_message} in {self.mxid}")
                     return
-                await sender.client(UpdatePinnedMessageRequest(channel=self.peer, id=message.tgid))
+                await sender.client(UpdatePinnedMessageRequest(peer=self.peer, id=message.tgid))
         except ChatNotModifiedError:
             pass
 
@@ -1680,16 +1682,17 @@ class Portal:
         self._temp_pinned_message_id = None
         self._temp_pinned_message_sender = None
 
-        message = DBMessage.get_by_tgid(msg_id, self.tgid)
+        message = DBMessage.get_by_tgid(msg_id, self._temp_pinned_message_id_space)
         if message:
             await intent.set_pinned_messages(self.mxid, [message.mxid])
         else:
             await intent.set_pinned_messages(self.mxid, [])
 
-    async def receive_telegram_pin_id(self, msg_id: int) -> None:
+    async def receive_telegram_pin_id(self, msg_id: int, receiver: TelegramID) -> None:
         if msg_id == 0:
             return await self.update_telegram_pin()
         self._temp_pinned_message_id = msg_id
+        self._temp_pinned_message_id_space = receiver if self.peer_type != "channel" else self.tgid
         if self._temp_pinned_message_sender:
             await self.update_telegram_pin()
 
