@@ -994,6 +994,10 @@ class Portal:
 
     async def handle_matrix_message(self, sender: 'u.User', message: Dict[str, Any],
                                     event_id: MatrixEventID) -> None:
+        if "body" not in message or "msgtype" not in message:
+            self.log.debug(f"Ignoring message {event_id} in {self.mxid} without body or msgtype")
+            return
+
         puppet = p.Puppet.get_by_custom_mxid(sender.mxid)
         if puppet and message.get("net.maunium.telegram.puppet", False):
             self.log.debug("Ignoring puppet-sent message by confirmed puppet user %s", sender.mxid)

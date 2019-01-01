@@ -100,7 +100,7 @@ def _read_video_thumbnail(data: bytes, video_ext: str = "mp4", frame_ext: str = 
 
 def _location_to_id(location: TypeLocation) -> str:
     if isinstance(location, (Document, InputDocumentFileLocation)):
-        return f"{location.id}-{location.version}"
+        return f"{location.id}-{location.access_hash}"
     elif isinstance(location, (FileLocation, InputFileLocation)):
         return f"{location.volume_id}-{location.local_id}"
 

@@ -89,7 +89,9 @@ def matrix_to_telegram(html: str) -> ParsedMessage:
 def matrix_reply_to_telegram(content: Dict[str, Any], tg_space: TelegramID,
                              room_id: Optional[MatrixRoomID] = None) -> Optional[TelegramID]:
     try:
-        reply = content["m.relates_to"]["m.in_reply_to"]
+        reply = content.get("m.relates_to", {}).get("m.in_reply_to", {})
+        if not reply:
+            return None
         room_id = room_id or reply["room_id"]
         event_id = reply["event_id"]
 
