@@ -107,6 +107,9 @@ bridge:
     # If no channel admins have logged into the bridge, the bridge won't be able to sync the member
     # list regardless of this setting.
     sync_channel_members: true
+    # Whether or not to automatically sync the Matrix room state (mostly unpuppeted displaynames)
+    # at startup and when creating a bridge.
+    sync_matrix_state: true
     # The maximum number of simultaneous Telegram deletions to handle.
     # A large number of simultaneous redactions could put strain on your homeserver.
     max_telegram_delete: 10

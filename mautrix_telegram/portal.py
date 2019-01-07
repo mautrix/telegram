@@ -101,6 +101,7 @@ class Portal:
     public_portals = False  # type: bool
     max_initial_member_sync = -1  # type: int
     sync_channel_members = True  # type: bool
+    sync_matrix_state = True  # type: bool
 
     dedup_pre_db_check = False  # type: bool
     dedup_cache_queue_length = 20  # type: int
@@ -328,7 +329,8 @@ class Portal:
                 puppet = p.Puppet.get(self.tgid)
             await puppet.update_info(user, entity)
             await puppet.intent.join_room(self.mxid)
-        await self.sync_matrix_members()
+        if self.sync_matrix_state:
+            await self.sync_matrix_members()
 
     async def create_matrix_room(self, user: 'AbstractUser', entity: TypeChat = None,
                                  invites: InviteList = None, update_if_exists: bool = True,
@@ -786,7 +788,6 @@ class Portal:
     async def sync_matrix_members(self) -> None:
         resp = await self.main_intent.get_room_joined_memberships(self.mxid)
         members = resp["joined"]
-        print(members)
         for mxid, info in members.items():
             member = {
                 "membership": "join",
@@ -1955,6 +1956,7 @@ def init(context: Context) -> None:
     Portal.az, Portal.db, config, Portal.loop, Portal.bot = context.core
     Portal.max_initial_member_sync = config["bridge.max_initial_member_sync"]
     Portal.sync_channel_members = config["bridge.sync_channel_members"]
+    Portal.sync_matrix_state = config["bridge.sync_matrix_state"]
     Portal.public_portals = config["bridge.public_portals"]
     Portal.filter_mode = config["bridge.filter.mode"]
     Portal.filter_list = config["bridge.filter.list"]
