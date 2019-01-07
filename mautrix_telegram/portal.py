@@ -77,7 +77,6 @@ if TYPE_CHECKING:
     from .config import Config
     from .tgclient import MautrixTelegramClient
 
-
 mimetypes.init()
 
 config = None  # type: Config
@@ -329,6 +328,7 @@ class Portal:
                 puppet = p.Puppet.get(self.tgid)
             await puppet.update_info(user, entity)
             await puppet.intent.join_room(self.mxid)
+        await self.sync_matrix_members()
 
     async def create_matrix_room(self, user: 'AbstractUser', entity: TypeChat = None,
                                  invites: InviteList = None, update_if_exists: bool = True,
@@ -782,6 +782,20 @@ class Portal:
     async def get_displayname(self, user: 'u.User') -> str:
         return (await self.main_intent.get_displayname(self.mxid, user.mxid)
                 or user.mxid)
+
+    async def sync_matrix_members(self) -> None:
+        resp = await self.main_intent.get_room_joined_memberships(self.mxid)
+        members = resp["joined"]
+        print(members)
+        for mxid, info in members.items():
+            member = {
+                "membership": "join",
+            }
+            if "display_name" in info:
+                member["displayname"] = info["display_name"]
+            if "avatar_url" in info:
+                member["avatar_url"] = info["avatar_url"]
+            self.az.state_store.set_member(self.mxid, mxid, member)
 
     def set_typing(self, user: 'u.User', typing: bool = True,
                    action: type = SendMessageTypingAction) -> Awaitable[bool]:

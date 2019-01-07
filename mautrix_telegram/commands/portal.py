@@ -28,7 +28,7 @@ from ..config import yaml
 from ..util import ignore_coro
 from .. import portal as po, user as u, util
 from . import (command_handler, CommandEvent,
-               SECTION_ADMIN, SECTION_CREATING_PORTALS, SECTION_PORTAL_MANAGEMENT)
+               SECTION_ADMIN, SECTION_CREATING_PORTALS, SECTION_PORTAL_MANAGEMENT, SECTION_MISC)
 
 
 @command_handler(needs_admin=True, needs_auth=False, name="set-pl",
@@ -51,6 +51,20 @@ async def set_power_level(evt: CommandEvent) -> Dict:
         evt.log.exception("Failed to set power level.")
         return await evt.reply("Failed to set power level.")
     return {}
+
+
+@command_handler(needs_admin=False, needs_puppeting=False, needs_auth=False,
+                 help_section=SECTION_MISC,
+                 help_text="Fetch Matrix room state to ensure the bridge has up-to-date info.")
+async def sync_state(evt: CommandEvent) -> Dict:
+    portal = po.Portal.get_by_mxid(evt.room_id)
+    if not portal:
+        return await evt.reply("This is not a portal room.")
+    elif not await user_has_power_level(evt.room_id, evt.az.intent, evt.sender, "bridge"):
+        return await evt.reply(f"You do not have the permissions to synchronize this room.")
+
+    await portal.sync_matrix_members()
+    await evt.reply("Synchronization complete")
 
 
 @command_handler(help_section=SECTION_PORTAL_MANAGEMENT,
