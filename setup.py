@@ -32,7 +32,7 @@ setuptools.setup(
         "alembic>=1.0.0,<2",
         "commonmark>=0.8.1,<1",
         "ruamel.yaml>=0.15.35,<0.16",
-        "future-fstrings>=0.4.2",
+        "future-fstrings>=0.4.2;python_version<'3.6'",
         "python-magic>=0.4.15,<0.5",
         "telethon>=1.5,<1.6",
         "telethon-session-sqlalchemy>=0.2.3,<0.3",
