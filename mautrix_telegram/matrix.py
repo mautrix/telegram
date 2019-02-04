@@ -222,7 +222,7 @@ class MatrixHandler:
         sender = await u.User.get_by_mxid(sender_id).ensure_started()
         if not sender.relaybot_whitelisted:
             self.log.debug(f"Ignoring message \"{message}\" from {sender} to {room}:"
-                           " u.User is not whitelisted.")
+                           " User is not whitelisted.")
             return
         self.log.debug(f"Received Matrix event \"{message}\" from {sender} in {room}")
 
