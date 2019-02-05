@@ -7,4 +7,4 @@ alembic
 commonmark
 future-fstrings
 telethon>=1.5,<1.5.4
-telethon-session-sqlalchemy
+telethon-session-sqlalchemy>=0.2.6
