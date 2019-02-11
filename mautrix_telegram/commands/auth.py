@@ -104,6 +104,21 @@ async def login_matrix(evt: CommandEvent) -> Optional[Dict]:
     return await evt.reply("This bridge instance has been configured to not allow logging in.")
 
 
+@command_handler(needs_auth=True, needs_matrix_puppeting=True,
+                 help_section=SECTION_AUTH,
+                 help_text="Pings the server with the stored matrix authentication")
+async def ping_matrix(evt: CommandEvent) -> Optional[Dict]:
+    puppet = pu.Puppet.get(evt.sender.tgid)
+    if not puppet.is_real_user:
+        return await evt.reply("You are not logged in with your Matrix account.")
+    resp = await puppet.init_custom_mxid()
+    if resp == pu.PuppetError.InvalidAccessToken:
+        return await evt.reply("Your access token is invalid.")
+    elif resp == pu.PuppetError.Success:
+        return await evt.reply("Your Matrix login is working.")
+    return await evt.reply(f"Unknown response while checking your Matrix login: {resp}.")
+
+
 async def enter_matrix_token(evt: CommandEvent) -> Dict:
     evt.sender.command_status = None
 
