@@ -31,7 +31,6 @@ import json
 import re
 
 import magic
-from sqlalchemy import orm
 from sqlalchemy.exc import IntegrityError
 
 from telethon.tl.functions.messages import (
@@ -89,7 +88,6 @@ InviteList = Union[MatrixUserID, List[MatrixUserID]]
 
 class Portal:
     log = logging.getLogger("mau.portal")  # type: logging.Logger
-    db = None  # type: orm.Session
     az = None  # type: AppService
     bot = None  # type: Bot
     loop = None  # type: asyncio.AbstractEventLoop
@@ -1255,8 +1253,7 @@ class Portal:
         self.tg_receiver = self.tgid
         self.by_tgid[self.tgid_full] = self
         await self.update_info(source, entity)
-        self.db.add(self.db_instance)
-        self.save()
+        self.db_instance.insert()
 
         if self.bot and self.bot.tgid in invites:
             self.bot.add_chat(self.tgid, self.peer_type)
@@ -1842,15 +1839,13 @@ class Portal:
             del self.by_tgid[self.tgid_full]
         except KeyError:
             pass
-        self.tgid = new_id
-        self.tg_receiver = new_id
-        existing = self.by_tgid[self.tgid_full]
+        existing = self.by_tgid[(new_id, new_id)]
         if existing:
             existing.delete()
+        self.db_instance.update(tgid=new_id, tg_receiver=new_id)
+        self.tgid = new_id
+        self.tg_receiver = new_id
         self.by_tgid[self.tgid_full] = self
-        self.db_instance.tgid = self.tgid
-        self.db_instance.tg_receiver = self.tg_receiver
-        self.save()
 
     def migrate_and_save_matrix(self, new_id: MatrixRoomID) -> None:
         try:
@@ -1858,17 +1853,13 @@ class Portal:
         except KeyError:
             pass
         self.mxid = new_id
+        self.db_instance.update(mxid=self.mxid)
         self.by_mxid[self.mxid] = self
-        self.save()
 
     def save(self) -> None:
-        self.db_instance.mxid = self.mxid
-        self.db_instance.username = self.username
-        self.db_instance.title = self.title
-        self.db_instance.about = self.about
-        self.db_instance.photo_id = self.photo_id
-        self.db_instance.config = json.dumps(self.local_config)
-        self.db.commit()
+        self.db_instance.update(mxid=self.mxid, username=self.username, title=self.title,
+                                about=self.about, photo_id=self.photo_id,
+                                config=json.dumps(self.local_config))
 
     def delete(self) -> None:
         try:
@@ -1880,8 +1871,7 @@ class Portal:
         except KeyError:
             pass
         if self._db_instance:
-            self.db.delete(self._db_instance)
-            self.db.commit()
+            self._db_instance.delete()
         self.deleted = True
 
     @classmethod
@@ -1902,7 +1892,7 @@ class Portal:
         except KeyError:
             pass
 
-        portal = DBPortal.query.filter(DBPortal.mxid == mxid).one_or_none()
+        portal = DBPortal.get_by_mxid(mxid)
         if portal:
             return cls.from_db(portal)
 
@@ -1924,7 +1914,7 @@ class Portal:
             if portal.username and portal.username.lower() == username.lower():
                 return portal
 
-        dbportal = DBPortal.query.filter(DBPortal.username == username).one_or_none()
+        dbportal = DBPortal.get_by_username(username)
         if dbportal:
             return cls.from_db(dbportal)
 
@@ -1940,14 +1930,13 @@ class Portal:
         except KeyError:
             pass
 
-        portal = DBPortal.query.get(tgid_full)
+        portal = DBPortal.get_by_tgid(tgid, tg_receiver)
         if portal:
             return cls.from_db(portal)
 
         if peer_type:
             portal = Portal(tgid, peer_type=peer_type, tg_receiver=tg_receiver)
-            cls.db.add(portal.db_instance)
-            cls.db.commit()
+            portal.db_instance.insert()
             return portal
 
         return None
@@ -1987,7 +1976,7 @@ class Portal:
 
 def init(context: Context) -> None:
     global config
-    Portal.az, Portal.db, config, Portal.loop, Portal.bot = context.core
+    Portal.az, _, config, Portal.loop, Portal.bot = context.core
     Portal.max_initial_member_sync = config["bridge.max_initial_member_sync"]
     Portal.sync_channel_members = config["bridge.sync_channel_members"]
     Portal.sync_matrix_state = config["bridge.sync_matrix_state"]
