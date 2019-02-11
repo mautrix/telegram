@@ -1165,7 +1165,7 @@ class Portal:
                     continue
                 user = u.User.get_by_mxid(user_id, create=False)
                 if user and user.tgid:
-                    entity = self.get_input_entity(user)
+                    entity = await self.get_input_entity(user)
                     if entity:
                         break
         if not entity:
