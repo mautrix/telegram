@@ -6,10 +6,15 @@ extras = {
     "highlight_edits": ["lxml>=4.1.1,<5"],
     "better_formatter": ["lxml>=4.1.1,<5"],
     "fast_crypto": ["cryptg>=0.1,<0.2"],
-    "webp_convert": ["Pillow>=5.0.0,<6"],
+    "webp_convert": ["Pillow>=4.3.0,<6"],
     "hq_thumbnails": ["moviepy>=0.2,<0.3", "imageio==2.4.1"],
 }
 extras["all"] = list(set(deps[0] for deps in extras.values()))
+
+try:
+    long_desc = open("README.md").read()
+except:
+    long_desc = "Failed to read README.md"
 
 setuptools.setup(
     name="mautrix-telegram",
@@ -20,7 +25,7 @@ setuptools.setup(
     author_email="tulir@maunium.net",
 
     description="A Matrix-Telegram hybrid puppeting/relaybot bridge.",
-    long_description=open("README.md").read(),
+    long_description=long_desc,
     long_description_content_type="text/markdown",
 
     packages=setuptools.find_packages(),

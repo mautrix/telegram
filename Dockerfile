@@ -1,4 +1,4 @@
-FROM docker.io/alpine:3.8
+FROM docker.io/alpine:3.9
 
 ENV UID=1337 \
     GID=1337 \
