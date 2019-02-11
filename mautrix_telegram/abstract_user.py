@@ -105,6 +105,10 @@ class AbstractUser(ABC):
             self.session.set_dc(config["telegram.server.dc"],
                                 config["telegram.server.ip"],
                                 config["telegram.server.port"])
+        if self.is_relaybot:
+            base_logger = logging.getLogger("telethon.relaybot")
+        else:
+            base_logger = logging.getLogger(f"telethon.{self.tgid or -hash(self.mxid)}")
         self.client = MautrixTelegramClient(session=self.session,
                                             api_id=config["telegram.api_id"],
                                             api_hash=config["telegram.api_hash"],
@@ -113,6 +117,7 @@ class AbstractUser(ABC):
                                             system_version=sysversion,
                                             device_model=device,
                                             timeout=120,
+                                            base_logger=base_logger,
                                             proxy=self._proxy_settings)
         self.client.add_event_handler(self._update_catch)
 
