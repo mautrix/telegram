@@ -2,3 +2,5 @@ lxml
 cryptg
 Pillow
 moviepy
+# TODO remove when moviepy is fixed
+imageio==2.4.1

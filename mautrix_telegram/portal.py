@@ -37,17 +37,17 @@ from sqlalchemy.exc import IntegrityError
 from telethon.tl.functions.messages import (
     AddChatUserRequest, CreateChatRequest, DeleteChatUserRequest, EditChatAdminRequest,
     EditChatPhotoRequest, EditChatTitleRequest, ExportChatInviteRequest, GetFullChatRequest,
-    UpdatePinnedMessageRequest, MigrateChatRequest, SetTypingRequest)
+    UpdatePinnedMessageRequest, MigrateChatRequest, SetTypingRequest, EditChatAboutRequest)
 from telethon.tl.functions.channels import (
-    CreateChannelRequest, EditAboutRequest, EditAdminRequest, EditBannedRequest, EditPhotoRequest,
-    EditTitleRequest, ExportInviteRequest, GetParticipantsRequest, InviteToChannelRequest,
+    CreateChannelRequest, EditAdminRequest, EditBannedRequest, EditPhotoRequest,
+    EditTitleRequest, GetParticipantsRequest, InviteToChannelRequest,
     JoinChannelRequest, LeaveChannelRequest, UpdateUsernameRequest)
 from telethon.tl.functions.messages import ReadHistoryRequest as ReadMessageHistoryRequest
 from telethon.tl.functions.channels import ReadHistoryRequest as ReadChannelHistoryRequest
 from telethon.errors import ChatAdminRequiredError, ChatNotModifiedError
 from telethon.tl.patched import Message, MessageService
 from telethon.tl.types import (
-    Channel, ChannelAdminRights, ChannelBannedRights, ChannelFull, ChannelParticipantAdmin,
+    Channel, ChatAdminRights, ChatBannedRights, ChannelFull, ChannelParticipantAdmin,
     ChannelParticipantCreator, ChannelParticipantsRecent, ChannelParticipantsSearch, Chat,
     ChatFull, ChatInviteEmpty, ChatParticipantAdmin, ChatParticipantCreator, ChatPhoto,
     DocumentAttributeFilename, DocumentAttributeImageSize, DocumentAttributeSticker,
@@ -60,7 +60,7 @@ from telethon.tl.types import (
     MessageMediaGeo, MessageMediaPhoto, MessageMediaUnsupported, MessageMediaGame, PeerChannel,
     PeerChat, PeerUser, Photo, PhotoCachedSize, SendMessageCancelAction, SendMessageTypingAction,
     TypeChannelParticipant, TypeChat, TypeChatParticipant, TypeDocumentAttribute, TypeInputPeer,
-    TypeMessageAction, TypeMessageEntity, TypePeer, TypePhotoSize, TypeUpdates, TypeUser,
+    TypeMessageAction, TypeMessageEntity, TypePeer, TypePhotoSize, TypeUpdates, TypeUser, PhotoSize,
     TypeUserFull, UpdateChatUserTyping, UpdateNewChannelMessage, UpdateNewMessage, UpdateUserTyping,
     User, UserFull, MessageEntityPre)
 from mautrix_appservice import MatrixRequestError, IntentError, AppService, IntentAPI
@@ -595,7 +595,7 @@ class Portal:
     @staticmethod
     def _get_largest_photo_size(photo: Photo) -> TypePhotoSize:
         return max(photo.sizes, key=(lambda photo2: (
-            len(photo2.bytes) if isinstance(photo2, PhotoCachedSize) else photo2.size)))
+            len(photo2.bytes) if not isinstance(photo2, PhotoSize) else photo2.size)))
 
     async def remove_avatar(self, _: 'AbstractUser', save: bool = False) -> None:
         await self.main_intent.set_room_avatar(self.mxid, None)
@@ -663,19 +663,11 @@ class Portal:
     async def get_invite_link(self, user: 'u.User') -> str:
         if self.peer_type == "user":
             raise ValueError("You can't invite users to private chats.")
-        elif self.peer_type == "chat":
-            link = await user.client(ExportChatInviteRequest(chat_id=self.tgid))
-        elif self.peer_type == "channel":
-            if self.username:
-                return f"https://t.me/{self.username}"
-            link = await user.client(
-                ExportInviteRequest(channel=await self.get_input_entity(user)))
-        else:
-            raise ValueError(f"Invalid peer type '{self.peer_type}' for invite link.")
-
+        if self.username:
+            return f"https://t.me/{self.username}"
+        link = await user.client(ExportChatInviteRequest(peer=await self.get_input_entity(user)))
         if isinstance(link, ChatInviteEmpty):
             raise ValueError("Failed to get invite link.")
-
         return link.link
 
     async def get_authenticated_matrix_users(self) -> List['u.User']:
@@ -825,7 +817,7 @@ class Portal:
             await source.client(DeleteChatUserRequest(chat_id=self.tgid, user_id=user.tgid))
         elif self.peer_type == "channel":
             channel = await self.get_input_entity(source)
-            rights = ChannelBannedRights(datetime.fromtimestamp(0), True)
+            rights = ChatBannedRights(datetime.fromtimestamp(0), True)
             await source.client(EditBannedRequest(channel=channel,
                                                   user_id=user.tgid,
                                                   banned_rights=rights))
@@ -1079,11 +1071,10 @@ class Portal:
         elif self.peer_type == "channel":
             moderator = level >= 50
             admin = level >= 75
-            rights = ChannelAdminRights(change_info=moderator, post_messages=moderator,
-                                        edit_messages=moderator, delete_messages=moderator,
-                                        ban_users=moderator, invite_users=moderator,
-                                        invite_link=moderator, pin_messages=moderator,
-                                        add_admins=admin)
+            rights = ChatAdminRights(change_info=moderator, post_messages=moderator,
+                                     edit_messages=moderator, delete_messages=moderator,
+                                     ban_users=moderator, invite_users=moderator,
+                                     pin_messages=moderator, add_admins=admin)
             await sender.client(
                 EditAdminRequest(channel=await self.get_input_entity(sender),
                                  user_id=user_id, admin_rights=rights))
@@ -1107,15 +1098,15 @@ class Portal:
                 await self._update_telegram_power_level(sender, user_id, level)
 
     async def handle_matrix_about(self, sender: 'u.User', about: str) -> None:
-        if self.peer_type not in {"channel"}:
+        if self.peer_type not in ("chat", "channel"):
             return
-        channel = await self.get_input_entity(sender)
-        await sender.client(EditAboutRequest(channel=channel, about=about))
+        peer = await self.get_input_entity(sender)
+        await sender.client(EditChatAboutRequest(peer=peer, about=about))
         self.about = about
         self.save()
 
     async def handle_matrix_title(self, sender: 'u.User', title: str) -> None:
-        if self.peer_type not in {"chat", "channel"}:
+        if self.peer_type not in ("chat", "channel"):
             return
 
         if self.peer_type == "chat":
@@ -1128,7 +1119,7 @@ class Portal:
         self.save()
 
     async def handle_matrix_avatar(self, sender: 'u.User', url: str) -> None:
-        if self.peer_type not in {"chat", "channel"}:
+        if self.peer_type not in ("chat", "channel"):
             # Invalid peer type
             return
 

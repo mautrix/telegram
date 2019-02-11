@@ -7,7 +7,7 @@ extras = {
     "better_formatter": ["lxml>=4.1.1,<5"],
     "fast_crypto": ["cryptg>=0.1,<0.2"],
     "webp_convert": ["Pillow>=5.0.0,<6"],
-    "hq_thumbnails": ["moviepy>=0.2,<0.3"],
+    "hq_thumbnails": ["moviepy>=0.2,<0.3", "imageio==2.4.1"],
 }
 extras["all"] = list(set(deps[0] for deps in extras.values()))
 
@@ -34,8 +34,8 @@ setuptools.setup(
         "ruamel.yaml>=0.15.35,<0.16",
         "future-fstrings>=0.4.2",
         "python-magic>=0.4.15,<0.5",
-        "telethon>=1.5,<1.5.4",
-        "telethon-session-sqlalchemy>=0.2.3,<0.3",
+        "telethon>=1.5.5,<1.6",
+        "telethon-session-sqlalchemy>=0.2.6,<0.3",
     ],
     extras_require=extras,
 

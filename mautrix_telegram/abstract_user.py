@@ -24,12 +24,11 @@ from sqlalchemy import orm
 from telethon.tl.patched import MessageService, Message
 from telethon.tl.types import (
     Channel, ChannelForbidden, Chat, ChatForbidden, MessageActionChannelMigrateFrom, PeerUser,
-    TypeUpdate, UpdateChannelPinnedMessage, UpdateChatPinnedMessage, UpdateChatAdmins,
-    UpdateChatParticipantAdmin, UpdateChatParticipants, UpdateChatUserTyping,
-    UpdateDeleteChannelMessages, UpdateDeleteMessages, UpdateEditChannelMessage, UpdateEditMessage,
-    UpdateNewChannelMessage, UpdateNewMessage, UpdateReadHistoryOutbox, UpdateShortChatMessage,
-    UpdateShortMessage, UpdateUserName, UpdateUserPhoto, UpdateUserStatus, UpdateUserTyping, User,
-    UserStatusOffline, UserStatusOnline)
+    TypeUpdate, UpdateChannelPinnedMessage, UpdateChatPinnedMessage, UpdateChatParticipantAdmin,
+    UpdateChatParticipants, UpdateChatUserTyping, UpdateDeleteChannelMessages, UpdateDeleteMessages,
+    UpdateEditChannelMessage, UpdateEditMessage, UpdateNewChannelMessage, UpdateNewMessage,
+    UpdateReadHistoryOutbox, UpdateShortChatMessage, UpdateShortMessage, UpdateUserName,
+    UpdateUserPhoto, UpdateUserStatus, UpdateUserTyping, User, UserStatusOffline, UserStatusOnline)
 
 from mautrix_appservice import MatrixRequestError, AppService
 from alchemysession import AlchemySessionContainer
@@ -202,7 +201,7 @@ class AbstractUser(ABC):
             await self.update_typing(update)
         elif isinstance(update, UpdateUserStatus):
             await self.update_status(update)
-        elif isinstance(update, (UpdateChatAdmins, UpdateChatParticipantAdmin)):
+        elif isinstance(update, UpdateChatParticipantAdmin):
             await self.update_admin(update)
         elif isinstance(update, UpdateChatParticipants):
             await self.update_participants(update)
@@ -247,19 +246,13 @@ class AbstractUser(ABC):
         puppet = pu.Puppet.get(TelegramID(update.peer.user_id))
         await puppet.intent.mark_read(portal.mxid, message.mxid)
 
-    async def update_admin(self,
-                           update: Union[UpdateChatAdmins, UpdateChatParticipantAdmin]) -> None:
+    async def update_admin(self, update: UpdateChatParticipantAdmin) -> None:
         # TODO duplication not checked
         portal = po.Portal.get_by_tgid(TelegramID(update.chat_id), peer_type="chat")
         if not portal or not portal.mxid:
             return
 
-        if isinstance(update, UpdateChatAdmins):
-            await portal.set_telegram_admins_enabled(update.enabled)
-        elif isinstance(update, UpdateChatParticipantAdmin):
-            await portal.set_telegram_admin(TelegramID(update.user_id))
-        else:
-            self.log.warning("Unexpected admin status update: %s", update)
+        await portal.set_telegram_admin(TelegramID(update.user_id))
 
     async def update_typing(self, update: Union[UpdateUserTyping, UpdateChatUserTyping]) -> None:
         if isinstance(update, UpdateUserTyping):

@@ -33,7 +33,7 @@ RUN apk add --no-cache \
       ffmpeg \
       ca-certificates \
       su-exec \
- && pip3 install -r requirements.txt -r optional-requirements.txt
+ && pip3 install .[all]
 
 VOLUME /data
 
