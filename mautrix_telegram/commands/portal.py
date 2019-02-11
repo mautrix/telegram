@@ -67,6 +67,16 @@ async def sync_state(evt: CommandEvent) -> Dict:
     await evt.reply("Synchronization complete")
 
 
+@command_handler(needs_admin=False, needs_puppeting=False, needs_auth=False,
+                 help_section=SECTION_MISC,
+                 help_text="Get the ID of the Telegram chat where this room is bridged.")
+async def id(evt: CommandEvent) -> Dict:
+    portal = po.Portal.get_by_mxid(evt.room_id)
+    if not portal:
+        return await evt.reply("This is not a portal room.")
+    await evt.reply(f"This room is bridged to Telegram chat ID `{portal.tgid}`.")
+
+
 @command_handler(help_section=SECTION_PORTAL_MANAGEMENT,
                  help_text="Get a Telegram invite link to the current chat.")
 async def invite_link(evt: CommandEvent) -> Dict:

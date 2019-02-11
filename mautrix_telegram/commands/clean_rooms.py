@@ -70,7 +70,7 @@ async def clean_rooms(evt: CommandEvent) -> Optional[Dict]:
                for n, (room, other_member) in enumerate(management_rooms)]
               or ["No management rooms found."])
     reply.append("#### Active portal rooms (A)")
-    reply += ([f"{n+1}. [P{n+1}](https://matrix.to/#/{portal.mxid}) "
+    reply += ([f"{n+1}. [A{n+1}](https://matrix.to/#/{portal.mxid}) "
                f"(to Telegram chat \"{portal.title}\")"
                for n, portal in enumerate(portals)]
               or ["No active portal rooms found."])
@@ -79,7 +79,7 @@ async def clean_rooms(evt: CommandEvent) -> Optional[Dict]:
                for n, room in enumerate(unidentified_rooms)]
               or ["No unidentified rooms found."])
     reply.append("#### Inactive portal rooms (I)")
-    reply += ([f"{n}. [E{n}](https://matrix.to/#/{portal.mxid}) "
+    reply += ([f"{n}. [I{n}](https://matrix.to/#/{portal.mxid}) "
                f"(to Telegram chat \"{portal.title}\")"
                for n, portal in enumerate(empty_portals)]
               or ["No inactive portal rooms found."])
@@ -93,7 +93,7 @@ async def clean_rooms(evt: CommandEvent) -> Optional[Dict]:
               "",
               ("To clean specific rooms, type `$cmdprefix+sp clean-range <range>` "
                "where `range` is the range (e.g. `5-21`) prefixed with the first letter of"
-               "the group name."),
+               "the group name. (e.g. `I2-6`)"),
               "",
               ("Please note that you will have to re-run `$cmdprefix+sp clean-rooms` "
                "between each use of the commands above.")]
