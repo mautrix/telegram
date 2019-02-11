@@ -302,6 +302,12 @@ class MatrixHandler:
                 await portal.handle_matrix_pin(sender, None)
 
     @staticmethod
+    async def handle_room_upgrade(room_id: MatrixRoomID, new_room_id: MatrixRoomID) -> None:
+        portal = po.Portal.get_by_mxid(room_id)
+        if portal:
+            await portal.handle_matrix_upgrade(new_room_id)
+
+    @staticmethod
     async def handle_name_change(room_id: MatrixRoomID, user_id: MatrixUserID, displayname: str,
                                  prev_displayname: str, event_id: MatrixEventID) -> None:
         portal = po.Portal.get_by_mxid(room_id)
@@ -416,6 +422,8 @@ class MatrixHandler:
             except KeyError:
                 old_events = set()
             await self.handle_room_pin(room_id, sender, new_events, old_events)
+        elif evt_type == "m.room.tombstone":
+            await self.handle_room_upgrade(room_id, evt["content"]["replacement_room"])
         elif evt_type == "m.receipt":
             await self.handle_read_receipts(room_id, self.parse_read_receipts(content))
         elif evt_type == "m.presence":

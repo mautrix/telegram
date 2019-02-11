@@ -284,7 +284,7 @@ class Portal:
             del self._dedup_mxid[self._dedup.popleft()]
         return None
 
-    def get_input_entity(self, user: 'u.User') -> Awaitable[TypeInputPeer]:
+    def get_input_entity(self, user: 'AbstractUser') -> Awaitable[TypeInputPeer]:
         return user.client.get_input_entity(self.peer)
 
     async def get_entity(self, user: 'AbstractUser') -> TypeChat:
@@ -419,20 +419,23 @@ class Portal:
 
     def _get_base_power_levels(self, levels: dict = None, entity: TypeChat = None) -> dict:
         levels = levels or {}
-        power_level_requirement = (0 if self.peer_type == "chat" and not entity.admins_enabled
-                                   else 50)
         levels["ban"] = 99
-        levels["invite"] = power_level_requirement if self.peer_type == "chat" else 75
+        levels["kick"] = 50
+        levels["invite"] = 50 if entity.default_banned_rights.invite_users else 0
         if "events" not in levels:
             levels["events"] = {}
-        levels["events"]["m.room.name"] = power_level_requirement
-        levels["events"]["m.room.avatar"] = power_level_requirement
-        levels["events"]["m.room.topic"] = 50 if self.peer_type == "channel" else 99
+        levels["events"]["m.room.name"] = 50 if entity.default_banned_rights.change_info else 0
+        levels["events"]["m.room.avatar"] = 50 if entity.default_banned_rights.change_info else 0
+        levels["events"]["m.room.topic"] = 50 if entity.default_banned_rights.change_info else 0
+        levels["events"][
+            "m.room.pinned_events"] = 50 if entity.default_banned_rights.pin_messages else 0
+        levels["events"]["m.sticker"] = 50 if entity.default_banned_rights.send_stickers else 0
         levels["events"]["m.room.power_levels"] = 75
         levels["events"]["m.room.history_visibility"] = 75
         levels["state_default"] = 50
         levels["users_default"] = 0
-        levels["events_default"] = (50 if self.peer_type == "channel" and not entity.megagroup
+        levels["events_default"] = (50 if (self.peer_type == "channel" and not entity.megagroup
+                                           or entity.default_banned_rights.send_messages)
                                     else 0)
         if "users" not in levels:
             levels["users"] = {
@@ -1145,6 +1148,36 @@ class Portal:
                 self.save()
                 break
 
+    async def handle_matrix_upgrade(self, new_room: MatrixRoomID) -> None:
+        old_room = self.mxid
+        self.migrate_and_save_matrix(new_room)
+        await self.main_intent.join_room(new_room)
+        entity = None  # type: TypeInputPeer
+        user = None  # type: AbstractUser
+        if self.bot and self.has_bot:
+            user = self.bot
+            entity = await self.get_input_entity(self.bot)
+        if not entity:
+            user_mxids = await self.main_intent.get_room_members(self.mxid)
+            for user_str in user_mxids:
+                user_id = MatrixUserID(user_str)
+                if user_id == self.az.bot_mxid:
+                    continue
+                user = u.User.get_by_mxid(user_id, create=False)
+                if user and user.tgid:
+                    entity = self.get_input_entity(user)
+                    if entity:
+                        break
+        if not entity:
+            self.log.error(
+                "Failed to fully migrate to upgraded Matrix room: no Telegram user found.")
+            return
+        users, participants = await self._get_users(self.bot, entity)
+        await self.sync_telegram_users(user, users)
+        levels = await self.main_intent.get_power_levels(self.mxid)
+        await self.update_telegram_participants(participants, levels)
+        self.log.info(f"Upgraded room from {old_room} to {self.mxid}")
+
     def _register_outgoing_actions_for_dedup(self, response: TypeUpdates) -> None:
         for update in response.updates:
             check_dedup = (isinstance(update, (UpdateNewMessage, UpdateNewChannelMessage))
@@ -1183,7 +1216,7 @@ class Portal:
         if not entity:
             raise ValueError("Upgrade may have failed: output channel not found.")
         self.peer_type = "channel"
-        self.migrate_and_save(TelegramID(entity.id))
+        self.migrate_and_save_telegram(TelegramID(entity.id))
         await self.update_info(source, entity)
 
     async def set_telegram_username(self, source: 'u.User', username: str) -> None:
@@ -1659,7 +1692,7 @@ class Portal:
             await self.delete_telegram_user(TelegramID(action.user_id), sender)
         elif isinstance(action, MessageActionChatMigrateTo):
             self.peer_type = "channel"
-            self.migrate_and_save(TelegramID(action.channel_id))
+            self.migrate_and_save_telegram(TelegramID(action.channel_id))
             await sender.intent.send_emote(self.mxid, "upgraded this group to a supergroup.")
         elif isinstance(action, MessageActionPinMessage):
             await self.receive_telegram_pin_sender(sender)
@@ -1804,19 +1837,29 @@ class Portal:
                         title=self.title, about=self.about, photo_id=self.photo_id,
                         config=json.dumps(self.local_config))
 
-    def migrate_and_save(self, new_id: TelegramID) -> None:
-        self.db.delete(self.db_instance)
-        self.db.commit()
-        self._db_instance = None
+    def migrate_and_save_telegram(self, new_id: TelegramID) -> None:
         try:
             del self.by_tgid[self.tgid_full]
         except KeyError:
             pass
         self.tgid = new_id
         self.tg_receiver = new_id
+        existing = self.by_tgid[self.tgid_full]
+        if existing:
+            existing.delete()
         self.by_tgid[self.tgid_full] = self
-        self.db.add(self.db_instance)
-        self.db.commit()
+        self.db_instance.tgid = self.tgid
+        self.db_instance.tg_receiver = self.tg_receiver
+        self.save()
+
+    def migrate_and_save_matrix(self, new_id: MatrixRoomID) -> None:
+        try:
+            del self.by_mxid[self.mxid]
+        except KeyError:
+            pass
+        self.mxid = new_id
+        self.by_mxid[self.mxid] = self
+        self.save()
 
     def save(self) -> None:
         self.db_instance.mxid = self.mxid
