@@ -74,7 +74,12 @@ async def id(evt: CommandEvent) -> Dict:
     portal = po.Portal.get_by_mxid(evt.room_id)
     if not portal:
         return await evt.reply("This is not a portal room.")
-    await evt.reply(f"This room is bridged to Telegram chat ID `{portal.tgid}`.")
+    tgid = portal.tgid
+    if portal.peer_type == "chat":
+        tgid = -tgid
+    elif portal.peer_type == "channel":
+        tgid = f"-100{tgid}"
+    await evt.reply(f"This room is bridged to Telegram chat ID `{tgid}`.")
 
 
 @command_handler(help_section=SECTION_PORTAL_MANAGEMENT,

@@ -1841,9 +1841,11 @@ class Portal:
             del self.by_tgid[self.tgid_full]
         except KeyError:
             pass
-        existing = self.by_tgid[(new_id, new_id)]
-        if existing:
+        try:
+            existing = self.by_tgid[(new_id, new_id)]
             existing.delete()
+        except KeyError:
+            pass
         self.db_instance.update(tgid=new_id, tg_receiver=new_id)
         old_id = self.tgid
         self.tgid = new_id
