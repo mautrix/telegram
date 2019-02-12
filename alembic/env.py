@@ -7,10 +7,9 @@ from os.path import abspath, dirname
 
 sys.path.insert(0, dirname(dirname(abspath(__file__))))
 
-from mautrix_telegram.base import Base
+from mautrix_telegram.db import Base
 from mautrix_telegram.config import Config
 from alchemysession import AlchemySessionContainer
-import mautrix_telegram.db
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
