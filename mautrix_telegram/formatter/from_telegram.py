@@ -87,6 +87,19 @@ async def _add_forward_header(source, text: str, html: Optional[str],
             if user:
                 fwd_from_text = pu.Puppet.get_displayname(user, False)
                 fwd_from_html = f"<b>{fwd_from_text}</b>"
+    else:
+        portal = po.Portal.get_by_tgid(TelegramID(fwd_from.channel_id))
+        if portal:
+            fwd_from_text = portal.title
+            if portal.alias:
+                fwd_from_html = f"<a href='https://matrix.to/#/{portal.alias}'>{fwd_from_text}</a>"
+            else:
+                fwd_from_html = f"<b>{fwd_from_text}</b>"
+        else:
+            channel = await source.client.get_entity(PeerChannel(fwd_from.channel_id))
+            if channel:
+                fwd_from_text = channel.title
+                fwd_from_html = f"<b>{fwd_from_text}</b>"
 
     if not fwd_from_text:
         if fwd_from.from_id:
