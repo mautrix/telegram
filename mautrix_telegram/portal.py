@@ -87,7 +87,7 @@ InviteList = Union[MatrixUserID, List[MatrixUserID]]
 
 
 class Portal:
-    log = logging.getLogger("mau.portal")  # type: logging.Logger
+    base_log = logging.getLogger("mau.portal")  # type: logging.Logger
     az = None  # type: AppService
     bot = None  # type: Bot
     loop = None  # type: asyncio.AbstractEventLoop
@@ -129,6 +129,7 @@ class Portal:
         self.local_config = json.loads(config or "{}")  # type: Dict[str, Any]
         self._db_instance = db_instance  # type: DBPortal
         self.deleted = False  # type: bool
+        self.log = self.base_log.getChild(self.tgid_log) if self.tgid else self.base_log
 
         self._main_intent = None  # type: IntentAPI
         self._room_create_lock = asyncio.Lock()  # type: asyncio.Lock
@@ -290,10 +291,10 @@ class Portal:
             return await user.client.get_entity(self.peer)
         except ValueError:
             if user.is_bot:
-                self.log.warning(f"Could not find entity for {self.tgid_log} with bot {user.tgid}. "
+                self.log.warning(f"Could not find entity with bot {user.tgid}. "
                                  "Failing...")
                 raise
-            self.log.warning(f"Could not find entity for {self.tgid_log} with user {user.tgid}. "
+            self.log.warning(f"Could not find entity with user {user.tgid}. "
                              "falling back to get_dialogs.")
             async for dialog in user.client.iter_dialogs():
                 if dialog.entity.id == self.tgid:
@@ -361,7 +362,7 @@ class Portal:
             entity = await self.get_entity(user)
             self.log.debug("Fetched data: %s", entity)
 
-        self.log.debug(f"Creating room for {self.tgid_log}")
+        self.log.debug(f"Creating room")
 
         try:
             self.title = entity.title
@@ -401,7 +402,7 @@ class Portal:
                                                      is_direct=direct, invitees=invites or [],
                                                      name=self.title, initial_state=initial_state)
         if not room_id:
-            raise Exception(f"Failed to create room for {self.tgid_log}")
+            raise Exception(f"Failed to create room")
 
         self.mxid = MatrixRoomID(room_id)
         self.by_mxid[self.mxid] = self
@@ -536,10 +537,10 @@ class Portal:
 
     async def update_info(self, user: 'AbstractUser', entity: TypeChat = None) -> None:
         if self.peer_type == "user":
-            self.log.warning(f"Called update_info() for direct chat portal {self.tgid_log}")
+            self.log.warning(f"Called update_info() for direct chat portal")
             return
 
-        self.log.debug(f"Updating info of {self.tgid_log}")
+        self.log.debug(f"Updating info")
         if not entity:
             entity = await self.get_entity(user)
             self.log.debug("Fetched data: %s", entity)
@@ -1254,6 +1255,7 @@ class Portal:
         self.by_tgid[self.tgid_full] = self
         await self.update_info(source, entity)
         self.db_instance.insert()
+        self.log = self.base_log.getChild(str(self.tgid))
 
         if self.bot and self.bot.tgid in invites:
             self.bot.add_chat(self.tgid, self.peer_type)
@@ -1843,9 +1845,12 @@ class Portal:
         if existing:
             existing.delete()
         self.db_instance.update(tgid=new_id, tg_receiver=new_id)
+        old_id = self.tgid
         self.tgid = new_id
         self.tg_receiver = new_id
         self.by_tgid[self.tgid_full] = self
+        self.log = self.base_log.getChild(str(self.tgid))
+        self.log.info(f"Telegram chat upgraded from {old_id}")
 
     def migrate_and_save_matrix(self, new_id: MatrixRoomID) -> None:
         try:
