@@ -58,7 +58,7 @@ class User(Base):
 
     @classmethod
     def get_by_username(cls, username: str) -> Optional['User']:
-        return cls._select_one_or_none(cls.c.username == username)
+        return cls._select_one_or_none(cls.c.tg_username == username)
 
     @property
     def _edit_identity(self):

@@ -31,8 +31,8 @@ if TYPE_CHECKING:
 
 
 class Context:
-    def __init__(self, az: "AppService", db: "scoped_session", config: "Config",
-                 loop: "asyncio.AbstractEventLoop", session_container: "AlchemySessionContainer"
+    def __init__(self, az: 'AppService', db: 'scoped_session', config: 'Config',
+                 loop: 'asyncio.AbstractEventLoop', session_container: 'AlchemySessionContainer'
                  ) -> None:
         self.az = az  # type: AppService
         self.db = db  # type: scoped_session
