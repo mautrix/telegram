@@ -14,7 +14,8 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import Awaitable, Coroutine, Dict, List, Optional, Pattern, Union, TYPE_CHECKING
+from typing import (Awaitable, Coroutine, Dict, List, Iterable, Optional, Pattern, Union,
+                    TYPE_CHECKING)
 from difflib import SequenceMatcher
 from enum import Enum
 from aiohttp import ServerDisconnectedError
@@ -396,7 +397,7 @@ class Puppet:
         except KeyError:
             pass
 
-        puppet = DBPuppet.query.get(tgid)
+        puppet = DBPuppet.get_by_tgid(tgid)
         if puppet:
             return cls.from_db(puppet)
 
@@ -426,7 +427,7 @@ class Puppet:
         except KeyError:
             pass
 
-        puppet = DBPuppet.query.filter(DBPuppet.custom_mxid == mxid).one_or_none()
+        puppet = DBPuppet.get_by_custom_mxid(mxid)
         if puppet:
             puppet = cls.from_db(puppet)
             return puppet
@@ -434,11 +435,11 @@ class Puppet:
         return None
 
     @classmethod
-    def get_all_with_custom_mxid(cls) -> List['Puppet']:
-        return [cls.by_custom_mxid[puppet.mxid]
+    def all_with_custom_mxid(cls) -> Iterable['Puppet']:
+        return (cls.by_custom_mxid[puppet.mxid]
                 if puppet.custom_mxid in cls.by_custom_mxid
                 else cls.from_db(puppet)
-                for puppet in DBPuppet.query.filter(DBPuppet.custom_mxid is not None).all()]
+                for puppet in DBPuppet.all_with_custom_mxid())
 
     @classmethod
     def get_id_from_mxid(cls, mxid: MatrixUserID) -> Optional[TelegramID]:
@@ -460,7 +461,7 @@ class Puppet:
             if puppet.username and puppet.username.lower() == username.lower():
                 return puppet
 
-        dbpuppet = DBPuppet.query.filter(DBPuppet.username == username).one_or_none()
+        dbpuppet = DBPuppet.get_by_username(username)
         if dbpuppet:
             return cls.from_db(dbpuppet)
 
@@ -475,7 +476,7 @@ class Puppet:
             if puppet.displayname and puppet.displayname == displayname:
                 return puppet
 
-        dbpuppet = DBPuppet.query.filter(DBPuppet.displayname == displayname).one_or_none()
+        dbpuppet = DBPuppet.get_by_displayname(displayname)
         if dbpuppet:
             return cls.from_db(dbpuppet)
 
@@ -491,4 +492,4 @@ def init(context: 'Context') -> List[Coroutine]:  # [None, None, PuppetError]
     Puppet.hs_domain = config["homeserver"]["domain"]
     Puppet.mxid_regex = re.compile(
         f"@{Puppet.username_template.format(userid='([0-9]+)')}:{Puppet.hs_domain}")
-    return [puppet.init_custom_mxid() for puppet in Puppet.get_all_with_custom_mxid()]
+    return [puppet.init_custom_mxid() for puppet in Puppet.all_with_custom_mxid()]
