@@ -21,13 +21,11 @@ from telethon.errors import (
     AccessTokenExpiredError, AccessTokenInvalidError, FirstNameInvalidError, FloodWaitError,
     PasswordHashInvalidError, PhoneCodeExpiredError, PhoneCodeInvalidError,
     PhoneNumberAppSignupForbiddenError, PhoneNumberBannedError, PhoneNumberFloodError,
-    PhoneNumberOccupiedError, PhoneNumberUnoccupiedError, SessionPasswordNeededError,
-    UsernameInvalidError, UsernameNotModifiedError, UsernameOccupiedError)
-from telethon.tl.functions.account import UpdateUsernameRequest
+    PhoneNumberOccupiedError, PhoneNumberUnoccupiedError, SessionPasswordNeededError)
 
-from . import command_handler, CommandEvent, SECTION_AUTH
-from .. import puppet as pu, user as u
-from ..util import format_duration, ignore_coro
+from mautrix_telegram.commands import command_handler, CommandEvent, SECTION_AUTH
+from mautrix_telegram import puppet as pu, user as u
+from mautrix_telegram.util import format_duration, ignore_coro
 
 
 @command_handler(needs_auth=False,
@@ -54,87 +52,6 @@ async def ping_bot(evt: CommandEvent) -> Optional[Dict]:
     return await evt.reply("Telegram message relay bot is active: "
                            f"[{displayname}](https://matrix.to/#/{mxid}) (ID {bot_info.id})\n\n"
                            "To use the bot, simply invite it to a portal room.")
-
-
-@command_handler(needs_auth=True, needs_matrix_puppeting=True,
-                 help_section=SECTION_AUTH,
-                 help_text="Revert your Telegram account's Matrix puppet to use the default Matrix "
-                           "account.")
-async def logout_matrix(evt: CommandEvent) -> Optional[Dict]:
-    puppet = pu.Puppet.get(evt.sender.tgid)
-    if not puppet.is_real_user:
-        return await evt.reply("You are not logged in with your Matrix account.")
-    await puppet.switch_mxid(None, None)
-    return await evt.reply("Reverted your Telegram account's Matrix puppet back to the default.")
-
-
-@command_handler(needs_auth=True, management_only=True, needs_matrix_puppeting=True,
-                 help_section=SECTION_AUTH,
-                 help_text="Replace your Telegram account's Matrix puppet with your own Matrix "
-                           "account")
-async def login_matrix(evt: CommandEvent) -> Optional[Dict]:
-    puppet = pu.Puppet.get(evt.sender.tgid)
-    if puppet.is_real_user:
-        return await evt.reply("You have already logged in with your Matrix account. "
-                               "Log out with `$cmdprefix+sp logout-matrix` first.")
-    allow_matrix_login = evt.config.get("bridge.allow_matrix_login", True)
-    if allow_matrix_login:
-        evt.sender.command_status = {
-            "next": enter_matrix_token,
-            "action": "Matrix login",
-        }
-    if evt.config["appservice.public.enabled"]:
-        prefix = evt.config["appservice.public.external"]
-        token = evt.public_website.make_token(evt.sender.mxid, "/matrix-login")
-        url = f"{prefix}/matrix-login?token={token}"
-        if allow_matrix_login:
-            return await evt.reply(
-                "This bridge instance allows you to log in inside or outside Matrix.\n\n"
-                "If you would like to log in within Matrix, please send your Matrix access token "
-                "here.\n"
-                f"If you would like to log in outside of Matrix, [click here]({url}).\n\n"
-                "Logging in outside of Matrix is recommended, because in-Matrix login would save "
-                "your access token in the message history.")
-        return await evt.reply("This bridge instance does not allow logging in inside Matrix.\n\n"
-                               f"Please visit [the login page]({url}) to log in.")
-    elif allow_matrix_login:
-        return await evt.reply(
-            "This bridge instance does not allow you to log in outside of Matrix.\n\n"
-            "Please send your Matrix access token here to log in.")
-    return await evt.reply("This bridge instance has been configured to not allow logging in.")
-
-
-@command_handler(needs_auth=True, needs_matrix_puppeting=True,
-                 help_section=SECTION_AUTH,
-                 help_text="Pings the server with the stored matrix authentication")
-async def ping_matrix(evt: CommandEvent) -> Optional[Dict]:
-    puppet = pu.Puppet.get(evt.sender.tgid)
-    if not puppet.is_real_user:
-        return await evt.reply("You are not logged in with your Matrix account.")
-    resp = await puppet.init_custom_mxid()
-    if resp == pu.PuppetError.InvalidAccessToken:
-        return await evt.reply("Your access token is invalid.")
-    elif resp == pu.PuppetError.Success:
-        return await evt.reply("Your Matrix login is working.")
-    return await evt.reply(f"Unknown response while checking your Matrix login: {resp}.")
-
-
-async def enter_matrix_token(evt: CommandEvent) -> Dict:
-    evt.sender.command_status = None
-
-    puppet = pu.Puppet.get(evt.sender.tgid)
-    if puppet.is_real_user:
-        return await evt.reply("You have already logged in with your Matrix account. "
-                               "Log out with `$cmdprefix+sp logout-matrix` first.")
-
-    resp = await puppet.switch_mxid(" ".join(evt.args), evt.sender.mxid)
-    if resp == pu.PuppetError.OnlyLoginSelf:
-        return await evt.reply("You can only log in as your own Matrix user.")
-    elif resp == pu.PuppetError.InvalidAccessToken:
-        return await evt.reply("Failed to verify access token.")
-    assert resp == pu.PuppetError.Success, "Encountered an unhandled PuppetError."
-    return await evt.reply(
-        f"Replaced your Telegram account's Matrix puppet with {puppet.custom_mxid}.")
 
 
 @command_handler(needs_auth=False, management_only=True,
@@ -375,30 +292,3 @@ async def logout(evt: CommandEvent) -> Optional[Dict]:
     if await evt.sender.log_out():
         return await evt.reply("Logged out successfully.")
     return await evt.reply("Failed to log out.")
-
-
-@command_handler(needs_auth=True,
-                 help_section=SECTION_AUTH,
-                 help_text="Change your Telegram username")
-async def username(evt: CommandEvent) -> Optional[Dict]:
-    if len(evt.args) == 0:
-        return await evt.reply("**Usage:** `$cmdprefix+sp username <new username>`")
-    if evt.sender.is_bot:
-        return await evt.reply("Bots can't set their own username.")
-    new_name = evt.args[0]
-    if new_name == "-":
-        new_name = ""
-    try:
-        await evt.sender.client(UpdateUsernameRequest(username=new_name))
-    except UsernameInvalidError:
-        return await evt.reply("Invalid username. Usernames must be between 5 and 30 alphanumeric "
-                               "characters.")
-    except UsernameNotModifiedError:
-        return await evt.reply("That is your current username.")
-    except UsernameOccupiedError:
-        return await evt.reply("That username is already in use.")
-    await evt.sender.update_info()
-    if not evt.sender.username:
-        await evt.reply("Username removed")
-    else:
-        await evt.reply(f"Username changed to {evt.sender.username}")

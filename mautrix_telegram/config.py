@@ -209,7 +209,6 @@ class Config(DictWithRecursion):
         copy("bridge.inline_images")
         copy("bridge.plaintext_highlights")
         copy("bridge.public_portals")
-        copy("bridge.native_stickers")
         copy("bridge.catch_up")
         copy("bridge.sync_with_custom_puppets")
         copy("bridge.telegram_link_preview")

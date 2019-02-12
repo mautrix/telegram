@@ -63,7 +63,7 @@ class Puppet(Base):
         return cls._select_one_or_none(cls.c.id == tgid)
 
     @classmethod
-    def get_by_custom_mxid(cls, mxid: MatrixRoomID) -> Optional['Puppet']:
+    def get_by_custom_mxid(cls, mxid: MatrixUserID) -> Optional['Puppet']:
         return cls._select_one_or_none(cls.c.custom_mxid == mxid)
 
     @classmethod

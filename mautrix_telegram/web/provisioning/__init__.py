@@ -28,7 +28,7 @@ from ...types import MatrixUserID, TelegramID
 from ...user import User
 from ...portal import Portal
 from ...util import ignore_coro
-from ...commands.portal import user_has_power_level, get_initial_state
+from ...commands.portal.util import user_has_power_level, get_initial_state
 from ..common import AuthAPI
 
 if TYPE_CHECKING:

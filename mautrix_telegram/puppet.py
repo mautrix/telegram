@@ -30,7 +30,6 @@ from mautrix_appservice import AppService, IntentAPI, IntentError, MatrixRequest
 
 from .types import MatrixUserID, TelegramID
 from .db import Puppet as DBPuppet
-from .util import ignore_coro
 from . import util
 
 if TYPE_CHECKING:
@@ -82,6 +81,7 @@ class Puppet:
 
         self.default_mxid_intent = self.az.intent.user(self.default_mxid)
         self.intent = self._fresh_intent()  # type: IntentAPI
+        self.sync_task = None  # type: Optional[asyncio.Future]
 
         self.cache[id] = self
         if self.custom_mxid:
@@ -154,7 +154,7 @@ class Puppet:
                 return PuppetError.OnlyLoginSelf
             return PuppetError.InvalidAccessToken
         if config["bridge.sync_with_custom_puppets"]:
-            ignore_coro(asyncio.ensure_future(self.sync(), loop=self.loop))
+            self.sync_task = asyncio.ensure_future(self.sync(), loop=self.loop)
         return PuppetError.Success
 
     async def leave_rooms_with_default_user(self) -> None:
@@ -236,6 +236,8 @@ class Puppet:
     async def sync(self) -> None:
         try:
             await self._sync()
+        except asyncio.CancelledError:
+            self.log.info("Syncing cancelled")
         except Exception:
             self.log.exception("Fatal error syncing")
 

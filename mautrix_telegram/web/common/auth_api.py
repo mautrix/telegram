@@ -24,7 +24,7 @@ import logging
 
 from telethon.errors import *
 
-from ...commands.auth import enter_password
+from ...commands.telegram.auth import enter_password
 from ...util import format_duration, ignore_coro
 from ...puppet import Puppet, PuppetError
 from ...user import User

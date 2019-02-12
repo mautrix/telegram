@@ -136,13 +136,13 @@ class User(AbstractUser):
         self.db_instance.update(tgid=self.tgid, tg_username=self.username, tg_phone=self.phone,
                                 saved_contacts=self.saved_contacts)
 
-    def delete(self) -> None:
+    def delete(self, delete_db: bool = True) -> None:
         try:
             del self.by_mxid[self.mxid]
             del self.by_tgid[self.tgid]
         except KeyError:
             pass
-        if self._db_instance:
+        if delete_db and self._db_instance:
             self._db_instance.delete()
 
     @classmethod
@@ -316,7 +316,7 @@ class User(AbstractUser):
 
     async def needs_relaybot(self, portal: po.Portal) -> bool:
         return not await self.is_logged_in() or (
-            self.is_bot and portal.tgid_full not in self.portals)
+            (portal.has_bot or self.bot) and portal.tgid_full not in self.portals)
 
     def _hash_contacts(self) -> int:
         acc = 0
@@ -328,7 +328,7 @@ class User(AbstractUser):
         response = await self.client(GetContactsRequest(hash=self._hash_contacts()))
         if isinstance(response, ContactsNotModified):
             return
-        self.log.debug("Updating contacts...")
+        self.log.debug(f"Updating contacts of {self.name}...")
         self.contacts = []
         self.saved_contacts = response.saved_count
         for user in response.users:

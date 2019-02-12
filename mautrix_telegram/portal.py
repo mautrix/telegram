@@ -1409,7 +1409,7 @@ class Portal:
             "external_url": self.get_external_url(evt)
         }
 
-        if attrs["is_sticker"] and self.get_config("native_stickers"):
+        if attrs["is_sticker"]:
             return await intent.send_sticker(**kwargs)
 
         mime_type = info["mimetype"]

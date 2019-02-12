@@ -53,7 +53,7 @@ class User(Base):
         return cls._select_one_or_none(cls.c.tgid == tgid)
 
     @classmethod
-    def get_by_mxid(cls, mxid: MatrixRoomID) -> Optional['User']:
+    def get_by_mxid(cls, mxid: MatrixUserID) -> Optional['User']:
         return cls._select_one_or_none(cls.c.mxid == mxid)
 
     @classmethod
@@ -79,8 +79,9 @@ class User(Base):
     @contacts.setter
     def contacts(self, puppets: Iterable[TelegramID]) -> None:
         self.db.execute(Contact.t.delete().where(Contact.c.user == self.tgid))
-        self.db.execute(Contact.t.insert(), [{"user": self.tgid, "contact": tgid}
-                                             for tgid in puppets])
+        if puppets:
+            self.db.execute(Contact.t.insert(), [{"user": self.tgid, "contact": tgid}
+                                                 for tgid in puppets])
 
     @property
     def portals(self) -> Iterable[Tuple[TelegramID, TelegramID]]:
@@ -92,12 +93,18 @@ class User(Base):
     @portals.setter
     def portals(self, portals: Iterable[Tuple[TelegramID, TelegramID]]) -> None:
         self.db.execute(UserPortal.t.delete().where(UserPortal.c.user == self.tgid))
-        self.db.execute(UserPortal.t.insert(),
-                        [{
-                            "user": self.tgid,
-                            "portal": tgid,
-                            "portal_receiver": tg_receiver
-                        } for tgid, tg_receiver in portals])
+        if portals:
+            self.db.execute(UserPortal.t.insert(),
+                            [{
+                                "user": self.tgid,
+                                "portal": tgid,
+                                "portal_receiver": tg_receiver
+                            } for tgid, tg_receiver in portals])
+
+    def delete(self) -> None:
+        super().delete()
+        self.portals = None
+        self.contacts = None
 
 
 class UserPortal(Base):

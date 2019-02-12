@@ -27,10 +27,10 @@ from telethon.tl.functions.messages import (ImportChatInviteRequest, CheckChatIn
                                             GetBotCallbackAnswerRequest)
 from telethon.tl.functions.channels import JoinChannelRequest
 
-from .. import puppet as pu, portal as po
-from ..db import Message as DBMessage
-from ..types import TelegramID
-from . import command_handler, CommandEvent, SECTION_MISC, SECTION_CREATING_PORTALS
+from mautrix_telegram import puppet as pu, portal as po
+from mautrix_telegram.db import Message as DBMessage
+from mautrix_telegram.types import TelegramID
+from mautrix_telegram.commands import command_handler, CommandEvent, SECTION_MISC, SECTION_CREATING_PORTALS
 
 
 @command_handler(help_section=SECTION_MISC,
@@ -71,14 +71,13 @@ async def search(evt: CommandEvent) -> Optional[Dict]:
     return await evt.reply("\n".join(reply))
 
 
-@command_handler(name="pm",
-                 help_section=SECTION_CREATING_PORTALS,
+@command_handler(help_section=SECTION_CREATING_PORTALS,
                  help_args="<_identifier_>",
                  help_text="Open a private chat with the given Telegram user. The identifier is "
                            "either the internal user ID, the username or the phone number. "
                            "**N.B.** The phone numbers you start chats with must already be in "
                            "your contacts.")
-async def private_message(evt: CommandEvent) -> Optional[Dict]:
+async def pm(evt: CommandEvent) -> Optional[Dict]:
     if len(evt.args) == 0:
         return await evt.reply("**Usage:** `$cmdprefix+sp pm <user identifier>`")
 
