@@ -24,7 +24,8 @@ from mautrix_telegram.commands import command_handler, CommandEvent, SECTION_AUT
 
 @command_handler(needs_auth=True,
                  help_section=SECTION_AUTH,
-                 help_text="Change your Telegram username")
+                 help_args="<_new username_>",
+                 help_text="Change your Telegram username.")
 async def username(evt: CommandEvent) -> Optional[Dict]:
     if len(evt.args) == 0:
         return await evt.reply("**Usage:** `$cmdprefix+sp username <new username>`")

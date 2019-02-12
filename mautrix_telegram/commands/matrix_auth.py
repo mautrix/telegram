@@ -35,7 +35,7 @@ async def logout_matrix(evt: CommandEvent) -> Optional[Dict]:
 @command_handler(needs_auth=True, management_only=True, needs_matrix_puppeting=True,
                  help_section=SECTION_AUTH,
                  help_text="Replace your Telegram account's Matrix puppet with your own Matrix "
-                           "account")
+                           "account.")
 async def login_matrix(evt: CommandEvent) -> Optional[Dict]:
     puppet = pu.Puppet.get(evt.sender.tgid)
     if puppet.is_real_user:
@@ -70,7 +70,7 @@ async def login_matrix(evt: CommandEvent) -> Optional[Dict]:
 
 @command_handler(needs_auth=True, needs_matrix_puppeting=True,
                  help_section=SECTION_AUTH,
-                 help_text="Pings the server with the stored matrix authentication")
+                 help_text="Pings the server with the stored matrix authentication.")
 async def ping_matrix(evt: CommandEvent) -> Optional[Dict]:
     puppet = pu.Puppet.get(evt.sender.tgid)
     if not puppet.is_real_user:

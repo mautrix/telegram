@@ -47,7 +47,7 @@ async def set_power_level(evt: CommandEvent) -> Dict:
 
 @command_handler(needs_admin=True, needs_auth=False,
                  help_section=SECTION_ADMIN,
-                 help_args="<portal|puppet|user>",
+                 help_args="<`portal`|`puppet`|`user`>",
                  help_text="Clear internal bridge caches")
 async def clear_db_cache(evt: CommandEvent) -> Dict:
     try:
@@ -79,7 +79,7 @@ async def clear_db_cache(evt: CommandEvent) -> Dict:
 
 @command_handler(needs_admin=True, needs_auth=False,
                  help_section=SECTION_ADMIN,
-                 help_args="[user]",
+                 help_args="[_mxid_]",
                  help_text="Reload and reconnect a user")
 async def reload_user(evt: CommandEvent) -> Dict:
     if len(evt.args) > 0:

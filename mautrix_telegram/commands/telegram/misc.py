@@ -168,8 +168,8 @@ PEER_TYPE_CHAT = b"g"
 
 
 @command_handler(help_section=SECTION_MISC,
-                 help_args="<play ID>",
-                 help_text="Play a Telegram game")
+                 help_args="<_play ID_>",
+                 help_text="Play a Telegram game.")
 async def play(evt: CommandEvent) -> Optional[Dict]:
     if len(evt.args) < 1:
         return await evt.reply("**Usage:** `$cmdprefix+sp play <play ID>`")
