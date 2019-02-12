@@ -31,11 +31,10 @@ from alchemysession import AlchemySessionContainer
 from .web.provisioning import ProvisioningAPI
 from .web.public import PublicBridgeWebsite
 from .abstract_user import init as init_abstract_user
-from .base import Base
 from .bot import init as init_bot
 from .config import Config
 from .context import Context
-from .db import init as init_db
+from .db import Base, init as init_db
 from .formatter import init as init_formatter
 from .matrix import MatrixHandler
 from .portal import init as init_portal
