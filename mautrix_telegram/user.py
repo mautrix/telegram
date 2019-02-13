@@ -289,7 +289,7 @@ class User(AbstractUser):
 
     async def sync_dialogs(self, synchronous_create: bool = False) -> None:
         creators = []
-        for entity in await self.get_dialogs(limit=30):
+        for entity in await self.get_dialogs(limit=config["bridge.sync_dialog_limit"] or None):
             portal = po.Portal.get_by_entity(entity)
             self.portals[portal.tgid_full] = portal
             creators.append(

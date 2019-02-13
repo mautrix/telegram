@@ -107,6 +107,10 @@ bridge:
     # Whether or not to automatically synchronize contacts and chats of Matrix users logged into
     # their Telegram account at startup.
     startup_sync: true
+    # Number of most recently active dialogs to check when syncing chats.
+    # Dialogs include groups and private chats, but only groups are synced.
+    # Set to 0 to remove limit.
+    sync_dialog_limit: 30
     # The maximum number of simultaneous Telegram deletions to handle.
     # A large number of simultaneous redactions could put strain on your homeserver.
     max_telegram_delete: 10
