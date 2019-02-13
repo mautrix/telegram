@@ -13,7 +13,7 @@ extras["all"] = list(set(deps[0] for deps in extras.values()))
 
 try:
     long_desc = open("README.md").read()
-except:
+except IOError:
     long_desc = "Failed to read README.md"
 
 setuptools.setup(
@@ -67,4 +67,3 @@ setuptools.setup(
         ("alembic/versions", glob.glob("alembic/versions/*.py"))
     ],
 )
-
