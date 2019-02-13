@@ -12,7 +12,7 @@ import json
 import re
 
 from mautrix_telegram.config import Config
-from mautrix_telegram.base import Base
+from mautrix_telegram.db import Base
 
 # revision identifiers, used by Alembic.
 revision = "6ca3d74d51e4"
