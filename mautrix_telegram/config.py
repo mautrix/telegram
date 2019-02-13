@@ -202,6 +202,7 @@ class Config(DictWithRecursion):
         copy("bridge.bot_messages_as_notices")
         copy("bridge.max_initial_member_sync")
         copy("bridge.sync_channel_members")
+        copy("bridge.startup_sync")
         copy("bridge.sync_matrix_state")
         copy("bridge.max_telegram_delete")
         copy("bridge.allow_matrix_login")

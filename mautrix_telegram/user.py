@@ -171,7 +171,7 @@ class User(AbstractUser):
     async def post_login(self, info: TLUser = None) -> None:
         try:
             await self.update_info(info)
-            if not self.is_bot:
+            if not self.is_bot and config["bridge.startup_sync"]:
                 await self.sync_dialogs()
                 await self.sync_contacts()
             if config["bridge.catch_up"]:
@@ -363,7 +363,7 @@ class User(AbstractUser):
         return None
 
     @classmethod
-    def get_by_tgid(cls, tgid: int) -> Optional['User']:
+    def get_by_tgid(cls, tgid: TelegramID) -> Optional['User']:
         try:
             return cls.by_tgid[tgid]
         except KeyError:

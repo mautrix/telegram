@@ -104,6 +104,9 @@ bridge:
     # If no channel admins have logged into the bridge, the bridge won't be able to sync the member
     # list regardless of this setting.
     sync_channel_members: true
+    # Whether or not to automatically synchronize contacts and chats of Matrix users logged into
+    # their Telegram account at startup.
+    startup_sync: true
     # The maximum number of simultaneous Telegram deletions to handle.
     # A large number of simultaneous redactions could put strain on your homeserver.
     max_telegram_delete: 10
