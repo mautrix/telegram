@@ -1131,7 +1131,7 @@ class Portal:
         file = await self.main_intent.download_file(url)
         mime = magic.from_buffer(file, mime=True)
         ext = mimetypes.guess_extension(mime)
-        uploaded = await sender.client.upload_file_direct(file, file_name=f"avatar{ext}")
+        uploaded = await sender.client.upload_file(file, file_name=f"avatar{ext}", use_cache=False)
         photo = InputChatUploadedPhoto(file=uploaded)
 
         if self.peer_type == "chat":
