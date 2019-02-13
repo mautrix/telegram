@@ -15,6 +15,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from typing import Awaitable, List, Any
+from time import time
 import argparse
 import asyncio
 import logging.config
@@ -108,6 +109,7 @@ if config["appservice.provisioning.enabled"]:
     context.provisioning_api = provisioning_api
 
 with appserv.run(config["appservice.hostname"], config["appservice.port"]) as start:
+    start_ts = time()
     init_db(db_engine)
     init_abstract_user(context)
     context.bot = init_bot(context)
@@ -124,10 +126,15 @@ with appserv.run(config["appservice.hostname"], config["appservice.port"]) as st
     signal.signal(signal.SIGINT, signal.default_int_handler)
     signal.signal(signal.SIGTERM, signal.default_int_handler)
 
+    end_ts = time()
     try:
-        log.debug("Initialization complete, running startup actions")
+        log.debug(f"Initialization complete in {round(end_ts-start_ts, 2)} seconds,"
+                  " running startup actions")
+        start_ts = time()
         loop.run_until_complete(asyncio.gather(*startup_actions, loop=loop))
-        log.debug("Startup actions complete, now running forever")
+        end_ts = time()
+        log.debug(f"Startup actions complete in {round(end_ts-start_ts, 2)} seconds,"
+                  " now running forever")
         loop.run_forever()
     except KeyboardInterrupt:
         log.debug("Interrupt received, stopping clients")
