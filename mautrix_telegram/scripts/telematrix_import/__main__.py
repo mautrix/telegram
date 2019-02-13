@@ -1,10 +1,27 @@
-import argparse
-import sqlalchemy as sql
+# -*- coding: future_fstrings -*-
+# mautrix-telegram - A Matrix-Telegram puppeting bridge
+# Copyright (C) 2018 Tulir Asokan
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+from typing import Dict
 from sqlalchemy import orm
+import sqlalchemy as sql
+import argparse
 
-from mautrix_telegram.base import Base
+from mautrix_telegram.db import Base, Portal, Message, Puppet, BotChat
 from mautrix_telegram.config import Config
-from mautrix_telegram.db import Portal, Message, Puppet, BotChat
+
 from .models import ChatLink, TgUser, MatrixUser, Message as TMMessage, Base as TelematrixBase
 
 parser = argparse.ArgumentParser(
@@ -21,7 +38,8 @@ args = parser.parse_args()
 config = Config(args.config, None, None)
 config.load()
 
-mxtg_db_engine = sql.create_engine(config.get("appservice.database", "sqlite:///mautrix-telegram.db"))
+mxtg_db_engine = sql.create_engine(
+    config.get("appservice.database", "sqlite:///mautrix-telegram.db"))
 mxtg = orm.sessionmaker(bind=mxtg_db_engine)()
 Base.metadata.bind = mxtg_db_engine
 
@@ -37,10 +55,11 @@ tm_messages = telematrix.query(TMMessage).all()
 telematrix.close()
 telematrix_db_engine.dispose()
 
-portals = {}  # Dict[int, Portal]
-chats = {}  # Dict[int, BotChat]
-messages = {}  # Dict[str, Message]
-puppets = {}  # Dict[int, Puppet]
+portals_by_tgid = {}  # type: Dict[int, Portal]
+portals_by_mxid = {}  # type: Dict[str, Portal]
+chats = {}  # type: Dict[int, BotChat]
+messages = {}  # type: Dict[str, Message]
+puppets = {}  # type: Dict[int, Puppet]
 
 for chat_link in chat_links:
     if type(chat_link.tg_room) is str:
@@ -61,16 +80,28 @@ for chat_link in chat_links:
 
     portal = Portal(tgid=tgid, tg_receiver=tgid, peer_type=peer_type, megagroup=megagroup,
                     mxid=chat_link.matrix_room)
-    bot_chat = BotChat(id=tgid, type=peer_type)
-    portals[chat_link.tg_room] = portal
-    chats[tgid] = bot_chat
+    chats[tgid] = BotChat(id=tgid, type=peer_type)
+    if chat_link.tg_room in portals_by_tgid:
+        print(f"Warning: Ignoring bridge from {portal.tgid} to {portal.mxid} "
+              f"in favor of {portals_by_tgid[portal.tgid].mxid}")
+        continue
+    elif chat_link.matrix_room in portals_by_mxid:
+        print(f"Warning: Ignoring bridge from {portal.mxid} to {portal.tgid} "
+              f"in favor of {portals_by_mxid[portal.mxid].tgid}")
+        continue
+    portals_by_tgid[portal.tgid] = portal
+    portals_by_mxid[portal.mxid] = portal
 
 for tm_msg in tm_messages:
     try:
-        portal = portals[tm_msg.tg_group_id]
+        portal = portals_by_tgid[tm_msg.tg_group_id]
     except KeyError:
-        print("Found message entry %d in unlinked chat %d, ignoring..." % (tm_msg.tg_message_id,
-                                                                           tm_msg.tg_group_id))
+        print(f"Found message entry {tm_msg.tg_message_id} in unlinked chat {tm_msg.tg_group_id},"
+              " ignoring...")
+        continue
+    if tm_msg.matrix_room_id != portal.mxid:
+        print(f"Found message entry {tm_msg.tg_message_id} with "
+              f"mismatching matrix room ID {tm_msg.matrix_room_id} (expected {portal.mxid})")
         continue
     tg_space = portal.tgid if portal.peer_type == "channel" else args.bot_id
     message = Message(mxid=tm_msg.matrix_event_id, mx_room=tm_msg.matrix_room_id,
@@ -81,7 +112,7 @@ for user in tg_users:
     puppets[user.tg_id] = Puppet(id=user.tg_id, displayname=user.name,
                                  displayname_source=args.bot_id)
 
-for k, v in portals.items():
+for k, v in portals_by_tgid.items():
     mxtg.add(v)
 for k, v in chats.items():
     mxtg.add(v)
