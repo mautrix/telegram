@@ -202,6 +202,7 @@ class Config(DictWithRecursion):
         copy("bridge.bot_messages_as_notices")
         copy("bridge.max_initial_member_sync")
         copy("bridge.sync_channel_members")
+        copy("bridge.skip_deleted_members")
         copy("bridge.startup_sync")
         copy("bridge.sync_dialog_limit")
         copy("bridge.sync_matrix_state")

@@ -461,13 +461,16 @@ class Portal:
             self.bot.add_chat(self.tgid, self.peer_type)
             return
 
-        user = u.User.get_by_tgid(bot.id)
+        user = u.User.get_by_tgid(TelegramID(bot.id))
         if user and user.is_bot:
             user.register_portal(self)
 
     async def sync_telegram_users(self, source: 'AbstractUser', users: List[User]) -> None:
         allowed_tgids = set()
+        skip_deleted = config["bridge.skip_deleted_members"]
         for entity in users:
+            if skip_deleted and entity.deleted:
+                continue
             puppet = p.Puppet.get(TelegramID(entity.id))
             if entity.bot:
                 self.add_bot_chat(entity)
@@ -475,7 +478,7 @@ class Portal:
             await puppet.intent.ensure_joined(self.mxid)
             await puppet.update_info(source, entity)
 
-            user = u.User.get_by_tgid(entity.id)
+            user = u.User.get_by_tgid(TelegramID(entity.id))
             if user:
                 await self.invite_to_matrix(user.mxid)
 

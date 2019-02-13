@@ -104,6 +104,8 @@ bridge:
     # If no channel admins have logged into the bridge, the bridge won't be able to sync the member
     # list regardless of this setting.
     sync_channel_members: true
+    # Whether or not to skip deleted members when syncing members.
+    skip_deleted_members: true
     # Whether or not to automatically synchronize contacts and chats of Matrix users logged into
     # their Telegram account at startup.
     startup_sync: true
