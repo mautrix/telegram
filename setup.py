@@ -9,7 +9,7 @@ extras = {
     "webp_convert": ["Pillow>=4.3.0,<6"],
     "hq_thumbnails": ["moviepy>=0.2,<0.3", "imageio==2.4.1"],
 }
-extras["all"] = list(set(deps[0] for deps in extras.values()))
+extras["all"] = list({dep for deps in extras.values() for dep in deps})
 
 try:
     long_desc = open("README.md").read()
