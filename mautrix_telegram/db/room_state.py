@@ -47,7 +47,9 @@ class RoomState(Base):
             return None
 
     def update(self) -> None:
-        return super().update(power_levels=self._power_levels_text)
+        self.db.execute(self.t.update()
+                        .where(self.c.room_id == self.room_id)
+                        .values(power_levels=self._power_levels_text))
 
     @property
     def _edit_identity(self):
