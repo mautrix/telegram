@@ -14,8 +14,9 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
+from typing import Iterable
+
 from sqlalchemy import Column, Integer, String
-from sqlalchemy.orm import Query
 
 from ..types import TelegramID
 from .base import Base
@@ -23,7 +24,20 @@ from .base import Base
 
 # Fucking Telegram not telling bots what chats they are in 3:<
 class BotChat(Base):
-    query = None  # type: Query
     __tablename__ = "bot_chat"
     id = Column(Integer, primary_key=True)  # type: TelegramID
     type = Column(String, nullable=False)
+
+    @classmethod
+    def delete(cls, id: TelegramID) -> None:
+        cls.db.execute(cls.t.delete().where(cls.c.id == id))
+
+    @classmethod
+    def all(cls) -> Iterable['BotChat']:
+        rows = cls.db.execute(cls.t.select())
+        for row in rows:
+            id, type = row
+            yield cls(id=id, type=type)
+
+    def insert(self) -> None:
+        self.db.execute(self.t.insert().values(id=self.id, type=self.type))

@@ -295,15 +295,10 @@ class Puppet:
                       db_instance=db_puppet)
 
     def save(self) -> None:
-        self.db_instance.access_token = self.access_token
-        self.db_instance.custom_mxid = self.custom_mxid
-        self.db_instance.username = self.username
-        self.db_instance.displayname = self.displayname
-        self.db_instance.displayname_source = self.displayname_source
-        self.db_instance.photo_id = self.photo_id
-        self.db_instance.is_bot = self.is_bot
-        self.db_instance.matrix_registered = self.is_registered
-        self.db.commit()
+        self.db_instance.update(access_token=self.access_token, custom_mxid=self.custom_mxid,
+                                username=self.username, displayname=self.displayname,
+                                displayname_source=self.displayname_source, photo_id=self.photo_id,
+                                is_bot=self.is_bot, matrix_registered=self.is_registered)
 
     # endregion
     # region Info updating

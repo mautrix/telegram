@@ -56,7 +56,7 @@ class Bot(AbstractUser):
         self.username = None  # type: str
         self.is_relaybot = True  # type: bool
         self.is_bot = True  # type: bool
-        self.chats = {chat.id: chat.type for chat in BotChat.query.all()}  # type: Dict[int, str]
+        self.chats = {chat.id: chat.type for chat in BotChat.all()}  # type: Dict[int, str]
         self.tg_whitelist = []  # type: List[int]
         self.whitelist_group_admins = (config["bridge.relaybot.whitelist_group_admins"]
                                        or False)  # type: bool
@@ -114,23 +114,19 @@ class Bot(AbstractUser):
     def unregister_portal(self, portal: po.Portal) -> None:
         self.remove_chat(portal.tgid)
 
-    def add_chat(self, chat_id: int, chat_type: str) -> None:
+    def add_chat(self, chat_id: TelegramID, chat_type: str) -> None:
         if chat_id not in self.chats:
             self.chats[chat_id] = chat_type
-            self.db.add(BotChat(id=TelegramID(chat_id), type=chat_type))
-            self.db.commit()
+            BotChat(id=TelegramID(chat_id), type=chat_type).insert()
 
-    def remove_chat(self, chat_id: int) -> None:
+    def remove_chat(self, chat_id: TelegramID) -> None:
         try:
             del self.chats[chat_id]
         except KeyError:
             pass
-        existing_chat = BotChat.query.get(chat_id)
-        if existing_chat:
-            self.db.delete(existing_chat)
-            self.db.commit()
+        BotChat.delete(chat_id)
 
-    async def _can_use_commands(self, chat: TypePeer, tgid: int) -> bool:
+    async def _can_use_commands(self, chat: TypePeer, tgid: TelegramID) -> bool:
         if tgid in self.tg_whitelist:
             return True
 

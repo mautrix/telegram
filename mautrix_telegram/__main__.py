@@ -112,7 +112,7 @@ if config["appservice.provisioning.enabled"]:
     context.provisioning_api = provisioning_api
 
 with appserv.run(config["appservice.hostname"], config["appservice.port"]) as start:
-    init_db(db_session, db_engine)
+    init_db(db_engine)
     init_abstract_user(context)
     context.bot = init_bot(context)
     context.mx = MatrixHandler(context)
