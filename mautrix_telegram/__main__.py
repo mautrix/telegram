@@ -79,11 +79,7 @@ Base.metadata.bind = db_engine
 session_container = AlchemySessionContainer(engine=db_engine, session=db_session,
                                             table_base=Base, table_prefix="telethon_",
                                             manage_tables=False)
-if config["appservice.sqlalchemy_core_mode"]:
-    try:
-        session_container.core_mode = True
-    except AttributeError:
-        log.error("Current version of teleton-session-sqlalchemy does not support core mode")
+session_container.core_mode = True
 
 loop = asyncio.get_event_loop()  # type: asyncio.AbstractEventLoop
 
