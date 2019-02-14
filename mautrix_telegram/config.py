@@ -151,8 +151,8 @@ class Config(DictWithRecursion):
                     base[to_path][key] = value
 
         copy("homeserver.address")
-        copy("homeserver.verify_ssl")
         copy("homeserver.domain")
+        copy("homeserver.verify_ssl")
 
         if "appservice.protocol" in self and "appservice.address" not in self:
             protocol, hostname, port = (self["appservice.protocol"], self["appservice.hostname"],
@@ -190,8 +190,24 @@ class Config(DictWithRecursion):
 
         copy("bridge.displayname_preference")
 
+        copy("bridge.max_initial_member_sync")
+        copy("bridge.sync_channel_members")
+        copy("bridge.skip_deleted_members")
+        copy("bridge.startup_sync")
+        copy("bridge.sync_dialog_limit")
+        copy("bridge.max_telegram_delete")
+        copy("bridge.sync_matrix_state")
+        copy("bridge.allow_matrix_login")
+        copy("bridge.plaintext_highlights")
         copy("bridge.edits_as_replies")
         copy("bridge.highlight_edits")
+        copy("bridge.public_portals")
+        copy("bridge.catch_up")
+        copy("bridge.sync_with_custom_puppets")
+        copy("bridge.telegram_link_preview")
+        copy("bridge.inline_images")
+
+        copy("bridge.bot_messages_as_notices")
         if isinstance(self["bridge.bridge_notices"], bool):
             base["bridge.bridge_notices"] = {
                 "default": self["bridge.bridge_notices"],
@@ -199,21 +215,6 @@ class Config(DictWithRecursion):
             }
         else:
             copy("bridge.bridge_notices")
-        copy("bridge.bot_messages_as_notices")
-        copy("bridge.max_initial_member_sync")
-        copy("bridge.sync_channel_members")
-        copy("bridge.skip_deleted_members")
-        copy("bridge.startup_sync")
-        copy("bridge.sync_dialog_limit")
-        copy("bridge.sync_matrix_state")
-        copy("bridge.max_telegram_delete")
-        copy("bridge.allow_matrix_login")
-        copy("bridge.inline_images")
-        copy("bridge.plaintext_highlights")
-        copy("bridge.public_portals")
-        copy("bridge.catch_up")
-        copy("bridge.sync_with_custom_puppets")
-        copy("bridge.telegram_link_preview")
 
         copy("bridge.deduplication.pre_db_check")
         copy("bridge.deduplication.cache_queue_length")
@@ -221,6 +222,7 @@ class Config(DictWithRecursion):
         if "bridge.message_formats.m_text" in self:
             del self["bridge.message_formats"]
         copy_dict("bridge.message_formats", override_existing_map=False)
+
         copy("bridge.state_event_formats.join")
         copy("bridge.state_event_formats.leave")
         copy("bridge.state_event_formats.name_change")

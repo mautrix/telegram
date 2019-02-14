@@ -116,7 +116,7 @@ class Portal:
                  mxid: Optional[MatrixRoomID] = None, username: Optional[str] = None,
                  megagroup: Optional[bool] = False, title: Optional[str] = None,
                  about: Optional[str] = None, photo_id: Optional[str] = None,
-                 config: Optional[str] = None, db_instance: DBPortal = None) -> None:
+                 local_config: Optional[str] = None, db_instance: DBPortal = None) -> None:
         self.mxid = mxid  # type: Optional[MatrixRoomID]
         self.tgid = tgid  # type: TelegramID
         self.tg_receiver = tg_receiver or tgid  # type: TelegramID
@@ -126,7 +126,7 @@ class Portal:
         self.title = title  # type: Optional[str]
         self.about = about  # type: str
         self.photo_id = photo_id  # type: str
-        self.local_config = json.loads(config or "{}")  # type: Dict[str, Any]
+        self.local_config = json.loads(local_config or "{}")  # type: Dict[str, Any]
         self._db_instance = db_instance  # type: DBPortal
         self.deleted = False  # type: bool
         self.log = self.base_log.getChild(self.tgid_log) if self.tgid else self.base_log
@@ -1796,7 +1796,7 @@ class Portal:
 
         for participant in participants:
             puppet = p.Puppet.get(TelegramID(participant.user_id))
-            user = u.User.get_by_tgid(participant.user_id)
+            user = u.User.get_by_tgid(TelegramID(participant.user_id))
             new_level = self._get_level_from_participant(participant, levels)
 
             if user:
@@ -1890,7 +1890,7 @@ class Portal:
                       peer_type=db_portal.peer_type, mxid=db_portal.mxid,
                       username=db_portal.username, megagroup=db_portal.megagroup,
                       title=db_portal.title, about=db_portal.about, photo_id=db_portal.photo_id,
-                      config=db_portal.config, db_instance=db_portal)
+                      local_config=db_portal.config, db_instance=db_portal)
 
     # endregion
     # region Class instance lookup
@@ -1940,9 +1940,9 @@ class Portal:
         except KeyError:
             pass
 
-        portal = DBPortal.get_by_tgid(tgid, tg_receiver)
-        if portal:
-            return cls.from_db(portal)
+        db_portal = DBPortal.get_by_tgid(tgid, tg_receiver)
+        if db_portal:
+            return cls.from_db(db_portal)
 
         if peer_type:
             portal = Portal(tgid, peer_type=peer_type, tg_receiver=tg_receiver)

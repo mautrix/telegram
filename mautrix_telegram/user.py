@@ -28,7 +28,7 @@ from telethon.tl.functions.account import UpdateStatusRequest
 from mautrix_appservice import MatrixRequestError
 
 from .types import MatrixUserID, TelegramID
-from .db import User as DBUser, Contact as DBContact, Portal as DBPortal
+from .db import User as DBUser
 from .abstract_user import AbstractUser
 from . import portal as po, puppet as pu
 
@@ -320,8 +320,8 @@ class User(AbstractUser):
 
     def _hash_contacts(self) -> int:
         acc = 0
-        for id in sorted([self.saved_contacts] + [contact.id for contact in self.contacts]):
-            acc = (acc * 20261 + id) & 0xffffffff
+        for contact in sorted([self.saved_contacts] + [contact.id for contact in self.contacts]):
+            acc = (acc * 20261 + contact) & 0xffffffff
         return acc & 0x7fffffff
 
     async def sync_contacts(self) -> None:

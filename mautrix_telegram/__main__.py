@@ -128,12 +128,12 @@ with appserv.run(config["appservice.hostname"], config["appservice.port"]) as st
 
     end_ts = time()
     try:
-        log.debug(f"Initialization complete in {round(end_ts-start_ts, 2)} seconds,"
+        log.debug(f"Initialization complete in {round(end_ts - start_ts, 2)} seconds,"
                   " running startup actions")
         start_ts = time()
         loop.run_until_complete(asyncio.gather(*startup_actions, loop=loop))
         end_ts = time()
-        log.debug(f"Startup actions complete in {round(end_ts-start_ts, 2)} seconds,"
+        log.debug(f"Startup actions complete in {round(end_ts - start_ts, 2)} seconds,"
                   " now running forever")
         loop.run_forever()
     except KeyboardInterrupt:

@@ -91,7 +91,7 @@ class Bot(AbstractUser):
         response = await self.client(GetChatsRequest(chat_ids))
         for chat in response.chats:
             if isinstance(chat, ChatForbidden) or chat.left or chat.deactivated:
-                self.remove_chat(chat.id)
+                self.remove_chat(TelegramID(chat.id))
 
         channel_ids = [InputChannel(chat_id, 0)
                        for chat_id, chat_type in self.chats.items()
@@ -100,7 +100,7 @@ class Bot(AbstractUser):
             try:
                 await self.client(GetChannelsRequest([channel_id]))
             except (ChannelPrivateError, ChannelInvalidError):
-                self.remove_chat(channel_id.channel_id)
+                self.remove_chat(TelegramID(channel_id.channel_id))
 
         if config["bridge.catch_up"]:
             try:
@@ -250,9 +250,9 @@ class Bot(AbstractUser):
 
         action = message.action
         if isinstance(action, MessageActionChatAddUser) and self.tgid in action.users:
-            self.add_chat(to_id, chat_type)
+            self.add_chat(TelegramID(to_id), chat_type)
         elif isinstance(action, MessageActionChatDeleteUser) and action.user_id == self.tgid:
-            self.remove_chat(to_id)
+            self.remove_chat(TelegramID(to_id))
 
     async def update(self, update) -> bool:
         if not isinstance(update, (UpdateNewMessage, UpdateNewChannelMessage)):
