@@ -7,7 +7,7 @@ extras = {
     "better_formatter": ["lxml>=4.1.1,<5"],
     "fast_crypto": ["cryptg>=0.1,<0.2"],
     "webp_convert": ["Pillow>=4.3.0,<6"],
-    "hq_thumbnails": ["moviepy>=0.2,<0.3", "imageio==2.4.1"],
+    "hq_thumbnails": ["moviepy>=1.0,<2.0"],
 }
 extras["all"] = list({dep for deps in extras.values() for dep in deps})
 
