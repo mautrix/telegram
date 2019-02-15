@@ -23,7 +23,7 @@ from telethon.tl.types import (
     ChannelParticipantAdmin, ChannelParticipantCreator, ChatForbidden, ChatParticipantAdmin,
     ChatParticipantCreator, InputChannel, InputUser, MessageActionChatAddUser,
     MessageActionChatDeleteUser, MessageEntityBotCommand, PeerChannel, PeerChat, TypePeer,
-    UpdateNewChannelMessage, UpdateNewMessage)
+    UpdateNewChannelMessage, UpdateNewMessage, MessageActionChatMigrateTo)
 from telethon.tl.functions.messages import GetChatsRequest, GetFullChatRequest
 from telethon.tl.functions.channels import GetChannelsRequest, GetParticipantRequest
 from telethon.errors import ChannelInvalidError, ChannelPrivateError
@@ -238,7 +238,7 @@ class Bot(AbstractUser):
             await self.handle_command_invite(portal, reply, mxid_input=mxid)
 
     def handle_service_message(self, message: MessageService) -> None:
-        to_id = message.to_id
+        to_id = message.to_id  # type: TelegramID
         if isinstance(to_id, PeerChannel):
             to_id = to_id.channel_id
             chat_type = "channel"
@@ -250,9 +250,12 @@ class Bot(AbstractUser):
 
         action = message.action
         if isinstance(action, MessageActionChatAddUser) and self.tgid in action.users:
-            self.add_chat(TelegramID(to_id), chat_type)
+            self.add_chat(to_id, chat_type)
         elif isinstance(action, MessageActionChatDeleteUser) and action.user_id == self.tgid:
-            self.remove_chat(TelegramID(to_id))
+            self.remove_chat(to_id)
+        elif isinstance(action, MessageActionChatMigrateTo):
+            self.remove_chat(to_id)
+            self.add_chat(TelegramID(action.channel_id), "channel")
 
     async def update(self, update) -> bool:
         if not isinstance(update, (UpdateNewMessage, UpdateNewChannelMessage)):
