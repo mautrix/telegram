@@ -23,8 +23,8 @@ import asyncio
 import magic
 from sqlalchemy.exc import IntegrityError, InvalidRequestError
 
-from telethon.tl.types import (Document, FileLocation, InputFileLocation,
-                               InputDocumentFileLocation, PhotoSize, PhotoCachedSize)
+from telethon.tl.types import (Document, FileLocation, InputFileLocation, InputDocumentFileLocation,
+                               TypePhotoSize, PhotoSize, PhotoCachedSize)
 from telethon.errors import (AuthBytesInvalidError, AuthKeyInvalidError, LocationInvalidError,
                              SecurityError)
 from mautrix_appservice import IntentAPI
@@ -149,7 +149,7 @@ transfer_locks = {}  # type: Dict[str, asyncio.Lock]
 
 
 async def transfer_file_to_matrix(client: MautrixTelegramClient, intent: IntentAPI,
-                                  location: TypeLocation, thumbnail: Optional[TypeLocation] = None,
+                                  location: TypeLocation, thumbnail: Optional[Union[TypeLocation, TypePhotoSize]] = None,
                                   is_sticker: bool = False) -> Optional[DBTelegramFile]:
     location_id = _location_to_id(location)
     if not location_id:
@@ -171,7 +171,7 @@ async def transfer_file_to_matrix(client: MautrixTelegramClient, intent: IntentA
 
 async def _unlocked_transfer_file_to_matrix(client: MautrixTelegramClient, intent: IntentAPI,
                                             loc_id: str, location: TypeLocation,
-                                            thumbnail: Optional[TypeLocation],
+                                            thumbnail: Optional[Union[TypeLocation, TypePhotoSize]],
                                             is_sticker: bool) -> Optional[DBTelegramFile]:
     db_file = DBTelegramFile.get(loc_id)
     if db_file:

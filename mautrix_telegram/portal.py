@@ -598,8 +598,8 @@ class Portal:
         return False
 
     @staticmethod
-    def _get_largest_photo_size(photo: Photo) -> TypePhotoSize:
-        return max(photo.sizes, key=(lambda photo2: (
+    def _get_largest_photo_size(photo: Union[Photo, List[TypePhotoSize]]) -> TypePhotoSize:
+        return max(photo.sizes if isinstance(photo, Photo) else photo, key=(lambda photo2: (
             len(photo2.bytes) if not isinstance(photo2, PhotoSize) else photo2.size)))
 
     async def remove_avatar(self, _: 'AbstractUser', save: bool = False) -> None:
@@ -1352,8 +1352,8 @@ class Portal:
         return attrs
 
     @staticmethod
-    def _parse_telegram_document_meta(evt: Message, file: DBTelegramFile, attrs: Dict
-                                      ) -> Tuple[Dict, str]:
+    def _parse_telegram_document_meta(evt: Message, file: DBTelegramFile, attrs: Dict,
+                                      thumb: TypePhotoSize) -> Tuple[Dict, str]:
         document = evt.media.document
         name = evt.message or attrs["name"]
         if attrs["is_sticker"]:
@@ -1381,8 +1381,8 @@ class Portal:
             info["thumbnail_url"] = file.thumbnail.mxc
             info["thumbnail_info"] = {
                 "mimetype": file.thumbnail.mime_type,
-                "h": file.thumbnail.height or document.thumb.h,
-                "w": file.thumbnail.width or document.thumb.w,
+                "h": file.thumbnail.height or thumb.h,
+                "w": file.thumbnail.width or thumb.w,
                 "size": file.thumbnail.size,
             }
 
@@ -1393,12 +1393,16 @@ class Portal:
         document = evt.media.document
         attrs = self._parse_telegram_document_attributes(document.attributes)
 
-        file = await util.transfer_file_to_matrix(source.client, intent, document,
-                                                  document.thumb, is_sticker=attrs["is_sticker"])
+        thumb = self._get_largest_photo_size(document.thumbs)
+        if not isinstance(thumb, (PhotoSize, PhotoCachedSize)):
+            self.log.debug(f"Unsupported thumbnail type {type(thumb)}")
+            thumb = None
+        file = await util.transfer_file_to_matrix(source.client, intent, document, thumb,
+                                                  is_sticker=attrs["is_sticker"])
         if not file:
             return None
 
-        info, name = self._parse_telegram_document_meta(evt, file, attrs)
+        info, name = self._parse_telegram_document_meta(evt, file, attrs, thumb)
 
         await intent.set_typing(self.mxid, is_typing=False)
 
