@@ -418,24 +418,36 @@ class Portal:
 
     def _get_base_power_levels(self, levels: dict = None, entity: TypeChat = None) -> dict:
         levels = levels or {}
-        levels["ban"] = 99
-        levels["kick"] = 50
-        levels["invite"] = 50 if entity.default_banned_rights.invite_users else 0
-        if "events" not in levels:
-            levels["events"] = {}
-        levels["events"]["m.room.name"] = 50 if entity.default_banned_rights.change_info else 0
-        levels["events"]["m.room.avatar"] = 50 if entity.default_banned_rights.change_info else 0
-        levels["events"]["m.room.topic"] = 50 if entity.default_banned_rights.change_info else 0
-        levels["events"][
-            "m.room.pinned_events"] = 50 if entity.default_banned_rights.pin_messages else 0
-        levels["events"]["m.sticker"] = 50 if entity.default_banned_rights.send_stickers else 0
-        levels["events"]["m.room.power_levels"] = 75
-        levels["events"]["m.room.history_visibility"] = 75
-        levels["state_default"] = 50
-        levels["users_default"] = 0
-        levels["events_default"] = (50 if (self.peer_type == "channel" and not entity.megagroup
-                                           or entity.default_banned_rights.send_messages)
-                                    else 0)
+        if self.peer_type == "user":
+            levels["ban"] = 100
+            levels["kick"] = 100
+            levels["invite"] = 100
+            levels.setdefault("events", {})
+            levels["events"]["m.room.name"] = 0
+            levels["events"]["m.room.avatar"] = 0
+            levels["events"]["m.room.topic"] = 0
+            levels["state_default"] = 0
+            levels["users_default"] = 0
+            levels["events_default"] = 0
+        else:
+            dbr = entity.default_banned_rights
+            levels["ban"] = 99
+            levels["kick"] = 50
+            levels["invite"] = 50 if dbr.invite_users else 0
+            levels.setdefault("events", {})
+            levels["events"]["m.room.name"] = 50 if dbr.change_info else 0
+            levels["events"]["m.room.avatar"] = 50 if dbr.change_info else 0
+            levels["events"]["m.room.topic"] = 50 if dbr.change_info else 0
+            levels["events"][
+                "m.room.pinned_events"] = 50 if dbr.pin_messages else 0
+            levels["events"]["m.sticker"] = 50 if dbr.send_stickers else 0
+            levels["events"]["m.room.power_levels"] = 75
+            levels["events"]["m.room.history_visibility"] = 75
+            levels["state_default"] = 50
+            levels["users_default"] = 0
+            levels["events_default"] = (50 if (self.peer_type == "channel" and not entity.megagroup
+                                               or entity.default_banned_rights.send_messages)
+                                        else 0)
         if "users" not in levels:
             levels["users"] = {
                 self.main_intent.mxid: 100
