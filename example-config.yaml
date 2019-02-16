@@ -144,6 +144,8 @@ bridge:
     # Use inline images instead of a separate message for the caption.
     # N.B. Inline images are not supported on all clients (e.g. Riot iOS).
     inline_images: false
+    # Maximum size of image in megabytes before sending to Telegram as a document.
+    image_as_file_size: 10
 
     # Whether to bridge Telegram bot messages as m.notices or m.texts.
     bot_messages_as_notices: true

@@ -18,7 +18,7 @@ from sqlalchemy import Column, ForeignKey, ForeignKeyConstraint, Integer, String
 from sqlalchemy.engine.result import RowProxy
 from typing import Optional, Iterable, Tuple
 
-from ..types import MatrixUserID, MatrixRoomID, TelegramID
+from ..types import MatrixUserID, TelegramID
 from .base import Base
 
 

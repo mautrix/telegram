@@ -610,7 +610,8 @@ class Portal:
         return False
 
     @staticmethod
-    def _get_largest_photo_size(photo: Union[Photo, List[TypePhotoSize]]) -> Optional[TypePhotoSize]:
+    def _get_largest_photo_size(photo: Union[Photo, List[TypePhotoSize]]
+                                ) -> Optional[TypePhotoSize]:
         if not photo:
             return None
         return max(photo.sizes if isinstance(photo, Photo) else photo, key=(lambda photo2: (
@@ -983,7 +984,9 @@ class Portal:
 
         caption = message["body"] if message["body"].lower() != file_name.lower() else None
 
-        media = await client.upload_file_direct(file, mime, attributes, file_name)
+        media = await client.upload_file_direct(
+            file, mime, attributes, file_name,
+            max_image_size=config["bridge.image_as_file_size"] * 1000 ** 2)
         lock = self.require_send_lock(sender_id)
         async with lock:
             response = await client.send_media(self.peer, media, reply_to=reply_to,
