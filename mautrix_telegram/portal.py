@@ -38,17 +38,17 @@ from telethon.tl.functions.messages import (
     EditChatPhotoRequest, EditChatTitleRequest, ExportChatInviteRequest, GetFullChatRequest,
     UpdatePinnedMessageRequest, MigrateChatRequest, SetTypingRequest, EditChatAboutRequest)
 from telethon.tl.functions.channels import (
-    CreateChannelRequest, EditAdminRequest, EditBannedRequest, EditPhotoRequest,
-    EditTitleRequest, GetParticipantsRequest, InviteToChannelRequest,
-    JoinChannelRequest, LeaveChannelRequest, UpdateUsernameRequest)
+    CreateChannelRequest, EditAdminRequest, EditBannedRequest, EditPhotoRequest, EditTitleRequest,
+    GetParticipantsRequest, InviteToChannelRequest, JoinChannelRequest, LeaveChannelRequest,
+    UpdateUsernameRequest)
 from telethon.tl.functions.messages import ReadHistoryRequest as ReadMessageHistoryRequest
 from telethon.tl.functions.channels import ReadHistoryRequest as ReadChannelHistoryRequest
 from telethon.errors import ChatAdminRequiredError, ChatNotModifiedError
 from telethon.tl.patched import Message, MessageService
 from telethon.tl.types import (
     Channel, ChatAdminRights, ChatBannedRights, ChannelFull, ChannelParticipantAdmin,
-    ChannelParticipantCreator, ChannelParticipantsRecent, ChannelParticipantsSearch, Chat,
-    ChatFull, ChatInviteEmpty, ChatParticipantAdmin, ChatParticipantCreator, ChatPhoto,
+    ChannelParticipantCreator, ChannelParticipantsRecent, ChannelParticipantsSearch, Chat, ChatFull,
+    ChatInviteEmpty, ChatParticipantAdmin, ChatParticipantCreator, ChatPhoto, Poll,
     DocumentAttributeFilename, DocumentAttributeImageSize, DocumentAttributeSticker,
     DocumentAttributeVideo, FileLocation, GeoPoint, InputChannel, InputChatUploadedPhoto,
     InputPeerChannel, InputPeerChat, InputPeerUser, InputUser, InputUserSelf,
@@ -56,12 +56,12 @@ from telethon.tl.types import (
     MessageActionChatDeletePhoto, MessageActionChatDeleteUser, MessageActionChatEditPhoto,
     MessageActionChatEditTitle, MessageActionChatJoinedByLink, MessageActionChatMigrateTo,
     MessageActionPinMessage, MessageActionGameScore, MessageMediaContact, MessageMediaDocument,
-    MessageMediaGeo, MessageMediaPhoto, MessageMediaUnsupported, MessageMediaGame, PeerChannel,
-    PeerChat, PeerUser, Photo, PhotoCachedSize, SendMessageCancelAction, SendMessageTypingAction,
-    TypeChannelParticipant, TypeChat, TypeChatParticipant, TypeDocumentAttribute, TypeInputPeer,
-    TypeMessageAction, TypeMessageEntity, TypePeer, TypePhotoSize, TypeUpdates, TypeUser, PhotoSize,
-    TypeUserFull, UpdateChatUserTyping, UpdateNewChannelMessage, UpdateNewMessage, UpdateUserTyping,
-    User, UserFull, MessageEntityPre)
+    MessageMediaGeo, MessageMediaPhoto, MessageMediaUnsupported, MessageMediaGame, MessageMediaPoll,
+    PeerChannel, PeerChat, PeerUser, Photo, PhotoCachedSize, SendMessageCancelAction,
+    SendMessageTypingAction, TypeChannelParticipant, TypeChat, TypeChatParticipant,
+    TypeDocumentAttribute, TypeInputPeer, TypeMessageAction, TypeMessageEntity, TypePeer,
+    TypePhotoSize, TypeUpdates, TypeUser, PhotoSize, TypeUserFull, UpdateChatUserTyping,
+    UpdateNewChannelMessage, UpdateNewMessage, UpdateUserTyping, User, UserFull, MessageEntityPre)
 from mautrix_appservice import MatrixRequestError, IntentError, AppService, IntentAPI
 
 from .types import MatrixEventID, MatrixRoomID, MatrixUserID, TelegramID
@@ -1502,6 +1502,19 @@ class Portal:
             "net.maunium.telegram.unsupported": True,
         }, timestamp=evt.date, external_url=self.get_external_url(evt))
 
+    async def handle_telegram_poll(self, _: 'AbstractUser', intent: IntentAPI, evt: Message,
+                                   relates_to: dict) -> dict:
+        poll = evt.media.poll  # type: Poll
+        text = (f"Poll: {poll.question}\n\n"
+                + "\n".join(f"* {answer.text}" for answer in poll.answers))
+        html = (f"<strong>Poll:</strong> {poll.question}<br/>\n<ol>"
+                + "\n".join(f"<li>{answer.text}</li>" for answer in poll.answers)
+                + "</ol>")
+        await intent.set_typing(self.mxid, is_typing=False)
+        return await intent.send_text(self.mxid, text, html=html, relates_to=relates_to,
+                                      msgtype="m.text", timestamp=evt.date,
+                                      external_url=self.get_external_url(evt))
+
     @staticmethod
     def _int_to_bytes(i: int) -> bytes:
         hex_value = "{0:010x}".format(i)
@@ -1630,7 +1643,7 @@ class Portal:
             await sender.update_info(source, entity)
 
         allowed_media = (MessageMediaPhoto, MessageMediaDocument, MessageMediaGeo, MessageMediaGame,
-                         MessageMediaUnsupported)
+                         MessageMediaPoll, MessageMediaUnsupported)
         media = evt.media if hasattr(evt, "media") and isinstance(evt.media,
                                                                   allowed_media) else None
         intent = sender.intent if sender else self.main_intent
@@ -1642,6 +1655,7 @@ class Portal:
                 MessageMediaPhoto: self.handle_telegram_photo,
                 MessageMediaDocument: self.handle_telegram_document,
                 MessageMediaGeo: self.handle_telegram_location,
+                MessageMediaPoll: self.handle_telegram_poll,
                 MessageMediaUnsupported: self.handle_telegram_unsupported,
                 MessageMediaGame: self.handle_telegram_game,
             }[type(media)](source, intent, evt,
