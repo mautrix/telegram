@@ -82,6 +82,14 @@ session_container = AlchemySessionContainer(engine=db_engine, session=db_session
                                             manage_tables=False)
 session_container.core_mode = True
 
+try:
+    import uvloop
+
+    asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
+    log.debug("Using uvloop for asyncio")
+except ImportError:
+    pass
+
 loop = asyncio.get_event_loop()  # type: asyncio.AbstractEventLoop
 
 state_store = SQLStateStore()
