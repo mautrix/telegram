@@ -1506,19 +1506,21 @@ class Portal:
                                    relates_to: dict) -> dict:
         poll = evt.media.poll  # type: Poll
         poll_id = self._encode_msgid(source, evt)
-        text = (f"Poll: {poll.question}\n\n"
-                + "\n".join(f"* {answer.text}" for answer in poll.answers)
-                + "\n"
-                + f"Poll ID: {poll_id}")
 
         def enc(answer: PollAnswer) -> str:
             return base64.b64encode(answer.option).decode("utf-8").rstrip("=")
 
-        html = (f"<strong>Poll:</strong> {poll.question}<br/>\n<ul>"
+        text = (f"Poll ID {poll_id}: {poll.question}\n"
+                + "\n".join(f"* {enc(answer)}: {answer.text}" for answer in poll.answers) +
+                "\n"
+                f"Vote with !tg vote <poll ID> <choice ID>")
+
+        html = (f"<strong>Poll</strong> ID <code>{poll_id}</code>: {poll.question}<br/>\n"
+                f"<ul>"
                 + "\n".join(f"<li><code>{enc(answer)}</code>: {answer.text}</li>"
-                            for answer in poll.answers)
-                + "</ul>\n"
-                + f"Poll ID: <code>{poll_id}</code>")
+                            for answer in poll.answers) +
+                "</ul>\n"
+                f"Vote with <code>!tg vote &lt;poll ID&gt; &lt;choice ID&gt;</code>")
         await intent.set_typing(self.mxid, is_typing=False)
         return await intent.send_text(self.mxid, text, html=html, relates_to=relates_to,
                                       msgtype="m.text", timestamp=evt.date,
