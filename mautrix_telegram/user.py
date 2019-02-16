@@ -133,8 +133,7 @@ class User(AbstractUser):
 
     def new_db_instance(self) -> DBUser:
         return DBUser(mxid=self.mxid, tgid=self.tgid, tg_username=self.username,
-                      contacts=self.db_contacts, saved_contacts=self.saved_contacts,
-                      portals=self.db_portals)
+                      saved_contacts=self.saved_contacts, portals=self.db_portals)
 
     def save(self, contacts: bool = False, portals: bool = False) -> None:
         self.db_instance.update(tgid=self.tgid, tg_username=self.username, tg_phone=self.phone,

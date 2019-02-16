@@ -79,9 +79,9 @@ class User(Base):
     @contacts.setter
     def contacts(self, puppets: Iterable[TelegramID]) -> None:
         self.db.execute(Contact.t.delete().where(Contact.c.user == self.tgid))
-        if puppets:
-            self.db.execute(Contact.t.insert(), [{"user": self.tgid, "contact": tgid}
-                                                 for tgid in puppets])
+        insert_puppets = [{"user": self.tgid, "contact": tgid} for tgid in puppets]
+        if insert_puppets:
+            self.db.execute(Contact.t.insert(), insert_puppets)
 
     @property
     def portals(self) -> Iterable[Tuple[TelegramID, TelegramID]]:
@@ -93,13 +93,13 @@ class User(Base):
     @portals.setter
     def portals(self, portals: Iterable[Tuple[TelegramID, TelegramID]]) -> None:
         self.db.execute(UserPortal.t.delete().where(UserPortal.c.user == self.tgid))
-        if portals:
-            self.db.execute(UserPortal.t.insert(),
-                            [{
-                                "user": self.tgid,
-                                "portal": tgid,
-                                "portal_receiver": tg_receiver
-                            } for tgid, tg_receiver in portals])
+        insert_portals = [{
+            "user": self.tgid,
+            "portal": tgid,
+            "portal_receiver": tg_receiver
+        } for tgid, tg_receiver in portals]
+        if insert_portals:
+            self.db.execute(UserPortal.t.insert(), insert_portals)
 
     def delete(self) -> None:
         super().delete()
@@ -125,4 +125,3 @@ class Contact(Base):
 
     user = Column(Integer, ForeignKey("user.tgid"), primary_key=True)  # type: TelegramID
     contact = Column(Integer, ForeignKey("puppet.id"), primary_key=True)  # type: TelegramID
-
