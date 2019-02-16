@@ -102,7 +102,9 @@ class User(AbstractUser):
 
     @property
     def db_contacts(self) -> Iterable[TelegramID]:
-        return (puppet.id for puppet in self.contacts)
+        return (puppet.id
+                for puppet in self.contacts
+                if puppet)
 
     @db_contacts.setter
     def db_contacts(self, contacts: Iterable[TelegramID]) -> None:
@@ -110,7 +112,9 @@ class User(AbstractUser):
 
     @property
     def db_portals(self) -> Iterable[Tuple[TelegramID, TelegramID]]:
-        return (portal.tgid_full for portal in self.portals.values() if not portal.deleted)
+        return (portal.tgid_full
+                for portal in self.portals.values()
+                if portal and not portal.deleted)
 
     @db_portals.setter
     def db_portals(self, portals: Iterable[Tuple[TelegramID, TelegramID]]) -> None:
@@ -132,9 +136,13 @@ class User(AbstractUser):
                       contacts=self.db_contacts, saved_contacts=self.saved_contacts,
                       portals=self.db_portals)
 
-    def save(self) -> None:
+    def save(self, contacts: bool = False, portals: bool = False) -> None:
         self.db_instance.update(tgid=self.tgid, tg_username=self.username, tg_phone=self.phone,
                                 saved_contacts=self.saved_contacts)
+        if contacts:
+            self.db_instance.contacts = self.db_contacts
+        if portals:
+            self.db_instance.portals = self.db_portals
 
     def delete(self, delete_db: bool = True) -> None:
         try:
@@ -240,7 +248,7 @@ class User(AbstractUser):
                 pass
         self.portals = {}
         self.contacts = []
-        self.save()
+        self.save(portals=True, contacts=True)
         if self.tgid:
             try:
                 del self.by_tgid[self.tgid]
@@ -295,7 +303,7 @@ class User(AbstractUser):
             creators.append(
                 portal.create_matrix_room(self, entity, invites=[self.mxid],
                                           synchronous=synchronous_create))
-        self.save()
+        self.save(portals=True)
         await asyncio.gather(*creators, loop=self.loop)
 
     def register_portal(self, portal: po.Portal) -> None:
@@ -305,12 +313,12 @@ class User(AbstractUser):
         except KeyError:
             pass
         self.portals[portal.tgid_full] = portal
-        self.save()
+        self.save(portals=True)
 
     def unregister_portal(self, portal: po.Portal) -> None:
         try:
             del self.portals[portal.tgid_full]
-            self.save()
+            self.save_portals()
         except KeyError:
             pass
 
@@ -335,7 +343,7 @@ class User(AbstractUser):
             puppet = pu.Puppet.get(user.id)
             await puppet.update_info(self, user)
             self.contacts.append(puppet)
-        self.save()
+        self.save(contacts=True)
 
     # endregion
     # region Class instance lookup
