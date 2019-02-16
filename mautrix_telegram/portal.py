@@ -610,7 +610,9 @@ class Portal:
         return False
 
     @staticmethod
-    def _get_largest_photo_size(photo: Union[Photo, List[TypePhotoSize]]) -> TypePhotoSize:
+    def _get_largest_photo_size(photo: Union[Photo, List[TypePhotoSize]]) -> Optional[TypePhotoSize]:
+        if not photo:
+            return None
         return max(photo.sizes if isinstance(photo, Photo) else photo, key=(lambda photo2: (
             len(photo2.bytes) if not isinstance(photo2, PhotoSize) else photo2.size)))
 
@@ -1406,7 +1408,7 @@ class Portal:
         attrs = self._parse_telegram_document_attributes(document.attributes)
 
         thumb = self._get_largest_photo_size(document.thumbs)
-        if not isinstance(thumb, (PhotoSize, PhotoCachedSize)):
+        if thumb and not isinstance(thumb, (PhotoSize, PhotoCachedSize)):
             self.log.debug(f"Unsupported thumbnail type {type(thumb)}")
             thumb = None
         file = await util.transfer_file_to_matrix(source.client, intent, document, thumb,
