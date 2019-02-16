@@ -31,7 +31,7 @@ class MautrixTelegramClient(TelegramClient):
                                  ) -> Union[InputMediaUploadedDocument, InputMediaUploadedPhoto]:
         file_handle = await super().upload_file(file, file_name=file_name, use_cache=False)
 
-        if mime_type == "image/png" or mime_type == "image/jpeg":
+        if (mime_type == "image/png" or mime_type == "image/jpeg") and len(file) < 10 * 1000 ** 2:
             return InputMediaUploadedPhoto(file_handle)
         else:
             attributes = attributes or []
