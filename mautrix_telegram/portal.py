@@ -431,6 +431,10 @@ class Portal:
             levels["events_default"] = 0
         else:
             dbr = entity.default_banned_rights
+            if not dbr:
+                self.log.debug(f"default_banned_rights is None in {entity}")
+                dbr = ChatBannedRights(invite_users=True, change_info=True, pin_messages=True,
+                                       send_stickers=False, send_messages=False, until_date=0)
             levels["ban"] = 99
             levels["kick"] = 50
             levels["invite"] = 50 if dbr.invite_users else 0
@@ -440,7 +444,6 @@ class Portal:
             levels["events"]["m.room.topic"] = 50 if dbr.change_info else 0
             levels["events"][
                 "m.room.pinned_events"] = 50 if dbr.pin_messages else 0
-            levels["events"]["m.sticker"] = 50 if dbr.send_stickers else 0
             levels["events"]["m.room.power_levels"] = 75
             levels["events"]["m.room.history_visibility"] = 75
             levels["state_default"] = 50
@@ -448,6 +451,7 @@ class Portal:
             levels["events_default"] = (50 if (self.peer_type == "channel" and not entity.megagroup
                                                or entity.default_banned_rights.send_messages)
                                         else 0)
+            levels["events"]["m.sticker"] = 50 if dbr.send_stickers else levels["events_default"]
         if "users" not in levels:
             levels["users"] = {
                 self.main_intent.mxid: 100
