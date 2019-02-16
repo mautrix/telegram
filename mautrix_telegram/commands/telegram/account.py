@@ -17,7 +17,7 @@
 from typing import Dict, Optional
 
 from telethon.errors import (UsernameInvalidError, UsernameNotModifiedError, UsernameOccupiedError,
-                             HashInvalidError)
+                             HashInvalidError, AuthKeyError)
 from telethon.tl.types import Authorization
 from telethon.tl.functions.account import (UpdateUsernameRequest, GetAuthorizationsRequest,
                                            ResetAuthorizationRequest)
@@ -94,6 +94,11 @@ async def session(evt: CommandEvent) -> Optional[Dict]:
             ok = await evt.sender.client(ResetAuthorizationRequest(hash=session_hash))
         except HashInvalidError:
             return await evt.reply("Invalid session hash.")
+        except AuthKeyError as e:
+            if e.message == "FRESH_RESET_AUTHORISATION_FORBIDDEN":
+                return await evt.reply("New sessions can't terminate other sessions. "
+                                       "Please wait a while.")
+            raise
         if ok:
             return await evt.reply("Session terminated successfully.")
         else:
