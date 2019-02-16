@@ -22,7 +22,7 @@ import commonmark
 
 from telethon.errors import FloodWaitError
 
-from ..types import MatrixRoomID
+from ..types import MatrixRoomID, MatrixEventID
 from ..util import format_duration
 from .. import user as u, context as c
 
@@ -60,8 +60,9 @@ md_renderer = HtmlEscapingRenderer()
 
 
 class CommandEvent:
-    def __init__(self, processor: 'CommandProcessor', room: MatrixRoomID, sender: u.User,
-                 command: str, args: List[str], is_management: bool, is_portal: bool) -> None:
+    def __init__(self, processor: 'CommandProcessor', room: MatrixRoomID, event: MatrixEventID,
+                 sender: u.User, command: str, args: List[str], is_management: bool,
+                 is_portal: bool) -> None:
         self.az = processor.az
         self.log = processor.log
         self.loop = processor.loop
@@ -70,6 +71,7 @@ class CommandEvent:
         self.public_website = processor.public_website
         self.command_prefix = processor.command_prefix
         self.room_id = room
+        self.event_id = event
         self.sender = sender
         self.command = command
         self.args = args
@@ -88,6 +90,9 @@ class CommandEvent:
         elif allow_html:
             html = message
         return self.az.intent.send_notice(self.room_id, message, html=html)
+
+    def mark_read(self) -> Awaitable[Dict]:
+        return self.az.intent.mark_read(self.room_id, self.event_id)
 
 
 class CommandHandler:
@@ -175,9 +180,10 @@ class CommandProcessor:
         self.public_website = context.public_website
         self.command_prefix = self.config["bridge.command_prefix"]
 
-    async def handle(self, room: MatrixRoomID, sender: u.User, command: str, args: List[str],
-                     is_management: bool, is_portal: bool) -> Optional[Dict]:
-        evt = CommandEvent(self, room, sender, command, args, is_management, is_portal)
+    async def handle(self, room: MatrixRoomID, event_id: MatrixEventID, sender: u.User,
+                     command: str, args: List[str], is_management: bool, is_portal: bool
+                     ) -> Optional[Dict]:
+        evt = CommandEvent(self, room, event_id, sender, command, args, is_management, is_portal)
         orig_command = command
         command = command.lower()
         try:

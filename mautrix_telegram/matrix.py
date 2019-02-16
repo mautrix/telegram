@@ -248,7 +248,7 @@ class MatrixHandler:
                 # Not enough values to unpack, i.e. no arguments
                 command = text
                 args = []
-            await self.commands.handle(room, sender, command, args, is_management,
+            await self.commands.handle(room, event_id, sender, command, args, is_management,
                                        is_portal=portal is not None)
 
     @staticmethod

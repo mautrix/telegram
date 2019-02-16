@@ -19,7 +19,7 @@ from typing import Dict, Callable, Optional
 from ...types import MatrixRoomID
 from ... import portal as po
 from .. import command_handler, CommandEvent, SECTION_PORTAL_MANAGEMENT
-from .util import user_has_power_level, get_initial_state
+from .util import user_has_power_level
 
 
 async def _get_portal_and_check_permission(evt: CommandEvent, permission: str,

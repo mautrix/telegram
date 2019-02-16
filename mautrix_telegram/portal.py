@@ -48,7 +48,7 @@ from telethon.tl.patched import Message, MessageService
 from telethon.tl.types import (
     Channel, ChatAdminRights, ChatBannedRights, ChannelFull, ChannelParticipantAdmin,
     ChannelParticipantCreator, ChannelParticipantsRecent, ChannelParticipantsSearch, Chat, ChatFull,
-    ChatInviteEmpty, ChatParticipantAdmin, ChatParticipantCreator, ChatPhoto, Poll,
+    ChatInviteEmpty, ChatParticipantAdmin, ChatParticipantCreator, ChatPhoto, Poll, PollAnswer,
     DocumentAttributeFilename, DocumentAttributeImageSize, DocumentAttributeSticker,
     DocumentAttributeVideo, FileLocation, GeoPoint, InputChannel, InputChatUploadedPhoto,
     InputPeerChannel, InputPeerChat, InputPeerUser, InputUser, InputUserSelf,
@@ -1502,14 +1502,23 @@ class Portal:
             "net.maunium.telegram.unsupported": True,
         }, timestamp=evt.date, external_url=self.get_external_url(evt))
 
-    async def handle_telegram_poll(self, _: 'AbstractUser', intent: IntentAPI, evt: Message,
+    async def handle_telegram_poll(self, source: 'AbstractUser', intent: IntentAPI, evt: Message,
                                    relates_to: dict) -> dict:
         poll = evt.media.poll  # type: Poll
+        poll_id = self._encode_msgid(source, evt)
         text = (f"Poll: {poll.question}\n\n"
-                + "\n".join(f"* {answer.text}" for answer in poll.answers))
-        html = (f"<strong>Poll:</strong> {poll.question}<br/>\n<ol>"
-                + "\n".join(f"<li>{answer.text}</li>" for answer in poll.answers)
-                + "</ol>")
+                + "\n".join(f"* {answer.text}" for answer in poll.answers)
+                + "\n"
+                + f"Poll ID: {poll_id}")
+
+        def enc(answer: PollAnswer) -> str:
+            return base64.b64encode(answer.option).decode("utf-8").rstrip("=")
+
+        html = (f"<strong>Poll:</strong> {poll.question}<br/>\n<ul>"
+                + "\n".join(f"<li><code>{enc(answer)}</code>: {answer.text}</li>"
+                            for answer in poll.answers)
+                + "</ul>\n"
+                + f"Poll ID: <code>{poll_id}</code>")
         await intent.set_typing(self.mxid, is_typing=False)
         return await intent.send_text(self.mxid, text, html=html, relates_to=relates_to,
                                       msgtype="m.text", timestamp=evt.date,
@@ -1520,25 +1529,28 @@ class Portal:
         hex_value = "{0:010x}".format(i)
         return codecs.decode(hex_value, "hex_codec")
 
-    async def handle_telegram_game(self, source: 'AbstractUser', intent: IntentAPI,
-                                   evt: Message, _: dict = None):
-        game = evt.media.game
+    def _encode_msgid(self, source: 'AbstractUser', evt: Message) -> str:
         if self.peer_type == "channel":
-            play_id = base64.b64encode(b"c"
-                                       + self._int_to_bytes(self.tgid)
-                                       + self._int_to_bytes(evt.id))
+            play_id = (b"c"
+                       + self._int_to_bytes(self.tgid)
+                       + self._int_to_bytes(evt.id))
         elif self.peer_type == "chat":
-            play_id = base64.b64encode(b"g"
-                                       + self._int_to_bytes(self.tgid)
-                                       + self._int_to_bytes(evt.id)
-                                       + self._int_to_bytes(source.tgid))
+            play_id = (b"g"
+                       + self._int_to_bytes(self.tgid)
+                       + self._int_to_bytes(evt.id)
+                       + self._int_to_bytes(source.tgid))
         elif self.peer_type == "user":
-            play_id = base64.b64encode(b"u"
-                                       + self._int_to_bytes(self.tgid)
-                                       + self._int_to_bytes(evt.id))
+            play_id = (b"u"
+                       + self._int_to_bytes(self.tgid)
+                       + self._int_to_bytes(evt.id))
         else:
             raise ValueError("Portal has invalid peer type")
-        play_id = play_id.decode("utf-8").rstrip("=")
+        return base64.b64encode(play_id).decode("utf-8").rstrip("=")
+
+    async def handle_telegram_game(self, source: 'AbstractUser', intent: IntentAPI,
+                                   evt: Message, relates_to: dict = None):
+        game = evt.media.game
+        play_id = self._encode_msgid(source, evt)
         command = f"!tg play {play_id}"
         override_text = f"Run {command} in your bridge management room to play {game.title}"
         override_entities = [MessageEntityPre(offset=len("Run "), length=len(command), language="")]

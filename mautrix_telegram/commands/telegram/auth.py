@@ -23,9 +23,9 @@ from telethon.errors import (
     PhoneNumberAppSignupForbiddenError, PhoneNumberBannedError, PhoneNumberFloodError,
     PhoneNumberOccupiedError, PhoneNumberUnoccupiedError, SessionPasswordNeededError)
 
-from mautrix_telegram.commands import command_handler, CommandEvent, SECTION_AUTH
-from mautrix_telegram import puppet as pu, user as u
-from mautrix_telegram.util import format_duration, ignore_coro
+from ... import puppet as pu, user as u
+from ...commands import command_handler, CommandEvent, SECTION_AUTH
+from ...util import format_duration, ignore_coro
 
 
 @command_handler(needs_auth=False,

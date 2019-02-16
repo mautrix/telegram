@@ -22,7 +22,7 @@ from telethon.tl.types import Authorization
 from telethon.tl.functions.account import (UpdateUsernameRequest, GetAuthorizationsRequest,
                                            ResetAuthorizationRequest)
 
-from mautrix_telegram.commands import command_handler, CommandEvent, SECTION_AUTH
+from .. import command_handler, CommandEvent, SECTION_AUTH
 
 
 @command_handler(needs_auth=True,

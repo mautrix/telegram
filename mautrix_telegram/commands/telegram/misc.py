@@ -19,18 +19,21 @@ import codecs
 import base64
 import re
 
-from telethon.errors import (InviteHashInvalidError, InviteHashExpiredError,
+from telethon.errors import (InviteHashInvalidError, InviteHashExpiredError, OptionsTooMuchError,
                              UserAlreadyParticipantError)
-from telethon.tl.types import User as TLUser, TypeUpdates, MessageMediaGame
+from telethon.tl.patched import Message
+from telethon.tl.types import (User as TLUser, TypeUpdates, MessageMediaGame, MessageMediaPoll,
+                               TypePeer)
 from telethon.tl.types.messages import BotCallbackAnswer
 from telethon.tl.functions.messages import (ImportChatInviteRequest, CheckChatInviteRequest,
-                                            GetBotCallbackAnswerRequest)
+                                            GetBotCallbackAnswerRequest, SendVoteRequest)
 from telethon.tl.functions.channels import JoinChannelRequest
 
-from mautrix_telegram import puppet as pu, portal as po
-from mautrix_telegram.db import Message as DBMessage
-from mautrix_telegram.types import TelegramID
-from mautrix_telegram.commands import command_handler, CommandEvent, SECTION_MISC, SECTION_CREATING_PORTALS
+from ... import puppet as pu, portal as po
+from ...abstract_user import AbstractUser
+from ...db import Message as DBMessage
+from ...types import TelegramID
+from ...commands import command_handler, CommandEvent, SECTION_MISC, SECTION_CREATING_PORTALS
 
 
 @command_handler(help_section=SECTION_MISC,
@@ -167,6 +170,45 @@ async def sync(evt: CommandEvent) -> Optional[Dict]:
 PEER_TYPE_CHAT = b"g"
 
 
+class MessageIDError(ValueError):
+    def __init__(self, message: str) -> None:
+        super().__init__(message)
+        self.message = message
+
+
+async def _parse_encoded_msgid(user: AbstractUser, enc_id: str, type_name: str
+                               ) -> Tuple[TypePeer, Message]:
+    try:
+        enc_id += (4 - len(enc_id) % 4) * "="
+        enc_id = base64.b64decode(enc_id)
+        peer_type, enc_id = bytes([enc_id[0]]), enc_id[1:]
+        tgid = TelegramID(int(codecs.encode(enc_id[0:5], "hex_codec"), 16))
+        msg_id = TelegramID(int(codecs.encode(enc_id[5:10], "hex_codec"), 16))
+        space = None
+        if peer_type == PEER_TYPE_CHAT:
+            space = TelegramID(int(codecs.encode(enc_id[10:15], "hex_codec"), 16))
+    except ValueError as e:
+        raise MessageIDError(f"Invalid {type_name} ID (format)") from e
+
+    if peer_type == PEER_TYPE_CHAT:
+        orig_msg = DBMessage.get_by_tgid(msg_id, space)
+        if not orig_msg:
+            raise MessageIDError(f"Invalid {type_name} ID (original message not found in db)")
+        new_msg = DBMessage.get_by_mxid(orig_msg.mxid, orig_msg.mx_room, user.tgid)
+        if not new_msg:
+            raise MessageIDError(f"Invalid {type_name} ID (your copy of message not found in db)")
+        msg_id = new_msg.tgid
+    try:
+        peer = await user.client.get_input_entity(tgid)
+    except ValueError as e:
+        raise MessageIDError(f"Invalid {type_name} ID (chat not found)") from e
+
+    msg = await user.client.get_messages(entity=peer, ids=msg_id)
+    if not msg:
+        raise MessageIDError(f"Invalid {type_name} ID (message not found)")
+    return peer, msg
+
+
 @command_handler(help_section=SECTION_MISC,
                  help_args="<_play ID_>",
                  help_text="Play a Telegram game.")
@@ -179,38 +221,45 @@ async def play(evt: CommandEvent) -> Optional[Dict]:
         return await evt.reply("Bots can't play games :(")
 
     try:
-        play_id = evt.args[0]
-        play_id += (4 - len(play_id) % 4) * "="
-        play_id = base64.b64decode(play_id)
-        peer_type, play_id = bytes([play_id[0]]), play_id[1:]
-        tgid = TelegramID(int(codecs.encode(play_id[0:5], "hex_codec"), 16))
-        msg_id = TelegramID(int(codecs.encode(play_id[5:10], "hex_codec"), 16))
-        space = None
-        if peer_type == PEER_TYPE_CHAT:
-            space = TelegramID(int(codecs.encode(play_id[10:15], "hex_codec"), 16))
-    except ValueError:
-        return await evt.reply("Invalid play ID (format)")
+        peer, msg = await _parse_encoded_msgid(evt.sender, evt.args[0], type_name="play")
+    except MessageIDError as e:
+        return await evt.reply(e.message)
 
-    if peer_type == PEER_TYPE_CHAT:
-        orig_msg = DBMessage.get_by_tgid(msg_id, space)
-        if not orig_msg:
-            return await evt.reply("Invalid play ID (original message not found in db)")
-        new_msg = DBMessage.get_by_mxid(orig_msg.mxid, orig_msg.mx_room, evt.sender.tgid)
-        if not new_msg:
-            return await evt.reply("Invalid play ID (your copy of message not found in db)")
-        msg_id = new_msg.tgid
-    try:
-        peer = await evt.sender.client.get_input_entity(tgid)
-    except ValueError:
-        return await evt.reply("Invalid play ID (chat not found)")
-
-    msg = await evt.sender.client.get_messages(entity=peer, ids=msg_id)
-    if not msg or not isinstance(msg.media, MessageMediaGame):
+    if not isinstance(msg.media, MessageMediaGame):
         return await evt.reply("Invalid play ID (message doesn't look like a game)")
 
-    game = await evt.sender.client(GetBotCallbackAnswerRequest(peer=peer, msg_id=msg_id, game=True))
+    game = await evt.sender.client(GetBotCallbackAnswerRequest(peer=peer, msg_id=msg.id, game=True))
     if not isinstance(game, BotCallbackAnswer):
         return await evt.reply("Game request response invalid")
 
     await evt.reply(f"Click [here]({game.url}) to play {msg.media.game.title}:\n\n"
                     f"{msg.media.game.description}")
+
+
+@command_handler(help_section=SECTION_MISC,
+                 help_args="<_poll ID_> <_choice ID_>",
+                 help_text="Vote in a Telegram poll.")
+async def vote(evt: CommandEvent) -> Optional[Dict]:
+    if len(evt.args) < 2:
+        return await evt.reply("**Usage:** `$cmdprefix+sp vote <poll ID> <choice ID>`")
+    elif not await evt.sender.is_logged_in():
+        return await evt.reply("You must be logged in with a real account to vote in polls.")
+    elif evt.sender.is_bot:
+        return await evt.reply("Bots can't vote in polls :(")
+
+    try:
+        peer, msg = await _parse_encoded_msgid(evt.sender, evt.args[0], type_name="poll")
+    except MessageIDError as e:
+        return await evt.reply(e.message)
+
+    if not isinstance(msg.media, MessageMediaPoll):
+        return await evt.reply("Invalid poll ID (message doesn't look like a poll)")
+
+    options = [base64.b64decode(option + (4 - len(option) % 4) * "=")
+               for option in evt.args[1:]]
+    try:
+        resp = await evt.sender.client(SendVoteRequest(peer=peer, msg_id=msg.id, options=options))
+    except OptionsTooMuchError:
+        return await evt.reply("You passed too many options.")
+    # TODO use response
+    return await evt.mark_read()
