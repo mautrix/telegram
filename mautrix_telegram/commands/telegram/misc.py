@@ -255,7 +255,7 @@ async def vote(evt: CommandEvent) -> Optional[Dict]:
     if not isinstance(msg.media, MessageMediaPoll):
         return await evt.reply("Invalid poll ID (message doesn't look like a poll)")
 
-    options = [base64.b64decode(option + (4 - len(option) % 4) * "=")
+    options = [base64.b64decode(option + (3 - (len(option) + 3) % 4) * "=")
                for option in evt.args[1:]]
     try:
         resp = await evt.sender.client(SendVoteRequest(peer=peer, msg_id=msg.id, options=options))
