@@ -50,7 +50,8 @@ class UserProfile(Base):
 
     @classmethod
     def delete_all(cls, room_id: MatrixRoomID) -> None:
-        cls.db.execute(cls.t.delete().where(cls.c.room_id == room_id))
+        with cls.db.begin() as conn:
+            conn.execute(cls.t.delete().where(cls.c.room_id == room_id))
 
     def update(self) -> None:
         super().update(membership=self.membership, displayname=self.displayname,
@@ -61,8 +62,8 @@ class UserProfile(Base):
         return and_(self.c.room_id == self.room_id, self.c.user_id == self.user_id)
 
     def insert(self) -> None:
-        self.db.execute(self.t.insert().values(room_id=self.room_id, user_id=self.user_id,
-                                               membership=self.membership,
-                                               displayname=self.displayname,
-                                               avatar_url=self.avatar_url))
-
+        with self.db.begin() as conn:
+            conn.execute(self.t.insert().values(room_id=self.room_id, user_id=self.user_id,
+                                                membership=self.membership,
+                                                displayname=self.displayname,
+                                                avatar_url=self.avatar_url))

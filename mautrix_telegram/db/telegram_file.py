@@ -49,7 +49,9 @@ class TelegramFile(Base):
             return None
 
     def insert(self) -> None:
-        self.db.execute(self.t.insert().values(
-            id=self.id, mxc=self.mxc, mime_type=self.mime_type, was_converted=self.was_converted,
-            timestamp=self.timestamp, size=self.size, width=self.width, height=self.height,
-            thumbnail=self.thumbnail.id if self.thumbnail else self.thumbnail_id))
+        with self.db.begin() as conn:
+            conn.execute(self.t.insert().values(
+                id=self.id, mxc=self.mxc, mime_type=self.mime_type,
+                was_converted=self.was_converted, timestamp=self.timestamp, size=self.size,
+                width=self.width, height=self.height,
+                thumbnail=self.thumbnail.id if self.thumbnail else self.thumbnail_id))

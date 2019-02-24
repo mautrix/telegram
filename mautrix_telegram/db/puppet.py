@@ -79,8 +79,9 @@ class Puppet(Base):
         return self.c.id == self.id
 
     def insert(self) -> None:
-        self.db.execute(self.t.insert().values(
-            id=self.id, custom_mxid=self.custom_mxid, access_token=self.access_token,
-            displayname=self.displayname, displayname_source=self.displayname_source,
-            username=self.username, photo_id=self.photo_id, is_bot=self.is_bot,
-            matrix_registered=self.matrix_registered))
+        with self.db.begin() as conn:
+            conn.execute(self.t.insert().values(
+                id=self.id, custom_mxid=self.custom_mxid, access_token=self.access_token,
+                displayname=self.displayname, displayname_source=self.displayname_source,
+                username=self.username, photo_id=self.photo_id, is_bot=self.is_bot,
+                matrix_registered=self.matrix_registered))

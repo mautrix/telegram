@@ -65,9 +65,10 @@ class User(Base):
         return self.c.mxid == self.mxid
 
     def insert(self) -> None:
-        self.db.execute(self.t.insert().values(
-            mxid=self.mxid, tgid=self.tgid, tg_username=self.tg_username, tg_phone=self.tg_phone,
-            saved_contacts=self.saved_contacts))
+        with self.db.begin() as conn:
+            conn.execute(self.t.insert().values(
+                mxid=self.mxid, tgid=self.tgid, tg_username=self.tg_username,
+                tg_phone=self.tg_phone, saved_contacts=self.saved_contacts))
 
     @property
     def contacts(self) -> Iterable[TelegramID]:
@@ -78,10 +79,11 @@ class User(Base):
 
     @contacts.setter
     def contacts(self, puppets: Iterable[TelegramID]) -> None:
-        self.db.execute(Contact.t.delete().where(Contact.c.user == self.tgid))
-        insert_puppets = [{"user": self.tgid, "contact": tgid} for tgid in puppets]
-        if insert_puppets:
-            self.db.execute(Contact.t.insert(), insert_puppets)
+        with self.db.begin() as conn:
+            conn.execute(Contact.t.delete().where(Contact.c.user == self.tgid))
+            insert_puppets = [{"user": self.tgid, "contact": tgid} for tgid in puppets]
+            if insert_puppets:
+                conn.execute(Contact.t.insert(), insert_puppets)
 
     @property
     def portals(self) -> Iterable[Tuple[TelegramID, TelegramID]]:
@@ -92,14 +94,15 @@ class User(Base):
 
     @portals.setter
     def portals(self, portals: Iterable[Tuple[TelegramID, TelegramID]]) -> None:
-        self.db.execute(UserPortal.t.delete().where(UserPortal.c.user == self.tgid))
-        insert_portals = [{
-            "user": self.tgid,
-            "portal": tgid,
-            "portal_receiver": tg_receiver
-        } for tgid, tg_receiver in portals]
-        if insert_portals:
-            self.db.execute(UserPortal.t.insert(), insert_portals)
+        with self.db.begin() as conn:
+            conn.execute(UserPortal.t.delete().where(UserPortal.c.user == self.tgid))
+            insert_portals = [{
+                "user": self.tgid,
+                "portal": tgid,
+                "portal_receiver": tg_receiver
+            } for tgid, tg_receiver in portals]
+            if insert_portals:
+                conn.execute(UserPortal.t.insert(), insert_portals)
 
     def delete(self) -> None:
         super().delete()

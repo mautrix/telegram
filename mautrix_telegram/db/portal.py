@@ -74,7 +74,8 @@ class Portal(Base):
         return and_(self.c.tgid == self.tgid, self.c.tg_receiver == self.tg_receiver)
 
     def insert(self) -> None:
-        self.db.execute(self.t.insert().values(
-            tgid=self.tgid, tg_receiver=self.tg_receiver, peer_type=self.peer_type,
-            megagroup=self.megagroup, mxid=self.mxid, config=self.config, username=self.username,
-            title=self.title, about=self.about, photo_id=self.photo_id))
+        with self.db.begin() as conn:
+            conn.execute(self.t.insert().values(
+                tgid=self.tgid, tg_receiver=self.tg_receiver, peer_type=self.peer_type,
+                megagroup=self.megagroup, mxid=self.mxid, config=self.config,
+                username=self.username, title=self.title, about=self.about, photo_id=self.photo_id))

@@ -44,14 +44,16 @@ class BaseBase:
         pass
 
     def update(self, **values) -> None:
-        self.db.execute(self.t.update()
-                        .where(self._edit_identity)
-                        .values(**values))
+        with self.db.begin() as conn:
+            conn.execute(self.t.update()
+                         .where(self._edit_identity)
+                         .values(**values))
         for key, value in values.items():
             setattr(self, key, value)
 
     def delete(self) -> None:
-        self.db.execute(self.t.delete().where(self._edit_identity))
+        with self.db.begin() as conn:
+            conn.execute(self.t.delete().where(self._edit_identity))
 
 
 Base = declarative_base(cls=BaseBase)

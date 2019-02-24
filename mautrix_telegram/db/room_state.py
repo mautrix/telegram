@@ -47,14 +47,16 @@ class RoomState(Base):
             return None
 
     def update(self) -> None:
-        self.db.execute(self.t.update()
-                        .where(self.c.room_id == self.room_id)
-                        .values(power_levels=self._power_levels_text))
+        with self.db.begin() as conn:
+            conn.execute(self.t.update()
+                         .where(self.c.room_id == self.room_id)
+                         .values(power_levels=self._power_levels_text))
 
     @property
     def _edit_identity(self):
         return self.c.room_id == self.room_id
 
     def insert(self) -> None:
-        self.db.execute(self.t.insert().values(room_id=self.room_id,
-                                               power_levels=self._power_levels_text))
+        with self.db.begin() as conn:
+            conn.execute(self.t.insert().values(room_id=self.room_id,
+                                                power_levels=self._power_levels_text))

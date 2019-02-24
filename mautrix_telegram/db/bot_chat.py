@@ -30,7 +30,8 @@ class BotChat(Base):
 
     @classmethod
     def delete(cls, id: TelegramID) -> None:
-        cls.db.execute(cls.t.delete().where(cls.c.id == id))
+        with cls.db.begin() as conn:
+            conn.execute(cls.t.delete().where(cls.c.id == id))
 
     @classmethod
     def all(cls) -> Iterable['BotChat']:
@@ -40,4 +41,5 @@ class BotChat(Base):
             yield cls(id=id, type=type)
 
     def insert(self) -> None:
-        self.db.execute(self.t.insert().values(id=self.id, type=self.type))
+        with self.db.begin() as conn:
+            conn.execute(self.t.insert().values(id=self.id, type=self.type))

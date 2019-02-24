@@ -68,20 +68,23 @@ class Message(Base):
 
     @classmethod
     def update_by_tgid(cls, s_tgid: TelegramID, s_tg_space: TelegramID, **values) -> None:
-        cls.db.execute(cls.t.update()
-                       .where(and_(cls.c.tgid == s_tgid, cls.c.tg_space == s_tg_space))
-                       .values(**values))
+        with cls.db.begin() as conn:
+            conn.execute(cls.t.update()
+                         .where(and_(cls.c.tgid == s_tgid, cls.c.tg_space == s_tg_space))
+                         .values(**values))
 
     @classmethod
     def update_by_mxid(cls, s_mxid: MatrixEventID, s_mx_room: MatrixRoomID, **values) -> None:
-        cls.db.execute(cls.t.update()
-                       .where(and_(cls.c.mxid == s_mxid, cls.c.mx_room == s_mx_room))
-                       .values(**values))
+        with cls.db.begin() as conn:
+            conn.execute(cls.t.update()
+                         .where(and_(cls.c.mxid == s_mxid, cls.c.mx_room == s_mx_room))
+                         .values(**values))
 
     @property
     def _edit_identity(self):
         return and_(self.c.tgid == self.tgid, self.c.tg_space == self.tg_space)
 
     def insert(self) -> None:
-        self.db.execute(self.t.insert().values(mxid=self.mxid, mx_room=self.mx_room, tgid=self.tgid,
-                                               tg_space=self.tg_space))
+        with self.db.begin() as conn:
+            conn.execute(self.t.insert().values(mxid=self.mxid, mx_room=self.mx_room,
+                                                tgid=self.tgid, tg_space=self.tg_space))
