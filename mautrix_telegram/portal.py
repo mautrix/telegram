@@ -775,7 +775,7 @@ class Portal:
 
         tpl_args = dict(mxid=user.mxid,
                         username=user.mxid_localpart,
-                        displayname=displayname)
+                        displayname=escape_html(displayname))
         tpl_args = {**tpl_args, **(arguments or {})}
         message = Template(tpl).safe_substitute(tpl_args)
         return {
@@ -907,7 +907,7 @@ class Portal:
         displayname = await self.get_displayname(sender)
         tpl_args = dict(sender_mxid=sender.mxid,
                         sender_username=sender.mxid_localpart,
-                        sender_displayname=displayname,
+                        sender_displayname=escape_html(displayname),
                         message=body)
         message["formatted_body"] = Template(tpl).safe_substitute(tpl_args)
 
