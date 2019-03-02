@@ -52,7 +52,7 @@ async def set_power_level(evt: CommandEvent) -> Dict:
 async def clear_db_cache(evt: CommandEvent) -> Dict:
     try:
         section = evt.args[0].lower()
-    except KeyError:
+    except IndexError:
         return await evt.reply("**Usage:** `$cmdprefix+sp clear-db-cache <section>`")
     if section == "portal":
         po.Portal.by_tgid = {}
