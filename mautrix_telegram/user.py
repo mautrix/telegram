@@ -239,7 +239,7 @@ class User(AbstractUser):
         if puppet.is_real_user:
             await puppet.switch_mxid(None, None)
         for _, portal in self.portals.items():
-            if not portal.mxid or portal.has_bot:
+            if not portal or portal.deleted or not portal.mxid or portal.has_bot:
                 continue
             try:
                 await portal.main_intent.kick(portal.mxid, self.mxid, "Logged out of Telegram.")
@@ -317,7 +317,7 @@ class User(AbstractUser):
     def unregister_portal(self, portal: po.Portal) -> None:
         try:
             del self.portals[portal.tgid_full]
-            self.save_portals()
+            self.save(portals=True)
         except KeyError:
             pass
 
