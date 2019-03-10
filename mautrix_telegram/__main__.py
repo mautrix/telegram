@@ -150,3 +150,6 @@ with appserv.run(config["appservice.hostname"], config["appservice.port"]) as st
             asyncio.gather(*[user.stop() for user in User.by_tgid.values()], loop=loop))
         log.debug("Clients stopped, shutting down")
         sys.exit(0)
+    except Exception as e:
+        log.exception("Unexpected error")
+        sys.exit(1)
