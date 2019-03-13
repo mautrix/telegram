@@ -11,9 +11,9 @@ parser.add_argument("-f", "--from-url", type=str, required=True, metavar="<url>"
                     help="the old database path")
 parser.add_argument("-t", "--to-url", type=str, required=True, metavar="<url>",
                     help="the new database path")
-parser.add_argument("-v", "--verbose", type=bool, required=False, default=False, help="Verbose mode")
+parser.add_argument("-v", "--verbose", action="store_true", help="Verbose logs while migrating")
 args = parser.parse_args()
-verbose = args.verbose
+verbose = args.verbose or False
 
 
 def log(*args, **kwargs):
