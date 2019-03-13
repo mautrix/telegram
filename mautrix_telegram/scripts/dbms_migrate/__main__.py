@@ -16,9 +16,9 @@ args = parser.parse_args()
 verbose = args.verbose or False
 
 
-def log(*args, **kwargs):
+def log(message, end="\n"):
     if verbose:
-        print(*args, **kwargs)
+        print(message, end=end, flush=True)
 
 
 def connect(to):
