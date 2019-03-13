@@ -11,7 +11,14 @@ parser.add_argument("-f", "--from-url", type=str, required=True, metavar="<url>"
                     help="the old database path")
 parser.add_argument("-t", "--to-url", type=str, required=True, metavar="<url>",
                     help="the new database path")
+parser.add_argument("-v", "--verbose", type=bool, required=False, default=False, help="Verbose mode")
 args = parser.parse_args()
+verbose = args.verbose
+
+
+def log(*args, **kwargs):
+    if verbose:
+        print(*args, **kwargs)
 
 
 def connect(to):
@@ -45,15 +52,30 @@ def connect(to):
         "TelegramFile": TelegramFile,
     }
 
-
+log("Connecting to old database")
 session, tables = connect(args.from_url)
 
 data = {}
 for name, table in tables.items():
+    log("Reading table {name}...".format(name=name), end=" ")
     data[name] = session.query(table).all()
+    log("Done!")
 
+log("Connecting to new database")
 session, tables = connect(args.to_url)
+
 for name, table in tables.items():
+    log("Writing table {name}".format(name=name), end="")
+    length = len(data[name])
+    n = 0
     for row in data[name]:
         session.merge(row)
+        n += 5
+        if n >= length:
+            log(".", end="")
+            n = 0
+    log(" Done!")
+
+log("Committing changes to database...", end=" ")
 session.commit()
+log("Done!")
