@@ -34,9 +34,9 @@ import commonmark
 
 from telethon.errors import FloodWaitError
 
-from mautrix_telegram.types import MatrixRoomID, MatrixEventID
-from mautrix_telegram.util import format_duration
-from mautrix_telegram import user as u, context as c
+from ..types import MatrixRoomID, MatrixEventID
+from ..util import format_duration
+from .. import user as u, context as c
 
 command_handlers = {}  # type: Dict[str, CommandHandler]
 
