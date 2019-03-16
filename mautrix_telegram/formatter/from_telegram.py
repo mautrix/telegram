@@ -193,8 +193,8 @@ async def telegram_to_matrix(evt: Message, source: "AbstractUser",
                              main_intent: Optional[IntentAPI] = None,
                              is_edit: bool = False, prefix_text: Optional[str] = None,
                              prefix_html: Optional[str] = None, override_text: str = None,
-                             override_entities: List[TypeMessageEntity] = None
-                             ) -> Tuple[str, str, Dict]:
+                             override_entities: List[TypeMessageEntity] = None,
+                             no_reply_fallback: bool = False) -> Tuple[str, str, Dict]:
     text = add_surrogates(override_text or evt.message)
     entities = override_entities or evt.entities
     html = _telegram_entities_to_matrix_catch(text, entities) if entities else None
@@ -208,7 +208,7 @@ async def telegram_to_matrix(evt: Message, source: "AbstractUser",
     if evt.fwd_from:
         text, html = await _add_forward_header(source, text, html, evt.fwd_from)
 
-    if evt.reply_to_msg_id:
+    if evt.reply_to_msg_id and not no_reply_fallback:
         text, html = await _add_reply_header(source, text, html, evt, relates_to, main_intent,
                                              is_edit)
 

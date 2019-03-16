@@ -1346,9 +1346,10 @@ class Portal:
                                          relates_to=relates_to, timestamp=evt.date,
                                          external_url=self.get_external_url(evt))
         if evt.message:
-            text, html, _ = await formatter.telegram_to_matrix(evt, source, self.main_intent)
-            await intent.send_text(self.mxid, text, html=html, timestamp=evt.date,
-                                   external_url=self.get_external_url(evt))
+            text, html, _ = await formatter.telegram_to_matrix(evt, source, self.main_intent,
+                                                               no_reply_fallback=True)
+            result = await intent.send_text(self.mxid, text, html=html, timestamp=evt.date,
+                                            external_url=self.get_external_url(evt))
         return result
 
     @staticmethod
