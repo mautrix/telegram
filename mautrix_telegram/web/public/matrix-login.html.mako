@@ -16,7 +16,7 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 -->
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
 	<title>Matrix login - Mautrix-Telegram bridge</title>
 	<link rel="icon" type="image/png" href="favicon.png"/>
@@ -25,9 +25,10 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 	<meta property="og:image" content="favicon.png">
 	<meta charset="utf-8">
 	<link rel="stylesheet" href="//fonts.googleapis.com/css?family=Roboto:300,700">
-	<link rel="stylesheet" href="//cdn.rawgit.com/necolas/normalize.css/master/normalize.css">
 	<link rel="stylesheet"
-		  href="//cdn.rawgit.com/milligram/milligram/master/dist/milligram.min.css">
+		  href="https://cdnjs.cloudflare.com/ajax/libs/normalize/8.0.1/normalize.min.css">
+	<link rel="stylesheet"
+		  href="https://cdnjs.cloudflare.com/ajax/libs/milligram/1.3.0/milligram.min.css">
 	<link rel="stylesheet" href="login.css"/>
 </head>
 <body>

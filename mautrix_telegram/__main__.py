@@ -100,7 +100,6 @@ appserv = AppService(config["homeserver.address"], config["homeserver.domain"],
                      })
 bot = init_bot(config)
 context = Context(appserv, config, loop, session_container, bot)
-context.mx = MatrixHandler(context)
 
 if config["appservice.public.enabled"]:
     public_website = PublicBridgeWebsite(loop)
@@ -112,6 +111,8 @@ if config["appservice.provisioning.enabled"]:
     appserv.app.add_subapp(config["appservice.provisioning.prefix"] or "/_matrix/provisioning",
                            provisioning_api.app)
     context.provisioning_api = provisioning_api
+
+context.mx = MatrixHandler(context)
 
 with appserv.run(config["appservice.hostname"], config["appservice.port"]) as start:
     start_ts = time()
