@@ -6,9 +6,8 @@ from _pytest.fixtures import FixtureRequest
 from pytest_mock import MockFixture
 
 import mautrix_telegram.commands.handler
-from mautrix_telegram.commands.handler import (
-    CommandEvent, CommandHandler, CommandProcessor, HelpSection
-)
+from mautrix_telegram.commands.handler import (CommandEvent, CommandHandler, CommandProcessor,
+                                               HelpSection)
 from mautrix_telegram.config import Config
 from mautrix_telegram.context import Context
 from mautrix_telegram.types import MatrixEventID, MatrixRoomID, MatrixUserID
@@ -25,13 +24,7 @@ def context(request: FixtureRequest) -> Context:
     """
     # Config(path, registration_path, base_path)
     config = getattr(request.cls, 'config', Config("", "", ""))
-    return Context(
-        Mock(),  # az
-        Mock(),  # db
-        config,  # config
-        Mock(),  # loop
-        Mock()  # session_container
-    )
+    return Context(az=Mock(), config=config, loop=Mock(), session_container=Mock(), bot=Mock())
 
 
 @pytest.fixture
@@ -97,15 +90,12 @@ class TestCommandEvent:
         mock_az.intent.send_notice.assert_called_with(
             MatrixRoomID("#mock_room:example.org"),
             "**This** <i>was</i><br/><strong>all</strong>fun*!",
-            html=(
-                "<p><strong>This</strong> &lt;i&gt;was&lt;/i&gt;&lt;br/&gt;"
-                "&lt;strong&gt;all&lt;/strong&gt;fun*!</p>\n"
-            ),
+            html="<p><strong>This</strong> &lt;i&gt;was&lt;/i&gt;&lt;br/&gt;"
+                 "&lt;strong&gt;all&lt;/strong&gt;fun*!</p>\n"
         )
 
-    def test_reply_with_cmdprefix(
-        self, command_processor: CommandProcessor, mocker: MockFixture
-    ) -> None:
+    def test_reply_with_cmdprefix(self, command_processor: CommandProcessor, mocker: MockFixture
+                                  ) -> None:
         mocker.patch("mautrix_telegram.user.config", self.config)
 
         evt = CommandEvent(
@@ -121,11 +111,8 @@ class TestCommandEvent:
 
         mock_az = command_processor.az
 
-        evt.reply(
-            "$cmdprefix+sp ....$cmdprefix+sp...$cmdprefix $cmdprefix",
-            allow_html=False,
-            render_markdown=False,
-        )
+        evt.reply("$cmdprefix+sp ....$cmdprefix+sp...$cmdprefix $cmdprefix", allow_html=False,
+                  render_markdown=False)
 
         mock_az.intent.send_notice.assert_called_with(
             MatrixRoomID("#mock_room:example.org"),
@@ -133,9 +120,8 @@ class TestCommandEvent:
             html=None,
         )
 
-    def test_reply_with_cmdprefix_in_management_room(
-        self, command_processor: CommandProcessor, mocker: MockFixture
-    ) -> None:
+    def test_reply_with_cmdprefix_in_management_room(self, command_processor: CommandProcessor,
+                                                     mocker: MockFixture) -> None:
         mocker.patch("mautrix_telegram.user.config", self.config)
 
         evt = CommandEvent(
@@ -162,6 +148,7 @@ class TestCommandEvent:
             "....tg+sp...tg tg",
             html="<p>....tg+sp...tg tg</p>\n",
         )
+
 
 class TestCommandHandler:
     config = Config("", "", "")
@@ -301,12 +288,8 @@ class TestCommandProcessor:
     config["bridge.permissions"] = {"*": "relaybot"}
 
     @pytest.mark.asyncio
-    async def test_handle(
-            self,
-            command_processor: CommandProcessor,
-            boolean2: Tuple[bool, bool],
-            mocker: MockFixture,
-        ) -> None:
+    async def test_handle(self, command_processor: CommandProcessor, boolean2: Tuple[bool, bool],
+                          mocker: MockFixture) -> None:
         mocker.patch('mautrix_telegram.user.config', self.config)
         mocker.patch(
             'mautrix_telegram.commands.handler.command_handlers',
@@ -330,12 +313,8 @@ class TestCommandProcessor:
         command_handlers["help"].mock.assert_called_once()  # type: ignore
 
     @pytest.mark.asyncio
-    async def test_handle_unknown_command(
-        self,
-        command_processor: CommandProcessor,
-        boolean2: Tuple[bool, bool],
-        mocker: MockFixture,
-    ) -> None:
+    async def test_handle_unknown_command(self, command_processor: CommandProcessor,
+                                          boolean2: Tuple[bool, bool], mocker: MockFixture) -> None:
         mocker.patch('mautrix_telegram.user.config', self.config)
         mocker.patch(
             'mautrix_telegram.commands.handler.command_handlers',
@@ -361,12 +340,9 @@ class TestCommandProcessor:
         command_handlers["unknown-command"].mock.assert_called_once()  # type: ignore
 
     @pytest.mark.asyncio
-    async def test_handle_delegated_handler(
-        self,
-        command_processor: CommandProcessor,
-        boolean2: Tuple[bool, bool],
-        mocker: MockFixture,
-    ) -> None:
+    async def test_handle_delegated_handler(self, command_processor: CommandProcessor,
+                                            boolean2: Tuple[bool, bool],
+                                            mocker: MockFixture) -> None:
         mocker.patch('mautrix_telegram.user.config', self.config)
         mocker.patch(
             'mautrix_telegram.commands.handler.command_handlers',
