@@ -2039,7 +2039,7 @@ class Portal:
 
 def init(context: Context) -> None:
     global config
-    Portal.az, _, config, Portal.loop, Portal.bot = context.core
+    Portal.az, config, Portal.loop, Portal.bot = context.core
     Portal.max_initial_member_sync = config["bridge.max_initial_member_sync"]
     Portal.sync_channel_members = config["bridge.sync_channel_members"]
     Portal.sync_matrix_state = config["bridge.sync_matrix_state"]

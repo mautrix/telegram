@@ -328,7 +328,7 @@ class CommandProcessor:
     log = logging.getLogger("mau.commands")
 
     def __init__(self, context: c.Context) -> None:
-        self.az, self.db, self.config, self.loop, self.tgbot = context.core
+        self.az, self.config, self.loop, self.tgbot = context.core
         self.public_website = context.public_website
         self.command_prefix = self.config["bridge.command_prefix"]
 

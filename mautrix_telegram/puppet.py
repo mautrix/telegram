@@ -14,16 +14,13 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import (Awaitable, Coroutine, Dict, List, Iterable, Optional, Pattern, Union,
-                    TYPE_CHECKING)
+from typing import Awaitable, Any, Dict, List, Iterable, Optional, Pattern, Union, TYPE_CHECKING
 from difflib import SequenceMatcher
 from enum import Enum
 from aiohttp import ServerDisconnectedError
 import asyncio
 import logging
 import re
-
-from sqlalchemy import orm
 
 from telethon.tl.types import UserProfilePhoto, User, FileLocation, UpdateUserName, PeerUser
 from mautrix_appservice import AppService, IntentAPI, IntentError, MatrixRequestError
@@ -45,7 +42,6 @@ config = None  # type: Config
 
 class Puppet:
     log = logging.getLogger("mau.puppet")  # type: logging.Logger
-    db = None  # type: orm.Session
     az = None  # type: AppService
     mx = None  # type: MatrixHandler
     loop = None  # type: asyncio.AbstractEventLoop
@@ -400,8 +396,7 @@ class Puppet:
 
         if create:
             puppet = cls(tgid)
-            cls.db.add(puppet.db_instance)
-            cls.db.commit()
+            puppet.db_instance.insert()
             return puppet
 
         return None
@@ -481,9 +476,9 @@ class Puppet:
     # endregion
 
 
-def init(context: 'Context') -> List[Coroutine]:  # [None, None, PuppetError]
+def init(context: 'Context') -> List[Awaitable[Any]]:  # [None, None, PuppetError]
     global config
-    Puppet.az, Puppet.db, config, Puppet.loop, _ = context.core
+    Puppet.az, config, Puppet.loop, _ = context.core
     Puppet.mx = context.mx
     Puppet.username_template = config.get("bridge.username_template", "telegram_{userid}")
     Puppet.hs_domain = config["homeserver"]["domain"]

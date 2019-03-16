@@ -23,7 +23,6 @@ import sys
 import copy
 import signal
 
-from sqlalchemy import orm
 import sqlalchemy as sql
 
 from mautrix_appservice import AppService
@@ -73,13 +72,10 @@ log = logging.getLogger("mau.init")  # type: logging.Logger
 log.debug(f"Initializing mautrix-telegram {__version__}")
 
 db_engine = sql.create_engine(config["appservice.database"] or "sqlite:///mautrix-telegram.db")
-db_factory = orm.sessionmaker(bind=db_engine)
-db_session = orm.scoping.scoped_session(db_factory)
 Base.metadata.bind = db_engine
 
-session_container = AlchemySessionContainer(engine=db_engine, session=db_session,
-                                            table_base=Base, table_prefix="telethon_",
-                                            manage_tables=False)
+session_container = AlchemySessionContainer(engine=db_engine, table_base=Base, session=False,
+                                            table_prefix="telethon_", manage_tables=False)
 session_container.core_mode = True
 
 try:
@@ -102,8 +98,9 @@ appserv = AppService(config["homeserver.address"], config["homeserver.domain"],
                      aiohttp_params={
                          "client_max_size": config["appservice.max_body_size"] * mebibyte
                      })
-
-context = Context(appserv, db_session, config, loop, session_container)
+bot = init_bot(config)
+context = Context(appserv, config, loop, session_container, bot)
+context.mx = MatrixHandler(context)
 
 if config["appservice.public.enabled"]:
     public_website = PublicBridgeWebsite(loop)
@@ -120,8 +117,6 @@ with appserv.run(config["appservice.hostname"], config["appservice.port"]) as st
     start_ts = time()
     init_db(db_engine)
     init_abstract_user(context)
-    context.bot = init_bot(context)
-    context.mx = MatrixHandler(context)
     init_formatter(context)
     init_portal(context)
     startup_actions = (init_puppet(context) +

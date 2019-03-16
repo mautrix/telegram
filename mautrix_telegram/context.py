@@ -19,8 +19,6 @@ from typing import Optional, Tuple, TYPE_CHECKING
 if TYPE_CHECKING:
     import asyncio
 
-    from sqlalchemy.orm import scoped_session
-
     from alchemysession import AlchemySessionContainer
     from mautrix_appservice import AppService
 
@@ -31,20 +29,17 @@ if TYPE_CHECKING:
 
 
 class Context:
-    def __init__(self, az: 'AppService', db: 'scoped_session', config: 'Config',
-                 loop: 'asyncio.AbstractEventLoop', session_container: 'AlchemySessionContainer'
-                 ) -> None:
+    def __init__(self, az: 'AppService', config: 'Config', loop: 'asyncio.AbstractEventLoop',
+                 session_container: 'AlchemySessionContainer', bot: Optional['Bot']) -> None:
         self.az = az  # type: AppService
-        self.db = db  # type: scoped_session
         self.config = config  # type: Config
         self.loop = loop  # type: asyncio.AbstractEventLoop
-        self.bot = None  # type: Optional[Bot]
-        self.mx = None  # type: MatrixHandler
+        self.bot = bot  # type: Optional[Bot]
+        self.mx = None  # type: Optional[MatrixHandler]
         self.session_container = session_container  # type: AlchemySessionContainer
-        self.public_website = None  # type: PublicBridgeWebsite
-        self.provisioning_api = None  # type: ProvisioningAPI
+        self.public_website = None  # type: Optional[PublicBridgeWebsite]
+        self.provisioning_api = None  # type: Optional[ProvisioningAPI]
 
     @property
-    def core(self) -> Tuple['AppService', 'scoped_session', 'Config',
-                            'asyncio.AbstractEventLoop', Optional['Bot']]:
-        return (self.az, self.db, self.config, self.loop, self.bot)
+    def core(self) -> Tuple['AppService', 'Config', 'asyncio.AbstractEventLoop', Optional['Bot']]:
+        return self.az, self.config, self.loop, self.bot

@@ -56,7 +56,7 @@ class Bot(AbstractUser):
         self.username = None  # type: str
         self.is_relaybot = True  # type: bool
         self.is_bot = True  # type: bool
-        self.chats = {chat.id: chat.type for chat in BotChat.all()}  # type: Dict[int, str]
+        self.chats = {}  # type: Dict[int, str]
         self.tg_whitelist = []  # type: List[int]
         self.whitelist_group_admins = (config["bridge.relaybot.whitelist_group_admins"]
                                        or False)  # type: bool
@@ -74,6 +74,7 @@ class Bot(AbstractUser):
                 self.tg_whitelist.append(user_id)
 
     async def start(self, delete_unless_authenticated: bool = False) -> 'Bot':
+        self.chats = {chat.id: chat.type for chat in BotChat.all()}
         await super().start(delete_unless_authenticated)
         if not await self.is_logged_in():
             await self.client.sign_in(bot_token=self.token)
@@ -280,9 +281,9 @@ class Bot(AbstractUser):
         return "bot"
 
 
-def init(context: 'Context') -> Optional[Bot]:
+def init(cfg: 'Config') -> Optional[Bot]:
     global config
-    config = context.config
+    config = cfg
     token = config["telegram.bot_token"]
     if token and not token.lower().startswith("disable"):
         return Bot(token)

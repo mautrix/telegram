@@ -32,7 +32,7 @@ class MatrixHandler:
     log = logging.getLogger("mau.mx")  # type: logging.Logger
 
     def __init__(self, context: 'Context') -> None:
-        self.az, self.db, self.config, _, self.tgbot = context.core
+        self.az, self.config, _, self.tgbot = context.core
         self.commands = com.CommandProcessor(context)  # type: com.CommandProcessor
         self.previously_typing = []  # type: List[MatrixUserID]
 

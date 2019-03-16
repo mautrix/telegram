@@ -15,7 +15,6 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from sqlalchemy import Column, ForeignKey, Integer, BigInteger, String, Boolean
-from sqlalchemy.orm import relationship
 from typing import Optional
 
 from .base import Base
@@ -33,7 +32,7 @@ class TelegramFile(Base):
     width = Column(Integer, nullable=True)
     height = Column(Integer, nullable=True)
     thumbnail_id = Column("thumbnail", String, ForeignKey("telegram_file.id"), nullable=True)
-    thumbnail = relationship("TelegramFile", uselist=False)
+    thumbnail = None  # type: Optional[TelegramFile]
 
     @classmethod
     def get(cls, id: str) -> Optional['TelegramFile']:

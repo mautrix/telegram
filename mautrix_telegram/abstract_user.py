@@ -20,7 +20,6 @@ import asyncio
 import logging
 import platform
 
-from sqlalchemy import orm
 from telethon.tl.patched import MessageService, Message
 from telethon.tl.types import (
     Channel, ChannelForbidden, Chat, ChatForbidden, MessageActionChannelMigrateFrom, PeerUser,
@@ -56,7 +55,6 @@ class AbstractUser(ABC):
     session_container = None  # type: AlchemySessionContainer
     loop = None  # type: asyncio.AbstractEventLoop
     log = None  # type: logging.Logger
-    db = None  # type: orm.Session
     az = None  # type: AppService
     bot = None  # type: Bot
     ignore_incoming_bot_events = True  # type: bool
@@ -175,11 +173,8 @@ class AbstractUser(ABC):
     async def ensure_started(self, even_if_no_session=False) -> 'AbstractUser':
         if not self.puppet_whitelisted or self.connected:
             return self
-        session_count = self.session_container.Session.query.filter(
-            self.session_container.Session.session_id == self.mxid).count()
-        self.log.debug("ensure_started(%s, even_if_no_session=%s, session_count=%s)",
-                       self.mxid, even_if_no_session, session_count)
-        if even_if_no_session or session_count > 0:
+        self.log.debug("ensure_started(%s, even_if_no_session=%s)", self.mxid, even_if_no_session)
+        if even_if_no_session or self.session_container.has_session(self.mxid):
             await self.start(delete_unless_authenticated=not even_if_no_session)
         return self
 
@@ -388,7 +383,7 @@ class AbstractUser(ABC):
 
 def init(context: "Context") -> None:
     global config, MAX_DELETIONS
-    AbstractUser.az, AbstractUser.db, config, AbstractUser.loop, AbstractUser.relaybot = context.core
+    AbstractUser.az, config, AbstractUser.loop, AbstractUser.relaybot = context.core
     AbstractUser.ignore_incoming_bot_events = config["bridge.relaybot.ignore_own_incoming_events"]
     AbstractUser.session_container = context.session_container
     MAX_DELETIONS = config.get("bridge.max_telegram_delete", 10)
