@@ -44,6 +44,9 @@ setuptools.setup(
     ],
     extras_require=extras,
 
+    setup_requires=["pytest-runner"],
+    tests_require=["pytest", "pytest-asyncio", "pytest-mock"],
+
     classifiers=[
         "Development Status :: 4 - Beta",
         "License :: OSI Approved :: GNU Affero General Public License v3 or later (AGPLv3+)",
