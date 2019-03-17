@@ -15,18 +15,23 @@ RUN apk add --no-cache \
       py3-sqlalchemy \
       py3-markdown \
       py3-psycopg2 \
+      # Not yet in stable repos:
+      #py3-ruamel \
       # Indirect dependencies
-      py3-numpy \
-      py3-asn1crypto \
-      py3-future \
-      py3-markupsafe \
-      py3-mako \
-      py3-decorator \
-      py3-dateutil \
-      py3-idna \
-      py3-six \
-      py3-asn1 \
-      py3-rsa \
+      #commonmark
+        py3-future \
+      #alembic
+        py3-mako \
+        py3-dateutil \
+        py3-markupsafe \
+      #moviepy
+        py3-decorator \
+        #py3-tqdm \
+        py3-requests \
+        #imageio
+          py3-numpy \
+      #telethon
+        py3-rsa \
       # Other dependencies
       python3-dev \
       build-base \
