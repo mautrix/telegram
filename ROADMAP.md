@@ -21,6 +21,10 @@
     * [ ] ‡ Changes to displayname/avatar
 * Telegram → Matrix
   * [x] Message content (text, formatting, files, etc..)
+  * [ ] Advanced message content/media
+    * [x] Polls
+	* [x] Games
+	* [ ] Buttons
   * [x] Message deletions
   * [x] Message edits
   * [ ] Message history
@@ -48,6 +52,8 @@
   * [x] Option to use bot to relay messages for unauthenticated Matrix users
   * [x] Option to use own Matrix account for messages sent from other Telegram clients
   * [ ] ‡ Calls (hard, not yet supported by Telethon)
+  * [ ] ‡ Secret chats (not yet supported by Telethon)
+  * [ ] ‡ E2EE in Matrix rooms (not yet supported 
 
 † Information not automatically sent from source, i.e. implementation may not be possible  
 ‡ Maybe, i.e. this feature may or may not be implemented at some point
