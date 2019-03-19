@@ -1,6 +1,6 @@
 # -*- coding: future_fstrings -*-
 # mautrix-telegram - A Matrix-Telegram puppeting bridge
-# Copyright (C) 2018 Tulir Asokan
+# Copyright (C) 2019 Tulir Asokan
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as published by
@@ -29,16 +29,16 @@ class BotChat(Base):
     type = Column(String, nullable=False)
 
     @classmethod
-    def delete(cls, id: TelegramID) -> None:
+    def delete(cls, chat_id: TelegramID) -> None:
         with cls.db.begin() as conn:
-            conn.execute(cls.t.delete().where(cls.c.id == id))
+            conn.execute(cls.t.delete().where(cls.c.id == chat_id))
 
     @classmethod
     def all(cls) -> Iterable['BotChat']:
         rows = cls.db.execute(cls.t.select())
         for row in rows:
-            id, type = row
-            yield cls(id=id, type=type)
+            chat_id, chat_type = row
+            yield cls(id=chat_id, type=chat_type)
 
     def insert(self) -> None:
         with self.db.begin() as conn:

@@ -1,6 +1,6 @@
 # -*- coding: future_fstrings -*-
 # mautrix-telegram - A Matrix-Telegram puppeting bridge
-# Copyright (C) 2018 Tulir Asokan
+# Copyright (C) 2019 Tulir Asokan
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as published by
@@ -247,7 +247,7 @@ class ProvisioningAPI(AuthAPI):
             "group": "chat",
         }[type]
 
-        portal = Portal(tgid=None, mxid=room_id, title=title, about=about, peer_type=type)
+        portal = Portal(tgid=TelegramID(0), mxid=room_id, title=title, about=about, peer_type=type)
         try:
             await portal.create_telegram_chat(user, supergroup=supergroup)
         except ValueError as e:

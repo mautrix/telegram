@@ -1,6 +1,6 @@
 # -*- coding: future_fstrings -*-
 # mautrix-telegram - A Matrix-Telegram puppeting bridge
-# Copyright (C) 2018 Tulir Asokan
+# Copyright (C) 2019 Tulir Asokan
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as published by
@@ -147,9 +147,11 @@ async def transfer_thumbnail_to_matrix(client: MautrixTelegramClient, intent: In
 
 transfer_locks = {}  # type: Dict[str, asyncio.Lock]
 
+TypeThumbnail = Optional[Union[TypeLocation, TypePhotoSize]]
+
 
 async def transfer_file_to_matrix(client: MautrixTelegramClient, intent: IntentAPI,
-                                  location: TypeLocation, thumbnail: Optional[Union[TypeLocation, TypePhotoSize]] = None,
+                                  location: TypeLocation, thumbnail: TypeThumbnail = None,
                                   is_sticker: bool = False) -> Optional[DBTelegramFile]:
     location_id = _location_to_id(location)
     if not location_id:
@@ -171,8 +173,8 @@ async def transfer_file_to_matrix(client: MautrixTelegramClient, intent: IntentA
 
 async def _unlocked_transfer_file_to_matrix(client: MautrixTelegramClient, intent: IntentAPI,
                                             loc_id: str, location: TypeLocation,
-                                            thumbnail: Optional[Union[TypeLocation, TypePhotoSize]],
-                                            is_sticker: bool) -> Optional[DBTelegramFile]:
+                                            thumbnail: TypeThumbnail, is_sticker: bool
+                                            ) -> Optional[DBTelegramFile]:
     db_file = DBTelegramFile.get(loc_id)
     if db_file:
         return db_file

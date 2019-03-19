@@ -1,6 +1,6 @@
 # -*- coding: future_fstrings -*-
 # mautrix-telegram - A Matrix-Telegram puppeting bridge
-# Copyright (C) 2018 Tulir Asokan
+# Copyright (C) 2019 Tulir Asokan
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as published by
@@ -15,18 +15,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """This module contains classes handling commands issued by Matrix users."""
-from typing import (
-    Any,
-    Awaitable,
-    Callable,
-    Coroutine,
-    Dict,
-    List,
-    NamedTuple,
-    Optional,
-    Union,
-    NewType,
-)
+from typing import Awaitable, Callable, Dict, List, NamedTuple, Optional
 import logging
 import traceback
 
@@ -93,6 +82,7 @@ class CommandEvent:
         is_portal: Determines whether the room in which the command was issued
             is a portal.
     """
+
     def __init__(self, processor: 'CommandProcessor', room: MatrixRoomID, event: MatrixEventID,
                  sender: u.User, command: str, args: List[str], is_management: bool,
                  is_portal: bool) -> None:
@@ -111,12 +101,8 @@ class CommandEvent:
         self.is_management = is_management
         self.is_portal = is_portal
 
-    def reply(
-            self,
-            message: str,
-            allow_html: bool = False,
-            render_markdown: bool = True,
-        ) -> Awaitable[Dict]:
+    def reply(self, message: str, allow_html: bool = False, render_markdown: bool = True
+              ) -> Awaitable[Dict]:
         """Write a reply to the room in which the command was issued.
 
         Replaces occurences of "$cmdprefix" in the message with the command
@@ -136,9 +122,8 @@ class CommandEvent:
             Handler for the message sending function.
         """
         message_cmd = self._replace_command_prefix(message)
-        html = self._render_message(
-            message_cmd, allow_html=allow_html, render_markdown=render_markdown
-        )
+        html = self._render_message(message_cmd, allow_html=allow_html,
+                                    render_markdown=render_markdown)
 
         return self.az.intent.send_notice(self.room_id, message_cmd, html=html)
 
@@ -153,9 +138,8 @@ class CommandEvent:
         )
         return message.replace("$cmdprefix", self.command_prefix)
 
-    def _render_message(
-        self, message: str, allow_html: bool, render_markdown: bool
-    ) -> Optional[str]:
+    @staticmethod
+    def _render_message(message: str, allow_html: bool, render_markdown: bool) -> Optional[str]:
         """Renders the message as HTML.
 
         Args:
@@ -194,6 +178,7 @@ class CommandHandler:
         name: The name of this command.
         help_section: Section of the help in which this command will appear.
     """
+
     def __init__(self, handler: Callable[[CommandEvent], Awaitable[Dict]], needs_auth: bool,
                  needs_puppeting: bool, needs_matrix_puppeting: bool, needs_admin: bool,
                  management_only: bool, name: str, help_text: str, help_args: str,
@@ -254,7 +239,7 @@ class CommandHandler:
         Args:
             is_management: If the room in which the command will be issued is a
                 management room.
-            puppet_whitelited: If the connected Telegram account puppet is
+            puppet_whitelisted: If the connected Telegram account puppet is
                 allowed to issue the command.
             matrix_puppet_whitelisted: If the connected Matrix account puppet is
                 allowed to issue the command.
@@ -308,10 +293,9 @@ def command_handler(_func: Optional[Callable[[CommandEvent], Awaitable[Dict]]] =
                     name: Optional[str] = None,
                     help_text: str = "",
                     help_args: str = "",
-                    help_section: HelpSection = None
+                    help_section: HelpSection = None,
                     ) -> Callable[[Callable[[CommandEvent], Awaitable[Optional[Dict]]]],
                                   CommandHandler]:
-
     def decorator(func: Callable[[CommandEvent], Awaitable[Optional[Dict]]]) -> CommandHandler:
         actual_name = name or func.__name__.replace("_", "-")
         handler = CommandHandler(func, needs_auth, needs_puppeting, needs_matrix_puppeting,

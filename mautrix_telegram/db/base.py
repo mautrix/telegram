@@ -1,6 +1,6 @@
 # -*- coding: future_fstrings -*-
 # mautrix-telegram - A Matrix-Telegram puppeting bridge
-# Copyright (C) 2018 Tulir Asokan
+# Copyright (C) 2019 Tulir Asokan
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as published by
@@ -20,10 +20,11 @@ from sqlalchemy import Table
 from sqlalchemy.engine.base import Engine
 from sqlalchemy.engine.result import RowProxy
 from sqlalchemy.sql.base import ImmutableColumnCollection
-from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.ext.declarative import as_declarative
 
 
-class BaseBase:
+@as_declarative()
+class Base:
     db = None  # type: Engine
     t = None  # type: Table
     __table__ = None  # type: Table
@@ -54,6 +55,3 @@ class BaseBase:
     def delete(self) -> None:
         with self.db.begin() as conn:
             conn.execute(self.t.delete().where(self._edit_identity))
-
-
-Base = declarative_base(cls=BaseBase)

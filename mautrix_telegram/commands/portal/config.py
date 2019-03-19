@@ -1,6 +1,6 @@
 # -*- coding: future_fstrings -*-
 # mautrix-telegram - A Matrix-Telegram puppeting bridge
-# Copyright (C) 2018 Tulir Asokan
+# Copyright (C) 2019 Tulir Asokan
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as published by
@@ -18,8 +18,9 @@ from typing import Dict, Awaitable
 from io import StringIO
 
 from ...config import yaml
-from ... import portal as po, user as u, util
+from ... import portal as po, util
 from .. import command_handler, CommandEvent, SECTION_PORTAL_MANAGEMENT
+
 
 @command_handler(help_section=SECTION_PORTAL_MANAGEMENT,
                  help_text="View or change per-portal settings.",

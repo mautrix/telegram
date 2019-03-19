@@ -1,6 +1,6 @@
 # -*- coding: future_fstrings -*-
 # mautrix-telegram - A Matrix-Telegram puppeting bridge
-# Copyright (C) 2018 Tulir Asokan
+# Copyright (C) 2019 Tulir Asokan
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as published by
@@ -1258,8 +1258,8 @@ class Portal:
 
         invites = await self._get_telegram_users_in_matrix_room()
         if len(invites) < 2:
-            raise ValueError("Not enough Telegram users to create a chat")
-
+            raise ValueError("Not enough Telegram users to create a chat. "
+                             "Invite more Telegram ghost users to the room, such as the relaybot.")
         if self.peer_type == "chat":
             response = await source.client(CreateChatRequest(title=self.title, users=invites))
             entity = response.chats[0]

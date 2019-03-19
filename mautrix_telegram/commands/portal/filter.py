@@ -1,6 +1,6 @@
 # -*- coding: future_fstrings -*-
 # mautrix-telegram - A Matrix-Telegram puppeting bridge
-# Copyright (C) 2018 Tulir Asokan
+# Copyright (C) 2019 Tulir Asokan
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as published by
@@ -46,11 +46,11 @@ async def filter_mode(evt: CommandEvent) -> Dict:
                                "`!filter blacklist <chat ID>`.")
 
 
-@command_handler(needs_admin=True,
+@command_handler(name="filter", needs_admin=True,
                  help_section=SECTION_ADMIN,
                  help_args="<`whitelist`|`blacklist`> <_chat ID_>",
                  help_text="Allow or disallow bridging a specific chat.")
-async def filter(evt: CommandEvent) -> Optional[Dict]:
+async def edit_filter(evt: CommandEvent) -> Optional[Dict]:
     try:
         action = evt.args[0]
         if action not in ("whitelist", "blacklist", "add", "remove"):
@@ -58,11 +58,11 @@ async def filter(evt: CommandEvent) -> Optional[Dict]:
 
         id_str = evt.args[1]
         if id_str.startswith("-100"):
-            id = int(id_str[4:])
+            filter_id = int(id_str[4:])
         elif id_str.startswith("-"):
-            id = int(id_str[1:])
+            filter_id = int(id_str[1:])
         else:
-            id = int(id_str)
+            filter_id = int(id_str)
     except (IndexError, ValueError):
         return await evt.reply("**Usage:** `$cmdprefix+sp filter <whitelist/blacklist> <chat ID>`")
 
@@ -70,26 +70,26 @@ async def filter(evt: CommandEvent) -> Optional[Dict]:
     if mode not in ("blacklist", "whitelist"):
         return await evt.reply(f"Unknown filter mode \"{mode}\". Please fix the bridge config.")
 
-    list = evt.config["bridge.filter.list"]
+    filter_id_list = evt.config["bridge.filter.list"]
 
     if action in ("blacklist", "whitelist"):
         action = "add" if mode == action else "remove"
 
     def save() -> None:
-        evt.config["bridge.filter.list"] = list
+        evt.config["bridge.filter.list"] = filter_id_list
         evt.config.save()
-        po.Portal.filter_list = list
+        po.Portal.filter_list = filter_id_list
 
     if action == "add":
-        if id in list:
+        if filter_id in filter_id_list:
             return await evt.reply(f"That chat is already {mode}ed.")
-        list.append(id)
+        filter_id_list.append(filter_id)
         save()
         return await evt.reply(f"Chat ID added to {mode}.")
     elif action == "remove":
-        if id not in list:
+        if filter_id not in filter_id_list:
             return await evt.reply(f"That chat is not {mode}ed.")
-        list.remove(id)
+        filter_id_list.remove(filter_id)
         save()
         return await evt.reply(f"Chat ID removed from {mode}.")
     return None

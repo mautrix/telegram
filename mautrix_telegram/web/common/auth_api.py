@@ -1,6 +1,6 @@
 # -*- coding: future_fstrings -*-
 # mautrix-telegram - A Matrix-Telegram puppeting bridge
-# Copyright (C) 2018 Tulir Asokan
+# Copyright (C) 2019 Tulir Asokan
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as published by
@@ -87,7 +87,8 @@ class AuthAPI(abc.ABC):
         except PhoneNumberAppSignupForbiddenError:
             return self.get_login_response(mxid=user.mxid, state="request", status=403,
                                            errcode="phone_number_app_signup_forbidden",
-                                           error="You have disabled 3rd party apps on your account.")
+                                           error="You have disabled 3rd party apps on your "
+                                                 "account.")
         except PhoneNumberUnoccupiedError:
             return self.get_login_response(mxid=user.mxid, state="request", status=404,
                                            errcode="phone_number_unoccupied",

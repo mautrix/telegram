@@ -1,6 +1,6 @@
 # -*- coding: future_fstrings -*-
 # mautrix-telegram - A Matrix-Telegram puppeting bridge
-# Copyright (C) 2018 Tulir Asokan
+# Copyright (C) 2019 Tulir Asokan
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as published by
@@ -65,8 +65,8 @@ def _get_management_status(evt: CommandEvent) -> str:
     return "**This is not a management room**: you must prefix commands with `$cmdprefix`."
 
 
-@command_handler(needs_auth=False, needs_puppeting=False,
+@command_handler(name="help", needs_auth=False, needs_puppeting=False,
                  help_section=SECTION_GENERAL,
                  help_text="Show this help message.")
-async def help(evt: CommandEvent) -> Optional[Dict]:
+async def help_cmd(evt: CommandEvent) -> Optional[Dict]:
     return await evt.reply(_get_management_status(evt) + "\n" + await _get_help_text(evt))

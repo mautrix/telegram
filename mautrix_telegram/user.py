@@ -1,6 +1,6 @@
 # -*- coding: future_fstrings -*-
 # mautrix-telegram - A Matrix-Telegram puppeting bridge
-# Copyright (C) 2018 Tulir Asokan
+# Copyright (C) 2019 Tulir Asokan
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as published by
@@ -65,7 +65,7 @@ class User(AbstractUser):
         self.db_portals = db_portals or []
         self._db_instance = db_instance  # type: Optional[DBUser]
 
-        self.command_status = None  # type: Dict
+        self.command_status = None  # type: Optional[Dict]
 
         (self.relaybot_whitelisted,
          self.whitelisted,

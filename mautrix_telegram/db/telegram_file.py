@@ -1,6 +1,6 @@
 # -*- coding: future_fstrings -*-
 # mautrix-telegram - A Matrix-Telegram puppeting bridge
-# Copyright (C) 2018 Tulir Asokan
+# Copyright (C) 2019 Tulir Asokan
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as published by
@@ -35,14 +35,14 @@ class TelegramFile(Base):
     thumbnail = None  # type: Optional[TelegramFile]
 
     @classmethod
-    def get(cls, id: str) -> Optional['TelegramFile']:
-        rows = cls.db.execute(cls.t.select().where(cls.c.id == id))
+    def get(cls, loc_id: str) -> Optional['TelegramFile']:
+        rows = cls.db.execute(cls.t.select().where(cls.c.id == loc_id))
         try:
-            id, mxc, mime, conv, ts, s, w, h, thumb_id = next(rows)
+            loc_id, mxc, mime, conv, ts, s, w, h, thumb_id = next(rows)
             thumb = None
             if thumb_id:
                 thumb = cls.get(thumb_id)
-            return cls(id=id, mxc=mxc, mime_type=mime, was_converted=conv, timestamp=ts,
+            return cls(id=loc_id, mxc=mxc, mime_type=mime, was_converted=conv, timestamp=ts,
                        size=s, width=w, height=h, thumbnail_id=thumb_id, thumbnail=thumb)
         except StopIteration:
             return None

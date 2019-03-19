@@ -1,6 +1,6 @@
 # -*- coding: future_fstrings -*-
 # mautrix-telegram - A Matrix-Telegram puppeting bridge
-# Copyright (C) 2018 Tulir Asokan
+# Copyright (C) 2019 Tulir Asokan
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as published by
@@ -36,7 +36,7 @@ should_bridge_plaintext_highlights = False  # type: bool
 
 command_regex = re.compile(r"^!([A-Za-z0-9@]+)")  # type: Pattern
 not_command_regex = re.compile(r"^\\(![A-Za-z0-9@]+)")  # type: Pattern
-plain_mention_regex = None  # type: Pattern
+plain_mention_regex = None  # type: Optional[Pattern]
 
 
 def plain_mention_to_html(match: Match) -> str:
@@ -147,5 +147,5 @@ def init_mx(context: "Context") -> None:
     config = context.config
     dn_template = config.get("bridge.displayname_template", "{displayname} (Telegram)")
     dn_template = re.escape(dn_template).replace(re.escape("{displayname}"), "[^>]+")
-    plain_mention_regex = re.compile(f"(\s|^)({dn_template})")
+    plain_mention_regex = re.compile(f"^({dn_template})")
     should_bridge_plaintext_highlights = config["bridge.plaintext_highlights"] or False

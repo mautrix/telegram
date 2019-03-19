@@ -1,6 +1,6 @@
 # -*- coding: future_fstrings -*-
 # mautrix-telegram - A Matrix-Telegram puppeting bridge
-# Copyright (C) 2018 Tulir Asokan
+# Copyright (C) 2019 Tulir Asokan
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as published by
@@ -71,7 +71,7 @@ async def _add_forward_header(source, text: str, html: Optional[str],
         html = escape(text)
     fwd_from_html, fwd_from_text = None, None
     if fwd_from.from_id:
-        user = u.User.get_by_tgid(fwd_from.from_id)
+        user = u.User.get_by_tgid(TelegramID(fwd_from.from_id))
         if user:
             fwd_from_text = user.displayname or user.mxid
             fwd_from_html = f"<a href='https://matrix.to/#/{user.mxid}'>{fwd_from_text}</a>"

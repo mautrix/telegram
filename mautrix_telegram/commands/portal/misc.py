@@ -1,6 +1,6 @@
 # -*- coding: future_fstrings -*-
 # mautrix-telegram - A Matrix-Telegram puppeting bridge
-# Copyright (C) 2018 Tulir Asokan
+# Copyright (C) 2019 Tulir Asokan
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as published by
@@ -38,10 +38,10 @@ async def sync_state(evt: CommandEvent) -> Dict:
     await evt.reply("Synchronization complete")
 
 
-@command_handler(needs_admin=False, needs_puppeting=False, needs_auth=False,
+@command_handler(name="id", needs_admin=False, needs_puppeting=False, needs_auth=False,
                  help_section=SECTION_MISC,
                  help_text="Get the ID of the Telegram chat where this room is bridged.")
-async def id(evt: CommandEvent) -> Dict:
+async def get_id(evt: CommandEvent) -> Dict:
     portal = po.Portal.get_by_mxid(evt.room_id)
     if not portal:
         return await evt.reply("This is not a portal room.")

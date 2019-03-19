@@ -1,6 +1,6 @@
 # -*- coding: future_fstrings -*-
 # mautrix-telegram - A Matrix-Telegram puppeting bridge
-# Copyright (C) 2018 Tulir Asokan
+# Copyright (C) 2019 Tulir Asokan
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as published by
@@ -17,6 +17,7 @@
 from typing import Dict
 
 from ... import portal as po
+from ...types import TelegramID
 from .. import command_handler, CommandEvent, SECTION_CREATING_PORTALS
 from .util import user_has_power_level, get_initial_state
 
@@ -50,7 +51,8 @@ async def create(evt: CommandEvent) -> Dict:
         "group": "chat",
     }[type]
 
-    portal = po.Portal(tgid=None, mxid=evt.room_id, title=title, about=about, peer_type=type)
+    portal = po.Portal(tgid=TelegramID(0), peer_type=type,
+                       mxid=evt.room_id, title=title, about=about)
     try:
         await portal.create_telegram_chat(evt.sender, supergroup=supergroup)
     except ValueError as e:
