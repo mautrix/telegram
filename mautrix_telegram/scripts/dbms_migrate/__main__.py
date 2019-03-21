@@ -23,7 +23,6 @@ def log(message, end="\n"):
 
 def connect(to):
     import mautrix_telegram.db.base as base
-    base.Base = declarative_base(cls=base.BaseBase)
     from mautrix_telegram.db import (Portal, Message, UserPortal, User, RoomState, UserProfile,
                                      Contact, Puppet, BotChat, TelegramFile)
     db_engine = sql.create_engine(to)
