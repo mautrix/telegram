@@ -285,15 +285,10 @@ class CommandHandler:
 
 
 def command_handler(_func: Optional[Callable[[CommandEvent], Awaitable[Dict]]] = None, *,
-                    needs_auth: bool = True,
-                    needs_puppeting: bool = True,
-                    needs_matrix_puppeting: bool = False,
-                    needs_admin: bool = False,
-                    management_only: bool = False,
-                    name: Optional[str] = None,
-                    help_text: str = "",
-                    help_args: str = "",
-                    help_section: HelpSection = None,
+                    needs_auth: bool = True, needs_puppeting: bool = True,
+                    needs_matrix_puppeting: bool = False, needs_admin: bool = False,
+                    management_only: bool = False, name: Optional[str] = None,
+                    help_text: str = "", help_args: str = "", help_section: HelpSection = None
                     ) -> Callable[[Callable[[CommandEvent], Awaitable[Optional[Dict]]]],
                                   CommandHandler]:
     def decorator(func: Callable[[CommandEvent], Awaitable[Optional[Dict]]]) -> CommandHandler:

@@ -44,7 +44,6 @@ try:
 except ImportError:
     htmldiff = None  # type: ignore
 
-
 log = logging.getLogger("mau.fmt.tg")  # type: logging.Logger
 should_highlight_edits = False  # type: bool
 
@@ -258,9 +257,9 @@ def _telegram_entities_to_matrix(text: str, entities: List[TypeMessageEntity]) -
         elif entity_type == MessageEntityItalic:
             html.append(f"<em>{entity_text}</em>")
         elif entity_type == MessageEntityCode:
-            html.append(f"<pre><code>{entity_text}</code></pre>"
-                        if "\n" in entity_text
-                        else f"<code>{entity_text}</code>")
+            html.append(("<pre><code>{entity_text}</code></pre>"
+                         if "\n" in entity_text
+                         else "<code>{entity_text}</code>").format(entity_text=entity_text))
         elif entity_type == MessageEntityPre:
             skip_entity = _parse_pre(html, entity_text, entity.language)
         elif entity_type == MessageEntityMention:
