@@ -20,11 +20,10 @@ from sqlalchemy import Table
 from sqlalchemy.engine.base import Engine
 from sqlalchemy.engine.result import RowProxy
 from sqlalchemy.sql.base import ImmutableColumnCollection
-from sqlalchemy.ext.declarative import as_declarative
+from sqlalchemy.ext.declarative import declarative_base
 
 
-@as_declarative()
-class Base:
+class BaseBase:
     db = None  # type: Engine
     t = None  # type: Table
     __table__ = None  # type: Table
@@ -55,3 +54,5 @@ class Base:
     def delete(self) -> None:
         with self.db.begin() as conn:
             conn.execute(self.t.delete().where(self._edit_identity))
+
+Base = declarative_base(cls=BaseBase)
