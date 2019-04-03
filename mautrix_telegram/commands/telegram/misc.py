@@ -237,10 +237,10 @@ async def play(evt: CommandEvent) -> Optional[Dict]:
 
 
 @command_handler(help_section=SECTION_MISC,
-                 help_args="<_poll ID_> <_choice ID_>",
+                 help_args="<_poll ID_> <_choice number_>",
                  help_text="Vote in a Telegram poll.")
 async def vote(evt: CommandEvent) -> Optional[Dict]:
-    if len(evt.args) < 2:
+    if len(evt.args) < 1:
         return await evt.reply("**Usage:** `$cmdprefix+sp vote <poll ID> <choice number>`")
     elif not await evt.sender.is_logged_in():
         return await evt.reply("You must be logged in with a real account to vote in polls.")
@@ -263,7 +263,7 @@ async def vote(evt: CommandEvent) -> Optional[Dict]:
             option_index = int(option) - 1
         except ValueError:
             option_index = None
-        if not option_index:
+        if option_index is None:
             return await evt.reply(f"Invalid option number \"{option}\"",
                                    render_markdown=False, allow_html=False)
         elif option_index < 0:
