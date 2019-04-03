@@ -241,7 +241,7 @@ async def play(evt: CommandEvent) -> Optional[Dict]:
                  help_text="Vote in a Telegram poll.")
 async def vote(evt: CommandEvent) -> Optional[Dict]:
     if len(evt.args) < 2:
-        return await evt.reply("**Usage:** `$cmdprefix+sp vote <poll ID> <choice ID>`")
+        return await evt.reply("**Usage:** `$cmdprefix+sp vote <poll ID> <choice number>`")
     elif not await evt.sender.is_logged_in():
         return await evt.reply("You must be logged in with a real account to vote in polls.")
     elif evt.sender.is_bot:
@@ -255,7 +255,25 @@ async def vote(evt: CommandEvent) -> Optional[Dict]:
     if not isinstance(msg.media, MessageMediaPoll):
         return await evt.reply("Invalid poll ID (message doesn't look like a poll)")
 
-    options = [base64.b64decode(option + (3 - (len(option) + 3) % 4) * "=")
+    options = []
+    for option in evt.args[1:]:
+        try:
+            if len(option) > 10:
+                raise ValueError("option index too long")
+            option_index = int(option) - 1
+        except ValueError:
+            option_index = None
+        if not option_index:
+            return await evt.reply(f"Invalid option number \"{option}\"",
+                                   render_markdown=False, allow_html=False)
+        elif option_index < 0:
+            return await evt.reply(f"Invalid option number {option}. "
+                                   f"Option numbers must be positive.")
+        elif option_index >= len(msg.media.poll.answers):
+            return await evt.reply(f"Invalid option number {option}. "
+                                   f"The poll only has {len(msg.media.poll.answers)} options.")
+        options.append(msg.media.poll.answers[option_index].option)
+    options = [msg.media.poll.answers[int(option) - 1].option
                for option in evt.args[1:]]
     try:
         resp = await evt.sender.client(SendVoteRequest(peer=peer, msg_id=msg.id, options=options))

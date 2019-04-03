@@ -1512,20 +1512,24 @@ class Portal:
         poll = evt.media.poll  # type: Poll
         poll_id = self._encode_msgid(source, evt)
 
-        def enc(answer: PollAnswer) -> str:
-            return base64.b64encode(answer.option).decode("utf-8").rstrip("=")
+        _n = 0
 
-        text = (f"Poll ID {poll_id}: {poll.question}\n"
-                + "\n".join(f"* {enc(answer)}: {answer.text}" for answer in poll.answers) +
+        def n() -> int:
+            nonlocal _n
+            _n += 1
+            return _n
+
+        text = (f"Poll: {poll.question}\n"
+                + "\n".join(f"{n()}. {answer.text}" for answer in poll.answers) +
                 "\n"
-                f"Vote with !tg vote <poll ID> <choice ID>")
+                f"Vote with !tg vote {poll_id} <choice number>")
 
-        html = (f"<strong>Poll</strong> ID <code>{poll_id}</code>: {poll.question}<br/>\n"
-                f"<ul>"
-                + "\n".join(f"<li><code>{enc(answer)}</code>: {answer.text}</li>"
+        html = (f"<strong>Poll</strong>: {poll.question}<br/>\n"
+                f"<ol>"
+                + "\n".join(f"<li>{answer.text}</li>"
                             for answer in poll.answers) +
-                "</ul>\n"
-                f"Vote with <code>!tg vote &lt;poll ID&gt; &lt;choice ID&gt;</code>")
+                "</ol>\n"
+                f"Vote with <code>!tg vote {poll_id} &lt;choice number&gt;</code>")
         await intent.set_typing(self.mxid, is_typing=False)
         return await intent.send_text(self.mxid, text, html=html, relates_to=relates_to,
                                       msgtype="m.text", timestamp=evt.date,
