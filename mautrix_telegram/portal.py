@@ -899,7 +899,7 @@ class Portal:
                                 ) -> None:
         if "formatted_body" not in message:
             message["format"] = "org.matrix.custom.html"
-            message["formatted_body"] = escape_html(message.get("body", ""))
+            message["formatted_body"] = escape_html(message.get("body", "")).replace("\n", "<br/>")
         body = message["formatted_body"]
 
         tpl = (self.get_config(f"message_formats.[{msgtype}]")
