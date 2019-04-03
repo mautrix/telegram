@@ -95,27 +95,43 @@ class AbstractUser(ABC):
 
     def _init_client(self) -> None:
         self.log.debug(f"Initializing client for {self.name}")
-        device = f"{platform.system()} {platform.release()}"
-        sysversion = MautrixTelegramClient.__version__
+
         self.session = self.session_container.new_session(self.name)
         if config["telegram.server.enabled"]:
             self.session.set_dc(config["telegram.server.dc"],
                                 config["telegram.server.ip"],
                                 config["telegram.server.port"])
+
         if self.is_relaybot:
             base_logger = logging.getLogger("telethon.relaybot")
         else:
             base_logger = logging.getLogger(f"telethon.{self.tgid or -hash(self.mxid)}")
-        self.client = MautrixTelegramClient(session=self.session,
-                                            api_id=config["telegram.api_id"],
-                                            api_hash=config["telegram.api_hash"],
-                                            loop=self.loop,
-                                            app_version=__version__,
-                                            system_version=sysversion,
-                                            device_model=device,
-                                            timeout=120,
-                                            base_logger=base_logger,
-                                            proxy=self._proxy_settings)
+
+        device = config["telegram.device_info.device_model"]
+        sysversion = config["telegram.device_info.system_version"]
+        appversion = config["telegram.device_info.app_version"]
+
+        self.client = MautrixTelegramClient(
+            session=self.session,
+
+            api_id=config["telegram.api_id"],
+            api_hash=config["telegram.api_hash"],
+
+            app_version=__version__ if appversion == "auto" else appversion,
+            system_version=MautrixTelegramClient.__version__ if sysversion == "auto" else sysversion,
+            device_model=f"{platform.system()} {platform.release()}" if device == "auto" else device,
+
+            timeout=config["telegram.connection.timeout"],
+            connection_retries=config["telegram.connection.retries"],
+            retry_delay=config["telegram.connection.retry_delay"],
+            flood_sleep_threshold=config["telegram.connection.flood_sleep_threshold"],
+            request_retries=config["telegram.connection.request_retries"],
+
+            proxy=self._proxy_settings,
+
+            loop=self.loop,
+            base_logger=base_logger
+        )
         self.client.add_event_handler(self._update_catch)
 
     @abstractmethod

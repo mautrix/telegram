@@ -257,10 +257,24 @@ class Config(DictWithRecursion):
         copy("telegram.api_id")
         copy("telegram.api_hash")
         copy("telegram.bot_token")
+
+        copy("telegram.connection.timeout")
+        copy("telegram.connection.retries")
+        copy("telegram.connection.retry_delay")
+        copy("telegram.connection.flood_sleep_threshold")
+        copy("telegram.connection.request_retries")
+
+        copy("telegram.device_info.device_model")
+        copy("telegram.device_info.system_version")
+        copy("telegram.device_info.app_version")
+        copy("telegram.device_info.lang_code")
+        copy("telegram.device_info.system_lang_code")
+
         copy("telegram.server.enabled")
         copy("telegram.server.dc")
         copy("telegram.server.ip")
         copy("telegram.server.port")
+
         copy("telegram.proxy.type")
         copy("telegram.proxy.address")
         copy("telegram.proxy.port")
