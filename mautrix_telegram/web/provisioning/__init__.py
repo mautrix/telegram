@@ -365,7 +365,7 @@ class ProvisioningAPI(AuthAPI):
 
     async def bridge_info(self, request: web.Request) -> web.Response:
         return web.json_response({
-            "relaybot_username": self.context.bot.username,
+            "relaybot_username": self.context.bot.username if self.context.bot is not None else None,
         }, status=200)
 
     @staticmethod
