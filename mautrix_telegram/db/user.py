@@ -106,8 +106,8 @@ class User(Base):
 
     def delete(self) -> None:
         super().delete()
-        self.portals = None
-        self.contacts = None
+        self.portals = []
+        self.contacts = []
 
 
 class UserPortal(Base):
