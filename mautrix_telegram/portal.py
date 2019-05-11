@@ -1386,7 +1386,11 @@ class Portal:
                 except ValueError:
                     name = alt
 
-        mime_type = document.mime_type or file.mime_type
+        generic_types = ("text/plain", "application/octet-stream")
+        if file.mime_type in generic_types and document.mime_type not in generic_types:
+            mime_type = document.mime_type or file.mime_type
+        else:
+            mime_type = file.mime_type or document.mime_type
         info = {
             "size": file.size,
             "mimetype": mime_type,
