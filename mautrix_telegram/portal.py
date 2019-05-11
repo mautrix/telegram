@@ -1311,6 +1311,8 @@ class Portal:
     def get_external_url(self, evt: Message) -> Optional[str]:
         if self.peer_type == "channel" and self.username is not None:
             return f"https://t.me/{self.username}/{evt.id}"
+        elif self.peer_type != "user":
+            return f"https://t.me/c/{self.tgid}/{evt.id}"
         return None
 
     async def handle_telegram_photo(self, source: 'AbstractUser', intent: IntentAPI, evt: Message,
