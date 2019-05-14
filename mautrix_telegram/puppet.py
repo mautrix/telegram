@@ -61,6 +61,7 @@ class Puppet:
                  photo_id: Optional[str] = None,
                  is_bot: bool = False,
                  is_registered: bool = False,
+                 disable_updates: bool = False,
                  db_instance: Optional[DBPuppet] = None) -> None:
         self.id = id  # type: TelegramID
         self.access_token = access_token  # type: Optional[str]
@@ -73,6 +74,7 @@ class Puppet:
         self.photo_id = photo_id  # type: Optional[str]
         self.is_bot = is_bot  # type: bool
         self.is_registered = is_registered  # type: bool
+        self.disable_updates = disable_updates  # type: bool
         self._db_instance = db_instance  # type: Optional[DBPuppet]
 
         self.default_mxid_intent = self.az.intent.user(self.default_mxid)
@@ -281,23 +283,26 @@ class Puppet:
         return DBPuppet(id=self.id, access_token=self.access_token, custom_mxid=self.custom_mxid,
                         username=self.username, displayname=self.displayname,
                         displayname_source=self.displayname_source, photo_id=self.photo_id,
-                        is_bot=self.is_bot, matrix_registered=self.is_registered)
+                        is_bot=self.is_bot, matrix_registered=self.is_registered,
+                        disable_updates=self.disable_updates)
 
     @classmethod
     def from_db(cls, db_puppet: DBPuppet) -> 'Puppet':
         return Puppet(db_puppet.id, db_puppet.access_token, db_puppet.custom_mxid,
                       db_puppet.username, db_puppet.displayname, db_puppet.displayname_source,
                       db_puppet.photo_id, db_puppet.is_bot, db_puppet.matrix_registered,
-                      db_instance=db_puppet)
+                      db_puppet.disable_updates, db_instance=db_puppet)
 
     def save(self) -> None:
         self.db_instance.update(access_token=self.access_token, custom_mxid=self.custom_mxid,
                                 username=self.username, displayname=self.displayname,
                                 displayname_source=self.displayname_source, photo_id=self.photo_id,
-                                is_bot=self.is_bot, matrix_registered=self.is_registered)
+                                is_bot=self.is_bot, matrix_registered=self.is_registered,
+                                disable_updates=self.disable_updates)
 
     # endregion
     # region Info updating
+
     def similarity(self, query: str) -> int:
         username_similarity = (SequenceMatcher(None, self.username, query).ratio()
                                if self.username else 0)
@@ -334,6 +339,8 @@ class Puppet:
             displayname=name)
 
     async def update_info(self, source: 'AbstractUser', info: User) -> None:
+        if self.disable_updates:
+            return
         changed = False
         if self.username != info.username:
             self.username = info.username
@@ -350,6 +357,8 @@ class Puppet:
 
     async def update_displayname(self, source: 'AbstractUser', info: Union[User, UpdateUserName]
                                  ) -> bool:
+        if self.disable_updates:
+            return False
         ignore_source = (not source.is_relaybot
                          and self.displayname_source is not None
                          and self.displayname_source != source.tgid)
@@ -370,6 +379,8 @@ class Puppet:
         return False
 
     async def update_avatar(self, source: 'AbstractUser', photo: FileLocation) -> bool:
+        if self.disable_updates:
+            return False
         photo_id = f"{photo.volume_id}-{photo.local_id}"
         if self.photo_id != photo_id:
             file = await util.transfer_file_to_matrix(source.client, self.default_mxid_intent,

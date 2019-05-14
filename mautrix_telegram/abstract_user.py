@@ -14,7 +14,7 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import Tuple, Optional, List, Union, TYPE_CHECKING
+from typing import Tuple, Optional, List, Union, Dict, TYPE_CHECKING
 from abc import ABC, abstractmethod
 import asyncio
 import logging
@@ -201,6 +201,8 @@ class AbstractUser(ABC):
     # region Telegram update handling
 
     async def _update(self, update: TypeUpdate) -> None:
+        asyncio.ensure_future(self._handle_entity_updates(getattr(update, "_entities", {})),
+                              loop=self.loop)
         if isinstance(update, (UpdateShortChatMessage, UpdateShortMessage, UpdateNewChannelMessage,
                                UpdateNewMessage, UpdateEditMessage, UpdateEditChannelMessage)):
             await self.update_message(update)
@@ -276,6 +278,15 @@ class AbstractUser(ABC):
 
         sender = pu.Puppet.get(TelegramID(update.user_id))
         await portal.handle_telegram_typing(sender, update)
+
+    async def _handle_entity_updates(self, entities: Dict[int, Union[User, Chat, Channel]]) -> None:
+        try:
+            users = (entity for entity in entities.items() if isinstance(entity, User))
+            puppets = ((pu.Puppet.get(TelegramID(user.id)), user) for user in users)
+            await asyncio.gather(*[puppet.update_info(self, info)
+                                   for puppet, info in puppets if puppet])
+        except Exception:
+            self.log.exception("Failed to handle entity updates")
 
     async def update_others_info(self, update: Union[UpdateUserName, UpdateUserPhoto]) -> None:
         # TODO duplication not checked

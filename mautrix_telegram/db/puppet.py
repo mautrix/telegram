@@ -35,15 +35,16 @@ class Puppet(Base):
     photo_id = Column(String, nullable=True)
     is_bot = Column(Boolean, nullable=True)
     matrix_registered = Column(Boolean, nullable=False, server_default=expression.false())
+    disable_updates = Column(Boolean, nullable=False, server_default=expression.false())
 
     @classmethod
     def scan(cls, row) -> Optional['Puppet']:
         (id, custom_mxid, access_token, displayname, displayname_source, username, photo_id,
-         is_bot, matrix_registered) = row
+         is_bot, matrix_registered, disable_updates) = row
         return cls(id=id, custom_mxid=custom_mxid, access_token=access_token,
                    displayname=displayname, displayname_source=displayname_source,
                    username=username, photo_id=photo_id, is_bot=is_bot,
-                   matrix_registered=matrix_registered)
+                   matrix_registered=matrix_registered, disable_updates=disable_updates)
 
     @classmethod
     def _one_or_none(cls, rows: RowProxy) -> Optional['Puppet']:
@@ -84,4 +85,4 @@ class Puppet(Base):
                 id=self.id, custom_mxid=self.custom_mxid, access_token=self.access_token,
                 displayname=self.displayname, displayname_source=self.displayname_source,
                 username=self.username, photo_id=self.photo_id, is_bot=self.is_bot,
-                matrix_registered=self.matrix_registered))
+                matrix_registered=self.matrix_registered, disable_updates=self.disable_updates))
