@@ -360,7 +360,7 @@ class Puppet:
         if self.disable_updates:
             return False
         is_main_source = (source.is_relaybot or (self.displayname_source is not None
-                                                 and self.displayname_source != source.tgid))
+                                                 and self.displayname_source == source.tgid))
         # No phone -> not in contact list -> can't set custom name -> name is trustworthy
         is_trustworthy_source = isinstance(info, User) and info.phone is None
         if not is_main_source and not is_trustworthy_source:
