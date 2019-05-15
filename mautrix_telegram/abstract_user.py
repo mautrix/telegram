@@ -281,7 +281,7 @@ class AbstractUser(ABC):
 
     async def _handle_entity_updates(self, entities: Dict[int, Union[User, Chat, Channel]]) -> None:
         try:
-            users = (entity for entity in entities.items() if isinstance(entity, User))
+            users = (entity for entity in entities.values() if isinstance(entity, User))
             puppets = ((pu.Puppet.get(TelegramID(user.id)), user) for user in users)
             await asyncio.gather(*[puppet.update_info(self, info)
                                    for puppet, info in puppets if puppet])

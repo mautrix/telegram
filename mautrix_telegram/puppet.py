@@ -359,19 +359,25 @@ class Puppet:
                                  ) -> bool:
         if self.disable_updates:
             return False
-        ignore_source = (not source.is_relaybot
-                         and self.displayname_source is not None
-                         and self.displayname_source != source.tgid)
-        if ignore_source:
+        is_main_source = (source.is_relaybot or (self.displayname_source is not None
+                                                 and self.displayname_source != source.tgid))
+        # No phone -> not in contact list -> can't set custom name -> name is trustworthy
+        is_trustworthy_source = isinstance(info, User) and info.phone is None
+        if not is_main_source and not is_trustworthy_source:
             return False
-        if isinstance(info, UpdateUserName):
+        elif isinstance(info, UpdateUserName):
             info = await source.client.get_entity(PeerUser(self.tgid))
 
         displayname = self.get_displayname(info)
         if displayname != self.displayname:
-            await self.default_mxid_intent.set_display_name(displayname)
             self.displayname = displayname
             self.displayname_source = source.tgid
+            try:
+                await self.default_mxid_intent.set_display_name(displayname)
+            except MatrixRequestError:
+                self.log.exception("Failed to set displayname")
+                self.displayname = ""
+                self.displayname_source = None
             return True
         elif source.is_relaybot or self.displayname_source is None:
             self.displayname_source = source.tgid
@@ -386,8 +392,12 @@ class Puppet:
             file = await util.transfer_file_to_matrix(source.client, self.default_mxid_intent,
                                                       photo)
             if file:
-                await self.default_mxid_intent.set_avatar(file.mxc)
                 self.photo_id = photo_id
+                try:
+                    await self.default_mxid_intent.set_avatar(file.mxc)
+                except MatrixRequestError:
+                    self.log.exception("Failed to set avatar")
+                    self.photo_id = ""
                 return True
         return False
 
