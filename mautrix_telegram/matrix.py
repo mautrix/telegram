@@ -213,7 +213,7 @@ class MatrixHandler:
         prefix = self.config["bridge.command_prefix"]
         is_command = text.startswith(prefix)
         if is_command:
-            text = text[len(prefix) + 1:]
+            text = text[len(prefix) + 1:].lstrip()
         return is_command, text
 
     async def handle_message(self, room: MatrixRoomID, sender_id: MatrixUserID, message: Dict,
