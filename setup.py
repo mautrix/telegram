@@ -39,7 +39,7 @@ setuptools.setup(
         "future-fstrings>=0.4.2",
         "python-magic>=0.4.15,<0.5",
         "telethon>=1.5.5,<1.7",
-        "telethon-session-sqlalchemy>=0.2.12,<0.3",
+        "telethon-session-sqlalchemy>=0.2.14,<0.3",
     ],
     extras_require=extras,
 
