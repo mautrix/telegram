@@ -16,7 +16,8 @@ depends_on = None
 
 
 def upgrade():
-    op.add_column('portal', sa.Column('megagroup', sa.Boolean()))
+    with op.batch_alter_table("portal") as batch_op:
+        batch_op.add_column(sa.Column('megagroup', sa.Boolean()))
 
 
 def downgrade():

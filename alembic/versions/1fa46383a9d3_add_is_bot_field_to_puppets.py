@@ -17,7 +17,8 @@ depends_on = None
 
 
 def upgrade():
-    op.add_column('puppet', sa.Column('is_bot', sa.Boolean(), nullable=True))
+    with op.batch_alter_table("puppet") as batch_op:
+        batch_op.add_column(sa.Column('is_bot', sa.Boolean(), nullable=True))
 
 
 def downgrade():

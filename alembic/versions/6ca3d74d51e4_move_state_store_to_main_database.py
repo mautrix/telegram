@@ -57,7 +57,8 @@ class Puppet(Base):
 
 
 def upgrade():
-    op.add_column("puppet", sa.Column("matrix_registered", sa.Boolean(), nullable=False,
+    with op.batch_alter_table("puppet") as batch_op:
+        batch_op.add_column(sa.Column("matrix_registered", sa.Boolean(), nullable=False,
                                       server_default=sa.sql.expression.false()))
     op.create_table("mx_room_state",
                     sa.Column("room_id", sa.String(), nullable=False),
