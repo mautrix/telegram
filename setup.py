@@ -31,7 +31,7 @@ setuptools.setup(
 
     install_requires=[
         "aiohttp>=3.0.1,<4",
-        "mautrix-appservice>=0.3.8,<0.4.0",
+        "mautrix-appservice>=0.3.10.dev1,<0.4.0",
         "SQLAlchemy>=1.2.3,<2",
         "alembic>=1.0.0,<2",
         "commonmark>=0.8.1,<1",
