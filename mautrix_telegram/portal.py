@@ -916,9 +916,13 @@ class Portal:
         msgtype = message.get("msgtype", "m.text")
         if msgtype == "m.emote":
             await self._apply_msg_format(sender, msgtype, message)
+            if "m.new_content" in message:
+                await self._apply_msg_format(sender, msgtype, message.get("m.new_content"))
             message["msgtype"] = "m.text"
         elif use_relaybot:
             await self._apply_msg_format(sender, msgtype, message)
+            if "m.new_content" in message:
+                await self._apply_msg_format(sender, msgtype, message.get("m.new_content"))
 
     @staticmethod
     def _matrix_event_to_entities(event: Dict[str, Any]
