@@ -252,7 +252,7 @@ class AbstractUser(ABC):
             return
 
         # We check that these are user read receipts, so tg_space is always the user ID.
-        message = DBMessage.get_by_tgid(TelegramID(update.max_id), self.tgid)
+        message = DBMessage.get_one_by_tgid(TelegramID(update.max_id), self.tgid, edit_index=-1)
         if not message:
             return
 
@@ -336,7 +336,8 @@ class AbstractUser(ABC):
         return update, sender, portal
 
     @staticmethod
-    async def _try_redact(portal: po.Portal, message: DBMessage) -> None:
+    async def _try_redact(message: DBMessage) -> None:
+        portal = po.Portal.get_by_mxid(message.mx_room)
         if not portal:
             return
         try:
@@ -348,30 +349,26 @@ class AbstractUser(ABC):
         if len(update.messages) > MAX_DELETIONS:
             return
 
-        for message in update.messages:
-            message = DBMessage.get_by_tgid(TelegramID(message), self.tgid)
-            if not message:
-                continue
-            message.delete()
-            number_left = DBMessage.count_spaces_by_mxid(message.mxid, message.mx_room)
-            if number_left == 0:
-                portal = po.Portal.get_by_mxid(message.mx_room)
-                await self._try_redact(portal, message)
+        for message_id in update.messages:
+            messages = DBMessage.get_all_by_tgid(TelegramID(message_id), self.tgid)
+            for message in messages:
+                message.delete()
+                number_left = DBMessage.count_spaces_by_mxid(message.mxid, message.mx_room)
+                if number_left == 0:
+                    portal = po.Portal.get_by_mxid(message.mx_room)
+                    await self._try_redact(message)
 
     async def delete_channel_message(self, update: UpdateDeleteChannelMessages) -> None:
         if len(update.messages) > MAX_DELETIONS:
             return
 
-        portal = po.Portal.get_by_tgid(TelegramID(update.channel_id))
-        if not portal:
-            return
+        channel_id = TelegramID(update.channel_id)
 
-        for message in update.messages:
-            message = DBMessage.get_by_tgid(TelegramID(message), portal.tgid)
-            if not message:
-                continue
-            message.delete()
-            await self._try_redact(portal, message)
+        for message_id in update.messages:
+            messages = DBMessage.get_all_by_tgid(TelegramID(message_id), channel_id)
+            for message in messages:
+                message.delete()
+                await self._try_redact(message)
 
     async def update_message(self, original_update: UpdateMessage) -> None:
         update, sender, portal = self.get_message_details(original_update)
@@ -397,10 +394,7 @@ class AbstractUser(ABC):
 
         user = sender.tgid if sender else "admin"
         if isinstance(original_update, (UpdateEditMessage, UpdateEditChannelMessage)):
-            if config["bridge.edits_as_replies"]:
-                self.log.debug("Handling edit %s to %s by %s", update, portal.tgid_log, user)
-                return await portal.handle_telegram_edit(self, sender, update)
-            return
+            return await portal.handle_telegram_edit(self, sender, update)
 
         self.log.debug("Handling message %s to %s by %s", update, portal.tgid_log, user)
         return await portal.handle_telegram_message(self, sender, update)

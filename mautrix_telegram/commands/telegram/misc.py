@@ -191,7 +191,7 @@ async def _parse_encoded_msgid(user: AbstractUser, enc_id: str, type_name: str
         raise MessageIDError(f"Invalid {type_name} ID (format)") from e
 
     if peer_type == PEER_TYPE_CHAT:
-        orig_msg = DBMessage.get_by_tgid(msg_id, space)
+        orig_msg = DBMessage.get_one_by_tgid(msg_id, space)
         if not orig_msg:
             raise MessageIDError(f"Invalid {type_name} ID (original message not found in db)")
         new_msg = DBMessage.get_by_mxid(orig_msg.mxid, orig_msg.mx_room, user.tgid)

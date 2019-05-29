@@ -37,15 +37,8 @@ from .util import (add_surrogates, remove_surrogates, trim_reply_fallback_html,
 
 if TYPE_CHECKING:
     from ..abstract_user import AbstractUser
-    from ..context import Context
-
-try:
-    from lxml.html.diff import htmldiff
-except ImportError:
-    htmldiff = None  # type: ignore
 
 log = logging.getLogger("mau.fmt.tg")  # type: logging.Logger
-should_highlight_edits = False  # type: bool
 
 
 def telegram_reply_to_matrix(evt: Message, source: 'AbstractUser') -> Dict:
@@ -53,13 +46,16 @@ def telegram_reply_to_matrix(evt: Message, source: 'AbstractUser') -> Dict:
         space = (evt.to_id.channel_id
                  if isinstance(evt, Message) and isinstance(evt.to_id, PeerChannel)
                  else source.tgid)
-        msg = DBMessage.get_by_tgid(evt.reply_to_msg_id, space)
+        msg = DBMessage.get_one_by_tgid(evt.reply_to_msg_id, space)
         if msg:
             return {
                 "m.in_reply_to": {
                     "event_id": msg.mxid,
                     "room_id": msg.mx_room,
-                }
+                },
+                "rel_type": "m.reference",
+                "event_id": msg.mxid,
+                "room_id": msg.mx_room,
             }
     return {}
 
@@ -114,32 +110,19 @@ async def _add_forward_header(source, text: str, html: Optional[str],
     return text, html
 
 
-def highlight_edits(new_html: str, old_html: str) -> str:
-    # Don't include `Edit:` text in diff.
-    if old_html.startswith("<u>Edit:</u> "):
-        old_html = old_html[len("<u>Edit:</u> "):]
-
-    # Generate diff with lxml
-    new_html = htmldiff(old_html, new_html)
-
-    # Replace <ins> with <u> since Riot doesn't allow <ins>
-    new_html = new_html.replace("<ins>", "<u>").replace("</ins>", "</u>")
-    # Remove <del>s since we just want to hide deletions.
-    new_html = re.sub("<del>.+?</del>", "", new_html)
-    return new_html
-
-
 async def _add_reply_header(source: "AbstractUser", text: str, html: str, evt: Message,
-                            relates_to: Dict, main_intent: IntentAPI, is_edit: bool
-                            ) -> Tuple[str, str]:
+                            relates_to: Dict, main_intent: IntentAPI) -> Tuple[str, str]:
     space = (evt.to_id.channel_id
              if isinstance(evt, Message) and isinstance(evt.to_id, PeerChannel)
              else source.tgid)
 
-    msg = DBMessage.get_by_tgid(evt.reply_to_msg_id, space)
+    msg = DBMessage.get_one_by_tgid(evt.reply_to_msg_id, space)
     if not msg:
         return text, html
 
+    relates_to["rel_type"] = "m.reference"
+    relates_to["event_id"] = msg.mxid
+    relates_to["room_id"] = msg.mx_room
     relates_to["m.in_reply_to"] = {
         "event_id": msg.mxid,
         "room_id": msg.mx_room,
@@ -159,21 +142,13 @@ async def _add_reply_header(source: "AbstractUser", text: str, html: str, evt: M
         puppet = pu.Puppet.get_by_mxid(r_sender, create=False)
         r_displayname = puppet.displayname if puppet else r_sender
         r_sender_link = f"<a href='https://matrix.to/#/{r_sender}'>{r_displayname}</a>"
-
-        if is_edit and should_highlight_edits:
-            html = highlight_edits(html or escape(text), r_html_body)
     except (ValueError, KeyError, MatrixRequestError):
         r_sender_link = "unknown user"
         r_displayname = "unknown user"
         r_text_body = "Failed to fetch message"
         r_html_body = "<em>Failed to fetch message</em>"
 
-    if is_edit:
-        html = f"<u>Edit:</u> {html or escape(text)}"
-        text = f"Edit: {text}"
-
-    r_keyword = "In reply to" if not is_edit else "Edit to"
-    r_msg_link = f"<a href='https://matrix.to/#/{msg.mx_room}/{msg.mxid}'>{r_keyword}</a>"
+    r_msg_link = f"<a href='https://matrix.to/#/{msg.mx_room}/{msg.mxid}'>In reply to</a>"
     html = (
         f"<mx-reply><blockquote>{r_msg_link} {r_sender_link}\n{r_html_body}</blockquote></mx-reply>"
         + (html or escape(text)))
@@ -190,8 +165,8 @@ async def _add_reply_header(source: "AbstractUser", text: str, html: str, evt: M
 
 async def telegram_to_matrix(evt: Message, source: "AbstractUser",
                              main_intent: Optional[IntentAPI] = None,
-                             is_edit: bool = False, prefix_text: Optional[str] = None,
-                             prefix_html: Optional[str] = None, override_text: str = None,
+                             prefix_text: Optional[str] = None, prefix_html: Optional[str] = None,
+                             override_text: str = None,
                              override_entities: List[TypeMessageEntity] = None,
                              no_reply_fallback: bool = False) -> Tuple[str, str, Dict]:
     text = add_surrogates(override_text or evt.message)
@@ -208,8 +183,7 @@ async def telegram_to_matrix(evt: Message, source: "AbstractUser",
         text, html = await _add_forward_header(source, text, html, evt.fwd_from)
 
     if evt.reply_to_msg_id and not no_reply_fallback:
-        text, html = await _add_reply_header(source, text, html, evt, relates_to, main_intent,
-                                             is_edit)
+        text, html = await _add_reply_header(source, text, html, evt, relates_to, main_intent)
 
     if isinstance(evt, Message) and evt.post and evt.post_author:
         if not html:
@@ -340,14 +314,9 @@ def _parse_url(html: List[str], entity_text: str, url: str) -> bool:
 
         portal = po.Portal.find_by_username(group)
         if portal:
-            message = DBMessage.get_by_tgid(TelegramID(msgid), portal.tgid)
+            message = DBMessage.get_one_by_tgid(TelegramID(msgid), portal.tgid)
             if message:
                 url = f"https://matrix.to/#/{portal.mxid}/{message.mxid}"
 
     html.append(f"<a href='{url}'>{entity_text}</a>")
     return False
-
-
-def init_tg(context: "Context") -> None:
-    global should_highlight_edits
-    should_highlight_edits = htmldiff and context.config["bridge.highlight_edits"]

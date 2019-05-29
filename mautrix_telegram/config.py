@@ -199,8 +199,6 @@ class Config(DictWithRecursion):
         copy("bridge.sync_matrix_state")
         copy("bridge.allow_matrix_login")
         copy("bridge.plaintext_highlights")
-        copy("bridge.edits_as_replies")
-        copy("bridge.highlight_edits")
         copy("bridge.public_portals")
         copy("bridge.catch_up")
         copy("bridge.sync_with_custom_puppets")

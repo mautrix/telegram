@@ -87,25 +87,28 @@ def matrix_to_telegram(html: str) -> ParsedMessage:
 
 def matrix_reply_to_telegram(content: Dict[str, Any], tg_space: TelegramID,
                              room_id: Optional[MatrixRoomID] = None) -> Optional[TelegramID]:
+    relates_to = content.get("m.relates_to", None) or {}
+    if not relates_to:
+        return None
+    reply = (relates_to if relates_to.get("rel_type", None) == "m.reference"
+             else relates_to.get("m.in_reply_to", None) or {})
+    if not reply:
+        return None
+    room_id = room_id or reply.get("room_id", None)
+    event_id = reply.get("event_id", None)
+    if not event_id:
+        return
+
     try:
-        reply = (content.get("m.relates_to", None) or {}).get("m.in_reply_to", {})
-        if not reply:
-            return None
-        room_id = room_id or reply["room_id"]
-        event_id = reply["event_id"]
-
-        try:
-            if content["format"] == "org.matrix.custom.html":
-                content["formatted_body"] = trim_reply_fallback_html(content["formatted_body"])
-        except KeyError:
-            pass
-        content["body"] = trim_reply_fallback_text(content["body"])
-
-        message = DBMessage.get_by_mxid(event_id, room_id, tg_space)
-        if message:
-            return message.tgid
+        if content["format"] == "org.matrix.custom.html":
+            content["formatted_body"] = trim_reply_fallback_html(content["formatted_body"])
     except KeyError:
         pass
+    content["body"] = trim_reply_fallback_text(content["body"])
+
+    message = DBMessage.get_by_mxid(event_id, room_id, tg_space)
+    if message:
+        return message.tgid
     return None
 
 

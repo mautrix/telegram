@@ -3,6 +3,7 @@
 * Matrix → Telegram
   * [x] Message content (text, formatting, files, etc..)
   * [x] Message redactions
+  * [x] Message edits
   * [ ] ‡ Message history
   * [x] Presence
   * [x] Typing notifications

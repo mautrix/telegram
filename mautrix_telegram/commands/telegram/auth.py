@@ -33,8 +33,8 @@ from ...util import format_duration, ignore_coro
                  help_text="Check if you're logged into Telegram.")
 async def ping(evt: CommandEvent) -> Optional[Dict]:
     me = await evt.sender.client.get_me() if await evt.sender.is_logged_in() else None
-    human_tg_id = f"@{me.username}" if me.username else f"+{me.phone}"
     if me:
+        human_tg_id = f"@{me.username}" if me.username else f"+{me.phone}"
         return await evt.reply(f"You're logged in as {human_tg_id}")
     else:
         return await evt.reply("You're not logged in.")

@@ -77,7 +77,6 @@ def config_view(evt: CommandEvent, portal: po.Portal) -> Awaitable[Dict]:
 def config_defaults(evt: CommandEvent) -> Awaitable[Dict]:
     stream = StringIO()
     yaml.dump({
-        "edits_as_replies": evt.config["bridge.edits_as_replies"],
         "bridge_notices": {
             "default": evt.config["bridge.bridge_notices.default"],
             "exceptions": evt.config["bridge.bridge_notices.exceptions"],

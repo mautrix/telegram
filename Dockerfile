@@ -10,7 +10,6 @@ RUN apk add --no-cache \
       py3-virtualenv \
       py3-pillow \
       py3-aiohttp \
-      py3-lxml \
       py3-magic \
       py3-sqlalchemy \
       py3-markdown \
