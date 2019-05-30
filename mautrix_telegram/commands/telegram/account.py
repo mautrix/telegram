@@ -17,10 +17,10 @@
 from typing import Dict, Optional
 
 from telethon.errors import (UsernameInvalidError, UsernameNotModifiedError, UsernameOccupiedError,
-                             HashInvalidError, AuthKeyError)
+                             HashInvalidError, AuthKeyError, FirstNameInvalidError)
 from telethon.tl.types import Authorization
 from telethon.tl.functions.account import (UpdateUsernameRequest, GetAuthorizationsRequest,
-                                           ResetAuthorizationRequest)
+                                           ResetAuthorizationRequest, UpdateProfileRequest)
 
 from .. import command_handler, CommandEvent, SECTION_AUTH
 
@@ -51,6 +51,25 @@ async def username(evt: CommandEvent) -> Optional[Dict]:
         await evt.reply("Username removed")
     else:
         await evt.reply(f"Username changed to {evt.sender.username}")
+
+
+@command_handler(needs_auth=True, help_section=SECTION_AUTH, help_args="<_new displayname_>",
+                 help_text="Change your Telegram displayname.")
+async def displayname(evt: CommandEvent) -> Optional[Dict]:
+    if len(evt.args) == 0:
+        return await evt.reply("**Usage:** `$cmdprefix+sp displayname <new displayname>`")
+    if evt.sender.is_bot:
+        return await evt.reply("Bots can't set their own displayname.")
+
+    first_name, last_name = ((evt.args[0], "")
+                             if len(evt.args) == 1
+                             else (" ".join(evt.args[:-1]), evt.args[-1]))
+    try:
+        await evt.sender.client(UpdateProfileRequest(first_name=first_name, last_name=last_name))
+    except FirstNameInvalidError:
+        return await evt.reply("Invalid first name")
+    await evt.sender.update_info()
+    await evt.reply("Displayname updated")
 
 
 def _format_session(sess: Authorization) -> str:
