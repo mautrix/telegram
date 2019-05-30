@@ -917,12 +917,13 @@ class Portal:
         if msgtype == "m.emote":
             await self._apply_msg_format(sender, msgtype, message)
             if "m.new_content" in message:
-                await self._apply_msg_format(sender, msgtype, message.get("m.new_content"))
+                await self._apply_msg_format(sender, msgtype, message["m.new_content"])
+                message["m.new_content"]["msgtype"] = "m.text"
             message["msgtype"] = "m.text"
         elif use_relaybot:
             await self._apply_msg_format(sender, msgtype, message)
             if "m.new_content" in message:
-                await self._apply_msg_format(sender, msgtype, message.get("m.new_content"))
+                await self._apply_msg_format(sender, msgtype, message["m.new_content"])
 
     @staticmethod
     def _matrix_event_to_entities(event: Dict[str, Any]
@@ -1048,7 +1049,7 @@ class Portal:
     def _add_telegram_message_to_db(self, event_id: MatrixEventID, space: TelegramID,
                                     edit_index: int, response: TypeMessage) -> None:
         self.log.debug("Handled Matrix message: %s", response)
-        self.is_duplicate(response, (event_id, space))
+        self.is_duplicate(response, (event_id, space), force_hash=edit_index != 0)
         if edit_index < 0:
             prev_edit = DBMessage.get_one_by_tgid(TelegramID(response.id), space, -1)
             edit_index = prev_edit.edit_index + 1
@@ -1654,10 +1655,17 @@ class Portal:
         text, html, _ = await formatter.telegram_to_matrix(evt, source, self.main_intent,
                                                            no_reply_fallback=True)
         editing_msg = DBMessage.get_one_by_tgid(TelegramID(evt.id), tg_space)
+        if not editing_msg:
+            self.log.info(f"Didn't find edited message {evt.id}@{tg_space} (src {source.tgid}) "
+                          "in database.")
+            return
 
+        msgtype = ("m.notice"
+                   if sender and sender.is_bot and self.get_config("bot_messages_as_notices")
+                   else "m.text")
         content = {
             "body": f"Edit: {text}",
-            "msgtype": "m.text",
+            "msgtype": msgtype,
             "format": "org.matrix.custom.html",
             "formatted_body": (f"<a href='https://matrix.to/#/{editing_msg.mx_room}/"
                                f"{editing_msg.mxid}'>Edit</a>: "
@@ -1680,12 +1688,7 @@ class Portal:
         response = await intent.send_message(self.mxid, content)
         mxid = response["event_id"]
 
-        prev_edit_msg = DBMessage.get_one_by_tgid(TelegramID(evt.id), tg_space, -1)
-        if not prev_edit_msg:
-            self.log.info(f"Didn't find edited message {evt.id}@{tg_space} (src {source.tgid}) "
-                          "in database.")
-            # Oh crap
-            return
+        prev_edit_msg = DBMessage.get_one_by_tgid(TelegramID(evt.id), tg_space, -1) or editing_msg
         DBMessage(mxid=mxid, mx_room=self.mxid, tg_space=tg_space, tgid=evt.id,
                   edit_index=prev_edit_msg.edit_index + 1).insert()
         DBMessage.update_by_mxid(temporary_identifier, self.mxid, mxid=mxid)
