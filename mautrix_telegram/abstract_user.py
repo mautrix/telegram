@@ -19,6 +19,7 @@ from abc import ABC, abstractmethod
 import asyncio
 import logging
 import platform
+import time
 
 from telethon.tl.patched import MessageService, Message
 from telethon.tl.types import (
@@ -50,6 +51,14 @@ UpdateMessage = Union[UpdateShortChatMessage, UpdateShortMessage, UpdateNewChann
                       UpdateNewMessage, UpdateEditMessage, UpdateEditChannelMessage]
 UpdateMessageContent = Union[UpdateShortMessage, UpdateShortChatMessage, Message, MessageService]
 
+try:
+    from prometheus_client import Histogram
+
+    UPDATE_TIME = Histogram("telegram_update", "Time spent processing Telegram updates",
+                            ["update_type"])
+except ImportError:
+    Histogram = None
+    UPDATE_TIME = None
 
 class AbstractUser(ABC):
     session_container = None  # type: AlchemySessionContainer
@@ -151,11 +160,14 @@ class AbstractUser(ABC):
         raise NotImplementedError()
 
     async def _update_catch(self, update: TypeUpdate) -> None:
+        start_time = time.time()
         try:
             if not await self.update(update):
                 await self._update(update)
         except Exception:
             self.log.exception("Failed to handle Telegram update")
+        if UPDATE_TIME:
+            UPDATE_TIME.labels(update_type=type(update).__name__).observe(time.time() - start_time)
 
     async def get_dialogs(self, limit: int = None) -> List[Union[Chat, Channel]]:
         if self.is_bot:
@@ -279,7 +291,8 @@ class AbstractUser(ABC):
         sender = pu.Puppet.get(TelegramID(update.user_id))
         await portal.handle_telegram_typing(sender, update)
 
-    async def _handle_entity_updates(self, entities: Dict[int, Union[User, Chat, Channel]]) -> None:
+    async def _handle_entity_updates(self, entities: Dict[int, Union[User, Chat, Channel]]
+                                     ) -> None:
         try:
             users = (entity for entity in entities.values() if isinstance(entity, User))
             puppets = ((pu.Puppet.get(TelegramID(user.id)), user) for user in users)

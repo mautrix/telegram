@@ -17,6 +17,7 @@
 from typing import Dict, List, Match, Optional, Set, Tuple, TYPE_CHECKING
 import logging
 import asyncio
+import time
 import re
 
 from mautrix_appservice import MatrixRequestError, IntentError
@@ -27,6 +28,14 @@ from . import user as u, portal as po, puppet as pu, commands as com
 if TYPE_CHECKING:
     from .context import Context
 
+try:
+    from prometheus_client import Histogram
+
+    EVENT_TIME = Histogram("matrix_event", "Time spent processing Matrix events",
+                           ["event_type"])
+except ImportError:
+    Histogram = None
+    EVENT_TIME = None
 
 class MatrixHandler:
     log = logging.getLogger("mau.mx")  # type: logging.Logger
@@ -379,6 +388,7 @@ class MatrixHandler:
     async def handle_event(self, evt: MatrixEvent) -> None:
         if self.filter_matrix_event(evt):
             return
+        start_time = time.time()
         self.log.debug("Received event: %s", evt)
         evt_type = evt.get("type", "m.unknown")  # type: str
         room_id = evt.get("room_id", None)  # type: Optional[MatrixRoomID]
@@ -430,3 +440,7 @@ class MatrixHandler:
             await self.handle_presence(sender, content.get("presence", "offline"))
         elif evt_type == "m.typing":
             await self.handle_typing(room_id, content.get("user_ids", []))
+        else:
+            return
+        if EVENT_TIME:
+            EVENT_TIME.labels(event_type=evt_type).observe(time.time() - start_time)

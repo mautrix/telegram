@@ -43,6 +43,11 @@ from .sqlstatestore import SQLStateStore
 from .user import User, init as init_user
 from . import __version__
 
+try:
+    import prometheus_client as prometheus
+except ImportError:
+    prometheus = None
+
 parser = argparse.ArgumentParser(
     description="A Matrix-Telegram puppeting bridge.",
     prog="python -m mautrix-telegram")
@@ -113,6 +118,12 @@ if config["appservice.provisioning.enabled"]:
     context.provisioning_api = provisioning_api
 
 context.mx = MatrixHandler(context)
+
+if config["metrics.enabled"]:
+    if prometheus:
+        prometheus.start_http_server(config["metrics.listen_port"])
+    else:
+        log.warn("Metrics are enabled in the config, but prometheus-async is not installed.")
 
 with appserv.run(config["appservice.hostname"], config["appservice.port"]) as start:
     start_ts = time()

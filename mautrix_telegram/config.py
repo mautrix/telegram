@@ -184,6 +184,9 @@ class Config(DictWithRecursion):
         copy("appservice.as_token")
         copy("appservice.hs_token")
 
+        copy("metrics.enabled")
+        copy("metrics.listen_port")
+
         copy("bridge.username_template")
         copy("bridge.alias_template")
         copy("bridge.displayname_template")
