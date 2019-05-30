@@ -106,9 +106,7 @@ async def session(evt: CommandEvent) -> Optional[Dict]:
         try:
             session_hash = int(evt.args[1])
         except ValueError:
-            return await evt.reply("Hash must be a positive integer")
-        if session_hash <= 0:
-            return await evt.reply("Hash must be a positive integer")
+            return await evt.reply("Hash must be an integer")
         try:
             ok = await evt.sender.client(ResetAuthorizationRequest(hash=session_hash))
         except HashInvalidError:
