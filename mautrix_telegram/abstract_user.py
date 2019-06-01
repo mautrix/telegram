@@ -52,16 +52,13 @@ UpdateMessage = Union[UpdateShortChatMessage, UpdateShortMessage, UpdateNewChann
 UpdateMessageContent = Union[UpdateShortMessage, UpdateShortChatMessage, Message, MessageService]
 
 try:
-    from prometheus_client import Histogram, Counter
+    from prometheus_client import Histogram
 
-    UPDATE_COUNT = Counter("telegram_update_count", "Number of Telegram updates processed",
-                           ["update_type"])
     UPDATE_TIME = Histogram("telegram_update", "Time spent processing Telegram updates",
                             ["update_type"])
 except ImportError:
     Histogram = None
     UPDATE_TIME = None
-    UPDATE_COUNT = None
 
 class AbstractUser(ABC):
     session_container = None  # type: AlchemySessionContainer
@@ -169,10 +166,8 @@ class AbstractUser(ABC):
                 await self._update(update)
         except Exception:
             self.log.exception("Failed to handle Telegram update")
-        if UPDATE_TIME and UPDATE_COUNT:
-            update_type = type(update).__name__
-            UPDATE_TIME.labels(update_type=update_type).observe(time.time() - start_time)
-            UPDATE_COUNT.labels(update_type=update_type).inc()
+        if UPDATE_TIME:
+            UPDATE_TIME.labels(update_type=type(update).__name__).observe(time.time() - start_time)
 
     async def get_dialogs(self, limit: int = None) -> List[Union[Chat, Channel]]:
         if self.is_bot:

@@ -29,16 +29,13 @@ if TYPE_CHECKING:
     from .context import Context
 
 try:
-    from prometheus_client import Histogram, Counter
+    from prometheus_client import Histogram
 
-    EVENT_COUNT = Counter("matrix_event_count", "Number of Matrix events processed",
-                          ["event_type"])
     EVENT_TIME = Histogram("matrix_event", "Time spent processing Matrix events",
                            ["event_type"])
 except ImportError:
     Histogram = None
     EVENT_TIME = None
-    EVENT_COUNT = None
 
 
 class MatrixHandler:
@@ -446,6 +443,5 @@ class MatrixHandler:
             await self.handle_typing(room_id, content.get("user_ids", []))
         else:
             return
-        if EVENT_TIME and EVENT_COUNT:
+        if EVENT_TIME:
             EVENT_TIME.labels(event_type=evt_type).observe(time.time() - start_time)
-            EVENT_COUNT.labels(event_type=evt_type).inc()
