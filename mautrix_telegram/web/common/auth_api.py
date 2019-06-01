@@ -79,7 +79,8 @@ class AuthAPI(abc.ABC):
         try:
             await user.client.sign_in(phone.strip())
             return self.get_login_response(mxid=user.mxid, state="code", status=200,
-                                           message="Code requested successfully.")
+                                           message="Code requested successfully. Check your SMS "
+                                                   "or Telegram client and enter the code below.")
         except PhoneNumberInvalidError:
             return self.get_login_response(mxid=user.mxid, state="request", status=400,
                                            errcode="phone_number_invalid",

@@ -136,11 +136,30 @@ class MatrixHandler:
 
         if not inviter.whitelisted:
             await self.az.intent.send_notice(
-                room_id, text="",
-                html="You are not whitelisted to use this bridge.<br/><br/>"
+                room_id,
+                text="You are not whitelisted to use this bridge.\n\n"
                      "If you are the owner of this bridge, see the "
-                     "<code>bridge.permissions</code> section in your config file.")
+                     "`bridge.permissions` section in your config file.",
+                html="<p>You are not whitelisted to use this bridge.</p>"
+                     "<p>If you are the owner of this bridge, see the "
+                     "<code>bridge.permissions</code> section in your config file.</p>")
             await self.az.intent.leave_room(room_id)
+
+        try:
+            is_management = len(await self.az.intent.get_room_members(room_id)) == 2
+        except MatrixRequestError:
+            is_management = False
+        cmd_prefix = self.commands.command_prefix
+        text = html = "Hello, I'm a Telegram bridge bot. "
+        if is_management and inviter.puppet_whitelisted and not await inviter.is_logged_in():
+            text += f"Use `{cmd_prefix} help` for help or `{cmd_prefix} login` to log in."
+            html += (f"Use <code>{cmd_prefix} help</code> for help"
+                     f" or <code>{cmd_prefix} login</code> to log in.")
+            pass
+        else:
+            text += f"Use `{cmd_prefix} help` for help."
+            html += f"Use <code>{cmd_prefix} help</code> for help."
+        await self.az.intent.send_notice(room_id, text=text, html=html)
 
     async def handle_invite(self, room_id: MatrixRoomID, user_id: MatrixUserID,
                             inviter_mxid: MatrixUserID) -> None:

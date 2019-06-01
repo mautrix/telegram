@@ -95,8 +95,8 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 				% if state == "request":
 					<label for="value">Phone number</label>
 					<input type="tel" id="value" name="phone" placeholder="Enter phone number"/>
-					<button type="submit">Request code</button>
-					<button class="button-clear" type="button" onclick="switchToBotLogin()">
+					<button type="submit">Start</button>
+					<button class="button-clear float-right" type="button" onclick="switchToBotLogin()">
 						Use bot token
 					</button>
 				% elif state == "bot_token":

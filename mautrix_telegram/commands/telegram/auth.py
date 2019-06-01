@@ -126,41 +126,20 @@ async def login(evt: CommandEvent) -> Optional[Dict]:
     if evt.config["appservice.public.enabled"]:
         prefix = evt.config["appservice.public.external"]
         url = f"{prefix}/login?token={evt.public_website.make_token(evt.sender.mxid, '/login')}"
-        if allow_matrix_login:
-            if override_sender:
-                return await evt.reply(
-                    "This bridge instance allows you to log in inside or outside of Matrix, but "
-                    "logging in as another user is only possible via the web interface.\n\n"
-                    f"Please visit [the login page]({url}) to log in as "
-                    f"[{evt.sender.mxid}](https://matrix.to/#/{evt.sender.mxid}).\n\n")
-            return await evt.reply(
-                "This bridge instance allows you to log in inside or outside Matrix.\n\n"
-                "If you would like to log in within Matrix, please send your phone number or bot "
-                "auth token here.\n"
-                "If you would like to log in outside of Matrix, please visit [the login page]"
-                f"({url}).\n\n"
-                "Logging in outside of Matrix is recommended if you have two-factor authentication "
-                "enabled, because in-Matrix login would save your password in the message history."
-                f"\n\n{nb}")
         if override_sender:
-            return await evt.reply(
-                "This bridge instance does not allow logging in inside Matrix, and logging in as "
-                "another user inside Matrix isn't possible anyway.\n\n"
-                f"Please visit [the login page]({url}) to log in as "
-                f"[{evt.sender.mxid}](https://matrix.to/#/{evt.sender.mxid}).")
-        return await evt.reply(
-            "This bridge instance does not allow logging in inside Matrix.\n\n"
-            f"Please visit [the login page]({url}) to log in.\n\n"
-            f"{nb}")
+            return await evt.reply(f"[Click here to log in]({url}) as "
+                                   f"[{evt.sender.mxid}](https://matrix.to/#/{evt.sender.mxid}).")
+        elif allow_matrix_login:
+            return await evt.reply(f"[Click here to log in]({url}). Alternatively, send your phone"
+                                   f" number (or bot auth token) here to log in.\n\n{nb}")
+        return await evt.reply(f"[Click here to log in]({url}).\n\n{nb}")
     elif allow_matrix_login:
         if override_sender:
             return await evt.reply(
                 "This bridge instance does not allow you to log in outside of Matrix. "
                 "Logging in as another user inside Matrix is not currently possible.")
-        return await evt.reply(
-            "This bridge instance does not allow you to log in outside of Matrix.\n\n"
-            "Please send your phone number or bot auth token here to start the login process.\n\n"
-            f"{nb}")
+        return await evt.reply("Please send your phone number (or bot auth token) here to start "
+                               f"the login process.\n\n{nb}")
     return await evt.reply("This bridge instance has been configured to not allow logging in.")
 
 
