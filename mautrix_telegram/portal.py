@@ -43,7 +43,8 @@ from telethon.tl.functions.channels import (
     UpdateUsernameRequest)
 from telethon.tl.functions.messages import ReadHistoryRequest as ReadMessageHistoryRequest
 from telethon.tl.functions.channels import ReadHistoryRequest as ReadChannelHistoryRequest
-from telethon.errors import ChatAdminRequiredError, ChatNotModifiedError
+from telethon.errors import (ChatAdminRequiredError, ChatNotModifiedError, PhotoExtInvalidError,
+                             PhotoInvalidDimensionsError, PhotoSaveFileInvalidError)
 from telethon.tl.patched import Message, MessageService
 from telethon.tl.types import (
     Channel, ChatAdminRights, ChatBannedRights, ChannelFull, ChannelParticipantAdmin,
@@ -61,7 +62,8 @@ from telethon.tl.types import (
     SendMessageTypingAction, TypeChannelParticipant, TypeChat, TypeChatParticipant,
     TypeDocumentAttribute, TypeInputPeer, TypeMessageAction, TypeMessageEntity, TypePeer,
     TypePhotoSize, TypeUpdates, TypeUser, PhotoSize, TypeUserFull, UpdateChatUserTyping,
-    UpdateNewChannelMessage, UpdateNewMessage, UpdateUserTyping, User, UserFull, MessageEntityPre)
+    UpdateNewChannelMessage, UpdateNewMessage, UpdateUserTyping, User, UserFull, MessageEntityPre,
+    InputMediaUploadedDocument)
 from mautrix_appservice import MatrixRequestError, IntentError, AppService, IntentAPI
 
 from .types import MatrixEventID, MatrixRoomID, MatrixUserID, TelegramID
@@ -1016,8 +1018,14 @@ class Portal:
                                                          caption, file=media)
                     self._add_telegram_message_to_db(event_id, space, -1, response)
                     return
-            response = await client.send_media(self.peer, media, reply_to=reply_to,
-                                               caption=caption)
+            try:
+                response = await client.send_media(self.peer, media, reply_to=reply_to,
+                                                   caption=caption)
+            except (PhotoInvalidDimensionsError, PhotoSaveFileInvalidError, PhotoExtInvalidError):
+                media = InputMediaUploadedDocument(file=media.file, mime_type=mime,
+                                                   attributes=attributes)
+                response = await client.send_media(self.peer, media, reply_to=reply_to,
+                                                   caption=caption)
             self._add_telegram_message_to_db(event_id, space, 0, response)
 
     async def _handle_matrix_location(self, sender_id: TelegramID, event_id: MatrixEventID,
