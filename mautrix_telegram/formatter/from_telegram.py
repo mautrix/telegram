@@ -69,27 +69,30 @@ async def _add_forward_header(source, text: str, html: Optional[str],
         user = u.User.get_by_tgid(TelegramID(fwd_from.from_id))
         if user:
             fwd_from_text = user.displayname or user.mxid
-            fwd_from_html = f"<a href='https://matrix.to/#/{user.mxid}'>{fwd_from_text}</a>"
+            fwd_from_html = (f"<a href='https://matrix.to/#/{user.mxid}'>"
+                             f"{escape(fwd_from_text)}</a>")
 
         if not fwd_from_text:
             puppet = pu.Puppet.get(TelegramID(fwd_from.from_id), create=False)
             if puppet and puppet.displayname:
                 fwd_from_text = puppet.displayname or puppet.mxid
-                fwd_from_html = f"<a href='https://matrix.to/#/{puppet.mxid}'>{fwd_from_text}</a>"
+                fwd_from_html = (f"<a href='https://matrix.to/#/{puppet.mxid}'>"
+                                 f"{escape(fwd_from_text)}</a>")
 
         if not fwd_from_text:
             user = await source.client.get_entity(PeerUser(fwd_from.from_id))
             if user:
                 fwd_from_text = pu.Puppet.get_displayname(user, False)
-                fwd_from_html = f"<b>{fwd_from_text}</b>"
+                fwd_from_html = f"<b>{escape(fwd_from_text)}</b>"
     else:
         portal = po.Portal.get_by_tgid(TelegramID(fwd_from.channel_id))
         if portal:
             fwd_from_text = portal.title
             if portal.alias:
-                fwd_from_html = f"<a href='https://matrix.to/#/{portal.alias}'>{fwd_from_text}</a>"
+                fwd_from_html = (f"<a href='https://matrix.to/#/{portal.alias}'>"
+                                 f"{escape(fwd_from_text)}</a>")
             else:
-                fwd_from_html = f"<b>{fwd_from_text}</b>"
+                fwd_from_html = f"<b>{escape(fwd_from_text)}</b>"
         else:
             channel = await source.client.get_entity(PeerChannel(fwd_from.channel_id))
             if channel:
@@ -141,7 +144,7 @@ async def _add_reply_header(source: "AbstractUser", text: str, html: str, evt: M
 
         puppet = pu.Puppet.get_by_mxid(r_sender, create=False)
         r_displayname = puppet.displayname if puppet else r_sender
-        r_sender_link = f"<a href='https://matrix.to/#/{r_sender}'>{r_displayname}</a>"
+        r_sender_link = f"<a href='https://matrix.to/#/{r_sender}'>{escape(r_displayname)}</a>"
     except (ValueError, KeyError, MatrixRequestError):
         r_sender_link = "unknown user"
         r_displayname = "unknown user"
