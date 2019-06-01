@@ -87,7 +87,8 @@ class PublicBridgeWebsite(AuthAPI):
         return self.get_login_response(mxid=user.mxid, human_tg_id=user.human_tg_id)
 
     async def get_matrix_login(self, request: web.Request) -> web.Response:
-        mxid = self.verify_token(request.rel_url.query.get("token", None), endpoint="/matrix-login")
+        mxid = self.verify_token(request.rel_url.query.get("token", None),
+                                 endpoint="/matrix-login")
         if not mxid:
             return self.get_mx_login_response(status=401, state="invalid-token")
         user = User.get_by_mxid(mxid, create=False) if mxid else None
@@ -124,7 +125,8 @@ class PublicBridgeWebsite(AuthAPI):
                                                       error=error, message=message, mxid=mxid))
 
     async def post_matrix_login(self, request: web.Request) -> web.Response:
-        mxid = self.verify_token(request.rel_url.query.get("token", None), endpoint="/matrix-login")
+        mxid = self.verify_token(request.rel_url.query.get("token", None),
+                                 endpoint="/matrix-login")
         if not mxid:
             return self.get_mx_login_response(status=401, state="invalid-token")
 
@@ -167,7 +169,13 @@ class PublicBridgeWebsite(AuthAPI):
         elif "bot_token" in data:
             return await self.post_login_token(user, data["bot_token"])
         elif "code" in data:
-            resp = await self.post_login_code(user, data["code"],
+            try:
+                code = int(data["code"].strip())
+            except ValueError:
+                return self.get_login_response(mxid=user.mxid, state="code", status=400,
+                                               errcode="phone_code_invalid",
+                                               error="Phone code must be a number.")
+            resp = await self.post_login_code(user, code,
                                               password_in_data="password" in data)
             if resp or "password" not in data:
                 return resp

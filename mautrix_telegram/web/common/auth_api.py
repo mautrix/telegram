@@ -56,7 +56,7 @@ class AuthAPI(abc.ABC):
                                               error="You have already logged in with your Matrix "
                                                     "account.", errcode="already-logged-in")
 
-        resp = await puppet.switch_mxid(token, user.mxid)
+        resp = await puppet.switch_mxid(token.strip(), user.mxid)
         if resp == PuppetError.OnlyLoginSelf:
             return self.get_mx_login_response(status=403, errcode="only-login-self",
                                               error="You can only log in as your own Matrix user.")
@@ -72,8 +72,12 @@ class AuthAPI(abc.ABC):
                                           errcode="not-yet-implemented")
 
     async def post_login_phone(self, user: User, phone: str) -> web.Response:
+        if not phone or not phone.strip():
+            return self.get_login_response(mxid=user.mxid, state="request", status=400,
+                                           errcode="phone_number_invalid",
+                                           error="Phone number not given.")
         try:
-            await user.client.sign_in(phone or "+123")
+            await user.client.sign_in(phone.strip())
             return self.get_login_response(mxid=user.mxid, state="code", status=200,
                                            message="Code requested successfully.")
         except PhoneNumberInvalidError:
@@ -117,10 +121,9 @@ class AuthAPI(abc.ABC):
         if user.command_status and user.command_status["action"] == "Login":
             user.command_status = None
 
-
     async def post_login_token(self, user: User, token: str) -> web.Response:
         try:
-            user_info = await user.client.sign_in(bot_token=token)
+            user_info = await user.client.sign_in(bot_token=token.strip())
             await self.postprocess_login(user, user_info)
             return self.get_login_response(mxid=user.mxid, state="logged-in", status=200,
                                            username=user_info.username, phone=None,
@@ -174,7 +177,7 @@ class AuthAPI(abc.ABC):
 
     async def post_login_password(self, user: User, password: str) -> web.Response:
         try:
-            user_info = await user.client.sign_in(password=password)
+            user_info = await user.client.sign_in(password=password.strip())
             await self.postprocess_login(user, user_info)
             human_tg_id = f"@{user_info.username}" if user_info.username else f"+{user_info.phone}"
             return self.get_login_response(mxid=user.mxid, state="logged-in", status=200,
