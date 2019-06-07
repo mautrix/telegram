@@ -22,6 +22,7 @@ import logging.config
 import sys
 import copy
 import signal
+import os
 
 import sqlalchemy as sql
 
@@ -62,7 +63,7 @@ parser.add_argument("-r", "--registration", type=str, default="registration.yaml
                     metavar="<path>", help="the path to save the generated registration to")
 args = parser.parse_args()
 
-config = Config(args.config, args.registration, args.base_config)
+config = Config(args.config, args.registration, args.base_config, os.environ)
 config.load()
 config.update()
 
