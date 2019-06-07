@@ -104,17 +104,19 @@ class DictWithRecursion:
 
 class Config(DictWithRecursion):
     def __init__(self, path: str, registration_path: str, base_path: str,
-                 overrides: Dict[str, Any] = {}) -> None:
+                 overrides: Dict[str, Any] = None) -> None:
         super().__init__()
         self.path = path  # type: str
         self.registration_path = registration_path  # type: str
         self.base_path = base_path  # type: str
         self._registration = None  # type: Optional[Dict]
-        self._overrides = overrides  # type: Dict[str, Any]
+        self._overrides = overrides or {}  # type: Dict[str, Any]
 
-    def __getitem__(self, key: str, prefix: str = 'MAUTRIX_TELEGRAM_') -> Any:
-        env_key = prefix + key.replace('.', '_').upper()
-        return self._overrides[env_key] or super(Config, self).__getitem__(key)
+    def __getitem__(self, key: str) -> Any:
+        try:
+            return self._overrides[f"MAUTRIX_TELEGRAM_{key.replace('.', '_').upper()}"]
+        except KeyError:
+            return super().__getitem__(key)
 
     def load(self) -> None:
         with open(self.path, 'r') as stream:
