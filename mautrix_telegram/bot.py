@@ -14,7 +14,7 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import Awaitable, Callable, Dict, List, Optional, Pattern, TYPE_CHECKING
+from typing import Awaitable, Callable, Dict, List, Optional, Pattern, Tuple, TYPE_CHECKING
 import logging
 import re
 
@@ -23,7 +23,7 @@ from telethon.tl.types import (
     ChannelParticipantAdmin, ChannelParticipantCreator, ChatForbidden, ChatParticipantAdmin,
     ChatParticipantCreator, InputChannel, InputUser, MessageActionChatAddUser,
     MessageActionChatDeleteUser, MessageEntityBotCommand, PeerChannel, PeerChat, TypePeer,
-    UpdateNewChannelMessage, UpdateNewMessage, MessageActionChatMigrateTo)
+    UpdateNewChannelMessage, UpdateNewMessage, MessageActionChatMigrateTo, User)
 from telethon.tl.functions.messages import GetChatsRequest, GetFullChatRequest
 from telethon.tl.functions.channels import GetChannelsRequest, GetParticipantRequest
 from telethon.errors import ChannelInvalidError, ChannelPrivateError
@@ -60,6 +60,14 @@ class Bot(AbstractUser):
         self.tg_whitelist = []  # type: List[int]
         self.whitelist_group_admins = (config["bridge.relaybot.whitelist_group_admins"]
                                        or False)  # type: bool
+        self._me_info = None  # type: Optional[User]
+        self._me_mxid = None  # type: Optional[MatrixUserID]
+
+    async def get_me(self, use_cache: bool = True) -> Tuple[User, MatrixUserID]:
+        if not use_cache or not self._me_mxid:
+            self._me_info = await self.client.get_me()
+            self._me_mxid = pu.Puppet.get_mxid_from_id(TelegramID(self._me_info.id))
+        return self._me_info, self._me_mxid
 
     async def init_permissions(self) -> None:
         whitelist = config["bridge.relaybot.whitelist"] or []

@@ -46,11 +46,9 @@ async def ping(evt: CommandEvent) -> Optional[Dict]:
 async def ping_bot(evt: CommandEvent) -> Optional[Dict]:
     if not evt.tgbot:
         return await evt.reply("Telegram message relay bot not configured.")
-    bot_info = await evt.tgbot.client.get_me()
-    mxid = pu.Puppet.get_mxid_from_id(bot_info.id)
-    displayname = bot_info.first_name
+    info, mxid = await evt.tgbot.get_me(use_cache=False)
     return await evt.reply("Telegram message relay bot is active: "
-                           f"[{displayname}](https://matrix.to/#/{mxid}) (ID {bot_info.id})\n\n"
+                           f"[{info.first_name}](https://matrix.to/#/{mxid}) (ID {info.id})\n\n"
                            "To use the bot, simply invite it to a portal room.")
 
 

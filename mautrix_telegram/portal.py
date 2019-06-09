@@ -1304,8 +1304,13 @@ class Portal:
 
         invites = await self._get_telegram_users_in_matrix_room()
         if len(invites) < 2:
+            if self.bot is not None:
+                info, mxid = await self.bot.get_me()
+                raise ValueError("Not enough Telegram users to create a chat. "
+                                 "Invite more Telegram ghost users to the room, such as the "
+                                 f"relaybot ([{info.first_name}](https://matrix.to/#/{mxid})).")
             raise ValueError("Not enough Telegram users to create a chat. "
-                             "Invite more Telegram ghost users to the room, such as the relaybot.")
+                             "Invite more Telegram ghost users to the room.")
         if self.peer_type == "chat":
             response = await source.client(CreateChatRequest(title=self.title, users=invites))
             entity = response.chats[0]
