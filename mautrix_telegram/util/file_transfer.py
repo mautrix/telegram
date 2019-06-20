@@ -23,8 +23,9 @@ import asyncio
 import magic
 from sqlalchemy.exc import IntegrityError, InvalidRequestError
 
-from telethon.tl.types import (Document, FileLocation, InputFileLocation, InputDocumentFileLocation,
-                               TypePhotoSize, PhotoSize, PhotoCachedSize)
+from telethon.tl.types import (Document, InputFileLocation, InputDocumentFileLocation,
+                               TypePhotoSize, PhotoSize, PhotoCachedSize, InputPhotoFileLocation,
+                               InputPeerPhotoFileLocation)
 from telethon.errors import (AuthBytesInvalidError, AuthKeyInvalidError, LocationInvalidError,
                              SecurityError)
 from mautrix_appservice import IntentAPI
@@ -47,7 +48,8 @@ except ImportError:
 
 log = logging.getLogger("mau.util")  # type: logging.Logger
 
-TypeLocation = Union[Document, InputDocumentFileLocation, FileLocation, InputFileLocation]
+TypeLocation = Union[Document, InputDocumentFileLocation, InputPeerPhotoFileLocation,
+                     InputFileLocation, InputPhotoFileLocation]
 
 
 def convert_image(file: bytes, source_mime: str = "image/webp", target_type: str = "png",
@@ -99,9 +101,9 @@ def _read_video_thumbnail(data: bytes, video_ext: str = "mp4", frame_ext: str = 
 
 
 def _location_to_id(location: TypeLocation) -> str:
-    if isinstance(location, (Document, InputDocumentFileLocation)):
+    if isinstance(location, (Document, InputDocumentFileLocation, InputPhotoFileLocation)):
         return f"{location.id}-{location.access_hash}"
-    elif isinstance(location, (FileLocation, InputFileLocation)):
+    elif isinstance(location, (InputFileLocation, InputPeerPhotoFileLocation)):
         return f"{location.volume_id}-{location.local_id}"
 
 

@@ -22,7 +22,8 @@ import asyncio
 import logging
 import re
 
-from telethon.tl.types import UserProfilePhoto, User, FileLocation, UpdateUserName, PeerUser
+from telethon.tl.types import (UserProfilePhoto, User, UpdateUserName, PeerUser, TypeInputPeer,
+                               InputPeerPhotoFileLocation, UserProfilePhotoEmpty)
 from mautrix_appservice import AppService, IntentAPI, IntentError, MatrixRequestError
 
 from .types import MatrixUserID, TelegramID
@@ -112,6 +113,9 @@ class Puppet:
         regex = re.compile("^" + re.escape(tpl).replace(re.escape("{displayname}"), "(.+?)") + "$")
         match = regex.match(self.displayname)
         return match.group(1) or self.displayname
+
+    def get_input_entity(self, user: 'AbstractUser') -> Awaitable[TypeInputPeer]:
+        return user.client.get_input_entity(PeerUser(user_id=self.tgid))
 
     # region Custom puppet management
     def _fresh_intent(self) -> IntentAPI:
@@ -348,7 +352,7 @@ class Puppet:
 
         changed = await self.update_displayname(source, info) or changed
         if isinstance(info.photo, UserProfilePhoto):
-            changed = await self.update_avatar(source, info.photo.photo_big) or changed
+            changed = await self.update_avatar(source, info.photo) or changed
 
         self.is_bot = info.bot
 
@@ -384,13 +388,32 @@ class Puppet:
             return True
         return False
 
-    async def update_avatar(self, source: 'AbstractUser', photo: FileLocation) -> bool:
+    async def update_avatar(self, source: 'AbstractUser',
+                            photo: Union[UserProfilePhoto, UserProfilePhotoEmpty]) -> bool:
         if self.disable_updates:
             return False
-        photo_id = f"{photo.volume_id}-{photo.local_id}"
+
+        if isinstance(photo, UserProfilePhotoEmpty):
+            photo_id = ""
+        else:
+            photo_id = str(photo.photo_id)
         if self.photo_id != photo_id:
-            file = await util.transfer_file_to_matrix(source.client, self.default_mxid_intent,
-                                                      photo)
+            if not photo_id:
+                self.photo_id = ""
+                try:
+                    await self.default_mxid_intent.set_avatar("")
+                except MatrixRequestError:
+                    self.log.exception("Failed to set avatar")
+                    self.photo_id = ""
+                return True
+
+            loc = InputPeerPhotoFileLocation(
+                peer=await self.get_input_entity(source),
+                local_id=photo.photo_big.local_id,
+                volume_id=photo.photo_big.volume_id,
+                big=True
+            )
+            file = await util.transfer_file_to_matrix(source.client, self.default_mxid_intent, loc)
             if file:
                 self.photo_id = photo_id
                 try:

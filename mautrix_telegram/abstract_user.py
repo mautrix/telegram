@@ -309,7 +309,7 @@ class AbstractUser(ABC):
             if await puppet.update_displayname(self, update):
                 puppet.save()
         elif isinstance(update, UpdateUserPhoto):
-            if await puppet.update_avatar(self, update.photo.photo_big):
+            if await puppet.update_avatar(self, update.photo):
                 puppet.save()
         else:
             self.log.warning("Unexpected other user info update: %s", update)

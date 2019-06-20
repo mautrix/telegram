@@ -47,13 +47,13 @@ from telethon.errors import (ChatAdminRequiredError, ChatNotModifiedError, Photo
                              PhotoInvalidDimensionsError, PhotoSaveFileInvalidError)
 from telethon.tl.patched import Message, MessageService
 from telethon.tl.types import (
-    Channel, ChatAdminRights, ChatBannedRights, ChannelFull, ChannelParticipantAdmin,
+    Channel, ChatAdminRights, ChatBannedRights, ChannelFull, ChannelParticipantAdmin, Document,
     ChannelParticipantCreator, ChannelParticipantsRecent, ChannelParticipantsSearch, Chat,
     ChatFull, ChatInviteEmpty, ChatParticipantAdmin, ChatParticipantCreator, ChatPhoto, Poll,
-    DocumentAttributeFilename, DocumentAttributeImageSize, DocumentAttributeSticker,
-    DocumentAttributeVideo, FileLocation, GeoPoint, InputChannel, InputChatUploadedPhoto,
+    DocumentAttributeFilename, DocumentAttributeImageSize, DocumentAttributeSticker, PhotoEmpty,
+    DocumentAttributeVideo, GeoPoint, InputChannel, InputChatUploadedPhoto, InputPhotoFileLocation,
     InputPeerChannel, InputPeerChat, InputPeerUser, InputUser, InputUserSelf, MessageMediaPoll,
-    MessageActionChannelCreate, MessageActionChatAddUser, MessageActionChatCreate,
+    MessageActionChannelCreate, MessageActionChatAddUser, MessageActionChatCreate, ChatPhotoEmpty,
     MessageActionChatDeletePhoto, MessageActionChatDeleteUser, MessageActionChatEditPhoto,
     MessageActionChatEditTitle, MessageActionChatJoinedByLink, MessageActionChatMigrateTo,
     MessageActionPinMessage, MessageActionGameScore, MessageMediaContact, MessageMediaDocument,
@@ -63,7 +63,7 @@ from telethon.tl.types import (
     TypeDocumentAttribute, TypeInputPeer, TypeMessageAction, TypeMessageEntity, TypePeer,
     TypePhotoSize, TypeUpdates, TypeUser, PhotoSize, TypeUserFull, UpdateChatUserTyping,
     UpdateNewChannelMessage, UpdateNewMessage, UpdateUserTyping, User, UserFull, MessageEntityPre,
-    InputMediaUploadedDocument)
+    InputMediaUploadedDocument, InputPeerPhotoFileLocation)
 from mautrix_appservice import MatrixRequestError, IntentError, AppService, IntentAPI
 
 from .types import MatrixEventID, MatrixRoomID, MatrixUserID, TelegramID
@@ -575,7 +575,7 @@ class Portal:
         changed = await self.update_title(entity.title) or changed
 
         if isinstance(entity.photo, ChatPhoto):
-            changed = await self.update_avatar(user, entity.photo.photo_big) or changed
+            changed = await self.update_avatar(user, entity.photo) or changed
 
         if changed:
             self.save()
@@ -616,12 +616,21 @@ class Portal:
         return False
 
     @staticmethod
-    def _get_largest_photo_size(photo: Union[Photo, List[TypePhotoSize]]
-                                ) -> Optional[TypePhotoSize]:
+    def _get_largest_photo_size(photo: Union[Photo, Document]
+                                ) -> Tuple[Optional[InputPhotoFileLocation],
+                                           Optional[TypePhotoSize]]:
         if not photo:
-            return None
-        return max(photo.sizes if isinstance(photo, Photo) else photo, key=(lambda photo2: (
-            len(photo2.bytes) if not isinstance(photo2, PhotoSize) else photo2.size)))
+            return None, None
+        largest = max(photo.sizes if isinstance(photo, Photo) else photo.thumbs,
+                      key=(lambda photo2: (len(photo2.bytes)
+                                           if not isinstance(photo2, PhotoSize)
+                                           else photo2.size)))
+        return InputPhotoFileLocation(
+            id=photo.id,
+            access_hash=photo.access_hash,
+            file_reference=photo.file_reference,
+            thumb_size=largest.type,
+        ), largest
 
     async def remove_avatar(self, _: 'AbstractUser', save: bool = False) -> None:
         await self.main_intent.set_room_avatar(self.mxid, None)
@@ -629,11 +638,33 @@ class Portal:
         if save:
             self.save()
 
-    async def update_avatar(self, user: 'AbstractUser', photo: FileLocation,
+    async def update_avatar(self, user: 'AbstractUser',
+                            photo: Union[ChatPhoto, ChatPhotoEmpty, Photo, PhotoEmpty],
                             save: bool = False) -> bool:
-        photo_id = f"{photo.volume_id}-{photo.local_id}"
+        if isinstance(photo, ChatPhoto):
+            loc = InputPeerPhotoFileLocation(
+                peer=await self.get_input_entity(user),
+                local_id=photo.photo_big.local_id,
+                volume_id=photo.photo_big.volume_id,
+                big=True
+            )
+            photo_id = f"{loc.volume_id}-{loc.local_id}"
+        elif isinstance(photo, Photo):
+            loc, largest = self._get_largest_photo_size(photo)
+            photo_id = f"{largest.location.volume_id}-{largest.location.local_id}"
+        elif isinstance(photo, (ChatPhotoEmpty, PhotoEmpty)):
+            photo_id = ""
+            loc = None
+        else:
+            raise ValueError(f"Unknown photo type {type(photo)}")
         if self.photo_id != photo_id:
-            file = await util.transfer_file_to_matrix(user.client, self.main_intent, photo)
+            if not photo_id:
+                await self.main_intent.set_room_avatar(self.mxid, "")
+                self.photo_id = ""
+                if save:
+                    self.save()
+                return True
+            file = await util.transfer_file_to_matrix(user.client, self.main_intent, loc)
             if file:
                 await self.main_intent.set_room_avatar(self.mxid, file.mxc)
                 self.photo_id = photo_id
@@ -1212,8 +1243,8 @@ class Portal:
                                and isinstance(update.message, MessageService)
                                and isinstance(update.message.action, MessageActionChatEditPhoto))
             if is_photo_update:
-                loc = self._get_largest_photo_size(update.message.action.photo).location
-                self.photo_id = f"{loc.volume_id}-{loc.local_id}"
+                loc, size = self._get_largest_photo_size(update.message.action.photo)
+                self.photo_id = f"{size.location.volume_id}-{size.location.local_id}"
                 self.save()
                 break
 
@@ -1368,8 +1399,8 @@ class Portal:
 
     async def handle_telegram_photo(self, source: 'AbstractUser', intent: IntentAPI, evt: Message,
                                     relates_to: Dict = None) -> Optional[Dict]:
-        largest_size = self._get_largest_photo_size(evt.media.photo)
-        file = await util.transfer_file_to_matrix(source.client, intent, largest_size.location)
+        loc, largest_size = self._get_largest_photo_size(evt.media.photo)
+        file = await util.transfer_file_to_matrix(source.client, intent, loc)
         if not file:
             return None
         if self.get_config("inline_images") and (evt.message
@@ -1429,7 +1460,7 @@ class Portal:
 
     @staticmethod
     def _parse_telegram_document_meta(evt: Message, file: DBTelegramFile, attrs: Dict,
-                                      thumb: TypePhotoSize) -> Tuple[Dict, str]:
+                                      thumb_size: TypePhotoSize) -> Tuple[Dict, str]:
         document = evt.media.document
         name = evt.message or attrs["name"]
         if attrs["is_sticker"]:
@@ -1461,8 +1492,8 @@ class Portal:
             info["thumbnail_url"] = file.thumbnail.mxc
             info["thumbnail_info"] = {
                 "mimetype": file.thumbnail.mime_type,
-                "h": file.thumbnail.height or thumb.h,
-                "w": file.thumbnail.width or thumb.w,
+                "h": file.thumbnail.height or thumb_size.h,
+                "w": file.thumbnail.width or thumb_size.w,
                 "size": file.thumbnail.size,
             }
 
@@ -1473,16 +1504,16 @@ class Portal:
         document = evt.media.document
         attrs = self._parse_telegram_document_attributes(document.attributes)
 
-        thumb = self._get_largest_photo_size(document.thumbs)
-        if thumb and not isinstance(thumb, (PhotoSize, PhotoCachedSize)):
-            self.log.debug(f"Unsupported thumbnail type {type(thumb)}")
+        thumb_loc, thumb_size = self._get_largest_photo_size(document)
+        if thumb_size and not isinstance(thumb_size, (PhotoSize, PhotoCachedSize)):
+            self.log.debug(f"Unsupported thumbnail type {type(thumb_size)}")
             thumb = None
-        file = await util.transfer_file_to_matrix(source.client, intent, document, thumb,
+        file = await util.transfer_file_to_matrix(source.client, intent, document, thumb_loc,
                                                   is_sticker=attrs["is_sticker"])
         if not file:
             return None
 
-        info, name = self._parse_telegram_document_meta(evt, file, attrs, thumb)
+        info, name = self._parse_telegram_document_meta(evt, file, attrs, thumb_size)
 
         await intent.set_typing(self.mxid, is_typing=False)
 
@@ -1819,8 +1850,7 @@ class Portal:
         if isinstance(action, MessageActionChatEditTitle):
             await self.update_title(action.title, save=True)
         elif isinstance(action, MessageActionChatEditPhoto):
-            largest_size = self._get_largest_photo_size(action.photo)
-            await self.update_avatar(source, largest_size.location, save=True)
+            await self.update_avatar(source, action.photo, save=True)
         elif isinstance(action, MessageActionChatDeletePhoto):
             await self.remove_avatar(source, save=True)
         elif isinstance(action, MessageActionChatAddUser):
