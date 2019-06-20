@@ -135,6 +135,7 @@ bridge:
     public_portals: true
     # Whether or not to fetch and handle Telegram updates at startup from the time the bridge was down.
     # Currently only works for private chats and normal groups.
+    # WARNING: This feature seems to be broken in the telegram library.
     catch_up: false
     # Whether or not to use /sync to get presence, read receipts and typing notifications when using
     # your own Matrix account as the Matrix puppet for your Telegram account.
