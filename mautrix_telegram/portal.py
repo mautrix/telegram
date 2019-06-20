@@ -619,6 +619,8 @@ class Portal:
                                            Optional[TypePhotoSize]]:
         if not photo:
             return None, None
+        if isinstance(photo, Document) and not photo.thumbs:
+            return None, None
         largest = max(photo.sizes if isinstance(photo, Photo) else photo.thumbs,
                       key=(lambda photo2: (len(photo2.bytes)
                                            if not isinstance(photo2, PhotoSize)
@@ -1491,12 +1493,19 @@ class Portal:
     async def handle_telegram_document(self, source: 'AbstractUser', intent: IntentAPI,
                                        evt: Message, relates_to: dict = None) -> Optional[Dict]:
         document = evt.media.document
+
         attrs = self._parse_telegram_document_attributes(document.attributes)
+
+        if document.size > config["bridge.max_document_size"] * 1000 ** 2:
+            name = attrs["name"] or ""
+            caption = f"\n{evt.message}" if evt.message else ""
+            return await intent.send_notice(self.mxid, f"Too large file {name}{caption}")
 
         thumb_loc, thumb_size = self._get_largest_photo_size(document)
         if thumb_size and not isinstance(thumb_size, (PhotoSize, PhotoCachedSize)):
             self.log.debug(f"Unsupported thumbnail type {type(thumb_size)}")
-            thumb = None
+            thumb_loc = None
+            thumb_size = None
         file = await util.transfer_file_to_matrix(source.client, intent, document, thumb_loc,
                                                   is_sticker=attrs["is_sticker"])
         if not file:

@@ -216,6 +216,7 @@ class Config(DictWithRecursion):
         copy("bridge.telegram_link_preview")
         copy("bridge.inline_images")
         copy("bridge.image_as_file_size")
+        copy("bridge.max_document_size")
 
         copy("bridge.bot_messages_as_notices")
         if isinstance(self["bridge.bridge_notices"], bool):
