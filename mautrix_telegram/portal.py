@@ -69,7 +69,7 @@ from mautrix_appservice import MatrixRequestError, IntentError, AppService, Inte
 from .types import MatrixEventID, MatrixRoomID, MatrixUserID, TelegramID
 from .context import Context
 from .db import Portal as DBPortal, Message as DBMessage, TelegramFile as DBTelegramFile
-from .util import ignore_coro
+from .util import ignore_coro, sane_mimetypes
 from . import puppet as p, user as u, formatter, util
 
 if TYPE_CHECKING:
@@ -77,8 +77,6 @@ if TYPE_CHECKING:
     from .abstract_user import AbstractUser
     from .config import Config
     from .tgclient import MautrixTelegramClient
-
-mimetypes.init()
 
 config = None  # type: Config
 
@@ -783,14 +781,9 @@ class Portal:
                 return body + current_extension
         except (ValueError, KeyError):
             pass
-        ext_override = {
-            "image/jpeg": ".jpg"
-        }
         if mime:
-            ext = ext_override.get(mime, mimetypes.guess_extension(mime))
-            return f"matrix_upload{ext}"
-        else:
-            return ""
+            return f"matrix_upload{sane_mimetypes.guess_extension(mime)}"
+        return ""
 
     def get_config(self, key: str) -> Any:
         local = util.recursive_get(self.local_config, key)
@@ -1228,7 +1221,7 @@ class Portal:
 
         file = await self.main_intent.download_file(url)
         mime = magic.from_buffer(file, mime=True)
-        ext = mimetypes.guess_extension(mime)
+        ext = sane_mimetypes.guess_extension(mime)
         uploaded = await sender.client.upload_file(file, file_name=f"avatar{ext}", use_cache=False)
         photo = InputChatUploadedPhoto(file=uploaded)
 
@@ -1421,11 +1414,7 @@ class Portal:
             "orientation": 0,
             "mimetype": file.mime_type,
         }
-        ext_override = {
-            "image/jpeg": ".jpg"
-        }
-        name = "image" + ext_override.get(file.mime_type,
-                                          mimetypes.guess_extension(file.mime_type))
+        name = f"image{sane_mimetypes.guess_extension(file.mime_type)}"
         await intent.set_typing(self.mxid, is_typing=False)
         result = await intent.send_image(self.mxid, file.mxc, info=info, text=name,
                                          relates_to=relates_to, timestamp=evt.date,

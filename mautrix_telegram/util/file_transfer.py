@@ -32,6 +32,7 @@ from mautrix_appservice import IntentAPI
 
 from ..tgclient import MautrixTelegramClient
 from ..db import TelegramFile as DBTelegramFile
+from ..util import sane_mimetypes
 
 try:
     from PIL import Image
@@ -121,7 +122,7 @@ async def transfer_thumbnail_to_matrix(client: MautrixTelegramClient, intent: In
     if db_file:
         return db_file
 
-    video_ext = mimetypes.guess_extension(mime)
+    video_ext = sane_mimetypes.guess_extension(mime)
     if VideoFileClip and video_ext:
         try:
             file, width, height = _read_video_thumbnail(video, video_ext, frame_ext="png")
