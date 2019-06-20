@@ -36,6 +36,10 @@ async def bridge(evt: CommandEvent) -> Dict:
     if len(evt.args) == 0:
         return await evt.reply("**Usage:** "
                                "`$cmdprefix+sp bridge <Telegram chat ID> [Matrix room ID]`")
+    force_use_bot = False
+    if evt.args[0] == "--usebot" and evt.sender.is_admin:
+        force_use_bot = True
+        evt.args = evt.args[1:]
     room_id = MatrixRoomID(evt.args[1]) if len(evt.args) > 1 else evt.room_id
     that_this = "This" if room_id == evt.room_id else "That"
 
@@ -80,6 +84,7 @@ async def bridge(evt: CommandEvent) -> Dict:
             "bridge_to_mxid": room_id,
             "tgid": portal.tgid,
             "peer_type": portal.peer_type,
+            "force_use_bot": force_use_bot,
         }
         return await evt.reply(f"{has_portal_message}"
                                "However, you have the permissions to unbridge that room.\n\n"
@@ -93,6 +98,7 @@ async def bridge(evt: CommandEvent) -> Dict:
         "bridge_to_mxid": room_id,
         "tgid": portal.tgid,
         "peer_type": portal.peer_type,
+        "force_use_bot": force_use_bot,
     }
     return await evt.reply("That Telegram chat has no existing portal. To confirm bridging the "
                            "chat to this room, use `$cmdprefix+sp continue`")
@@ -149,7 +155,7 @@ async def confirm_bridge(evt: CommandEvent) -> Optional[Dict]:
                                "`$cmdprefix+sp cancel` to cancel.")
 
     evt.sender.command_status = None
-    is_logged_in = await evt.sender.is_logged_in()
+    is_logged_in = await evt.sender.is_logged_in() and not status["force_use_bot"]
     user = evt.sender if is_logged_in else evt.tgbot
     try:
         entity = await user.client.get_entity(portal.peer)
