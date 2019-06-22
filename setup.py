@@ -3,8 +3,8 @@ import glob
 import mautrix_telegram
 
 extras = {
-    "fast_crypto": ["cryptg>=0.1,<0.2"],
-    "webp_convert": ["Pillow>=4.3.0,<6"],
+    "fast_crypto": ["cryptg>=0.1,<0.3"],
+    "webp_convert": ["Pillow>=4.3.0,<7"],
     "hq_thumbnails": ["moviepy>=1.0,<2.0"],
     "metrics": ["prometheus-client>=0.6.0,<0.7.0"],
 }
