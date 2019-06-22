@@ -1,4 +1,4 @@
-FROM docker.io/alpine:3.9
+FROM docker.io/alpine:3.10
 
 ENV UID=1337 \
     GID=1337 \
@@ -14,8 +14,7 @@ RUN apk add --no-cache \
       py3-sqlalchemy \
       py3-markdown \
       py3-psycopg2 \
-      # Not yet in stable repos:
-      #py3-ruamel \
+      py3-ruamel.yaml \
       # Indirect dependencies
       #commonmark
         py3-future \
@@ -33,6 +32,7 @@ RUN apk add --no-cache \
         py3-rsa \
       # Other dependencies
       python3-dev \
+      libffi-dev \
       build-base \
       ffmpeg \
       ca-certificates \
