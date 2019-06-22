@@ -64,7 +64,7 @@ appservice:
     as_token: "This value is generated when generating the registration"
     hs_token: "This value is generated when generating the registration"
 
-# Prometheus telemetry config. Requires prometheus-aio to be installed.
+# Prometheus telemetry config. Requires prometheus-client to be installed.
 metrics:
     enabled: false
     listen_port: 8000
