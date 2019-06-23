@@ -221,10 +221,10 @@ def _telegram_entities_to_matrix(text: str, entities: List[TypeMessageEntity],
     html = []
     last_offset = 0
     for i, entity in enumerate(entities):
-        relative_offset = entity.offset - offset
         if entity.offset > offset + length:
             break
-        elif relative_offset > last_offset:
+        relative_offset = entity.offset - offset
+        if relative_offset > last_offset:
             html.append(escape(text[last_offset:relative_offset]))
         elif relative_offset < last_offset:
             continue
@@ -267,7 +267,7 @@ def _telegram_entities_to_matrix(text: str, entities: List[TypeMessageEntity],
         else:
             skip_entity = True
         last_offset = relative_offset + (0 if skip_entity else entity.length)
-    html.append(text[last_offset:])
+    html.append(escape(text[last_offset:]))
 
     return "".join(html)
 
