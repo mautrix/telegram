@@ -212,19 +212,27 @@ def _telegram_entities_to_matrix_catch(text: str, entities: List[TypeMessageEnti
     return "[failed conversion in _telegram_entities_to_matrix]"
 
 
-def _telegram_entities_to_matrix(text: str, entities: List[TypeMessageEntity]) -> str:
+def _telegram_entities_to_matrix(text: str, entities: List[TypeMessageEntity],
+                                 offset: int = 0, length: int = None) -> str:
     if not entities:
-        return text
+        return escape(text)
+    if length is None:
+        length = len(text)
     html = []
     last_offset = 0
-    for entity in entities:
-        if entity.offset > last_offset:
-            html.append(escape(text[last_offset:entity.offset]))
-        elif entity.offset < last_offset:
+    for i, entity in enumerate(entities):
+        relative_offset = entity.offset - offset
+        if entity.offset > offset + length:
+            break
+        elif relative_offset > last_offset:
+            html.append(escape(text[last_offset:relative_offset]))
+        elif relative_offset < last_offset:
             continue
 
         skip_entity = False
-        entity_text = escape(text[entity.offset:entity.offset + entity.length])
+        entity_text = _telegram_entities_to_matrix(
+            text=text[relative_offset:relative_offset + entity.length],
+            entities=entities[i + 1:], offset=entity.offset, length=entity.length)
         entity_type = type(entity)
 
         if entity_type == MessageEntityBold:
@@ -258,7 +266,7 @@ def _telegram_entities_to_matrix(text: str, entities: List[TypeMessageEntity]) -
             html.append(f"<font color='blue'>{entity_text}</font>")
         else:
             skip_entity = True
-        last_offset = entity.offset + (0 if skip_entity else entity.length)
+        last_offset = relative_offset + (0 if skip_entity else entity.length)
     html.append(text[last_offset:])
 
     return "".join(html)
