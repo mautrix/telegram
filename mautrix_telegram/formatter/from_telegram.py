@@ -24,7 +24,8 @@ from telethon.tl.types import (MessageEntityMention, MessageEntityMentionName, M
                                MessageEntityItalic, MessageEntityCode, MessageEntityPre,
                                MessageEntityBotCommand, MessageEntityHashtag, MessageEntityCashtag,
                                MessageEntityPhone, TypeMessageEntity, Message, PeerChannel,
-                               MessageFwdHeader, PeerUser)
+                               MessageEntityBlockquote, MessageEntityStrike, MessageFwdHeader,
+                               MessageEntityUnderline, PeerUser)
 
 from mautrix_appservice import MatrixRequestError
 from mautrix_appservice.intent_api import IntentAPI
@@ -33,7 +34,7 @@ from .. import user as u, puppet as pu, portal as po
 from ..types import TelegramID
 from ..db import Message as DBMessage
 from .util import (add_surrogates, remove_surrogates, trim_reply_fallback_html,
-                   trim_reply_fallback_text, unicode_to_html)
+                   trim_reply_fallback_text)
 
 if TYPE_CHECKING:
     from ..abstract_user import AbstractUser
@@ -194,9 +195,6 @@ async def telegram_to_matrix(evt: Message, source: "AbstractUser",
         text += f"\n- {evt.post_author}"
         html += f"<br/><i>- <u>{evt.post_author}</u></i>"
 
-    html = unicode_to_html(text, html, "\u0336", "del")
-    html = unicode_to_html(text, html, "\u0332", "u")
-
     if html:
         html = html.replace("\n", "<br/>")
 
@@ -233,10 +231,16 @@ def _telegram_entities_to_matrix(text: str, entities: List[TypeMessageEntity]) -
             html.append(f"<strong>{entity_text}</strong>")
         elif entity_type == MessageEntityItalic:
             html.append(f"<em>{entity_text}</em>")
+        elif entity_type == MessageEntityUnderline:
+            html.append(f"<u>{entity_text}</u>")
+        elif entity_type == MessageEntityStrike:
+            html.append(f"<del>{entity_text}</del>")
+        elif entity_type == MessageEntityBlockquote:
+            html.append(f"<blockquote>{entity_text}</blockquote>")
         elif entity_type == MessageEntityCode:
-            html.append(("<pre><code>{entity_text}</code></pre>"
-                         if "\n" in entity_text
-                         else "<code>{entity_text}</code>").format(entity_text=entity_text))
+            html.append(f"<pre><code>{entity_text}</code></pre>"
+                        if "\n" in entity_text
+                        else f"<code>{entity_text}</code>")
         elif entity_type == MessageEntityPre:
             skip_entity = _parse_pre(html, entity_text, entity.language)
         elif entity_type == MessageEntityMention:
