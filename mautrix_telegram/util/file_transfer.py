@@ -27,7 +27,7 @@ from telethon.tl.types import (Document, InputFileLocation, InputDocumentFileLoc
                                TypePhotoSize, PhotoSize, PhotoCachedSize, InputPhotoFileLocation,
                                InputPeerPhotoFileLocation)
 from telethon.errors import (AuthBytesInvalidError, AuthKeyInvalidError, LocationInvalidError,
-                             SecurityError)
+                             SecurityError, FileIdInvalidError)
 from mautrix_appservice import IntentAPI
 
 from ..tgclient import MautrixTelegramClient
@@ -184,7 +184,7 @@ async def _unlocked_transfer_file_to_matrix(client: MautrixTelegramClient, inten
 
     try:
         file = await client.download_file(location)
-    except LocationInvalidError:
+    except (LocationInvalidError, FileIdInvalidError):
         return None
     except (AuthBytesInvalidError, AuthKeyInvalidError, SecurityError) as e:
         log.exception(f"{e.__class__.__name__} while downloading a file.")
