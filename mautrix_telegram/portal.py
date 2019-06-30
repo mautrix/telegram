@@ -397,6 +397,11 @@ class Portal:
             "type": "m.room.power_levels",
             "content": power_levels,
         }]
+        if config["appservice.community_id"]:
+            initial_state.append({
+                "type": "m.room.related_groups",
+                "content": {"groups": [config["appservice.community_id"]]},
+            })
 
         room_id = await self.main_intent.create_room(alias=alias, is_public=public,
                                                      is_direct=direct, invitees=invites or [],

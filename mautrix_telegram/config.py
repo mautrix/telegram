@@ -189,6 +189,8 @@ class Config(DictWithRecursion):
         copy("appservice.bot_displayname")
         copy("appservice.bot_avatar")
 
+        copy("appservice.community_id")
+
         copy("appservice.as_token")
         copy("appservice.hs_token")
 
@@ -352,3 +354,6 @@ class Config(DictWithRecursion):
             "sender_localpart": self["appservice.bot_username"],
             "rate_limited": False
         }
+        if self["appservice.community_id"]:
+            self._registration["namespaces"]["users"][0]["group_id"] \
+                = self["appservice.community_id"]
