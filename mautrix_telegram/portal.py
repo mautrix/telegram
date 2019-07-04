@@ -1774,7 +1774,7 @@ class Portal:
                 return
 
         if sender and not sender.displayname:
-            self.log.debug(f"Telegram user {sender.tgid} sent a message, but doesn't have a"
+            self.log.debug(f"Telegram user {sender.tgid} sent a message, but doesn't have a "
                            "displayname, updating info...")
             entity = await source.client.get_entity(PeerUser(sender.tgid))
             await sender.update_info(source, entity)
