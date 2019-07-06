@@ -1583,7 +1583,7 @@ class Portal:
                                       external_url=self.get_external_url(evt))
 
     async def handle_telegram_unsupported(self, source: 'AbstractUser', intent: IntentAPI,
-                                          evt: Message, _: dict = None) -> dict:
+                                          evt: Message, relates_to: dict = None) -> dict:
         override_text = ("This message is not supported on your version of Mautrix-Telegram. "
                          "Please check https://github.com/tulir/mautrix-telegram or ask your "
                          "bridge administrator about possible updates.")
