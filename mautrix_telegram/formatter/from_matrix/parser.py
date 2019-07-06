@@ -18,15 +18,15 @@ from typing import List, Tuple, Pattern
 import re
 
 from telethon.tl.types import (MessageEntityMention as Mention, MessageEntityBotCommand as Command,
-                               MessageEntityMentionName as MentionName, MessageEntityEmail as Email,
-                               MessageEntityUrl as URL, MessageEntityTextUrl as TextURL,
+                               MessageEntityMentionName as MentionName, MessageEntityUrl as URL,
+                               MessageEntityEmail as Email, MessageEntityTextUrl as TextURL,
                                MessageEntityBold as Bold, MessageEntityItalic as Italic,
                                MessageEntityCode as Code, MessageEntityPre as Pre,
-                               TypeMessageEntity)
+                               MessageEntityStrike as Strike, MessageEntityUnderline as Underline,
+                               MessageEntityBlockquote as Blockquote, TypeMessageEntity)
 
 from ... import user as u, puppet as pu, portal as po
 from ...types import MatrixUserID
-from ..util import html_to_unicode
 from .telegram_message import TelegramMessage, Entity, offset_length_multiply
 
 from .html_reader import HTMLNode, read_html
@@ -102,13 +102,6 @@ class MatrixParser:
         return TelegramMessage.join(children, "\n")
 
     @classmethod
-    def blockquote_to_tmessage(cls, node: HTMLNode, ctx: RecursionContext) -> TelegramMessage:
-        msg = cls.tag_aware_parse_node(node, ctx)
-        children = msg.trim().split("\n")
-        children = [child.prepend("> ") for child in children]
-        return TelegramMessage.join(children, "\n")
-
-    @classmethod
     def header_to_tmessage(cls, node: HTMLNode, ctx: RecursionContext) -> TelegramMessage:
         children = cls.node_to_tmessages(node, ctx)
         length = int(node.tag[1])
@@ -122,15 +115,14 @@ class MatrixParser:
             msg.format(Bold)
         elif node.tag in ("i", "em"):
             msg.format(Italic)
+        elif node.tag in ("s", "strike", "del"):
+            msg.format(Strike)
+        elif node.tag in ("u", "ins"):
+            msg.format(Underline)
+        elif node == "blockquote":
+            msg.format(Blockquote)
         elif node.tag == "command":
             msg.format(Command)
-        elif node.tag in ("s", "strike", "del"):
-            msg.text = html_to_unicode(msg.text, "\u0336")
-        elif node.tag in ("u", "ins"):
-            msg.text = html_to_unicode(msg.text, "\u0332")
-
-        if node.tag in ("s", "strike", "del", "u", "ins"):
-            msg.entities = Entity.adjust(msg.entities, offset_length_multiply(2))
 
         return msg
 
@@ -171,9 +163,7 @@ class MatrixParser:
 
     @classmethod
     def node_to_tmessage(cls, node: HTMLNode, ctx: RecursionContext) -> TelegramMessage:
-        if node.tag == "blockquote":
-            return cls.blockquote_to_tmessage(node, ctx)
-        elif node.tag == "ol":
+        if node.tag == "ol":
             return cls.list_to_tmessage(node, ctx)
         elif node.tag == "ul":
             return cls.list_to_tmessage(node, ctx.enter_list())
@@ -181,7 +171,8 @@ class MatrixParser:
             return cls.header_to_tmessage(node, ctx)
         elif node.tag == "br":
             return TelegramMessage("\n")
-        elif node.tag in ("b", "strong", "i", "em", "s", "del", "u", "ins", "command"):
+        elif node.tag in ("b", "strong", "i", "em", "s", "del", "u", "ins", "blockquote",
+                          "command"):
             return cls.basic_format_to_tmessage(node, ctx)
         elif node.tag == "a":
             return cls.link_to_tstring(node, ctx)

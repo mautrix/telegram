@@ -6,7 +6,7 @@ extras = {
     "fast_crypto": ["cryptg>=0.1,<0.3"],
     "webp_convert": ["Pillow>=4.3.0,<7"],
     "hq_thumbnails": ["moviepy>=1.0,<2.0"],
-    "metrics": ["prometheus-client>=0.6.0,<0.7.0"],
+    "metrics": ["prometheus-client>=0.6.0,<0.8.0"],
 }
 extras["all"] = list({dep for deps in extras.values() for dep in deps})
 
@@ -38,7 +38,7 @@ setuptools.setup(
         "ruamel.yaml>=0.15.35,<0.16",
         "future-fstrings>=0.4.2",
         "python-magic>=0.4.15,<0.5",
-        "telethon>=1.7,<1.9",
+        "telethon>=1.9,<1.10",
         "telethon-session-sqlalchemy>=0.2.14,<0.3",
     ],
     extras_require=extras,

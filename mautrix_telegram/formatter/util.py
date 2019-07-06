@@ -20,38 +20,6 @@ import struct
 import re
 
 
-def unicode_to_html(text: str, html: str, ctrl: str, tag: str) -> str:
-    if ctrl not in text:
-        return html
-    if not html:
-        html = escape(text)
-    tag_start = f"<{tag}>"
-    tag_end = f"</{tag}>"
-    characters = html.split(ctrl)
-    html = ""
-    in_tag = False
-    for char in characters:
-        if not in_tag:
-            if len(char) > 1:
-                html += char[0:-1]
-                char = char[-1]
-            html += tag_start
-            in_tag = True
-            html += char
-        else:
-            if len(char) > 1:
-                html += tag_end
-                in_tag = False
-            html += char
-    if in_tag:
-        html += tag_end
-    return html
-
-
-def html_to_unicode(text: str, ctrl: str) -> str:
-    return ctrl.join(text) + ctrl
-
-
 # add_surrogates and remove_surrogates are unicode surrogate utility functions from Telethon.
 # Licensed under the MIT license.
 # https://github.com/LonamiWebs/Telethon/blob/7cce7aa3e4c6c7019a55530391b1761d33e5a04e/telethon/helpers.py
