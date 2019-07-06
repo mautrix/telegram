@@ -162,6 +162,13 @@ class MatrixParser:
                 else msg.format(TextURL, url=href))
 
     @classmethod
+    def blockquote_to_tmessage(cls, node: HTMLNode, ctx: RecursionContext) -> TelegramMessage:
+        msg = cls.tag_aware_parse_node(node, ctx)
+        children = msg.trim().split("\n")
+        children = [child.prepend("> ") for child in children]
+        return TelegramMessage.join(children, "\n")
+
+    @classmethod
     def node_to_tmessage(cls, node: HTMLNode, ctx: RecursionContext) -> TelegramMessage:
         if node.tag == "ol":
             return cls.list_to_tmessage(node, ctx)
@@ -171,9 +178,13 @@ class MatrixParser:
             return cls.header_to_tmessage(node, ctx)
         elif node.tag == "br":
             return TelegramMessage("\n")
-        elif node.tag in ("b", "strong", "i", "em", "s", "del", "u", "ins", "blockquote",
-                          "command"):
+        elif node.tag in ("b", "strong", "i", "em", "s", "del", "u", "ins", "command"):
             return cls.basic_format_to_tmessage(node, ctx)
+        elif node.tag == "blockquote":
+            # Telegram already has blockquote entities in the protocol schema, but it strips them
+            # server-side and none of the official clients support them.
+            # TODO once Telegram changes that, use the above if block for blockquotes too.
+            return cls.blockquote_to_tmessage(node, ctx)
         elif node.tag == "a":
             return cls.link_to_tstring(node, ctx)
         elif node.tag == "p":
