@@ -221,13 +221,13 @@ class Puppet:
         return new_events
 
     def handle_sync(self, presence: List, ephemeral: Dict) -> None:
-        presence_events = [self.mx.try_handle_event(event) for event in presence]
+        presence_events = [self.mx.try_handle_ephemeral_event(event) for event in presence]
 
         for room_id, events in ephemeral.items():
             for event in events:
                 event["room_id"] = room_id
 
-        ephemeral_events = [self.mx.try_handle_event(event)
+        ephemeral_events = [self.mx.try_handle_ephemeral_event(event)
                             for events in ephemeral.values()
                             for event in self.filter_events(events)]
 

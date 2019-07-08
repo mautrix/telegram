@@ -399,11 +399,23 @@ class MatrixHandler:
         return (sender == self.az.bot_mxid
                 or pu.Puppet.get_id_from_mxid(sender) is not None)
 
-    async def try_handle_event(self, evt: MatrixEvent) -> None:
+    async def try_handle_ephemeral_event(self, evt: MatrixEvent) -> None:
         try:
-            await self.handle_event(evt)
+            await self.handle_ephemeral_event(evt)
         except Exception:
             self.log.exception("Error handling manually received Matrix event")
+
+    async def handle_ephemeral_event(self, evt: MatrixEvent) -> None:
+        evt_type = evt.get("type", "m.unknown")  # type: str
+        room_id = evt.get("room_id", None)  # type: Optional[MatrixRoomID]
+        sender = evt.get("sender", None)  # type: Optional[MatrixUserID]
+        content = evt.get("content", {})  # type: Dict
+        if evt_type == "m.receipt":
+            await self.handle_read_receipts(room_id, self.parse_read_receipts(content))
+        elif evt_type == "m.presence":
+            await self.handle_presence(sender, content.get("presence", "offline"))
+        elif evt_type == "m.typing":
+            await self.handle_typing(room_id, content.get("user_ids", []))
 
     async def handle_event(self, evt: MatrixEvent) -> None:
         if self.filter_matrix_event(evt):
@@ -414,53 +426,52 @@ class MatrixHandler:
         room_id = evt.get("room_id", None)  # type: Optional[MatrixRoomID]
         event_id = evt.get("event_id", None)  # type: Optional[MatrixEventID]
         sender = evt.get("sender", None)  # type: Optional[MatrixUserID]
+        state_key = evt.get("state_key", None)
         content = evt.get("content", {})  # type: Dict
-        if evt_type == "m.room.member":
-            state_key = evt["state_key"]  # type: MatrixUserID
-            prev_content = evt.get("unsigned", {}).get("prev_content", {})  # type: Dict
-            membership = content.get("membership", "")  # type: str
-            prev_membership = prev_content.get("membership", "leave")  # type: str
-            if membership == prev_membership:
-                match = re.compile("@(.+):(.+)").match(state_key)  # type: Match
-                mxid = match.group(0)  # type: str
-                displayname = content.get("displayname", None) or mxid  # type: str
-                prev_displayname = prev_content.get("displayname", None) or mxid  # type: str
-                if displayname != prev_displayname:
-                    await self.handle_name_change(room_id, state_key, displayname,
-                                                  prev_displayname, event_id)
-            elif membership == "invite":
-                await self.handle_invite(room_id, state_key, sender)
-            elif prev_membership == "join" and membership == "leave":
-                await self.handle_part(room_id, state_key, sender, event_id)
-            elif membership == "join":
-                await self.handle_join(room_id, state_key, event_id)
-        elif evt_type in ("m.room.message", "m.sticker"):
-            if evt_type != "m.room.message":
-                content["msgtype"] = evt_type
-            await self.handle_message(room_id, sender, content, event_id)
-        elif evt_type == "m.room.redaction":
-            await self.handle_redaction(room_id, sender, evt["redacts"])
-        elif evt_type == "m.room.power_levels":
-            prev_content = evt.get("unsigned", {}).get("prev_content", {})
-            await self.handle_power_levels(room_id, sender, evt["content"], prev_content)
-        elif evt_type in ("m.room.name", "m.room.avatar", "m.room.topic"):
-            await self.handle_room_meta(evt_type, room_id, sender, evt["content"])
-        elif evt_type == "m.room.pinned_events":
-            new_events = set(evt["content"]["pinned"])
-            try:
-                old_events = set(evt["unsigned"]["prev_content"]["pinned"])
-            except KeyError:
-                old_events = set()
-            await self.handle_room_pin(room_id, sender, new_events, old_events)
-        elif evt_type == "m.room.tombstone":
-            await self.handle_room_upgrade(room_id, evt["content"]["replacement_room"])
-        elif evt_type == "m.receipt":
-            await self.handle_read_receipts(room_id, self.parse_read_receipts(content))
-        elif evt_type == "m.presence":
-            await self.handle_presence(sender, content.get("presence", "offline"))
-        elif evt_type == "m.typing":
-            await self.handle_typing(room_id, content.get("user_ids", []))
+        if state_key is not None:
+            if evt_type == "m.room.member":
+                prev_content = evt.get("unsigned", {}).get("prev_content", {})  # type: Dict
+                membership = content.get("membership", "")  # type: str
+                prev_membership = prev_content.get("membership", "leave")  # type: str
+                if membership == prev_membership:
+                    match = re.compile("@(.+):(.+)").match(state_key)  # type: Match
+                    mxid = match.group(0)  # type: str
+                    displayname = content.get("displayname", None) or mxid  # type: str
+                    prev_displayname = prev_content.get("displayname", None) or mxid  # type: str
+                    if displayname != prev_displayname:
+                        await self.handle_name_change(room_id, state_key, displayname,
+                                                      prev_displayname, event_id)
+                elif membership == "invite":
+                    await self.handle_invite(room_id, state_key, sender)
+                elif prev_membership == "join" and membership == "leave":
+                    await self.handle_part(room_id, state_key, sender, event_id)
+                elif membership == "join":
+                    await self.handle_join(room_id, state_key, event_id)
+            elif evt_type == "m.room.power_levels":
+                prev_content = evt.get("unsigned", {}).get("prev_content", {})
+                await self.handle_power_levels(room_id, sender, evt["content"], prev_content)
+            elif evt_type in ("m.room.name", "m.room.avatar", "m.room.topic"):
+                await self.handle_room_meta(evt_type, room_id, sender, evt["content"])
+            elif evt_type == "m.room.pinned_events":
+                new_events = set(evt["content"]["pinned"])
+                try:
+                    old_events = set(evt["unsigned"]["prev_content"]["pinned"])
+                except KeyError:
+                    old_events = set()
+                await self.handle_room_pin(room_id, sender, new_events, old_events)
+            elif evt_type == "m.room.tombstone":
+                await self.handle_room_upgrade(room_id, evt["content"]["replacement_room"])
+            else:
+                return
         else:
-            return
+            if evt_type in ("m.room.message", "m.sticker"):
+                if evt_type != "m.room.message":
+                    content["msgtype"] = evt_type
+                await self.handle_message(room_id, sender, content, event_id)
+            elif evt_type == "m.room.redaction":
+                await self.handle_redaction(room_id, sender, evt["redacts"])
+            else:
+                return
+
         if EVENT_TIME:
             EVENT_TIME.labels(event_type=evt_type).observe(time.time() - start_time)
