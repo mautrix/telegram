@@ -36,12 +36,12 @@ setuptools.setup(
         "alembic>=1.0.0,<2",
         "commonmark>=0.8.1,<1",
         "ruamel.yaml>=0.15.35,<0.16",
-        "future-fstrings>=0.4.2",
         "python-magic>=0.4.15,<0.5",
         "telethon>=1.9,<1.10",
         "telethon-session-sqlalchemy>=0.2.14,<0.3",
     ],
     extras_require=extras,
+    python_requires="~=3.6",
 
     setup_requires=["pytest-runner"],
     tests_require=["pytest", "pytest-asyncio", "pytest-mock"],
@@ -53,8 +53,8 @@ setuptools.setup(
         "Framework :: AsyncIO",
         "Programming Language :: Python",
         "Programming Language :: Python :: 3",
-        "Programming Language :: Python :: 3.5",
         "Programming Language :: Python :: 3.6",
+        "Programming Language :: Python :: 3.7",
     ],
     entry_points="""
         [console_scripts]
