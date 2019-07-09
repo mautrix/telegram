@@ -73,7 +73,7 @@ if args.generate_registration:
     sys.exit(0)
 
 logging.config.dictConfig(copy.deepcopy(config["logging"]))
-log = logging.getLogger("mau.init")  # type: logging.Logger
+log: logging.Logger = logging.getLogger("mau.init")
 log.debug(f"Initializing mautrix-telegram {__version__}")
 
 db_engine = sql.create_engine(config["appservice.database"] or "sqlite:///mautrix-telegram.db")
@@ -91,7 +91,7 @@ try:
 except ImportError:
     pass
 
-loop = asyncio.get_event_loop()  # type: asyncio.AbstractEventLoop
+loop: asyncio.AbstractEventLoop = asyncio.get_event_loop()
 
 state_store = SQLStateStore()
 mebibyte = 1024 ** 2
@@ -123,7 +123,7 @@ if config["metrics.enabled"]:
     if prometheus:
         prometheus.start_http_server(config["metrics.listen_port"])
     else:
-        log.warn("Metrics are enabled in the config, but prometheus-async is not installed.")
+        log.warn("Metrics are enabled in the config, but prometheus_client is not installed.")
 
 with appserv.run(config["appservice.hostname"], config["appservice.port"]) as start:
     start_ts = time()
@@ -131,9 +131,9 @@ with appserv.run(config["appservice.hostname"], config["appservice.port"]) as st
     init_abstract_user(context)
     init_formatter(context)
     init_portal(context)
-    startup_actions = (init_puppet(context) +
-                       init_user(context) +
-                       [start, context.mx.init_as_bot()])  # type: List[Awaitable[Any]]
+    startup_actions: List[Awaitable[Any]] = (init_puppet(context) +
+                                             init_user(context) +
+                                             [start, context.mx.init_as_bot()])
 
     if context.bot:
         startup_actions.append(context.bot.start())

@@ -13,7 +13,8 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import Awaitable, Dict, List, Iterable, Match, NewType, Optional, Tuple, TYPE_CHECKING
+from typing import (Awaitable, Dict, List, Iterable, Match, NewType, Optional, Tuple, Any,
+                    TYPE_CHECKING)
 import logging
 import asyncio
 import re
@@ -35,15 +36,23 @@ if TYPE_CHECKING:
     from .config import Config
     from .context import Context
 
-config = None  # type: Config
+config: Optional['Config'] = None
 
 SearchResult = NewType('SearchResult', Tuple['pu.Puppet', int])
 
 
 class User(AbstractUser):
-    log = logging.getLogger("mau.user")  # type: logging.Logger
-    by_mxid = {}  # type: Dict[str, User]
-    by_tgid = {}  # type: Dict[int, User]
+    log: logging.Logger = logging.getLogger("mau.user")
+    by_mxid: Dict[str, 'User'] = {}
+    by_tgid: Dict[int, 'User'] = {}
+
+    phone: Optional[str]
+    contacts: List['pu.Puppet']
+    saved_contacts: int
+    portals: Dict[Tuple[TelegramID, TelegramID], 'po.Portal']
+    command_status: Optional[Dict[str, Any]]
+
+    _db_instance: Optional[DBUser]
 
     def __init__(self, mxid: MatrixUserID, tgid: Optional[TelegramID] = None,
                  username: Optional[str] = None, phone: Optional[str] = None,
@@ -52,19 +61,19 @@ class User(AbstractUser):
                  db_portals: Optional[Iterable[Tuple[TelegramID, TelegramID]]] = None,
                  db_instance: Optional[DBUser] = None) -> None:
         super().__init__()
-        self.mxid = mxid  # type: MatrixUserID
-        self.tgid = tgid  # type: TelegramID
-        self.is_bot = is_bot  # type: bool
-        self.username = username  # type: str
-        self.phone = phone  # type: str
-        self.contacts = []  # type: List[pu.Puppet]
-        self.saved_contacts = saved_contacts  # type: int
+        self.mxid = mxid
+        self.tgid = tgid
+        self.is_bot = is_bot
+        self.username = username
+        self.phone = phone
+        self.contacts = []
+        self.saved_contacts = saved_contacts
         self.db_contacts = db_contacts
-        self.portals = {}  # type: Dict[Tuple[TelegramID, TelegramID], po.Portal]
+        self.portals = {}
         self.db_portals = db_portals or []
-        self._db_instance = db_instance  # type: Optional[DBUser]
+        self._db_instance = db_instance
 
-        self.command_status = None  # type: Optional[Dict]
+        self.command_status = None
 
         (self.relaybot_whitelisted,
          self.whitelisted,
@@ -83,7 +92,7 @@ class User(AbstractUser):
 
     @property
     def mxid_localpart(self) -> str:
-        match = re.compile("@(.+):(.+)").match(self.mxid)  # type: Match
+        match: Match = re.compile("@(.+):(.+)").match(self.mxid)
         return match.group(1)
 
     @property
@@ -228,7 +237,7 @@ class User(AbstractUser):
             self.phone = info.phone
             changed = True
         if self.tgid != info.id:
-            self.tgid = info.id
+            self.tgid = TelegramID(info.id)
             self.by_tgid[self.tgid] = self
         if changed:
             self.save()

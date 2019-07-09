@@ -19,13 +19,15 @@ from ruamel.yaml.comments import CommentedMap
 import random
 import string
 
-yaml = YAML()  # type: YAML
+yaml: YAML = YAML()
 yaml.indent(4)
 
 
 class DictWithRecursion:
+    _data: CommentedMap
+
     def __init__(self, data: Optional[CommentedMap] = None) -> None:
-        self._data = data or CommentedMap()  # type: CommentedMap
+        self._data = data or CommentedMap()
 
     @staticmethod
     def _parse_key(key: str) -> Tuple[str, Optional[str]]:
@@ -102,14 +104,20 @@ class DictWithRecursion:
 
 
 class Config(DictWithRecursion):
+    path: str
+    registration_path: str
+    base_path: str
+    _registration: Optional[Dict[str, Any]]
+    _overrides: Dict[str, Any]
+
     def __init__(self, path: str, registration_path: str, base_path: str,
                  overrides: Dict[str, Any] = None) -> None:
         super().__init__()
-        self.path = path  # type: str
-        self.registration_path = registration_path  # type: str
-        self.base_path = base_path  # type: str
-        self._registration = None  # type: Optional[Dict]
-        self._overrides = overrides or {}  # type: Dict[str, Any]
+        self.path = path
+        self.registration_path = registration_path
+        self.base_path = base_path
+        self._registration = None
+        self._overrides = overrides or {}
 
     def __getitem__(self, key: str) -> Any:
         try:
@@ -327,10 +335,10 @@ class Config(DictWithRecursion):
     def generate_registration(self) -> None:
         homeserver = self["homeserver.domain"]
 
-        username_format = self.get("bridge.username_template", "telegram_{userid}") \
-            .format(userid=".+")
-        alias_format = self.get("bridge.alias_template", "telegram_{groupname}") \
-            .format(groupname=".+")
+        username_format = self.get("bridge.username_template",
+                                   "telegram_{userid}").format(userid=".+")
+        alias_format = self.get("bridge.alias_template",
+                                "telegram_{groupname}").format(groupname=".+")
 
         self.set("appservice.as_token", self._new_token())
         self.set("appservice.hs_token", self._new_token())
@@ -354,5 +362,5 @@ class Config(DictWithRecursion):
             "rate_limited": False
         }
         if self["appservice.community_id"]:
-            self._registration["namespaces"]["users"][0]["group_id"] \
-                = self["appservice.community_id"]
+            self._registration["namespaces"]["users"][0]["group_id"] = self[
+                "appservice.community_id"]

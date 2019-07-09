@@ -23,10 +23,13 @@ from .db import RoomState, UserProfile
 
 
 class SQLStateStore(StateStore):
+    profile_cache: Dict[Tuple[str, str], UserProfile]
+    room_state_cache: Dict[str, RoomState]
+
     def __init__(self) -> None:
         super().__init__()
-        self.profile_cache = {}  # type: Dict[Tuple[str, str], UserProfile]
-        self.room_state_cache = {}  # type: Dict[str, RoomState]
+        self.profile_cache = {}
+        self.room_state_cache = {}
 
     @staticmethod
     def is_registered(user: MatrixUserID) -> bool:

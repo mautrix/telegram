@@ -42,9 +42,9 @@ if TYPE_CHECKING:
     from .config import Config
     from .bot import Bot
 
-config = None  # type: Config
+config: Optional['Config'] = None
 # Value updated from config in init()
-MAX_DELETIONS = 10  # type: int
+MAX_DELETIONS: int = 10
 
 UpdateMessage = Union[UpdateShortChatMessage, UpdateShortMessage, UpdateNewChannelMessage,
                       UpdateNewMessage, UpdateEditMessage, UpdateEditChannelMessage]
@@ -59,26 +59,41 @@ except ImportError:
     Histogram = None
     UPDATE_TIME = None
 
+
 class AbstractUser(ABC):
-    session_container = None  # type: AlchemySessionContainer
-    loop = None  # type: asyncio.AbstractEventLoop
-    log = None  # type: logging.Logger
-    az = None  # type: AppService
-    bot = None  # type: Bot
-    ignore_incoming_bot_events = True  # type: bool
+    session_container: AlchemySessionContainer = None
+    loop: asyncio.AbstractEventLoop = None
+    log: logging.Logger
+    az: AppService
+    bot: 'Bot'
+    ignore_incoming_bot_events: bool = True
+
+    client: Optional[MautrixTelegramClient]
+    mxid: Optional[MatrixUserID]
+
+    tgid: Optional[TelegramID]
+    username: Optional['str']
+    is_bot: bool
+
+    is_relaybot: bool
+    relaybot: Optional['Bot']
+
+    puppet_whitelisted: bool
+    whitelisted: bool
+    relaybot_whitelisted: bool
+    matrix_puppet_whitelisted: bool
+    is_admin: bool
 
     def __init__(self) -> None:
-        self.is_admin = False  # type: bool
-        self.matrix_puppet_whitelisted = False  # type: bool
-        self.puppet_whitelisted = False  # type: bool
-        self.whitelisted = False  # type: bool
-        self.relaybot_whitelisted = False  # type: bool
-        self.client = None  # type: MautrixTelegramClient
-        self.tgid = None  # type: TelegramID
-        self.mxid = None  # type: MatrixUserID
-        self.is_relaybot = False  # type: bool
-        self.is_bot = False  # type: bool
-        self.relaybot = None  # type: Optional[Bot]
+        self.is_admin = False
+        self.matrix_puppet_whitelisted = False
+        self.puppet_whitelisted = False
+        self.whitelisted = False
+        self.relaybot_whitelisted = False
+        self.client = None
+        self.is_relaybot = False
+        self.is_bot = False
+        self.relaybot = None
 
     @property
     def connected(self) -> bool:
@@ -367,7 +382,6 @@ class AbstractUser(ABC):
                 message.delete()
                 number_left = DBMessage.count_spaces_by_mxid(message.mxid, message.mx_room)
                 if number_left == 0:
-                    portal = po.Portal.get_by_mxid(message.mx_room)
                     await self._try_redact(message)
 
     async def delete_channel_message(self, update: UpdateDeleteChannelMessages) -> None:
@@ -414,7 +428,7 @@ class AbstractUser(ABC):
     # endregion
 
 
-def init(context: "Context") -> None:
+def init(context: 'Context') -> None:
     global config, MAX_DELETIONS
     AbstractUser.az, config, AbstractUser.loop, AbstractUser.relaybot = context.core
     AbstractUser.ignore_incoming_bot_events = config["bridge.relaybot.ignore_own_incoming_events"]

@@ -35,32 +35,40 @@ from . import puppet as pu, portal as po, user as u
 
 if TYPE_CHECKING:
     from .config import Config
-    from .context import Context
 
-config = None  # type: Config
+config: Optional['Config'] = None
 
 ReplyFunc = Callable[[str], Awaitable[Message]]
 
 
 class Bot(AbstractUser):
-    log = logging.getLogger("mau.bot")  # type: logging.Logger
-    mxid_regex = re.compile("@.+:.+")  # type: Pattern
+    log: logging.Logger = logging.getLogger("mau.bot")
+    mxid_regex: Pattern = re.compile("@.+:.+")
+
+    token: str
+    chats: Dict[int, str]
+    tg_whitelist: List[int]
+    whitelist_group_admins: bool
+    _me_info: Optional[User]
+    _me_mxid: Optional[MatrixUserID]
 
     def __init__(self, token: str) -> None:
         super().__init__()
-        self.token = token  # type: str
-        self.puppet_whitelisted = True  # type: bool
-        self.whitelisted = True  # type: bool
-        self.relaybot_whitelisted = True  # type: bool
-        self.username = None  # type: str
-        self.is_relaybot = True  # type: bool
-        self.is_bot = True  # type: bool
-        self.chats = {}  # type: Dict[int, str]
-        self.tg_whitelist = []  # type: List[int]
+        self.token = token
+        self.tgid = None
+        self.mxid = None
+        self.puppet_whitelisted = True
+        self.whitelisted = True
+        self.relaybot_whitelisted = True
+        self.username = None
+        self.is_relaybot = True
+        self.is_bot = True
+        self.chats = {}
+        self.tg_whitelist = []
         self.whitelist_group_admins = (config["bridge.relaybot.whitelist_group_admins"]
-                                       or False)  # type: bool
-        self._me_info = None  # type: Optional[User]
-        self._me_mxid = None  # type: Optional[MatrixUserID]
+                                       or False)
+        self._me_info = None
+        self._me_mxid = None
 
     async def get_me(self, use_cache: bool = True) -> Tuple[User, MatrixUserID]:
         if not use_cache or not self._me_mxid:
@@ -91,7 +99,7 @@ class Bot(AbstractUser):
     async def post_login(self) -> None:
         await self.init_permissions()
         info = await self.client.get_me()
-        self.tgid = info.id
+        self.tgid = TelegramID(info.id)
         self.username = info.username
         self.mxid = pu.Puppet.get_mxid_from_id(self.tgid)
 

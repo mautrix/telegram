@@ -28,16 +28,25 @@ if TYPE_CHECKING:
 
 
 class Context:
+    az: 'AppService'
+    config: 'Config'
+    loop: 'asyncio.AbstractEventLoop'
+    bot: Optional['Bot']
+    mx: Optional['MatrixHandler']
+    session_container: 'AlchemySessionContainer'
+    public_website: Optional['PublicBridgeWebsite']
+    provisioning_api: Optional['ProvisioningAPI']
+
     def __init__(self, az: 'AppService', config: 'Config', loop: 'asyncio.AbstractEventLoop',
                  session_container: 'AlchemySessionContainer', bot: Optional['Bot']) -> None:
-        self.az = az  # type: AppService
-        self.config = config  # type: Config
-        self.loop = loop  # type: asyncio.AbstractEventLoop
-        self.bot = bot  # type: Optional[Bot]
-        self.mx = None  # type: Optional[MatrixHandler]
-        self.session_container = session_container  # type: AlchemySessionContainer
-        self.public_website = None  # type: Optional[PublicBridgeWebsite]
-        self.provisioning_api = None  # type: Optional[ProvisioningAPI]
+        self.az = az
+        self.config = config
+        self.loop = loop
+        self.bot = bot
+        self.mx = None
+        self.session_container = session_container
+        self.public_website = None
+        self.provisioning_api = None
 
     @property
     def core(self) -> Tuple['AppService', 'Config', 'asyncio.AbstractEventLoop', Optional['Bot']]:

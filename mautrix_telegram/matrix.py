@@ -26,6 +26,9 @@ from . import user as u, portal as po, puppet as pu, commands as com
 
 if TYPE_CHECKING:
     from .context import Context
+    from .config import Config
+    from .bot import Bot
+    from mautrix_appservice import AppService
 
 try:
     from prometheus_client import Histogram
@@ -38,12 +41,17 @@ except ImportError:
 
 
 class MatrixHandler:
-    log = logging.getLogger("mau.mx")  # type: logging.Logger
+    log: logging.Logger = logging.getLogger("mau.mx")
+    az: 'AppService'
+    config: 'Config'
+    bot: 'Bot'
+    commands: 'com.CommandProcessor'
+    previously_typing: Dict[MatrixRoomID, Set[MatrixUserID]]
 
     def __init__(self, context: 'Context') -> None:
         self.az, self.config, _, self.tgbot = context.core
-        self.commands = com.CommandProcessor(context)  # type: com.CommandProcessor
-        self.previously_typing = []  # type: List[MatrixUserID]
+        self.commands = com.CommandProcessor(context)
+        self.previously_typing = {}
 
         self.az.matrix_event_handler(self.handle_event)
 
@@ -372,14 +380,16 @@ class MatrixHandler:
             return
         await user.set_presence(presence == "online")
 
-    async def handle_typing(self, room_id: MatrixRoomID, now_typing: List[MatrixUserID]) -> None:
+    async def handle_typing(self, room_id: MatrixRoomID, now_typing: Set[MatrixUserID]) -> None:
         portal = po.Portal.get_by_mxid(room_id)
         if not portal:
             return
 
-        for user_id in set(self.previously_typing + now_typing):
+        previously_typing = self.previously_typing.get(room_id, set())
+
+        for user_id in set(previously_typing | now_typing):
             is_typing = user_id in now_typing
-            was_typing = user_id in self.previously_typing
+            was_typing = user_id in previously_typing
             if is_typing and was_typing:
                 continue
 
@@ -389,7 +399,7 @@ class MatrixHandler:
 
             await portal.set_typing(user, is_typing)
 
-        self.previously_typing = now_typing
+        self.previously_typing[room_id] = now_typing
 
     def filter_matrix_event(self, event: MatrixEvent) -> bool:
         sender = event.get("sender", None)
@@ -405,38 +415,38 @@ class MatrixHandler:
             self.log.exception("Error handling manually received Matrix event")
 
     async def handle_ephemeral_event(self, evt: MatrixEvent) -> None:
-        evt_type = evt.get("type", "m.unknown")  # type: str
-        room_id = evt.get("room_id", None)  # type: Optional[MatrixRoomID]
-        sender = evt.get("sender", None)  # type: Optional[MatrixUserID]
-        content = evt.get("content", {})  # type: Dict
+        evt_type: str = evt.get("type", "m.unknown")
+        room_id: Optional[MatrixRoomID] = evt.get("room_id", None)
+        sender: Optional[MatrixUserID] = evt.get("sender", None)
+        content: Dict = evt.get("content", {})
         if evt_type == "m.receipt":
             await self.handle_read_receipts(room_id, self.parse_read_receipts(content))
         elif evt_type == "m.presence":
             await self.handle_presence(sender, content.get("presence", "offline"))
         elif evt_type == "m.typing":
-            await self.handle_typing(room_id, content.get("user_ids", []))
+            await self.handle_typing(room_id, set(content.get("user_ids", [])))
 
     async def handle_event(self, evt: MatrixEvent) -> None:
         if self.filter_matrix_event(evt):
             return
         start_time = time.time()
         self.log.debug("Received event: %s", evt)
-        evt_type = evt.get("type", "m.unknown")  # type: str
-        room_id = evt.get("room_id", None)  # type: Optional[MatrixRoomID]
-        event_id = evt.get("event_id", None)  # type: Optional[MatrixEventID]
-        sender = evt.get("sender", None)  # type: Optional[MatrixUserID]
+        evt_type: str = evt.get("type", "m.unknown")
+        room_id: Optional[MatrixRoomID] = evt.get("room_id", None)
+        event_id: Optional[MatrixEventID] = evt.get("event_id", None)
+        sender: Optional[MatrixUserID] = evt.get("sender", None)
         state_key = evt.get("state_key", None)
-        content = evt.get("content", {})  # type: Dict
+        content: Dict = evt.get("content", {})
         if state_key is not None:
             if evt_type == "m.room.member":
-                prev_content = evt.get("unsigned", {}).get("prev_content", {})  # type: Dict
-                membership = content.get("membership", "")  # type: str
-                prev_membership = prev_content.get("membership", "leave")  # type: str
+                prev_content: Dict = evt.get("unsigned", {}).get("prev_content", {})
+                membership: str = content.get("membership", "")
+                prev_membership: str = prev_content.get("membership", "leave")
                 if membership == prev_membership:
-                    match = re.compile("@(.+):(.+)").match(state_key)  # type: Match
-                    mxid = match.group(0)  # type: str
-                    displayname = content.get("displayname", None) or mxid  # type: str
-                    prev_displayname = prev_content.get("displayname", None) or mxid  # type: str
+                    match: Match = re.compile("@(.+):(.+)").match(state_key)
+                    mxid: str = match.group(0)
+                    displayname: str = content.get("displayname", None) or mxid
+                    prev_displayname: str = prev_content.get("displayname", None) or mxid
                     if displayname != prev_displayname:
                         await self.handle_name_change(room_id, state_key, displayname,
                                                       prev_displayname, event_id)

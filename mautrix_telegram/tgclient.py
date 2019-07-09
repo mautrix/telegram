@@ -21,9 +21,12 @@ from telethon.tl.types import (
     InputMediaUploadedDocument, InputMediaUploadedPhoto, TypeDocumentAttribute, TypeInputMedia,
     TypeInputPeer, TypeMessageEntity, TypeMessageMedia, TypePeer)
 from telethon.tl.patched import Message
+from telethon.sessions.abstract import Session
 
 
 class MautrixTelegramClient(TelegramClient):
+    session: Session
+
     async def upload_file_direct(self, file: bytes, mime_type: str = None,
                                  attributes: List[TypeDocumentAttribute] = None,
                                  file_name: str = None, max_image_size: float = 10 * 1000 ** 2,
