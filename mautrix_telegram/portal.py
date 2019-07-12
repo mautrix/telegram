@@ -864,23 +864,32 @@ class Portal:
         else:
             await user.client(ReadMessageHistoryRequest(peer=self.peer, max_id=message.tgid))
 
-    async def kick_matrix(self, user: Union['u.User', 'p.Puppet'], source: 'u.User') -> None:
+    async def kick_matrix(self, user: Union['u.User', 'p.Puppet'], source: 'u.User',
+                          ban: bool = False) -> None:
         if user.tgid == source.tgid:
             return
+        if isinstance(user, u.User) and await user.needs_relaybot(self):
+            if not self.bot:
+                return
+            # TODO kick and ban message
+            return
         if await source.needs_relaybot(self):
+            if not self.has_bot:
+                return
             source = self.bot
+        target = await user.get_input_entity(source)
         if self.peer_type == "chat":
-            await source.client(DeleteChatUserRequest(chat_id=self.tgid, user_id=user.tgid))
+            await source.client(DeleteChatUserRequest(chat_id=self.tgid, user_id=target))
         elif self.peer_type == "channel":
             channel = await self.get_input_entity(source)
-            rights = ChatBannedRights(datetime.fromtimestamp(0), True)
-            await source.client(EditBannedRequest(channel=channel,
-                                                  user_id=user.tgid,
-                                                  banned_rights=rights))
+            await source.client.edit_permissions(channel, target, view_messages=False)
+            if not ban:
+                await source.client.edit_permissions(channel, target, view_messages=True)
 
-    async def leave_matrix(self, user: 'u.User', source: 'u.User',
-                           event_id: MatrixEventID) -> None:
+    async def leave_matrix(self, user: 'u.User', event_id: MatrixEventID) -> None:
         if await user.needs_relaybot(self):
+            if not self.has_bot:
+                return
             async with self.require_send_lock(self.bot.tgid):
                 message = await self._get_state_change_message("leave", user)
                 if not message:
@@ -900,8 +909,6 @@ class Portal:
                 del self.by_mxid[self.mxid]
             except KeyError:
                 pass
-        elif source and source.tgid != user.tgid:
-            await self.kick_matrix(user, source)
         elif self.peer_type == "chat":
             await user.client(DeleteChatUserRequest(chat_id=self.tgid, user_id=InputUserSelf()))
         elif self.peer_type == "channel":

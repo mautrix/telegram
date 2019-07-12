@@ -65,7 +65,7 @@ class AbstractUser(ABC):
     loop: asyncio.AbstractEventLoop = None
     log: logging.Logger
     az: AppService
-    bot: 'Bot'
+    relaybot: Optional['Bot']
     ignore_incoming_bot_events: bool = True
 
     client: Optional[MautrixTelegramClient]
@@ -76,7 +76,6 @@ class AbstractUser(ABC):
     is_bot: bool
 
     is_relaybot: bool
-    relaybot: Optional['Bot']
 
     puppet_whitelisted: bool
     whitelisted: bool
@@ -404,7 +403,7 @@ class AbstractUser(ABC):
                            portal.tgid_log)
             return
 
-        if self.ignore_incoming_bot_events and self.bot and sender.id == self.bot.tgid:
+        if self.ignore_incoming_bot_events and self.relaybot and sender.id == self.relaybot.tgid:
             self.log.debug(f"Ignoring relaybot-sent message %s to %s", update, portal.tgid_log)
             return
 

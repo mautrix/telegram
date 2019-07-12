@@ -15,11 +15,12 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from typing import Optional, Tuple, TYPE_CHECKING
 
-if TYPE_CHECKING:
-    import asyncio
+import asyncio
 
-    from alchemysession import AlchemySessionContainer
-    from mautrix_appservice import AppService
+from alchemysession import AlchemySessionContainer
+from mautrix_appservice import AppService
+
+if TYPE_CHECKING:
 
     from .web import PublicBridgeWebsite, ProvisioningAPI
     from .config import Config
@@ -28,17 +29,17 @@ if TYPE_CHECKING:
 
 
 class Context:
-    az: 'AppService'
+    az: AppService
     config: 'Config'
-    loop: 'asyncio.AbstractEventLoop'
+    loop: asyncio.AbstractEventLoop
     bot: Optional['Bot']
     mx: Optional['MatrixHandler']
-    session_container: 'AlchemySessionContainer'
+    session_container: AlchemySessionContainer
     public_website: Optional['PublicBridgeWebsite']
     provisioning_api: Optional['ProvisioningAPI']
 
-    def __init__(self, az: 'AppService', config: 'Config', loop: 'asyncio.AbstractEventLoop',
-                 session_container: 'AlchemySessionContainer', bot: Optional['Bot']) -> None:
+    def __init__(self, az: AppService, config: 'Config', loop: asyncio.AbstractEventLoop,
+                 session_container: AlchemySessionContainer, bot: Optional['Bot']) -> None:
         self.az = az
         self.config = config
         self.loop = loop
@@ -49,5 +50,5 @@ class Context:
         self.provisioning_api = None
 
     @property
-    def core(self) -> Tuple['AppService', 'Config', 'asyncio.AbstractEventLoop', Optional['Bot']]:
+    def core(self) -> Tuple[AppService, 'Config', asyncio.AbstractEventLoop, Optional['Bot']]:
         return self.az, self.config, self.loop, self.bot

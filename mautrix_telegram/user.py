@@ -331,7 +331,7 @@ class User(AbstractUser):
 
     async def needs_relaybot(self, portal: po.Portal) -> bool:
         return not await self.is_logged_in() or (
-            (portal.has_bot or self.bot) and portal.tgid_full not in self.portals)
+            (portal.has_bot or self.is_bot) and portal.tgid_full not in self.portals)
 
     def _hash_contacts(self) -> int:
         acc = 0
@@ -408,9 +408,8 @@ class User(AbstractUser):
     # endregion
 
 
-def init(context: 'Context') -> List[Awaitable['User']]:
+def init(context: 'Context') -> Iterable[Awaitable['User']]:
     global config
     config = context.config
 
-    users = [User.from_db(user) for user in DBUser.all()]
-    return [user.ensure_started() for user in users if user.tgid]
+    return (User.from_db(db_user).ensure_started() for db_user in DBUser.all() if db_user.tgid)

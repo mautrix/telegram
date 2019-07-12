@@ -521,7 +521,7 @@ class Puppet:
     # endregion
 
 
-def init(context: 'Context') -> List[Awaitable[Any]]:  # [None, None, PuppetError]
+def init(context: 'Context') -> Iterable[Awaitable[Any]]:
     global config
     Puppet.az, config, Puppet.loop, _ = context.core
     Puppet.mx = context.mx
@@ -529,4 +529,4 @@ def init(context: 'Context') -> List[Awaitable[Any]]:  # [None, None, PuppetErro
     Puppet.hs_domain = config["homeserver"]["domain"]
     Puppet.mxid_regex = re.compile(
         f"@{Puppet.username_template.format(userid='([0-9]+)')}:{Puppet.hs_domain}")
-    return [puppet.init_custom_mxid() for puppet in Puppet.all_with_custom_mxid()]
+    return (puppet.init_custom_mxid() for puppet in Puppet.all_with_custom_mxid())

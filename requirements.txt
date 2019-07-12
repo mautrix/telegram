@@ -1,5 +1,5 @@
 aiohttp
-mautrix-appservice
+mautrix
 ruamel.yaml
 python-magic
 SQLAlchemy
