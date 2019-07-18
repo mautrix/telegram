@@ -1,4 +1,4 @@
 cryptg
 Pillow
 moviepy
-prometheus-client
+prometheus_client

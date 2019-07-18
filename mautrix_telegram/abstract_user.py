@@ -24,17 +24,19 @@ from telethon.tl.patched import MessageService, Message
 from telethon.tl.types import (
     Channel, ChannelForbidden, Chat, ChatForbidden, MessageActionChannelMigrateFrom, PeerUser,
     TypeUpdate, UpdateChannelPinnedMessage, UpdateChatPinnedMessage, UpdateChatParticipantAdmin,
-    UpdateChatParticipants, UpdateChatUserTyping, UpdateDeleteChannelMessages, UpdateDeleteMessages,
-    UpdateEditChannelMessage, UpdateEditMessage, UpdateNewChannelMessage, UpdateNewMessage,
+    UpdateChatParticipants, UpdateChatUserTyping, UpdateDeleteChannelMessages, UpdateNewMessage,
+    UpdateDeleteMessages, UpdateEditChannelMessage, UpdateEditMessage, UpdateNewChannelMessage,
     UpdateReadHistoryOutbox, UpdateShortChatMessage, UpdateShortMessage, UpdateUserName,
     UpdateUserPhoto, UpdateUserStatus, UpdateUserTyping, User, UserStatusOffline, UserStatusOnline)
 
-from mautrix_appservice import MatrixRequestError, AppService
+from mautrix.types import UserID
+from mautrix.errors import MatrixError
+from mautrix.appservice import AppService
 from alchemysession import AlchemySessionContainer
 
 from . import portal as po, puppet as pu, __version__
 from .db import Message as DBMessage
-from .types import TelegramID, MatrixUserID
+from .types import TelegramID
 from .tgclient import MautrixTelegramClient
 
 if TYPE_CHECKING:
@@ -69,7 +71,7 @@ class AbstractUser(ABC):
     ignore_incoming_bot_events: bool = True
 
     client: Optional[MautrixTelegramClient]
-    mxid: Optional[MatrixUserID]
+    mxid: Optional[UserID]
 
     tgid: Optional[TelegramID]
     username: Optional['str']
@@ -140,8 +142,10 @@ class AbstractUser(ABC):
             api_hash=config["telegram.api_hash"],
 
             app_version=__version__ if appversion == "auto" else appversion,
-            system_version=MautrixTelegramClient.__version__ if sysversion == "auto" else sysversion,
-            device_model=f"{platform.system()} {platform.release()}" if device == "auto" else device,
+            system_version=(MautrixTelegramClient.__version__
+                            if sysversion == "auto" else sysversion),
+            device_model=(f"{platform.system()} {platform.release()}"
+                          if device == "auto" else device),
 
             timeout=config["telegram.connection.timeout"],
             connection_retries=config["telegram.connection.retries"],
@@ -197,7 +201,8 @@ class AbstractUser(ABC):
         raise NotImplementedError()
 
     async def is_logged_in(self) -> bool:
-        return self.client and self.client.is_connected() and await self.client.is_user_authorized()
+        return (self.client and self.client.is_connected()
+                and await self.client.is_user_authorized())
 
     async def has_full_access(self, allow_bot: bool = False) -> bool:
         return (self.puppet_whitelisted
@@ -368,7 +373,7 @@ class AbstractUser(ABC):
             return
         try:
             await portal.main_intent.redact(message.mx_room, message.mxid)
-        except MatrixRequestError:
+        except MatrixError:
             pass
 
     async def delete_message(self, update: UpdateDeleteMessages) -> None:

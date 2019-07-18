@@ -34,10 +34,6 @@ class Config(BaseBridgeConfig):
         except KeyError:
             return super().__getitem__(key)
 
-    @staticmethod
-    def _new_token() -> str:
-        return "".join(random.choice(string.ascii_lowercase + string.digits) for _ in range(64))
-
     def do_update(self, helper: ConfigUpdateHelper) -> None:
         copy, copy_dict, base = helper
 

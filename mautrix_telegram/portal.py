@@ -13,11 +13,11 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import Awaitable, Dict, List, Optional, Pattern, Tuple, Union, cast, TYPE_CHECKING, Any
-from collections import deque
-from datetime import datetime
-from string import Template
+from typing import (Awaitable, Dict, List, Optional, Pattern, Tuple, Union, Any, Deque, cast,
+                    TYPE_CHECKING)
 from html import escape as escape_html
+from collections import deque
+from string import Template
 import asyncio
 import random
 import mimetypes
@@ -37,7 +37,7 @@ from telethon.tl.functions.messages import (
     EditChatPhotoRequest, EditChatTitleRequest, ExportChatInviteRequest, GetFullChatRequest,
     UpdatePinnedMessageRequest, MigrateChatRequest, SetTypingRequest, EditChatAboutRequest)
 from telethon.tl.functions.channels import (
-    CreateChannelRequest, EditAdminRequest, EditBannedRequest, EditPhotoRequest, EditTitleRequest,
+    CreateChannelRequest, EditAdminRequest, EditPhotoRequest, EditTitleRequest,
     GetParticipantsRequest, InviteToChannelRequest, JoinChannelRequest, LeaveChannelRequest,
     UpdateUsernameRequest)
 from telethon.tl.functions.messages import ReadHistoryRequest as ReadMessageHistoryRequest
@@ -63,9 +63,12 @@ from telethon.tl.types import (
     TypePhotoSize, TypeUpdates, TypeUser, PhotoSize, TypeUserFull, UpdateChatUserTyping,
     UpdateNewChannelMessage, UpdateNewMessage, UpdateUserTyping, User, UserFull, MessageEntityPre,
     InputMediaUploadedDocument, InputPeerPhotoFileLocation)
-from mautrix_appservice import MatrixRequestError, IntentError, AppService, IntentAPI
 
-from .types import MatrixEventID, MatrixRoomID, MatrixUserID, TelegramID
+from mautrix.errors import MatrixRequestError, IntentError
+from mautrix.appservice import AppService, IntentAPI
+from mautrix.types import EventID, RoomID, UserID, RoomCreatePreset, ContentURI, MessageType
+
+from .types import TelegramID
 from .context import Context
 from .db import Portal as DBPortal, Message as DBMessage, TelegramFile as DBTelegramFile
 from .util import ignore_coro, sane_mimetypes
@@ -77,70 +80,96 @@ if TYPE_CHECKING:
     from .config import Config
     from .tgclient import MautrixTelegramClient
 
-config = None  # type: Config
+config: Optional[Config] = None
 
 TypeMessage = Union[Message, MessageService]
 TypeParticipant = Union[TypeChatParticipant, TypeChannelParticipant]
-DedupMXID = Tuple[MatrixEventID, TelegramID]
-InviteList = Union[MatrixUserID, List[MatrixUserID]]
+DedupMXID = Tuple[EventID, TelegramID]
+InviteList = Union[UserID, List[UserID]]
 
 
 class Portal:
-    base_log = logging.getLogger("mau.portal")  # type: logging.Logger
-    az = None  # type: AppService
-    bot = None  # type: Bot
-    loop = None  # type: asyncio.AbstractEventLoop
+    base_log: logging.Logger = logging.getLogger("mau.portal")
+    az: AppService = None
+    bot: Bot = None
+    loop: asyncio.AbstractEventLoop = None
 
     # Config cache
-    filter_mode = None  # type: str
-    filter_list = None  # type: List[str]
+    filter_mode: str = None
+    filter_list: List[str] = None
 
-    public_portals = False  # type: bool
-    max_initial_member_sync = -1  # type: int
-    sync_channel_members = True  # type: bool
-    sync_matrix_state = True  # type: bool
+    public_portals: bool = False
+    max_initial_member_sync: int = -1
+    sync_channel_members: bool = True
+    sync_matrix_state: bool = True
 
-    dedup_pre_db_check = False  # type: bool
-    dedup_cache_queue_length = 20  # type: int
+    dedup_pre_db_check: bool = False
+    dedup_cache_queue_length: int = 20
 
-    alias_template = None  # type: str
-    mx_alias_regex = None  # type: Pattern
-    hs_domain = None  # type: str
+    alias_template: str = None
+    mx_alias_regex: Pattern = None
+    hs_domain: str = None
 
     # Instance cache
-    by_mxid = {}  # type: Dict[MatrixRoomID, Portal]
-    by_tgid = {}  # type: Dict[Tuple[TelegramID, TelegramID], Portal]
+    by_mxid: Dict[RoomID, 'Portal'] = {}
+    by_tgid: Dict[Tuple[TelegramID, TelegramID], 'Portal'] = {}
+
+    mxid: Optional[RoomID]
+    tgid: TelegramID
+    tg_receiver: TelegramID
+    peer_type: str
+    username: str
+    megagroup: bool
+    title: Optional[str]
+    about: Optional[str]
+    photo_id: Optional[str]
+    local_config: Dict[str, Any]
+    deleted: bool
+    log: logging.Logger
+
+    _db_instance: DBPortal
+    _main_intent: Optional[IntentAPI]
+    _room_create_lock: asyncio.Lock
+    _temp_pinned_message_id: Optional[TelegramID]
+    _temp_pinned_message_id_space: Optional[TelegramID]
+    _temp_pinned_message_sender: Optional['p.Puppet']
+
+    _dedup: Deque[str]
+    _dedup_mxid: Dict[str, DedupMXID]
+    _dedup_action: Deque[str]
+
+    _send_locks: Dict[int, asyncio.Lock]
 
     def __init__(self, tgid: TelegramID, peer_type: str, tg_receiver: Optional[TelegramID] = None,
-                 mxid: Optional[MatrixRoomID] = None, username: Optional[str] = None,
+                 mxid: Optional[RoomID] = None, username: Optional[str] = None,
                  megagroup: Optional[bool] = False, title: Optional[str] = None,
                  about: Optional[str] = None, photo_id: Optional[str] = None,
                  local_config: Optional[str] = None, db_instance: DBPortal = None) -> None:
-        self.mxid = mxid  # type: Optional[MatrixRoomID]
-        self.tgid = tgid  # type: TelegramID
-        self.tg_receiver = tg_receiver or tgid  # type: TelegramID
-        self.peer_type = peer_type  # type: str
-        self.username = username  # type: str
-        self.megagroup = megagroup  # type: bool
-        self.title = title  # type: Optional[str]
-        self.about = about  # type: str
-        self.photo_id = photo_id  # type: str
-        self.local_config = json.loads(local_config or "{}")  # type: Dict[str, Any]
-        self._db_instance = db_instance  # type: DBPortal
-        self.deleted = False  # type: bool
+        self.mxid = mxid
+        self.tgid = tgid
+        self.tg_receiver = tg_receiver or tgid
+        self.peer_type = peer_type
+        self.username = username
+        self.megagroup = megagroup
+        self.title = title
+        self.about = about
+        self.photo_id = photo_id
+        self.local_config = json.loads(local_config or "{}")
+        self._db_instance = db_instance
+        self.deleted = False
         self.log = self.base_log.getChild(self.tgid_log) if self.tgid else self.base_log
 
-        self._main_intent = None  # type: IntentAPI
-        self._room_create_lock = asyncio.Lock()  # type: asyncio.Lock
-        self._temp_pinned_message_id = None  # type: Optional[int]
-        self._temp_pinned_message_id_space = None  # type: Optional[TelegramID]
-        self._temp_pinned_message_sender = None  # type: Optional[p.Puppet]
+        self._main_intent = None
+        self._room_create_lock = asyncio.Lock()
+        self._temp_pinned_message_id = None
+        self._temp_pinned_message_id_space = None
+        self._temp_pinned_message_sender = None
 
-        self._dedup = deque()  # type: deque
-        self._dedup_mxid = {}  # type: Dict[str, DedupMXID]
-        self._dedup_action = deque()  # type: deque
+        self._dedup = deque()
+        self._dedup_mxid = {}
+        self._dedup_action = deque()
 
-        self._send_locks = {}  # type: Dict[int, asyncio.Lock]
+        self._send_locks = {}
 
         if tgid:
             self.by_tgid[self.tgid_full] = self
@@ -260,7 +289,7 @@ class Portal:
         try:
             found_mxid = self._dedup_mxid[evt_hash]
         except KeyError:
-            return MatrixEventID("None"), TelegramID(0)
+            return EventID("None"), TelegramID(0)
 
         if found_mxid != expected_mxid:
             return found_mxid
@@ -304,13 +333,11 @@ class Portal:
     # region Matrix room info updating
 
     async def invite_to_matrix(self, users: InviteList) -> None:
-        if isinstance(users, str):
-            await self.main_intent.invite(self.mxid, users, check_cache=True)
-        elif isinstance(users, list):
+        if isinstance(users, list):
             for user in users:
-                await self.main_intent.invite(self.mxid, user, check_cache=True)
+                await self.main_intent.invite_user(self.mxid, user, check_cache=True)
         else:
-            raise ValueError("Invalid invite identifier given to invite_matrix()")
+            await self.main_intent.invite_user(self.mxid, users, check_cache=True)
 
     async def update_matrix_room(self, user: 'AbstractUser', entity: Union[TypeChat, User],
                                  direct: bool, puppet: p.Puppet = None, levels: Dict = None,
@@ -348,7 +375,7 @@ class Portal:
             return await self._create_matrix_room(user, entity, invites)
 
     async def _create_matrix_room(self, user: 'AbstractUser', entity: TypeChat, invites: InviteList
-                                  ) -> Optional[MatrixRoomID]:
+                                  ) -> Optional[RoomID]:
         direct = self.peer_type == "user"
 
         if self.mxid:
@@ -375,11 +402,11 @@ class Portal:
             self.megagroup = entity.megagroup
 
         if self.peer_type == "channel" and entity.username:
-            public = Portal.public_portals
+            preset = RoomCreatePreset.PUBLIC
             alias = self._get_alias_localpart(entity.username)
             self.username = entity.username
         else:
-            public = False
+            preset = RoomCreatePreset.PRIVATE
             # TODO invite link alias?
             alias = None
 
@@ -402,13 +429,13 @@ class Portal:
                 "content": {"groups": [config["appservice.community_id"]]},
             })
 
-        room_id = await self.main_intent.create_room(alias=alias, is_public=public,
+        room_id = await self.main_intent.create_room(alias_localpart=alias, preset=preset,
                                                      is_direct=direct, invitees=invites or [],
                                                      name=self.title, initial_state=initial_state)
         if not room_id:
             raise Exception(f"Failed to create room")
 
-        self.mxid = MatrixRoomID(room_id)
+        self.mxid = RoomID(room_id)
         self.by_mxid[self.mxid] = self
         self.save()
         self.az.state_store.set_power_levels(self.mxid, power_levels)
@@ -510,7 +537,7 @@ class Portal:
                              and Portal.max_initial_member_sync == -1
                              and (self.megagroup or self.peer_type != "channel"))
         if trust_member_list:
-            joined_mxids = cast(List[MatrixUserID],
+            joined_mxids = cast(List[UserID],
                                 await self.main_intent.get_room_members(self.mxid))
             for user_mxid in joined_mxids:
                 if user_mxid == self.az.bot_mxid:
@@ -519,7 +546,7 @@ class Portal:
                 if puppet_id and puppet_id not in allowed_tgids:
                     if self.bot and puppet_id == self.bot.tgid:
                         self.bot.remove_chat(self.tgid)
-                    await self.main_intent.kick(self.mxid, user_mxid,
+                    await self.main_intent.kick_user(self.mxid, user_mxid,
                                                 "User had left this Telegram chat.")
                     continue
                 mx_user = u.User.get_by_mxid(user_mxid, create=False)
@@ -527,7 +554,7 @@ class Portal:
                     mx_user.unregister_portal(self)
 
                 if mx_user and not self.has_bot and mx_user.tgid not in allowed_tgids:
-                    await self.main_intent.kick(self.mxid, mx_user.mxid,
+                    await self.main_intent.kick_user(self.mxid, mx_user.mxid,
                                                 "You had left this Telegram chat.")
                     continue
 
@@ -551,12 +578,12 @@ class Portal:
                         if sender and sender.tgid != puppet.tgid
                         else "Left Telegram chat")
         if sender and sender.tgid != puppet.tgid:
-            await self.main_intent.kick(self.mxid, puppet.mxid, kick_message)
+            await self.main_intent.kick_user(self.mxid, puppet.mxid, kick_message)
         else:
             await puppet.intent.leave_room(self.mxid)
         if user:
             user.unregister_portal(self)
-            await self.main_intent.kick(self.mxid, user.mxid, kick_message)
+            await self.main_intent.kick_user(self.mxid, user.mxid, kick_message)
 
     async def update_info(self, user: 'AbstractUser', entity: TypeChat = None) -> None:
         if self.peer_type == "user":
@@ -625,7 +652,8 @@ class Portal:
             return None, None
         if isinstance(photo, Document) and not photo.thumbs:
             return None, None
-        largest = max(photo.sizes if isinstance(photo, Photo) else photo.thumbs,
+
+        largest = max(photo.thumbs if isinstance(photo, Document) else photo.sizes,
                       key=(lambda photo2: (len(photo2.bytes)
                                            if not isinstance(photo2, PhotoSize)
                                            else photo2.size)))
@@ -663,7 +691,7 @@ class Portal:
             raise ValueError(f"Unknown photo type {type(photo)}")
         if self.photo_id != photo_id:
             if not photo_id:
-                await self.main_intent.set_room_avatar(self.mxid, "")
+                await self.main_intent.set_room_avatar(self.mxid, ContentURI(""))
                 self.photo_id = ""
                 if save:
                     self.save()
@@ -739,7 +767,7 @@ class Portal:
         authenticated = []  # type: List[u.User]
         has_bot = self.has_bot
         for member_str in members:
-            member = MatrixUserID(member_str)
+            member = UserID(member_str)
             if p.Puppet.get_id_from_mxid(member) or member == self.main_intent.mxid:
                 continue
             user = await u.User.get_by_mxid(member).ensure_started()  # type: u.User
@@ -749,20 +777,20 @@ class Portal:
         return authenticated
 
     @staticmethod
-    async def cleanup_room(intent: IntentAPI, room_id: str, message: str = "Portal deleted",
+    async def cleanup_room(intent: IntentAPI, room_id: RoomID, message: str = "Portal deleted",
                            puppets_only: bool = False) -> None:
         try:
             members = await intent.get_room_members(room_id)
         except MatrixRequestError:
             members = []
         for user in members:
-            puppet = p.Puppet.get_by_mxid(MatrixUserID(user), create=False)
+            puppet = p.Puppet.get_by_mxid(UserID(user), create=False)
             if user != intent.mxid and (not puppets_only or puppet):
                 try:
                     if puppet:
                         await puppet.intent.leave_room(room_id)
                     else:
-                        await intent.kick(room_id, user, message)
+                        await intent.kick_user(room_id, user, message)
                 except (MatrixRequestError, IntentError):
                     pass
         await intent.leave_room(room_id)
@@ -816,7 +844,7 @@ class Portal:
         }
 
     async def name_change_matrix(self, user: 'u.User', displayname: str, prev_displayname: str,
-                                 event_id: MatrixEventID) -> None:
+                                 event_id: EventID) -> None:
         async with self.require_send_lock(self.bot.tgid):
             message = await self._get_state_change_message(
                 "name_change", user,
@@ -830,6 +858,7 @@ class Portal:
             self.is_duplicate(response, (event_id, space))
 
     async def get_displayname(self, user: 'u.User') -> str:
+        # FIXME mautrix4
         return (await self.main_intent.get_displayname(self.mxid, user.mxid)
                 or user.mxid)
 
@@ -851,7 +880,7 @@ class Portal:
         return user.client(SetTypingRequest(
             self.peer, action() if typing else SendMessageCancelAction()))
 
-    async def mark_read(self, user: 'u.User', event_id: MatrixEventID) -> None:
+    async def mark_read(self, user: 'u.User', event_id: EventID) -> None:
         if user.is_bot:
             return
         space = self.tgid if self.peer_type == "channel" else user.tgid
@@ -886,7 +915,7 @@ class Portal:
             if not ban:
                 await source.client.edit_permissions(channel, target, view_messages=True)
 
-    async def leave_matrix(self, user: 'u.User', event_id: MatrixEventID) -> None:
+    async def leave_matrix(self, user: 'u.User', event_id: EventID) -> None:
         if await user.needs_relaybot(self):
             if not self.has_bot:
                 return
@@ -915,7 +944,7 @@ class Portal:
             channel = await self.get_input_entity(user)
             await user.client(LeaveChannelRequest(channel=channel))
 
-    async def join_matrix(self, user: 'u.User', event_id: MatrixEventID) -> None:
+    async def join_matrix(self, user: 'u.User', event_id: EventID) -> None:
         if await user.needs_relaybot(self):
             async with self.require_send_lock(self.bot.tgid):
                 message = await self._get_state_change_message("join", user)
@@ -993,7 +1022,7 @@ class Portal:
         except KeyError:
             return None
 
-    async def _handle_matrix_text(self, sender_id: TelegramID, event_id: MatrixEventID,
+    async def _handle_matrix_text(self, sender_id: TelegramID, event_id: EventID,
                                   space: TelegramID, client: 'MautrixTelegramClient',
                                   message: Dict, reply_to: TelegramID) -> None:
         lock = self.require_send_lock(sender_id)
@@ -1015,18 +1044,18 @@ class Portal:
                                                  link_preview=lp)
             self._add_telegram_message_to_db(event_id, space, 0, response)
 
-    async def _handle_matrix_file(self, msgtype: str, sender_id: TelegramID,
-                                  event_id: MatrixEventID, space: TelegramID,
+    async def _handle_matrix_file(self, msgtype: MessageType, sender_id: TelegramID,
+                                  event_id: EventID, space: TelegramID,
                                   client: 'MautrixTelegramClient', message: dict,
                                   reply_to: TelegramID) -> None:
-        file = await self.main_intent.download_file(message["url"])
+        file = await self.main_intent.download_media(message["url"])
 
         info = message.get("info", {})
         mime = info.get("mimetype", None)
 
         w, h = None, None
 
-        if msgtype == "m.sticker":
+        if msgtype == MessageType.STICKER:
             if mime != "image/gif":
                 mime, file, w, h = util.convert_image(file, source_mime=mime, target_type="webp")
             else:
@@ -1048,14 +1077,8 @@ class Portal:
             max_image_size=config["bridge.image_as_file_size"] * 1000 ** 2)
         lock = self.require_send_lock(sender_id)
         async with lock:
-            relates_to = message.get("m.relates_to", None) or {}
-            if relates_to.get("rel_type", None) == "m.replace":
-                orig_msg = DBMessage.get_by_mxid(relates_to.get("event_id", ""), self.mxid, space)
-                if orig_msg:
-                    response = await client.edit_message(self.peer, orig_msg.tgid,
-                                                         caption, file=media)
-                    self._add_telegram_message_to_db(event_id, space, -1, response)
-                    return
+            if await self._matrix_document_edit(client, message, space, caption, media, event_id):
+                return
             try:
                 response = await client.send_media(self.peer, media, reply_to=reply_to,
                                                    caption=caption)
@@ -1066,7 +1089,20 @@ class Portal:
                                                    caption=caption)
             self._add_telegram_message_to_db(event_id, space, 0, response)
 
-    async def _handle_matrix_location(self, sender_id: TelegramID, event_id: MatrixEventID,
+    async def _matrix_document_edit(self, client: 'MautrixTelegramClient', message: dict,
+                                    space: TelegramID, caption: str, media: Any, event_id: EventID
+                                    ) -> bool:
+        relates_to = message.get("m.relates_to", None) or {}
+        if relates_to.get("rel_type", None) == "m.replace":
+            orig_msg = DBMessage.get_by_mxid(relates_to.get("event_id", ""), self.mxid, space)
+            if orig_msg:
+                response = await client.edit_message(self.peer, orig_msg.tgid,
+                                                     caption, file=media)
+                self._add_telegram_message_to_db(event_id, space, -1, response)
+                return True
+        return False
+
+    async def _handle_matrix_location(self, sender_id: TelegramID, event_id: EventID,
                                       space: TelegramID, client: 'MautrixTelegramClient',
                                       message: Dict[str, Any], reply_to: TelegramID) -> None:
         try:
@@ -1080,19 +1116,13 @@ class Portal:
 
         lock = self.require_send_lock(sender_id)
         async with lock:
-            relates_to = message.get("m.relates_to", None) or {}
-            if relates_to.get("rel_type", None) == "m.replace":
-                orig_msg = DBMessage.get_by_mxid(relates_to.get("event_id", ""), self.mxid, space)
-                if orig_msg:
-                    response = await client.edit_message(self.peer, orig_msg.tgid,
-                                                         caption, file=media)
-                    self._add_telegram_message_to_db(event_id, space, -1, response)
-                    return
+            if await self._matrix_document_edit(client, message, space, caption, media, event_id):
+                return
             response = await client.send_media(self.peer, media, reply_to=reply_to,
                                                caption=caption, entities=entities)
             self._add_telegram_message_to_db(event_id, space, 0, response)
 
-    def _add_telegram_message_to_db(self, event_id: MatrixEventID, space: TelegramID,
+    def _add_telegram_message_to_db(self, event_id: EventID, space: TelegramID,
                                     edit_index: int, response: TypeMessage) -> None:
         self.log.debug("Handled Matrix message: %s", response)
         self.is_duplicate(response, (event_id, space), force_hash=edit_index != 0)
@@ -1107,7 +1137,7 @@ class Portal:
             edit_index=edit_index).insert()
 
     async def handle_matrix_message(self, sender: 'u.User', message: Dict[str, Any],
-                                    event_id: MatrixEventID) -> None:
+                                    event_id: EventID) -> None:
         if "body" not in message or "msgtype" not in message:
             self.log.debug(f"Ignoring message {event_id} in {self.mxid} without body or msgtype")
             return
@@ -1146,7 +1176,7 @@ class Portal:
             self.log.debug(f"Unhandled Matrix event: {message}")
 
     async def handle_matrix_pin(self, sender: 'u.User',
-                                pinned_message: Optional[MatrixEventID]) -> None:
+                                pinned_message: Optional[EventID]) -> None:
         if self.peer_type != "chat" and self.peer_type != "channel":
             return
         try:
@@ -1162,7 +1192,7 @@ class Portal:
         except ChatNotModifiedError:
             pass
 
-    async def handle_matrix_deletion(self, deleter: 'u.User', event_id: MatrixEventID) -> None:
+    async def handle_matrix_deletion(self, deleter: 'u.User', event_id: EventID) -> None:
         real_deleter = deleter if not await deleter.needs_relaybot(self) else self.bot
         space = self.tgid if self.peer_type == "channel" else real_deleter.tgid
         message = DBMessage.get_by_mxid(event_id, self.mxid, space)
@@ -1190,7 +1220,7 @@ class Portal:
                                  user_id=user_id, admin_rights=rights))
 
     async def handle_matrix_power_levels(self, sender: 'u.User',
-                                         new_users: Dict[MatrixUserID, int],
+                                         new_users: Dict[UserID, int],
                                          old_users: Dict[str, int]) -> None:
         # TODO handle all power level changes and bridge exact admin rights to supergroups/channels
         for user, level in new_users.items():
@@ -1228,12 +1258,12 @@ class Portal:
         self.title = title
         self.save()
 
-    async def handle_matrix_avatar(self, sender: 'u.User', url: str) -> None:
+    async def handle_matrix_avatar(self, sender: 'u.User', url: ContentURI) -> None:
         if self.peer_type not in ("chat", "channel"):
             # Invalid peer type
             return
 
-        file = await self.main_intent.download_file(url)
+        file = await self.main_intent.download_media(url)
         mime = magic.from_buffer(file, mime=True)
         ext = sane_mimetypes.guess_extension(mime)
         uploaded = await sender.client.upload_file(file, file_name=f"avatar{ext}", use_cache=False)
@@ -1255,7 +1285,7 @@ class Portal:
                 self.save()
                 break
 
-    async def handle_matrix_upgrade(self, new_room: MatrixRoomID) -> None:
+    async def handle_matrix_upgrade(self, new_room: RoomID) -> None:
         old_room = self.mxid
         self.migrate_and_save_matrix(new_room)
         await self.main_intent.join_room(new_room)
@@ -1267,7 +1297,7 @@ class Portal:
         if not entity:
             user_mxids = await self.main_intent.get_room_members(self.mxid)
             for user_str in user_mxids:
-                user_id = MatrixUserID(user_str)
+                user_id = UserID(user_str)
                 if user_id == self.az.bot_mxid:
                     continue
                 user = u.User.get_by_mxid(user_id, create=False)
@@ -1299,7 +1329,7 @@ class Portal:
         user_tgids = set()
         user_mxids = await self.main_intent.get_room_members(self.mxid, ("join", "invite"))
         for user_str in user_mxids:
-            user = MatrixUserID(user_str)
+            user = UserID(user_str)
             if user == self.az.bot_mxid:
                 continue
             mx_user = u.User.get_by_mxid(user, create=False)
@@ -1405,7 +1435,7 @@ class Portal:
         return None
 
     async def handle_telegram_photo(self, source: 'AbstractUser', intent: IntentAPI, evt: Message,
-                                    relates_to: Dict = None) -> Optional[Dict]:
+                                    relates_to: Dict = None) -> Optional[EventID]:
         loc, largest_size = self._get_largest_photo_size(evt.media.photo)
         file = await util.transfer_file_to_matrix(source.client, intent, loc)
         if not file:
@@ -1503,7 +1533,7 @@ class Portal:
         return info, name
 
     async def handle_telegram_document(self, source: 'AbstractUser', intent: IntentAPI,
-                                       evt: Message, relates_to: dict = None) -> Optional[Dict]:
+                                       evt: Message, relates_to: dict = None) -> Optional[EventID]:
         document = evt.media.document
 
         attrs = self._parse_telegram_document_attributes(document.attributes)
@@ -1552,7 +1582,7 @@ class Portal:
         return await intent.send_file(**kwargs)
 
     def handle_telegram_location(self, _: 'AbstractUser', intent: IntentAPI, evt: Message,
-                                 relates_to: dict = None) -> Awaitable[dict]:
+                                 relates_to: dict = None) -> Awaitable[EventID]:
         location = evt.media.geo
         long = location.long
         lat = location.lat
@@ -1580,7 +1610,7 @@ class Portal:
         }, timestamp=evt.date, external_url=self.get_external_url(evt))
 
     async def handle_telegram_text(self, source: 'AbstractUser', intent: IntentAPI, is_bot: bool,
-                                   evt: Message) -> dict:
+                                   evt: Message) -> EventID:
         self.log.debug(f"Sending {evt.message} to {self.mxid} by {intent.mxid}")
         text, html, relates_to = await formatter.telegram_to_matrix(evt, source, self.main_intent)
         await intent.set_typing(self.mxid, is_typing=False)
@@ -1590,7 +1620,7 @@ class Portal:
                                       external_url=self.get_external_url(evt))
 
     async def handle_telegram_unsupported(self, source: 'AbstractUser', intent: IntentAPI,
-                                          evt: Message, relates_to: dict = None) -> dict:
+                                          evt: Message, relates_to: dict = None) -> EventID:
         override_text = ("This message is not supported on your version of Mautrix-Telegram. "
                          "Please check https://github.com/tulir/mautrix-telegram or ask your "
                          "bridge administrator about possible updates.")
@@ -1607,7 +1637,7 @@ class Portal:
         }, timestamp=evt.date, external_url=self.get_external_url(evt))
 
     async def handle_telegram_poll(self, source: 'AbstractUser', intent: IntentAPI, evt: Message,
-                                   relates_to: dict) -> dict:
+                                   relates_to: dict) -> EventID:
         poll = evt.media.poll  # type: Poll
         poll_id = self._encode_msgid(source, evt)
 
@@ -1658,7 +1688,7 @@ class Portal:
         return base64.b64encode(play_id).decode("utf-8").rstrip("=")
 
     async def handle_telegram_game(self, source: 'AbstractUser', intent: IntentAPI,
-                                   evt: Message, relates_to: dict = None):
+                                   evt: Message, relates_to: dict = None) -> EventID:
         game = evt.media.game
         play_id = self._encode_msgid(source, evt)
         command = f"!tg play {play_id}"
@@ -1693,7 +1723,7 @@ class Portal:
 
         tg_space = self.tgid if self.peer_type == "channel" else source.tgid
 
-        temporary_identifier = MatrixEventID(
+        temporary_identifier = EventID(
             f"${random.randint(1000000000000, 9999999999999)}TGBRIDGEDITEMP")
         duplicate_found = self.is_duplicate(evt, (temporary_identifier, tg_space), force_hash=True)
         if duplicate_found:
@@ -1758,7 +1788,7 @@ class Portal:
 
         tg_space = self.tgid if self.peer_type == "channel" else source.tgid
 
-        temporary_identifier = MatrixEventID(
+        temporary_identifier = EventID(
             f"${random.randint(1000000000000, 9999999999999)}TGBRIDGETEMP")
         duplicate_found = self.is_duplicate(evt, (temporary_identifier, tg_space))
         if duplicate_found:
@@ -2034,7 +2064,7 @@ class Portal:
         self.log = self.base_log.getChild(str(self.tgid))
         self.log.info(f"Telegram chat upgraded from {old_id}")
 
-    def migrate_and_save_matrix(self, new_id: MatrixRoomID) -> None:
+    def migrate_and_save_matrix(self, new_id: RoomID) -> None:
         try:
             del self.by_mxid[self.mxid]
         except KeyError:
@@ -2073,7 +2103,7 @@ class Portal:
     # region Class instance lookup
 
     @classmethod
-    def get_by_mxid(cls, mxid: MatrixRoomID) -> Optional['Portal']:
+    def get_by_mxid(cls, mxid: RoomID) -> Optional['Portal']:
         try:
             return cls.by_mxid[mxid]
         except KeyError:

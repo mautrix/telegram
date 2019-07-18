@@ -16,6 +16,8 @@
 from sqlalchemy import Column, ForeignKey, Integer, BigInteger, String, Boolean
 from typing import Optional
 
+from mautrix.types import ContentURI
+
 from .base import Base
 
 
@@ -23,7 +25,7 @@ class TelegramFile(Base):
     __tablename__ = "telegram_file"
 
     id = Column(String, primary_key=True)
-    mxc = Column(String)
+    mxc: ContentURI = Column(String)
     mime_type = Column(String)
     was_converted = Column(Boolean)
     timestamp = Column(BigInteger)

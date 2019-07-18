@@ -27,7 +27,8 @@ from telethon.tl.functions.messages import GetChatsRequest, GetFullChatRequest
 from telethon.tl.functions.channels import GetChannelsRequest, GetParticipantRequest
 from telethon.errors import ChannelInvalidError, ChannelPrivateError
 
-from .types import MatrixUserID
+from mautrix.types import UserID
+
 from .abstract_user import AbstractUser
 from .db import BotChat
 from .types import TelegramID
@@ -50,7 +51,7 @@ class Bot(AbstractUser):
     tg_whitelist: List[int]
     whitelist_group_admins: bool
     _me_info: Optional[User]
-    _me_mxid: Optional[MatrixUserID]
+    _me_mxid: Optional[UserID]
 
     def __init__(self, token: str) -> None:
         super().__init__()
@@ -70,7 +71,7 @@ class Bot(AbstractUser):
         self._me_info = None
         self._me_mxid = None
 
-    async def get_me(self, use_cache: bool = True) -> Tuple[User, MatrixUserID]:
+    async def get_me(self, use_cache: bool = True) -> Tuple[User, UserID]:
         if not use_cache or not self._me_mxid:
             self._me_info = await self.client.get_me()
             self._me_mxid = pu.Puppet.get_mxid_from_id(TelegramID(self._me_info.id))
@@ -186,7 +187,7 @@ class Bot(AbstractUser):
                     "Portal is not public. Use `/invite <mxid>` to get an invite.")
 
     async def handle_command_invite(self, portal: po.Portal, reply: ReplyFunc,
-                                    mxid_input: MatrixUserID) -> Message:
+                                    mxid_input: UserID) -> Message:
         if len(mxid_input) == 0:
             return await reply("Usage: `/invite <mxid>`")
         elif not portal.mxid:
@@ -194,7 +195,7 @@ class Bot(AbstractUser):
                                "Create one with /portal first.")
         if not self.mxid_regex.match(mxid_input):
             return await reply("That doesn't look like a Matrix ID.")
-        user = await u.User.get_by_mxid(MatrixUserID(mxid_input)).ensure_started()
+        user = await u.User.get_by_mxid(mxid_input).ensure_started()
         if not user.relaybot_whitelisted:
             return await reply("That user is not whitelisted to use the bridge.")
         elif await user.is_logged_in():
