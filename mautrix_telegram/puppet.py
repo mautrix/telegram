@@ -379,7 +379,7 @@ class Puppet:
             self.displayname = displayname
             self.displayname_source = source.tgid
             try:
-                await self.default_mxid_intent.set_display_name(displayname)
+                await self.default_mxid_intent.set_display_name(displayname[:100])
             except MatrixRequestError:
                 self.log.exception("Failed to set displayname")
                 self.displayname = ""
