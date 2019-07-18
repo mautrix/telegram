@@ -996,9 +996,10 @@ class Portal:
             relates_to = message.get("m.relates_to", None) or {}
             if relates_to.get("rel_type", None) == "m.replace":
                 orig_msg = DBMessage.get_by_mxid(relates_to.get("event_id", ""), self.mxid, space)
-                if orig_msg:
-                    response = await client.edit_message(self.peer, orig_msg.tgid,
-                                                         message.get("m.new_content", message),
+                if orig_msg and "m.new_content" in message:
+                    message = message["m.new_content"]
+                    formatter.matrix_reply_to_telegram(message, space, room_id=self.mxid)
+                    response = await client.edit_message(self.peer, orig_msg.tgid, message,
                                                          parse_mode=self._matrix_event_to_entities,
                                                          link_preview=lp)
                     self._add_telegram_message_to_db(event_id, space, -1, response)
@@ -1699,8 +1700,7 @@ class Portal:
                           edit_index=prev_edit_msg.edit_index + 1).insert()
             return
 
-        text, html, _ = await formatter.telegram_to_matrix(evt, source, self.main_intent,
-                                                           no_reply_fallback=True)
+        text, html, _ = await formatter.telegram_to_matrix(evt, source, self.main_intent)
         editing_msg = DBMessage.get_one_by_tgid(TelegramID(evt.id), tg_space)
         if not editing_msg:
             self.log.info(f"Didn't find edited message {evt.id}@{tg_space} (src {source.tgid}) "
