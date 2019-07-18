@@ -96,6 +96,8 @@ class AbstractUser(ABC):
             proxy_type = 2
         elif proxy_type == "http":
             proxy_type = 3
+        elif proxy_type == "mtproxy":
+            proxy_type = 4
 
         return (proxy_type,
                 config["telegram.proxy.address"], config["telegram.proxy.port"],
@@ -119,6 +121,12 @@ class AbstractUser(ABC):
         device = config["telegram.device_info.device_model"]
         sysversion = config["telegram.device_info.system_version"]
         appversion = config["telegram.device_info.app_version"]
+        import telethon
+        connection = telethon.network.connection.ConnectionTcpFull
+        proxy = self._proxy_settings
+        if proxy is not None and proxy[0] == 4:
+            connection = telethon.network.connection.ConnectionTcpMTProxyRandomizedIntermediate
+            proxy = (proxy[1], proxy[2], proxy[5])
 
         self.client = MautrixTelegramClient(
             session=self.session,
@@ -135,8 +143,8 @@ class AbstractUser(ABC):
             retry_delay=config["telegram.connection.retry_delay"],
             flood_sleep_threshold=config["telegram.connection.flood_sleep_threshold"],
             request_retries=config["telegram.connection.request_retries"],
-
-            proxy=self._proxy_settings,
+            connection=connection,
+            proxy=proxy,
 
             loop=self.loop,
             base_logger=base_logger
