@@ -21,7 +21,8 @@ import logging
 import platform
 import time
 
-from telethon.network import ConnectionTcpMTProxyRandomizedIntermediate, ConnectionTcpFull
+from telethon.network import (
+    ConnectionTcpMTProxyRandomizedIntermediate, ConnectionTcpFull)
 from telethon.tl.patched import MessageService, Message
 from telethon.tl.types import (
     Channel, ChannelForbidden, Chat, ChatForbidden, MessageActionChannelMigrateFrom, PeerUser,
