@@ -21,6 +21,7 @@ import logging
 import platform
 import time
 
+from telethon.network import ConnectionTcpMTProxyRandomizedIntermediate, ConnectionTcpFull
 from telethon.tl.patched import MessageService, Message
 from telethon.tl.types import (
     Channel, ChannelForbidden, Chat, ChatForbidden, MessageActionChannelMigrateFrom, PeerUser,
@@ -121,11 +122,10 @@ class AbstractUser(ABC):
         device = config["telegram.device_info.device_model"]
         sysversion = config["telegram.device_info.system_version"]
         appversion = config["telegram.device_info.app_version"]
-        import telethon
-        connection = telethon.network.connection.ConnectionTcpFull
+        connection = ConnectionTcpFull
         proxy = self._proxy_settings
         if proxy is not None and proxy[0] == 4:
-            connection = telethon.network.connection.ConnectionTcpMTProxyRandomizedIntermediate
+            connection = ConnectionTcpMTProxyRandomizedIntermediate
             proxy = (proxy[1], proxy[2], proxy[5])
 
         self.client = MautrixTelegramClient(
