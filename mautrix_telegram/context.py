@@ -14,14 +14,13 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from typing import Optional, Tuple, TYPE_CHECKING
-
 import asyncio
 
 from alchemysession import AlchemySessionContainer
-from mautrix_appservice import AppService
+
+from mautrix.appservice import AppService
 
 if TYPE_CHECKING:
-
     from .web import PublicBridgeWebsite, ProvisioningAPI
     from .config import Config
     from .bot import Bot

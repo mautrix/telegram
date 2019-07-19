@@ -1,7 +1,8 @@
-import argparse
-import sqlalchemy as sql
+from typing import Union
 from sqlalchemy import orm
 from sqlalchemy.ext.declarative import declarative_base
+import sqlalchemy as sql
+import argparse
 
 from alchemysession import AlchemySessionContainer
 
@@ -24,11 +25,12 @@ def log(message, end="\n"):
 def connect(to):
     import mautrix_telegram.db.base as base
     base.Base = declarative_base(cls=base.BaseBase)
-    from mautrix_telegram.db import (Portal, Message, UserPortal, User, RoomState, UserProfile,
-                                     Contact, Puppet, BotChat, TelegramFile)
+    from mautrix_telegram.db import (Portal, Message, UserPortal, User, Contact, Puppet, BotChat,
+                                     TelegramFile)
+    from mautrix.bridge.db import RoomState, UserProfile
     db_engine = sql.create_engine(to)
     db_factory = orm.sessionmaker(bind=db_engine)
-    db_session = orm.scoped_session(db_factory)  # type: orm.Session
+    db_session: Union[orm.Session, orm.scoped_session] = orm.scoped_session(db_factory)
     base.Base.metadata.bind = db_engine
     session_container = AlchemySessionContainer(engine=db_engine, session=db_session,
                                                 table_base=base.Base, table_prefix="telethon_",
@@ -51,6 +53,7 @@ def connect(to):
         "BotChat": BotChat,
         "TelegramFile": TelegramFile,
     }
+
 
 log("Connecting to old database")
 session, tables = connect(args.from_url)

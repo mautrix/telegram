@@ -25,9 +25,11 @@ from telethon.tl.types import (
 from telethon.tl.types.contacts import ContactsNotModified
 from telethon.tl.functions.contacts import GetContactsRequest, SearchRequest
 from telethon.tl.functions.account import UpdateStatusRequest
-from mautrix_appservice import MatrixRequestError
 
-from .types import MatrixUserID, TelegramID
+from mautrix.errors import MatrixRequestError
+from mautrix.types import UserID
+
+from .types import TelegramID
 from .db import User as DBUser
 from .abstract_user import AbstractUser
 from . import portal as po, puppet as pu
@@ -54,7 +56,7 @@ class User(AbstractUser):
 
     _db_instance: Optional[DBUser]
 
-    def __init__(self, mxid: MatrixUserID, tgid: Optional[TelegramID] = None,
+    def __init__(self, mxid: UserID, tgid: Optional[TelegramID] = None,
                  username: Optional[str] = None, phone: Optional[str] = None,
                  db_contacts: Optional[Iterable[TelegramID]] = None,
                  saved_contacts: int = 0, is_bot: bool = False,
@@ -250,7 +252,8 @@ class User(AbstractUser):
             if not portal or portal.deleted or not portal.mxid or portal.has_bot:
                 continue
             try:
-                await portal.main_intent.kick(portal.mxid, self.mxid, "Logged out of Telegram.")
+                await portal.main_intent.kick_user(portal.mxid, self.mxid,
+                                                   "Logged out of Telegram.")
             except MatrixRequestError:
                 pass
         self.portals = {}
@@ -356,7 +359,7 @@ class User(AbstractUser):
     # region Class instance lookup
 
     @classmethod
-    def get_by_mxid(cls, mxid: MatrixUserID, create: bool = True) -> Optional['User']:
+    def get_by_mxid(cls, mxid: UserID, create: bool = True) -> Optional['User']:
         if not mxid:
             raise ValueError("Matrix ID can't be empty")
 

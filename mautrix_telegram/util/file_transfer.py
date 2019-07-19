@@ -27,7 +27,8 @@ from telethon.tl.types import (Document, InputFileLocation, InputDocumentFileLoc
                                InputPeerPhotoFileLocation)
 from telethon.errors import (AuthBytesInvalidError, AuthKeyInvalidError, LocationInvalidError,
                              SecurityError, FileIdInvalidError)
-from mautrix_appservice import IntentAPI
+
+from mautrix.appservice import IntentAPI
 
 from ..tgclient import MautrixTelegramClient
 from ..db import TelegramFile as DBTelegramFile

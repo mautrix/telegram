@@ -13,27 +13,30 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from abc import abstractmethod
 from typing import Optional
-
-from aiohttp import web
+from abc import abstractmethod
 import abc
 import asyncio
 import logging
 
+from aiohttp import web
+
 from telethon.errors import *
+
+from mautrix.bridge import OnlyLoginSelf, InvalidAccessToken
 
 from ...commands.telegram.auth import enter_password
 from ...util import format_duration, ignore_coro
-from ...puppet import Puppet, PuppetError
+from ...puppet import Puppet
 from ...user import User
 
 
 class AuthAPI(abc.ABC):
-    log = logging.getLogger("mau.web.auth")  # type: logging.Logger
+    log: logging.Logger = logging.getLogger("mau.web.auth")
+    loop: asyncio.AbstractEventLoop
 
     def __init__(self, loop: asyncio.AbstractEventLoop):
-        self.loop = loop  # type: asyncio.AbstractEventLoop
+        self.loop = loop
 
     @abstractmethod
     def get_login_response(self, status: int = 200, state: str = "", username: str = "",
@@ -55,15 +58,14 @@ class AuthAPI(abc.ABC):
                                               error="You have already logged in with your Matrix "
                                                     "account.", errcode="already-logged-in")
 
-        resp = await puppet.switch_mxid(token.strip(), user.mxid)
-        if resp == PuppetError.OnlyLoginSelf:
+        try:
+            await puppet.switch_mxid(token.strip(), user.mxid)
+        except OnlyLoginSelf:
             return self.get_mx_login_response(status=403, errcode="only-login-self",
                                               error="You can only log in as your own Matrix user.")
-        elif resp == PuppetError.InvalidAccessToken:
+        except InvalidAccessToken:
             return self.get_mx_login_response(status=401, errcode="invalid-access-token",
                                               error="Failed to verify access token.")
-        assert resp == PuppetError.Success, "Encountered an unhandled PuppetError."
-
         return self.get_mx_login_response(mxid=user.mxid, status=200, state="logged-in")
 
     async def post_matrix_password(self, user: User, password: str) -> web.Response:

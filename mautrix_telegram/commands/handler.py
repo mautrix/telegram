@@ -22,11 +22,12 @@ import commonmark
 
 from telethon.errors import FloodWaitError
 
-from ..types import MatrixRoomID, MatrixEventID
+from mautrix.types import RoomID, EventID
+
 from ..util import format_duration
 from .. import user as u, context as c
 
-command_handlers = {}  # type: Dict[str, CommandHandler]
+command_handlers: Dict[str, 'CommandHandler'] = {}
 
 HelpSection = NamedTuple('HelpSection', [('name', str), ('order', int), ('description', str)])
 
@@ -82,7 +83,7 @@ class CommandEvent:
             is a portal.
     """
 
-    def __init__(self, processor: 'CommandProcessor', room: MatrixRoomID, event: MatrixEventID,
+    def __init__(self, processor: 'CommandProcessor', room: RoomID, event: EventID,
                  sender: u.User, command: str, args: List[str], is_management: bool,
                  is_portal: bool) -> None:
         self.az = processor.az
@@ -101,7 +102,7 @@ class CommandEvent:
         self.is_portal = is_portal
 
     def reply(self, message: str, allow_html: bool = False, render_markdown: bool = True
-              ) -> Awaitable[Dict]:
+              ) -> Awaitable[EventID]:
         """Write a reply to the room in which the command was issued.
 
         Replaces occurences of "$cmdprefix" in the message with the command
@@ -178,7 +179,7 @@ class CommandHandler:
         help_section: Section of the help in which this command will appear.
     """
 
-    def __init__(self, handler: Callable[[CommandEvent], Awaitable[Dict]], needs_auth: bool,
+    def __init__(self, handler: Callable[[CommandEvent], Awaitable[EventID]], needs_auth: bool,
                  needs_puppeting: bool, needs_matrix_puppeting: bool, needs_admin: bool,
                  management_only: bool, name: str, help_text: str, help_args: str,
                  help_section: HelpSection) -> None:
@@ -255,7 +256,7 @@ class CommandHandler:
                 (not self.needs_admin or is_admin) and
                 (not self.needs_auth or is_logged_in))
 
-    async def __call__(self, evt: CommandEvent) -> Dict:
+    async def __call__(self, evt: CommandEvent) -> EventID:
         """Executes the command if evt was issued with proper rights.
 
         Args:
@@ -283,14 +284,14 @@ class CommandHandler:
         return f"**{self.name}** {self._help_args} - {self._help_text}"
 
 
-def command_handler(_func: Optional[Callable[[CommandEvent], Awaitable[Dict]]] = None, *,
+def command_handler(_func: Optional[Callable[[CommandEvent], Awaitable[EventID]]] = None, *,
                     needs_auth: bool = True, needs_puppeting: bool = True,
                     needs_matrix_puppeting: bool = False, needs_admin: bool = False,
                     management_only: bool = False, name: Optional[str] = None,
                     help_text: str = "", help_args: str = "", help_section: HelpSection = None
-                    ) -> Callable[[Callable[[CommandEvent], Awaitable[Optional[Dict]]]],
+                    ) -> Callable[[Callable[[CommandEvent], Awaitable[Optional[EventID]]]],
                                   CommandHandler]:
-    def decorator(func: Callable[[CommandEvent], Awaitable[Optional[Dict]]]) -> CommandHandler:
+    def decorator(func: Callable[[CommandEvent], Awaitable[Optional[EventID]]]) -> CommandHandler:
         actual_name = name or func.__name__.replace("_", "-")
         handler = CommandHandler(func, needs_auth, needs_puppeting, needs_matrix_puppeting,
                                  needs_admin, management_only, actual_name, help_text, help_args,
@@ -310,9 +311,9 @@ class CommandProcessor:
         self.public_website = context.public_website
         self.command_prefix = self.config["bridge.command_prefix"]
 
-    async def handle(self, room: MatrixRoomID, event_id: MatrixEventID, sender: u.User,
+    async def handle(self, room: RoomID, event_id: EventID, sender: u.User,
                      command: str, args: List[str], is_management: bool, is_portal: bool
-                     ) -> Optional[Dict]:
+                     ) -> Optional[EventID]:
         """Handles the raw commands issued by a user to the Matrix bot.
 
         If the command is not known, it might be a followup command and is

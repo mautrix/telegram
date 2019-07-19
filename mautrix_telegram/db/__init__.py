@@ -18,10 +18,8 @@ from .bot_chat import BotChat
 from .message import Message
 from .portal import Portal
 from .puppet import Puppet
-from .room_state import RoomState
 from .telegram_file import TelegramFile
 from .user import User, UserPortal, Contact
-from .user_profile import UserProfile
 
 
 def init(db_engine) -> None:

@@ -13,17 +13,21 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from aiohttp import web
 from typing import Awaitable, Callable, Dict, Optional, Tuple, TYPE_CHECKING
 import asyncio
 import logging
 import json
 
+from aiohttp import web
+
 from telethon.utils import get_peer_id, resolve_id
 from telethon.tl.types import ChatForbidden, ChannelForbidden, TypeChat
-from mautrix_appservice import AppService, MatrixRequestError, IntentError
 
-from ...types import MatrixUserID, TelegramID
+from mautrix.appservice import AppService
+from mautrix.errors import MatrixRequestError, IntentError
+from mautrix.types import UserID
+
+from ...types import TelegramID
 from ...user import User
 from ...portal import Portal
 from ...util import ignore_coro
@@ -35,16 +39,19 @@ if TYPE_CHECKING:
 
 
 class ProvisioningAPI(AuthAPI):
-    log = logging.getLogger("mau.web.provisioning")  # type: logging.Logger
+    log: logging.Logger = logging.getLogger("mau.web.provisioning")
+    secret: str
+    az: AppService
+    context: 'Context'
+    app: web.Application
 
     def __init__(self, context: "Context") -> None:
         super().__init__(context.loop)
-        self.secret = context.config["appservice.provisioning.shared_secret"]  # type: str
-        self.az = context.az  # type: AppService
-        self.context = context  # type: Context
+        self.secret = context.config["appservice.provisioning.shared_secret"]
+        self.az = context.az
+        self.context = context
 
-        self.app = web.Application(loop=context.loop, middlewares=[self.error_middleware]
-                                   )  # type: web.Application
+        self.app = web.Application(loop=context.loop, middlewares=[self.error_middleware])
 
         portal_prefix = "/portal/{mxid:![^/]+}"
         self.app.router.add_route("GET", f"{portal_prefix}", self.get_portal_by_mxid)
@@ -76,18 +83,7 @@ class ProvisioningAPI(AuthAPI):
         if not portal:
             return self.get_error_response(404, "portal_not_found",
                                            "Portal with given Matrix ID not found.")
-        user, _ = await self.get_user(request.query.get("user_id", None), expect_logged_in=None,
-                                      require_puppeting=False)
-        return web.json_response({
-            "mxid": portal.mxid,
-            "chat_id": get_peer_id(portal.peer),
-            "peer_type": portal.peer_type,
-            "title": portal.title,
-            "about": portal.about,
-            "username": portal.username,
-            "megagroup": portal.megagroup,
-            "can_unbridge": (await portal.can_user_perform(user, "unbridge")) if user else False,
-        })
+        return await self._get_portal_response(UserID(request.query.get("user_id", "")), portal)
 
     async def get_portal_by_tgid(self, request: web.Request) -> web.Response:
         err = self.check_authorization(request)
@@ -103,8 +99,10 @@ class ProvisioningAPI(AuthAPI):
         if not portal:
             return self.get_error_response(404, "portal_not_found",
                                            "Portal to given Telegram chat not found.")
-        user, _ = await self.get_user(request.query.get("user_id", None), expect_logged_in=None,
-                                      require_puppeting=False)
+        return await self._get_portal_response(UserID(request.query.get("user_id", "")), portal)
+
+    async def _get_portal_response(self, user_id: UserID, portal: Portal) -> web.Response:
+        user, _ = await self.get_user(user_id, expect_logged_in=None, require_puppeting=False)
         return web.json_response({
             "mxid": portal.mxid,
             "chat_id": get_peer_id(portal.peer),
@@ -364,7 +362,8 @@ class ProvisioningAPI(AuthAPI):
 
     async def bridge_info(self, request: web.Request) -> web.Response:
         return web.json_response({
-            "relaybot_username": self.context.bot.username if self.context.bot is not None else None,
+            "relaybot_username": (self.context.bot.username
+                                  if self.context.bot is not None else None),
         }, status=200)
 
     @staticmethod
@@ -430,7 +429,7 @@ class ProvisioningAPI(AuthAPI):
         except json.JSONDecodeError:
             return None
 
-    async def get_user(self, mxid: MatrixUserID, expect_logged_in: Optional[bool] = False,
+    async def get_user(self, mxid: Optional[UserID], expect_logged_in: Optional[bool] = False,
                        require_puppeting: bool = True, require_user: bool = True
                        ) -> Tuple[Optional[User], Optional[web.Response]]:
         if not mxid:
@@ -459,8 +458,7 @@ class ProvisioningAPI(AuthAPI):
                                     expect_logged_in: Optional[bool] = False,
                                     require_puppeting: bool = False,
                                     want_data: bool = True,
-                                    ) -> (Tuple[Optional[Dict],
-                                                Optional[User],
+                                    ) -> (Tuple[Optional[Dict], Optional[User],
                                                 Optional[web.Response]]):
         err = self.check_authorization(request)
         if err is not None:

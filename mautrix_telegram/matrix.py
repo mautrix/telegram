@@ -13,9 +13,7 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import Dict, Match, Optional, Set, Tuple, Union, Iterable, TYPE_CHECKING
-import time
-import re
+from typing import Dict, Set, Tuple, Union, Iterable, TYPE_CHECKING
 
 from mautrix.bridge import BaseMatrixHandler
 from mautrix.types import (Event, EventType, RoomID, UserID, EventID, ReceiptEvent, ReceiptType,

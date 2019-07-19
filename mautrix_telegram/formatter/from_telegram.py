@@ -38,7 +38,7 @@ from .util import (add_surrogates, remove_surrogates, trim_reply_fallback_html,
 if TYPE_CHECKING:
     from ..abstract_user import AbstractUser
 
-log = logging.getLogger("mau.fmt.tg")  # type: logging.Logger
+log: logging.Logger = logging.getLogger("mau.fmt.tg")
 
 
 def telegram_reply_to_matrix(evt: Message, source: 'AbstractUser') -> Dict:

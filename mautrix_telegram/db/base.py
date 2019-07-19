@@ -23,10 +23,10 @@ from sqlalchemy.ext.declarative import declarative_base
 
 
 class BaseBase:
-    db = None  # type: Engine
-    t = None  # type: Table
-    __table__ = None  # type: Table
-    c = None  # type: ImmutableColumnCollection
+    db: Engine = None
+    t: Table = None
+    __table__: Table = None
+    c: ImmutableColumnCollection = None
 
     @classmethod
     @abstractmethod
@@ -53,5 +53,6 @@ class BaseBase:
     def delete(self) -> None:
         with self.db.begin() as conn:
             conn.execute(self.t.delete().where(self._edit_identity))
+
 
 Base = declarative_base(cls=BaseBase)

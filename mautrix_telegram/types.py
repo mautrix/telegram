@@ -1,3 +1,3 @@
-from typing import Dict, NewType
+from typing import NewType
 
 TelegramID = NewType('TelegramID', int)

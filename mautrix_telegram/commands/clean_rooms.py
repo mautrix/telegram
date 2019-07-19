@@ -13,41 +13,41 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import Dict, List, NewType, Optional, Tuple, Union
+from typing import Dict, List, NamedTuple, Optional, Tuple, Union
 
-from mautrix_appservice import MatrixRequestError, IntentAPI
+from mautrix.appservice import IntentAPI
+from mautrix.errors import MatrixRequestError
+from mautrix.types import RoomID, UserID
 
-from ..types import MatrixRoomID, MatrixUserID
 from . import command_handler, CommandEvent, SECTION_ADMIN
 from .. import puppet as pu, portal as po
 
-ManagementRoom = NewType('ManagementRoom', Tuple[MatrixRoomID, MatrixUserID])
+ManagementRoom = NamedTuple('ManagementRoom', room_id=RoomID, user_id=UserID)
 
 
-async def _find_rooms(intent: IntentAPI) -> Tuple[List[ManagementRoom], List[MatrixRoomID],
+async def _find_rooms(intent: IntentAPI) -> Tuple[List[ManagementRoom], List[RoomID],
                                                   List['po.Portal'], List['po.Portal']]:
-    management_rooms = []  # type: List[ManagementRoom]
-    unidentified_rooms = []  # type: List[MatrixRoomID]
-    portals = []  # type: List[po.Portal]
-    empty_portals = []  # type: List[po.Portal]
+    management_rooms: List[ManagementRoom] = []
+    unidentified_rooms: List[RoomID] = []
+    portals: List[po.Portal] = []
+    empty_portals: List[po.Portal] = []
 
     rooms = await intent.get_joined_rooms()
-    for room_str in rooms:
-        room = MatrixRoomID(room_str)
-        portal = po.Portal.get_by_mxid(room)
+    for room_id in rooms:
+        portal = po.Portal.get_by_mxid(room_id)
         if not portal:
             try:
-                members = await intent.get_room_members(room)
+                members = await intent.get_room_members(room_id)
             except MatrixRequestError:
                 members = []
             if len(members) == 2:
-                other_member = MatrixUserID(members[0] if members[0] != intent.mxid else members[1])
+                other_member = members[0] if members[0] != intent.mxid else members[1]
                 if pu.Puppet.get_id_from_mxid(other_member):
-                    unidentified_rooms.append(room)
+                    unidentified_rooms.append(room_id)
                 else:
-                    management_rooms.append(ManagementRoom((room, other_member)))
+                    management_rooms.append(ManagementRoom(room_id, other_member))
             else:
-                unidentified_rooms.append(room)
+                unidentified_rooms.append(room_id)
         else:
             members = await portal.get_authenticated_matrix_users()
             if len(members) == 0:

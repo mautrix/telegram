@@ -80,7 +80,7 @@ if TYPE_CHECKING:
     from .config import Config
     from .tgclient import MautrixTelegramClient
 
-config: Optional[Config] = None
+config: Optional['Config'] = None
 
 TypeMessage = Union[Message, MessageService]
 TypeParticipant = Union[TypeChatParticipant, TypeChannelParticipant]
@@ -91,7 +91,7 @@ InviteList = Union[UserID, List[UserID]]
 class Portal:
     base_log: logging.Logger = logging.getLogger("mau.portal")
     az: AppService = None
-    bot: Bot = None
+    bot: 'Bot' = None
     loop: asyncio.AbstractEventLoop = None
 
     # Config cache

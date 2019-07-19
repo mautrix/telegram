@@ -14,7 +14,6 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from typing import Optional, Pattern
-from html import escape
 import struct
 import re
 
@@ -47,9 +46,9 @@ def trim_reply_fallback_text(text: str) -> str:
     return "\n".join(lines)
 
 
-html_reply_fallback_regex = re.compile("^<mx-reply>"
-                                       r"[\s\S]+?"
-                                       "</mx-reply>")  # type: Pattern
+html_reply_fallback_regex: Pattern = re.compile("^<mx-reply>"
+                                                r"[\s\S]+?"
+                                                "</mx-reply>")
 
 
 def trim_reply_fallback_html(html: str) -> str:
