@@ -30,8 +30,8 @@ push tag:
   stage: push
   variables:
     GIT_STRATEGY: none
-  only:
-  - tags
+  except:
+  - master
   script:
   - docker pull $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA
   - docker tag $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA $CI_REGISTRY_IMAGE:$CI_COMMIT_REF_NAME
