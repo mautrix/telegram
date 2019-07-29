@@ -998,7 +998,6 @@ class Portal:
                 orig_msg = DBMessage.get_by_mxid(relates_to.get("event_id", ""), self.mxid, space)
                 if orig_msg and "m.new_content" in message:
                     message = message["m.new_content"]
-                    formatter.matrix_reply_to_telegram(message, space, room_id=self.mxid)
                     response = await client.edit_message(self.peer, orig_msg.tgid, message,
                                                          parse_mode=self._matrix_event_to_entities,
                                                          link_preview=lp)
