@@ -16,21 +16,23 @@
 from typing import Any, Dict, Optional
 import asyncio
 
-from telethon.errors import (
+from telethon.errors import (  # isort: skip
     AccessTokenExpiredError, AccessTokenInvalidError, FirstNameInvalidError, FloodWaitError,
     PasswordHashInvalidError, PhoneCodeExpiredError, PhoneCodeInvalidError,
     PhoneNumberAppSignupForbiddenError, PhoneNumberBannedError, PhoneNumberFloodError,
     PhoneNumberOccupiedError, PhoneNumberUnoccupiedError, SessionPasswordNeededError)
 
-from ... import puppet as pu, user as u
+from mautrix.types import EventID
+
+from ... import user as u
 from ...commands import command_handler, CommandEvent, SECTION_AUTH
-from ...util import format_duration, ignore_coro
+from ...util import format_duration
 
 
 @command_handler(needs_auth=False,
                  help_section=SECTION_AUTH,
                  help_text="Check if you're logged into Telegram.")
-async def ping(evt: CommandEvent) -> Optional[Dict]:
+async def ping(evt: CommandEvent) -> EventID:
     me = await evt.sender.client.get_me() if await evt.sender.is_logged_in() else None
     if me:
         human_tg_id = f"@{me.username}" if me.username else f"+{me.phone}"
@@ -42,7 +44,7 @@ async def ping(evt: CommandEvent) -> Optional[Dict]:
 @command_handler(needs_auth=False, needs_puppeting=False,
                  help_section=SECTION_AUTH,
                  help_text="Get the info of the message relay Telegram bot.")
-async def ping_bot(evt: CommandEvent) -> Optional[Dict]:
+async def ping_bot(evt: CommandEvent) -> EventID:
     if not evt.tgbot:
         return await evt.reply("Telegram message relay bot not configured.")
     info, mxid = await evt.tgbot.get_me(use_cache=False)
@@ -55,7 +57,7 @@ async def ping_bot(evt: CommandEvent) -> Optional[Dict]:
                  help_section=SECTION_AUTH,
                  help_args="<_phone_> <_full name_>",
                  help_text="Register to Telegram")
-async def register(evt: CommandEvent) -> Optional[Dict]:
+async def register(evt: CommandEvent) -> Optional[EventID]:
     if await evt.sender.is_logged_in():
         return await evt.reply("You are already logged in.")
     elif len(evt.args) < 1:
@@ -75,14 +77,14 @@ async def register(evt: CommandEvent) -> Optional[Dict]:
     return None
 
 
-async def enter_code_register(evt: CommandEvent) -> Dict:
+async def enter_code_register(evt: CommandEvent) -> EventID:
     if len(evt.args) == 0:
         return await evt.reply("**Usage:** `$cmdprefix+sp <code>`")
     try:
         await evt.sender.ensure_started(even_if_no_session=True)
         first_name, last_name = evt.sender.command_status["full_name"]
         user = await evt.sender.client.sign_up(evt.args[0], first_name, last_name)
-        ignore_coro(asyncio.ensure_future(evt.sender.post_login(user), loop=evt.loop))
+        asyncio.ensure_future(evt.sender.post_login(user), loop=evt.loop)
         evt.sender.command_status = None
         return await evt.reply(f"Successfully registered to Telegram.")
     except PhoneNumberOccupiedError:
@@ -104,7 +106,7 @@ async def enter_code_register(evt: CommandEvent) -> Dict:
 @command_handler(needs_auth=False, management_only=True,
                  help_section=SECTION_AUTH,
                  help_text="Get instructions on how to log in.")
-async def login(evt: CommandEvent) -> Optional[Dict]:
+async def login(evt: CommandEvent) -> EventID:
     override_sender = False
     if len(evt.args) > 0 and evt.sender.is_admin:
         evt.sender = await u.User.get_by_mxid(evt.args[0]).ensure_started()
@@ -141,7 +143,7 @@ async def login(evt: CommandEvent) -> Optional[Dict]:
 
 
 async def _request_code(evt: CommandEvent, phone_number: str, next_status: Dict[str, Any]
-                        ) -> Dict:
+                        ) -> EventID:
     ok = False
     try:
         await evt.sender.ensure_started(even_if_no_session=True)
@@ -173,7 +175,7 @@ async def _request_code(evt: CommandEvent, phone_number: str, next_status: Dict[
 
 
 @command_handler(needs_auth=False)
-async def enter_phone_or_token(evt: CommandEvent) -> Optional[Dict]:
+async def enter_phone_or_token(evt: CommandEvent) -> Optional[EventID]:
     if len(evt.args) == 0:
         return await evt.reply("**Usage:** `$cmdprefix+sp enter-phone-or-token <phone-or-token>`")
     elif not evt.config.get("bridge.allow_matrix_login", True):
@@ -197,7 +199,7 @@ async def enter_phone_or_token(evt: CommandEvent) -> Optional[Dict]:
 
 
 @command_handler(needs_auth=False)
-async def enter_code(evt: CommandEvent) -> Optional[Dict]:
+async def enter_code(evt: CommandEvent) -> Optional[EventID]:
     if len(evt.args) == 0:
         return await evt.reply("**Usage:** `$cmdprefix+sp enter-code <code>`")
     elif not evt.config.get("bridge.allow_matrix_login", True):
@@ -213,7 +215,7 @@ async def enter_code(evt: CommandEvent) -> Optional[Dict]:
 
 
 @command_handler(needs_auth=False)
-async def enter_password(evt: CommandEvent) -> Optional[Dict]:
+async def enter_password(evt: CommandEvent) -> Optional[EventID]:
     if len(evt.args) == 0:
         return await evt.reply("**Usage:** `$cmdprefix+sp enter-password <password>`")
     elif not evt.config.get("bridge.allow_matrix_login", True):
@@ -232,7 +234,7 @@ async def enter_password(evt: CommandEvent) -> Optional[Dict]:
     return None
 
 
-async def _sign_in(evt: CommandEvent, **sign_in_info) -> Dict:
+async def _sign_in(evt: CommandEvent, **sign_in_info) -> EventID:
     try:
         await evt.sender.ensure_started(even_if_no_session=True)
         user = await evt.sender.client.sign_in(**sign_in_info)
@@ -242,7 +244,7 @@ async def _sign_in(evt: CommandEvent, **sign_in_info) -> Dict:
             await evt.reply(f"[{existing_user.displayname}]"
                             f"(https://matrix.to/#/{existing_user.mxid})"
                             " was logged out from the account.")
-        ignore_coro(asyncio.ensure_future(evt.sender.post_login(user), loop=evt.loop))
+        asyncio.ensure_future(evt.sender.post_login(user), loop=evt.loop)
         evt.sender.command_status = None
         name = f"@{user.username}" if user.username else f"+{user.phone}"
         return await evt.reply(f"Successfully logged in as {name}")
@@ -264,7 +266,7 @@ async def _sign_in(evt: CommandEvent, **sign_in_info) -> Dict:
 @command_handler(needs_auth=True,
                  help_section=SECTION_AUTH,
                  help_text="Log out from Telegram.")
-async def logout(evt: CommandEvent) -> Optional[Dict]:
+async def logout(evt: CommandEvent) -> EventID:
     if await evt.sender.log_out():
         return await evt.reply("Logged out successfully.")
     return await evt.reply("Failed to log out.")

@@ -17,9 +17,9 @@ from typing import List, Union, Optional
 
 from telethon import TelegramClient, utils
 from telethon.tl.functions.messages import SendMediaRequest
-from telethon.tl.types import (
-    InputMediaUploadedDocument, InputMediaUploadedPhoto, TypeDocumentAttribute, TypeInputMedia,
-    TypeInputPeer, TypeMessageEntity, TypeMessageMedia, TypePeer)
+from telethon.tl.types import (InputMediaUploadedDocument, InputMediaUploadedPhoto,
+                               TypeDocumentAttribute, TypeInputMedia, TypeInputPeer,
+                               TypeMessageEntity, TypeMessageMedia, TypePeer)
 from telethon.tl.patched import Message
 from telethon.sessions.abstract import Session
 

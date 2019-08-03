@@ -13,7 +13,7 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import Dict, List, Optional, Tuple
+from typing import List, Optional, Tuple
 import codecs
 import base64
 import re
@@ -28,6 +28,8 @@ from telethon.tl.functions.messages import (ImportChatInviteRequest, CheckChatIn
                                             GetBotCallbackAnswerRequest, SendVoteRequest)
 from telethon.tl.functions.channels import JoinChannelRequest
 
+from mautrix.types import EventID
+
 from ... import puppet as pu, portal as po
 from ...abstract_user import AbstractUser
 from ...db import Message as DBMessage
@@ -38,7 +40,7 @@ from ...commands import command_handler, CommandEvent, SECTION_MISC, SECTION_CRE
 @command_handler(help_section=SECTION_MISC,
                  help_args="[_-r|--remote_] <_query_>",
                  help_text="Search your contacts or the Telegram servers for users.")
-async def search(evt: CommandEvent) -> Optional[Dict]:
+async def search(evt: CommandEvent) -> EventID:
     if len(evt.args) == 0:
         return await evt.reply("**Usage:** `$cmdprefix+sp search [-r|--remote] <query>`")
 
@@ -79,7 +81,7 @@ async def search(evt: CommandEvent) -> Optional[Dict]:
                            "either the internal user ID, the username or the phone number. "
                            "**N.B.** The phone numbers you start chats with must already be in "
                            "your contacts.")
-async def pm(evt: CommandEvent) -> Optional[Dict]:
+async def pm(evt: CommandEvent) -> EventID:
     if len(evt.args) == 0:
         return await evt.reply("**Usage:** `$cmdprefix+sp pm <user identifier>`")
 
@@ -98,7 +100,7 @@ async def pm(evt: CommandEvent) -> Optional[Dict]:
                            f"{pu.Puppet.get_displayname(user, False)}")
 
 
-async def _join(evt: CommandEvent, arg: str) -> Tuple[Optional[TypeUpdates], Optional[Dict]]:
+async def _join(evt: CommandEvent, arg: str) -> Tuple[Optional[TypeUpdates], Optional[EventID]]:
     if arg.startswith("joinchat/"):
         invite_hash = arg[len("joinchat/"):]
         try:
@@ -121,7 +123,7 @@ async def _join(evt: CommandEvent, arg: str) -> Tuple[Optional[TypeUpdates], Opt
 @command_handler(help_section=SECTION_CREATING_PORTALS,
                  help_args="<_link_>",
                  help_text="Join a chat with an invite link.")
-async def join(evt: CommandEvent) -> Optional[Dict]:
+async def join(evt: CommandEvent) -> Optional[EventID]:
     if len(evt.args) == 0:
         return await evt.reply("**Usage:** `$cmdprefix+sp join <invite link>`")
 
@@ -149,7 +151,7 @@ async def join(evt: CommandEvent) -> Optional[Dict]:
 @command_handler(help_section=SECTION_MISC,
                  help_args="[`chats`|`contacts`|`me`]",
                  help_text="Synchronize your chat portals, contacts and/or own info.")
-async def sync(evt: CommandEvent) -> Optional[Dict]:
+async def sync(evt: CommandEvent) -> EventID:
     if len(evt.args) > 0:
         sync_only = evt.args[0]
         if sync_only not in ("chats", "contacts", "me"):
@@ -211,7 +213,7 @@ async def _parse_encoded_msgid(user: AbstractUser, enc_id: str, type_name: str
 @command_handler(help_section=SECTION_MISC,
                  help_args="<_play ID_>",
                  help_text="Play a Telegram game.")
-async def play(evt: CommandEvent) -> Optional[Dict]:
+async def play(evt: CommandEvent) -> EventID:
     if len(evt.args) < 1:
         return await evt.reply("**Usage:** `$cmdprefix+sp play <play ID>`")
     elif not await evt.sender.is_logged_in():
@@ -231,14 +233,14 @@ async def play(evt: CommandEvent) -> Optional[Dict]:
     if not isinstance(game, BotCallbackAnswer):
         return await evt.reply("Game request response invalid")
 
-    await evt.reply(f"Click [here]({game.url}) to play {msg.media.game.title}:\n\n"
+    return await evt.reply(f"Click [here]({game.url}) to play {msg.media.game.title}:\n\n"
                     f"{msg.media.game.description}")
 
 
 @command_handler(help_section=SECTION_MISC,
                  help_args="<_poll ID_> <_choice number_>",
                  help_text="Vote in a Telegram poll.")
-async def vote(evt: CommandEvent) -> Optional[Dict]:
+async def vote(evt: CommandEvent) -> EventID:
     if len(evt.args) < 1:
         return await evt.reply("**Usage:** `$cmdprefix+sp vote <poll ID> <choice number>`")
     elif not await evt.sender.is_logged_in():

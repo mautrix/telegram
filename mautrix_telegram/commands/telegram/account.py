@@ -13,7 +13,7 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import Dict, Optional
+from typing import Optional
 
 from telethon.errors import (UsernameInvalidError, UsernameNotModifiedError, UsernameOccupiedError,
                              HashInvalidError, AuthKeyError, FirstNameInvalidError)
@@ -30,7 +30,7 @@ from .. import command_handler, CommandEvent, SECTION_AUTH
                  help_section=SECTION_AUTH,
                  help_args="<_new username_>",
                  help_text="Change your Telegram username.")
-async def username(evt: CommandEvent) -> Optional[Dict]:
+async def username(evt: CommandEvent) -> EventID:
     if len(evt.args) == 0:
         return await evt.reply("**Usage:** `$cmdprefix+sp username <new username>`")
     if evt.sender.is_bot:
@@ -56,7 +56,7 @@ async def username(evt: CommandEvent) -> Optional[Dict]:
 
 @command_handler(needs_auth=True, help_section=SECTION_AUTH, help_args="<_new displayname_>",
                  help_text="Change your Telegram displayname.")
-async def displayname(evt: CommandEvent) -> Optional[Dict]:
+async def displayname(evt: CommandEvent) -> EventID:
     if len(evt.args) == 0:
         return await evt.reply("**Usage:** `$cmdprefix+sp displayname <new displayname>`")
     if evt.sender.is_bot:
@@ -70,7 +70,7 @@ async def displayname(evt: CommandEvent) -> Optional[Dict]:
     except FirstNameInvalidError:
         return await evt.reply("Invalid first name")
     await evt.sender.update_info()
-    await evt.reply("Displayname updated")
+    return await evt.reply("Displayname updated")
 
 
 def _format_session(sess: Authorization) -> str:
@@ -84,7 +84,7 @@ def _format_session(sess: Authorization) -> str:
                  help_section=SECTION_AUTH,
                  help_args="<`list`|`terminate`> [_hash_]",
                  help_text="View or delete other Telegram sessions.")
-async def session(evt: CommandEvent) -> Optional[Dict]:
+async def session(evt: CommandEvent) -> EventID:
     if len(evt.args) == 0:
         return await evt.reply("**Usage:** `$cmdprefix+sp session <list|terminate> [hash]`")
     elif evt.sender.is_bot:

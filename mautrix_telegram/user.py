@@ -19,9 +19,8 @@ import logging
 import asyncio
 import re
 
-from telethon.tl.types import (
-    TypeUpdate, UpdateNewMessage, UpdateNewChannelMessage, PeerUser,
-    UpdateShortChatMessage, UpdateShortMessage, User as TLUser)
+from telethon.tl.types import (TypeUpdate, UpdateNewMessage, UpdateNewChannelMessage, PeerUser,
+                               UpdateShortChatMessage, UpdateShortMessage, User as TLUser)
 from telethon.tl.types.contacts import ContactsNotModified
 from telethon.tl.functions.contacts import GetContactsRequest, SearchRequest
 from telethon.tl.functions.account import UpdateStatusRequest
