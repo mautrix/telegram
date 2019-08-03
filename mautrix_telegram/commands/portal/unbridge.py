@@ -15,7 +15,8 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from typing import Dict, Callable, Optional
 
-from ...types import MatrixRoomID
+from mautrix.types import RoomID, EventID
+
 from ... import portal as po
 from .. import command_handler, CommandEvent, SECTION_PORTAL_MANAGEMENT
 from .util import user_has_power_level
@@ -24,7 +25,7 @@ from .util import user_has_power_level
 async def _get_portal_and_check_permission(evt: CommandEvent, permission: str,
                                            action: Optional[str] = None
                                            ) -> Optional[po.Portal]:
-    room_id = MatrixRoomID(evt.args[0]) if len(evt.args) > 0 else evt.room_id
+    room_id = RoomID(evt.args[0]) if len(evt.args) > 0 else evt.room_id
 
     portal = po.Portal.get_by_mxid(room_id)
     if not portal:
@@ -41,7 +42,7 @@ async def _get_portal_and_check_permission(evt: CommandEvent, permission: str,
 
 def _get_portal_murder_function(action: str, room_id: str, function: Callable, command: str,
                                 completed_message: str) -> Dict:
-    async def post_confirm(confirm) -> Optional[Dict]:
+    async def post_confirm(confirm) -> Optional[EventID]:
         confirm.sender.command_status = None
         if len(confirm.args) > 0 and confirm.args[0] == f"confirm-{command}":
             await function()
@@ -62,7 +63,7 @@ def _get_portal_murder_function(action: str, room_id: str, function: Callable, c
                  help_text="Remove all users from the current portal room and forget the portal. "
                            "Only works for group chats; to delete a private chat portal, simply "
                            "leave the room.")
-async def delete_portal(evt: CommandEvent) -> Optional[Dict]:
+async def delete_portal(evt: CommandEvent) -> Optional[EventID]:
     portal = await _get_portal_and_check_permission(evt, "unbridge")
     if not portal:
         return None
@@ -83,7 +84,7 @@ async def delete_portal(evt: CommandEvent) -> Optional[Dict]:
 @command_handler(needs_auth=False, needs_puppeting=False,
                  help_section=SECTION_PORTAL_MANAGEMENT,
                  help_text="Remove puppets from the current portal room and forget the portal.")
-async def unbridge(evt: CommandEvent) -> Optional[Dict]:
+async def unbridge(evt: CommandEvent) -> Optional[EventID]:
     portal = await _get_portal_and_check_permission(evt, "unbridge")
     if not portal:
         return None

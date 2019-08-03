@@ -13,7 +13,8 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from .base import Base
+from mautrix.bridge.db import UserProfile, RoomState
+
 from .bot_chat import BotChat
 from .message import Message
 from .portal import Portal

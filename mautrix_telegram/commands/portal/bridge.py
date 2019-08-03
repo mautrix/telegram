@@ -13,13 +13,14 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import Dict, Optional, Tuple, Coroutine
+from typing import Optional, Tuple, Coroutine
 import asyncio
 
 from telethon.tl.types import ChatForbidden, ChannelForbidden
 
-from ...types import MatrixRoomID, TelegramID
-from ...util import ignore_coro
+from mautrix.types import EventID, RoomID
+
+from ...types import TelegramID
 from ... import portal as po
 from .. import command_handler, CommandEvent, SECTION_CREATING_PORTALS
 from .util import user_has_power_level, get_initial_state
@@ -31,7 +32,7 @@ from .util import user_has_power_level, get_initial_state
                  help_text="Bridge the current Matrix room to the Telegram chat with the given "
                            "ID. The ID must be the prefixed version that you get with the `/id` "
                            "command of the Telegram-side bot.")
-async def bridge(evt: CommandEvent) -> Dict:
+async def bridge(evt: CommandEvent) -> EventID:
     if len(evt.args) == 0:
         return await evt.reply("**Usage:** "
                                "`$cmdprefix+sp bridge <Telegram chat ID> [Matrix room ID]`")
@@ -39,7 +40,7 @@ async def bridge(evt: CommandEvent) -> Dict:
     if evt.args[0] == "--usebot" and evt.sender.is_admin:
         force_use_bot = True
         evt.args = evt.args[1:]
-    room_id = MatrixRoomID(evt.args[1]) if len(evt.args) > 1 else evt.room_id
+    room_id = RoomID(evt.args[1]) if len(evt.args) > 1 else evt.room_id
     that_this = "This" if room_id == evt.room_id else "That"
 
     portal = po.Portal.get_by_mxid(room_id)
@@ -104,7 +105,8 @@ async def bridge(evt: CommandEvent) -> Dict:
 
 
 async def cleanup_old_portal_while_bridging(evt: CommandEvent, portal: "po.Portal"
-                                            ) -> Tuple[bool, Optional[Coroutine[None, None, None]]]:
+                                            ) -> Tuple[
+    bool, Optional[Coroutine[None, None, None]]]:
     if not portal.mxid:
         await evt.reply("The portal seems to have lost its Matrix room between you"
                         "calling `$cmdprefix+sp bridge` and this command.\n\n"
@@ -127,7 +129,7 @@ async def cleanup_old_portal_while_bridging(evt: CommandEvent, portal: "po.Porta
         return False, None
 
 
-async def confirm_bridge(evt: CommandEvent) -> Optional[Dict]:
+async def confirm_bridge(evt: CommandEvent) -> Optional[EventID]:
     status = evt.sender.command_status
     try:
         portal = po.Portal.get_by_tgid(status["tgid"], peer_type=status["peer_type"])
@@ -142,7 +144,7 @@ async def confirm_bridge(evt: CommandEvent) -> Optional[Dict]:
         if not ok:
             return None
         elif coro:
-            ignore_coro(asyncio.ensure_future(coro, loop=evt.loop))
+            asyncio.ensure_future(coro, loop=evt.loop)
             await evt.reply("Cleaning up previous portal room...")
     elif portal.mxid:
         evt.sender.command_status = None
@@ -179,8 +181,7 @@ async def confirm_bridge(evt: CommandEvent) -> Optional[Dict]:
     portal.photo_id = ""
     portal.save()
 
-    ignore_coro(asyncio.ensure_future(portal.update_matrix_room(user, entity, direct,
-                                                                levels=levels),
-                                      loop=evt.loop))
+    asyncio.ensure_future(portal.update_matrix_room(user, entity, direct, levels=levels),
+                          loop=evt.loop)
 
     return await evt.reply("Bridging complete. Portal synchronization should begin momentarily.")

@@ -26,7 +26,7 @@ from telethon.errors import *
 from mautrix.bridge import OnlyLoginSelf, InvalidAccessToken
 
 from ...commands.telegram.auth import enter_password
-from ...util import format_duration, ignore_coro
+from ...util import format_duration
 from ...puppet import Puppet
 from ...user import User
 
@@ -119,7 +119,7 @@ class AuthAPI(abc.ABC):
         existing_user = User.get_by_tgid(user_info.id)
         if existing_user and existing_user != user:
             await existing_user.log_out()
-        ignore_coro(asyncio.ensure_future(user.post_login(user_info), loop=self.loop))
+        asyncio.ensure_future(user.post_login(user_info), loop=self.loop)
         if user.command_status and user.command_status["action"] == "Login":
             user.command_status = None
 

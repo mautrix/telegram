@@ -32,24 +32,3 @@ def remove_surrogates(text: Optional[str]) -> Optional[str]:
     if text is None:
         return None
     return text.encode("utf-16", "surrogatepass").decode("utf-16")
-
-
-# trim_reply_fallback_text, html_reply_fallback_regex and trim_reply_fallback_html are Matrix
-# reply fallback utility functions.
-# You may copy and use them under any OSI-approved license.
-def trim_reply_fallback_text(text: str) -> str:
-    if not text.startswith("> ") or "\n" not in text:
-        return text
-    lines = text.split("\n")
-    while len(lines) > 0 and lines[0].startswith("> "):
-        lines.pop(0)
-    return "\n".join(lines)
-
-
-html_reply_fallback_regex: Pattern = re.compile("^<mx-reply>"
-                                                r"[\s\S]+?"
-                                                "</mx-reply>")
-
-
-def trim_reply_fallback_html(html: str) -> str:
-    return html_reply_fallback_regex.sub("", html)

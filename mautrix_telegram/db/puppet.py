@@ -13,44 +13,41 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from sqlalchemy import Column, Integer, String, Boolean
-from sqlalchemy.engine.result import RowProxy
-from sqlalchemy.sql import expression
 from typing import Optional, Iterable
 
-from ..types import MatrixUserID, MatrixRoomID, TelegramID
-from .base import Base
+from sqlalchemy import Column, Integer, String, Boolean
+from sqlalchemy.sql import expression
+from sqlalchemy.engine.result import RowProxy
+from sqlalchemy.sql.expression import ClauseElement
+
+from mautrix.types import UserID
+from mautrix.bridge.db import Base
+
+from ..types import TelegramID
 
 
 class Puppet(Base):
     __tablename__ = "puppet"
 
-    id = Column(Integer, primary_key=True)  # type: TelegramID
-    custom_mxid = Column(String, nullable=True)  # type: Optional[MatrixUserID]
-    access_token = Column(String, nullable=True)
-    displayname = Column(String, nullable=True)
-    displayname_source = Column(Integer, nullable=True)  # type: Optional[TelegramID]
-    username = Column(String, nullable=True)
-    photo_id = Column(String, nullable=True)
-    is_bot = Column(Boolean, nullable=True)
-    matrix_registered = Column(Boolean, nullable=False, server_default=expression.false())
-    disable_updates = Column(Boolean, nullable=False, server_default=expression.false())
+    id: TelegramID = Column(Integer, primary_key=True)
+    custom_mxid: UserID = Column(String, nullable=True)
+    access_token: str = Column(String, nullable=True)
+    displayname: str = Column(String, nullable=True)
+    displayname_source: TelegramID = Column(Integer, nullable=True)
+    username: str = Column(String, nullable=True)
+    photo_id: str = Column(String, nullable=True)
+    is_bot: bool = Column(Boolean, nullable=True)
+    matrix_registered: bool = Column(Boolean, nullable=False, server_default=expression.false())
+    disable_updates: bool = Column(Boolean, nullable=False, server_default=expression.false())
 
     @classmethod
-    def scan(cls, row) -> Optional['Puppet']:
+    def scan(cls, row: RowProxy) -> Optional['Puppet']:
         (id, custom_mxid, access_token, displayname, displayname_source, username, photo_id,
          is_bot, matrix_registered, disable_updates) = row
         return cls(id=id, custom_mxid=custom_mxid, access_token=access_token,
                    displayname=displayname, displayname_source=displayname_source,
                    username=username, photo_id=photo_id, is_bot=is_bot,
                    matrix_registered=matrix_registered, disable_updates=disable_updates)
-
-    @classmethod
-    def _one_or_none(cls, rows: RowProxy) -> Optional['Puppet']:
-        try:
-            return cls.scan(next(rows))
-        except StopIteration:
-            return None
 
     @classmethod
     def all_with_custom_mxid(cls) -> Iterable['Puppet']:
@@ -63,7 +60,7 @@ class Puppet(Base):
         return cls._select_one_or_none(cls.c.id == tgid)
 
     @classmethod
-    def get_by_custom_mxid(cls, mxid: MatrixUserID) -> Optional['Puppet']:
+    def get_by_custom_mxid(cls, mxid: UserID) -> Optional['Puppet']:
         return cls._select_one_or_none(cls.c.custom_mxid == mxid)
 
     @classmethod
@@ -75,7 +72,7 @@ class Puppet(Base):
         return cls._select_one_or_none(cls.c.displayname == displayname)
 
     @property
-    def _edit_identity(self):
+    def _edit_identity(self) -> ClauseElement:
         return self.c.id == self.id
 
     def insert(self) -> None:

@@ -13,7 +13,7 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import (Awaitable, Dict, List, Optional, Pattern, Tuple, Union, Any, Deque, cast,
+from typing import (Awaitable, Dict, List, Optional, Pattern, Tuple, Union, Any, Deque,
                     TYPE_CHECKING)
 from html import escape as escape_html
 from collections import deque
@@ -64,14 +64,17 @@ from telethon.tl.types import (
     UpdateNewChannelMessage, UpdateNewMessage, UpdateUserTyping, User, UserFull, MessageEntityPre,
     InputMediaUploadedDocument, InputPeerPhotoFileLocation)
 
-from mautrix.errors import MatrixRequestError, IntentError
+from mautrix.errors import MatrixRequestError, IntentError, MForbidden
 from mautrix.appservice import AppService, IntentAPI
-from mautrix.types import EventID, RoomID, UserID, RoomCreatePreset, ContentURI, MessageType
+from mautrix.bridge import BasePortal
+from mautrix.types import (EventID, RoomID, UserID, RoomCreatePreset, ContentURI, MessageType,
+                           ImageInfo, ThumbnailInfo, EventType, PowerLevelStateEventContent,
+                           RoomAlias, TextMessageEventContent, Format)
 
 from .types import TelegramID
 from .context import Context
 from .db import Portal as DBPortal, Message as DBMessage, TelegramFile as DBTelegramFile
-from .util import ignore_coro, sane_mimetypes
+from .util import sane_mimetypes
 from . import puppet as p, user as u, formatter, util
 
 if TYPE_CHECKING:
@@ -88,7 +91,7 @@ DedupMXID = Tuple[EventID, TelegramID]
 InviteList = Union[UserID, List[UserID]]
 
 
-class Portal:
+class Portal(BasePortal):
     base_log: logging.Logger = logging.getLogger("mau.portal")
     az: AppService = None
     bot: 'Bot' = None
@@ -225,7 +228,7 @@ class Portal:
     # endregion
     # region Permission checks
 
-    async def can_user_perform(self, user: 'u.User', event: str, default: int = 50) -> bool:
+    async def can_user_perform(self, user: 'u.User', event: str) -> bool:
         if user.is_admin:
             return True
         if not self.mxid:
@@ -235,10 +238,9 @@ class Portal:
             await self.main_intent.get_power_levels(self.mxid)
         except MatrixRequestError:
             return False
-        return self.main_intent.state_store.has_power_level(
-            self.mxid, user.mxid,
-            event=f"net.maunium.telegram.{event}",
-            default=default)
+        evt_type = EventType.find(f"net.maunium.telegram.{event}")
+        evt_type.t_class = EventType.Class.STATE
+        return self.main_intent.state_store.has_power_level(self.mxid, user.mxid, event=evt_type)
 
     # endregion
     # region Deduplication
@@ -340,7 +342,8 @@ class Portal:
             await self.main_intent.invite_user(self.mxid, users, check_cache=True)
 
     async def update_matrix_room(self, user: 'AbstractUser', entity: Union[TypeChat, User],
-                                 direct: bool, puppet: p.Puppet = None, levels: Dict = None,
+                                 direct: bool, puppet: p.Puppet = None,
+                                 levels: PowerLevelStateEventContent = None,
                                  users: List[User] = None,
                                  participants: List[TypeParticipant] = None) -> None:
         if not direct:
@@ -368,7 +371,7 @@ class Portal:
                 if synchronous:
                     await update
                 else:
-                    ignore_coro(asyncio.ensure_future(update, loop=self.loop))
+                    asyncio.ensure_future(update, loop=self.loop)
                 await self.invite_to_matrix(invites or [])
             return self.mxid
         async with self._room_create_lock:
@@ -388,7 +391,7 @@ class Portal:
             entity = await self.get_entity(user)
             self.log.debug("Fetched data: %s", entity)
 
-        self.log.debug(f"Creating room")
+        self.log.debug("Creating room")
 
         try:
             self.title = entity.title
@@ -414,14 +417,14 @@ class Portal:
             # TODO? properly handle existing room aliases
             await self.main_intent.remove_room_alias(alias)
 
-        power_levels = self._get_base_power_levels({}, entity)
+        power_levels = self._get_base_power_levels(entity=entity)
         users = participants = None
         if not direct:
             users, participants = await self._get_users(user, entity)
             self._participants_to_power_levels(participants, power_levels)
         initial_state = [{
-            "type": "m.room.power_levels",
-            "content": power_levels,
+            "type": EventType.ROOM_POWER_LEVELS.serialize(),
+            "content": power_levels.serialize(),
         }]
         if config["appservice.community_id"]:
             initial_state.append({
@@ -440,62 +443,56 @@ class Portal:
         self.save()
         self.az.state_store.set_power_levels(self.mxid, power_levels)
         user.register_portal(self)
-        ignore_coro(asyncio.ensure_future(self.update_matrix_room(user, entity, direct, puppet,
-                                                                  levels=power_levels, users=users,
-                                                                  participants=participants),
-                                          loop=self.loop))
+        asyncio.ensure_future(self.update_matrix_room(user, entity, direct, puppet,
+                                                      levels=power_levels, users=users,
+                                                      participants=participants), loop=self.loop)
 
         return self.mxid
 
-    def _get_base_power_levels(self, levels: dict = None, entity: TypeChat = None) -> dict:
-        levels = levels or {}
+    def _get_base_power_levels(self, levels: PowerLevelStateEventContent = None,
+                               entity: TypeChat = None) -> PowerLevelStateEventContent:
+        levels = levels or PowerLevelStateEventContent()
         if self.peer_type == "user":
-            levels["ban"] = 100
-            levels["kick"] = 100
-            levels["invite"] = 100
-            levels.setdefault("events", {})
-            levels["events"]["m.room.name"] = 0
-            levels["events"]["m.room.avatar"] = 0
-            levels["events"]["m.room.topic"] = 0
-            levels["state_default"] = 0
-            levels["users_default"] = 0
-            levels["events_default"] = 0
+            levels.ban = 100
+            levels.kick = 100
+            levels.invite = 100
+            levels.events[EventType.ROOM_NAME] = 0
+            levels.events[EventType.ROOM_AVATAR] = 0
+            levels.events[EventType.ROOM_TOPIC] = 0
+            levels.state_default = 0
+            levels.users_default = 0
+            levels.events_default = 0
         else:
             dbr = entity.default_banned_rights
             if not dbr:
                 self.log.debug(f"default_banned_rights is None in {entity}")
                 dbr = ChatBannedRights(invite_users=True, change_info=True, pin_messages=True,
                                        send_stickers=False, send_messages=False, until_date=0)
-            levels["ban"] = 99
-            levels["kick"] = 50
-            levels["invite"] = 50 if dbr.invite_users else 0
-            levels.setdefault("events", {})
-            levels["events"]["m.room.name"] = 50 if dbr.change_info else 0
-            levels["events"]["m.room.avatar"] = 50 if dbr.change_info else 0
-            levels["events"]["m.room.topic"] = 50 if dbr.change_info else 0
-            levels["events"][
-                "m.room.pinned_events"] = 50 if dbr.pin_messages else 0
-            levels["events"]["m.room.power_levels"] = 75
-            levels["events"]["m.room.history_visibility"] = 75
-            levels["state_default"] = 50
-            levels["users_default"] = 0
-            levels["events_default"] = (50 if (self.peer_type == "channel" and not entity.megagroup
-                                               or entity.default_banned_rights.send_messages)
-                                        else 0)
-            levels["events"]["m.sticker"] = 50 if dbr.send_stickers else levels["events_default"]
-        if "users" not in levels:
-            levels["users"] = {
-                self.main_intent.mxid: 100
-            }
-        else:
-            levels["users"][self.main_intent.mxid] = 100
+            levels.ban = 99
+            levels.kick = 50
+            levels.invite = 50 if dbr.invite_users else 0
+            levels.events[EventType.ROOM_ENCRYPTED] = 99
+            levels.events[EventType.ROOM_TOMBSTONE] = 99
+            levels.events[EventType.ROOM_NAME] = 50 if dbr.change_info else 0
+            levels.events[EventType.ROOM_AVATAR] = 50 if dbr.change_info else 0
+            levels.events[EventType.ROOM_TOPIC] = 50 if dbr.change_info else 0
+            levels.events[EventType.ROOM_PINNED_EVENTS] = 50 if dbr.pin_messages else 0
+            levels.events[EventType.ROOM_POWER_LEVELS] = 75
+            levels.events[EventType.ROOM_HISTORY_VISIBILITY] = 75
+            levels.state_default = 50
+            levels.users_default = 0
+            levels.events_default = (50 if (self.peer_type == "channel" and not entity.megagroup
+                                            or entity.default_banned_rights.send_messages)
+                                     else 0)
+            levels.events[EventType.STICKER] = 50 if dbr.send_stickers else levels.events_default
+        levels.users[self.main_intent.mxid] = 100
         return levels
 
     @property
-    def alias(self) -> Optional[str]:
+    def alias(self) -> Optional[RoomAlias]:
         if not self.username:
             return None
-        return f"#{self._get_alias_localpart()}:{self.hs_domain}"
+        return RoomAlias(f"#{self._get_alias_localpart()}:{self.hs_domain}")
 
     def _get_alias_localpart(self, username: Optional[str] = None) -> Optional[str]:
         username = username or self.username
@@ -537,8 +534,7 @@ class Portal:
                              and Portal.max_initial_member_sync == -1
                              and (self.megagroup or self.peer_type != "channel"))
         if trust_member_list:
-            joined_mxids = cast(List[UserID],
-                                await self.main_intent.get_room_members(self.mxid))
+            joined_mxids = await self.main_intent.get_room_members(self.mxid)
             for user_mxid in joined_mxids:
                 if user_mxid == self.az.bot_mxid:
                     continue
@@ -547,7 +543,7 @@ class Portal:
                     if self.bot and puppet_id == self.bot.tgid:
                         self.bot.remove_chat(self.tgid)
                     await self.main_intent.kick_user(self.mxid, user_mxid,
-                                                "User had left this Telegram chat.")
+                                                     "User had left this Telegram chat.")
                     continue
                 mx_user = u.User.get_by_mxid(user_mxid, create=False)
                 if mx_user and mx_user.is_bot and mx_user.tgid not in allowed_tgids:
@@ -555,14 +551,14 @@ class Portal:
 
                 if mx_user and not self.has_bot and mx_user.tgid not in allowed_tgids:
                     await self.main_intent.kick_user(self.mxid, mx_user.mxid,
-                                                "You had left this Telegram chat.")
+                                                     "You had left this Telegram chat.")
                     continue
 
     async def add_telegram_user(self, user_id: TelegramID, source: Optional['AbstractUser'] = None
                                 ) -> None:
         puppet = p.Puppet.get(user_id)
         if source:
-            entity = await source.client.get_entity(PeerUser(user_id))  # type: User
+            entity: User = await source.client.get_entity(PeerUser(user_id))
             await puppet.update_info(source, entity)
             await puppet.intent.join_room(self.mxid)
 
@@ -577,12 +573,21 @@ class Portal:
         kick_message = (f"Kicked by {sender.displayname}"
                         if sender and sender.tgid != puppet.tgid
                         else "Left Telegram chat")
-        if sender and sender.tgid != puppet.tgid:
-            await self.main_intent.kick_user(self.mxid, puppet.mxid, kick_message)
+        if sender.tgid != puppet.tgid:
+            try:
+                await sender.intent.kick_user(self.mxid, puppet.mxid)
+            except MForbidden:
+                await self.main_intent.kick_user(self.mxid, puppet.mxid, kick_message)
         else:
             await puppet.intent.leave_room(self.mxid)
         if user:
             user.unregister_portal(self)
+            if sender.tgid != puppet.tgid:
+                try:
+                    await sender.intent.kick_user(self.mxid, puppet.mxid)
+                    return
+                except MForbidden:
+                    pass
             await self.main_intent.kick_user(self.mxid, user.mxid, kick_message)
 
     async def update_info(self, user: 'AbstractUser', entity: TypeChat = None) -> None:
@@ -706,7 +711,7 @@ class Portal:
         return False
 
     async def _get_users(self, user: 'AbstractUser',
-                         entity: Union[TypeInputPeer, InputUser, TypeChat, TypeUser]
+                         entity: Union[TypeInputPeer, InputUser, TypeChat, TypeUser, InputChannel]
                          ) -> Tuple[List[TypeUser], List[TypeParticipant]]:
         if self.peer_type == "chat":
             chat = await user.client(GetFullChatRequest(chat_id=self.tgid))
@@ -764,13 +769,13 @@ class Portal:
             members = await self.main_intent.get_room_members(self.mxid)
         except MatrixRequestError:
             return []
-        authenticated = []  # type: List[u.User]
+        authenticated: List[u.User] = []
         has_bot = self.has_bot
         for member_str in members:
             member = UserID(member_str)
             if p.Puppet.get_id_from_mxid(member) or member == self.main_intent.mxid:
                 continue
-            user = await u.User.get_by_mxid(member).ensure_started()  # type: u.User
+            user = await u.User.get_by_mxid(member).ensure_started()
             authenticated_through_bot = has_bot and user.relaybot_whitelisted
             if authenticated_through_bot or await user.has_full_access(allow_bot=True):
                 authenticated.append(user)
@@ -825,30 +830,28 @@ class Portal:
             return local
         return config[f"bridge.{key}"]
 
-    async def _get_state_change_message(self, event: str, user: 'u.User',
-                                        arguments: Optional[Dict] = None) -> Optional[Dict]:
+    async def _get_state_change_message(self, event: str, user: 'u.User', **kwargs: Any
+                                        ) -> Optional[str]:
         tpl = self.get_config(f"state_event_formats.{event}")
         if len(tpl) == 0:
             # Empty format means they don't want the message
             return None
         displayname = await self.get_displayname(user)
 
-        tpl_args = dict(mxid=user.mxid,
-                        username=user.mxid_localpart,
-                        displayname=escape_html(displayname))
-        tpl_args = {**tpl_args, **(arguments or {})}
-        message = Template(tpl).safe_substitute(tpl_args)
-        return {
-            "format": "org.matrix.custom.html",
-            "formatted_body": message,
+        tpl_args = {
+            "mxid": user.mxid,
+            "username": user.mxid_localpart,
+            "displayname": escape_html(displayname),
+            **kwargs,
         }
+        return Template(tpl).safe_substitute(tpl_args)
 
     async def name_change_matrix(self, user: 'u.User', displayname: str, prev_displayname: str,
                                  event_id: EventID) -> None:
         async with self.require_send_lock(self.bot.tgid):
             message = await self._get_state_change_message(
                 "name_change", user,
-                dict(displayname=displayname, prev_displayname=prev_displayname))
+                displayname=displayname, prev_displayname=prev_displayname)
             if not message:
                 return
             response = await self.bot.client.send_message(
@@ -858,7 +861,7 @@ class Portal:
             self.is_duplicate(response, (event_id, space))
 
     async def get_displayname(self, user: 'u.User') -> str:
-        # FIXME mautrix4
+        # FIXME this doesn't seem to use cache in mautrix 0.4
         return (await self.main_intent.get_displayname(self.mxid, user.mxid)
                 or user.mxid)
 
@@ -994,13 +997,15 @@ class Portal:
                 await self._apply_msg_format(sender, msgtype, message["m.new_content"])
 
     @staticmethod
-    def _matrix_event_to_entities(event: Dict[str, Any]
+    def _matrix_event_to_entities(event: Union[str, TextMessageEventContent]
                                   ) -> Tuple[str, Optional[List[TypeMessageEntity]]]:
         try:
-            if event.get("format", None) == "org.matrix.custom.html":
-                message, entities = formatter.matrix_to_telegram(event.get("formatted_body", ""))
+            if isinstance(event, str):
+                message, entities = formatter.matrix_to_telegram(event)
+            elif isinstance(event, TextMessageEventContent) and event.format == Format.HTML:
+                message, entities = formatter.matrix_to_telegram(event.formatted_body)
             else:
-                message, entities = formatter.matrix_text_to_telegram(event.get("body", ""))
+                message, entities = formatter.matrix_text_to_telegram(event.body)
         except KeyError:
             message, entities = None, None
         return message, entities
@@ -1403,8 +1408,7 @@ class Portal:
             self.bot.add_chat(self.tgid, self.peer_type)
 
         levels = await self.main_intent.get_power_levels(self.mxid)
-        bot_level = self._get_bot_level(levels)
-        if bot_level == 100:
+        if levels.get_user_level(self.main_intent.mxid) == 100:
             levels = self._get_base_power_levels(levels, entity)
             await self.main_intent.set_power_levels(self.mxid, levels)
         await self.handle_matrix_power_levels(source, levels["users"], {})
@@ -1441,22 +1445,17 @@ class Portal:
             return None
         if self.get_config("inline_images") and (evt.message
                                                  or evt.fwd_from or evt.reply_to_msg_id):
-            text, html, relates_to = await formatter.telegram_to_matrix(
+            content = await formatter.telegram_to_matrix(
                 evt, source, self.main_intent,
                 prefix_html=f"<img src='{file.mxc}' alt='Inline Telegram photo'/><br/>",
                 prefix_text="Inline image: ")
+            content.external_url = self.get_external_url(evt)
             await intent.set_typing(self.mxid, is_typing=False)
-            return await intent.send_text(self.mxid, text, html=html, relates_to=relates_to,
-                                          timestamp=evt.date,
-                                          external_url=self.get_external_url(evt))
-        info = {
-            "h": largest_size.h,
-            "w": largest_size.w,
-            "size": len(largest_size.bytes) if (
-                isinstance(largest_size, PhotoCachedSize)) else largest_size.size,
-            "orientation": 0,
-            "mimetype": file.mime_type,
-        }
+            return await intent.send_message(self.mxid, content, timestamp=evt.date)
+        info = ImageInfo(
+            height=largest_size.h, width=largest_size.w, orientation=0, mimetype=file.mime_type,
+            size=(len(largest_size.bytes) if (isinstance(largest_size, PhotoCachedSize))
+                  else largest_size.size))
         name = f"image{sane_mimetypes.guess_extension(file.mime_type)}"
         await intent.set_typing(self.mxid, is_typing=False)
         result = await intent.send_image(self.mxid, file.mxc, info=info, text=name,
@@ -1492,7 +1491,7 @@ class Portal:
 
     @staticmethod
     def _parse_telegram_document_meta(evt: Message, file: DBTelegramFile, attrs: Dict,
-                                      thumb_size: TypePhotoSize) -> Tuple[Dict, str]:
+                                      thumb_size: TypePhotoSize) -> Tuple[ImageInfo, str]:
         document = evt.media.document
         name = evt.message or attrs["name"]
         if attrs["is_sticker"]:
@@ -1508,26 +1507,21 @@ class Portal:
             mime_type = document.mime_type or file.mime_type
         else:
             mime_type = file.mime_type or document.mime_type
-        info = {
-            "size": file.size,
-            "mimetype": mime_type,
-        }
+        info = ImageInfo(size=file.size, mimetype=mime_type)
 
         if attrs["mime_type"] and not file.was_converted:
             file.mime_type = attrs["mime_type"] or file.mime_type
         if file.width and file.height:
-            info["w"], info["h"] = file.width, file.height
+            info.width, info.height = file.width, file.height
         elif attrs["width"] and attrs["height"]:
-            info["w"], info["h"] = attrs["width"], attrs["height"]
+            info.width, info.height = attrs["width"], attrs["height"]
 
         if file.thumbnail:
-            info["thumbnail_url"] = file.thumbnail.mxc
-            info["thumbnail_info"] = {
-                "mimetype": file.thumbnail.mime_type,
-                "h": file.thumbnail.height or thumb_size.h,
-                "w": file.thumbnail.width or thumb_size.w,
-                "size": file.thumbnail.size,
-            }
+            info.thumbnail_url = file.thumbnail.mxc
+            info.thumbnail_info = ThumbnailInfo(mimetype=file.thumbnail.mime_type,
+                                                height=file.thumbnail.height or thumb_size.h,
+                                                width=file.thumbnail.width or thumb_size.w,
+                                                size=file.thumbnail.size)
 
         return info, name
 
@@ -1948,7 +1942,7 @@ class Portal:
             await self.update_telegram_pin()
 
     @staticmethod
-    def _get_level_from_participant(participant: TypeParticipant, _: Dict) -> int:
+    def _get_level_from_participant(participant: TypeParticipant) -> int:
         # TODO use the power level requirements to get better precision in channels
         if isinstance(participant, (ChatParticipantAdmin, ChannelParticipantAdmin)):
             return 50
@@ -1957,27 +1951,15 @@ class Portal:
         return 0
 
     @staticmethod
-    def _participant_to_power_levels(levels: dict, user: Union['u.User', p.Puppet], new_level: int,
+    def _participant_to_power_levels(levels: PowerLevelStateEventContent,
+                                     user: Union['u.User', p.Puppet], new_level: int,
                                      bot_level: int) -> bool:
         new_level = min(new_level, bot_level)
-        default_level = levels["users_default"] if "users_default" in levels else 0
-        try:
-            user_level = int(levels["users"][user.mxid])
-        except (ValueError, KeyError):
-            user_level = default_level
+        user_level = levels.get_user_level(user.mxid)
         if user_level != new_level and user_level < bot_level:
-            levels["users"][user.mxid] = new_level
+            levels.users[user.mxid] = new_level
             return True
         return False
-
-    def _get_bot_level(self, levels: dict) -> int:
-        try:
-            return levels["users"][self.main_intent.mxid]
-        except KeyError:
-            try:
-                return levels["users_default"]
-            except KeyError:
-                return 0
 
     @staticmethod
     def _get_powerlevel_level(levels: dict) -> int:
@@ -1989,21 +1971,21 @@ class Portal:
             except KeyError:
                 return 50
 
-    def _participants_to_power_levels(self, participants: List[TypeParticipant], levels: Dict
-                                      ) -> bool:
-        bot_level = self._get_bot_level(levels)
-        if bot_level < self._get_powerlevel_level(levels):
+    def _participants_to_power_levels(self, participants: List[TypeParticipant],
+                                      levels: PowerLevelStateEventContent) -> bool:
+        bot_level = levels.get_user_level(self.main_intent.mxid)
+        if bot_level < levels.get_event_level(EventType.ROOM_POWER_LEVELS):
             return False
         changed = False
         admin_power_level = min(75 if self.peer_type == "channel" else 50, bot_level)
-        if levels["events"]["m.room.power_levels"] != admin_power_level:
+        if levels.events[EventType.ROOM_POWER_LEVELS] != admin_power_level:
             changed = True
-            levels["events"]["m.room.power_levels"] = admin_power_level
+            levels.events[EventType.ROOM_POWER_LEVELS] = admin_power_level
 
         for participant in participants:
             puppet = p.Puppet.get(TelegramID(participant.user_id))
             user = u.User.get_by_tgid(TelegramID(participant.user_id))
-            new_level = self._get_level_from_participant(participant, levels)
+            new_level = self._get_level_from_participant(participant)
 
             if user:
                 user.register_portal(self)

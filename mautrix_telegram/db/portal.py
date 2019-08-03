@@ -13,36 +13,40 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from sqlalchemy import Column, Integer, String, Boolean, Text, and_
-from sqlalchemy.engine.result import RowProxy
 from typing import Optional
 
-from ..types import MatrixRoomID, TelegramID
-from .base import Base
+from sqlalchemy import Column, Integer, String, Boolean, Text, and_
+from sqlalchemy.engine.result import RowProxy
+from sqlalchemy.sql.expression import ClauseElement
+
+from mautrix.types import RoomID
+from mautrix.bridge.db import Base
+
+from ..types import TelegramID
 
 
 class Portal(Base):
     __tablename__ = "portal"
 
     # Telegram chat information
-    tgid = Column(Integer, primary_key=True)  # type: TelegramID
-    tg_receiver = Column(Integer, primary_key=True)  # type: TelegramID
-    peer_type = Column(String, nullable=False)
-    megagroup = Column(Boolean)
+    tgid: TelegramID = Column(Integer, primary_key=True)
+    tg_receiver: TelegramID = Column(Integer, primary_key=True)
+    peer_type: str = Column(String, nullable=False)
+    megagroup: bool = Column(Boolean)
 
     # Matrix portal information
-    mxid = Column(String, unique=True, nullable=True)  # type: Optional[MatrixRoomID]
+    mxid: RoomID = Column(String, unique=True, nullable=True)
 
-    config = Column(Text, nullable=True)
+    config: str = Column(Text, nullable=True)
 
     # Telegram chat metadata
-    username = Column(String, nullable=True)
-    title = Column(String, nullable=True)
-    about = Column(String, nullable=True)
-    photo_id = Column(String, nullable=True)
+    username: str = Column(String, nullable=True)
+    title: str = Column(String, nullable=True)
+    about: str = Column(String, nullable=True)
+    photo_id: str = Column(String, nullable=True)
 
     @classmethod
-    def scan(cls, row) -> Optional['Portal']:
+    def scan(cls, row: RowProxy) -> Optional['Portal']:
         (tgid, tg_receiver, peer_type, megagroup, mxid, config, username, title, about,
          photo_id) = row
         return cls(tgid=tgid, tg_receiver=tg_receiver, peer_type=peer_type, megagroup=megagroup,
@@ -50,18 +54,11 @@ class Portal(Base):
                    photo_id=photo_id)
 
     @classmethod
-    def _one_or_none(cls, rows: RowProxy) -> Optional['Portal']:
-        try:
-            return cls.scan(next(rows))
-        except StopIteration:
-            return None
-
-    @classmethod
     def get_by_tgid(cls, tgid: TelegramID, tg_receiver: TelegramID) -> Optional['Portal']:
         return cls._select_one_or_none(and_(cls.c.tgid == tgid, cls.c.tg_receiver == tg_receiver))
 
     @classmethod
-    def get_by_mxid(cls, mxid: MatrixRoomID) -> Optional['Portal']:
+    def get_by_mxid(cls, mxid: RoomID) -> Optional['Portal']:
         return cls._select_one_or_none(cls.c.mxid == mxid)
 
     @classmethod
@@ -69,7 +66,7 @@ class Portal(Base):
         return cls._select_one_or_none(cls.c.username == username)
 
     @property
-    def _edit_identity(self):
+    def _edit_identity(self) -> ClauseElement:
         return and_(self.c.tgid == self.tgid, self.c.tg_receiver == self.tg_receiver)
 
     def insert(self) -> None:

@@ -13,17 +13,17 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import Dict, Optional
+from mautrix.types import EventID
+from mautrix.bridge import InvalidAccessToken, OnlyLoginSelf
 
 from . import command_handler, CommandEvent, SECTION_AUTH
 from .. import puppet as pu
 
 
 @command_handler(needs_auth=True, needs_matrix_puppeting=True,
-                 help_section=SECTION_AUTH,
-                 help_text="Revert your Telegram account's Matrix puppet to use the default Matrix "
-                           "account.")
-async def logout_matrix(evt: CommandEvent) -> Optional[Dict]:
+                 help_section=SECTION_AUTH, help_text="Revert your Telegram account's Matrix "
+                                                      "puppet to use the default Matrix account.")
+async def logout_matrix(evt: CommandEvent) -> EventID:
     puppet = pu.Puppet.get(evt.sender.tgid)
     if not puppet.is_real_user:
         return await evt.reply("You are not logged in with your Matrix account.")
@@ -35,7 +35,7 @@ async def logout_matrix(evt: CommandEvent) -> Optional[Dict]:
                  help_section=SECTION_AUTH,
                  help_text="Replace your Telegram account's Matrix puppet with your own Matrix "
                            "account.")
-async def login_matrix(evt: CommandEvent) -> Optional[Dict]:
+async def login_matrix(evt: CommandEvent) -> EventID:
     puppet = pu.Puppet.get(evt.sender.tgid)
     if puppet.is_real_user:
         return await evt.reply("You have already logged in with your Matrix account. "
@@ -70,31 +70,29 @@ async def login_matrix(evt: CommandEvent) -> Optional[Dict]:
 @command_handler(needs_auth=True, needs_matrix_puppeting=True,
                  help_section=SECTION_AUTH,
                  help_text="Pings the server with the stored matrix authentication.")
-async def ping_matrix(evt: CommandEvent) -> Optional[Dict]:
+async def ping_matrix(evt: CommandEvent) -> EventID:
     puppet = pu.Puppet.get(evt.sender.tgid)
     if not puppet.is_real_user:
         return await evt.reply("You are not logged in with your Matrix account.")
-    resp = await puppet.init_custom_mxid()
-    if resp == pu.PuppetError.InvalidAccessToken:
+    try:
+        await puppet.init_custom_mxid()
+    except InvalidAccessToken:
         return await evt.reply("Your access token is invalid.")
-    elif resp == pu.PuppetError.Success:
-        return await evt.reply("Your Matrix login is working.")
-    return await evt.reply(f"Unknown response while checking your Matrix login: {resp}.")
+    return await evt.reply("Your Matrix login is working.")
 
 
-async def enter_matrix_token(evt: CommandEvent) -> Dict:
+async def enter_matrix_token(evt: CommandEvent) -> EventID:
     evt.sender.command_status = None
 
     puppet = pu.Puppet.get(evt.sender.tgid)
     if puppet.is_real_user:
         return await evt.reply("You have already logged in with your Matrix account. "
                                "Log out with `$cmdprefix+sp logout-matrix` first.")
-
-    resp = await puppet.switch_mxid(" ".join(evt.args), evt.sender.mxid)
-    if resp == pu.PuppetError.OnlyLoginSelf:
+    try:
+        await puppet.switch_mxid(" ".join(evt.args), evt.sender.mxid)
+    except OnlyLoginSelf:
         return await evt.reply("You can only log in as your own Matrix user.")
-    elif resp == pu.PuppetError.InvalidAccessToken:
+    except InvalidAccessToken:
         return await evt.reply("Failed to verify access token.")
-    assert resp == pu.PuppetError.Success, "Encountered an unhandled PuppetError."
-    return await evt.reply(
-        f"Replaced your Telegram account's Matrix puppet with {puppet.custom_mxid}.")
+    return await evt.reply("Replaced your Telegram account's Matrix puppet "
+                           f"with {puppet.custom_mxid}.")

@@ -21,6 +21,8 @@ from telethon.tl.types import Authorization
 from telethon.tl.functions.account import (UpdateUsernameRequest, GetAuthorizationsRequest,
                                            ResetAuthorizationRequest, UpdateProfileRequest)
 
+from mautrix.types import EventID
+
 from .. import command_handler, CommandEvent, SECTION_AUTH
 
 

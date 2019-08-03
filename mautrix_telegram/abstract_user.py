@@ -381,8 +381,7 @@ class AbstractUser(ABC):
             return
 
         for message_id in update.messages:
-            messages = DBMessage.get_all_by_tgid(TelegramID(message_id), self.tgid)
-            for message in messages:
+            for message in DBMessage.get_all_by_tgid(TelegramID(message_id), self.tgid):
                 message.delete()
                 number_left = DBMessage.count_spaces_by_mxid(message.mxid, message.mx_room)
                 if number_left == 0:
@@ -395,8 +394,7 @@ class AbstractUser(ABC):
         channel_id = TelegramID(update.channel_id)
 
         for message_id in update.messages:
-            messages = DBMessage.get_all_by_tgid(TelegramID(message_id), channel_id)
-            for message in messages:
+            for message in DBMessage.get_all_by_tgid(TelegramID(message_id), channel_id):
                 message.delete()
                 await self._try_redact(message)
 

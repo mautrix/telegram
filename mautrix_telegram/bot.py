@@ -141,7 +141,7 @@ class Bot(AbstractUser):
             del self.chats[chat_id]
         except KeyError:
             pass
-        BotChat.delete(chat_id)
+        BotChat.delete_by_id(chat_id)
 
     async def _can_use_commands(self, chat: TypePeer, tgid: TelegramID) -> bool:
         if tgid in self.tg_whitelist:

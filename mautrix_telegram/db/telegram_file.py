@@ -13,40 +13,40 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from sqlalchemy import Column, ForeignKey, Integer, BigInteger, String, Boolean
 from typing import Optional
 
-from mautrix.types import ContentURI
+from sqlalchemy import Column, ForeignKey, Integer, BigInteger, String, Boolean
+from sqlalchemy.engine.result import RowProxy
 
-from .base import Base
+from mautrix.types import ContentURI
+from mautrix.bridge.db import Base
 
 
 class TelegramFile(Base):
     __tablename__ = "telegram_file"
 
-    id = Column(String, primary_key=True)
+    id: str = Column(String, primary_key=True)
     mxc: ContentURI = Column(String)
-    mime_type = Column(String)
-    was_converted = Column(Boolean)
-    timestamp = Column(BigInteger)
-    size = Column(Integer, nullable=True)
-    width = Column(Integer, nullable=True)
-    height = Column(Integer, nullable=True)
-    thumbnail_id = Column("thumbnail", String, ForeignKey("telegram_file.id"), nullable=True)
-    thumbnail = None  # type: Optional[TelegramFile]
+    mime_type: str = Column(String)
+    was_converted: bool = Column(Boolean)
+    timestamp: int = Column(BigInteger)
+    size: int = Column(Integer, nullable=True)
+    width: int = Column(Integer, nullable=True)
+    height: int = Column(Integer, nullable=True)
+    thumbnail_id: str = Column("thumbnail", String, ForeignKey("telegram_file.id"), nullable=True)
+    thumbnail: Optional['TelegramFile'] = None
+
+    def scan(cls, row: RowProxy) -> 'TelegramFile':
+        loc_id, mxc, mime, conv, ts, s, w, h, thumb_id = row
+        thumb = None
+        if thumb_id:
+            thumb = cls.get(thumb_id)
+        return cls(id=loc_id, mxc=mxc, mime_type=mime, was_converted=conv, timestamp=ts,
+                   size=s, width=w, height=h, thumbnail_id=thumb_id, thumbnail=thumb)
 
     @classmethod
     def get(cls, loc_id: str) -> Optional['TelegramFile']:
-        rows = cls.db.execute(cls.t.select().where(cls.c.id == loc_id))
-        try:
-            loc_id, mxc, mime, conv, ts, s, w, h, thumb_id = next(rows)
-            thumb = None
-            if thumb_id:
-                thumb = cls.get(thumb_id)
-            return cls(id=loc_id, mxc=mxc, mime_type=mime, was_converted=conv, timestamp=ts,
-                       size=s, width=w, height=h, thumbnail_id=thumb_id, thumbnail=thumb)
-        except StopIteration:
-            return None
+        return cls._select_one_or_none(cls.c.id == loc_id)
 
     def insert(self) -> None:
         with self.db.begin() as conn:

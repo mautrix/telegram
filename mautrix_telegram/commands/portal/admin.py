@@ -13,10 +13,10 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import Dict
 import asyncio
 
-from mautrix_appservice import MatrixRequestError
+from mautrix.errors import MatrixRequestError
+from mautrix.types import EventID
 
 from ... import portal as po, puppet as pu, user as u
 from .. import command_handler, CommandEvent, SECTION_ADMIN
@@ -26,7 +26,7 @@ from .. import command_handler, CommandEvent, SECTION_ADMIN
                  help_section=SECTION_ADMIN,
                  help_args="<_level_> [_mxid_]",
                  help_text="Set a temporary power level without affecting Telegram.")
-async def set_power_level(evt: CommandEvent) -> Dict:
+async def set_power_level(evt: CommandEvent) -> EventID:
     try:
         level = int(evt.args[0])
     except KeyError:
@@ -35,20 +35,19 @@ async def set_power_level(evt: CommandEvent) -> Dict:
         return await evt.reply("The level must be an integer.")
     levels = await evt.az.intent.get_power_levels(evt.room_id)
     mxid = evt.args[1] if len(evt.args) > 1 else evt.sender.mxid
-    levels["users"][mxid] = level
+    levels.users[mxid] = level
     try:
-        await evt.az.intent.set_power_levels(evt.room_id, levels)
+        return await evt.az.intent.set_power_levels(evt.room_id, levels)
     except MatrixRequestError:
         evt.log.exception("Failed to set power level.")
         return await evt.reply("Failed to set power level.")
-    return {}
 
 
 @command_handler(needs_admin=True, needs_auth=False,
                  help_section=SECTION_ADMIN,
                  help_args="<`portal`|`puppet`|`user`>",
                  help_text="Clear internal bridge caches")
-async def clear_db_cache(evt: CommandEvent) -> Dict:
+async def clear_db_cache(evt: CommandEvent) -> EventID:
     try:
         section = evt.args[0].lower()
     except IndexError:
@@ -62,9 +61,8 @@ async def clear_db_cache(evt: CommandEvent) -> Dict:
         for puppet in pu.Puppet.by_custom_mxid.values():
             puppet.sync_task.cancel()
         pu.Puppet.by_custom_mxid = {}
-        await asyncio.gather(
-            *[puppet.init_custom_mxid() for puppet in pu.Puppet.all_with_custom_mxid()],
-            loop=evt.loop)
+        await asyncio.gather(*[puppet.start() for puppet in pu.Puppet.all_with_custom_mxid()],
+                             loop=evt.loop)
         await evt.reply("Cleared puppet cache and restarted custom puppet syncers")
     elif section == "user":
         u.User.by_mxid = {
@@ -80,7 +78,7 @@ async def clear_db_cache(evt: CommandEvent) -> Dict:
                  help_section=SECTION_ADMIN,
                  help_args="[_mxid_]",
                  help_text="Reload and reconnect a user")
-async def reload_user(evt: CommandEvent) -> Dict:
+async def reload_user(evt: CommandEvent) -> EventID:
     if len(evt.args) > 0:
         mxid = evt.args[0]
     else:
@@ -96,5 +94,5 @@ async def reload_user(evt: CommandEvent) -> Dict:
     user = u.User.get_by_mxid(mxid)
     await user.ensure_started()
     if puppet:
-        await puppet.init_custom_mxid()
-    await evt.reply(f"Reloaded and reconnected {user.mxid} (telegram: {user.human_tg_id})")
+        await puppet.start()
+    return await evt.reply(f"Reloaded and reconnected {user.mxid} (telegram: {user.human_tg_id})")

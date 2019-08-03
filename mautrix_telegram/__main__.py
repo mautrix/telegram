@@ -15,8 +15,10 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from itertools import chain
 
-from mautrix.bridge import Bridge
 from alchemysession import AlchemySessionContainer
+
+from mautrix.bridge import Bridge
+from mautrix.bridge.db import Base
 
 from .web.provisioning import ProvisioningAPI
 from .web.public import PublicBridgeWebsite
@@ -24,7 +26,7 @@ from .abstract_user import init as init_abstract_user
 from .bot import Bot, init as init_bot
 from .config import Config
 from .context import Context
-from .db import Base, init as init_db
+from .db import init as init_db
 from .formatter import init as init_formatter
 from .matrix import MatrixHandler
 from .portal import init as init_portal

@@ -13,46 +13,43 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from sqlalchemy import Column, ForeignKey, ForeignKeyConstraint, Integer, String
-from sqlalchemy.engine.result import RowProxy
 from typing import Optional, Iterable, Tuple
 
-from ..types import MatrixUserID, TelegramID
-from .base import Base
+from sqlalchemy import Column, ForeignKey, ForeignKeyConstraint, Integer, String
+from sqlalchemy.engine.result import RowProxy
+from sqlalchemy.sql.expression import ClauseElement
+
+from mautrix.types import UserID
+from mautrix.bridge.db import Base
+
+from ..types import TelegramID
 
 
 class User(Base):
     __tablename__ = "user"
 
-    mxid = Column(String, primary_key=True)  # type: MatrixUserID
-    tgid = Column(Integer, nullable=True, unique=True)  # type: Optional[TelegramID]
-    tg_username = Column(String, nullable=True)
-    tg_phone = Column(String, nullable=True)
-    saved_contacts = Column(Integer, default=0, nullable=False)
+    mxid: UserID = Column(String, primary_key=True)
+    tgid: Optional[TelegramID] = Column(Integer, nullable=True, unique=True)
+    tg_username: str = Column(String, nullable=True)
+    tg_phone: str = Column(String, nullable=True)
+    saved_contacts: int = Column(Integer, default=0, nullable=False)
 
     @classmethod
-    def _one_or_none(cls, rows: RowProxy) -> Optional['User']:
-        try:
-            mxid, tgid, tg_username, tg_phone, saved_contacts = next(rows)
-            return cls(mxid=mxid, tgid=tgid, tg_username=tg_username, tg_phone=tg_phone,
-                       saved_contacts=saved_contacts)
-        except StopIteration:
-            return None
+    def scan(cls, row: RowProxy) -> 'User':
+        mxid, tgid, tg_username, tg_phone, saved_contacts = row
+        return cls(mxid=mxid, tgid=tgid, tg_username=tg_username, tg_phone=tg_phone,
+                   saved_contacts=saved_contacts)
 
     @classmethod
     def all(cls) -> Iterable['User']:
-        rows = cls.db.execute(cls.t.select())
-        for row in rows:
-            mxid, tgid, tg_username, tg_phone, saved_contacts = row
-            yield cls(mxid=mxid, tgid=tgid, tg_username=tg_username, tg_phone=tg_phone,
-                      saved_contacts=saved_contacts)
+        return cls._select_all()
 
     @classmethod
     def get_by_tgid(cls, tgid: TelegramID) -> Optional['User']:
         return cls._select_one_or_none(cls.c.tgid == tgid)
 
     @classmethod
-    def get_by_mxid(cls, mxid: MatrixUserID) -> Optional['User']:
+    def get_by_mxid(cls, mxid: UserID) -> Optional['User']:
         return cls._select_one_or_none(cls.c.mxid == mxid)
 
     @classmethod
@@ -60,7 +57,7 @@ class User(Base):
         return cls._select_one_or_none(cls.c.tg_username == username)
 
     @property
-    def _edit_identity(self):
+    def _edit_identity(self) -> ClauseElement:
         return self.c.mxid == self.mxid
 
     def insert(self) -> None:
@@ -112,10 +109,10 @@ class User(Base):
 class UserPortal(Base):
     __tablename__ = "user_portal"
 
-    user = Column(Integer, ForeignKey("user.tgid", onupdate="CASCADE", ondelete="CASCADE"),
-                  primary_key=True)  # type: TelegramID
-    portal = Column(Integer, primary_key=True)  # type: TelegramID
-    portal_receiver = Column(Integer, primary_key=True)  # type: TelegramID
+    user: TelegramID = Column(Integer, ForeignKey("user.tgid", onupdate="CASCADE",
+                                                  ondelete="CASCADE"), primary_key=True)
+    portal: TelegramID = Column(Integer, primary_key=True)
+    portal_receiver: TelegramID = Column(Integer, primary_key=True)
 
     __table_args__ = (ForeignKeyConstraint(("portal", "portal_receiver"),
                                            ("portal.tgid", "portal.tg_receiver"),
@@ -125,5 +122,5 @@ class UserPortal(Base):
 class Contact(Base):
     __tablename__ = "contact"
 
-    user = Column(Integer, ForeignKey("user.tgid"), primary_key=True)  # type: TelegramID
-    contact = Column(Integer, ForeignKey("puppet.id"), primary_key=True)  # type: TelegramID
+    user: TelegramID = Column(Integer, ForeignKey("user.tgid"), primary_key=True)
+    contact: TelegramID = Column(Integer, ForeignKey("puppet.id"), primary_key=True)

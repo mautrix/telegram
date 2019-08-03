@@ -13,42 +13,35 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
+from typing import Optional, Iterator
+
 from sqlalchemy import Column, UniqueConstraint, Integer, String, and_, func, desc, select
 from sqlalchemy.engine.result import RowProxy
-from typing import Optional, List
+from sqlalchemy.sql.expression import ClauseElement
 
-from ..types import MatrixRoomID, MatrixEventID, TelegramID
-from .base import Base
+from mautrix.types import RoomID, EventID
+from mautrix.bridge.db import Base
+
+from ..types import TelegramID
 
 
 class Message(Base):
     __tablename__ = "message"
 
-    mxid = Column(String)  # type: MatrixEventID
-    mx_room = Column(String)  # type: MatrixRoomID
-    tgid = Column(Integer, primary_key=True)  # type: TelegramID
-    tg_space = Column(Integer, primary_key=True)  # type: TelegramID
-    edit_index = Column(Integer, primary_key=True)  # type: int
+    mxid: EventID = Column(String)
+    mx_room: RoomID = Column(String)
+    tgid: TelegramID = Column(Integer, primary_key=True)
+    tg_space: TelegramID = Column(Integer, primary_key=True)
+    edit_index: int = Column(Integer, primary_key=True)
 
     __table_args__ = (UniqueConstraint("mxid", "mx_room", "tg_space", name="_mx_id_room"),)
 
     @classmethod
-    def _one_or_none(cls, rows: RowProxy) -> Optional['Message']:
-        try:
-            mxid, mx_room, tgid, tg_space, edit_index = next(rows)
-            return cls(mxid=mxid, mx_room=mx_room, tgid=tgid, tg_space=tg_space,
-                       edit_index=edit_index)
-        except StopIteration:
-            return None
-
-    @staticmethod
-    def _all(rows: RowProxy) -> List['Message']:
-        return [Message(mxid=row[0], mx_room=row[1], tgid=row[2], tg_space=row[3],
-                        edit_index=row[4])
-                for row in rows]
+    def scan(cls, row: RowProxy) -> 'Message':
+        return cls(mxid=row[0], mx_room=row[1], tgid=row[2], tg_space=row[3], edit_index=row[4])
 
     @classmethod
-    def get_all_by_tgid(cls, tgid: TelegramID, tg_space: TelegramID) -> List['Message']:
+    def get_all_by_tgid(cls, tgid: TelegramID, tg_space: TelegramID) -> Iterator['Message']:
         return cls._all(cls.db.execute(cls.t.select().where(and_(cls.c.tgid == tgid,
                                                                  cls.c.tg_space == tg_space))))
 
@@ -68,7 +61,7 @@ class Message(Base):
         return cls._one_or_none(cls.db.execute(query))
 
     @classmethod
-    def count_spaces_by_mxid(cls, mxid: MatrixEventID, mx_room: MatrixRoomID) -> int:
+    def count_spaces_by_mxid(cls, mxid: EventID, mx_room: RoomID) -> int:
         rows = cls.db.execute(select([func.count(cls.c.tg_space)])
                               .where(and_(cls.c.mxid == mxid, cls.c.mx_room == mx_room)))
         try:
@@ -78,7 +71,7 @@ class Message(Base):
             return 0
 
     @classmethod
-    def get_by_mxid(cls, mxid: MatrixEventID, mx_room: MatrixRoomID, tg_space: TelegramID
+    def get_by_mxid(cls, mxid: EventID, mx_room: RoomID, tg_space: TelegramID
                     ) -> Optional['Message']:
         return cls._select_one_or_none(and_(cls.c.mxid == mxid,
                                             cls.c.mx_room == mx_room,
@@ -94,14 +87,14 @@ class Message(Base):
                          .values(**values))
 
     @classmethod
-    def update_by_mxid(cls, s_mxid: MatrixEventID, s_mx_room: MatrixRoomID, **values) -> None:
+    def update_by_mxid(cls, s_mxid: EventID, s_mx_room: RoomID, **values) -> None:
         with cls.db.begin() as conn:
             conn.execute(cls.t.update()
                          .where(and_(cls.c.mxid == s_mxid, cls.c.mx_room == s_mx_room))
                          .values(**values))
 
     @property
-    def _edit_identity(self):
+    def _edit_identity(self) -> ClauseElement:
         return and_(self.c.tgid == self.tgid, self.c.tg_space == self.tg_space,
                     self.c.edit_index == self.edit_index)
 

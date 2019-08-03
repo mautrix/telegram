@@ -30,7 +30,6 @@ from mautrix.types import UserID
 from ...types import TelegramID
 from ...user import User
 from ...portal import Portal
-from ...util import ignore_coro
 from ...commands.portal.util import user_has_power_level, get_initial_state
 from ..common import AuthAPI
 
@@ -188,9 +187,8 @@ class ProvisioningAPI(AuthAPI):
         portal.photo_id = ""
         portal.save()
 
-        ignore_coro(asyncio.ensure_future(portal.update_matrix_room(user, entity, direct,
-                                                                    levels=levels),
-                                          loop=self.loop))
+        asyncio.ensure_future(portal.update_matrix_room(user, entity, direct, levels=levels),
+                              loop=self.loop)
 
         return web.Response(status=202, body="{}")
 
@@ -269,7 +267,8 @@ class ProvisioningAPI(AuthAPI):
                                         require_puppeting=False, require_user=False)
         if err is not None:
             return err
-        elif user and not await user_has_power_level(portal.mxid, self.az.intent, user, "unbridge"):
+        elif user and not await user_has_power_level(portal.mxid, self.az.intent, user,
+                                                     "unbridge"):
             return self.get_error_response(403, "not_enough_permissions",
                                            "You do not have the permissions to unbridge that room.")
 
@@ -284,7 +283,7 @@ class ProvisioningAPI(AuthAPI):
                 self.log.exception("Failed to disconnect chat")
                 return self.get_error_response(500, "exception", "Failed to disconnect chat")
         else:
-            ignore_coro(asyncio.ensure_future(coro, loop=self.loop))
+            asyncio.ensure_future(coro, loop=self.loop)
         return web.json_response({}, status=200 if sync else 202)
 
     async def get_user_info(self, request: web.Request) -> web.Response:

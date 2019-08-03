@@ -15,8 +15,6 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from typing import Any, Dict, List, NamedTuple
 from ruamel.yaml.comments import CommentedMap
-import random
-import string
 import os
 
 from mautrix.types import UserID
