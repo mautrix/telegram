@@ -12,11 +12,11 @@ homeserver:
 # Changing these values requires regeneration of the registration.
 appservice:
     # The address that the homeserver can use to connect to this appservice.
-    address: http://localhost:8080
+    address: http://localhost:29317
 
     # The hostname and port where this appservice should listen.
     hostname: 0.0.0.0
-    port: 8080
+    port: 29317
     # The maximum body size of appservice API requests (from the homeserver) in mebibytes
     # Usually 1 is enough, but on high-traffic bridges you might need to increase this to avoid 413s
     max_body_size: 1

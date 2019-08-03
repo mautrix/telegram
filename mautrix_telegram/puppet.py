@@ -170,14 +170,26 @@ class Puppet(CustomPuppetMixin):
         return int(round(similarity * 100))
 
     @staticmethod
-    def get_displayname(info: User, enable_format: bool = True) -> str:
+    def _filter_name(name: str) -> str:
+        if not name:
+            return ""
+        whitespace = ("\ufeff", "\u3164", "\u2063", "\u200b", "\u180e", "\u034f", "\u2800",
+                      "\u180e", "\u200b", "\u202f", "\u205f", "\u3000")
+        name = "".join(char for char in name if char not in whitespace)
+        name = name.strip()
+        return name
+
+    @classmethod
+    def get_displayname(cls, info: User, enable_format: bool = True) -> str:
+        fn = cls._filter_name(info.first_name)
+        ln = cls._filter_name(info.last_name)
         data = {
             "phone number": info.phone if hasattr(info, "phone") else None,
             "username": info.username,
-            "full name": " ".join([info.first_name or "", info.last_name or ""]).strip(),
-            "full name reversed": " ".join([info.first_name or "", info.last_name or ""]).strip(),
-            "first name": info.first_name,
-            "last name": info.last_name,
+            "full name": " ".join([fn, ln]).strip(),
+            "full name reversed": " ".join([ln, fn]).strip(),
+            "first name": fn,
+            "last name": ln,
         }
         preferences = config["bridge.displayname_preference"]
         name = None
@@ -189,7 +201,7 @@ class Puppet(CustomPuppetMixin):
         if isinstance(info, User) and info.deleted:
             name = f"Deleted account {info.id}"
         elif not name:
-            name = info.id
+            name = str(info.id)
 
         if not enable_format:
             return name
