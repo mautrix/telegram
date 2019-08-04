@@ -34,7 +34,7 @@ class Message(Base):
     tg_space: TelegramID = Column(Integer, primary_key=True)
     edit_index: int = Column(Integer, primary_key=True)
 
-    __table_args__ = (UniqueConstraint("mxid", "mx_room", "tg_space", name="_mx_id_room"),)
+    __table_args__ = (UniqueConstraint("mxid", "mx_room", "tg_space", name="_mx_id_room_2"),)
 
     @classmethod
     def scan(cls, row: RowProxy) -> 'Message':

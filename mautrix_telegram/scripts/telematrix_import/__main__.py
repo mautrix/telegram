@@ -14,11 +14,14 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from typing import Dict
-from sqlalchemy import orm
-import sqlalchemy as sql
 import argparse
 
-from mautrix_telegram.db import Base, Portal, Message, Puppet, BotChat
+from sqlalchemy import orm
+import sqlalchemy as sql
+
+from mautrix.bridge.db import Base
+
+from mautrix_telegram.db import Portal, Message, Puppet, BotChat
 from mautrix_telegram.config import Config
 
 from .models import ChatLink, TgUser, MatrixUser, Message as TMMessage, Base as TelematrixBase
@@ -37,8 +40,7 @@ args = parser.parse_args()
 config = Config(args.config, None, None)
 config.load()
 
-mxtg_db_engine = sql.create_engine(
-    config.get("appservice.database", "sqlite:///mautrix-telegram.db"))
+mxtg_db_engine = sql.create_engine(config["appservice.database"])
 mxtg = orm.sessionmaker(bind=mxtg_db_engine)()
 Base.metadata.bind = mxtg_db_engine
 
@@ -54,18 +56,18 @@ tm_messages = telematrix.query(TMMessage).all()
 telematrix.close()
 telematrix_db_engine.dispose()
 
-portals_by_tgid = {}  # type: Dict[int, Portal]
-portals_by_mxid = {}  # type: Dict[str, Portal]
-chats = {}  # type: Dict[int, BotChat]
-messages = {}  # type: Dict[str, Message]
-puppets = {}  # type: Dict[int, Puppet]
+portals_by_tgid: Dict[int, Portal] = {}
+portals_by_mxid: Dict[str, Portal] = {}
+chats: Dict[int, BotChat] = {}
+messages: Dict[str, Message] = {}
+puppets: Dict[int, Puppet] = {}
 
 for chat_link in chat_links:
     if type(chat_link.tg_room) is str:
-        print("Expected tg_room to be a number, got a string. Ignoring %s" % chat_link.tg_room)
+        print(f"Expected tg_room to be a number, got a string. Ignoring {chat_link.tg_room}")
         continue
     if chat_link.tg_room >= 0:
-        print("Unexpected unprefixed telegram chat ID: %s, ignoring..." % chat_link.tg_room)
+        print(f"Unexpected unprefixed telegram chat ID: {chat_link.tg_room}, ignoring...")
         continue
     tgid = str(chat_link.tg_room)
     if tgid.startswith("-100"):

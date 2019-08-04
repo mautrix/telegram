@@ -7,7 +7,8 @@ from os.path import abspath, dirname
 
 sys.path.insert(0, dirname(dirname(abspath(__file__))))
 
-from mautrix_telegram.db import Base
+from mautrix.bridge.db import Base
+import mautrix_telegram.db
 from mautrix_telegram.config import Config
 from alchemysession import AlchemySessionContainer
 
@@ -18,17 +19,10 @@ config = context.config
 mxtg_config_path = context.get_x_argument(as_dictionary=True).get("config", "config.yaml")
 mxtg_config = Config(mxtg_config_path, None, None)
 mxtg_config.load()
-config.set_main_option("sqlalchemy.url",
-                       mxtg_config.get("appservice.database", "sqlite:///mautrix-telegram.db"))
+config.set_main_option("sqlalchemy.url", mxtg_config["appservice.database"])
 
 
-class FakeDB:
-    @staticmethod
-    def query_property():
-        return None
-
-
-AlchemySessionContainer.create_table_classes(FakeDB(), "telethon_", Base)
+AlchemySessionContainer.create_table_classes(None, "telethon_", Base)
 
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.

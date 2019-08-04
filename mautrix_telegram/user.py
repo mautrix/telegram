@@ -273,7 +273,7 @@ class User(AbstractUser):
 
     def _search_local(self, query: str, max_results: int = 5, min_similarity: int = 45
                       ) -> List[SearchResult]:
-        results = []  # type: List[SearchResult]
+        results: List[SearchResult] = []
         for contact in self.contacts:
             similarity = contact.similarity(query)
             if similarity >= min_similarity:
@@ -285,7 +285,7 @@ class User(AbstractUser):
         if len(query) < 5:
             return []
         server_results = await self.client(SearchRequest(q=query, limit=max_results))
-        results = []  # type: List[SearchResult]
+        results: List[SearchResult] = []
         for user in server_results.users:
             puppet = pu.Puppet.get(user.id)
             await puppet.update_info(self, user)

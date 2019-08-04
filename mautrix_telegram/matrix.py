@@ -37,7 +37,6 @@ except ImportError:
     Histogram = None
     EVENT_TIME = None
 
-
 RoomMetaStateEventContent = Union[RoomNameStateEventContent, RoomAvatarStateEventContent,
                                   RoomTopicStateEventContent]
 
@@ -93,15 +92,13 @@ class MatrixHandler(BaseMatrixHandler):
 
             await intent.join_room(room_id)
             portal = po.Portal.get_by_tgid(puppet.tgid, inviter.tgid, "user")
-            # TODO: if portal is None:
             if portal.mxid:
                 try:
-                    await intent.invite(portal.mxid, inviter.mxid)
-                    await intent.send_notice(room_id, text=None, html=(
-                        "You already have a private chat with me: "
-                        f"<a href='https://matrix.to/#/{portal.mxid}'>"
-                        "Link to room"
-                        "</a>"))
+                    await intent.invite_user(portal.mxid, inviter.mxid)
+                    await intent.send_notice(
+                        room_id, text=f"You already have a private chat with me: {portal.mxid}",
+                        html=("You already have a private chat with me: "
+                              f"<a href='https://matrix.to/#/{portal.mxid}'>Link to room</a>"))
                     await intent.leave_room(room_id)
                     return
                 except MatrixError:
@@ -115,8 +112,7 @@ class MatrixHandler(BaseMatrixHandler):
             await intent.send_notice(room_id, "This puppet will remain inactive until a "
                                               "Telegram chat is created for this room.")
 
-    async def send_welcome_message(self, room_id: RoomID, inviter: 'u.User', event_id: EventID
-                                   ) -> None:
+    async def send_welcome_message(self, room_id: RoomID, inviter: 'u.User') -> None:
         try:
             is_management = len(await self.az.intent.get_room_members(room_id)) == 2
         except MatrixError:
@@ -133,7 +129,8 @@ class MatrixHandler(BaseMatrixHandler):
             html += f"Use <code>{cmd_prefix} help</code> for help."
         await self.az.intent.send_notice(room_id, text=text, html=html)
 
-    async def handle_invite(self, room_id: RoomID, user_id: UserID, inviter: 'u.User') -> None:
+    async def handle_invite(self, room_id: RoomID, user_id: UserID, inviter: 'u.User',
+                            event_id: EventID) -> None:
         user = u.User.get_by_mxid(user_id, create=False)
         if not user:
             return
@@ -143,8 +140,7 @@ class MatrixHandler(BaseMatrixHandler):
             await portal.invite_telegram(inviter, user)
             return
 
-    async def handle_join(self, room_id: RoomID, user_id: UserID,
-                          event_id: EventID) -> None:
+    async def handle_join(self, room_id: RoomID, user_id: UserID, event_id: EventID) -> None:
         user = await u.User.get_by_mxid(user_id).ensure_started()
 
         portal = po.Portal.get_by_mxid(room_id)
@@ -152,13 +148,13 @@ class MatrixHandler(BaseMatrixHandler):
             return
 
         if not user.relaybot_whitelisted:
-            await portal.main_intent.kick(room_id, user.mxid,
-                                          "You are not whitelisted on this Telegram bridge.")
+            await portal.main_intent.kick_user(room_id, user.mxid,
+                                               "You are not whitelisted on this Telegram bridge.")
             return
         elif not await user.is_logged_in() and not portal.has_bot:
-            await portal.main_intent.kick(room_id, user.mxid,
-                                          "This chat does not have a bot relaying "
-                                          "messages for unauthenticated users.")
+            await portal.main_intent.kick_user(room_id, user.mxid,
+                                               "This chat does not have a bot relaying "
+                                               "messages for unauthenticated users.")
             return
 
         self.log.debug(f"{user} joined {room_id}")
@@ -218,7 +214,7 @@ class MatrixHandler(BaseMatrixHandler):
 
     @staticmethod
     async def handle_power_levels(evt: StateEvent) -> None:
-        portal = po.Portal.get_by_mxid(evt.event_id)
+        portal = po.Portal.get_by_mxid(evt.room_id)
         sender = await u.User.get_by_mxid(evt.sender).ensure_started()
         if await sender.has_full_access(allow_bot=True) and portal:
             await portal.handle_matrix_power_levels(sender, evt.content.users,
@@ -259,8 +255,7 @@ class MatrixHandler(BaseMatrixHandler):
         if portal:
             await portal.handle_matrix_upgrade(new_room_id)
 
-    @staticmethod
-    async def handle_member_info_change(room_id: RoomID, user_id: UserID,
+    async def handle_member_info_change(self, room_id: RoomID, user_id: UserID,
                                         profile: MemberStateEventContent,
                                         prev_profile: MemberStateEventContent,
                                         event_id: EventID) -> None:

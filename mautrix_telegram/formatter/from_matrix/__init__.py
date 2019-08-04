@@ -49,17 +49,22 @@ def plain_mention_to_html(match: Match) -> str:
     return "".join(match.groups())
 
 
+MAX_LENGTH = 4096
+CUTOFF_TEXT = " [message cut]"
+CUT_MAX_LENGTH = MAX_LENGTH - len(CUTOFF_TEXT)
+
+
 def cut_long_message(message: str, entities: List[TypeMessageEntity]) -> ParsedMessage:
-    if len(message) > 4096:
-        message = message[0:4082] + " [message cut]"
+    if len(message) > MAX_LENGTH:
+        message = message[0:CUT_MAX_LENGTH] + CUTOFF_TEXT
         new_entities = []
         for entity in entities:
-            if entity.offset > 4082:
+            if entity.offset > CUT_MAX_LENGTH:
                 continue
-            if entity.offset + entity.length > 4082:
-                entity.length = 4082 - entity.offset
+            if entity.offset + entity.length > CUT_MAX_LENGTH:
+                entity.length = CUT_MAX_LENGTH - entity.offset
             new_entities.append(entity)
-        new_entities.append(MessageEntityItalic(4082, len(" [message cut]")))
+        new_entities.append(MessageEntityItalic(CUT_MAX_LENGTH, len(CUTOFF_TEXT)))
         entities = new_entities
     return message, entities
 
@@ -124,10 +129,10 @@ def matrix_text_to_telegram(text: str) -> ParsedMessage:
     return text, entities
 
 
-def plain_mention_to_text() -> Tuple[List[TypeMessageEntity], Callable[[str], str]]:
+def plain_mention_to_text() -> Tuple[List[TypeMessageEntity], Callable[[Match], str]]:
     entities = []
 
-    def replacer(match) -> str:
+    def replacer(match: Match) -> str:
         puppet = pu.Puppet.find_by_displayname(match.group(2))
         if puppet:
             offset = match.start()

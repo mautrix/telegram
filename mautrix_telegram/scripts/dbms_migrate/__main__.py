@@ -1,8 +1,9 @@
 from typing import Union
+import argparse
+
 from sqlalchemy import orm
 from sqlalchemy.ext.declarative import declarative_base
 import sqlalchemy as sql
-import argparse
 
 from alchemysession import AlchemySessionContainer
 
@@ -23,17 +24,19 @@ def log(message, end="\n"):
 
 
 def connect(to):
-    import mautrix_telegram.db.base as base
-    base.Base = declarative_base(cls=base.BaseBase)
+    from mautrix.bridge.db import Base, RoomState, UserProfile
     from mautrix_telegram.db import (Portal, Message, UserPortal, User, Contact, Puppet, BotChat,
                                      TelegramFile)
-    from mautrix.bridge.db import RoomState, UserProfile
+
     db_engine = sql.create_engine(to)
     db_factory = orm.sessionmaker(bind=db_engine)
     db_session: Union[orm.Session, orm.scoped_session] = orm.scoped_session(db_factory)
-    base.Base.metadata.bind = db_engine
+    Base.metadata.bind = db_engine
+
+    new_base = declarative_base()
+    new_base.metadata.bind = db_engine
     session_container = AlchemySessionContainer(engine=db_engine, session=db_session,
-                                                table_base=base.Base, table_prefix="telethon_",
+                                                table_base=new_base, table_prefix="telethon_",
                                                 manage_tables=False)
 
     return db_session, {

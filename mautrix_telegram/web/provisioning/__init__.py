@@ -165,7 +165,7 @@ class ProvisioningAPI(AuthAPI):
             return self.get_login_response(status=403, errcode="not_logged_in",
                                            error="You are not logged in and there is no relay bot.")
 
-        entity = None  # type: Optional[TypeChat]
+        entity: Optional[TypeChat] = None
         try:
             entity = await acting_user.client.get_entity(portal.peer)
         except Exception:

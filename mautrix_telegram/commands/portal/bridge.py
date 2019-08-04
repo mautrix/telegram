@@ -65,7 +65,7 @@ async def bridge(evt: CommandEvent) -> EventID:
                                "Bridging private chats to existing rooms is not allowed.")
 
     portal = po.Portal.get_by_tgid(tgid, peer_type=peer_type)
-    if not portal.allow_bridging():
+    if not portal.allow_bridging:
         return await evt.reply("This bridge doesn't allow bridging that Telegram chat.\n"
                                "If you're the bridge admin, try "
                                "`$cmdprefix+sp filter whitelist <Telegram chat ID>` first.")

@@ -61,7 +61,7 @@ async def search(evt: CommandEvent) -> EventID:
                                    "Minimum length of remote query is 5 characters.")
         return await evt.reply("No results 3:")
 
-    reply = []  # type: List[str]
+    reply: List[str] = []
     if remote:
         reply += ["**Results from Telegram server:**", ""]
     else:

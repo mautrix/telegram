@@ -17,10 +17,9 @@ from typing import Awaitable, Any, Dict, Iterable, Optional, Union, TYPE_CHECKIN
 from difflib import SequenceMatcher
 import asyncio
 import logging
-import re
 
 from telethon.tl.types import (UserProfilePhoto, User, UpdateUserName, PeerUser, TypeInputPeer,
-                               InputPeerPhotoFileLocation, UserProfilePhotoEmpty)
+                               InputPeerPhotoFileLocation, UserProfilePhotoEmpty, TypeInputUser)
 
 from mautrix.appservice import AppService, IntentAPI
 from mautrix.errors import MatrixRequestError
@@ -126,7 +125,8 @@ class Puppet(CustomPuppetMixin):
             return self.displayname[len(prefix):-len(suffix)]
         return self.displayname
 
-    def get_input_entity(self, user: 'AbstractUser') -> Awaitable[TypeInputPeer]:
+    def get_input_entity(self, user: 'AbstractUser'
+                         ) -> Awaitable[Union[TypeInputPeer, TypeInputUser]]:
         return user.client.get_input_entity(PeerUser(user_id=self.tgid))
 
     # region DB conversion

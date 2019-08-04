@@ -174,7 +174,7 @@ class Bot(AbstractUser):
         if not config["bridge.relaybot.authless_portals"]:
             return await reply("This bridge doesn't allow portal creation from Telegram.")
 
-        if not portal.allow_bridging():
+        if not portal.allow_bridging:
             return await reply("This bridge doesn't allow bridging this chat.")
 
         await portal.create_matrix_room(self)
@@ -255,7 +255,7 @@ class Bot(AbstractUser):
             await self.handle_command_invite(portal, reply, mxid_input=mxid)
 
     def handle_service_message(self, message: MessageService) -> None:
-        to_id = message.to_id  # type: TelegramID
+        to_id: TelegramID = message.to_id
         if isinstance(to_id, PeerChannel):
             to_id = to_id.channel_id
             chat_type = "channel"
