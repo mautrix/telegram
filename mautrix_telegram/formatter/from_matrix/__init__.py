@@ -19,23 +19,24 @@ import logging
 
 from telethon.tl.types import (MessageEntityMention, MessageEntityMentionName, MessageEntityItalic,
                                TypeMessageEntity)
+from telethon.helpers import add_surrogate, del_surrogate
+
+from mautrix.types import RoomID
 
 from ... import puppet as pu
-from ...types import TelegramID, MatrixRoomID
+from ...types import TelegramID
 from ...db import Message as DBMessage
-from ..util import (add_surrogates, remove_surrogates, trim_reply_fallback_html,
-                    trim_reply_fallback_text)
 from .parser import ParsedMessage, parse_html
 
 if TYPE_CHECKING:
     from ...context import Context
 
-log = logging.getLogger("mau.fmt.mx")  # type: logging.Logger
-should_bridge_plaintext_highlights = False  # type: bool
+log: logging.Logger = logging.getLogger("mau.fmt.mx")
+should_bridge_plaintext_highlights: bool = False
 
-command_regex = re.compile(r"^!([A-Za-z0-9@]+)")  # type: Pattern
-not_command_regex = re.compile(r"^\\(![A-Za-z0-9@]+)")  # type: Pattern
-plain_mention_regex = None  # type: Optional[Pattern]
+command_regex: Pattern = re.compile(r"^!([A-Za-z0-9@]+)")
+not_command_regex: Pattern = re.compile(r"^\\(![A-Za-z0-9@]+)")
+plain_mention_regex: Optional[Pattern] = None
 
 
 def plain_mention_to_html(match: Match) -> str:
@@ -75,8 +76,8 @@ def matrix_to_telegram(html: str) -> ParsedMessage:
         if should_bridge_plaintext_highlights:
             html = plain_mention_regex.sub(plain_mention_to_html, html)
 
-        text, entities = parse_html(add_surrogates(html))
-        text = remove_surrogates(text.strip())
+        text, entities = parse_html(add_surrogate(html))
+        text = del_surrogate(text.strip())
         text, entities = cut_long_message(text, entities)
 
         return text, entities
@@ -85,7 +86,7 @@ def matrix_to_telegram(html: str) -> ParsedMessage:
 
 
 def matrix_reply_to_telegram(content: Dict[str, Any], tg_space: TelegramID,
-                             room_id: Optional[MatrixRoomID] = None) -> Optional[TelegramID]:
+                             room_id: Optional[RoomID] = None) -> Optional[TelegramID]:
     relates_to = content.get("m.relates_to", None) or {}
     if not relates_to:
         return None

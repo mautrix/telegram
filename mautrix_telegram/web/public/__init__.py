@@ -25,8 +25,8 @@ from aiohttp import web
 import pkg_resources
 
 from mautrix.types import UserID
+from mautrix.util.signed_token import sign_token, verify_token
 
-from ...util import sign_token, verify_token
 from ...user import User
 from ...puppet import Puppet
 from ..common import AuthAPI

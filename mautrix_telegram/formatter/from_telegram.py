@@ -25,6 +25,7 @@ from telethon.tl.types import (MessageEntityMention, MessageEntityMentionName, M
                                MessageEntityPhone, TypeMessageEntity, Message, PeerChannel,
                                MessageEntityBlockquote, MessageEntityStrike, MessageFwdHeader,
                                MessageEntityUnderline, PeerUser)
+from telethon.helpers import add_surrogate, del_surrogate
 
 from mautrix.errors import MatrixRequestError
 from mautrix.appservice import IntentAPI
@@ -34,7 +35,6 @@ from mautrix.types import (TextMessageEventContent, RelatesTo, RelationType, For
 from .. import user as u, puppet as pu, portal as po
 from ..types import TelegramID
 from ..db import Message as DBMessage
-from .util import (add_surrogates, remove_surrogates)
 
 if TYPE_CHECKING:
     from ..abstract_user import AbstractUser
@@ -136,7 +136,7 @@ async def telegram_to_matrix(evt: Message, source: "AbstractUser",
                              no_reply_fallback: bool = False) -> TextMessageEventContent:
     content = TextMessageEventContent(
         msgtype=MessageType.TEXT,
-        body=add_surrogates(override_text or evt.message),
+        body=add_surrogate(override_text or evt.message),
     )
     entities = override_entities or evt.entities
     if entities:
@@ -163,11 +163,10 @@ async def telegram_to_matrix(evt: Message, source: "AbstractUser",
         content.body += f"\n- {evt.post_author}"
         content.formatted_body += f"<br/><i>- <u>{evt.post_author}</u></i>"
 
-    if content.formatted_body:
-        content.formatted_body = content.formatted_body.replace("\n", "<br/>")
+    content.body = del_surrogate(content.body)
 
-    content.body = remove_surrogates(content.body)
-    content.formatted_body = remove_surrogates(content.formatted_body)
+    if content.formatted_body:
+        content.formatted_body = del_surrogate(content.formatted_body.replace("\n", "<br/>"))
 
     return content
 
@@ -284,8 +283,8 @@ def _parse_name_mention(html: List[str], entity_text: str, user_id: TelegramID) 
     return False
 
 
-message_link_regex = re.compile(
-    r"https?://t(?:elegram)?\.(?:me|dog)/([A-Za-z][A-Za-z0-9_]{3,}[A-Za-z0-9])/([0-9]{1,50})")
+message_link_regex = re.compile(r"https?://t(?:elegram)?\.(?:me|dog)/"
+                                r"([A-Za-z][A-Za-z0-9_]{3,}[A-Za-z0-9])/([0-9]{1,50})")
 
 
 def _parse_url(html: List[str], entity_text: str, url: str) -> bool:
