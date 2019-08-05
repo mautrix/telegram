@@ -21,19 +21,16 @@ import mimetypes
 
 import magic
 
-from telethon.tl.functions.messages import (
-    DeleteChatUserRequest, EditChatAdminRequest, EditChatPhotoRequest, EditChatTitleRequest,
-    UpdatePinnedMessageRequest, SetTypingRequest, EditChatAboutRequest)
-from telethon.tl.functions.channels import (
-    EditAdminRequest, EditPhotoRequest, EditTitleRequest, JoinChannelRequest, LeaveChannelRequest)
-from telethon.tl.functions.messages import ReadHistoryRequest as ReadMessageHistoryRequest
-from telethon.tl.functions.channels import ReadHistoryRequest as ReadChannelHistoryRequest
+from telethon.tl.functions.messages import (EditChatPhotoRequest, EditChatTitleRequest,
+                                            UpdatePinnedMessageRequest, SetTypingRequest,
+                                            EditChatAboutRequest)
+from telethon.tl.functions.channels import EditPhotoRequest, EditTitleRequest, JoinChannelRequest
 from telethon.errors import (ChatNotModifiedError, PhotoExtInvalidError,
                              PhotoInvalidDimensionsError, PhotoSaveFileInvalidError)
 from telethon.tl.patched import Message, MessageService
 from telethon.tl.types import (
-    ChatAdminRights, DocumentAttributeFilename, DocumentAttributeImageSize, GeoPoint,
-    InputChatUploadedPhoto, InputUserSelf, MessageActionChatEditPhoto, MessageMediaGeo,
+    DocumentAttributeFilename, DocumentAttributeImageSize, GeoPoint,
+    InputChatUploadedPhoto, MessageActionChatEditPhoto, MessageMediaGeo,
     SendMessageCancelAction, SendMessageTypingAction, TypeInputPeer, TypeMessageEntity,
     UpdateNewMessage, InputMediaUploadedDocument)
 
@@ -127,8 +124,7 @@ class PortalMatrix(BasePortal, MautrixBasePortal, ABC):
         await user.client.send_read_acknowledge(self.peer, max_id=message.tgid,
                                                 clear_mentions=True)
 
-    async def kick_matrix(self, user: Union['u.User', 'p.Puppet'], source: 'u.User',
-                          ban: bool = False) -> None:
+    async def kick_matrix(self, user: Union['u.User', 'p.Puppet'], source: 'u.User') -> None:
         if user.tgid == source.tgid:
             return
         if isinstance(user, u.User) and await user.needs_relaybot(self):
@@ -140,14 +136,7 @@ class PortalMatrix(BasePortal, MautrixBasePortal, ABC):
             if not self.has_bot:
                 return
             source = self.bot
-        target = await user.get_input_entity(source)
-        if self.peer_type == "chat":
-            await source.client(DeleteChatUserRequest(chat_id=self.tgid, user_id=target))
-        elif self.peer_type == "channel":
-            channel = await self.get_input_entity(source)
-            await source.client.edit_permissions(channel, target, view_messages=False)
-            if not ban:
-                await source.client.edit_permissions(channel, target, view_messages=True)
+        await source.client.kick_participant(self.peer, user.peer)
 
     async def leave_matrix(self, user: 'u.User', event_id: EventID) -> None:
         if await user.needs_relaybot(self):
@@ -162,11 +151,8 @@ class PortalMatrix(BasePortal, MautrixBasePortal, ABC):
                 del self.by_mxid[self.mxid]
             except KeyError:
                 pass
-        elif self.peer_type == "chat":
-            await user.client(DeleteChatUserRequest(chat_id=self.tgid, user_id=InputUserSelf()))
-        elif self.peer_type == "channel":
-            channel = await self.get_input_entity(user)
-            await user.client(LeaveChannelRequest(channel=channel))
+        else:
+            await user.client.delete_dialog(self.peer)
 
     async def join_matrix(self, user: 'u.User', event_id: EventID) -> None:
         if await user.needs_relaybot(self):
@@ -388,19 +374,13 @@ class PortalMatrix(BasePortal, MautrixBasePortal, ABC):
 
     async def _update_telegram_power_level(self, sender: 'u.User', user_id: TelegramID,
                                            level: int) -> None:
-        if self.peer_type == "chat":
-            await sender.client(EditChatAdminRequest(
-                chat_id=self.tgid, user_id=user_id, is_admin=level >= 50))
-        elif self.peer_type == "channel":
-            moderator = level >= 50
-            admin = level >= 75
-            rights = ChatAdminRights(change_info=moderator, post_messages=moderator,
-                                     edit_messages=moderator, delete_messages=moderator,
-                                     ban_users=moderator, invite_users=moderator,
-                                     pin_messages=moderator, add_admins=admin)
-            await sender.client(
-                EditAdminRequest(channel=await self.get_input_entity(sender),
-                                 user_id=user_id, admin_rights=rights))
+        moderator = level >= 50
+        admin = level >= 75
+        await sender.client.edit_admin(self.peer, user_id,
+                                       change_info=moderator, post_messages=moderator,
+                                       edit_messages=moderator, delete_messages=moderator,
+                                       ban_users=moderator, invite_users=moderator,
+                                       pin_messages=moderator, add_admins=admin)
 
     async def handle_matrix_power_levels(self, sender: 'u.User', new_users: Dict[UserID, int],
                                          old_users: Dict[UserID, int]) -> None:

@@ -112,6 +112,10 @@ class Puppet(CustomPuppetMixin):
     def tgid(self) -> TelegramID:
         return self.id
 
+    @property
+    def peer(self) -> PeerUser:
+        return PeerUser(user_id=self.tgid)
+
     @staticmethod
     async def is_logged_in() -> bool:
         """ Is True if the puppet is logged in. """
@@ -127,7 +131,7 @@ class Puppet(CustomPuppetMixin):
 
     def get_input_entity(self, user: 'AbstractUser'
                          ) -> Awaitable[Union[TypeInputPeer, TypeInputUser]]:
-        return user.client.get_input_entity(PeerUser(user_id=self.tgid))
+        return user.client.get_input_entity(self.peer)
 
     # region DB conversion
 
