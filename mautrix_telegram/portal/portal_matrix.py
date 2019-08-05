@@ -124,11 +124,8 @@ class PortalMatrix(BasePortal, MautrixBasePortal, ABC):
         message = DBMessage.get_by_mxid(event_id, self.mxid, space)
         if not message:
             return
-        if self.peer_type == "channel":
-            await user.client(ReadChannelHistoryRequest(
-                channel=await self.get_input_entity(user), max_id=message.tgid))
-        else:
-            await user.client(ReadMessageHistoryRequest(peer=self.peer, max_id=message.tgid))
+        await user.client.send_read_acknowledge(self.peer, max_id=message.tgid,
+                                                clear_mentions=True)
 
     async def kick_matrix(self, user: Union['u.User', 'p.Puppet'], source: 'u.User',
                           ban: bool = False) -> None:
