@@ -20,6 +20,7 @@ import logging
 import platform
 import time
 
+from telethon.sessions import Session
 from telethon.tl.patched import MessageService, Message
 from telethon.tl.types import (
     Channel, ChannelForbidden, Chat, ChatForbidden, MessageActionChannelMigrateFrom, PeerUser,
@@ -29,7 +30,7 @@ from telethon.tl.types import (
     UpdateReadHistoryOutbox, UpdateShortChatMessage, UpdateShortMessage, UpdateUserName,
     UpdateUserPhoto, UpdateUserStatus, UpdateUserTyping, User, UserStatusOffline, UserStatusOnline)
 
-from mautrix.types import UserID
+from mautrix.types import UserID, PresenceState
 from mautrix.errors import MatrixError
 from mautrix.appservice import AppService
 from alchemysession import AlchemySessionContainer
@@ -134,6 +135,8 @@ class AbstractUser(ABC):
         device = config["telegram.device_info.device_model"]
         sysversion = config["telegram.device_info.system_version"]
         appversion = config["telegram.device_info.app_version"]
+
+        assert isinstance(self.session, Session)
 
         self.client = MautrixTelegramClient(
             session=self.session,
@@ -335,9 +338,9 @@ class AbstractUser(ABC):
     async def update_status(self, update: UpdateUserStatus) -> None:
         puppet = pu.Puppet.get(TelegramID(update.user_id))
         if isinstance(update.status, UserStatusOnline):
-            await puppet.default_mxid_intent.set_presence("online")
+            await puppet.default_mxid_intent.set_presence(PresenceState.ONLINE)
         elif isinstance(update.status, UserStatusOffline):
-            await puppet.default_mxid_intent.set_presence("offline")
+            await puppet.default_mxid_intent.set_presence(PresenceState.OFFLINE)
         else:
             self.log.warning("Unexpected user status update: %s", update)
         return

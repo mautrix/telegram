@@ -14,23 +14,24 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from typing import Awaitable, Dict, List, Optional, Pattern, Tuple, Union, Any, TYPE_CHECKING
-from abc import ABC
+from abc import ABC, abstractmethod
 import asyncio
 import logging
 import json
 import re
 
 from telethon.tl.functions.messages import ExportChatInviteRequest
-from telethon.tl.patched import Message, MessageService
 from telethon.tl.types import (Channel, ChannelFull, Chat, ChatFull, ChatInviteEmpty, InputChannel,
                                InputPeerChannel, InputPeerChat, InputPeerUser, InputUser,
                                PeerChannel, PeerChat, PeerUser, TypeChat, TypeInputPeer, TypePeer,
-                               TypeUser, TypeUserFull, User, UserFull, TypeInputChannel,
-                               Photo, Document, TypePhotoSize, PhotoSize, InputPhotoFileLocation)
+                               TypeUser, TypeUserFull, User, UserFull, TypeInputChannel, Photo,
+                               Document, TypePhotoSize, PhotoSize, InputPhotoFileLocation,
+                               TypeChatParticipant, TypeChannelParticipant, PhotoEmpty, ChatPhoto,
+                               ChatPhotoEmpty)
 
 from mautrix.errors import MatrixRequestError, IntentError
 from mautrix.appservice import AppService, IntentAPI
-from mautrix.types import RoomID, UserID, EventType
+from mautrix.types import RoomID, RoomAlias, UserID, EventType, PowerLevelStateEventContent
 
 from ..types import TelegramID
 from ..context import Context
@@ -45,9 +46,11 @@ if TYPE_CHECKING:
     from ..config import Config
     from . import Portal
 
-config: Optional['Config'] = None
+TypeParticipant = Union[TypeChatParticipant, TypeChannelParticipant]
+TypeChatPhoto = Union[ChatPhoto, ChatPhotoEmpty, Photo, PhotoEmpty]
+InviteList = Union[UserID, List[UserID]]
 
-TypeMessage = Union[Message, MessageService]
+config: Optional['Config'] = None
 
 
 class BasePortal(ABC):
@@ -85,6 +88,8 @@ class BasePortal(ABC):
     local_config: Dict[str, Any]
     deleted: bool
     log: logging.Logger
+
+    alias: Optional[RoomAlias]
 
     dedup: PortalDedup
     send_lock: PortalSendLock
@@ -169,7 +174,7 @@ class BasePortal(ABC):
         local = util.recursive_get(self.local_config, key)
         if local is not None:
             return local
-        return self.config[f"bridge.{key}"]
+        return config[f"bridge.{key}"]
 
     @staticmethod
     def _get_largest_photo_size(photo: Union[Photo, Document]
@@ -410,6 +415,50 @@ class BasePortal(ABC):
         return cls.get_by_tgid(TelegramID(entity_id),
                                receiver_id if type_name == "user" else entity_id,
                                type_name if create else None)
+
+    # endregion
+    # region Abstract methods (cross-called in matrix/metadata/telegram classes)
+
+    @abstractmethod
+    async def update_matrix_room(self, user: 'AbstractUser', entity: Union[TypeChat, User],
+                                 direct: bool, puppet: p.Puppet = None,
+                                 levels: PowerLevelStateEventContent = None,
+                                 users: List[User] = None,
+                                 participants: List[TypeParticipant] = None) -> None:
+        pass
+
+    @abstractmethod
+    async def create_matrix_room(self, user: 'AbstractUser', entity: TypeChat = None,
+                                 invites: InviteList = None, update_if_exists: bool = True,
+                                 synchronous: bool = False) -> Optional[str]:
+        pass
+
+    @abstractmethod
+    async def _add_telegram_user(self, user_id: TelegramID, source: Optional['AbstractUser'] = None
+                                 ) -> None:
+        pass
+
+    @abstractmethod
+    async def _delete_telegram_user(self, user_id: TelegramID, sender: p.Puppet) -> None:
+        pass
+
+    @abstractmethod
+    async def _update_title(self, title: str, save: bool = False) -> bool:
+        pass
+
+    @abstractmethod
+    async def _update_avatar(self, user: 'AbstractUser', photo: Union[TypeChatPhoto],
+                             save: bool = False) -> bool:
+        pass
+
+    @abstractmethod
+    def _migrate_and_save_telegram(self, new_id: TelegramID) -> None:
+        pass
+
+    @abstractmethod
+    def handle_matrix_power_levels(self, sender: 'u.User', new_levels: PowerLevelStateEventContent,
+                                   old_levels: PowerLevelStateEventContent) -> Awaitable[None]:
+        pass
 
     # endregion
 

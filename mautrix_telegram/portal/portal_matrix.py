@@ -16,6 +16,7 @@
 from typing import Awaitable, Dict, List, Optional, Tuple, Union, Any, TYPE_CHECKING
 from html import escape as escape_html
 from string import Template
+from abc import ABC
 import mimetypes
 
 import magic
@@ -38,22 +39,26 @@ from telethon.tl.types import (
 
 from mautrix.types import (EventID, RoomID, UserID, ContentURI, MessageType,
                            TextMessageEventContent, Format)
-from mautrix.bridge import BasePortal as AbstractPortal
+from mautrix.bridge import BasePortal as MautrixBasePortal
 
 from ..types import TelegramID
 from ..db import Message as DBMessage
 from ..util import sane_mimetypes
+from ..context import Context
 from .. import puppet as p, user as u, formatter, util
 from .base import BasePortal
 
 if TYPE_CHECKING:
     from ..abstract_user import AbstractUser
     from ..tgclient import MautrixTelegramClient
+    from ..config import Config
 
 TypeMessage = Union[Message, MessageService]
 
+config: Optional['Config'] = None
 
-class PortalMatrix(BasePortal, AbstractPortal):
+
+class PortalMatrix(BasePortal, MautrixBasePortal, ABC):
     @staticmethod
     def _get_file_meta(body: str, mime: str) -> str:
         try:
@@ -104,9 +109,7 @@ class PortalMatrix(BasePortal, AbstractPortal):
                                               prev_displayname=prev_displayname)
 
     async def get_displayname(self, user: 'u.User') -> str:
-        # FIXME this doesn't seem to support per-room names or use cache in mautrix 0.4
-        return (await self.main_intent.get_displayname(self.mxid, user.mxid)
-                or user.mxid)
+        return await self.main_intent.get_room_displayname(self.mxid, user.mxid) or user.mxid
 
     def set_typing(self, user: 'u.User', typing: bool = True,
                    action: type = SendMessageTypingAction) -> Awaitable[bool]:
@@ -462,7 +465,7 @@ class PortalMatrix(BasePortal, AbstractPortal):
         file = await self.main_intent.download_media(url)
         mime = magic.from_buffer(file, mime=True)
         ext = sane_mimetypes.guess_extension(mime)
-        uploaded = await sender.client.upload_file(file, file_name=f"avatar{ext}", use_cache=False)
+        uploaded = await sender.client.upload_file(file, file_name=f"avatar{ext}")
         photo = InputChatUploadedPhoto(file=uploaded)
 
         if self.peer_type == "chat":
@@ -485,8 +488,8 @@ class PortalMatrix(BasePortal, AbstractPortal):
         old_room = self.mxid
         self.migrate_and_save_matrix(new_room)
         await self.main_intent.join_room(new_room)
-        entity = None  # type: TypeInputPeer
-        user = None  # type: AbstractUser
+        entity: Optional[TypeInputPeer] = None
+        user: Optional[AbstractUser] = None
         if self.bot and self.has_bot:
             user = self.bot
             entity = await self.get_input_entity(self.bot)
@@ -505,10 +508,7 @@ class PortalMatrix(BasePortal, AbstractPortal):
             self.log.error(
                 "Failed to fully migrate to upgraded Matrix room: no Telegram user found.")
             return
-        users, participants = await self._get_users(self.bot, entity)
-        await self.sync_telegram_users(user, users)
-        levels = await self.main_intent.get_power_levels(self.mxid)
-        await self.update_telegram_participants(participants, levels)
+        await self.update_matrix_room(user, entity, direct=self.peer_type == "user")
         self.log.info(f"Upgraded room from {old_room} to {self.mxid}")
 
     def migrate_and_save_matrix(self, new_id: RoomID) -> None:
@@ -519,3 +519,8 @@ class PortalMatrix(BasePortal, AbstractPortal):
         self.mxid = new_id
         self.db_instance.update(mxid=self.mxid)
         self.by_mxid[self.mxid] = self
+
+
+def init(context: Context) -> None:
+    global config
+    config = context.config

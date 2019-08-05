@@ -15,6 +15,7 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from typing import Awaitable, Dict, List, Optional, Tuple, Union, TYPE_CHECKING
 from html import escape as escape_html
+from abc import ABC
 import random
 import mimetypes
 import codecs
@@ -33,7 +34,7 @@ from telethon.tl.types import (
     MessageMediaDocument, MessageMediaGeo, MessageMediaPhoto, MessageMediaUnsupported,
     MessageMediaGame, PeerUser, PhotoCachedSize, TypeChannelParticipant, TypeChatParticipant,
     TypeDocumentAttribute, TypeMessageAction, TypePhotoSize, PhotoSize, UpdateChatUserTyping,
-    UpdateUserTyping, MessageEntityPre)
+    UpdateUserTyping, MessageEntityPre, ChatPhotoEmpty)
 
 from mautrix.appservice import IntentAPI
 from mautrix.types import EventID, UserID, ImageInfo, ThumbnailInfo
@@ -41,17 +42,21 @@ from mautrix.types import EventID, UserID, ImageInfo, ThumbnailInfo
 from ..types import TelegramID
 from ..db import Message as DBMessage, TelegramFile as DBTelegramFile
 from ..util import sane_mimetypes
+from ..context import Context
 from .. import puppet as p, user as u, formatter, util
 from .base import BasePortal
 
 if TYPE_CHECKING:
     from ..abstract_user import AbstractUser
+    from ..config import Config
 
 InviteList = Union[UserID, List[UserID]]
 TypeParticipant = Union[TypeChatParticipant, TypeChannelParticipant]
 
+config: Optional['Config'] = None
 
-class PortalTelegram(BasePortal):
+
+class PortalTelegram(BasePortal, ABC):
     _temp_pinned_message_id: Optional[TelegramID]
     _temp_pinned_message_id_space: Optional[TelegramID]
     _temp_pinned_message_sender: Optional['p.Puppet']
@@ -509,21 +514,21 @@ class PortalTelegram(BasePortal):
         if should_ignore or not self.mxid:
             return
         if isinstance(action, MessageActionChatEditTitle):
-            await self.update_title(action.title, save=True)
+            await self._update_title(action.title, save=True)
         elif isinstance(action, MessageActionChatEditPhoto):
-            await self.update_avatar(source, action.photo, save=True)
+            await self._update_avatar(source, action.photo, save=True)
         elif isinstance(action, MessageActionChatDeletePhoto):
-            await self.remove_avatar(source, save=True)
+            await self._update_avatar(source, ChatPhotoEmpty(), save=True)
         elif isinstance(action, MessageActionChatAddUser):
             for user_id in action.users:
-                await self.add_telegram_user(TelegramID(user_id), source)
+                await self._add_telegram_user(TelegramID(user_id), source)
         elif isinstance(action, MessageActionChatJoinedByLink):
-            await self.add_telegram_user(sender.id, source)
+            await self._add_telegram_user(sender.id, source)
         elif isinstance(action, MessageActionChatDeleteUser):
-            await self.delete_telegram_user(TelegramID(action.user_id), sender)
+            await self._delete_telegram_user(TelegramID(action.user_id), sender)
         elif isinstance(action, MessageActionChatMigrateTo):
             self.peer_type = "channel"
-            self.migrate_and_save_telegram(TelegramID(action.channel_id))
+            self._migrate_and_save_telegram(TelegramID(action.channel_id))
             await sender.intent.send_emote(self.mxid, "upgraded this group to a supergroup.")
         elif isinstance(action, MessageActionPinMessage):
             await self.receive_telegram_pin_sender(sender)
@@ -577,3 +582,8 @@ class PortalTelegram(BasePortal):
         levels["events"]["m.room.name"] = level
         levels["events"]["m.room.avatar"] = level
         await self.main_intent.set_power_levels(self.mxid, levels)
+
+
+def init(context: Context) -> None:
+    global config
+    config = context.config

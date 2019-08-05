@@ -14,6 +14,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from typing import List, Optional, Tuple, Union, TYPE_CHECKING
+from abc import ABC
 import asyncio
 
 from telethon.tl.functions.messages import (AddChatUserRequest, CreateChatRequest,
@@ -22,28 +23,29 @@ from telethon.tl.functions.channels import (CreateChannelRequest, GetParticipant
                                             InviteToChannelRequest, UpdateUsernameRequest)
 from telethon.errors import ChatAdminRequiredError
 from telethon.tl.types import (
-    Channel, ChatBannedRights, Document, ChannelParticipantsRecent, ChannelParticipantsSearch,
-    ChatPhoto, PhotoEmpty, InputChannel, InputPhotoFileLocation, InputUser, ChatPhotoEmpty,
-    PeerUser, Photo, TypeChannelParticipant, TypeChat, TypeChatParticipant, TypeInputPeer,
-    TypePhotoSize, TypeUser, PhotoSize, User, InputPeerPhotoFileLocation)
+    Channel, ChatBannedRights, ChannelParticipantsRecent, ChannelParticipantsSearch, ChatPhoto,
+    PhotoEmpty, InputChannel, InputUser, ChatPhotoEmpty, PeerUser, Photo, TypeChat, TypeInputPeer,
+    TypeUser, User, InputPeerPhotoFileLocation, ChatParticipantAdmin, ChannelParticipantAdmin,
+    ChatParticipantCreator, ChannelParticipantCreator)
 
 from mautrix.errors import MForbidden
-from mautrix.types import (RoomID, UserID, RoomCreatePreset, ContentURI, EventType, Membership,
+from mautrix.types import (RoomID, UserID, RoomCreatePreset, EventType, Membership, Member,
                            PowerLevelStateEventContent, RoomAlias)
 
 from ..types import TelegramID
+from ..context import Context
 from .. import puppet as p, user as u, util
-from .base import BasePortal
+from .base import BasePortal, InviteList, TypeParticipant, TypeChatPhoto
 
 if TYPE_CHECKING:
     from ..abstract_user import AbstractUser
+    from ..config import Config
     from . import Portal
 
-InviteList = Union[UserID, List[UserID]]
-TypeParticipant = Union[TypeChatParticipant, TypeChannelParticipant]
+config: Optional['Config'] = None
 
 
-class PortalMetadata(BasePortal):
+class PortalMetadata(BasePortal, ABC):
     _room_create_lock: asyncio.Lock
 
     def __init__(self, *args, **kwargs) -> None:
@@ -52,7 +54,7 @@ class PortalMetadata(BasePortal):
 
     # region Matrix -> Telegram
 
-    async def _get_telegram_users_in_matrix_room(self) -> List[TelegramID]:
+    async def _get_telegram_users_in_matrix_room(self) -> List[Union[InputUser, PeerUser]]:
         user_tgids = set()
         user_mxids = await self.main_intent.get_room_members(self.mxid, (Membership.JOIN,
                                                                          Membership.INVITE))
@@ -66,7 +68,7 @@ class PortalMetadata(BasePortal):
             puppet_id = p.Puppet.get_id_from_mxid(user)
             if puppet_id:
                 user_tgids.add(puppet_id)
-        return list(user_tgids)
+        return [PeerUser(user_id) for user_id in user_tgids]
 
     async def upgrade_telegram_chat(self, source: 'u.User') -> None:
         if self.peer_type != "chat":
@@ -81,10 +83,10 @@ class PortalMetadata(BasePortal):
         if not entity:
             raise ValueError("Upgrade may have failed: output channel not found.")
         self.peer_type = "channel"
-        self.migrate_and_save_telegram(TelegramID(entity.id))
+        self._migrate_and_save_telegram(TelegramID(entity.id))
         await self.update_info(source, entity)
 
-    def migrate_and_save_telegram(self, new_id: TelegramID) -> None:
+    def _migrate_and_save_telegram(self, new_id: TelegramID) -> None:
         try:
             del self.by_tgid[self.tgid_full]
         except KeyError:
@@ -107,7 +109,7 @@ class PortalMetadata(BasePortal):
             raise ValueError("Only channels and supergroups have usernames.")
         await source.client(
             UpdateUsernameRequest(await self.get_input_entity(source), username))
-        if await self.update_username(username):
+        if await self._update_username(username):
             self.save()
 
     async def create_telegram_chat(self, source: 'u.User', supergroup: bool = False) -> None:
@@ -153,7 +155,7 @@ class PortalMetadata(BasePortal):
         if levels.get_user_level(self.main_intent.mxid) == 100:
             levels = self._get_base_power_levels(levels, entity)
             await self.main_intent.set_power_levels(self.mxid, levels)
-        await self.handle_matrix_power_levels(source, levels["users"], {})
+        await self.handle_matrix_power_levels(source, levels, PowerLevelStateEventContent())
 
     async def invite_telegram(self, source: 'u.User',
                               puppet: Union[p.Puppet, 'AbstractUser']) -> None:
@@ -195,7 +197,7 @@ class PortalMetadata(BasePortal):
             await self.update_info(user, entity)
             if not users or not participants:
                 users, participants = await self._get_users(user, entity)
-            await self.sync_telegram_users(user, users)
+            await self._sync_telegram_users(user, users)
             await self.update_telegram_participants(participants, levels)
         else:
             if not puppet:
@@ -382,7 +384,7 @@ class PortalMetadata(BasePortal):
         return changed
 
     async def update_telegram_participants(self, participants: List[TypeParticipant],
-                                           levels: dict = None) -> None:
+                                           levels: PowerLevelStateEventContent = None) -> None:
         if not levels:
             levels = await self.main_intent.get_power_levels(self.mxid)
         if self._participants_to_power_levels(participants, levels):
@@ -400,7 +402,7 @@ class PortalMetadata(BasePortal):
             return None
         return self.alias_template.format(groupname=username)
 
-    def add_bot_chat(self, bot: User) -> None:
+    def _add_bot_chat(self, bot: User) -> None:
         if self.bot and bot.id == self.bot.tgid:
             self.bot.add_chat(self.tgid, self.peer_type)
             return
@@ -409,7 +411,7 @@ class PortalMetadata(BasePortal):
         if user and user.is_bot:
             user.register_portal(self)
 
-    async def sync_telegram_users(self, source: 'AbstractUser', users: List[User]) -> None:
+    async def _sync_telegram_users(self, source: 'AbstractUser', users: List[User]) -> None:
         allowed_tgids = set()
         skip_deleted = config["bridge.skip_deleted_members"]
         for entity in users:
@@ -417,7 +419,7 @@ class PortalMetadata(BasePortal):
                 continue
             puppet = p.Puppet.get(TelegramID(entity.id))
             if entity.bot:
-                self.add_bot_chat(entity)
+                self._add_bot_chat(entity)
             allowed_tgids.add(entity.id)
             await puppet.intent.ensure_joined(self.mxid)
             await puppet.update_info(source, entity)
@@ -454,8 +456,8 @@ class PortalMetadata(BasePortal):
                                                      "You had left this Telegram chat.")
                     continue
 
-    async def add_telegram_user(self, user_id: TelegramID, source: Optional['AbstractUser'] = None
-                                ) -> None:
+    async def _add_telegram_user(self, user_id: TelegramID, source: Optional['AbstractUser'] = None
+                                 ) -> None:
         puppet = p.Puppet.get(user_id)
         if source:
             entity: User = await source.client.get_entity(PeerUser(user_id))
@@ -467,7 +469,7 @@ class PortalMetadata(BasePortal):
             user.register_portal(self)
             await self.invite_to_matrix(user.mxid)
 
-    async def delete_telegram_user(self, user_id: TelegramID, sender: p.Puppet) -> None:
+    async def _delete_telegram_user(self, user_id: TelegramID, sender: p.Puppet) -> None:
         puppet = p.Puppet.get(user_id)
         user = u.User.get_by_tgid(user_id)
         kick_message = (f"Kicked by {sender.displayname}"
@@ -492,72 +494,68 @@ class PortalMetadata(BasePortal):
 
     async def update_info(self, user: 'AbstractUser', entity: TypeChat = None) -> None:
         if self.peer_type == "user":
-            self.log.warning(f"Called update_info() for direct chat portal")
+            self.log.warning("Called update_info() for direct chat portal")
             return
 
-        self.log.debug(f"Updating info")
+        self.log.debug("Updating info")
         if not entity:
             entity = await self.get_entity(user)
-            self.log.debug("Fetched data: %s", entity)
+            self.log.debug(f"Fetched data: {entity}")
         changed = False
 
         if self.peer_type == "channel":
-            changed = await self.update_username(entity.username) or changed
+            changed = await self._update_username(entity.username) or changed
             # TODO update about text
             # changed = self.update_about(entity.about) or changed
 
-        changed = await self.update_title(entity.title) or changed
+        changed = await self._update_title(entity.title) or changed
 
         if isinstance(entity.photo, ChatPhoto):
-            changed = await self.update_avatar(user, entity.photo) or changed
+            changed = await self._update_avatar(user, entity.photo) or changed
 
         if changed:
             self.save()
 
-    async def update_username(self, username: str, save: bool = False) -> bool:
-        if self.username != username:
-            if self.username:
-                await self.main_intent.remove_room_alias(self._get_alias_localpart())
-            self.username = username or None
-            if self.username:
-                await self.main_intent.add_room_alias(self.mxid, self._get_alias_localpart())
-                if Portal.public_portals:
-                    await self.main_intent.set_join_rule(self.mxid, "public")
-            else:
-                await self.main_intent.set_join_rule(self.mxid, "invite")
+    async def _update_username(self, username: str, save: bool = False) -> bool:
+        if self.username == username:
+            return False
 
-            if save:
-                self.save()
-            return True
-        return False
+        if self.username:
+            await self.main_intent.remove_room_alias(self._get_alias_localpart())
+        self.username = username or None
+        if self.username:
+            await self.main_intent.add_room_alias(self.mxid, self._get_alias_localpart())
+            if Portal.public_portals:
+                await self.main_intent.set_join_rule(self.mxid, "public")
+        else:
+            await self.main_intent.set_join_rule(self.mxid, "invite")
 
-    async def update_about(self, about: str, save: bool = False) -> bool:
-        if self.about != about:
-            self.about = about
-            await self.main_intent.set_room_topic(self.mxid, self.about)
-            if save:
-                self.save()
-            return True
-        return False
-
-    async def update_title(self, title: str, save: bool = False) -> bool:
-        if self.title != title:
-            self.title = title
-            await self.main_intent.set_room_name(self.mxid, self.title)
-            if save:
-                self.save()
-            return True
-        return False
-
-    async def remove_avatar(self, _: 'AbstractUser', save: bool = False) -> None:
-        await self.main_intent.set_room_avatar(self.mxid, None)
-        self.photo_id = None
         if save:
             self.save()
+        return True
 
-    async def update_avatar(self, user: 'AbstractUser',
-                            photo: Union[ChatPhoto, ChatPhotoEmpty, Photo, PhotoEmpty],
-                            save: bool = False) -> bool:
+    async def _update_about(self, about: str, save: bool = False) -> bool:
+        if self.about == about:
+            return False
+
+        self.about = about
+        await self.main_intent.set_room_topic(self.mxid, self.about)
+        if save:
+            self.save()
+        return True
+
+    async def _update_title(self, title: str, save: bool = False) -> bool:
+        if self.title == title:
+            return False
+
+        self.title = title
+        await self.main_intent.set_room_name(self.mxid, self.title)
+        if save:
+            self.save()
+        return True
+
+    async def _update_avatar(self, user: 'AbstractUser', photo: TypeChatPhoto, save: bool = False
+                             ) -> bool:
         if isinstance(photo, ChatPhoto):
             loc = InputPeerPhotoFileLocation(
                 peer=await self.get_input_entity(user),
@@ -576,7 +574,7 @@ class PortalMetadata(BasePortal):
             raise ValueError(f"Unknown photo type {type(photo)}")
         if self.photo_id != photo_id:
             if not photo_id:
-                await self.main_intent.set_room_avatar(self.mxid, ContentURI(""))
+                await self.main_intent.set_room_avatar(self.mxid, None)
                 self.photo_id = ""
                 if save:
                     self.save()
@@ -593,6 +591,7 @@ class PortalMetadata(BasePortal):
     async def _get_users(self, user: 'AbstractUser',
                          entity: Union[TypeInputPeer, InputUser, TypeChat, TypeUser, InputChannel]
                          ) -> Tuple[List[TypeUser], List[TypeParticipant]]:
+        # TODO replace with client.get_participants
         if self.peer_type == "chat":
             chat = await user.client(GetFullChatRequest(chat_id=self.tgid))
             return chat.users, chat.full_chat.participants.participants
@@ -610,8 +609,8 @@ class PortalMetadata(BasePortal):
                         entity, ChannelParticipantsRecent(), offset=0, limit=limit, hash=0))
                     return response.users, response.participants
                 elif limit > 200 or limit == -1:
-                    users = []  # type: List[TypeUser]
-                    participants = []  # type: List[TypeParticipant]
+                    users: List[TypeUser] = []
+                    participants: List[TypeParticipant] = []
                     offset = 0
                     remaining_quota = limit if limit > 0 else 1000000
                     query = (ChannelParticipantsSearch("") if limit == -1
@@ -635,3 +634,8 @@ class PortalMetadata(BasePortal):
         return [], []
 
     # endregion
+
+
+def init(context: Context) -> None:
+    global config
+    config = context.config
