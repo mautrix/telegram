@@ -40,7 +40,6 @@ from .base import BasePortal, InviteList, TypeParticipant, TypeChatPhoto
 if TYPE_CHECKING:
     from ..abstract_user import AbstractUser
     from ..config import Config
-    from . import Portal
 
 config: Optional['Config'] = None
 
@@ -433,7 +432,7 @@ class PortalMetadata(BasePortal, ABC):
         #  * The member sync count is limited, because then we might ignore some members.
         #  * It's a channel, because non-admins don't have access to the member list.
         trust_member_list = (len(allowed_tgids) < 9900
-                             and Portal.max_initial_member_sync == -1
+                             and self.max_initial_member_sync == -1
                              and (self.megagroup or self.peer_type != "channel"))
         if trust_member_list:
             joined_mxids = await self.main_intent.get_room_members(self.mxid)
@@ -525,7 +524,7 @@ class PortalMetadata(BasePortal, ABC):
         self.username = username or None
         if self.username:
             await self.main_intent.add_room_alias(self.mxid, self._get_alias_localpart())
-            if Portal.public_portals:
+            if self.public_portals:
                 await self.main_intent.set_join_rule(self.mxid, "public")
         else:
             await self.main_intent.set_join_rule(self.mxid, "invite")
@@ -596,10 +595,10 @@ class PortalMetadata(BasePortal, ABC):
             chat = await user.client(GetFullChatRequest(chat_id=self.tgid))
             return chat.users, chat.full_chat.participants.participants
         elif self.peer_type == "channel":
-            if not self.megagroup and not Portal.sync_channel_members:
+            if not self.megagroup and not self.sync_channel_members:
                 return [], []
 
-            limit = Portal.max_initial_member_sync
+            limit = self.max_initial_member_sync
             if limit == 0:
                 return [], []
 

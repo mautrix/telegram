@@ -36,6 +36,7 @@ class TelegramFile(Base):
     thumbnail_id: str = Column("thumbnail", String, ForeignKey("telegram_file.id"), nullable=True)
     thumbnail: Optional['TelegramFile'] = None
 
+    @classmethod
     def scan(cls, row: RowProxy) -> 'TelegramFile':
         loc_id, mxc, mime, conv, ts, s, w, h, thumb_id = row
         thumb = None
