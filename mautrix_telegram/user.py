@@ -414,4 +414,5 @@ def init(context: 'Context') -> Iterable[Awaitable['User']]:
     global config
     config = context.config
 
-    return (User.from_db(db_user).ensure_started() for db_user in DBUser.all() if db_user.tgid)
+    return (User.from_db(db_user).ensure_started()
+            for db_user in DBUser.all_with_tgid())

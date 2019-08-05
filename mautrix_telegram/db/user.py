@@ -41,8 +41,8 @@ class User(Base):
                    saved_contacts=saved_contacts)
 
     @classmethod
-    def all(cls) -> Iterable['User']:
-        return cls._select_all()
+    def all_with_tgid(cls) -> Iterable['User']:
+        return cls._select_all(cls.c.tgid != None)
 
     @classmethod
     def get_by_tgid(cls, tgid: TelegramID) -> Optional['User']:
