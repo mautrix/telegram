@@ -37,6 +37,7 @@ RUN apk add --no-cache \
       ffmpeg \
       ca-certificates \
       su-exec \
+      git \
  && pip3 install .[all] && pip3 install --upgrade 'git+https://github.com/tulir/mautrix-python@bridge-updates#egg=mautrix'
 
 VOLUME /data
