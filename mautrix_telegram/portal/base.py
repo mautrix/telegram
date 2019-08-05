@@ -456,8 +456,8 @@ class BasePortal(ABC):
         pass
 
     @abstractmethod
-    def handle_matrix_power_levels(self, sender: 'u.User', new_levels: PowerLevelStateEventContent,
-                                   old_levels: PowerLevelStateEventContent) -> Awaitable[None]:
+    def handle_matrix_power_levels(self, sender: 'u.User', new_levels: Dict[UserID, int],
+                                   old_levels: Dict[UserID, int]) -> Awaitable[None]:
         pass
 
     # endregion

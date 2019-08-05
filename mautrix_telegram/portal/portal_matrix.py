@@ -37,8 +37,9 @@ from telethon.tl.types import (
     SendMessageCancelAction, SendMessageTypingAction, TypeInputPeer, TypeMessageEntity,
     UpdateNewMessage, InputMediaUploadedDocument)
 
-from mautrix.types import (EventID, RoomID, UserID, ContentURI, MessageType,
-                           TextMessageEventContent, Format)
+from mautrix.types import (EventID, RoomID, UserID, ContentURI, MessageType, MessageEventContent,
+                           TextMessageEventContent, MediaMessageEventContent, Format,
+                           LocationMessageEventContent)
 from mautrix.bridge import BasePortal as MautrixBasePortal
 
 from ..types import TelegramID
@@ -181,38 +182,31 @@ class PortalMatrix(BasePortal, MautrixBasePortal, ABC):
             # We'll just assume the user is already in the chat.
             pass
 
-    async def _apply_msg_format(self, sender: 'u.User', msgtype: str, message: Dict[str, Any]
+    async def _apply_msg_format(self, sender: 'u.User', content: MessageEventContent
                                 ) -> None:
-        if "formatted_body" not in message:
-            message["format"] = "org.matrix.custom.html"
-            message["formatted_body"] = escape_html(message.get("body", "")).replace("\n", "<br/>")
-        body = message["formatted_body"]
+        if not content.formatted_body or content.format != Format.HTML:
+            content.format = Format.HTML
+            content.formatted_body = escape_html(content.body).replace("\n", "<br/>")
 
-        tpl = (self.get_config(f"message_formats.[{msgtype}]")
+        tpl = (self.get_config(f"message_formats.[{content.msgtype.value}]")
                or "<b>$sender_displayname</b>: $message")
         displayname = await self.get_displayname(sender)
         tpl_args = dict(sender_mxid=sender.mxid,
                         sender_username=sender.mxid_localpart,
                         sender_displayname=escape_html(displayname),
-                        message=body)
-        message["formatted_body"] = Template(tpl).safe_substitute(tpl_args)
+                        message=content.formatted_body)
+        content.formatted_body = Template(tpl).safe_substitute(tpl_args)
 
     async def _pre_process_matrix_message(self, sender: 'u.User', use_relaybot: bool,
-                                          message: Dict[str, Any]) -> None:
-        msgtype = message.get("msgtype", "m.text")
-        if msgtype == "m.emote":
-            await self._apply_msg_format(sender, msgtype, message)
-            if "m.new_content" in message:
-                await self._apply_msg_format(sender, msgtype, message["m.new_content"])
-                message["m.new_content"]["msgtype"] = "m.text"
-            message["msgtype"] = "m.text"
+                                          content: MessageEventContent) -> None:
+        if content.msgtype == MessageType.EMOTE:
+            await self._apply_msg_format(sender, content)
+            content.msgtype = MessageType.TEXT
         elif use_relaybot:
-            await self._apply_msg_format(sender, msgtype, message)
-            if "m.new_content" in message:
-                await self._apply_msg_format(sender, msgtype, message["m.new_content"])
+            await self._apply_msg_format(sender, content)
 
     @staticmethod
-    def _matrix_event_to_entities(event: Union[str, TextMessageEventContent]
+    def _matrix_event_to_entities(event: Union[str, MessageEventContent]
                                   ) -> Tuple[str, Optional[List[TypeMessageEntity]]]:
         try:
             if isinstance(event, str):
@@ -227,57 +221,51 @@ class PortalMatrix(BasePortal, MautrixBasePortal, ABC):
 
     async def _handle_matrix_text(self, sender_id: TelegramID, event_id: EventID,
                                   space: TelegramID, client: 'MautrixTelegramClient',
-                                  message: Dict, reply_to: TelegramID) -> None:
+                                  content: TextMessageEventContent, reply_to: TelegramID) -> None:
         async with self.send_lock(sender_id):
             lp = self.get_config("telegram_link_preview")
-            relates_to = message.get("m.relates_to", None) or {}
-            if relates_to.get("rel_type", None) == "m.replace":
-                orig_msg = DBMessage.get_by_mxid(relates_to.get("event_id", ""), self.mxid, space)
-                if orig_msg and "m.new_content" in message:
-                    message = message["m.new_content"]
-                    response = await client.edit_message(self.peer, orig_msg.tgid, message,
+            if content.get_edit():
+                orig_msg = DBMessage.get_by_mxid(content.get_edit(), self.mxid, space)
+                if orig_msg:
+                    response = await client.edit_message(self.peer, orig_msg.tgid, content,
                                                          parse_mode=self._matrix_event_to_entities,
                                                          link_preview=lp)
                     self._add_telegram_message_to_db(event_id, space, -1, response)
                     return
-            response = await client.send_message(self.peer, message, reply_to=reply_to,
+            response = await client.send_message(self.peer, content, reply_to=reply_to,
                                                  parse_mode=self._matrix_event_to_entities,
                                                  link_preview=lp)
             self._add_telegram_message_to_db(event_id, space, 0, response)
 
-    async def _handle_matrix_file(self, msgtype: MessageType, sender_id: TelegramID,
-                                  event_id: EventID, space: TelegramID,
-                                  client: 'MautrixTelegramClient', message: dict,
-                                  reply_to: TelegramID) -> None:
-        file = await self.main_intent.download_media(message["url"])
+    async def _handle_matrix_file(self, sender_id: TelegramID, event_id: EventID,
+                                  space: TelegramID, client: 'MautrixTelegramClient',
+                                  content: MediaMessageEventContent, reply_to: TelegramID) -> None:
+        file = await self.main_intent.download_media(content.url)
 
-        info = message.get("info", {})
-        mime = info.get("mimetype", None)
+        mime = content.info.mimetype
 
-        w, h = None, None
+        w, h = content.info.width, content.info.height
 
-        if msgtype == MessageType.STICKER:
+        if content.msgtype == MessageType.STICKER:
             if mime != "image/gif":
                 mime, file, w, h = util.convert_image(file, source_mime=mime, target_type="webp")
             else:
                 # Remove sticker description
-                message["mxtg_filename"] = "sticker.gif"
-                message["body"] = ""
-        elif "w" in info and "h" in info:
-            w, h = info["w"], info["h"]
+                content["net.maunium.telegram.internal.filename"] = "sticker.gif"
+                content.body = ""
 
-        file_name = self._get_file_meta(message["mxtg_filename"], mime)
+        file_name = self._get_file_meta(content["net.maunium.telegram.internal.filename"], mime)
         attributes = [DocumentAttributeFilename(file_name=file_name)]
         if w and h:
             attributes.append(DocumentAttributeImageSize(w, h))
 
-        caption = message["body"] if message["body"].lower() != file_name.lower() else None
+        caption = content.body if content.body.lower() != file_name.lower() else None
 
         media = await client.upload_file_direct(
             file, mime, attributes, file_name,
             max_image_size=config["bridge.image_as_file_size"] * 1000 ** 2)
         async with self.send_lock(sender_id):
-            if await self._matrix_document_edit(client, message, space, caption, media, event_id):
+            if await self._matrix_document_edit(client, content, space, caption, media, event_id):
                 return
             try:
                 response = await client.send_media(self.peer, media, reply_to=reply_to,
@@ -289,12 +277,11 @@ class PortalMatrix(BasePortal, MautrixBasePortal, ABC):
                                                    caption=caption)
             self._add_telegram_message_to_db(event_id, space, 0, response)
 
-    async def _matrix_document_edit(self, client: 'MautrixTelegramClient', message: dict,
-                                    space: TelegramID, caption: str, media: Any, event_id: EventID
-                                    ) -> bool:
-        relates_to = message.get("m.relates_to", None) or {}
-        if relates_to.get("rel_type", None) == "m.replace":
-            orig_msg = DBMessage.get_by_mxid(relates_to.get("event_id", ""), self.mxid, space)
+    async def _matrix_document_edit(self, client: 'MautrixTelegramClient',
+                                    content: MessageEventContent, space: TelegramID,
+                                    caption: str, media: Any, event_id: EventID) -> bool:
+        if content.get_edit():
+            orig_msg = DBMessage.get_by_mxid(content.get_edit(), self.mxid, space)
             if orig_msg:
                 response = await client.edit_message(self.peer, orig_msg.tgid,
                                                      caption, file=media)
@@ -304,18 +291,19 @@ class PortalMatrix(BasePortal, MautrixBasePortal, ABC):
 
     async def _handle_matrix_location(self, sender_id: TelegramID, event_id: EventID,
                                       space: TelegramID, client: 'MautrixTelegramClient',
-                                      message: Dict[str, Any], reply_to: TelegramID) -> None:
+                                      content: LocationMessageEventContent, reply_to: TelegramID
+                                      ) -> None:
         try:
-            lat, long = message["geo_uri"][len("geo:"):].split(",")
+            lat, long = content.geo_uri[len("geo:"):].split(",")
             lat, long = float(lat), float(long)
         except (KeyError, ValueError):
             self.log.exception("Failed to parse location")
             return None
-        caption, entities = self._matrix_event_to_entities(message)
+        caption, entities = self._matrix_event_to_entities(content)
         media = MessageMediaGeo(geo=GeoPoint(lat, long, access_hash=0))
 
         async with self.send_lock(sender_id):
-            if await self._matrix_document_edit(client, message, space, caption, media, event_id):
+            if await self._matrix_document_edit(client, content, space, caption, media, event_id):
                 return
             response = await client.send_media(self.peer, media, reply_to=reply_to,
                                                caption=caption, entities=entities)
@@ -335,14 +323,14 @@ class PortalMatrix(BasePortal, MautrixBasePortal, ABC):
             mxid=event_id,
             edit_index=edit_index).insert()
 
-    async def handle_matrix_message(self, sender: 'u.User', message: Dict[str, Any],
+    async def handle_matrix_message(self, sender: 'u.User', content: MessageEventContent,
                                     event_id: EventID) -> None:
-        if "body" not in message or "msgtype" not in message:
+        if not content.body or not content.msgtype:
             self.log.debug(f"Ignoring message {event_id} in {self.mxid} without body or msgtype")
             return
 
         puppet = p.Puppet.get_by_custom_mxid(sender.mxid)
-        if puppet and message.get("net.maunium.telegram.puppet", False):
+        if puppet and content.get("net.maunium.telegram.puppet", False):
             self.log.debug("Ignoring puppet-sent message by confirmed puppet user %s", sender.mxid)
             return
 
@@ -351,28 +339,27 @@ class PortalMatrix(BasePortal, MautrixBasePortal, ABC):
         sender_id = sender.tgid if logged_in else self.bot.tgid
         space = (self.tgid if self.peer_type == "channel"  # Channels have their own ID space
                  else (sender.tgid if logged_in else self.bot.tgid))
-        reply_to = formatter.matrix_reply_to_telegram(message, space, room_id=self.mxid)
+        reply_to = formatter.matrix_reply_to_telegram(content, space, room_id=self.mxid)
 
-        message["mxtg_filename"] = message["body"]
-        await self._pre_process_matrix_message(sender, not logged_in, message)
-        msgtype = message["msgtype"]
+        content["net.maunium.telegram.internal.filename"] = content.body
+        await self._pre_process_matrix_message(sender, not logged_in, content)
 
-        if msgtype == "m.notice":
+        if content.msgtype == MessageType.NOTICE:
             bridge_notices = self.get_config("bridge_notices.default")
             excepted = sender.mxid in self.get_config("bridge_notices.exceptions")
             if not bridge_notices and not excepted:
                 return
 
-        if msgtype == "m.text" or msgtype == "m.notice":
-            await self._handle_matrix_text(sender_id, event_id, space, client, message, reply_to)
-        elif msgtype == "m.location":
-            await self._handle_matrix_location(sender_id, event_id, space, client, message,
+        if content.msgtype in (MessageType.TEXT, MessageType.NOTICE):
+            await self._handle_matrix_text(sender_id, event_id, space, client, content, reply_to)
+        elif content.msgtype == MessageType.LOCATION:
+            await self._handle_matrix_location(sender_id, event_id, space, client, content,
                                                reply_to)
-        elif msgtype in ("m.sticker", "m.image", "m.file", "m.audio", "m.video"):
-            await self._handle_matrix_file(msgtype, sender_id, event_id, space, client, message,
-                                           reply_to)
+        elif content.msgtype in (MessageType.STICKER, MessageType.IMAGE, MessageType.FILE,
+                                 MessageType.AUDIO, MessageType.VIDEO):
+            await self._handle_matrix_file(sender_id, event_id, space, client, content, reply_to)
         else:
-            self.log.debug(f"Unhandled Matrix event: {message}")
+            self.log.debug(f"Unhandled Matrix event: {content}")
 
     async def handle_matrix_pin(self, sender: 'u.User',
                                 pinned_message: Optional[EventID]) -> None:
@@ -418,9 +405,8 @@ class PortalMatrix(BasePortal, MautrixBasePortal, ABC):
                 EditAdminRequest(channel=await self.get_input_entity(sender),
                                  user_id=user_id, admin_rights=rights))
 
-    async def handle_matrix_power_levels(self, sender: 'u.User',
-                                         new_users: Dict[UserID, int],
-                                         old_users: Dict[str, int]) -> None:
+    async def handle_matrix_power_levels(self, sender: 'u.User', new_users: Dict[UserID, int],
+                                         old_users: Dict[UserID, int]) -> None:
         # TODO handle all power level changes and bridge exact admin rights to supergroups/channels
         for user, level in new_users.items():
             if not user or user == self.main_intent.mxid or user == sender.mxid:

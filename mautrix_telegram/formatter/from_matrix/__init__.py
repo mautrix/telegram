@@ -13,7 +13,7 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import Optional, List, Tuple, Callable, Pattern, Match, TYPE_CHECKING, Dict, Any
+from typing import Optional, List, Tuple, Callable, Pattern, Match, TYPE_CHECKING
 import re
 import logging
 
@@ -21,7 +21,7 @@ from telethon.tl.types import (MessageEntityMention, MessageEntityMentionName, M
                                TypeMessageEntity)
 from telethon.helpers import add_surrogate, del_surrogate
 
-from mautrix.types import RoomID
+from mautrix.types import RoomID, MessageEventContent
 
 from ... import puppet as pu
 from ...types import TelegramID
@@ -90,26 +90,12 @@ def matrix_to_telegram(html: str) -> ParsedMessage:
         raise FormatError(f"Failed to convert Matrix format: {html}") from e
 
 
-def matrix_reply_to_telegram(content: Dict[str, Any], tg_space: TelegramID,
+def matrix_reply_to_telegram(content: MessageEventContent, tg_space: TelegramID,
                              room_id: Optional[RoomID] = None) -> Optional[TelegramID]:
-    relates_to = content.get("m.relates_to", None) or {}
-    if not relates_to:
-        return None
-    reply = (relates_to if relates_to.get("rel_type", None) == "m.reference"
-             else relates_to.get("m.in_reply_to", None) or {})
-    if not reply:
-        return None
-    room_id = room_id or reply.get("room_id", None)
-    event_id = reply.get("event_id", None)
+    event_id = content.get_reply_to()
     if not event_id:
         return
-
-    try:
-        if content["format"] == "org.matrix.custom.html":
-            content["formatted_body"] = trim_reply_fallback_html(content["formatted_body"])
-    except KeyError:
-        pass
-    content["body"] = trim_reply_fallback_text(content["body"])
+    content.trim_reply_fallback()
 
     message = DBMessage.get_by_mxid(event_id, room_id, tg_space)
     if message:

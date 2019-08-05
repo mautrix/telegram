@@ -13,7 +13,7 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import Awaitable, Dict, List, Optional, Tuple, Union, TYPE_CHECKING
+from typing import Awaitable, Dict, List, Optional, Tuple, Union, NamedTuple, TYPE_CHECKING
 from html import escape as escape_html
 from abc import ABC
 import random
@@ -37,7 +37,9 @@ from telethon.tl.types import (
     UpdateUserTyping, MessageEntityPre, ChatPhotoEmpty)
 
 from mautrix.appservice import IntentAPI
-from mautrix.types import EventID, UserID, ImageInfo, ThumbnailInfo
+from mautrix.types import (EventID, UserID, ImageInfo, ThumbnailInfo, RelatesTo, MessageType,
+                           EventType, MediaMessageEventContent, TextMessageEventContent,
+                           LocationMessageEventContent, Format)
 
 from ..types import TelegramID
 from ..db import Message as DBMessage, TelegramFile as DBTelegramFile
@@ -52,6 +54,8 @@ if TYPE_CHECKING:
 
 InviteList = Union[UserID, List[UserID]]
 TypeParticipant = Union[TypeChatParticipant, TypeChannelParticipant]
+DocAttrs = NamedTuple("DocAttrs", name=Optional[str], mime_type=Optional[str], is_sticker=bool,
+                      sticker_alt=Optional[str], width=int, height=int)
 
 config: Optional['Config'] = None
 
@@ -71,7 +75,7 @@ class PortalTelegram(BasePortal, ABC):
                                      _: Union[UpdateUserTyping, UpdateChatUserTyping]) -> None:
         await user.intent.set_typing(self.mxid, is_typing=True)
 
-    def get_external_url(self, evt: Message) -> Optional[str]:
+    def _get_external_url(self, evt: Message) -> Optional[str]:
         if self.peer_type == "channel" and self.username is not None:
             return f"https://t.me/{self.username}/{evt.id}"
         elif self.peer_type != "user":
@@ -90,7 +94,7 @@ class PortalTelegram(BasePortal, ABC):
                 evt, source, self.main_intent,
                 prefix_html=f"<img src='{file.mxc}' alt='Inline Telegram photo'/><br/>",
                 prefix_text="Inline image: ")
-            content.external_url = self.get_external_url(evt)
+            content.external_url = self._get_external_url(evt)
             await intent.set_typing(self.mxid, is_typing=False)
             return await intent.send_message(self.mxid, content, timestamp=evt.date)
         info = ImageInfo(
@@ -101,42 +105,36 @@ class PortalTelegram(BasePortal, ABC):
         await intent.set_typing(self.mxid, is_typing=False)
         result = await intent.send_image(self.mxid, file.mxc, info=info, text=name,
                                          relates_to=relates_to, timestamp=evt.date,
-                                         external_url=self.get_external_url(evt))
+                                         external_url=self._get_external_url(evt))
         if evt.message:
             text, html, _ = await formatter.telegram_to_matrix(evt, source, self.main_intent,
                                                                no_reply_fallback=True)
             result = await intent.send_text(self.mxid, text, html=html, timestamp=evt.date,
-                                            external_url=self.get_external_url(evt))
+                                            external_url=self._get_external_url(evt))
         return result
 
     @staticmethod
-    def _parse_telegram_document_attributes(attributes: List[TypeDocumentAttribute]) -> Dict:
-        attrs = {
-            "name": None,
-            "mime_type": None,
-            "is_sticker": False,
-            "sticker_alt": None,
-            "width": None,
-            "height": None,
-        }  # type: Dict
+    def _parse_telegram_document_attributes(attributes: List[TypeDocumentAttribute]) -> DocAttrs:
+        attrs = DocAttrs(name=None, mime_type=None, is_sticker=False, sticker_alt=None,
+                         width=0, height=0)
         for attr in attributes:
             if isinstance(attr, DocumentAttributeFilename):
-                attrs["name"] = attrs["name"] or attr.file_name
-                attrs["mime_type"], _ = mimetypes.guess_type(attr.file_name)
+                attrs.name = attrs.name or attr.file_name
+                attrs.mime_type, _ = mimetypes.guess_type(attr.file_name)
             elif isinstance(attr, DocumentAttributeSticker):
-                attrs["is_sticker"] = True
-                attrs["sticker_alt"] = attr.alt
+                attrs.is_sticker = True
+                attrs.sticker_alt = attr.alt
             elif isinstance(attr, DocumentAttributeVideo):
-                attrs["width"], attrs["height"] = attr.w, attr.h
+                attrs.width, attrs.height = attr.w, attr.h
         return attrs
 
     @staticmethod
-    def _parse_telegram_document_meta(evt: Message, file: DBTelegramFile, attrs: Dict,
+    def _parse_telegram_document_meta(evt: Message, file: DBTelegramFile, attrs: DocAttrs,
                                       thumb_size: TypePhotoSize) -> Tuple[ImageInfo, str]:
         document = evt.media.document
-        name = evt.message or attrs["name"]
-        if attrs["is_sticker"]:
-            alt = attrs["sticker_alt"]
+        name = evt.message or attrs.name
+        if attrs.is_sticker:
+            alt = attrs.sticker_alt
             if len(alt) > 0:
                 try:
                     name = f"{alt} ({unicodedata.name(alt[0]).lower()})"
@@ -150,12 +148,12 @@ class PortalTelegram(BasePortal, ABC):
             mime_type = file.mime_type or document.mime_type
         info = ImageInfo(size=file.size, mimetype=mime_type)
 
-        if attrs["mime_type"] and not file.was_converted:
-            file.mime_type = attrs["mime_type"] or file.mime_type
+        if attrs.mime_type and not file.was_converted:
+            file.mime_type = attrs.mime_type or file.mime_type
         if file.width and file.height:
             info.width, info.height = file.width, file.height
-        elif attrs["width"] and attrs["height"]:
-            info.width, info.height = attrs["width"], attrs["height"]
+        elif attrs.width and attrs.height:
+            info.width, info.height = attrs.width, attrs.height
 
         if file.thumbnail:
             info.thumbnail_url = file.thumbnail.mxc
@@ -167,13 +165,14 @@ class PortalTelegram(BasePortal, ABC):
         return info, name
 
     async def handle_telegram_document(self, source: 'AbstractUser', intent: IntentAPI,
-                                       evt: Message, relates_to: dict = None) -> Optional[EventID]:
+                                       evt: Message, relates_to: RelatesTo = None
+                                       ) -> Optional[EventID]:
         document = evt.media.document
 
         attrs = self._parse_telegram_document_attributes(document.attributes)
 
         if document.size > config["bridge.max_document_size"] * 1000 ** 2:
-            name = attrs["name"] or ""
+            name = attrs.name or ""
             caption = f"\n{evt.message}" if evt.message else ""
             return await intent.send_notice(self.mxid, f"Too large file {name}{caption}")
 
@@ -183,7 +182,7 @@ class PortalTelegram(BasePortal, ABC):
             thumb_loc = None
             thumb_size = None
         file = await util.transfer_file_to_matrix(source.client, intent, document, thumb_loc,
-                                                  is_sticker=attrs["is_sticker"])
+                                                  is_sticker=attrs.is_sticker)
         if not file:
             return None
 
@@ -191,88 +190,62 @@ class PortalTelegram(BasePortal, ABC):
 
         await intent.set_typing(self.mxid, is_typing=False)
 
-        kwargs = {
-            "room_id": self.mxid,
-            "url": file.mxc,
-            "info": info,
-            "text": name,
-            "relates_to": relates_to,
-            "timestamp": evt.date,
-            "external_url": self.get_external_url(evt)
-        }
-
-        if attrs["is_sticker"]:
-            return await intent.send_sticker(**kwargs)
-
-        mime_type = info["mimetype"]
-        if mime_type.startswith("video/"):
-            kwargs["file_type"] = "m.video"
-        elif mime_type.startswith("audio/"):
-            kwargs["file_type"] = "m.audio"
-        elif mime_type.startswith("image/"):
-            kwargs["file_type"] = "m.image"
-        else:
-            kwargs["file_type"] = "m.file"
-        return await intent.send_file(**kwargs)
+        event_type = EventType.STICKER if attrs.is_sticker else EventType.ROOM_MESSAGE
+        content = MediaMessageEventContent(
+            body=name, info=info, url=file.mxc, relates_to=relates_to,
+            external_url=self._get_external_url(evt),
+            msgtype={
+                "video/": MessageType.VIDEO,
+                "audio/": MessageType.AUDIO,
+                "image/": MessageType.IMAGE,
+            }.get(info.mimetype[:6], default=MessageType.FILE))
+        return await intent.send_message_event(self.mxid, event_type, content, timestamp=evt.date)
 
     def handle_telegram_location(self, _: 'AbstractUser', intent: IntentAPI, evt: Message,
                                  relates_to: dict = None) -> Awaitable[EventID]:
-        location = evt.media.geo
-        long = location.long
-        lat = location.lat
+        long = evt.media.geo.long
+        lat = evt.media.geo.lat
         long_char = "E" if long > 0 else "W"
         lat_char = "N" if lat > 0 else "S"
-        rounded_long = round(long, 5)
-        rounded_lat = round(lat, 5)
 
-        body = f"{rounded_lat}° {lat_char}, {rounded_long}° {long_char}"
-
+        body = f"{round(lat, 5)}° {lat_char}, {round(long, 5)}° {long_char}"
         url = f"https://maps.google.com/?q={lat},{long}"
 
-        formatted_body = f"Location: <a href='{url}'>{body}</a>"
-        # At least riot-web ignores formatting in m.location messages,
-        # so we'll add a plaintext link.
-        body = f"Location: {body}\n{url}"
+        content = LocationMessageEventContent(
+            msgtype=MessageType.LOCATION, geo_uri=f"geo:{lat},{long}",
+            body=f"Location: {body}\n{url}",
+            relates_to=relates_to, external_url=self._get_external_url(evt))
+        content["format"] = Format.HTML
+        content["formatted_body"] = f"Location: <a href='{url}'>{body}</a>"
 
-        return intent.send_message(self.mxid, {
-            "msgtype": "m.location",
-            "geo_uri": f"geo:{lat},{long}",
-            "body": body,
-            "format": "org.matrix.custom.html",
-            "formatted_body": formatted_body,
-            "m.relates_to": relates_to or None,
-        }, timestamp=evt.date, external_url=self.get_external_url(evt))
+        return intent.send_message(self.mxid, content, timestamp=evt.date)
 
     async def handle_telegram_text(self, source: 'AbstractUser', intent: IntentAPI, is_bot: bool,
                                    evt: Message) -> EventID:
         self.log.debug(f"Sending {evt.message} to {self.mxid} by {intent.mxid}")
-        text, html, relates_to = await formatter.telegram_to_matrix(evt, source, self.main_intent)
+        content = await formatter.telegram_to_matrix(evt, source, self.main_intent)
+        content.external_url = self._get_external_url(evt)
+        if is_bot and self.get_config("bot_messages_as_notices"):
+            content.msgtype = MessageType.NOTICE
         await intent.set_typing(self.mxid, is_typing=False)
-        msgtype = "m.notice" if is_bot and self.get_config("bot_messages_as_notices") else "m.text"
-        return await intent.send_text(self.mxid, text, html=html, relates_to=relates_to,
-                                      msgtype=msgtype, timestamp=evt.date,
-                                      external_url=self.get_external_url(evt))
+        return await intent.send_message(self.mxid, content, timestamp=evt.date)
 
     async def handle_telegram_unsupported(self, source: 'AbstractUser', intent: IntentAPI,
                                           evt: Message, relates_to: dict = None) -> EventID:
         override_text = ("This message is not supported on your version of Mautrix-Telegram. "
                          "Please check https://github.com/tulir/mautrix-telegram or ask your "
                          "bridge administrator about possible updates.")
-        text, html, relates_to = await formatter.telegram_to_matrix(
+        content = await formatter.telegram_to_matrix(
             evt, source, self.main_intent, override_text=override_text)
+        content.msgtype = MessageType.NOTICE
+        content.external_url = self._get_external_url(evt)
+        content["net.maunium.telegram.unsupported"] = True
         await intent.set_typing(self.mxid, is_typing=False)
-        return await intent.send_message(self.mxid, {
-            "body": text,
-            "msgtype": "m.notice",
-            "format": "org.matrix.custom.html",
-            "formatted_body": html,
-            "m.relates_to": relates_to,
-            "net.maunium.telegram.unsupported": True,
-        }, timestamp=evt.date, external_url=self.get_external_url(evt))
+        return await intent.send_message(self.mxid, content, timestamp=evt.date)
 
     async def handle_telegram_poll(self, source: 'AbstractUser', intent: IntentAPI, evt: Message,
-                                   relates_to: dict) -> EventID:
-        poll = evt.media.poll  # type: Poll
+                                   relates_to: RelatesTo) -> EventID:
+        poll: Poll = evt.media.poll
         poll_id = self._encode_msgid(source, evt)
 
         _n = 0
@@ -282,21 +255,19 @@ class PortalTelegram(BasePortal, ABC):
             _n += 1
             return _n
 
-        text = (f"Poll: {poll.question}\n"
-                + "\n".join(f"{n()}. {answer.text}" for answer in poll.answers) +
-                "\n"
-                f"Vote with !tg vote {poll_id} <choice number>")
+        text_answers = "\n".join(f"{n()}. {answer.text}" for answer in poll.answers)
+        html_answers = "\n".join(f"<li>{answer.text}</li>" for answer in poll.answers)
+        content = TextMessageEventContent(
+            msgtype=MessageType.TEXT, format=Format.HTML,
+            body=f"Poll: {poll.question}\n{text_answers}\n"
+                 f"Vote with !tg vote {poll_id} <choice number>",
+            formatted_body=f"<strong>Poll</strong>: {poll.question}<br/>\n"
+                           f"<ol>{html_answers}</ol>\n"
+                           f"Vote with <code>!tg vote {poll_id} &lt;choice number&gt;</code>",
+            relates_to=relates_to, external_url=self._get_external_url(evt))
 
-        html = (f"<strong>Poll</strong>: {poll.question}<br/>\n"
-                f"<ol>"
-                + "\n".join(f"<li>{answer.text}</li>"
-                            for answer in poll.answers) +
-                "</ol>\n"
-                f"Vote with <code>!tg vote {poll_id} &lt;choice number&gt;</code>")
         await intent.set_typing(self.mxid, is_typing=False)
-        return await intent.send_text(self.mxid, text, html=html, relates_to=relates_to,
-                                      msgtype="m.text", timestamp=evt.date,
-                                      external_url=self.get_external_url(evt))
+        return await intent.send_message(self.mxid, content, timestamp=evt.date)
 
     @staticmethod
     def _int_to_bytes(i: int) -> bytes:
@@ -322,31 +293,29 @@ class PortalTelegram(BasePortal, ABC):
         return base64.b64encode(play_id).decode("utf-8").rstrip("=")
 
     async def handle_telegram_game(self, source: 'AbstractUser', intent: IntentAPI,
-                                   evt: Message, relates_to: dict = None) -> EventID:
+                                   evt: Message, relates_to: RelatesTo = None) -> EventID:
         game = evt.media.game
         play_id = self._encode_msgid(source, evt)
         command = f"!tg play {play_id}"
         override_text = f"Run {command} in your bridge management room to play {game.title}"
         override_entities = [
             MessageEntityPre(offset=len("Run "), length=len(command), language="")]
-        text, html, relates_to = await formatter.telegram_to_matrix(
+
+        content = await formatter.telegram_to_matrix(
             evt, source, self.main_intent,
             override_text=override_text, override_entities=override_entities)
-        await intent.set_typing(self.mxid, is_typing=False)
-        return await intent.send_message(self.mxid, {
-            "body": text,
-            "msgtype": "m.notice",
-            "format": "org.matrix.custom.html",
-            "formatted_body": html,
-            "m.relates_to": relates_to,
-            "net.maunium.telegram.game": play_id,
-        }, timestamp=evt.date, external_url=self.get_external_url(evt))
+        content.msgtype = MessageType.NOTICE
+        content.external_url = self._get_external_url(evt)
+        content["net.maunium.telegram.game"] = play_id
 
-    async def handle_telegram_edit(self, source: 'AbstractUser', sender: p.Puppet,
-                                   evt: Message) -> None:
+        await intent.set_typing(self.mxid, is_typing=False)
+        return await intent.send_message(self.mxid, content, timestamp=evt.date)
+
+    async def handle_telegram_edit(self, source: 'AbstractUser', sender: p.Puppet, evt: Message
+                                   ) -> None:
         if not self.mxid:
             return
-        elif hasattr(evt, "media") and isinstance(evt.media, (MessageMediaGame,)):
+        elif hasattr(evt, "media") and isinstance(evt.media, MessageMediaGame):
             self.log.debug("Ignoring game message edit event")
             return
 
@@ -368,45 +337,38 @@ class PortalTelegram(BasePortal, ABC):
                               ).insert()
                 return
 
-        text, html, _ = await formatter.telegram_to_matrix(evt, source, self.main_intent)
+        content = await formatter.telegram_to_matrix(evt, source, self.main_intent,
+                                                     no_reply_fallback=True)
         editing_msg = DBMessage.get_one_by_tgid(TelegramID(evt.id), tg_space)
         if not editing_msg:
             self.log.info(f"Didn't find edited message {evt.id}@{tg_space} (src {source.tgid}) "
                           "in database.")
             return
 
-        msgtype = ("m.notice"
-                   if sender and sender.is_bot and self.get_config("bot_messages_as_notices")
-                   else "m.text")
-        content = {
-            "body": f"Edit: {text}",
-            "msgtype": msgtype,
-            "format": "org.matrix.custom.html",
-            "formatted_body": (f"<a href='https://matrix.to/#/{editing_msg.mx_room}/"
-                               f"{editing_msg.mxid}'>Edit</a>: "
-                               f"{html or escape_html(text)}"),
-            "external_url": self.get_external_url(evt),
-            "m.new_content": {
-                "body": text,
-                "msgtype": "m.text",
-                **({"format": "org.matrix.custom.html",
-                    "formatted_body": html} if html else {}),
-            },
-            "m.relates_to": {
-                "rel_type": "m.replace",
-                "event_id": editing_msg.mxid,
-            },
-        }
+        content.msgtype = (MessageType.NOTICE if (sender and sender.is_bot
+                                                  and self.get_config("bot_messages_as_notices"))
+                           else MessageType.TEXT)
+        content.external_url = self._get_external_url(evt)
+        content.set_edit(editing_msg.mxid)
+
+        # TODO remove this stuff once mautrix-python generates m.new_content
+        new_content = content.serialize()
+        del new_content["m.relates_to"]
+        content["m.new_content"] = new_content
+        content.body = f"Edit: {content.body}"
+        content.format = Format.HTML
+        content.formatted_body = (f"<a href=\"https://matrix.to/#/{editing_msg.mx_room}/"
+                                  f"{editing_msg.mxid}\">Edit</a>: "
+                                  f"{content.formatted_body or escape_html(content.body)}")
 
         intent = sender.intent if sender else self.main_intent
         await intent.set_typing(self.mxid, is_typing=False)
-        response = await intent.send_message(self.mxid, content)
-        mxid = response["event_id"]
+        event_id = await intent.send_message(self.mxid, content)
 
         prev_edit_msg = DBMessage.get_one_by_tgid(TelegramID(evt.id), tg_space, -1) or editing_msg
-        DBMessage(mxid=mxid, mx_room=self.mxid, tg_space=tg_space, tgid=evt.id,
+        DBMessage(mxid=event_id, mx_room=self.mxid, tg_space=tg_space, tgid=TelegramID(evt.id),
                   edit_index=prev_edit_msg.edit_index + 1).insert()
-        DBMessage.update_by_mxid(temporary_identifier, self.mxid, mxid=mxid)
+        DBMessage.update_by_mxid(temporary_identifier, self.mxid, mxid=event_id)
 
     async def handle_telegram_message(self, source: 'AbstractUser', sender: p.Puppet,
                                       evt: Message) -> None:
@@ -450,9 +412,9 @@ class PortalTelegram(BasePortal, ABC):
         intent = sender.intent if sender else self.main_intent
         if not media and evt.message:
             is_bot = sender.is_bot if sender else False
-            response = await self.handle_telegram_text(source, intent, is_bot, evt)
+            event_id = await self.handle_telegram_text(source, intent, is_bot, evt)
         elif media:
-            response = await {
+            event_id = await {
                 MessageMediaPhoto: self.handle_telegram_photo,
                 MessageMediaDocument: self.handle_telegram_document,
                 MessageMediaGeo: self.handle_telegram_location,
@@ -465,33 +427,31 @@ class PortalTelegram(BasePortal, ABC):
             self.log.debug("Unhandled Telegram message: %s", evt)
             return
 
-        if not response:
+        if not event_id:
             return
 
-        mxid = response["event_id"]
-
-        prev_id = self.dedup.update(evt, (mxid, tg_space), (temporary_identifier, tg_space))
+        prev_id = self.dedup.update(evt, (event_id, tg_space), (temporary_identifier, tg_space))
         if prev_id:
-            self.log.debug(f"Sent message {evt.id}@{tg_space} to Matrix as {mxid}. "
+            self.log.debug(f"Sent message {evt.id}@{tg_space} to Matrix as {event_id}. "
                            f"Temporary dedup identifier was {temporary_identifier}, "
                            f"but dedup map contained {prev_id[1]} instead! -- "
                            "This was probably a race condition caused by Telegram sending updates"
                            "to other clients before responding to the sender. I'll just redact "
                            "the likely duplicate message now.")
-            await intent.redact(self.mxid, mxid)
+            await intent.redact(self.mxid, event_id)
             return
 
         self.log.debug("Handled Telegram message: %s", evt)
         try:
-            DBMessage(tgid=TelegramID(evt.id), mx_room=self.mxid, mxid=mxid,
+            DBMessage(tgid=TelegramID(evt.id), mx_room=self.mxid, mxid=event_id,
                       tg_space=tg_space, edit_index=0).insert()
-            DBMessage.update_by_mxid(temporary_identifier, self.mxid, mxid=mxid)
+            DBMessage.update_by_mxid(temporary_identifier, self.mxid, mxid=event_id)
         except IntegrityError as e:
             self.log.exception(f"{e.__class__.__name__} while saving message mapping. "
                                "This might mean that an update was handled after it left the "
                                "dedup cache queue. You can try enabling bridge.deduplication."
                                "pre_db_check in the config.")
-            await intent.redact(self.mxid, mxid)
+            await intent.redact(self.mxid, event_id)
 
     async def _create_room_on_action(self, source: 'AbstractUser',
                                      action: TypeMessageAction) -> bool:
@@ -544,9 +504,9 @@ class PortalTelegram(BasePortal, ABC):
 
         levels = await self.main_intent.get_power_levels(self.mxid)
         if user:
-            levels["users"][user.mxid] = 50
+            levels.users[user.mxid] = 50
         if puppet:
-            levels["users"][puppet.mxid] = 50
+            levels.users[puppet.mxid] = 50
         await self.main_intent.set_power_levels(self.mxid, levels)
 
     async def receive_telegram_pin_sender(self, sender: p.Puppet) -> None:
@@ -578,9 +538,9 @@ class PortalTelegram(BasePortal, ABC):
     async def set_telegram_admins_enabled(self, enabled: bool) -> None:
         level = 50 if enabled else 10
         levels = await self.main_intent.get_power_levels(self.mxid)
-        levels["invite"] = level
-        levels["events"]["m.room.name"] = level
-        levels["events"]["m.room.avatar"] = level
+        levels.invite = level
+        levels.events[EventType.ROOM_NAME] = level
+        levels.events[EventType.ROOM_AVATAR] = level
         await self.main_intent.set_power_levels(self.mxid, levels)
 
 
