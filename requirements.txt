@@ -1,5 +1,6 @@
 aiohttp
-mautrix
+#mautrix
+git+https://github.com/tulir/mautrix-python@bridge-updates#egg=mautrix
 ruamel.yaml
 python-magic
 SQLAlchemy
