@@ -6,7 +6,7 @@ from .deduplication import init as init_dedup
 from ..context import Context
 
 
-class Portal(BasePortal, PortalMatrix, PortalTelegram, PortalMetadata):
+class Portal(PortalMatrix, PortalTelegram, PortalMetadata):
     pass
 
 

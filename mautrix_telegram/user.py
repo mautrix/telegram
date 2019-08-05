@@ -145,8 +145,8 @@ class User(AbstractUser):
                       saved_contacts=self.saved_contacts, portals=self.db_portals)
 
     def save(self, contacts: bool = False, portals: bool = False) -> None:
-        self.db_instance.update(tgid=self.tgid, tg_username=self.username, tg_phone=self.phone,
-                                saved_contacts=self.saved_contacts)
+        self.db_instance.edit(tgid=self.tgid, tg_username=self.username, tg_phone=self.phone,
+                              saved_contacts=self.saved_contacts)
         if contacts:
             self.db_instance.contacts = self.db_contacts
         if portals:

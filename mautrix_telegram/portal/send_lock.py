@@ -29,7 +29,7 @@ class FakeLock:
 
 class PortalSendLock:
     _send_locks: Dict[int, Lock]
-    _noop_lock: Lock = FakeLock
+    _noop_lock: Lock = FakeLock()
 
     def __init__(self) -> None:
         self._send_locks = {}

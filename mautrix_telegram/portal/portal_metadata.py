@@ -96,7 +96,7 @@ class PortalMetadata(BasePortal, ABC):
             existing.delete()
         except KeyError:
             pass
-        self.db_instance.update(tgid=new_id, tg_receiver=new_id, peer_type=self.peer_type)
+        self.db_instance.edit(tgid=new_id, tg_receiver=new_id, peer_type=self.peer_type)
         old_id = self.tgid
         self.tgid = new_id
         self.tg_receiver = new_id

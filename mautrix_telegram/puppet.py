@@ -152,11 +152,11 @@ class Puppet(CustomPuppetMixin):
                       db_puppet.disable_updates, db_instance=db_puppet)
 
     def save(self) -> None:
-        self.db_instance.update(access_token=self.access_token, custom_mxid=self.custom_mxid,
-                                username=self.username, displayname=self.displayname,
-                                displayname_source=self.displayname_source, photo_id=self.photo_id,
-                                is_bot=self.is_bot, matrix_registered=self.is_registered,
-                                disable_updates=self.disable_updates)
+        self.db_instance.edit(access_token=self.access_token, custom_mxid=self.custom_mxid,
+                              username=self.username, displayname=self.displayname,
+                              displayname_source=self.displayname_source, photo_id=self.photo_id,
+                              is_bot=self.is_bot, matrix_registered=self.is_registered,
+                              disable_updates=self.disable_updates)
 
     # endregion
     # region Info updating
@@ -405,6 +405,6 @@ def init(context: 'Context') -> Iterable[Awaitable[Any]]:
     index = displayname_template.index("{displayname}")
     length = len("{displayname}")
     Puppet._displayname_prefix = displayname_template[:index]
-    Puppet._displayname_suffix = displayname_template[index+length:]
+    Puppet._displayname_suffix = displayname_template[index + length:]
 
     return (puppet.start() for puppet in Puppet.all_with_custom_mxid())

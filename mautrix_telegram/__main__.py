@@ -91,9 +91,12 @@ class TelegramBridge(Bridge):
         init_portal(context)
         puppet_startup = init_puppet(context)
         user_startup = init_user(context)
-        self.startup_actions = chain(puppet_startup, user_startup,
-                                     [self.bot.start] if self.bot else [])
+        bot_startup = [self.bot.start()] if self.bot else []
+        self.startup_actions = chain(puppet_startup, user_startup, bot_startup)
 
     async def stop(self) -> None:
         self.shutdown_actions = [user.stop() for user in User.by_tgid.values()]
         await super().stop()
+
+
+TelegramBridge().run()

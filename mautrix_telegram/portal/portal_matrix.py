@@ -491,8 +491,8 @@ class PortalMatrix(BasePortal, MautrixBasePortal, ABC):
                     if entity:
                         break
         if not entity:
-            self.log.error(
-                "Failed to fully migrate to upgraded Matrix room: no Telegram user found.")
+            self.log.error("Failed to fully migrate to upgraded Matrix room: "
+                           "no Telegram user found.")
             return
         await self.update_matrix_room(user, entity, direct=self.peer_type == "user")
         self.log.info(f"Upgraded room from {old_room} to {self.mxid}")
@@ -503,7 +503,7 @@ class PortalMatrix(BasePortal, MautrixBasePortal, ABC):
         except KeyError:
             pass
         self.mxid = new_id
-        self.db_instance.update(mxid=self.mxid)
+        self.db_instance.edit(mxid=self.mxid)
         self.by_mxid[self.mxid] = self
 
 

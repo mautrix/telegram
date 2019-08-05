@@ -325,7 +325,10 @@ telegram:
 logging:
     version: 1
     formatters:
-        precise:
+        colored:
+            (): mautrix_telegram.util.ColorFormatter
+            format: "[%(asctime)s] [%(levelname)s@%(name)s] %(message)s"
+        normal:
             format: "[%(asctime)s] [%(levelname)s@%(name)s] %(message)s"
     handlers:
         file:

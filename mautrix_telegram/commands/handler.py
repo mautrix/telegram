@@ -65,10 +65,10 @@ class CommandHandler(BaseCommandHandler):
     needs_matrix_puppeting: bool
     needs_admin: bool
 
-    def __init__(self, handler: Callable[[CommandEvent], Awaitable[EventID]], needs_auth: bool,
-                 needs_puppeting: bool, needs_matrix_puppeting: bool, needs_admin: bool,
+    def __init__(self, handler: Callable[[CommandEvent], Awaitable[EventID]],
                  management_only: bool, name: str, help_text: str, help_args: str,
-                 help_section: HelpSection) -> None:
+                 help_section: HelpSection, needs_auth: bool, needs_puppeting: bool,
+                 needs_matrix_puppeting: bool, needs_admin: bool,) -> None:
         super().__init__(handler, management_only, name, help_text, help_args, help_section,
                          needs_auth=needs_auth, needs_puppeting=needs_puppeting,
                          needs_matrix_puppeting=needs_matrix_puppeting, needs_admin=needs_admin)

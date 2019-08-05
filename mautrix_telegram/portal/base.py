@@ -113,6 +113,7 @@ class BasePortal(ABC):
         self.photo_id = photo_id
         self.local_config = json.loads(local_config or "{}")
         self._db_instance = db_instance
+        self._main_intent = None
         self.deleted = False
         self.log = self.base_log.getChild(self.tgid_log) if self.tgid else self.base_log
 
@@ -302,9 +303,9 @@ class BasePortal(ABC):
                         config=json.dumps(self.local_config))
 
     def save(self) -> None:
-        self.db_instance.update(mxid=self.mxid, username=self.username, title=self.title,
-                                about=self.about, photo_id=self.photo_id,
-                                config=json.dumps(self.local_config))
+        self.db_instance.edit(mxid=self.mxid, username=self.username, title=self.title,
+                              about=self.about, photo_id=self.photo_id,
+                              config=json.dumps(self.local_config))
 
     def delete(self) -> None:
         try:
@@ -321,11 +322,11 @@ class BasePortal(ABC):
 
     @classmethod
     def from_db(cls, db_portal: DBPortal) -> 'Portal':
-        return Portal(tgid=db_portal.tgid, tg_receiver=db_portal.tg_receiver,
-                      peer_type=db_portal.peer_type, mxid=db_portal.mxid,
-                      username=db_portal.username, megagroup=db_portal.megagroup,
-                      title=db_portal.title, about=db_portal.about, photo_id=db_portal.photo_id,
-                      local_config=db_portal.config, db_instance=db_portal)
+        return cls(tgid=db_portal.tgid, tg_receiver=db_portal.tg_receiver,
+                   peer_type=db_portal.peer_type, mxid=db_portal.mxid,
+                   username=db_portal.username, megagroup=db_portal.megagroup,
+                   title=db_portal.title, about=db_portal.about, photo_id=db_portal.photo_id,
+                   local_config=db_portal.config, db_instance=db_portal)
 
     # endregion
     # region Class instance lookup
@@ -380,7 +381,7 @@ class BasePortal(ABC):
             return cls.from_db(db_portal)
 
         if peer_type:
-            portal = Portal(tgid, peer_type=peer_type, tg_receiver=tg_receiver)
+            portal = cls(tgid, peer_type=peer_type, tg_receiver=tg_receiver)
             portal.db_instance.insert()
             return portal
 
@@ -465,14 +466,14 @@ class BasePortal(ABC):
 
 def init(context: Context) -> None:
     global config
-    Portal.az, config, Portal.loop, Portal.bot = context.core
-    Portal.max_initial_member_sync = config["bridge.max_initial_member_sync"]
-    Portal.sync_channel_members = config["bridge.sync_channel_members"]
-    Portal.sync_matrix_state = config["bridge.sync_matrix_state"]
-    Portal.public_portals = config["bridge.public_portals"]
-    Portal.filter_mode = config["bridge.filter.mode"]
-    Portal.filter_list = config["bridge.filter.list"]
-    Portal.alias_template = config.get("bridge.alias_template", "telegram_{groupname}")
-    Portal.hs_domain = config["homeserver.domain"]
-    Portal.mx_alias_regex = re.compile(
-        f"#{Portal.alias_template.format(groupname='(.+)')}:{Portal.hs_domain}")
+    BasePortal.az, config, BasePortal.loop, BasePortal.bot = context.core
+    BasePortal.max_initial_member_sync = config["bridge.max_initial_member_sync"]
+    BasePortal.sync_channel_members = config["bridge.sync_channel_members"]
+    BasePortal.sync_matrix_state = config["bridge.sync_matrix_state"]
+    BasePortal.public_portals = config["bridge.public_portals"]
+    BasePortal.filter_mode = config["bridge.filter.mode"]
+    BasePortal.filter_list = config["bridge.filter.list"]
+    BasePortal.alias_template = config.get("bridge.alias_template", "telegram_{groupname}")
+    BasePortal.hs_domain = config["homeserver.domain"]
+    BasePortal.mx_alias_regex = re.compile(
+        f"#{BasePortal.alias_template.format(groupname='(.+)')}:{BasePortal.hs_domain}")
