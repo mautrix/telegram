@@ -62,10 +62,7 @@ class TelegramBridge(Bridge):
             engine=self.db, table_base=Base, session=False,
             table_prefix="telethon_", manage_tables=False)
 
-    def prepare_bridge(self) -> None:
-        self.bot = init_bot(self.config)
-        context = Context(self.az, self.config, self.loop, self.session_container, self.bot)
-
+    def _prepare_website(self, context: Context) -> None:
         if self.config["appservice.public.enabled"]:
             public_website = PublicBridgeWebsite(self.loop)
             self.az.app.add_subapp(self.config["appservice.public.prefix"], public_website.app)
@@ -77,14 +74,18 @@ class TelegramBridge(Bridge):
                                    provisioning_api.app)
             context.provisioning_api = provisioning_api
 
-        self.matrix = context.mx = MatrixHandler(context)
-
         if self.config["metrics.enabled"]:
             if prometheus:
                 prometheus.start_http_server(self.config["metrics.listen_port"])
             else:
                 self.log.warn("Metrics are enabled in the config, "
                               "but prometheus_client is not installed.")
+
+    def prepare_bridge(self) -> None:
+        self.bot = init_bot(self.config)
+        context = Context(self.az, self.config, self.loop, self.session_container, self.bot)
+        self._prepare_website(context)
+        self.matrix = context.mx = MatrixHandler(context)
 
         init_abstract_user(context)
         init_formatter(context)

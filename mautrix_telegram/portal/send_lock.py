@@ -40,8 +40,5 @@ class PortalSendLock:
         try:
             return self._send_locks[user_id]
         except KeyError:
-            if required:
-                self._send_locks[user_id] = Lock()
-                return self._send_locks[user_id]
-            else:
-                return self._noop_lock
+            return (self._send_locks.setdefault(user_id, Lock())
+                    if required else self._noop_lock)
