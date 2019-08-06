@@ -24,7 +24,7 @@ from telethon.tl.types import (UserProfilePhoto, User, UpdateUserName, PeerUser,
 from mautrix.appservice import AppService, IntentAPI
 from mautrix.errors import MatrixRequestError
 from mautrix.bridge import CustomPuppetMixin
-from mautrix.types import UserID
+from mautrix.types import UserID, SyncToken
 
 from .types import TelegramID
 from .db import Puppet as DBPuppet
@@ -57,6 +57,7 @@ class Puppet(CustomPuppetMixin):
     id: TelegramID
     access_token: Optional[str]
     custom_mxid: Optional[UserID]
+    _next_batch: Optional[SyncToken]
     default_mxid: UserID
 
     username: Optional[str]
@@ -78,6 +79,7 @@ class Puppet(CustomPuppetMixin):
                  id: TelegramID,
                  access_token: Optional[str] = None,
                  custom_mxid: Optional[UserID] = None,
+                 next_batch: Optional[SyncToken] = None,
                  username: Optional[str] = None,
                  displayname: Optional[str] = None,
                  displayname_source: Optional[TelegramID] = None,
@@ -89,6 +91,7 @@ class Puppet(CustomPuppetMixin):
         self.id = id
         self.access_token = access_token
         self.custom_mxid = custom_mxid
+        self._next_batch = next_batch
         self.default_mxid = self.get_mxid_from_id(self.id)
 
         self.username = username
@@ -117,6 +120,15 @@ class Puppet(CustomPuppetMixin):
     @property
     def peer(self) -> PeerUser:
         return PeerUser(user_id=self.tgid)
+
+    @property
+    def next_batch(self) -> SyncToken:
+        return self._next_batch
+
+    @next_batch.setter
+    def next_batch(self, value: SyncToken) -> None:
+        self._next_batch = value
+        self.db_instance.edit(next_batch=self._next_batch)
 
     @staticmethod
     async def is_logged_in() -> bool:
@@ -148,26 +160,27 @@ class Puppet(CustomPuppetMixin):
             self._db_instance = self.new_db_instance()
         return self._db_instance
 
+    @property
+    def _fields(self) -> Dict[str, Any]:
+        return dict(access_token=self.access_token, next_batch=self._next_batch,
+                    custom_mxid=self.custom_mxid, username=self.username, is_bot=self.is_bot,
+                    displayname=self.displayname, displayname_source=self.displayname_source,
+                    photo_id=self.photo_id, matrix_registered=self.is_registered,
+                    disable_updates=self.disable_updates)
+
     def new_db_instance(self) -> DBPuppet:
-        return DBPuppet(id=self.id, access_token=self.access_token, custom_mxid=self.custom_mxid,
-                        username=self.username, displayname=self.displayname,
-                        displayname_source=self.displayname_source, photo_id=self.photo_id,
-                        is_bot=self.is_bot, matrix_registered=self.is_registered,
-                        disable_updates=self.disable_updates)
+        return DBPuppet(id=self.id, **self._fields)
+
+    def save(self) -> None:
+        self.db_instance.edit(**self._fields)
 
     @classmethod
     def from_db(cls, db_puppet: DBPuppet) -> 'Puppet':
         return Puppet(db_puppet.id, db_puppet.access_token, db_puppet.custom_mxid,
-                      db_puppet.username, db_puppet.displayname, db_puppet.displayname_source,
-                      db_puppet.photo_id, db_puppet.is_bot, db_puppet.matrix_registered,
-                      db_puppet.disable_updates, db_instance=db_puppet)
-
-    def save(self) -> None:
-        self.db_instance.edit(access_token=self.access_token, custom_mxid=self.custom_mxid,
-                              username=self.username, displayname=self.displayname,
-                              displayname_source=self.displayname_source, photo_id=self.photo_id,
-                              is_bot=self.is_bot, matrix_registered=self.is_registered,
-                              disable_updates=self.disable_updates)
+                      db_puppet.next_batch, db_puppet.username, db_puppet.displayname,
+                      db_puppet.displayname_source, db_puppet.photo_id, db_puppet.is_bot,
+                      db_puppet.matrix_registered, db_puppet.disable_updates,
+                      db_instance=db_puppet)
 
     # endregion
     # region Info updating

@@ -20,7 +20,7 @@ from sqlalchemy.sql import expression
 from sqlalchemy.engine.result import RowProxy
 from sqlalchemy.sql.expression import ClauseElement
 
-from mautrix.types import UserID
+from mautrix.types import UserID, SyncToken
 from mautrix.bridge.db import Base
 
 from ..types import TelegramID
@@ -32,6 +32,7 @@ class Puppet(Base):
     id: TelegramID = Column(Integer, primary_key=True)
     custom_mxid: UserID = Column(String, nullable=True)
     access_token: str = Column(String, nullable=True)
+    next_batch: SyncToken = Column(String, nullable=True)
     displayname: str = Column(String, nullable=True)
     displayname_source: TelegramID = Column(Integer, nullable=True)
     username: str = Column(String, nullable=True)
@@ -42,12 +43,12 @@ class Puppet(Base):
 
     @classmethod
     def scan(cls, row: RowProxy) -> Optional['Puppet']:
-        (id, custom_mxid, access_token, displayname, displayname_source, username, photo_id,
-         is_bot, matrix_registered, disable_updates) = row
-        return cls(id=id, custom_mxid=custom_mxid, access_token=access_token,
-                   displayname=displayname, displayname_source=displayname_source,
-                   username=username, photo_id=photo_id, is_bot=is_bot,
-                   matrix_registered=matrix_registered, disable_updates=disable_updates)
+        (id, custom_mxid, access_token, next_batch, displayname, displayname_source, username,
+         photo_id, is_bot, matrix_registered, disable_updates) = row
+        return cls(id=id, custom_mxid=custom_mxid, access_token=access_token, username=username,
+                   next_batch=next_batch, displayname=displayname, photo_id=photo_id,
+                   displayname_source=displayname_source, matrix_registered=matrix_registered,
+                   disable_updates=disable_updates, is_bot=is_bot)
 
     @classmethod
     def all_with_custom_mxid(cls) -> Iterable['Puppet']:
@@ -79,6 +80,7 @@ class Puppet(Base):
         with self.db.begin() as conn:
             conn.execute(self.t.insert().values(
                 id=self.id, custom_mxid=self.custom_mxid, access_token=self.access_token,
-                displayname=self.displayname, displayname_source=self.displayname_source,
-                username=self.username, photo_id=self.photo_id, is_bot=self.is_bot,
-                matrix_registered=self.matrix_registered, disable_updates=self.disable_updates))
+                next_batch=self.next_batch, displayname=self.displayname, username=self.username,
+                displayname_source=self.displayname_source, photo_id=self.photo_id,
+                is_bot=self.is_bot, matrix_registered=self.matrix_registered,
+                disable_updates=self.disable_updates))

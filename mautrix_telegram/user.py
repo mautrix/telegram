@@ -13,15 +13,14 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import (Awaitable, Dict, List, Iterable, Match, NewType, Optional, Tuple, Any, Union,
-                    AsyncIterable, TYPE_CHECKING)
+from typing import (Awaitable, Dict, List, Iterable, Match, NewType, Optional, Tuple, Any,
+                    TYPE_CHECKING)
 import logging
 import asyncio
 import re
 
 from telethon.tl.types import (TypeUpdate, UpdateNewMessage, UpdateNewChannelMessage, PeerUser,
-                               UpdateShortChatMessage, UpdateShortMessage, User as TLUser,
-                               ChannelForbidden, ChatForbidden, Chat, Channel)
+                               UpdateShortChatMessage, UpdateShortMessage, User as TLUser, Chat)
 from telethon.tl.types.contacts import ContactsNotModified
 from telethon.tl.functions.contacts import GetContactsRequest, SearchRequest
 from telethon.tl.functions.account import UpdateStatusRequest
