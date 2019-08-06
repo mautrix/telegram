@@ -28,7 +28,7 @@ from mautrix.types import UserID
 
 from .types import TelegramID
 from .db import Puppet as DBPuppet
-from . import util
+from . import util, portal as p
 
 if TYPE_CHECKING:
     from .matrix import MatrixHandler
@@ -134,6 +134,11 @@ class Puppet(CustomPuppetMixin):
     def get_input_entity(self, user: 'AbstractUser'
                          ) -> Awaitable[Union[TypeInputPeer, TypeInputUser]]:
         return user.client.get_input_entity(self.peer)
+
+    def intent_for(self, portal: 'p.Portal') -> IntentAPI:
+        if portal.tgid == self.tgid:
+            return self.default_mxid_intent
+        return self.intent
 
     # region DB conversion
 

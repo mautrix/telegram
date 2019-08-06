@@ -73,7 +73,7 @@ class PortalTelegram(BasePortal, ABC):
 
     async def handle_telegram_typing(self, user: p.Puppet,
                                      _: Union[UpdateUserTyping, UpdateChatUserTyping]) -> None:
-        await user.intent.set_typing(self.mxid, is_typing=True)
+        await user.intent_for(self).set_typing(self.mxid, is_typing=True)
 
     def _get_external_url(self, evt: Message) -> Optional[str]:
         if self.peer_type == "channel" and self.username is not None:
@@ -361,7 +361,7 @@ class PortalTelegram(BasePortal, ABC):
                                   f"{editing_msg.mxid}\">Edit</a>: "
                                   f"{content.formatted_body or escape_html(content.body)}")
 
-        intent = sender.intent if sender else self.main_intent
+        intent = sender.intent_for(self) if sender else self.main_intent
         await intent.set_typing(self.mxid, is_typing=False)
         event_id = await intent.send_message(self.mxid, content)
 
@@ -409,7 +409,7 @@ class PortalTelegram(BasePortal, ABC):
                          MessageMediaGame, MessageMediaPoll, MessageMediaUnsupported)
         media = evt.media if hasattr(evt, "media") and isinstance(evt.media,
                                                                   allowed_media) else None
-        intent = sender.intent if sender else self.main_intent
+        intent = sender.intent_for(self) if sender else self.main_intent
         if not media and evt.message:
             is_bot = sender.is_bot if sender else False
             event_id = await self.handle_telegram_text(source, intent, is_bot, evt)
@@ -489,7 +489,7 @@ class PortalTelegram(BasePortal, ABC):
         elif isinstance(action, MessageActionChatMigrateTo):
             self.peer_type = "channel"
             self._migrate_and_save_telegram(TelegramID(action.channel_id))
-            await sender.intent.send_emote(self.mxid, "upgraded this group to a supergroup.")
+            await sender.intent_for(self).send_emote(self.mxid, "upgraded this group to a supergroup.")
         elif isinstance(action, MessageActionPinMessage):
             await self.receive_telegram_pin_sender(sender)
         elif isinstance(action, MessageActionGameScore):
@@ -515,7 +515,7 @@ class PortalTelegram(BasePortal, ABC):
             await self.update_telegram_pin()
 
     async def update_telegram_pin(self) -> None:
-        intent = (self._temp_pinned_message_sender.intent
+        intent = (self._temp_pinned_message_sender.intent_for(self)
                   if self._temp_pinned_message_sender else self.main_intent)
         msg_id = self._temp_pinned_message_id
         self._temp_pinned_message_id = None

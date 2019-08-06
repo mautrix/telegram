@@ -85,6 +85,7 @@ class Config(BaseBridgeConfig):
         copy("bridge.skip_deleted_members")
         copy("bridge.startup_sync")
         copy("bridge.sync_dialog_limit")
+        copy("bridge.sync_direct_chats")
         copy("bridge.max_telegram_delete")
         copy("bridge.sync_matrix_state")
         copy("bridge.allow_matrix_login")

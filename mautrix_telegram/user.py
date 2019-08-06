@@ -13,14 +13,15 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import (Awaitable, Dict, List, Iterable, Match, NewType, Optional, Tuple, Any,
-                    TYPE_CHECKING)
+from typing import (Awaitable, Dict, List, Iterable, Match, NewType, Optional, Tuple, Any, Union,
+                    AsyncIterable, TYPE_CHECKING)
 import logging
 import asyncio
 import re
 
 from telethon.tl.types import (TypeUpdate, UpdateNewMessage, UpdateNewChannelMessage, PeerUser,
-                               UpdateShortChatMessage, UpdateShortMessage, User as TLUser)
+                               UpdateShortChatMessage, UpdateShortMessage, User as TLUser,
+                               ChannelForbidden, ChatForbidden, Chat, Channel)
 from telethon.tl.types.contacts import ContactsNotModified
 from telethon.tl.functions.contacts import GetContactsRequest, SearchRequest
 from telethon.tl.functions.account import UpdateStatusRequest
@@ -310,7 +311,17 @@ class User(AbstractUser):
         if self.is_bot:
             return
         creators = []
-        async for entity in self.get_dialogs(limit=config["bridge.sync_dialog_limit"] or None):
+        limit = config["bridge.sync_dialog_limit"] or None
+        self.log.debug(f"Syncing dialogs (limit={limit}, synchronous_create={synchronous_create})")
+        async for dialog in self.client.iter_dialogs(limit=limit, ignore_migrated=True,
+                                                     archived=False):
+            entity = dialog.entity
+            if isinstance(entity, Chat) and (entity.deactivated or entity.left):
+                self.log.warn(f"Ignoring deactivated or left chat {entity} while syncing")
+                continue
+            elif isinstance(entity, TLUser) and not config["bridge.sync_direct_chats"]:
+                continue
+            self.log.info(f"Syncing {type(entity)}")
             portal = po.Portal.get_by_entity(entity)
             self.portals[portal.tgid_full] = portal
             creators.append(
@@ -318,6 +329,7 @@ class User(AbstractUser):
                                           synchronous=synchronous_create))
         self.save(portals=True)
         await asyncio.gather(*creators, loop=self.loop)
+        self.log.debug("Dialog syncing complete")
 
     def register_portal(self, portal: po.Portal) -> None:
         try:

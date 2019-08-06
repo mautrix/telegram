@@ -115,7 +115,7 @@ class BasePortal(ABC):
         self._db_instance = db_instance
         self._main_intent = None
         self.deleted = False
-        self.log = self.base_log.getChild(self.tgid_log) if self.tgid else self.base_log
+        self.log = self.base_log.getChild(self.tgid_log if self.tgid else self.mxid)
 
         self.dedup = PortalDedup(self)
         self.send_lock = PortalSendLock()
@@ -155,7 +155,7 @@ class BasePortal(ABC):
         if not self._main_intent:
             direct = self.peer_type == "user"
             puppet = p.Puppet.get(self.tgid) if direct else None
-            self._main_intent = puppet.intent if direct else self.az.intent
+            self._main_intent = puppet.intent_for(self) if direct else self.az.intent
         return self._main_intent
 
     @property
@@ -272,7 +272,7 @@ class BasePortal(ABC):
             if user != intent.mxid and (not puppets_only or puppet):
                 try:
                     if puppet:
-                        await puppet.intent.leave_room(room_id)
+                        await puppet.default_mxid_intent.leave_room(room_id)
                     else:
                         await intent.kick_user(room_id, user, message)
                 except (MatrixRequestError, IntentError):

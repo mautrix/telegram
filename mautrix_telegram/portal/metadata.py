@@ -100,7 +100,7 @@ class PortalMetadata(BasePortal, ABC):
         self.tgid = new_id
         self.tg_receiver = new_id
         self.by_tgid[self.tgid_full] = self
-        self.log = self.base_log.getChild(str(self.tgid))
+        self.log = self.base_log.getChild(self.tgid_log)
         self.log.info(f"Telegram chat upgraded from {old_id}")
 
     async def set_telegram_username(self, source: 'u.User', username: str) -> None:
@@ -145,7 +145,7 @@ class PortalMetadata(BasePortal, ABC):
         self.by_tgid[self.tgid_full] = self
         await self.update_info(source, entity)
         self.db_instance.insert()
-        self.log = self.base_log.getChild(str(self.tgid))
+        self.log = self.base_log.getChild(self.tgid_log)
 
         if self.bot and self.bot.tgid in invites:
             self.bot.add_chat(self.tgid, self.peer_type)
@@ -192,6 +192,17 @@ class PortalMetadata(BasePortal, ABC):
                                  levels: PowerLevelStateEventContent = None,
                                  users: List[User] = None,
                                  participants: List[TypeParticipant] = None) -> None:
+        try:
+            await self._update_matrix_room(user, entity, direct, puppet, levels, users,
+                                           participants)
+        except Exception:
+            self.log.exception("Fatal error updating Matrix room")
+
+    async def _update_matrix_room(self, user: 'AbstractUser', entity: Union[TypeChat, User],
+                                 direct: bool, puppet: p.Puppet = None,
+                                 levels: PowerLevelStateEventContent = None,
+                                 users: List[User] = None,
+                                 participants: List[TypeParticipant] = None) -> None:
         if not direct:
             await self.update_info(user, entity)
             if not users or not participants:
@@ -202,7 +213,7 @@ class PortalMetadata(BasePortal, ABC):
             if not puppet:
                 puppet = p.Puppet.get(self.tgid)
             await puppet.update_info(user, entity)
-            await puppet.intent.join_room(self.mxid)
+            await puppet.intent_for(self).join_room(self.mxid)
         if self.sync_matrix_state:
             await self.sync_matrix_members()
 
@@ -221,7 +232,10 @@ class PortalMetadata(BasePortal, ABC):
                 await self.invite_to_matrix(invites or [])
             return self.mxid
         async with self._room_create_lock:
-            return await self._create_matrix_room(user, entity, invites)
+            try:
+                return await self._create_matrix_room(user, entity, invites)
+            except Exception:
+                self.log.exception("Fatal error creating Matrix room")
 
     async def _create_matrix_room(self, user: 'AbstractUser', entity: TypeChat, invites: InviteList
                                   ) -> Optional[RoomID]:
@@ -235,7 +249,7 @@ class PortalMetadata(BasePortal, ABC):
 
         if not entity:
             entity = await self.get_entity(user)
-            self.log.debug("Fetched data: %s", entity)
+            self.log.debug(f"Fetched data: {entity}")
 
         self.log.debug("Creating room")
 
@@ -244,8 +258,12 @@ class PortalMetadata(BasePortal, ABC):
         except AttributeError:
             self.title = None
 
+        if direct and self.tgid == user.tgid:
+            self.title = "Telegram Saved Messages"
+            self.about = "Your Telegram cloud storage chat"
+
         puppet = p.Puppet.get(self.tgid) if direct else None
-        self._main_intent = puppet.intent if direct else self.az.intent
+        self._main_intent = puppet.intent_for(self) if direct else self.az.intent
 
         if self.peer_type == "channel":
             self.megagroup = entity.megagroup
@@ -280,7 +298,8 @@ class PortalMetadata(BasePortal, ABC):
 
         room_id = await self.main_intent.create_room(alias_localpart=alias, preset=preset,
                                                      is_direct=direct, invitees=invites or [],
-                                                     name=self.title, initial_state=initial_state)
+                                                     name=self.title, topic=self.about,
+                                                     initial_state=initial_state)
         if not room_id:
             raise Exception(f"Failed to create room")
 
@@ -420,7 +439,7 @@ class PortalMetadata(BasePortal, ABC):
             if entity.bot:
                 self._add_bot_chat(entity)
             allowed_tgids.add(entity.id)
-            await puppet.intent.ensure_joined(self.mxid)
+            await puppet.intent_for(self).ensure_joined(self.mxid)
             await puppet.update_info(source, entity)
 
             user = u.User.get_by_tgid(TelegramID(entity.id))
@@ -461,7 +480,7 @@ class PortalMetadata(BasePortal, ABC):
         if source:
             entity: User = await source.client.get_entity(PeerUser(user_id))
             await puppet.update_info(source, entity)
-            await puppet.intent.join_room(self.mxid)
+            await puppet.intent_for(self).join_room(self.mxid)
 
         user = u.User.get_by_tgid(user_id)
         if user:
@@ -476,16 +495,16 @@ class PortalMetadata(BasePortal, ABC):
                         else "Left Telegram chat")
         if sender.tgid != puppet.tgid:
             try:
-                await sender.intent.kick_user(self.mxid, puppet.mxid)
+                await sender.intent_for(self).kick_user(self.mxid, puppet.mxid)
             except MForbidden:
                 await self.main_intent.kick_user(self.mxid, puppet.mxid, kick_message)
         else:
-            await puppet.intent.leave_room(self.mxid)
+            await puppet.intent_for(self).leave_room(self.mxid)
         if user:
             user.unregister_portal(self)
             if sender.tgid != puppet.tgid:
                 try:
-                    await sender.intent.kick_user(self.mxid, puppet.mxid)
+                    await sender.intent_for(self).kick_user(self.mxid, puppet.mxid)
                     return
                 except MForbidden:
                     pass

@@ -13,7 +13,7 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import Tuple, Optional, AsyncIterable, Union, Dict, TYPE_CHECKING
+from typing import Tuple, Optional, Union, Dict, TYPE_CHECKING
 from abc import ABC, abstractmethod
 import asyncio
 import logging
@@ -23,12 +23,12 @@ import time
 from telethon.sessions import Session
 from telethon.tl.patched import MessageService, Message
 from telethon.tl.types import (
-    Channel, ChannelForbidden, Chat, ChatForbidden, MessageActionChannelMigrateFrom, PeerUser,
-    TypeUpdate, UpdateChannelPinnedMessage, UpdateChatPinnedMessage, UpdateChatParticipantAdmin,
-    UpdateChatParticipants, UpdateChatUserTyping, UpdateDeleteChannelMessages, UpdateNewMessage,
-    UpdateDeleteMessages, UpdateEditChannelMessage, UpdateEditMessage, UpdateNewChannelMessage,
-    UpdateReadHistoryOutbox, UpdateShortChatMessage, UpdateShortMessage, UpdateUserName,
-    UpdateUserPhoto, UpdateUserStatus, UpdateUserTyping, User, UserStatusOffline, UserStatusOnline)
+    Channel, Chat, MessageActionChannelMigrateFrom, PeerUser, TypeUpdate, UpdateChatPinnedMessage,
+    UpdateChannelPinnedMessage, UpdateChatParticipantAdmin, UpdateChatParticipants,
+    UpdateChatUserTyping, UpdateDeleteChannelMessages, UpdateNewMessage, UpdateDeleteMessages,
+    UpdateEditChannelMessage, UpdateEditMessage, UpdateNewChannelMessage, UpdateReadHistoryOutbox,
+    UpdateShortChatMessage, UpdateShortMessage, UpdateUserName, UpdateUserPhoto, UpdateUserStatus,
+    UpdateUserTyping, User, UserStatusOffline, UserStatusOnline)
 
 from mautrix.types import UserID, PresenceState
 from mautrix.errors import MatrixError
@@ -188,13 +188,6 @@ class AbstractUser(ABC):
             self.log.exception("Failed to handle Telegram update")
         if UPDATE_TIME:
             UPDATE_TIME.labels(update_type=type(update).__name__).observe(time.time() - start_time)
-
-    def get_dialogs(self, limit: int = None) -> AsyncIterable[Union[User, Chat, Channel]]:
-        return (dialog.entity async for dialog in
-                self.client.iter_dialogs(limit=limit, ignore_migrated=True, archived=False)
-                if isinstance(dialog.entity, (ChatForbidden, ChannelForbidden))
-                or (isinstance(dialog.entity, Chat)
-                    and (dialog.entity.deactivated or dialog.entity.left)))
 
     @property
     @abstractmethod

@@ -319,7 +319,7 @@ class ProvisioningAPI(AuthAPI):
             return web.json_response([{
                 "id": get_peer_id(chat),
                 "title": chat.title,
-            } async for chat in user.get_dialogs()])
+            } async for chat in user.client.get_dialogs(ignore_migrated=True, archived=False)])
         else:
             return web.json_response([{
                 "id": get_peer_id(chat.peer),
