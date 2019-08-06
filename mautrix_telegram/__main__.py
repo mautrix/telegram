@@ -30,7 +30,7 @@ from .db import init as init_db
 from .formatter import init as init_formatter
 from .matrix import MatrixHandler
 from .portal import init as init_portal
-from .puppet import init as init_puppet
+from .puppet import Puppet, init as init_puppet
 from .sqlstatestore import SQLStateStore
 from .user import User, init as init_user
 from . import __version__
@@ -94,9 +94,10 @@ class TelegramBridge(Bridge):
         bot_startup = [self.bot.start()] if self.bot else []
         self.startup_actions = chain(puppet_startup, user_startup, bot_startup)
 
-    async def stop(self) -> None:
-        self.shutdown_actions = [user.stop() for user in User.by_tgid.values()]
-        await super().stop()
+    def prepare_stop(self) -> None:
+        for puppet in Puppet.by_custom_mxid.values():
+            puppet.stop()
+        self.shutdown_actions = (user.stop() for user in User.by_tgid.values())
 
 
 TelegramBridge().run()
