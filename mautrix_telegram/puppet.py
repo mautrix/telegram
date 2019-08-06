@@ -108,6 +108,8 @@ class Puppet(CustomPuppetMixin):
         if self.custom_mxid:
             self.by_custom_mxid[self.custom_mxid] = self
 
+        self.log = self.log.getChild(str(self.id))
+
     @property
     def tgid(self) -> TelegramID:
         return self.id

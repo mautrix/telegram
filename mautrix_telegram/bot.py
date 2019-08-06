@@ -43,7 +43,7 @@ ReplyFunc = Callable[[str], Awaitable[Message]]
 
 
 class Bot(AbstractUser):
-    log: logging.Logger = logging.getLogger("mau.bot")
+    log: logging.Logger = logging.getLogger("mau.user.bot")
     mxid_regex: Pattern = re.compile("@.+:.+")
 
     token: str

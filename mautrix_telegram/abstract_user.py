@@ -13,7 +13,7 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import Tuple, Optional, List, Union, Dict, TYPE_CHECKING
+from typing import Tuple, Optional, AsyncIterable, Union, Dict, TYPE_CHECKING
 from abc import ABC, abstractmethod
 import asyncio
 import logging
@@ -189,14 +189,12 @@ class AbstractUser(ABC):
         if UPDATE_TIME:
             UPDATE_TIME.labels(update_type=type(update).__name__).observe(time.time() - start_time)
 
-    async def get_dialogs(self, limit: int = None) -> List[Union[Chat, Channel]]:
-        if self.is_bot:
-            return []
-        dialogs = await self.client.get_dialogs(limit=limit)
-        return [dialog.entity for dialog in dialogs if (
-            not isinstance(dialog.entity, (User, ChatForbidden, ChannelForbidden))
-            and not (isinstance(dialog.entity, Chat)
-                     and (dialog.entity.deactivated or dialog.entity.left)))]
+    def get_dialogs(self, limit: int = None) -> AsyncIterable[Union[User, Chat, Channel]]:
+        return (dialog.entity async for dialog in
+                self.client.iter_dialogs(limit=limit, ignore_migrated=True, archived=False)
+                if isinstance(dialog.entity, (ChatForbidden, ChannelForbidden))
+                or (isinstance(dialog.entity, Chat)
+                    and (dialog.entity.deactivated or dialog.entity.left)))
 
     @property
     @abstractmethod
@@ -216,7 +214,7 @@ class AbstractUser(ABC):
         if not self.client:
             self._init_client()
         await self.client.connect()
-        self.log.debug("%s connected: %s", self.mxid, self.connected)
+        self.log.debug(f"{self.mxid if not self.is_bot else 'Bot'} connected: {self.connected}")
         return self
 
     async def ensure_started(self, even_if_no_session=False) -> 'AbstractUser':

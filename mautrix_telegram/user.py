@@ -87,6 +87,8 @@ class User(AbstractUser):
         if tgid:
             self.by_tgid[tgid] = self
 
+        self.log = self.log.getChild(self.mxid)
+
     @property
     def name(self) -> str:
         return self.mxid
@@ -305,8 +307,10 @@ class User(AbstractUser):
         return await self._search_remote(query), True
 
     async def sync_dialogs(self, synchronous_create: bool = False) -> None:
+        if self.is_bot:
+            return
         creators = []
-        for entity in await self.get_dialogs(limit=config["bridge.sync_dialog_limit"] or None):
+        async for entity in self.get_dialogs(limit=config["bridge.sync_dialog_limit"] or None):
             portal = po.Portal.get_by_entity(entity)
             self.portals[portal.tgid_full] = portal
             creators.append(

@@ -316,11 +316,10 @@ class ProvisioningAPI(AuthAPI):
             return err
 
         if not user.is_bot:
-            chats = await user.get_dialogs()
             return web.json_response([{
                 "id": get_peer_id(chat),
                 "title": chat.title,
-            } for chat in chats])
+            } async for chat in user.get_dialogs()])
         else:
             return web.json_response([{
                 "id": get_peer_id(chat.peer),
