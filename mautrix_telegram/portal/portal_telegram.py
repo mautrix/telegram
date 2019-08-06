@@ -103,7 +103,7 @@ class PortalTelegram(BasePortal, ABC):
                   else largest_size.size))
         name = f"image{sane_mimetypes.guess_extension(file.mime_type)}"
         await intent.set_typing(self.mxid, is_typing=False)
-        result = await intent.send_image(self.mxid, file.mxc, info=info, text=name,
+        result = await intent.send_image(self.mxid, file.mxc, info=info, file_name=name,
                                          relates_to=relates_to, timestamp=evt.date,
                                          external_url=self._get_external_url(evt))
         if evt.message:
@@ -115,18 +115,17 @@ class PortalTelegram(BasePortal, ABC):
 
     @staticmethod
     def _parse_telegram_document_attributes(attributes: List[TypeDocumentAttribute]) -> DocAttrs:
-        attrs = DocAttrs(name=None, mime_type=None, is_sticker=False, sticker_alt=None,
-                         width=0, height=0)
+        name, mime_type, is_sticker, sticker_alt, width, height = None, None, False, None, 0, 0
         for attr in attributes:
             if isinstance(attr, DocumentAttributeFilename):
-                attrs.name = attrs.name or attr.file_name
-                attrs.mime_type, _ = mimetypes.guess_type(attr.file_name)
+                name = name or attr.file_name
+                mime_type, _ = mimetypes.guess_type(attr.file_name)
             elif isinstance(attr, DocumentAttributeSticker):
-                attrs.is_sticker = True
-                attrs.sticker_alt = attr.alt
+                is_sticker = True
+                sticker_alt = attr.alt
             elif isinstance(attr, DocumentAttributeVideo):
-                attrs.width, attrs.height = attr.w, attr.h
-        return attrs
+                width, height = attr.w, attr.h
+        return DocAttrs(name, mime_type, is_sticker, sticker_alt, width, height)
 
     @staticmethod
     def _parse_telegram_document_meta(evt: Message, file: DBTelegramFile, attrs: DocAttrs,

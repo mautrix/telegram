@@ -75,7 +75,7 @@ async def ping_matrix(evt: CommandEvent) -> EventID:
     if not puppet.is_real_user:
         return await evt.reply("You are not logged in with your Matrix account.")
     try:
-        await puppet.init_custom_mxid()
+        await puppet.start()
     except InvalidAccessToken:
         return await evt.reply("Your access token is invalid.")
     return await evt.reply("Your Matrix login is working.")
