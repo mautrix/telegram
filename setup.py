@@ -6,7 +6,8 @@ extras = {
     "fast_crypto": ["cryptg>=0.1,<0.3"],
     "webp_convert": ["Pillow>=4.3.0,<7"],
     "hq_thumbnails": ["moviepy>=1.0,<2.0"],
-    "metrics": ["prometheus-client>=0.6.0,<0.8.0"],
+    "metrics": ["prometheus_client>=0.6.0,<0.8.0"],
+    "postgres": ["psycopg2-binary>=2,<3"],
 }
 extras["all"] = list({dep for deps in extras.values() for dep in deps})
 
