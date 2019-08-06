@@ -14,7 +14,7 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import Tuple, Optional, List, Union, Dict, TYPE_CHECKING
+from typing import Tuple, Optional, List, Union, Dict, Type, TYPE_CHECKING
 from abc import ABC, abstractmethod
 import asyncio
 import logging
@@ -22,7 +22,7 @@ import platform
 import time
 
 from telethon.network import (
-    ConnectionTcpMTProxyRandomizedIntermediate, ConnectionTcpFull)
+    ConnectionTcpMTProxyRandomizedIntermediate, ConnectionTcpFull, Connection)
 from telethon.tl.patched import MessageService, Message
 from telethon.tl.types import (
     Channel, ChannelForbidden, Chat, ChatForbidden, MessageActionChannelMigrateFrom, PeerUser,
@@ -88,23 +88,27 @@ class AbstractUser(ABC):
         return self.client and self.client.is_connected()
 
     @property
-    def _proxy_settings(self) -> Optional[Tuple[int, str, str, str, str, str]]:
+    def _proxy_settings(self) -> Tuple[Type[Connection], Optional[tuple]]:
         proxy_type = config["telegram.proxy.type"].lower()
+        connection = ConnectionTcpFull
+        connection_data = (config["telegram.proxy.address"],
+                            config["telegram.proxy.port"],
+                            config["telegram.proxy.rdns"],
+                            config["telegram.proxy.username"],
+                            config["telegram.proxy.password"])
         if proxy_type == "disabled":
-            return None
+            connection_data = None
         elif proxy_type == "socks4":
-            proxy_type = 1
+            connection_data = (1,) + connection_data
         elif proxy_type == "socks5":
-            proxy_type = 2
+            connection_data = (2,) + connection_data
         elif proxy_type == "http":
-            proxy_type = 3
+            connection_data = (3,) + connection_data
         elif proxy_type == "mtproxy":
-            proxy_type = 4
+            connection = ConnectionTcpMTProxyRandomizedIntermediate
+            connection_data = (connection_data[0], connection_data[1], connection_data[4])
 
-        return (proxy_type,
-                config["telegram.proxy.address"], config["telegram.proxy.port"],
-                config["telegram.proxy.rdns"],
-                config["telegram.proxy.username"], config["telegram.proxy.password"])
+        return connection, connection_data
 
     def _init_client(self) -> None:
         self.log.debug(f"Initializing client for {self.name}")
@@ -123,11 +127,7 @@ class AbstractUser(ABC):
         device = config["telegram.device_info.device_model"]
         sysversion = config["telegram.device_info.system_version"]
         appversion = config["telegram.device_info.app_version"]
-        connection = ConnectionTcpFull
-        proxy = self._proxy_settings
-        if proxy is not None and proxy[0] == 4:
-            connection = ConnectionTcpMTProxyRandomizedIntermediate
-            proxy = (proxy[1], proxy[2], proxy[5])
+        connection, proxy = self._proxy_settings
 
         self.client = MautrixTelegramClient(
             session=self.session,
