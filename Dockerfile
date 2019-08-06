@@ -38,7 +38,8 @@ RUN apk add --no-cache \
       ca-certificates \
       su-exec \
       git \
- && pip3 install .[all] && pip3 install --upgrade 'git+https://github.com/tulir/mautrix-python@bridge-updates#egg=mautrix'
+ && pip3 install .[fast_crypto,hq_thumbnails,metrics] \
+ && pip3 install --upgrade 'git+https://github.com/tulir/mautrix-python@bridge-updates#egg=mautrix'
 
 VOLUME /data
 

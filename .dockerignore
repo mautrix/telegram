@@ -2,3 +2,5 @@
 .codeclimate.yml
 *.png
 *.md
+logs
+.venv
