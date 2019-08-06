@@ -1,7 +1,7 @@
 from .base import BasePortal, init as init_base
-from .portal_matrix import PortalMatrix, init as init_matrix
-from .portal_metadata import PortalMetadata, init as init_metadata
-from .portal_telegram import PortalTelegram, init as init_telegram
+from .matrix import PortalMatrix, init as init_matrix
+from .metadata import PortalMetadata, init as init_metadata
+from .telegram import PortalTelegram, init as init_telegram
 from .deduplication import init as init_dedup
 from ..context import Context
 
