@@ -321,7 +321,6 @@ class User(AbstractUser):
                 continue
             elif isinstance(entity, TLUser) and not config["bridge.sync_direct_chats"]:
                 continue
-            self.log.info(f"Syncing {type(entity)}")
             portal = po.Portal.get_by_entity(entity)
             self.portals[portal.tgid_full] = portal
             creators.append(
