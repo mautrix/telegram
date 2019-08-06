@@ -103,6 +103,8 @@ bridge:
     - full name
     - username
     - phone number
+    # Maximum length of displayname
+    displayname_max_length: 100
 
     # Maximum number of members to sync per portal when starting up. Other members will be
     # synced when they send messages. The maximum is 10000, after which the Telegram server

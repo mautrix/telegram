@@ -256,7 +256,8 @@ class Puppet(CustomPuppetMixin):
             self.displayname = displayname
             self.displayname_source = source.tgid
             try:
-                await self.default_mxid_intent.set_displayname(displayname[:100])
+                await self.default_mxid_intent.set_displayname(
+                    displayname[:config["bridge.displayname_max_length"]])
             except MatrixRequestError:
                 self.log.exception("Failed to set displayname")
                 self.displayname = ""
