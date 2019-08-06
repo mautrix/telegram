@@ -103,7 +103,7 @@ class PortalTelegram(BasePortal, ABC):
                   else largest_size.size))
         name = f"image{sane_mimetypes.guess_extension(file.mime_type)}"
         await intent.set_typing(self.mxid, is_typing=False)
-        content = MediaMessageEventContent(uri=file.mxc, info=info, body=name, relates_to=relates_to,
+        content = MediaMessageEventContent(url=file.mxc, info=info, body=name, relates_to=relates_to,
                                            external_url=self._get_external_url(evt))
         result = await intent.send_message(self.mxid, content, timestamp=evt.date)
         if evt.message:
