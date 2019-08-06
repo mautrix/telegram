@@ -198,7 +198,7 @@ class PortalTelegram(BasePortal, ABC):
                 "video/": MessageType.VIDEO,
                 "audio/": MessageType.AUDIO,
                 "image/": MessageType.IMAGE,
-            }.get(info.mimetype[:6], default=MessageType.FILE))
+            }.get(info.mimetype[:6], MessageType.FILE))
         return await intent.send_message_event(self.mxid, event_type, content, timestamp=evt.date)
 
     def handle_telegram_location(self, _: 'AbstractUser', intent: IntentAPI, evt: Message,
