@@ -192,7 +192,7 @@ class PortalTelegram(BasePortal, ABC):
 
         event_type = EventType.STICKER if attrs.is_sticker else EventType.ROOM_MESSAGE
         content = MediaMessageEventContent(
-            body=name, info=info, url=file.mxc, relates_to=relates_to,
+            body=name or "unnamed file", info=info, url=file.mxc, relates_to=relates_to,
             external_url=self._get_external_url(evt),
             msgtype={
                 "video/": MessageType.VIDEO,
