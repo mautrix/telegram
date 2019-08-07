@@ -319,7 +319,7 @@ class MatrixHandler(BaseMatrixHandler):
         self.previously_typing[room_id] = now_typing
 
     def filter_matrix_event(self, evt: Event) -> bool:
-        if not isinstance(evt, (MessageEvent, StateEvent)):
+        if not isinstance(evt, (RedactionEvent, MessageEvent, StateEvent)):
             return True
         return evt.sender and (evt.sender == self.az.bot_mxid
                                or pu.Puppet.get_id_from_mxid(evt.sender) is not None)
