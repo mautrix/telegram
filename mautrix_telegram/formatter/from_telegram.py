@@ -22,9 +22,10 @@ from telethon.tl.types import (MessageEntityMention, MessageEntityMentionName, M
                                MessageEntityEmail, MessageEntityTextUrl, MessageEntityBold,
                                MessageEntityItalic, MessageEntityCode, MessageEntityPre,
                                MessageEntityBotCommand, MessageEntityHashtag, MessageEntityCashtag,
-                               MessageEntityPhone, TypeMessageEntity, Message, PeerChannel,
+                               MessageEntityPhone, TypeMessageEntity, PeerChannel,
                                MessageEntityBlockquote, MessageEntityStrike, MessageFwdHeader,
                                MessageEntityUnderline, PeerUser)
+from telethon.tl.custom import Message
 from telethon.helpers import add_surrogate, del_surrogate
 
 from mautrix.errors import MatrixRequestError
@@ -47,7 +48,7 @@ def telegram_reply_to_matrix(evt: Message, source: 'AbstractUser') -> Optional[R
         space = (evt.to_id.channel_id
                  if isinstance(evt, Message) and isinstance(evt.to_id, PeerChannel)
                  else source.tgid)
-        msg = DBMessage.get_one_by_tgid(evt.reply_to_msg_id, space)
+        msg = DBMessage.get_one_by_tgid(TelegramID(evt.reply_to_msg_id), space)
         if msg:
             return RelatesTo(rel_type=RelationType.REFERENCE, event_id=msg.mxid)
     return None
@@ -74,11 +75,14 @@ async def _add_forward_header(source: 'AbstractUser', content: TextMessageEventC
                                  f"{escape(fwd_from_text)}</a>")
 
         if not fwd_from_text:
-            user = await source.client.get_entity(PeerUser(fwd_from.from_id))
-            if user:
-                fwd_from_text = pu.Puppet.get_displayname(user, False)
-                fwd_from_html = f"<b>{escape(fwd_from_text)}</b>"
-    else:
+            try:
+                user = await source.client.get_entity(PeerUser(fwd_from.from_id))
+                if user:
+                    fwd_from_text = pu.Puppet.get_displayname(user, False)
+                    fwd_from_html = f"<b>{escape(fwd_from_text)}</b>"
+            except ValueError:
+                fwd_from_text = fwd_from_html = "unknown user"
+    elif fwd_from.channel_id:
         portal = po.Portal.get_by_tgid(TelegramID(fwd_from.channel_id))
         if portal:
             fwd_from_text = portal.title
@@ -86,19 +90,21 @@ async def _add_forward_header(source: 'AbstractUser', content: TextMessageEventC
                 fwd_from_html = (f"<a href='https://matrix.to/#/{portal.alias}'>"
                                  f"{escape(fwd_from_text)}</a>")
             else:
-                fwd_from_html = f"<b>{escape(fwd_from_text)}</b>"
+                fwd_from_html = f"channel <b>{escape(fwd_from_text)}</b>"
         else:
-            channel = await source.client.get_entity(PeerChannel(fwd_from.channel_id))
-            if channel:
-                fwd_from_text = channel.title
-                fwd_from_html = f"<b>{fwd_from_text}</b>"
-
-    if not fwd_from_text:
-        if fwd_from.from_id:
-            fwd_from_text = "Unknown user"
-        else:
-            fwd_from_text = "Unknown source"
-        fwd_from_html = f"<b>{fwd_from_text}</b>"
+            try:
+                channel = await source.client.get_entity(PeerChannel(fwd_from.channel_id))
+                if channel:
+                    fwd_from_text = f"channel {channel.title}"
+                    fwd_from_html = f"channel <b>{escape(channel.title)}</b>"
+            except ValueError:
+                fwd_from_text = fwd_from_html = "unknown channel"
+    elif fwd_from.from_name:
+        fwd_from_text = fwd_from.from_name
+        fwd_from_html = f"<b>{escape(fwd_from.from_name)}</b>"
+    else:
+        fwd_from_text = "unknown source"
+        fwd_from_html = f"unknown source"
 
     content.body = "\n".join([f"> {line}" for line in content.body.split("\n")])
     content.body = f"Forwarded from {fwd_from_text}:\n{content.body}"
@@ -113,7 +119,7 @@ async def _add_reply_header(source: 'AbstractUser', content: TextMessageEventCon
              if isinstance(evt, Message) and isinstance(evt.to_id, PeerChannel)
              else source.tgid)
 
-    msg = DBMessage.get_one_by_tgid(evt.reply_to_msg_id, space)
+    msg = DBMessage.get_one_by_tgid(TelegramID(evt.reply_to_msg_id), space)
     if not msg:
         return
 
