@@ -14,12 +14,13 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from typing import List, Optional, Tuple
+import logging
 import codecs
 import base64
 import re
 
 from telethon.errors import (InviteHashInvalidError, InviteHashExpiredError, OptionsTooMuchError,
-                             UserAlreadyParticipantError)
+                             UserAlreadyParticipantError, ChatIdInvalidError)
 from telethon.tl.patched import Message
 from telethon.tl.types import (User as TLUser, TypeUpdates, MessageMediaGame, MessageMediaPoll,
                                TypePeer)
@@ -143,7 +144,11 @@ async def join(evt: CommandEvent) -> Optional[EventID]:
             return await evt.reply(f"Invited you to portal of {portal.title}")
         else:
             await evt.reply(f"Creating room for {chat.title}... This might take a while.")
-            await portal.create_matrix_room(evt.sender, chat, [evt.sender.mxid])
+            try:
+                await portal.create_matrix_room(evt.sender, chat, [evt.sender.mxid])
+            except ChatIdInvalidError as e:
+                logging.getLogger("mau.commands").info(updates.stringify())
+                raise e
             return await evt.reply(f"Created room for {portal.title}")
     return None
 

@@ -81,6 +81,21 @@ async def ping_matrix(evt: CommandEvent) -> EventID:
     return await evt.reply("Your Matrix login is working.")
 
 
+@command_handler(needs_auth=True, needs_matrix_puppeting=True, help_section=SECTION_AUTH,
+                 help_text="Clear the Matrix sync token stored for your custom puppet.")
+async def clear_cache_matrix(evt: CommandEvent) -> EventID:
+    puppet = pu.Puppet.get(evt.sender.tgid)
+    if not puppet.is_real_user:
+        return await evt.reply("You are not logged in with your Matrix account.")
+    try:
+        puppet.stop()
+        puppet.next_batch = None
+        await puppet.start()
+    except InvalidAccessToken:
+        return await evt.reply("Your access token is invalid.")
+    return await evt.reply("Cleared cache successfully.")
+
+
 async def enter_matrix_token(evt: CommandEvent) -> EventID:
     evt.sender.command_status = None
 
