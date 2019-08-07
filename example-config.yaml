@@ -180,6 +180,7 @@ bridge:
 
 
     # The formats to use when sending messages to Telegram via the relay bot.
+    # Text msgtypes (m.text, m.notice and m.emote) support HTML, media msgtypes don't.
     #
     # Telegram doesn't have built-in emotes, so the m.emote format is also used for non-relaybot users.
     #
@@ -187,15 +188,17 @@ bridge:
     #   $sender_displayname    - The display name of the sender (e.g. Example User)
     #   $sender_username       - The username (Matrix ID localpart) of the sender (e.g. exampleuser)
     #   $sender_mxid           - The Matrix ID of the sender (e.g. @exampleuser:example.com)
-    #   $message               - The message content as HTML
+    #   $body                  - The plaintext body (file name for media msgtypes)
+    #   $formatted_body        - The message content as HTML (for text msgtypes)
     message_formats:
-        m.text: "<b>$sender_displayname</b>: $message"
-        m.emote: "* <b>$sender_displayname</b> $message"
-        m.file: "<b>$sender_displayname</b> sent a file: $message"
-        m.image: "<b>$sender_displayname</b> sent an image: $message"
-        m.audio: "<b>$sender_displayname</b> sent an audio file: $message"
-        m.video: "<b>$sender_displayname</b> sent a video: $message"
-        m.location: "<b>$sender_displayname</b> sent a location: $message"
+        m.text: "<b>$sender_displayname</b>: $formatted_body"
+        m.notice: "<b>$sender_displayname</b>: $formatted_body"
+        m.emote: "* <b>$sender_displayname</b> $formatted_body"
+        m.file: "$sender_displayname sent a file: $body"
+        m.image: "$sender_displayname sent an image: $body"
+        m.audio: "$sender_displayname sent an audio file: $body"
+        m.video: "$sender_displayname sent a video: $body"
+        m.location: "$sender_displayname sent a location: $body"
 
     # The formats to use when sending state events to Telegram via the relay bot.
     #

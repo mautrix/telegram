@@ -167,7 +167,7 @@ class PortalMatrix(BasePortal, MautrixBasePortal, ABC):
 
     async def _apply_msg_format(self, sender: 'u.User', content: MessageEventContent
                                 ) -> None:
-        if not content.formatted_body or content.format != Format.HTML:
+        if isinstance(content, TextMessageEventContent) and content.format != Format.HTML:
             content.format = Format.HTML
             content.formatted_body = escape_html(content.body).replace("\n", "<br/>")
 
@@ -177,8 +177,14 @@ class PortalMatrix(BasePortal, MautrixBasePortal, ABC):
         tpl_args = dict(sender_mxid=sender.mxid,
                         sender_username=sender.mxid_localpart,
                         sender_displayname=escape_html(displayname),
-                        message=content.formatted_body)
-        content.formatted_body = Template(tpl).safe_substitute(tpl_args)
+                        body=content.body)
+        if isinstance(content, TextMessageEventContent):
+            tpl_args["formatted_body"] = content.formatted_body
+            tpl_args["message"] = content.formatted_body
+            content.formatted_body = Template(tpl).safe_substitute(tpl_args)
+        else:
+            tpl_args["message"] = content.body
+            content.body = Template(tpl).safe_substitute(tpl_args)
 
     async def _pre_process_matrix_message(self, sender: 'u.User', use_relaybot: bool,
                                           content: MessageEventContent) -> None:
