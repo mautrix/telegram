@@ -508,7 +508,10 @@ class PortalMetadata(BasePortal, ABC):
                     return
                 except MForbidden:
                     pass
-            await self.main_intent.kick_user(self.mxid, user.mxid, kick_message)
+            try:
+                await self.main_intent.kick_user(self.mxid, user.mxid, kick_message)
+            except MForbidden as e:
+                self.log.warn(f"Failed to kick {user.mxid}: {e}")
 
     async def update_info(self, user: 'AbstractUser', entity: TypeChat = None) -> None:
         if self.peer_type == "user":
