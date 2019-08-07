@@ -211,7 +211,7 @@ class AbstractUser(ABC):
         return self
 
     async def ensure_started(self, even_if_no_session=False) -> 'AbstractUser':
-        if not self.puppet_whitelisted or self.connected:
+        if self.connected:
             return self
         if even_if_no_session or self.session_container.has_session(self.mxid):
             self.log.debug("Starting client due to ensure_started"
