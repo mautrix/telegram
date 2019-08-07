@@ -480,7 +480,7 @@ class PortalMetadata(BasePortal, ABC):
         if source:
             entity: User = await source.client.get_entity(PeerUser(user_id))
             await puppet.update_info(source, entity)
-            await puppet.intent_for(self).join_room(self.mxid)
+            await puppet.intent_for(self).ensure_joined(self.mxid)
 
         user = u.User.get_by_tgid(user_id)
         if user:
