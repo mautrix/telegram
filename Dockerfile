@@ -37,9 +37,9 @@ RUN apk add --no-cache \
       ffmpeg \
       ca-certificates \
       su-exec \
-      git \
  && pip3 install .[fast_crypto,hq_thumbnails,metrics] \
- && pip3 install --upgrade 'git+https://github.com/tulir/mautrix-python@bridge-updates#egg=mautrix'
+ && pip3 install --upgrade 'https://github.com/tulir/mautrix-python/tarball/bridge-updates#egg=mautrix' \
+                           'https://github.com/LonamiWebs/Telethon/tarball/master#egg=telethon'
 
 VOLUME /data
 

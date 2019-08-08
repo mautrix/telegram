@@ -7,5 +7,6 @@ SQLAlchemy
 alembic
 commonmark
 future-fstrings
-telethon
+#telethon
+git+https://github.com/LonamiWebs/Telethon@master#egg=telethon
 telethon-session-sqlalchemy
