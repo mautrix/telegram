@@ -13,12 +13,11 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import Awaitable, Dict, List, Optional, Pattern, Tuple, Union, Any, TYPE_CHECKING
+from typing import Awaitable, Dict, List, Optional, Tuple, Union, Any, TYPE_CHECKING
 from abc import ABC, abstractmethod
 import asyncio
 import logging
 import json
-import re
 
 from telethon.tl.functions.messages import ExportChatInviteRequest
 from telethon.tl.types import (Channel, ChannelFull, Chat, ChatFull, ChatInviteEmpty, InputChannel,
@@ -69,7 +68,8 @@ class BasePortal(ABC):
     public_portals: bool = False
 
     alias_template: str = None
-    mx_alias_regex: Pattern = None
+    _mx_alias_prefix: str = None
+    _mx_alias_suffix: str = None
     hs_domain: str = None
 
     # Instance cache
@@ -346,9 +346,10 @@ class BasePortal(ABC):
 
     @classmethod
     def get_username_from_mx_alias(cls, alias: str) -> Optional[str]:
-        match = cls.mx_alias_regex.match(alias)
-        if match:
-            return match.group(1)
+        prefix = cls._mx_alias_prefix
+        suffix = cls._mx_alias_suffix
+        if alias[:len(prefix)] == prefix and alias[-len(suffix):] == suffix:
+            return alias[len(prefix):-len(suffix)]
         return None
 
     @classmethod
@@ -473,7 +474,10 @@ def init(context: Context) -> None:
     BasePortal.public_portals = config["bridge.public_portals"]
     BasePortal.filter_mode = config["bridge.filter.mode"]
     BasePortal.filter_list = config["bridge.filter.list"]
-    BasePortal.alias_template = config.get("bridge.alias_template", "telegram_{groupname}")
     BasePortal.hs_domain = config["homeserver.domain"]
-    BasePortal.mx_alias_regex = re.compile(
-        f"#{BasePortal.alias_template.format(groupname='(.+)')}:{BasePortal.hs_domain}")
+    BasePortal.alias_template = config["bridge.alias_template"]
+    index = BasePortal.alias_template.index("{groupname}")
+    length = len("{groupname}")
+    BasePortal._mx_alias_prefix = f"#{BasePortal.alias_template[:index]}"
+    BasePortal._mx_alias_suffix = (f"{BasePortal.alias_template[index + length:]}"
+                                   f":{BasePortal.hs_domain}")
