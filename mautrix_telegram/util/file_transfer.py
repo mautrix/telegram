@@ -103,8 +103,10 @@ def _read_video_thumbnail(data: bytes, video_ext: str = "mp4", frame_ext: str = 
 
 
 def _location_to_id(location: TypeLocation) -> str:
-    if isinstance(location, (Document, InputDocumentFileLocation, InputPhotoFileLocation)):
+    if isinstance(location, Document):
         return f"{location.id}-{location.access_hash}"
+    elif isinstance(location, (InputDocumentFileLocation, InputPhotoFileLocation)):
+        return f"{location.id}-{location.access_hash}-{location.thumb_size}"
     elif isinstance(location, (InputFileLocation, InputPeerPhotoFileLocation)):
         return f"{location.volume_id}-{location.local_id}"
 
