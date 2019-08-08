@@ -375,6 +375,12 @@ class PortalTelegram(BasePortal, ABC):
         if not self.mxid:
             await self.create_matrix_room(source, invites=[source.mxid], update_if_exists=False)
 
+        if (self.peer_type == "user" and sender.tgid == self.tg_receiver
+            and not sender.is_real_user and not self.az.state_store.is_joined(self.mxid,
+                                                                              sender.mxid)):
+            self.log.debug(f"Ignoring private chat message {evt.id}@{source.tgid} as receiver does"
+                           " not have matrix puppeting and their default puppet isn't in the room")
+
         async with self.send_lock(sender.tgid if sender else None, required=False):
             tg_space = self.tgid if self.peer_type == "channel" else source.tgid
 
@@ -489,7 +495,8 @@ class PortalTelegram(BasePortal, ABC):
         elif isinstance(action, MessageActionChatMigrateTo):
             self.peer_type = "channel"
             self._migrate_and_save_telegram(TelegramID(action.channel_id))
-            await sender.intent_for(self).send_emote(self.mxid, "upgraded this group to a supergroup.")
+            await sender.intent_for(self).send_emote(self.mxid,
+                                                     "upgraded this group to a supergroup.")
         elif isinstance(action, MessageActionPinMessage):
             await self.receive_telegram_pin_sender(sender)
         elif isinstance(action, MessageActionGameScore):

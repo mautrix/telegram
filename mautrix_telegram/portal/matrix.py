@@ -127,6 +127,14 @@ class PortalMatrix(BasePortal, MautrixBasePortal, ABC):
     async def kick_matrix(self, user: Union['u.User', 'p.Puppet'], source: 'u.User') -> None:
         if user.tgid == source.tgid:
             return
+        if self.peer_type == "user" and user.tgid == self.tgid:
+            self.delete()
+            try:
+                del self.by_tgid[self.tgid_full]
+                del self.by_mxid[self.mxid]
+            except KeyError:
+                pass
+            return
         if isinstance(user, u.User) and await user.needs_relaybot(self):
             if not self.bot:
                 return
