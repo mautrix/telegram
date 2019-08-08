@@ -139,7 +139,7 @@ def plain_mention_to_text() -> Tuple[List[TypeMessageEntity], Callable[[Match], 
 def init_mx(context: "Context") -> None:
     global plain_mention_regex, should_bridge_plaintext_highlights
     config = context.config
-    dn_template = config.get("bridge.displayname_template", "{displayname} (Telegram)")
+    dn_template = config["bridge.displayname_template"]
     dn_template = re.escape(dn_template).replace(re.escape("{displayname}"), "[^>]+")
     plain_mention_regex = re.compile(f"^({dn_template})")
-    should_bridge_plaintext_highlights = config["bridge.plaintext_highlights"] or False
+    should_bridge_plaintext_highlights = config["bridge.plaintext_highlights"]

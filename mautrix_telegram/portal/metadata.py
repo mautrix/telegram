@@ -418,7 +418,7 @@ class PortalMetadata(BasePortal, ABC):
         username = username or self.username
         if not username:
             return None
-        return self.alias_template.format(groupname=username)
+        return self.alias_template.format(username)
 
     def _add_bot_chat(self, bot: User) -> None:
         if self.bot and bot.id == self.bot.tgid:

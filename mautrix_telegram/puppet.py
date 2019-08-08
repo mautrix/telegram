@@ -25,6 +25,7 @@ from mautrix.appservice import AppService, IntentAPI
 from mautrix.errors import MatrixRequestError
 from mautrix.bridge import CustomPuppetMixin
 from mautrix.types import UserID, SyncToken
+from mautrix.util.simple_template import SimpleTemplate
 
 from .types import TelegramID
 from .db import Puppet as DBPuppet
@@ -44,12 +45,9 @@ class Puppet(CustomPuppetMixin):
     az: AppService
     mx: 'MatrixHandler'
     loop: asyncio.AbstractEventLoop
-    username_template: str
     hs_domain: str
-    _mxid_prefix: str
-    _mxid_suffix: str
-    _displayname_prefix: str
-    _displayname_suffix: str
+    mxid_template: SimpleTemplate[TelegramID]
+    displayname_template: SimpleTemplate[str]
 
     cache: Dict[TelegramID, 'Puppet'] = {}
     by_custom_mxid: Dict[UserID, 'Puppet'] = {}
@@ -137,11 +135,7 @@ class Puppet(CustomPuppetMixin):
 
     @property
     def plain_displayname(self) -> str:
-        prefix = self._mxid_prefix
-        suffix = self._mxid_suffix
-        if self.displayname[:len(prefix)] == prefix and self.displayname[-len(suffix):] == suffix:
-            return self.displayname[len(prefix):-len(suffix)]
-        return self.displayname
+        return self.displayname_template.parse(self.displayname) or self.displayname
 
     def get_input_entity(self, user: 'AbstractUser'
                          ) -> Awaitable[Union[TypeInputPeer, TypeInputUser]]:
@@ -229,8 +223,7 @@ class Puppet(CustomPuppetMixin):
 
         if not enable_format:
             return name
-        return config["bridge.displayname_template"].format(
-            displayname=name)
+        return cls.displayname_template.format_full(name)
 
     async def update_info(self, source: 'AbstractUser', info: User) -> None:
         if self.disable_updates:
@@ -372,15 +365,11 @@ class Puppet(CustomPuppetMixin):
 
     @classmethod
     def get_id_from_mxid(cls, mxid: UserID) -> Optional[TelegramID]:
-        prefix = cls._mxid_prefix
-        suffix = cls._mxid_suffix
-        if mxid[:len(prefix)] == prefix and mxid[-len(suffix):] == suffix:
-            return TelegramID(int(mxid[len(prefix):-len(suffix)]))
-        return None
+        return cls.mxid_template.parse(mxid)
 
     @classmethod
     def get_mxid_from_id(cls, tgid: TelegramID) -> UserID:
-        return UserID(f"@{cls.username_template.format(userid=tgid)}:{cls.hs_domain}")
+        return UserID(cls.mxid_template.format_full(tgid))
 
     @classmethod
     def find_by_username(cls, username: str) -> Optional['Puppet']:
@@ -420,16 +409,9 @@ def init(context: 'Context') -> Iterable[Awaitable[Any]]:
     Puppet.mx = context.mx
     Puppet.hs_domain = config["homeserver"]["domain"]
 
-    Puppet.username_template = config["bridge.username_template"]
-    index = Puppet.username_template.index("{userid}")
-    length = len("{userid}")
-    Puppet._mxid_prefix = f"@{Puppet.username_template[:index]}"
-    Puppet._mxid_suffix = f"{Puppet.username_template[index + length:]}:{Puppet.hs_domain}"
-
-    displayname_template = config["bridge.displayname_template"]
-    index = displayname_template.index("{displayname}")
-    length = len("{displayname}")
-    Puppet._displayname_prefix = displayname_template[:index]
-    Puppet._displayname_suffix = displayname_template[index + length:]
+    Puppet.mxid_template = SimpleTemplate(config["bridge.username_template"], "userid",
+                                          prefix="@", suffix=f":{Puppet.hs_domain}", type=int)
+    Puppet.displayname_template = SimpleTemplate(config["bridge.displayname_template"],
+                                                 "displayname")
 
     return (puppet.start() for puppet in Puppet.all_with_custom_mxid())

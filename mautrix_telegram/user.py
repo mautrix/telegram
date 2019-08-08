@@ -13,11 +13,10 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import (Awaitable, Dict, List, Iterable, Match, NewType, Optional, Tuple, Any, cast,
+from typing import (Awaitable, Dict, List, Iterable, NewType, Optional, Tuple, Any, cast,
                     TYPE_CHECKING)
 import logging
 import asyncio
-import re
 
 from telethon.tl.types import (TypeUpdate, UpdateNewMessage, UpdateNewChannelMessage, PeerUser,
                                UpdateShortChatMessage, UpdateShortMessage, User as TLUser, Chat)
@@ -25,6 +24,7 @@ from telethon.tl.types.contacts import ContactsNotModified
 from telethon.tl.functions.contacts import GetContactsRequest, SearchRequest
 from telethon.tl.functions.account import UpdateStatusRequest
 
+from mautrix.client import Client
 from mautrix.errors import MatrixRequestError
 from mautrix.types import UserID
 
@@ -97,8 +97,8 @@ class User(AbstractUser):
 
     @property
     def mxid_localpart(self) -> str:
-        match: Match = re.compile("@(.+):(.+)").match(self.mxid)
-        return match.group(1)
+        localpart, server = Client.parse_user_id(self.mxid)
+        return localpart
 
     @property
     def human_tg_id(self) -> str:
