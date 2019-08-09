@@ -58,10 +58,6 @@ class TelegramBridge(Bridge):
 
     def prepare_db(self) -> None:
         super().prepare_db()
-        if not self.db.has_table("alembic_version"):
-            self.log.critical("alembic_version table not found. "
-                              "Did you forget to `alembic upgrade head`?")
-            sys.exit(10)
         init_db(self.db)
         self.session_container = AlchemySessionContainer(
             engine=self.db, table_base=Base, session=False,
