@@ -313,14 +313,14 @@ telegram:
     # Telethon proxy configuration.
     # You must install PySocks from pip for proxies to work.
     proxy:
-        # Allowed types: disabled, socks4, socks5, http
+        # Allowed types: disabled, socks4, socks5, http, mtproxy
         type: disabled
         # Proxy IP address and port.
         address: 127.0.0.1
         port: 1080
-        # Whether or not to perform DNS resolving remotely.
+        # Whether or not to perform DNS resolving remotely. Only for socks/http proxies.
         rdns: true
-        # Proxy authentication (optional).
+        # Proxy authentication (optional). Put MTProxy secret in password field.
         username: ""
         password: ""
 

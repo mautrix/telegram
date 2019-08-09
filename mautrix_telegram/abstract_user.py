@@ -13,7 +13,7 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import Tuple, Optional, Union, Dict, TYPE_CHECKING
+from typing import Tuple, Optional, Union, Dict, Type, Any, TYPE_CHECKING
 from abc import ABC, abstractmethod
 import asyncio
 import logging
@@ -21,6 +21,8 @@ import platform
 import time
 
 from telethon.sessions import Session
+from telethon.network import (ConnectionTcpMTProxyRandomizedIntermediate, ConnectionTcpFull,
+                              Connection)
 from telethon.tl.patched import MessageService, Message
 from telethon.tl.types import (
     Channel, Chat, MessageActionChannelMigrateFrom, PeerUser, TypeUpdate, UpdateChatPinnedMessage,
@@ -102,21 +104,27 @@ class AbstractUser(ABC):
         return self.client and self.client.is_connected()
 
     @property
-    def _proxy_settings(self) -> Optional[Tuple[int, str, str, str, str, str]]:
+    def _proxy_settings(self) -> Tuple[Type[Connection], Optional[Tuple[Any, ...]]]:
         proxy_type = config["telegram.proxy.type"].lower()
+        connection = ConnectionTcpFull
+        connection_data = (config["telegram.proxy.address"],
+                           config["telegram.proxy.port"],
+                           config["telegram.proxy.rdns"],
+                           config["telegram.proxy.username"],
+                           config["telegram.proxy.password"])
         if proxy_type == "disabled":
-            return None
+            connection_data = None
         elif proxy_type == "socks4":
-            proxy_type = 1
+            connection_data = (1,) + connection_data
         elif proxy_type == "socks5":
-            proxy_type = 2
+            connection_data = (2,) + connection_data
         elif proxy_type == "http":
-            proxy_type = 3
+            connection_data = (3,) + connection_data
+        elif proxy_type == "mtproxy":
+            connection = ConnectionTcpMTProxyRandomizedIntermediate
+            connection_data = (connection_data[0], connection_data[1], connection_data[4])
 
-        return (proxy_type,
-                config["telegram.proxy.address"], config["telegram.proxy.port"],
-                config["telegram.proxy.rdns"],
-                config["telegram.proxy.username"], config["telegram.proxy.password"])
+        return connection, connection_data
 
     def _init_client(self) -> None:
         self.log.debug(f"Initializing client for {self.name}")
@@ -135,6 +143,7 @@ class AbstractUser(ABC):
         device = config["telegram.device_info.device_model"]
         sysversion = config["telegram.device_info.system_version"]
         appversion = config["telegram.device_info.app_version"]
+        connection, proxy = self._proxy_settings
 
         assert isinstance(self.session, Session)
 
@@ -155,8 +164,8 @@ class AbstractUser(ABC):
             retry_delay=config["telegram.connection.retry_delay"],
             flood_sleep_threshold=config["telegram.connection.flood_sleep_threshold"],
             request_retries=config["telegram.connection.request_retries"],
-
-            proxy=self._proxy_settings,
+            connection=connection,
+            proxy=proxy,
 
             loop=self.loop,
             base_logger=base_logger
