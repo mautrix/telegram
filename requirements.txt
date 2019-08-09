@@ -1,12 +1,10 @@
 aiohttp
-#mautrix
-git+https://github.com/tulir/mautrix-python@bridge-updates#egg=mautrix
+mautrix
 ruamel.yaml
 python-magic
 SQLAlchemy
 alembic
 commonmark
-future-fstrings
 #telethon
 git+https://github.com/LonamiWebs/Telethon@master#egg=telethon
 telethon-session-sqlalchemy
