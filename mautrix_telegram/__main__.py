@@ -83,8 +83,8 @@ class TelegramBridge(Bridge):
             if prometheus:
                 prometheus.start_http_server(self.config["metrics.listen_port"])
             else:
-                self.log.warn("Metrics are enabled in the config, "
-                              "but prometheus_client is not installed.")
+                self.log.warning("Metrics are enabled in the config, "
+                                 "but prometheus_client is not installed.")
 
     def prepare_bridge(self) -> None:
         self.bot = init_bot(self.config)

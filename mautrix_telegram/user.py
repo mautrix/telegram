@@ -321,7 +321,7 @@ class User(AbstractUser):
                                                      archived=False):
             entity = dialog.entity
             if isinstance(entity, Chat) and (entity.deactivated or entity.left):
-                self.log.warn(f"Ignoring deactivated or left chat {entity} while syncing")
+                self.log.warning(f"Ignoring deactivated or left chat {entity} while syncing")
                 continue
             elif isinstance(entity, TLUser) and not config["bridge.sync_direct_chats"]:
                 continue
