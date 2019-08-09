@@ -71,6 +71,9 @@ class TelegramEntity(SemiAbstractEntity):
         return TelegramEntity(type(self.internal), offset=self.internal.offset,
                               length=self.internal.length, extra_info=extra_info)
 
+    def __repr__(self) -> str:
+        return str(self.internal)
+
     @property
     def offset(self) -> int:
         return self.internal.offset
