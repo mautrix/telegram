@@ -188,10 +188,12 @@ class PortalMetadata(BasePortal, ABC):
             await self.main_intent.invite_user(self.mxid, users, check_cache=True)
 
     async def update_matrix_room(self, user: 'AbstractUser', entity: Union[TypeChat, User],
-                                 direct: bool, puppet: p.Puppet = None,
+                                 direct: bool = None, puppet: p.Puppet = None,
                                  levels: PowerLevelStateEventContent = None,
                                  users: List[User] = None,
                                  participants: List[TypeParticipant] = None) -> None:
+        if direct is None:
+            direct = self.peer_type == "user"
         try:
             await self._update_matrix_room(user, entity, direct, puppet, levels, users,
                                            participants)
@@ -199,10 +201,10 @@ class PortalMetadata(BasePortal, ABC):
             self.log.exception("Fatal error updating Matrix room")
 
     async def _update_matrix_room(self, user: 'AbstractUser', entity: Union[TypeChat, User],
-                                 direct: bool, puppet: p.Puppet = None,
-                                 levels: PowerLevelStateEventContent = None,
-                                 users: List[User] = None,
-                                 participants: List[TypeParticipant] = None) -> None:
+                                  direct: bool, puppet: p.Puppet = None,
+                                  levels: PowerLevelStateEventContent = None,
+                                  users: List[User] = None,
+                                  participants: List[TypeParticipant] = None) -> None:
         if not direct:
             await self.update_info(user, entity)
             if not users or not participants:
@@ -526,8 +528,9 @@ class PortalMetadata(BasePortal, ABC):
 
         if self.peer_type == "channel":
             changed = await self._update_username(entity.username) or changed
-            # TODO update about text
-            # changed = self.update_about(entity.about) or changed
+
+        if hasattr(entity, "about"):
+            changed = self._update_about(entity.about) or changed
 
         changed = await self._update_title(entity.title) or changed
 

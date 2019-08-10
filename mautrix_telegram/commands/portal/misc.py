@@ -37,6 +37,27 @@ async def sync_state(evt: CommandEvent) -> EventID:
     await evt.reply("Synchronization complete")
 
 
+@command_handler(needs_admin=False, needs_puppeting=False, needs_auth=False,
+                 help_section=SECTION_MISC)
+async def sync_full(evt: CommandEvent) -> EventID:
+    portal = po.Portal.get_by_mxid(evt.room_id)
+    if not portal:
+        return await evt.reply("This is not a portal room.")
+
+    if evt.args[0] == "--usebot" and evt.sender.is_admin:
+        src = evt.tgbot
+    else:
+        src = evt.tgbot if await evt.sender.needs_relaybot(portal) else evt.sender
+
+    try:
+        entity = await src.client.get_entity(portal.peer)
+    except ValueError:
+        return await evt.reply("Failed to get portal info from Telegram.")
+
+    await portal.update_matrix_room(src, entity)
+    return await evt.reply("Portal synced successfully.")
+
+
 @command_handler(name="id", needs_admin=False, needs_puppeting=False, needs_auth=False,
                  help_section=SECTION_MISC,
                  help_text="Get the ID of the Telegram chat where this room is bridged.")
