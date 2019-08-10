@@ -92,7 +92,6 @@ class Config(BaseBridgeConfig):
         copy("bridge.allow_matrix_login")
         copy("bridge.plaintext_highlights")
         copy("bridge.public_portals")
-        copy("bridge.catch_up")
         copy("bridge.sync_with_custom_puppets")
         copy("bridge.telegram_link_preview")
         copy("bridge.inline_images")

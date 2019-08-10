@@ -197,8 +197,6 @@ class User(AbstractUser):
             if not self.is_bot and config["bridge.startup_sync"]:
                 await self.sync_dialogs()
                 await self.sync_contacts()
-            if config["bridge.catch_up"]:
-                await self.client.catch_up()
         except Exception:
             self.log.exception("Failed to run post-login functions for %s", self.mxid)
 
