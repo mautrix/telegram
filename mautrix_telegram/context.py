@@ -25,12 +25,14 @@ if TYPE_CHECKING:
     from .config import Config
     from .bot import Bot
     from .matrix import MatrixHandler
+    from .__main__ import TelegramBridge
 
 
 class Context:
     az: AppService
     config: 'Config'
     loop: asyncio.AbstractEventLoop
+    bridge: 'TelegramBridge'
     bot: Optional['Bot']
     mx: Optional['MatrixHandler']
     session_container: AlchemySessionContainer
@@ -38,10 +40,12 @@ class Context:
     provisioning_api: Optional['ProvisioningAPI']
 
     def __init__(self, az: AppService, config: 'Config', loop: asyncio.AbstractEventLoop,
-                 session_container: AlchemySessionContainer, bot: Optional['Bot']) -> None:
+                 session_container: AlchemySessionContainer, bridge: 'TelegramBridge',
+                 bot: Optional['Bot']) -> None:
         self.az = az
         self.config = config
         self.loop = loop
+        self.bridge = bridge
         self.bot = bot
         self.mx = None
         self.session_container = session_container

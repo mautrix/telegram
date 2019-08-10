@@ -84,7 +84,7 @@ class TelegramBridge(Bridge):
 
     def prepare_bridge(self) -> None:
         self.bot = init_bot(self.config)
-        context = Context(self.az, self.config, self.loop, self.session_container, self.bot)
+        context = Context(self.az, self.config, self.loop, self.session_container, self, self.bot)
         self._prepare_website(context)
         self.matrix = context.mx = MatrixHandler(context)
 

@@ -27,6 +27,7 @@ from telethon.tl.functions.account import UpdateStatusRequest
 from mautrix.client import Client
 from mautrix.errors import MatrixRequestError
 from mautrix.types import UserID
+from mautrix.bridge import BaseUser
 
 from .types import TelegramID
 from .db import User as DBUser
@@ -42,7 +43,7 @@ config: Optional['Config'] = None
 SearchResult = NewType('SearchResult', Tuple['pu.Puppet', int])
 
 
-class User(AbstractUser):
+class User(AbstractUser, BaseUser):
     log: logging.Logger = logging.getLogger("mau.user")
     by_mxid: Dict[str, 'User'] = {}
     by_tgid: Dict[int, 'User'] = {}

@@ -46,6 +46,7 @@ class CommandEvent(BaseCommandEvent):
                  is_portal: bool) -> None:
         super().__init__(processor, room_id, event_id, sender, command, args, is_management,
                          is_portal)
+        self.bridge = processor.bridge
         self.tgbot = processor.tgbot
         self.config = processor.config
         self.public_website = processor.public_website
@@ -113,6 +114,7 @@ class CommandProcessor(BaseCommandProcessor):
         super().__init__(az=context.az, config=context.config, event_class=CommandEvent,
                          loop=context.loop)
         self.tgbot = context.bot
+        self.bridge = context.bridge
         self.az, self.config, self.loop, self.tgbot = context.core
         self.public_website = context.public_website
         self.command_prefix = self.config["bridge.command_prefix"]
