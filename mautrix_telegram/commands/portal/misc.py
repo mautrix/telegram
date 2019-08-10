@@ -1,4 +1,3 @@
-# -*- coding: future_fstrings -*-
 # mautrix-telegram - A Matrix-Telegram puppeting bridge
 # Copyright (C) 2019 Tulir Asokan
 #
@@ -14,10 +13,10 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import Dict
-
 from telethon.errors import (ChatAdminRequiredError, UsernameInvalidError,
                              UsernameNotModifiedError, UsernameOccupiedError)
+
+from mautrix.types import EventID
 
 from ... import portal as po
 from .. import command_handler, CommandEvent, SECTION_PORTAL_MANAGEMENT, SECTION_MISC
@@ -27,7 +26,7 @@ from .util import user_has_power_level
 @command_handler(needs_admin=False, needs_puppeting=False, needs_auth=False,
                  help_section=SECTION_MISC,
                  help_text="Fetch Matrix room state to ensure the bridge has up-to-date info.")
-async def sync_state(evt: CommandEvent) -> Dict:
+async def sync_state(evt: CommandEvent) -> EventID:
     portal = po.Portal.get_by_mxid(evt.room_id)
     if not portal:
         return await evt.reply("This is not a portal room.")
@@ -38,10 +37,31 @@ async def sync_state(evt: CommandEvent) -> Dict:
     await evt.reply("Synchronization complete")
 
 
+@command_handler(needs_admin=False, needs_puppeting=False, needs_auth=False,
+                 help_section=SECTION_MISC)
+async def sync_full(evt: CommandEvent) -> EventID:
+    portal = po.Portal.get_by_mxid(evt.room_id)
+    if not portal:
+        return await evt.reply("This is not a portal room.")
+
+    if evt.args[0] == "--usebot" and evt.sender.is_admin:
+        src = evt.tgbot
+    else:
+        src = evt.tgbot if await evt.sender.needs_relaybot(portal) else evt.sender
+
+    try:
+        entity = await src.client.get_entity(portal.peer)
+    except ValueError:
+        return await evt.reply("Failed to get portal info from Telegram.")
+
+    await portal.update_matrix_room(src, entity)
+    return await evt.reply("Portal synced successfully.")
+
+
 @command_handler(name="id", needs_admin=False, needs_puppeting=False, needs_auth=False,
                  help_section=SECTION_MISC,
                  help_text="Get the ID of the Telegram chat where this room is bridged.")
-async def get_id(evt: CommandEvent) -> Dict:
+async def get_id(evt: CommandEvent) -> EventID:
     portal = po.Portal.get_by_mxid(evt.room_id)
     if not portal:
         return await evt.reply("This is not a portal room.")
@@ -55,7 +75,7 @@ async def get_id(evt: CommandEvent) -> Dict:
 
 @command_handler(help_section=SECTION_PORTAL_MANAGEMENT,
                  help_text="Get a Telegram invite link to the current chat.")
-async def invite_link(evt: CommandEvent) -> Dict:
+async def invite_link(evt: CommandEvent) -> EventID:
     portal = po.Portal.get_by_mxid(evt.room_id)
     if not portal:
         return await evt.reply("This is not a portal room.")
@@ -74,7 +94,7 @@ async def invite_link(evt: CommandEvent) -> Dict:
 
 @command_handler(help_section=SECTION_PORTAL_MANAGEMENT,
                  help_text="Upgrade a normal Telegram group to a supergroup.")
-async def upgrade(evt: CommandEvent) -> Dict:
+async def upgrade(evt: CommandEvent) -> EventID:
     portal = po.Portal.get_by_mxid(evt.room_id)
     if not portal:
         return await evt.reply("This is not a portal room.")
@@ -96,7 +116,7 @@ async def upgrade(evt: CommandEvent) -> Dict:
                  help_args="<_name_|`-`>",
                  help_text="Change the username of a supergroup/channel. "
                            "To disable, use a dash (`-`) as the name.")
-async def group_name(evt: CommandEvent) -> Dict:
+async def group_name(evt: CommandEvent) -> EventID:
     if len(evt.args) == 0:
         return await evt.reply("**Usage:** `$cmdprefix+sp group-name <name/->`")
 

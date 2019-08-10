@@ -5,14 +5,16 @@ Revises: 2228d49c383f
 Create Date: 2018-06-26 21:31:26.911307
 
 """
-from alembic import context, op
-import sqlalchemy.orm as orm
-import sqlalchemy as sa
 import json
 import re
 
+from alembic import context, op
+import sqlalchemy.orm as orm
+import sqlalchemy as sa
+
+from mautrix.bridge.db import Base
+
 from mautrix_telegram.config import Config
-from mautrix_telegram.db import Base
 
 # revision identifiers, used by Alembic.
 revision = "6ca3d74d51e4"
@@ -22,7 +24,6 @@ depends_on = None
 
 
 class RoomState(Base):
-    query = None
     __tablename__ = "mx_room_state"
     __table_args__ = {"extend_existing": True}
 
@@ -31,7 +32,6 @@ class RoomState(Base):
 
 
 class UserProfile(Base):
-    query = None
     __tablename__ = "mx_user_profile"
     __table_args__ = {"extend_existing": True}
 
@@ -43,7 +43,6 @@ class UserProfile(Base):
 
 
 class Puppet(Base):
-    query = None
     __tablename__ = "puppet"
     __table_args__ = {"extend_existing": True}
 
@@ -83,7 +82,7 @@ def upgrade():
 
 def migrate_state_store():
     conn = op.get_bind()
-    session = orm.sessionmaker(bind=conn)()  # type: orm.Session
+    session: orm.Session = orm.sessionmaker(bind=conn)()
 
     try:
         with open("mx-state.json") as file:

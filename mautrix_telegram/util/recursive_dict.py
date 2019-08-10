@@ -1,4 +1,3 @@
-# -*- coding: future_fstrings -*-
 # mautrix-telegram - A Matrix-Telegram puppeting bridge
 # Copyright (C) 2019 Tulir Asokan
 #
@@ -15,11 +14,12 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from typing import Dict, Any
-from ..config import DictWithRecursion
+
+from mautrix.util.config import RecursiveDict
 
 
 def recursive_set(data: Dict[str, Any], key: str, value: Any) -> bool:
-    key, next_key = DictWithRecursion._parse_key(key)
+    key, next_key = RecursiveDict.parse_key(key)
     if next_key is not None:
         if key not in data:
             data[key] = {}
@@ -32,7 +32,7 @@ def recursive_set(data: Dict[str, Any], key: str, value: Any) -> bool:
 
 
 def recursive_get(data: Dict[str, Any], key: str) -> Any:
-    key, next_key = DictWithRecursion._parse_key(key)
+    key, next_key = RecursiveDict.parse_key(key)
     if next_key is not None:
         next_data = data.get(key, None)
         if not next_data:
@@ -42,7 +42,7 @@ def recursive_get(data: Dict[str, Any], key: str) -> Any:
 
 
 def recursive_del(data: Dict[str, any], key: str) -> bool:
-    key, next_key = DictWithRecursion._parse_key(key)
+    key, next_key = RecursiveDict.parse_key(key)
     if next_key is not None:
         if key not in data:
             return False

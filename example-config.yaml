@@ -103,6 +103,8 @@ bridge:
     - full name
     - username
     - phone number
+    # Maximum length of displayname
+    displayname_max_length: 100
 
     # Maximum number of members to sync per portal when starting up. Other members will be
     # synced when they send messages. The maximum is 10000, after which the Telegram server
@@ -119,9 +121,10 @@ bridge:
     # their Telegram account at startup.
     startup_sync: true
     # Number of most recently active dialogs to check when syncing chats.
-    # Dialogs include groups and private chats, but only groups are synced.
     # Set to 0 to remove limit.
     sync_dialog_limit: 30
+    # Whether or not to sync and create portals for direct chats at startup.
+    sync_direct_chats: false
     # The maximum number of simultaneous Telegram deletions to handle.
     # A large number of simultaneous redactions could put strain on your homeserver.
     max_telegram_delete: 10
@@ -177,6 +180,7 @@ bridge:
 
 
     # The formats to use when sending messages to Telegram via the relay bot.
+    # Text msgtypes (m.text, m.notice and m.emote) support HTML, media msgtypes don't.
     #
     # Telegram doesn't have built-in emotes, so the m.emote format is also used for non-relaybot users.
     #
@@ -184,15 +188,17 @@ bridge:
     #   $sender_displayname    - The display name of the sender (e.g. Example User)
     #   $sender_username       - The username (Matrix ID localpart) of the sender (e.g. exampleuser)
     #   $sender_mxid           - The Matrix ID of the sender (e.g. @exampleuser:example.com)
-    #   $message               - The message content as HTML
+    #   $body                  - The plaintext body (file name for media msgtypes)
+    #   $formatted_body        - The message content as HTML (for text msgtypes)
     message_formats:
-        m.text: "<b>$sender_displayname</b>: $message"
-        m.emote: "* <b>$sender_displayname</b> $message"
-        m.file: "<b>$sender_displayname</b> sent a file: $message"
-        m.image: "<b>$sender_displayname</b> sent an image: $message"
-        m.audio: "<b>$sender_displayname</b> sent an audio file: $message"
-        m.video: "<b>$sender_displayname</b> sent a video: $message"
-        m.location: "<b>$sender_displayname</b> sent a location: $message"
+        m.text: "<b>$sender_displayname</b>: $formatted_body"
+        m.notice: "<b>$sender_displayname</b>: $formatted_body"
+        m.emote: "* <b>$sender_displayname</b> $formatted_body"
+        m.file: "$sender_displayname sent a file: $body"
+        m.image: "$sender_displayname sent an image: $body"
+        m.audio: "$sender_displayname sent an audio file: $body"
+        m.video: "$sender_displayname sent a video: $body"
+        m.location: "$sender_displayname sent a location: $body"
 
     # The formats to use when sending state events to Telegram via the relay bot.
     #
@@ -307,14 +313,14 @@ telegram:
     # Telethon proxy configuration.
     # You must install PySocks from pip for proxies to work.
     proxy:
-        # Allowed types: disabled, socks4, socks5, http
+        # Allowed types: disabled, socks4, socks5, http, mtproxy
         type: disabled
         # Proxy IP address and port.
         address: 127.0.0.1
         port: 1080
-        # Whether or not to perform DNS resolving remotely.
+        # Whether or not to perform DNS resolving remotely. Only for socks/http proxies.
         rdns: true
-        # Proxy authentication (optional).
+        # Proxy authentication (optional). Put MTProxy secret in password field.
         username: ""
         password: ""
 
@@ -325,18 +331,21 @@ telegram:
 logging:
     version: 1
     formatters:
-        precise:
+        colored:
+            (): mautrix_telegram.util.ColorFormatter
+            format: "[%(asctime)s] [%(levelname)s@%(name)s] %(message)s"
+        normal:
             format: "[%(asctime)s] [%(levelname)s@%(name)s] %(message)s"
     handlers:
         file:
             class: logging.handlers.RotatingFileHandler
-            formatter: precise
+            formatter: normal
             filename: ./mautrix-telegram.log
             maxBytes: 10485760
             backupCount: 10
         console:
             class: logging.StreamHandler
-            formatter: precise
+            formatter: colored
     loggers:
         mau:
             level: DEBUG

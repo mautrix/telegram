@@ -1,4 +1,3 @@
-# -*- coding: future_fstrings -*-
 # mautrix-telegram - A Matrix-Telegram puppeting bridge
 # Copyright (C) 2019 Tulir Asokan
 #
@@ -14,7 +13,7 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import Dict, Optional
+from mautrix.types import EventID
 
 from ... import portal as po
 from .. import command_handler, CommandEvent, SECTION_ADMIN
@@ -25,7 +24,7 @@ from .. import command_handler, CommandEvent, SECTION_ADMIN
                  help_args="<`whitelist`|`blacklist`>",
                  help_text="Change whether the bridge will allow or disallow bridging rooms by "
                            "default.")
-async def filter_mode(evt: CommandEvent) -> Dict:
+async def filter_mode(evt: CommandEvent) -> EventID:
     try:
         mode = evt.args[0]
         if mode not in ("whitelist", "blacklist"):
@@ -50,7 +49,7 @@ async def filter_mode(evt: CommandEvent) -> Dict:
                  help_section=SECTION_ADMIN,
                  help_args="<`whitelist`|`blacklist`> <_chat ID_>",
                  help_text="Allow or disallow bridging a specific chat.")
-async def edit_filter(evt: CommandEvent) -> Optional[Dict]:
+async def edit_filter(evt: CommandEvent) -> EventID:
     try:
         action = evt.args[0]
         if action not in ("whitelist", "blacklist", "add", "remove"):
@@ -92,4 +91,5 @@ async def edit_filter(evt: CommandEvent) -> Optional[Dict]:
         filter_id_list.remove(filter_id)
         save()
         return await evt.reply(f"Chat ID removed from {mode}.")
-    return None
+    else:
+        return await evt.reply("**Usage:** `$cmdprefix+sp filter <whitelist/blacklist> <chat ID>`")

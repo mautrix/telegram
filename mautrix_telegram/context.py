@@ -1,4 +1,3 @@
-# -*- coding: future_fstrings -*-
 # mautrix-telegram - A Matrix-Telegram puppeting bridge
 # Copyright (C) 2019 Tulir Asokan
 #
@@ -15,13 +14,13 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from typing import Optional, Tuple, TYPE_CHECKING
+import asyncio
+
+from alchemysession import AlchemySessionContainer
+
+from mautrix.appservice import AppService
 
 if TYPE_CHECKING:
-    import asyncio
-
-    from alchemysession import AlchemySessionContainer
-    from mautrix_appservice import AppService
-
     from .web import PublicBridgeWebsite, ProvisioningAPI
     from .config import Config
     from .bot import Bot
@@ -29,17 +28,26 @@ if TYPE_CHECKING:
 
 
 class Context:
-    def __init__(self, az: 'AppService', config: 'Config', loop: 'asyncio.AbstractEventLoop',
-                 session_container: 'AlchemySessionContainer', bot: Optional['Bot']) -> None:
-        self.az = az  # type: AppService
-        self.config = config  # type: Config
-        self.loop = loop  # type: asyncio.AbstractEventLoop
-        self.bot = bot  # type: Optional[Bot]
-        self.mx = None  # type: Optional[MatrixHandler]
-        self.session_container = session_container  # type: AlchemySessionContainer
-        self.public_website = None  # type: Optional[PublicBridgeWebsite]
-        self.provisioning_api = None  # type: Optional[ProvisioningAPI]
+    az: AppService
+    config: 'Config'
+    loop: asyncio.AbstractEventLoop
+    bot: Optional['Bot']
+    mx: Optional['MatrixHandler']
+    session_container: AlchemySessionContainer
+    public_website: Optional['PublicBridgeWebsite']
+    provisioning_api: Optional['ProvisioningAPI']
+
+    def __init__(self, az: AppService, config: 'Config', loop: asyncio.AbstractEventLoop,
+                 session_container: AlchemySessionContainer, bot: Optional['Bot']) -> None:
+        self.az = az
+        self.config = config
+        self.loop = loop
+        self.bot = bot
+        self.mx = None
+        self.session_container = session_container
+        self.public_website = None
+        self.provisioning_api = None
 
     @property
-    def core(self) -> Tuple['AppService', 'Config', 'asyncio.AbstractEventLoop', Optional['Bot']]:
+    def core(self) -> Tuple[AppService, 'Config', asyncio.AbstractEventLoop, Optional['Bot']]:
         return self.az, self.config, self.loop, self.bot

@@ -1,4 +1,3 @@
-# -*- coding: future_fstrings -*-
 # mautrix-telegram - A Matrix-Telegram puppeting bridge
 # Copyright (C) 2019 Tulir Asokan
 #
@@ -14,7 +13,7 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import Dict, List, Optional, Tuple, TYPE_CHECKING
+from typing import List, Optional, TYPE_CHECKING
 from html import escape
 import logging
 import re
@@ -23,48 +22,43 @@ from telethon.tl.types import (MessageEntityMention, MessageEntityMentionName, M
                                MessageEntityEmail, MessageEntityTextUrl, MessageEntityBold,
                                MessageEntityItalic, MessageEntityCode, MessageEntityPre,
                                MessageEntityBotCommand, MessageEntityHashtag, MessageEntityCashtag,
-                               MessageEntityPhone, TypeMessageEntity, Message, PeerChannel,
+                               MessageEntityPhone, TypeMessageEntity, PeerChannel,
                                MessageEntityBlockquote, MessageEntityStrike, MessageFwdHeader,
                                MessageEntityUnderline, PeerUser)
+from telethon.tl.custom import Message
+from telethon.helpers import add_surrogate, del_surrogate
 
-from mautrix_appservice import MatrixRequestError
-from mautrix_appservice.intent_api import IntentAPI
+from mautrix.errors import MatrixRequestError
+from mautrix.appservice import IntentAPI
+from mautrix.types import (TextMessageEventContent, RelatesTo, RelationType, Format, MessageType,
+                           MessageEvent)
 
 from .. import user as u, puppet as pu, portal as po
 from ..types import TelegramID
 from ..db import Message as DBMessage
-from .util import (add_surrogates, remove_surrogates, trim_reply_fallback_html,
-                   trim_reply_fallback_text)
 
 if TYPE_CHECKING:
     from ..abstract_user import AbstractUser
 
-log = logging.getLogger("mau.fmt.tg")  # type: logging.Logger
+log: logging.Logger = logging.getLogger("mau.fmt.tg")
 
 
-def telegram_reply_to_matrix(evt: Message, source: 'AbstractUser') -> Dict:
+def telegram_reply_to_matrix(evt: Message, source: 'AbstractUser') -> Optional[RelatesTo]:
     if evt.reply_to_msg_id:
         space = (evt.to_id.channel_id
                  if isinstance(evt, Message) and isinstance(evt.to_id, PeerChannel)
                  else source.tgid)
-        msg = DBMessage.get_one_by_tgid(evt.reply_to_msg_id, space)
+        msg = DBMessage.get_one_by_tgid(TelegramID(evt.reply_to_msg_id), space)
         if msg:
-            return {
-                "m.in_reply_to": {
-                    "event_id": msg.mxid,
-                    "room_id": msg.mx_room,
-                },
-                "rel_type": "m.reference",
-                "event_id": msg.mxid,
-                "room_id": msg.mx_room,
-            }
-    return {}
+            return RelatesTo(rel_type=RelationType.REFERENCE, event_id=msg.mxid)
+    return None
 
 
-async def _add_forward_header(source, text: str, html: Optional[str],
-                              fwd_from: MessageFwdHeader) -> Tuple[str, str]:
-    if not html:
-        html = escape(text)
+async def _add_forward_header(source: 'AbstractUser', content: TextMessageEventContent,
+                              fwd_from: MessageFwdHeader) -> None:
+    if not content.formatted_body or content.format != Format.HTML:
+        content.format = Format.HTML
+        content.formatted_body = escape(content.body)
     fwd_from_html, fwd_from_text = None, None
     if fwd_from.from_id:
         user = u.User.get_by_tgid(TelegramID(fwd_from.from_id))
@@ -81,11 +75,14 @@ async def _add_forward_header(source, text: str, html: Optional[str],
                                  f"{escape(fwd_from_text)}</a>")
 
         if not fwd_from_text:
-            user = await source.client.get_entity(PeerUser(fwd_from.from_id))
-            if user:
-                fwd_from_text = pu.Puppet.get_displayname(user, False)
-                fwd_from_html = f"<b>{escape(fwd_from_text)}</b>"
-    else:
+            try:
+                user = await source.client.get_entity(PeerUser(fwd_from.from_id))
+                if user:
+                    fwd_from_text = pu.Puppet.get_displayname(user, False)
+                    fwd_from_html = f"<b>{escape(fwd_from_text)}</b>"
+            except ValueError:
+                fwd_from_text = fwd_from_html = "unknown user"
+    elif fwd_from.channel_id:
         portal = po.Portal.get_by_tgid(TelegramID(fwd_from.channel_id))
         if portal:
             fwd_from_text = portal.title
@@ -93,78 +90,48 @@ async def _add_forward_header(source, text: str, html: Optional[str],
                 fwd_from_html = (f"<a href='https://matrix.to/#/{portal.alias}'>"
                                  f"{escape(fwd_from_text)}</a>")
             else:
-                fwd_from_html = f"<b>{escape(fwd_from_text)}</b>"
+                fwd_from_html = f"channel <b>{escape(fwd_from_text)}</b>"
         else:
-            channel = await source.client.get_entity(PeerChannel(fwd_from.channel_id))
-            if channel:
-                fwd_from_text = channel.title
-                fwd_from_html = f"<b>{fwd_from_text}</b>"
+            try:
+                channel = await source.client.get_entity(PeerChannel(fwd_from.channel_id))
+                if channel:
+                    fwd_from_text = f"channel {channel.title}"
+                    fwd_from_html = f"channel <b>{escape(channel.title)}</b>"
+            except ValueError:
+                fwd_from_text = fwd_from_html = "unknown channel"
+    elif fwd_from.from_name:
+        fwd_from_text = fwd_from.from_name
+        fwd_from_html = f"<b>{escape(fwd_from.from_name)}</b>"
+    else:
+        fwd_from_text = "unknown source"
+        fwd_from_html = f"unknown source"
 
-    if not fwd_from_text:
-        if fwd_from.from_id:
-            fwd_from_text = "Unknown user"
-        else:
-            fwd_from_text = "Unknown source"
-        fwd_from_html = f"<b>{fwd_from_text}</b>"
-
-    text = "\n".join([f"> {line}" for line in text.split("\n")])
-    text = f"Forwarded from {fwd_from_text}:\n{text}"
-    html = (f"Forwarded message from {fwd_from_html}<br/>"
-            f"<tg-forward><blockquote>{html}</blockquote></tg-forward>")
-    return text, html
+    content.body = "\n".join([f"> {line}" for line in content.body.split("\n")])
+    content.body = f"Forwarded from {fwd_from_text}:\n{content.body}"
+    content.formatted_body = (
+        f"Forwarded message from {fwd_from_html}<br/>"
+        f"<tg-forward><blockquote>{content.formatted_body}</blockquote></tg-forward>")
 
 
-async def _add_reply_header(source: "AbstractUser", text: str, html: str, evt: Message,
-                            relates_to: Dict, main_intent: IntentAPI) -> Tuple[str, str]:
+async def _add_reply_header(source: 'AbstractUser', content: TextMessageEventContent, evt: Message,
+                            main_intent: IntentAPI):
     space = (evt.to_id.channel_id
              if isinstance(evt, Message) and isinstance(evt.to_id, PeerChannel)
              else source.tgid)
 
-    msg = DBMessage.get_one_by_tgid(evt.reply_to_msg_id, space)
+    msg = DBMessage.get_one_by_tgid(TelegramID(evt.reply_to_msg_id), space)
     if not msg:
-        return text, html
+        return
 
-    relates_to["rel_type"] = "m.reference"
-    relates_to["event_id"] = msg.mxid
-    relates_to["room_id"] = msg.mx_room
-    relates_to["m.in_reply_to"] = {
-        "event_id": msg.mxid,
-        "room_id": msg.mx_room,
-    }
+    content.relates_to = RelatesTo(rel_type=RelationType.REFERENCE, event_id=msg.mxid)
 
     try:
-        event = await main_intent.get_event(msg.mx_room, msg.mxid)
-
-        content = event["content"]
-        r_sender = event["sender"]
-
-        r_text_body = trim_reply_fallback_text(content["body"])
-        r_html_body = trim_reply_fallback_html(content["formatted_body"]
-                                               if "formatted_body" in content
-                                               else escape(content["body"]))
-
-        puppet = pu.Puppet.get_by_mxid(r_sender, create=False)
-        r_displayname = puppet.displayname if puppet else r_sender
-        r_sender_link = f"<a href='https://matrix.to/#/{r_sender}'>{escape(r_displayname)}</a>"
-    except (ValueError, KeyError, MatrixRequestError):
-        r_sender_link = "unknown user"
-        r_displayname = "unknown user"
-        r_text_body = "Failed to fetch message"
-        r_html_body = "<em>Failed to fetch message</em>"
-
-    r_msg_link = f"<a href='https://matrix.to/#/{msg.mx_room}/{msg.mxid}'>In reply to</a>"
-    html = (
-        f"<mx-reply><blockquote>{r_msg_link} {r_sender_link}\n{r_html_body}</blockquote></mx-reply>"
-        + (html or escape(text)))
-
-    lines = r_text_body.strip().split("\n")
-    text_with_quote = f"> <{r_displayname}> {lines.pop(0)}"
-    for line in lines:
-        if line:
-            text_with_quote += f"\n> {line}"
-    text_with_quote += "\n\n"
-    text_with_quote += text
-    return text_with_quote, html
+        event: MessageEvent = await main_intent.get_event(msg.mx_room, msg.mxid)
+        if isinstance(event.content, TextMessageEventContent):
+            event.content.trim_reply_fallback()
+        content.set_reply(event)
+    except MatrixRequestError:
+        pass
 
 
 async def telegram_to_matrix(evt: Message, source: "AbstractUser",
@@ -172,33 +139,42 @@ async def telegram_to_matrix(evt: Message, source: "AbstractUser",
                              prefix_text: Optional[str] = None, prefix_html: Optional[str] = None,
                              override_text: str = None,
                              override_entities: List[TypeMessageEntity] = None,
-                             no_reply_fallback: bool = False) -> Tuple[str, str, Dict]:
-    text = add_surrogates(override_text or evt.message)
+                             no_reply_fallback: bool = False) -> TextMessageEventContent:
+    content = TextMessageEventContent(
+        msgtype=MessageType.TEXT,
+        body=add_surrogate(override_text or evt.message),
+    )
     entities = override_entities or evt.entities
-    html = _telegram_entities_to_matrix_catch(text, entities) if entities else None
-    relates_to = {}  # type: Dict
+    if entities:
+        content.format = Format.HTML
+        content.formatted_body = _telegram_entities_to_matrix_catch(content.body, entities)
 
     if prefix_html:
-        html = prefix_html + (html or escape(text))
+        if not content.formatted_body:
+            content.format = Format.HTML
+            content.formatted_body = escape(content.body)
+        content.formatted_body = prefix_html + content.formatted_body
     if prefix_text:
-        text = prefix_text + text
+        content.body = prefix_text + content.body
 
     if evt.fwd_from:
-        text, html = await _add_forward_header(source, text, html, evt.fwd_from)
+        await _add_forward_header(source, content, evt.fwd_from)
 
     if evt.reply_to_msg_id and not no_reply_fallback:
-        text, html = await _add_reply_header(source, text, html, evt, relates_to, main_intent)
+        await _add_reply_header(source, content, evt, main_intent)
 
     if isinstance(evt, Message) and evt.post and evt.post_author:
-        if not html:
-            html = escape(text)
-        text += f"\n- {evt.post_author}"
-        html += f"<br/><i>- <u>{evt.post_author}</u></i>"
+        if not content.formatted_body:
+            content.formatted_body = escape(content.body)
+        content.body += f"\n- {evt.post_author}"
+        content.formatted_body += f"<br/><i>- <u>{evt.post_author}</u></i>"
 
-    if html:
-        html = html.replace("\n", "<br/>")
+    content.body = del_surrogate(content.body)
 
-    return remove_surrogates(text), remove_surrogates(html), relates_to
+    if content.formatted_body:
+        content.formatted_body = del_surrogate(content.formatted_body.replace("\n", "<br/>"))
+
+    return content
 
 
 def _telegram_entities_to_matrix_catch(text: str, entities: List[TypeMessageEntity]) -> str:
@@ -313,8 +289,8 @@ def _parse_name_mention(html: List[str], entity_text: str, user_id: TelegramID) 
     return False
 
 
-message_link_regex = re.compile(
-    r"https?://t(?:elegram)?\.(?:me|dog)/([A-Za-z][A-Za-z0-9_]{3,}[A-Za-z0-9])/([0-9]{1,50})")
+message_link_regex = re.compile(r"https?://t(?:elegram)?\.(?:me|dog)/"
+                                r"([A-Za-z][A-Za-z0-9_]{3,}[A-Za-z0-9])/([0-9]{1,50})")
 
 
 def _parse_url(html: List[str], entity_text: str, url: str) -> bool:

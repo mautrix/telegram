@@ -1,4 +1,3 @@
-# -*- coding: future_fstrings -*-
 # mautrix-telegram - A Matrix-Telegram puppeting bridge
 # Copyright (C) 2019 Tulir Asokan
 #
@@ -14,18 +13,19 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from .base import Base
+from sqlalchemy.engine.base import Engine
+
+from mautrix.bridge.db import UserProfile, RoomState
+
 from .bot_chat import BotChat
 from .message import Message
 from .portal import Portal
 from .puppet import Puppet
-from .room_state import RoomState
 from .telegram_file import TelegramFile
 from .user import User, UserPortal, Contact
-from .user_profile import UserProfile
 
 
-def init(db_engine) -> None:
+def init(db_engine: Engine) -> None:
     for table in (Portal, Message, User, Contact, UserPortal, Puppet, TelegramFile, UserProfile,
                   RoomState, BotChat):
         table.db = db_engine

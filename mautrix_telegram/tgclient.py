@@ -1,4 +1,3 @@
-# -*- coding: future_fstrings -*-
 # mautrix-telegram - A Matrix-Telegram puppeting bridge
 # Copyright (C) 2019 Tulir Asokan
 #
@@ -18,18 +17,21 @@ from typing import List, Union, Optional
 
 from telethon import TelegramClient, utils
 from telethon.tl.functions.messages import SendMediaRequest
-from telethon.tl.types import (
-    InputMediaUploadedDocument, InputMediaUploadedPhoto, TypeDocumentAttribute, TypeInputMedia,
-    TypeInputPeer, TypeMessageEntity, TypeMessageMedia, TypePeer)
+from telethon.tl.types import (InputMediaUploadedDocument, InputMediaUploadedPhoto,
+                               TypeDocumentAttribute, TypeInputMedia, TypeInputPeer,
+                               TypeMessageEntity, TypeMessageMedia, TypePeer)
 from telethon.tl.patched import Message
+from telethon.sessions.abstract import Session
 
 
 class MautrixTelegramClient(TelegramClient):
+    session: Session
+
     async def upload_file_direct(self, file: bytes, mime_type: str = None,
                                  attributes: List[TypeDocumentAttribute] = None,
                                  file_name: str = None, max_image_size: float = 10 * 1000 ** 2,
                                  ) -> Union[InputMediaUploadedDocument, InputMediaUploadedPhoto]:
-        file_handle = await super().upload_file(file, file_name=file_name, use_cache=False)
+        file_handle = await super().upload_file(file, file_name=file_name)
 
         if (mime_type == "image/png" or mime_type == "image/jpeg") and len(file) < max_image_size:
             return InputMediaUploadedPhoto(file_handle)

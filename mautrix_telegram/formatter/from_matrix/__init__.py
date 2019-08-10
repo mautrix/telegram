@@ -1,4 +1,3 @@
-# -*- coding: future_fstrings -*-
 # mautrix-telegram - A Matrix-Telegram puppeting bridge
 # Copyright (C) 2019 Tulir Asokan
 #
@@ -14,29 +13,30 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import Optional, List, Tuple, Callable, Pattern, Match, TYPE_CHECKING, Dict, Any
+from typing import Optional, List, Tuple, Callable, Pattern, Match, TYPE_CHECKING
 import re
 import logging
 
 from telethon.tl.types import (MessageEntityMention, MessageEntityMentionName, MessageEntityItalic,
                                TypeMessageEntity)
+from telethon.helpers import add_surrogate, del_surrogate
+
+from mautrix.types import RoomID, MessageEventContent
 
 from ... import puppet as pu
-from ...types import TelegramID, MatrixRoomID
+from ...types import TelegramID
 from ...db import Message as DBMessage
-from ..util import (add_surrogates, remove_surrogates, trim_reply_fallback_html,
-                    trim_reply_fallback_text)
 from .parser import ParsedMessage, parse_html
 
 if TYPE_CHECKING:
     from ...context import Context
 
-log = logging.getLogger("mau.fmt.mx")  # type: logging.Logger
-should_bridge_plaintext_highlights = False  # type: bool
+log: logging.Logger = logging.getLogger("mau.fmt.mx")
+should_bridge_plaintext_highlights: bool = False
 
-command_regex = re.compile(r"^!([A-Za-z0-9@]+)")  # type: Pattern
-not_command_regex = re.compile(r"^\\(![A-Za-z0-9@]+)")  # type: Pattern
-plain_mention_regex = None  # type: Optional[Pattern]
+command_regex: Pattern = re.compile(r"^!([A-Za-z0-9@]+)")
+not_command_regex: Pattern = re.compile(r"^\\(![A-Za-z0-9@]+)")
+plain_mention_regex: Optional[Pattern] = None
 
 
 def plain_mention_to_html(match: Match) -> str:
@@ -49,17 +49,22 @@ def plain_mention_to_html(match: Match) -> str:
     return "".join(match.groups())
 
 
+MAX_LENGTH = 4096
+CUTOFF_TEXT = " [message cut]"
+CUT_MAX_LENGTH = MAX_LENGTH - len(CUTOFF_TEXT)
+
+
 def cut_long_message(message: str, entities: List[TypeMessageEntity]) -> ParsedMessage:
-    if len(message) > 4096:
-        message = message[0:4082] + " [message cut]"
+    if len(message) > MAX_LENGTH:
+        message = message[0:CUT_MAX_LENGTH] + CUTOFF_TEXT
         new_entities = []
         for entity in entities:
-            if entity.offset > 4082:
+            if entity.offset > CUT_MAX_LENGTH:
                 continue
-            if entity.offset + entity.length > 4082:
-                entity.length = 4082 - entity.offset
+            if entity.offset + entity.length > CUT_MAX_LENGTH:
+                entity.length = CUT_MAX_LENGTH - entity.offset
             new_entities.append(entity)
-        new_entities.append(MessageEntityItalic(4082, len(" [message cut]")))
+        new_entities.append(MessageEntityItalic(CUT_MAX_LENGTH, len(CUTOFF_TEXT)))
         entities = new_entities
     return message, entities
 
@@ -76,8 +81,8 @@ def matrix_to_telegram(html: str) -> ParsedMessage:
         if should_bridge_plaintext_highlights:
             html = plain_mention_regex.sub(plain_mention_to_html, html)
 
-        text, entities = parse_html(add_surrogates(html))
-        text = remove_surrogates(text.strip())
+        text, entities = parse_html(add_surrogate(html))
+        text = del_surrogate(text.strip())
         text, entities = cut_long_message(text, entities)
 
         return text, entities
@@ -85,26 +90,12 @@ def matrix_to_telegram(html: str) -> ParsedMessage:
         raise FormatError(f"Failed to convert Matrix format: {html}") from e
 
 
-def matrix_reply_to_telegram(content: Dict[str, Any], tg_space: TelegramID,
-                             room_id: Optional[MatrixRoomID] = None) -> Optional[TelegramID]:
-    relates_to = content.get("m.relates_to", None) or {}
-    if not relates_to:
-        return None
-    reply = (relates_to if relates_to.get("rel_type", None) == "m.reference"
-             else relates_to.get("m.in_reply_to", None) or {})
-    if not reply:
-        return None
-    room_id = room_id or reply.get("room_id", None)
-    event_id = reply.get("event_id", None)
+def matrix_reply_to_telegram(content: MessageEventContent, tg_space: TelegramID,
+                             room_id: Optional[RoomID] = None) -> Optional[TelegramID]:
+    event_id = content.get_reply_to()
     if not event_id:
         return
-
-    try:
-        if content["format"] == "org.matrix.custom.html":
-            content["formatted_body"] = trim_reply_fallback_html(content["formatted_body"])
-    except KeyError:
-        pass
-    content["body"] = trim_reply_fallback_text(content["body"])
+    content.trim_reply_fallback()
 
     message = DBMessage.get_by_mxid(event_id, room_id, tg_space)
     if message:
@@ -124,10 +115,10 @@ def matrix_text_to_telegram(text: str) -> ParsedMessage:
     return text, entities
 
 
-def plain_mention_to_text() -> Tuple[List[TypeMessageEntity], Callable[[str], str]]:
+def plain_mention_to_text() -> Tuple[List[TypeMessageEntity], Callable[[Match], str]]:
     entities = []
 
-    def replacer(match) -> str:
+    def replacer(match: Match) -> str:
         puppet = pu.Puppet.find_by_displayname(match.group(2))
         if puppet:
             offset = match.start()
@@ -148,7 +139,7 @@ def plain_mention_to_text() -> Tuple[List[TypeMessageEntity], Callable[[str], st
 def init_mx(context: "Context") -> None:
     global plain_mention_regex, should_bridge_plaintext_highlights
     config = context.config
-    dn_template = config.get("bridge.displayname_template", "{displayname} (Telegram)")
+    dn_template = config["bridge.displayname_template"]
     dn_template = re.escape(dn_template).replace(re.escape("{displayname}"), "[^>]+")
     plain_mention_regex = re.compile(f"^({dn_template})")
-    should_bridge_plaintext_highlights = config["bridge.plaintext_highlights"] or False
+    should_bridge_plaintext_highlights = config["bridge.plaintext_highlights"]

@@ -1,4 +1,3 @@
-# -*- coding: future_fstrings -*-
 # mautrix-telegram - A Matrix-Telegram puppeting bridge
 # Copyright (C) 2019 Tulir Asokan
 #
@@ -14,9 +13,8 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import Awaitable, Callable, Dict, List, Optional, Pattern, Tuple, TYPE_CHECKING
+from typing import Awaitable, Callable, Dict, List, Optional, Tuple, TYPE_CHECKING
 import logging
-import re
 
 from telethon.tl.patched import Message, MessageService
 from telethon.tl.types import (
@@ -28,7 +26,8 @@ from telethon.tl.functions.messages import GetChatsRequest, GetFullChatRequest
 from telethon.tl.functions.channels import GetChannelsRequest, GetParticipantRequest
 from telethon.errors import ChannelInvalidError, ChannelPrivateError
 
-from .types import MatrixUserID
+from mautrix.types import UserID
+
 from .abstract_user import AbstractUser
 from .db import BotChat
 from .types import TelegramID
@@ -36,34 +35,41 @@ from . import puppet as pu, portal as po, user as u
 
 if TYPE_CHECKING:
     from .config import Config
-    from .context import Context
 
-config = None  # type: Config
+config: Optional['Config'] = None
 
 ReplyFunc = Callable[[str], Awaitable[Message]]
 
 
 class Bot(AbstractUser):
-    log = logging.getLogger("mau.bot")  # type: logging.Logger
-    mxid_regex = re.compile("@.+:.+")  # type: Pattern
+    log: logging.Logger = logging.getLogger("mau.user.bot")
+
+    token: str
+    chats: Dict[int, str]
+    tg_whitelist: List[int]
+    whitelist_group_admins: bool
+    _me_info: Optional[User]
+    _me_mxid: Optional[UserID]
 
     def __init__(self, token: str) -> None:
         super().__init__()
-        self.token = token  # type: str
-        self.puppet_whitelisted = True  # type: bool
-        self.whitelisted = True  # type: bool
-        self.relaybot_whitelisted = True  # type: bool
-        self.username = None  # type: str
-        self.is_relaybot = True  # type: bool
-        self.is_bot = True  # type: bool
-        self.chats = {}  # type: Dict[int, str]
-        self.tg_whitelist = []  # type: List[int]
+        self.token = token
+        self.tgid = None
+        self.mxid = None
+        self.puppet_whitelisted = True
+        self.whitelisted = True
+        self.relaybot_whitelisted = True
+        self.username = None
+        self.is_relaybot = True
+        self.is_bot = True
+        self.chats = {}
+        self.tg_whitelist = []
         self.whitelist_group_admins = (config["bridge.relaybot.whitelist_group_admins"]
-                                       or False)  # type: bool
-        self._me_info = None  # type: Optional[User]
-        self._me_mxid = None  # type: Optional[MatrixUserID]
+                                       or False)
+        self._me_info = None
+        self._me_mxid = None
 
-    async def get_me(self, use_cache: bool = True) -> Tuple[User, MatrixUserID]:
+    async def get_me(self, use_cache: bool = True) -> Tuple[User, UserID]:
         if not use_cache or not self._me_mxid:
             self._me_info = await self.client.get_me()
             self._me_mxid = pu.Puppet.get_mxid_from_id(TelegramID(self._me_info.id))
@@ -92,7 +98,7 @@ class Bot(AbstractUser):
     async def post_login(self) -> None:
         await self.init_permissions()
         info = await self.client.get_me()
-        self.tgid = info.id
+        self.tgid = TelegramID(info.id)
         self.username = info.username
         self.mxid = pu.Puppet.get_mxid_from_id(self.tgid)
 
@@ -102,9 +108,9 @@ class Bot(AbstractUser):
             if isinstance(chat, ChatForbidden) or chat.left or chat.deactivated:
                 self.remove_chat(TelegramID(chat.id))
 
-        channel_ids = [InputChannel(chat_id, 0)
+        channel_ids = (InputChannel(chat_id, 0)
                        for chat_id, chat_type in self.chats.items()
-                       if chat_type == "channel"]
+                       if chat_type == "channel")
         for channel_id in channel_ids:
             try:
                 await self.client(GetChannelsRequest([channel_id]))
@@ -133,7 +139,7 @@ class Bot(AbstractUser):
             del self.chats[chat_id]
         except KeyError:
             pass
-        BotChat.delete(chat_id)
+        BotChat.delete_by_id(chat_id)
 
     async def _can_use_commands(self, chat: TypePeer, tgid: TelegramID) -> bool:
         if tgid in self.tg_whitelist:
@@ -157,7 +163,7 @@ class Bot(AbstractUser):
         return False
 
     async def check_can_use_commands(self, event: Message, reply: ReplyFunc) -> bool:
-        if not await self._can_use_commands(event.to_id, event.from_id):
+        if not await self._can_use_commands(event.to_id, TelegramID(event.from_id)):
             await reply("You do not have the permission to use that command.")
             return False
         return True
@@ -166,7 +172,7 @@ class Bot(AbstractUser):
         if not config["bridge.relaybot.authless_portals"]:
             return await reply("This bridge doesn't allow portal creation from Telegram.")
 
-        if not portal.allow_bridging():
+        if not portal.allow_bridging:
             return await reply("This bridge doesn't allow bridging this chat.")
 
         await portal.create_matrix_room(self)
@@ -179,15 +185,15 @@ class Bot(AbstractUser):
                     "Portal is not public. Use `/invite <mxid>` to get an invite.")
 
     async def handle_command_invite(self, portal: po.Portal, reply: ReplyFunc,
-                                    mxid_input: MatrixUserID) -> Message:
+                                    mxid_input: UserID) -> Message:
         if len(mxid_input) == 0:
             return await reply("Usage: `/invite <mxid>`")
         elif not portal.mxid:
             return await reply("Portal does not have Matrix room. "
                                "Create one with /portal first.")
-        if not self.mxid_regex.match(mxid_input):
+        if mxid_input[0] != '@' or mxid_input.find(':') < 2:
             return await reply("That doesn't look like a Matrix ID.")
-        user = await u.User.get_by_mxid(MatrixUserID(mxid_input)).ensure_started()
+        user = await u.User.get_by_mxid(mxid_input).ensure_started()
         if not user.relaybot_whitelisted:
             return await reply("That user is not whitelisted to use the bridge.")
         elif await user.is_logged_in():
@@ -195,7 +201,7 @@ class Bot(AbstractUser):
             return await reply("That user seems to be logged in. "
                                f"Just invite [{displayname}](tg://user?id={user.tgid})")
         else:
-            await portal.main_intent.invite(portal.mxid, user.mxid)
+            await portal.main_intent.invite_user(portal.mxid, user.mxid)
             return await reply(f"Invited `{user.mxid}` to the portal.")
 
     @staticmethod
@@ -244,15 +250,15 @@ class Bot(AbstractUser):
                 mxid = text[text.index(" ") + 1:]
             except ValueError:
                 mxid = ""
-            await self.handle_command_invite(portal, reply, mxid_input=mxid)
+            await self.handle_command_invite(portal, reply, mxid_input=UserID(mxid))
 
     def handle_service_message(self, message: MessageService) -> None:
-        to_id = message.to_id  # type: TelegramID
-        if isinstance(to_id, PeerChannel):
-            to_id = to_id.channel_id
+        to_peer = message.to_id
+        if isinstance(to_peer, PeerChannel):
+            to_id = TelegramID(to_peer.channel_id)
             chat_type = "channel"
-        elif isinstance(to_id, PeerChat):
-            to_id = to_id.chat_id
+        elif isinstance(to_peer, PeerChat):
+            to_id = TelegramID(to_peer.chat_id)
             chat_type = "chat"
         else:
             return

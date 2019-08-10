@@ -5,12 +5,14 @@ import pytest
 from _pytest.fixtures import FixtureRequest
 from pytest_mock import MockFixture
 
+from mautrix.types import EventID, RoomID, UserID
+import mautrix.bridge.commands.handler
+
 import mautrix_telegram.commands.handler
 from mautrix_telegram.commands.handler import (CommandEvent, CommandHandler, CommandProcessor,
-                                               HelpSection)
+                                               HelpSection, HelpCacheKey)
 from mautrix_telegram.config import Config
 from mautrix_telegram.context import Context
-from mautrix_telegram.types import MatrixEventID, MatrixRoomID, MatrixUserID
 import mautrix_telegram.user as u
 
 from tests.utils.helpers import AsyncMock, list_true_once_each
@@ -45,9 +47,9 @@ class TestCommandEvent:
 
         evt = CommandEvent(
             processor=command_processor,
-            room=MatrixRoomID("#mock_room:example.org"),
-            event=MatrixEventID("$H45H:example.org"),
-            sender=u.User(MatrixUserID("@sender:example.org")),
+            room_id=RoomID("#mock_room:example.org"),
+            event_id=EventID("$H45H:example.org"),
+            sender=u.User(UserID("@sender:example.org")),
             command="help",
             args=[],
             is_management=True,
@@ -61,7 +63,7 @@ class TestCommandEvent:
         # html, no markdown
         evt.reply(message, allow_html=True, render_markdown=False)
         mock_az.intent.send_notice.assert_called_with(
-            MatrixRoomID("#mock_room:example.org"),
+            RoomID("#mock_room:example.org"),
             "**This** <i>was</i><br/><strong>all</strong>fun*!",
             html="**This** <i>was</i><br/><strong>all</strong>fun*!\n",
         )
@@ -69,7 +71,7 @@ class TestCommandEvent:
         # html, markdown (default)
         evt.reply(message, allow_html=True, render_markdown=True)
         mock_az.intent.send_notice.assert_called_with(
-            MatrixRoomID("#mock_room:example.org"),
+            RoomID("#mock_room:example.org"),
             "**This** <i>was</i><br/><strong>all</strong>fun*!",
             html=(
                 "<p><strong>This</strong> <i>was</i><br/>"
@@ -80,7 +82,7 @@ class TestCommandEvent:
         # no html, no markdown
         evt.reply(message, allow_html=False, render_markdown=False)
         mock_az.intent.send_notice.assert_called_with(
-            MatrixRoomID("#mock_room:example.org"),
+            RoomID("#mock_room:example.org"),
             "**This** <i>was</i><br/><strong>all</strong>fun*!",
             html=None,
         )
@@ -88,7 +90,7 @@ class TestCommandEvent:
         # no html, markdown
         evt.reply(message, allow_html=False, render_markdown=True)
         mock_az.intent.send_notice.assert_called_with(
-            MatrixRoomID("#mock_room:example.org"),
+            RoomID("#mock_room:example.org"),
             "**This** <i>was</i><br/><strong>all</strong>fun*!",
             html="<p><strong>This</strong> &lt;i&gt;was&lt;/i&gt;&lt;br/&gt;"
                  "&lt;strong&gt;all&lt;/strong&gt;fun*!</p>\n"
@@ -100,9 +102,9 @@ class TestCommandEvent:
 
         evt = CommandEvent(
             processor=command_processor,
-            room=MatrixRoomID("#mock_room:example.org"),
-            event=MatrixEventID("$H45H:example.org"),
-            sender=u.User(MatrixUserID("@sender:example.org")),
+            room_id=RoomID("#mock_room:example.org"),
+            event_id=EventID("$H45H:example.org"),
+            sender=u.User(UserID("@sender:example.org")),
             command="help",
             args=[],
             is_management=False,
@@ -115,7 +117,7 @@ class TestCommandEvent:
                   render_markdown=False)
 
         mock_az.intent.send_notice.assert_called_with(
-            MatrixRoomID("#mock_room:example.org"),
+            RoomID("#mock_room:example.org"),
             "tg ....tg+sp...tg tg",
             html=None,
         )
@@ -126,9 +128,9 @@ class TestCommandEvent:
 
         evt = CommandEvent(
             processor=command_processor,
-            room=MatrixRoomID("#mock_room:example.org"),
-            event=MatrixEventID("$H45H:example.org"),
-            sender=u.User(MatrixUserID("@sender:example.org")),
+            room_id=RoomID("#mock_room:example.org"),
+            event_id=EventID("$H45H:example.org"),
+            sender=u.User(UserID("@sender:example.org")),
             command="help",
             args=[],
             is_management=True,
@@ -144,7 +146,7 @@ class TestCommandEvent:
         )
 
         mock_az.intent.send_notice.assert_called_with(
-            MatrixRoomID("#mock_room:example.org"),
+            RoomID("#mock_room:example.org"),
             "....tg+sp...tg tg",
             html="<p>....tg+sp...tg tg</p>\n",
         )
@@ -195,15 +197,15 @@ class TestCommandHandler:
             help_section=HelpSection("Mock Section", 42, ""),
         )
 
-        sender = u.User(MatrixUserID("@sender:example.org"))
+        sender = u.User(UserID("@sender:example.org"))
         sender.puppet_whitelisted = False
         sender.matrix_puppet_whitelisted = False
         sender.is_admin = False
 
         event = CommandEvent(
             processor=command_processor,
-            room=MatrixRoomID("#mock_room:example.org"),
-            event=MatrixEventID("$H45H:example.org"),
+            room_id=RoomID("#mock_room:example.org"),
+            event_id=EventID("$H45H:example.org"),
             sender=sender,
             command=command,
             args=[],
@@ -212,7 +214,8 @@ class TestCommandHandler:
         )
 
         assert await command_handler.get_permission_error(event)
-        assert not command_handler.has_permission(False, False, False, False, False)
+        assert not command_handler.has_permission(
+            HelpCacheKey(False, False, False, False, False, False))
 
     @pytest.mark.parametrize(
         (
@@ -255,7 +258,7 @@ class TestCommandHandler:
             help_section=HelpSection("Mock Section", 42, ""),
         )
 
-        sender = u.User(MatrixUserID("@sender:example.org"))
+        sender = u.User(UserID("@sender:example.org"))
         sender.puppet_whitelisted = puppet_whitelisted
         sender.matrix_puppet_whitelisted = matrix_puppet_whitelisted
         sender.is_admin = is_admin
@@ -263,8 +266,8 @@ class TestCommandHandler:
 
         event = CommandEvent(
             processor=command_processor,
-            room=MatrixRoomID("#mock_room:example.org"),
-            event=MatrixEventID("$H45H:example.org"),
+            room_id=RoomID("#mock_room:example.org"),
+            event_id=EventID("$H45H:example.org"),
             sender=sender,
             command=command,
             args=[],
@@ -274,12 +277,12 @@ class TestCommandHandler:
 
         assert not await command_handler.get_permission_error(event)
         assert command_handler.has_permission(
-            is_management=is_management,
-            puppet_whitelisted=puppet_whitelisted,
-            matrix_puppet_whitelisted=matrix_puppet_whitelisted,
-            is_admin=is_admin,
-            is_logged_in=is_logged_in,
-        )
+            HelpCacheKey(is_management=is_management,
+                         puppet_whitelisted=puppet_whitelisted,
+                         matrix_puppet_whitelisted=matrix_puppet_whitelisted,
+                         is_admin=is_admin,
+                         is_logged_in=is_logged_in,
+                         is_portal=boolean))
 
 
 class TestCommandProcessor:
@@ -292,41 +295,41 @@ class TestCommandProcessor:
                           mocker: MockFixture) -> None:
         mocker.patch('mautrix_telegram.user.config', self.config)
         mocker.patch(
-            'mautrix_telegram.commands.handler.command_handlers',
+            'mautrix.bridge.commands.handler.command_handlers',
             {"help": AsyncMock(), "unknown-command": AsyncMock()}
         )
 
-        sender = u.User(MatrixUserID("@sender:example.org"))
+        sender = u.User(UserID("@sender:example.org"))
 
         result = await command_processor.handle(
-            room=MatrixRoomID("#mock_room:example.org"),
-            event_id=MatrixEventID("$H45H:example.org"),
+            room_id=RoomID("#mock_room:example.org"),
+            event_id=EventID("$H45H:example.org"),
             sender=sender,
             command="hElp",
             args=[],
             is_management=boolean2[0],
-            is_portal=boolean2[1],
-        )
+            is_portal=boolean2[1])
 
         assert result is None
-        command_handlers = mautrix_telegram.commands.handler.command_handlers
+        command_handlers = mautrix.bridge.commands.handler.command_handlers
         command_handlers["help"].mock.assert_called_once()  # type: ignore
 
     @pytest.mark.asyncio
     async def test_handle_unknown_command(self, command_processor: CommandProcessor,
-                                          boolean2: Tuple[bool, bool], mocker: MockFixture) -> None:
+                                          boolean2: Tuple[bool, bool],
+                                          mocker: MockFixture) -> None:
         mocker.patch('mautrix_telegram.user.config', self.config)
         mocker.patch(
-            'mautrix_telegram.commands.handler.command_handlers',
+            'mautrix.bridge.commands.handler.command_handlers',
             {"help": AsyncMock(), "unknown-command": AsyncMock()}
         )
 
-        sender = u.User(MatrixUserID("@sender:example.org"))
+        sender = u.User(UserID("@sender:example.org"))
         sender.command_status = {}
 
         result = await command_processor.handle(
-            room=MatrixRoomID("#mock_room:example.org"),
-            event_id=MatrixEventID("$H45H:example.org"),
+            room_id=RoomID("#mock_room:example.org"),
+            event_id=EventID("$H45H:example.org"),
             sender=sender,
             command="foo",
             args=[],
@@ -335,7 +338,7 @@ class TestCommandProcessor:
         )
 
         assert result is None
-        command_handlers = mautrix_telegram.commands.handler.command_handlers
+        command_handlers = mautrix.bridge.commands.handler.command_handlers
         command_handlers["help"].mock.assert_not_called()  # type: ignore
         command_handlers["unknown-command"].mock.assert_called_once()  # type: ignore
 
@@ -345,16 +348,16 @@ class TestCommandProcessor:
                                             mocker: MockFixture) -> None:
         mocker.patch('mautrix_telegram.user.config', self.config)
         mocker.patch(
-            'mautrix_telegram.commands.handler.command_handlers',
+            'mautrix.bridge.commands.handler.command_handlers',
             {"help": AsyncMock(), "unknown-command": AsyncMock()}
         )
 
-        sender = u.User(MatrixUserID("@sender:example.org"))
+        sender = u.User(UserID("@sender:example.org"))
         sender.command_status = {"foo": AsyncMock(), "next": AsyncMock()}
 
         result = await command_processor.handle(
-            room=MatrixRoomID("#mock_room:example.org"),
-            event_id=MatrixEventID("$H45H:example.org"),
+            room_id=RoomID("#mock_room:example.org"),
+            event_id=EventID("$H45H:example.org"),
             sender=sender,  # u.User
             command="foo",
             args=[],
@@ -363,7 +366,7 @@ class TestCommandProcessor:
         )
 
         assert result is None
-        command_handlers = mautrix_telegram.commands.handler.command_handlers
+        command_handlers = mautrix.bridge.commands.handler.command_handlers
         command_handlers["help"].mock.assert_not_called()  # type: ignore
         command_handlers["unknown-command"].mock.assert_not_called()  # type: ignore
         sender.command_status["foo"].mock.assert_not_called()  # type: ignore

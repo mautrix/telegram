@@ -1,10 +1,10 @@
 aiohttp
-mautrix-appservice
+mautrix
 ruamel.yaml
 python-magic
 SQLAlchemy
 alembic
 commonmark
-future-fstrings
-telethon
+#telethon
+git+https://github.com/LonamiWebs/Telethon@master#egg=telethon
 telethon-session-sqlalchemy

@@ -1,4 +1,3 @@
-# -*- coding: future_fstrings -*-
 # mautrix-telegram - A Matrix-Telegram puppeting bridge
 # Copyright (C) 2019 Tulir Asokan
 #
@@ -14,20 +13,22 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import Awaitable, Dict, List, Iterable, Match, NewType, Optional, Tuple, TYPE_CHECKING
+from typing import (Awaitable, Dict, List, Iterable, NewType, Optional, Tuple, Any, cast,
+                    TYPE_CHECKING)
 import logging
 import asyncio
-import re
 
-from telethon.tl.types import (
-    TypeUpdate, UpdateNewMessage, UpdateNewChannelMessage, PeerUser,
-    UpdateShortChatMessage, UpdateShortMessage, User as TLUser)
+from telethon.tl.types import (TypeUpdate, UpdateNewMessage, UpdateNewChannelMessage, PeerUser,
+                               UpdateShortChatMessage, UpdateShortMessage, User as TLUser, Chat)
 from telethon.tl.types.contacts import ContactsNotModified
 from telethon.tl.functions.contacts import GetContactsRequest, SearchRequest
 from telethon.tl.functions.account import UpdateStatusRequest
-from mautrix_appservice import MatrixRequestError
 
-from .types import MatrixUserID, TelegramID
+from mautrix.client import Client
+from mautrix.errors import MatrixRequestError
+from mautrix.types import UserID
+
+from .types import TelegramID
 from .db import User as DBUser
 from .abstract_user import AbstractUser
 from . import portal as po, puppet as pu
@@ -36,36 +37,46 @@ if TYPE_CHECKING:
     from .config import Config
     from .context import Context
 
-config = None  # type: Config
+config: Optional['Config'] = None
 
 SearchResult = NewType('SearchResult', Tuple['pu.Puppet', int])
 
 
 class User(AbstractUser):
-    log = logging.getLogger("mau.user")  # type: logging.Logger
-    by_mxid = {}  # type: Dict[str, User]
-    by_tgid = {}  # type: Dict[int, User]
+    log: logging.Logger = logging.getLogger("mau.user")
+    by_mxid: Dict[str, 'User'] = {}
+    by_tgid: Dict[int, 'User'] = {}
 
-    def __init__(self, mxid: MatrixUserID, tgid: Optional[TelegramID] = None,
+    phone: Optional[str]
+    contacts: List['pu.Puppet']
+    saved_contacts: int
+    portals: Dict[Tuple[TelegramID, TelegramID], 'po.Portal']
+    command_status: Optional[Dict[str, Any]]
+
+    _db_instance: Optional[DBUser]
+    _ensure_started_lock: asyncio.Lock
+
+    def __init__(self, mxid: UserID, tgid: Optional[TelegramID] = None,
                  username: Optional[str] = None, phone: Optional[str] = None,
                  db_contacts: Optional[Iterable[TelegramID]] = None,
                  saved_contacts: int = 0, is_bot: bool = False,
                  db_portals: Optional[Iterable[Tuple[TelegramID, TelegramID]]] = None,
                  db_instance: Optional[DBUser] = None) -> None:
         super().__init__()
-        self.mxid = mxid  # type: MatrixUserID
-        self.tgid = tgid  # type: TelegramID
-        self.is_bot = is_bot  # type: bool
-        self.username = username  # type: str
-        self.phone = phone  # type: str
-        self.contacts = []  # type: List[pu.Puppet]
-        self.saved_contacts = saved_contacts  # type: int
+        self.mxid = mxid
+        self.tgid = tgid
+        self.is_bot = is_bot
+        self.username = username
+        self.phone = phone
+        self.contacts = []
+        self.saved_contacts = saved_contacts
         self.db_contacts = db_contacts
-        self.portals = {}  # type: Dict[Tuple[TelegramID, TelegramID], po.Portal]
+        self.portals = {}
         self.db_portals = db_portals or []
-        self._db_instance = db_instance  # type: Optional[DBUser]
+        self._db_instance = db_instance
+        self._ensure_started_lock = asyncio.Lock()
 
-        self.command_status = None  # type: Optional[Dict]
+        self.command_status = None
 
         (self.relaybot_whitelisted,
          self.whitelisted,
@@ -78,14 +89,16 @@ class User(AbstractUser):
         if tgid:
             self.by_tgid[tgid] = self
 
+        self.log = self.log.getChild(self.mxid)
+
     @property
     def name(self) -> str:
         return self.mxid
 
     @property
     def mxid_localpart(self) -> str:
-        match = re.compile("@(.+):(.+)").match(self.mxid)  # type: Match
-        return match.group(1)
+        localpart, server = Client.parse_user_id(self.mxid)
+        return localpart
 
     @property
     def human_tg_id(self) -> str:
@@ -136,8 +149,8 @@ class User(AbstractUser):
                       saved_contacts=self.saved_contacts, portals=self.db_portals)
 
     def save(self, contacts: bool = False, portals: bool = False) -> None:
-        self.db_instance.update(tgid=self.tgid, tg_username=self.username, tg_phone=self.phone,
-                                saved_contacts=self.saved_contacts)
+        self.db_instance.edit(tgid=self.tgid, tg_username=self.username, tg_phone=self.phone,
+                              saved_contacts=self.saved_contacts)
         if contacts:
             self.db_instance.contacts = self.db_contacts
         if portals:
@@ -161,8 +174,11 @@ class User(AbstractUser):
     # endregion
     # region Telegram connection management
 
-    def ensure_started(self, even_if_no_session=False) -> Awaitable['User']:
-        return super().ensure_started(even_if_no_session)
+    async def ensure_started(self, even_if_no_session=False) -> 'User':
+        if not self.puppet_whitelisted or self.connected:
+            return self
+        async with self._ensure_started_lock:
+            return cast(User, await super().ensure_started(even_if_no_session))
 
     async def start(self, delete_unless_authenticated: bool = False) -> 'User':
         await super().start()
@@ -229,7 +245,7 @@ class User(AbstractUser):
             self.phone = info.phone
             changed = True
         if self.tgid != info.id:
-            self.tgid = info.id
+            self.tgid = TelegramID(info.id)
             self.by_tgid[self.tgid] = self
         if changed:
             self.save()
@@ -242,7 +258,8 @@ class User(AbstractUser):
             if not portal or portal.deleted or not portal.mxid or portal.has_bot:
                 continue
             try:
-                await portal.main_intent.kick(portal.mxid, self.mxid, "Logged out of Telegram.")
+                await portal.main_intent.kick_user(portal.mxid, self.mxid,
+                                                   "Logged out of Telegram.")
             except MatrixRequestError:
                 pass
         self.portals = {}
@@ -263,7 +280,7 @@ class User(AbstractUser):
 
     def _search_local(self, query: str, max_results: int = 5, min_similarity: int = 45
                       ) -> List[SearchResult]:
-        results = []  # type: List[SearchResult]
+        results: List[SearchResult] = []
         for contact in self.contacts:
             similarity = contact.similarity(query)
             if similarity >= min_similarity:
@@ -275,7 +292,7 @@ class User(AbstractUser):
         if len(query) < 5:
             return []
         server_results = await self.client(SearchRequest(q=query, limit=max_results))
-        results = []  # type: List[SearchResult]
+        results: List[SearchResult] = []
         for user in server_results.users:
             puppet = pu.Puppet.get(user.id)
             await puppet.update_info(self, user)
@@ -295,8 +312,19 @@ class User(AbstractUser):
         return await self._search_remote(query), True
 
     async def sync_dialogs(self, synchronous_create: bool = False) -> None:
+        if self.is_bot:
+            return
         creators = []
-        for entity in await self.get_dialogs(limit=config["bridge.sync_dialog_limit"] or None):
+        limit = config["bridge.sync_dialog_limit"] or None
+        self.log.debug(f"Syncing dialogs (limit={limit}, synchronous_create={synchronous_create})")
+        async for dialog in self.client.iter_dialogs(limit=limit, ignore_migrated=True,
+                                                     archived=False):
+            entity = dialog.entity
+            if isinstance(entity, Chat) and (entity.deactivated or entity.left):
+                self.log.warning(f"Ignoring deactivated or left chat {entity} while syncing")
+                continue
+            elif isinstance(entity, TLUser) and not config["bridge.sync_direct_chats"]:
+                continue
             portal = po.Portal.get_by_entity(entity)
             self.portals[portal.tgid_full] = portal
             creators.append(
@@ -304,6 +332,7 @@ class User(AbstractUser):
                                           synchronous=synchronous_create))
         self.save(portals=True)
         await asyncio.gather(*creators, loop=self.loop)
+        self.log.debug("Dialog syncing complete")
 
     def register_portal(self, portal: po.Portal) -> None:
         try:
@@ -323,7 +352,7 @@ class User(AbstractUser):
 
     async def needs_relaybot(self, portal: po.Portal) -> bool:
         return not await self.is_logged_in() or (
-            (portal.has_bot or self.bot) and portal.tgid_full not in self.portals)
+            (portal.has_bot or self.is_bot) and portal.tgid_full not in self.portals)
 
     def _hash_contacts(self) -> int:
         acc = 0
@@ -348,7 +377,7 @@ class User(AbstractUser):
     # region Class instance lookup
 
     @classmethod
-    def get_by_mxid(cls, mxid: MatrixUserID, create: bool = True) -> Optional['User']:
+    def get_by_mxid(cls, mxid: UserID, create: bool = True) -> Optional['User']:
         if not mxid:
             raise ValueError("Matrix ID can't be empty")
 
@@ -400,9 +429,9 @@ class User(AbstractUser):
     # endregion
 
 
-def init(context: 'Context') -> List[Awaitable['User']]:
+def init(context: 'Context') -> Iterable[Awaitable['User']]:
     global config
     config = context.config
 
-    users = [User.from_db(user) for user in DBUser.all()]
-    return [user.ensure_started() for user in users if user.tgid]
+    return (User.from_db(db_user).ensure_started()
+            for db_user in DBUser.all_with_tgid())

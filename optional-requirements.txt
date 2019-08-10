@@ -1,4 +1,5 @@
 cryptg
 Pillow
 moviepy
-prometheus-client
+prometheus_client
+psycopg2-binary

@@ -1,4 +1,3 @@
-# -*- coding: future_fstrings -*-
 # mautrix-telegram - A Matrix-Telegram puppeting bridge
 # Copyright (C) 2019 Tulir Asokan
 #
@@ -14,7 +13,7 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import Dict
+from mautrix.types import EventID
 
 from ... import portal as po
 from ...types import TelegramID
@@ -27,7 +26,7 @@ from .util import user_has_power_level, get_initial_state
                  help_text="Create a Telegram chat of the given type for the current Matrix room. "
                            "The type is either `group`, `supergroup` or `channel` (defaults to "
                            "`group`).")
-async def create(evt: CommandEvent) -> Dict:
+async def create(evt: CommandEvent) -> EventID:
     type = evt.args[0] if len(evt.args) > 0 else "group"
     if type not in {"chat", "group", "supergroup", "channel"}:
         return await evt.reply(

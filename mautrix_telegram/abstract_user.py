@@ -1,4 +1,3 @@
-# -*- coding: future_fstrings -*-
 # mautrix-telegram - A Matrix-Telegram puppeting bridge
 # Copyright (C) 2019 Tulir Asokan
 #
@@ -14,28 +13,33 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import Tuple, Optional, List, Union, Dict, TYPE_CHECKING
+from typing import Tuple, Optional, Union, Dict, Type, Any, TYPE_CHECKING
 from abc import ABC, abstractmethod
 import asyncio
 import logging
 import platform
 import time
 
+from telethon.sessions import Session
+from telethon.network import (ConnectionTcpMTProxyRandomizedIntermediate, ConnectionTcpFull,
+                              Connection)
 from telethon.tl.patched import MessageService, Message
 from telethon.tl.types import (
-    Channel, ChannelForbidden, Chat, ChatForbidden, MessageActionChannelMigrateFrom, PeerUser,
-    TypeUpdate, UpdateChannelPinnedMessage, UpdateChatPinnedMessage, UpdateChatParticipantAdmin,
-    UpdateChatParticipants, UpdateChatUserTyping, UpdateDeleteChannelMessages, UpdateDeleteMessages,
-    UpdateEditChannelMessage, UpdateEditMessage, UpdateNewChannelMessage, UpdateNewMessage,
-    UpdateReadHistoryOutbox, UpdateShortChatMessage, UpdateShortMessage, UpdateUserName,
-    UpdateUserPhoto, UpdateUserStatus, UpdateUserTyping, User, UserStatusOffline, UserStatusOnline)
+    Channel, Chat, MessageActionChannelMigrateFrom, PeerUser, TypeUpdate, UpdateChatPinnedMessage,
+    UpdateChannelPinnedMessage, UpdateChatParticipantAdmin, UpdateChatParticipants,
+    UpdateChatUserTyping, UpdateDeleteChannelMessages, UpdateNewMessage, UpdateDeleteMessages,
+    UpdateEditChannelMessage, UpdateEditMessage, UpdateNewChannelMessage, UpdateReadHistoryOutbox,
+    UpdateShortChatMessage, UpdateShortMessage, UpdateUserName, UpdateUserPhoto, UpdateUserStatus,
+    UpdateUserTyping, User, UserStatusOffline, UserStatusOnline)
 
-from mautrix_appservice import MatrixRequestError, AppService
+from mautrix.types import UserID, PresenceState
+from mautrix.errors import MatrixError
+from mautrix.appservice import AppService
 from alchemysession import AlchemySessionContainer
 
 from . import portal as po, puppet as pu, __version__
 from .db import Message as DBMessage
-from .types import TelegramID, MatrixUserID
+from .types import TelegramID
 from .tgclient import MautrixTelegramClient
 
 if TYPE_CHECKING:
@@ -43,9 +47,9 @@ if TYPE_CHECKING:
     from .config import Config
     from .bot import Bot
 
-config = None  # type: Config
+config: Optional['Config'] = None
 # Value updated from config in init()
-MAX_DELETIONS = 10  # type: int
+MAX_DELETIONS: int = 10
 
 UpdateMessage = Union[UpdateShortChatMessage, UpdateShortMessage, UpdateNewChannelMessage,
                       UpdateNewMessage, UpdateEditMessage, UpdateEditChannelMessage]
@@ -60,47 +64,67 @@ except ImportError:
     Histogram = None
     UPDATE_TIME = None
 
+
 class AbstractUser(ABC):
-    session_container = None  # type: AlchemySessionContainer
-    loop = None  # type: asyncio.AbstractEventLoop
-    log = None  # type: logging.Logger
-    az = None  # type: AppService
-    bot = None  # type: Bot
-    ignore_incoming_bot_events = True  # type: bool
+    session_container: AlchemySessionContainer = None
+    loop: asyncio.AbstractEventLoop = None
+    log: logging.Logger
+    az: AppService
+    relaybot: Optional['Bot']
+    ignore_incoming_bot_events: bool = True
+
+    client: Optional[MautrixTelegramClient]
+    mxid: Optional[UserID]
+
+    tgid: Optional[TelegramID]
+    username: Optional['str']
+    is_bot: bool
+
+    is_relaybot: bool
+
+    puppet_whitelisted: bool
+    whitelisted: bool
+    relaybot_whitelisted: bool
+    matrix_puppet_whitelisted: bool
+    is_admin: bool
 
     def __init__(self) -> None:
-        self.is_admin = False  # type: bool
-        self.matrix_puppet_whitelisted = False  # type: bool
-        self.puppet_whitelisted = False  # type: bool
-        self.whitelisted = False  # type: bool
-        self.relaybot_whitelisted = False  # type: bool
-        self.client = None  # type: MautrixTelegramClient
-        self.tgid = None  # type: TelegramID
-        self.mxid = None  # type: MatrixUserID
-        self.is_relaybot = False  # type: bool
-        self.is_bot = False  # type: bool
-        self.relaybot = None  # type: Optional[Bot]
+        self.is_admin = False
+        self.matrix_puppet_whitelisted = False
+        self.puppet_whitelisted = False
+        self.whitelisted = False
+        self.relaybot_whitelisted = False
+        self.client = None
+        self.is_relaybot = False
+        self.is_bot = False
+        self.relaybot = None
 
     @property
     def connected(self) -> bool:
         return self.client and self.client.is_connected()
 
     @property
-    def _proxy_settings(self) -> Optional[Tuple[int, str, str, str, str, str]]:
+    def _proxy_settings(self) -> Tuple[Type[Connection], Optional[Tuple[Any, ...]]]:
         proxy_type = config["telegram.proxy.type"].lower()
+        connection = ConnectionTcpFull
+        connection_data = (config["telegram.proxy.address"],
+                           config["telegram.proxy.port"],
+                           config["telegram.proxy.rdns"],
+                           config["telegram.proxy.username"],
+                           config["telegram.proxy.password"])
         if proxy_type == "disabled":
-            return None
+            connection_data = None
         elif proxy_type == "socks4":
-            proxy_type = 1
+            connection_data = (1,) + connection_data
         elif proxy_type == "socks5":
-            proxy_type = 2
+            connection_data = (2,) + connection_data
         elif proxy_type == "http":
-            proxy_type = 3
+            connection_data = (3,) + connection_data
+        elif proxy_type == "mtproxy":
+            connection = ConnectionTcpMTProxyRandomizedIntermediate
+            connection_data = (connection_data[0], connection_data[1], connection_data[4])
 
-        return (proxy_type,
-                config["telegram.proxy.address"], config["telegram.proxy.port"],
-                config["telegram.proxy.rdns"],
-                config["telegram.proxy.username"], config["telegram.proxy.password"])
+        return connection, connection_data
 
     def _init_client(self) -> None:
         self.log.debug(f"Initializing client for {self.name}")
@@ -119,6 +143,9 @@ class AbstractUser(ABC):
         device = config["telegram.device_info.device_model"]
         sysversion = config["telegram.device_info.system_version"]
         appversion = config["telegram.device_info.app_version"]
+        connection, proxy = self._proxy_settings
+
+        assert isinstance(self.session, Session)
 
         self.client = MautrixTelegramClient(
             session=self.session,
@@ -127,16 +154,18 @@ class AbstractUser(ABC):
             api_hash=config["telegram.api_hash"],
 
             app_version=__version__ if appversion == "auto" else appversion,
-            system_version=MautrixTelegramClient.__version__ if sysversion == "auto" else sysversion,
-            device_model=f"{platform.system()} {platform.release()}" if device == "auto" else device,
+            system_version=(MautrixTelegramClient.__version__
+                            if sysversion == "auto" else sysversion),
+            device_model=(f"{platform.system()} {platform.release()}"
+                          if device == "auto" else device),
 
             timeout=config["telegram.connection.timeout"],
             connection_retries=config["telegram.connection.retries"],
             retry_delay=config["telegram.connection.retry_delay"],
             flood_sleep_threshold=config["telegram.connection.flood_sleep_threshold"],
             request_retries=config["telegram.connection.request_retries"],
-
-            proxy=self._proxy_settings,
+            connection=connection,
+            proxy=proxy,
 
             loop=self.loop,
             base_logger=base_logger
@@ -165,18 +194,9 @@ class AbstractUser(ABC):
             if not await self.update(update):
                 await self._update(update)
         except Exception:
-            self.log.exception("Failed to handle Telegram update")
+            self.log.exception(f"Failed to handle Telegram update {update}")
         if UPDATE_TIME:
             UPDATE_TIME.labels(update_type=type(update).__name__).observe(time.time() - start_time)
-
-    async def get_dialogs(self, limit: int = None) -> List[Union[Chat, Channel]]:
-        if self.is_bot:
-            return []
-        dialogs = await self.client.get_dialogs(limit=limit)
-        return [dialog.entity for dialog in dialogs if (
-            not isinstance(dialog.entity, (User, ChatForbidden, ChannelForbidden))
-            and not (isinstance(dialog.entity, Chat)
-                     and (dialog.entity.deactivated or dialog.entity.left)))]
 
     @property
     @abstractmethod
@@ -184,7 +204,8 @@ class AbstractUser(ABC):
         raise NotImplementedError()
 
     async def is_logged_in(self) -> bool:
-        return self.client and self.client.is_connected() and await self.client.is_user_authorized()
+        return (self.client and self.client.is_connected()
+                and await self.client.is_user_authorized())
 
     async def has_full_access(self, allow_bot: bool = False) -> bool:
         return (self.puppet_whitelisted
@@ -195,14 +216,15 @@ class AbstractUser(ABC):
         if not self.client:
             self._init_client()
         await self.client.connect()
-        self.log.debug("%s connected: %s", self.mxid, self.connected)
+        self.log.debug(f"{self.mxid if not self.is_bot else 'Bot'} connected: {self.connected}")
         return self
 
     async def ensure_started(self, even_if_no_session=False) -> 'AbstractUser':
-        if not self.puppet_whitelisted or self.connected:
+        if self.connected:
             return self
-        self.log.debug("ensure_started(%s, even_if_no_session=%s)", self.mxid, even_if_no_session)
         if even_if_no_session or self.session_container.has_session(self.mxid):
+            self.log.debug("Starting client due to ensure_started"
+                           f"(even_if_no_session={even_if_no_session})")
             await self.start(delete_unless_authenticated=not even_if_no_session)
         return self
 
@@ -317,9 +339,9 @@ class AbstractUser(ABC):
     async def update_status(self, update: UpdateUserStatus) -> None:
         puppet = pu.Puppet.get(TelegramID(update.user_id))
         if isinstance(update.status, UserStatusOnline):
-            await puppet.default_mxid_intent.set_presence("online")
+            await puppet.default_mxid_intent.set_presence(PresenceState.ONLINE)
         elif isinstance(update.status, UserStatusOffline):
-            await puppet.default_mxid_intent.set_presence("offline")
+            await puppet.default_mxid_intent.set_presence(PresenceState.OFFLINE)
         else:
             self.log.warning("Unexpected user status update: %s", update)
         return
@@ -355,7 +377,7 @@ class AbstractUser(ABC):
             return
         try:
             await portal.main_intent.redact(message.mx_room, message.mxid)
-        except MatrixRequestError:
+        except MatrixError:
             pass
 
     async def delete_message(self, update: UpdateDeleteMessages) -> None:
@@ -363,12 +385,10 @@ class AbstractUser(ABC):
             return
 
         for message_id in update.messages:
-            messages = DBMessage.get_all_by_tgid(TelegramID(message_id), self.tgid)
-            for message in messages:
+            for message in DBMessage.get_all_by_tgid(TelegramID(message_id), self.tgid):
                 message.delete()
                 number_left = DBMessage.count_spaces_by_mxid(message.mxid, message.mx_room)
                 if number_left == 0:
-                    portal = po.Portal.get_by_mxid(message.mx_room)
                     await self._try_redact(message)
 
     async def delete_channel_message(self, update: UpdateDeleteChannelMessages) -> None:
@@ -378,8 +398,7 @@ class AbstractUser(ABC):
         channel_id = TelegramID(update.channel_id)
 
         for message_id in update.messages:
-            messages = DBMessage.get_all_by_tgid(TelegramID(message_id), channel_id)
-            for message in messages:
+            for message in DBMessage.get_all_by_tgid(TelegramID(message_id), channel_id):
                 message.delete()
                 await self._try_redact(message)
 
@@ -391,7 +410,7 @@ class AbstractUser(ABC):
                            portal.tgid_log)
             return
 
-        if self.ignore_incoming_bot_events and self.bot and sender.id == self.bot.tgid:
+        if self.ignore_incoming_bot_events and self.relaybot and sender.id == self.relaybot.tgid:
             self.log.debug(f"Ignoring relaybot-sent message %s to %s", update, portal.tgid_log)
             return
 
@@ -415,7 +434,7 @@ class AbstractUser(ABC):
     # endregion
 
 
-def init(context: "Context") -> None:
+def init(context: 'Context') -> None:
     global config, MAX_DELETIONS
     AbstractUser.az, config, AbstractUser.loop, AbstractUser.relaybot = context.core
     AbstractUser.ignore_incoming_bot_events = config["bridge.relaybot.ignore_own_incoming_events"]

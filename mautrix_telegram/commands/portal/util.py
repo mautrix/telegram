@@ -1,4 +1,3 @@
-# -*- coding: future_fstrings -*-
 # mautrix-telegram - A Matrix-Telegram puppeting bridge
 # Copyright (C) 2019 Tulir Asokan
 #
@@ -14,43 +13,48 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import Dict, Tuple
+from typing import Tuple, Optional
 
-from mautrix_appservice import MatrixRequestError, IntentAPI
+from mautrix.errors import MatrixRequestError
+from mautrix.appservice import IntentAPI
+from mautrix.types import RoomID, EventType, PowerLevelStateEventContent
 
 from ... import user as u
 
+OptStr = Optional[str]
 
-async def get_initial_state(intent: IntentAPI, room_id: str) -> Tuple[str, str, Dict]:
-    state = await intent.get_room_state(room_id)
-    title = None
-    about = None
-    levels = None
+
+async def get_initial_state(intent: IntentAPI, room_id: RoomID
+                            ) -> Tuple[OptStr, OptStr, Optional[PowerLevelStateEventContent]]:
+    state = await intent.get_state(room_id)
+    title: OptStr = None
+    about: OptStr = None
+    levels: Optional[PowerLevelStateEventContent] = None
     for event in state:
         try:
-            if event["type"] == "m.room.name":
-                title = event["content"]["name"]
-            elif event["type"] == "m.room.topic":
-                about = event["content"]["topic"]
-            elif event["type"] == "m.room.power_levels":
-                levels = event["content"]
-            elif event["type"] == "m.room.canonical_alias":
-                title = title or event["content"]["alias"]
+            if event.type == EventType.ROOM_NAME:
+                title = event.content.name
+            elif event.type == EventType.ROOM_TOPIC:
+                about = event.content.topic
+            elif event.type == EventType.ROOM_POWER_LEVELS:
+                levels = event.content
+            elif event.type == EventType.ROOM_CANONICAL_ALIAS:
+                title = title or event.content.canonical_alias
         except KeyError:
             # Some state event probably has empty content
             pass
     return title, about, levels
 
 
-async def user_has_power_level(room: str, intent, sender: u.User, event: str, default: int = 50
-                               ) -> bool:
+async def user_has_power_level(room_id: RoomID, intent: IntentAPI, sender: u.User,
+                               event: str) -> bool:
     if sender.is_admin:
         return True
     # Make sure the state store contains the power levels.
     try:
-        await intent.get_power_levels(room)
+        await intent.get_power_levels(room_id)
     except MatrixRequestError:
         return False
-    return intent.state_store.has_power_level(room, sender.mxid,
-                                              event=f"net.maunium.telegram.{event}",
-                                              default=default)
+    event_type = EventType.find(f"net.maunium.telegram.{event}")
+    event_type.t_class = EventType.Class.STATE
+    return intent.state_store.has_power_level(room_id, sender.mxid, event_type)

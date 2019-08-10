@@ -13,25 +13,17 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-import mimetypes
+from mautrix.util.color_log import ColorFormatter as BaseColorFormatter, PREFIX, MXID_COLOR, RESET
 
-mimetypes.init()
-
-sanity_overrides = {
-    "image/jpeg": ".jpeg",
-    "image/tiff": ".tiff",
-    "text/plain": ".txt",
-    "text/html": ".html",
-    "audio/mpeg": ".mp3",
-    "audio/ogg": ".ogg",
-    "application/xml": ".xml",
-    "application/octet-stream": "",
-    "application/x-msdos-program": ".exe",
-}
+TELETHON_COLOR = PREFIX + "35;1m"  # magenta
+TELETHON_MODULE_COLOR = PREFIX + "35m"
 
 
-def guess_extension(mime: str) -> str:
-    try:
-        return sanity_overrides[mime]
-    except KeyError:
-        return mimetypes.guess_extension(mime)
+class ColorFormatter(BaseColorFormatter):
+    def _color_name(self, module: str) -> str:
+        if module.startswith("telethon"):
+            prefix, user_id, module = module.split(".", 2)
+            return (f"{TELETHON_COLOR}{prefix}{RESET}."
+                    f"{MXID_COLOR}{user_id}{RESET}."
+                    f"{TELETHON_MODULE_COLOR}{module}{RESET}")
+        return super()._color_name(module)

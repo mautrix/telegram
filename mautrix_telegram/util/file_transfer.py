@@ -1,4 +1,3 @@
-# -*- coding: future_fstrings -*-
 # mautrix-telegram - A Matrix-Telegram puppeting bridge
 # Copyright (C) 2019 Tulir Asokan
 #
@@ -28,7 +27,8 @@ from telethon.tl.types import (Document, InputFileLocation, InputDocumentFileLoc
                                InputPeerPhotoFileLocation)
 from telethon.errors import (AuthBytesInvalidError, AuthKeyInvalidError, LocationInvalidError,
                              SecurityError, FileIdInvalidError)
-from mautrix_appservice import IntentAPI
+
+from mautrix.appservice import IntentAPI
 
 from ..tgclient import MautrixTelegramClient
 from ..db import TelegramFile as DBTelegramFile
@@ -38,6 +38,7 @@ try:
     from PIL import Image
 except ImportError:
     Image = None
+
 try:
     from moviepy.editor import VideoFileClip
     import random
@@ -47,7 +48,7 @@ try:
 except ImportError:
     VideoFileClip = random = string = os = mimetypes = None
 
-log = logging.getLogger("mau.util")  # type: logging.Logger
+log: logging.Logger = logging.getLogger("mau.util")
 
 TypeLocation = Union[Document, InputDocumentFileLocation, InputPeerPhotoFileLocation,
                      InputFileLocation, InputPhotoFileLocation]
@@ -59,7 +60,7 @@ def convert_image(file: bytes, source_mime: str = "image/webp", target_type: str
     if not Image:
         return source_mime, file, None, None
     try:
-        image = Image.open(BytesIO(file)).convert("RGBA")  # type: Image.Image
+        image: Image.Image = Image.open(BytesIO(file)).convert("RGBA")
         if thumbnail_to:
             image.thumbnail(thumbnail_to, Image.ANTIALIAS)
         new_file = BytesIO()
@@ -102,8 +103,10 @@ def _read_video_thumbnail(data: bytes, video_ext: str = "mp4", frame_ext: str = 
 
 
 def _location_to_id(location: TypeLocation) -> str:
-    if isinstance(location, (Document, InputDocumentFileLocation, InputPhotoFileLocation)):
+    if isinstance(location, Document):
         return f"{location.id}-{location.access_hash}"
+    elif isinstance(location, (InputDocumentFileLocation, InputPhotoFileLocation)):
+        return f"{location.id}-{location.access_hash}-{location.thumb_size}"
     elif isinstance(location, (InputFileLocation, InputPeerPhotoFileLocation)):
         return f"{location.volume_id}-{location.local_id}"
 
@@ -134,7 +137,7 @@ async def transfer_thumbnail_to_matrix(client: MautrixTelegramClient, intent: In
         width, height = None, None
         mime_type = magic.from_buffer(file, mime=True)
 
-    content_uri = await intent.upload_file(file, mime_type)
+    content_uri = await intent.upload_media(file, mime_type)
 
     db_file = DBTelegramFile(id=loc_id, mxc=content_uri, mime_type=mime_type,
                              was_converted=False, timestamp=int(time.time()), size=len(file),
@@ -148,7 +151,7 @@ async def transfer_thumbnail_to_matrix(client: MautrixTelegramClient, intent: In
     return db_file
 
 
-transfer_locks = {}  # type: Dict[str, asyncio.Lock]
+transfer_locks: Dict[str, asyncio.Lock] = {}
 
 TypeThumbnail = Optional[Union[TypeLocation, TypePhotoSize]]
 
@@ -202,7 +205,7 @@ async def _unlocked_transfer_file_to_matrix(client: MautrixTelegramClient, inten
         mime_type = new_mime_type
         thumbnail = None
 
-    content_uri = await intent.upload_file(file, mime_type)
+    content_uri = await intent.upload_media(file, mime_type)
 
     db_file = DBTelegramFile(id=loc_id, mxc=content_uri,
                              mime_type=mime_type, was_converted=image_converted,

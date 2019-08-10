@@ -1,4 +1,3 @@
-# -*- coding: future_fstrings -*-
 # mautrix-telegram - A Matrix-Telegram puppeting bridge
 # Copyright (C) 2019 Tulir Asokan
 #
@@ -14,10 +13,12 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import Dict, Awaitable
+from typing import Awaitable
 from io import StringIO
 
-from ...config import yaml
+from mautrix.util.config import yaml
+from mautrix.types import EventID
+
 from ... import portal as po, util
 from .. import command_handler, CommandEvent, SECTION_PORTAL_MANAGEMENT
 
@@ -55,7 +56,7 @@ async def config(evt: CommandEvent) -> None:
     portal.save()
 
 
-def config_help(evt: CommandEvent) -> Awaitable[Dict]:
+def config_help(evt: CommandEvent) -> Awaitable[EventID]:
     return evt.reply("""**Usage:** `$cmdprefix config <subcommand> [...]`. Subcommands:
 
 * **help** - View this help text.
@@ -68,13 +69,13 @@ def config_help(evt: CommandEvent) -> Awaitable[Dict]:
 """)
 
 
-def config_view(evt: CommandEvent, portal: po.Portal) -> Awaitable[Dict]:
+def config_view(evt: CommandEvent, portal: po.Portal) -> Awaitable[EventID]:
     stream = StringIO()
     yaml.dump(portal.local_config, stream)
     return evt.reply(f"Room-specific config:\n\n```yaml\n{stream.getvalue()}```")
 
 
-def config_defaults(evt: CommandEvent) -> Awaitable[Dict]:
+def config_defaults(evt: CommandEvent) -> Awaitable[EventID]:
     stream = StringIO()
     yaml.dump({
         "bridge_notices": {
@@ -90,7 +91,7 @@ def config_defaults(evt: CommandEvent) -> Awaitable[Dict]:
     return evt.reply(f"Bridge instance wide config:\n\n```yaml\n{stream.getvalue()}```")
 
 
-def config_set(evt: CommandEvent, portal: po.Portal, key: str, value: str) -> Awaitable[Dict]:
+def config_set(evt: CommandEvent, portal: po.Portal, key: str, value: str) -> Awaitable[EventID]:
     if not key or value is None:
         return evt.reply(f"**Usage:** `$cmdprefix+sp config set <key> <value>`")
     elif util.recursive_set(portal.local_config, key, value):
@@ -100,7 +101,7 @@ def config_set(evt: CommandEvent, portal: po.Portal, key: str, value: str) -> Aw
                          "Does the path contain non-map types?")
 
 
-def config_unset(evt: CommandEvent, portal: po.Portal, key: str) -> Awaitable[Dict]:
+def config_unset(evt: CommandEvent, portal: po.Portal, key: str) -> Awaitable[EventID]:
     if not key:
         return evt.reply(f"**Usage:** `$cmdprefix+sp config unset <key>`")
     elif util.recursive_del(portal.local_config, key):
@@ -110,7 +111,7 @@ def config_unset(evt: CommandEvent, portal: po.Portal, key: str) -> Awaitable[Di
 
 
 def config_add_del(evt: CommandEvent, portal: po.Portal, key: str, value: str, cmd: str
-                   ) -> Awaitable[Dict]:
+                   ) -> Awaitable[EventID]:
     if not key or value is None:
         return evt.reply(f"**Usage:** `$cmdprefix+sp config {cmd} <key> <value>`")
 
