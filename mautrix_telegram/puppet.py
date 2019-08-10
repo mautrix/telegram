@@ -191,10 +191,10 @@ class Puppet(CustomPuppetMixin):
     def _filter_name(name: str) -> str:
         if not name:
             return ""
-        whitespace = ("\ufeff", "\u3164", "\u2063", "\u200b", "\u180e", "\u034f", "\u2800",
-                      "\u180e", "\u200b", "\u202f", "\u205f", "\u3000")
-        name = "".join(char for char in name if char not in whitespace)
-        name = name.strip()
+        whitespace = ("\t\n\r\v\f \u00a0\u034f\u180e\u2063\u202f\u205f\u2800\u3000\u3164\ufeff"
+                      "\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200a\u200b"
+                      "\u200c\u200d\u200e\u200f")
+        name = name.strip(whitespace)
         return name
 
     @classmethod
