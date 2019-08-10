@@ -192,10 +192,8 @@ class Puppet(CustomPuppetMixin):
     def _filter_name(name: str) -> str:
         if not name:
             return ""
-        whitespace = ("\t\n\r\v\f \u00a0\u034f\u180e\u2063\u202f\u205f\u2800\u3000\u3164\ufeff"
-                      "\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200a\u200b"
-                      "\u200c\u200d\u200e\u200f")
-        name = str(filter(lambda c: unicodedata.category(c) != 'Cf', name.strip(whitespace)))
+        whitespace = ("\t\n\r\v\f \u00a0\u034f\u180e\u2063\u202f\u205f\u2800\u3000\u3164\ufeff\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200a\u200b\u200c\u200d\u200e\u200f")
+        name = "".join(c for c in name.strip(whitespace) if unicodedata.category(c) != 'Cf')
         return name
 
     @classmethod
