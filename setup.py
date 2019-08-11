@@ -32,7 +32,7 @@ setuptools.setup(
 
     install_requires=[
         "aiohttp>=3.0.1,<4",
-        "mautrix>=0.4.0.dev53,<0.5",
+        "mautrix>=0.4.0.dev54,<0.5",
         "SQLAlchemy>=1.2.3,<2",
         "alembic>=1.0.0,<2",
         "commonmark>=0.8.1,<1",
