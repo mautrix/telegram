@@ -39,7 +39,7 @@ RUN apk add --no-cache \
       su-exec \
  && pip3 install .[fast_crypto,hq_thumbnails,metrics] \
  && pip3 install --upgrade 'https://github.com/LonamiWebs/Telethon/tarball/master#egg=telethon' \
-                           'https://github.com/tulir/mautrix-python/tarball/master#egg=telethon'
+                           'https://github.com/tulir/mautrix-python/tarball/master#egg=mautrix'
 
 VOLUME /data
 
