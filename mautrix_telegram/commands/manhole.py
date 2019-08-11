@@ -18,6 +18,8 @@ import asyncio
 import sys
 import os
 
+from attr import dataclass
+
 from telethon import __version__ as __telethon_version__
 
 from mautrix import __version__ as __mautrix_version__
@@ -28,8 +30,9 @@ from .. import __version__
 from . import command_handler, CommandEvent, SECTION_ADMIN
 
 
-class State:
-    manhole: Optional[asyncio.AbstractServer] = None
+@dataclass
+class ManholeState:
+    server: Optional[asyncio.AbstractServer] = None
     opened_by: Optional[UserID] = None
     close: Optional[Callable[[], None]] = None
 
@@ -41,8 +44,8 @@ async def manhole(evt: CommandEvent) -> None:
         await evt.reply("The manhole has been disabled in the config.")
         return
 
-    if State.manhole:
-        await evt.reply(f"There's an existing manhole opened by {State.opened_by}")
+    if evt.bridge.manhole:
+        await evt.reply(f"There's an existing manhole opened by {evt.bridge.manhole.opened_by}")
         return
 
     from ..portal import Portal
@@ -60,30 +63,32 @@ async def manhole(evt: CommandEvent) -> None:
     path = evt.config["manhole.path"]
 
     evt.log.info(f"{evt.sender.mxid} opened a manhole.")
-    State.manhole, State.close = await start_manhole(path=path, banner=banner, namespace=namespace,
+    server, close = await start_manhole(path=path, banner=banner, namespace=namespace,
                                                      loop=evt.loop)
-    State.opened_by = evt.sender.mxid
+    evt.bridge.manhole = ManholeState(server=server, opened_by=evt.sender.mxid, close=close)
     await evt.reply(f"Opened manhole at unix://{path}")
-    await State.manhole.wait_closed()
+    await server.wait_closed()
+    evt.bridge.manhole = None
     try:
         os.unlink(path)
     except FileNotFoundError:
         pass
     evt.log.info(f"{evt.sender.mxid}'s manhole was closed.")
-    await evt.reply("Your manhole was closed.")
+    try:
+        await evt.reply("Your manhole was closed.")
+    except AttributeError as e:
+        evt.log.warning(f"Failed to send manhole close notification: {e}")
 
 
 @command_handler(needs_auth=False, needs_admin=True, help_section=SECTION_ADMIN,
                  help_text="Close an open manhole.")
 async def close_manhole(evt: CommandEvent) -> None:
-    if not State.manhole:
+    if not evt.bridge.manhole:
         await evt.reply("There is no open manhole.")
         return
 
-    opened_by = State.opened_by
-    State.close()
-    State.manhole = None
-    State.close = None
-    State.opened_by = None
-    if opened_by != evt.sender:
+    opened_by = evt.bridge.manhole.opened_by
+    evt.bridge.manhole.close()
+    evt.bridge.manhole = None
+    if opened_by != evt.sender.mxid:
         await evt.reply(f"Closed manhole opened by {opened_by}")

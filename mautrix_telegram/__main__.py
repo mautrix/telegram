@@ -13,8 +13,8 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
+from typing import Optional
 from itertools import chain
-import sys
 
 from alchemysession import AlchemySessionContainer
 
@@ -23,6 +23,7 @@ from mautrix.bridge.db import Base
 
 from .web.provisioning import ProvisioningAPI
 from .web.public import PublicBridgeWebsite
+from .commands.manhole import ManholeState
 from .abstract_user import init as init_abstract_user
 from .bot import Bot, init as init_bot
 from .config import Config
@@ -55,6 +56,7 @@ class TelegramBridge(Bridge):
     config: Config
     session_container: AlchemySessionContainer
     bot: Bot
+    manhole: Optional[ManholeState]
 
     def prepare_db(self) -> None:
         super().prepare_db()
@@ -87,6 +89,7 @@ class TelegramBridge(Bridge):
         context = Context(self.az, self.config, self.loop, self.session_container, self, self.bot)
         self._prepare_website(context)
         self.matrix = context.mx = MatrixHandler(context)
+        self.manhole = None
 
         init_abstract_user(context)
         init_formatter(context)
@@ -100,6 +103,9 @@ class TelegramBridge(Bridge):
         for puppet in Puppet.by_custom_mxid.values():
             puppet.stop()
         self.shutdown_actions = (user.stop() for user in User.by_tgid.values())
+        if self.manhole:
+            self.manhole.close()
+            self.manhole = None
 
 
 TelegramBridge().run()
