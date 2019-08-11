@@ -92,14 +92,15 @@ async def open_manhole(evt: CommandEvent) -> None:
     path = evt.config["manhole.path"]
 
     wl_list = list(whitelist)
-    whitelist_str = (f"{', '.join(wl_list[:-1])} and {wl_list[-1]}"
+    whitelist_str = (f"{', '.join(str(uid) for uid in wl_list[:-1])} and {wl_list[-1]}"
                      if len(wl_list) > 1 else wl_list[0])
     evt.log.info(f"{evt.sender.mxid} opened a manhole with {whitelist_str} whitelisted.")
     server, close = await start_manhole(path=path, banner=banner, namespace=namespace,
                                         loop=evt.loop, whitelist=whitelist)
     evt.bridge.manhole = ManholeState(server=server, opened_by=evt.sender.mxid, close=close,
                                       whitelist=whitelist)
-    await evt.reply(f"Opened manhole at unix://{path}")
+    plrl = "s" if len(whitelist) != 1 else ""
+    await evt.reply(f"Opened manhole at unix://{path} with UID{plrl} {whitelist_str} whitelisted")
     await server.wait_closed()
     evt.bridge.manhole = None
     try:
