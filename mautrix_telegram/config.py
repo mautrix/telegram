@@ -76,6 +76,7 @@ class Config(BaseBridgeConfig):
 
         copy("manhole.enabled")
         copy("manhole.path")
+        copy("manhole.whitelist")
 
         copy("bridge.username_template")
         copy("bridge.alias_template")
