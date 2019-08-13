@@ -234,9 +234,12 @@ class Puppet(CustomPuppetMixin):
             self.username = info.username
             changed = True
 
-        changed = await self.update_displayname(source, info) or changed
-        if isinstance(info.photo, UserProfilePhoto):
-            changed = await self.update_avatar(source, info.photo) or changed
+        try:
+            changed = await self.update_displayname(source, info) or changed
+            if isinstance(info.photo, UserProfilePhoto):
+                changed = await self.update_avatar(source, info.photo) or changed
+        except Exception:
+            self.log.exception(f"Failed to update info from source {source.tgid}")
 
         self.is_bot = info.bot
 

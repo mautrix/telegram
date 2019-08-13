@@ -521,21 +521,24 @@ class PortalMetadata(BasePortal, ABC):
             return
 
         self.log.debug("Updating info")
-        if not entity:
-            entity = await self.get_entity(user)
-            self.log.debug(f"Fetched data: {entity}")
-        changed = False
+        try:
+            if not entity:
+                entity = await self.get_entity(user)
+                self.log.debug(f"Fetched data: {entity}")
+            changed = False
 
-        if self.peer_type == "channel":
-            changed = await self._update_username(entity.username) or changed
+            if self.peer_type == "channel":
+                changed = await self._update_username(entity.username) or changed
 
-        if hasattr(entity, "about"):
-            changed = self._update_about(entity.about) or changed
+            if hasattr(entity, "about"):
+                changed = self._update_about(entity.about) or changed
 
-        changed = await self._update_title(entity.title) or changed
+            changed = await self._update_title(entity.title) or changed
 
-        if isinstance(entity.photo, ChatPhoto):
-            changed = await self._update_avatar(user, entity.photo) or changed
+            if isinstance(entity.photo, ChatPhoto):
+                changed = await self._update_avatar(user, entity.photo) or changed
+        except Exception:
+            self.log.exception(f"Failed to update info from source {user.tgid}")
 
         if changed:
             self.save()
