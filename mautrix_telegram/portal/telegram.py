@@ -380,6 +380,7 @@ class PortalTelegram(BasePortal, ABC):
                                                                               sender.mxid)):
             self.log.debug(f"Ignoring private chat message {evt.id}@{source.tgid} as receiver does"
                            " not have matrix puppeting and their default puppet isn't in the room")
+            return
 
         async with self.send_lock(sender.tgid if sender else None, required=False):
             tg_space = self.tgid if self.peer_type == "channel" else source.tgid
