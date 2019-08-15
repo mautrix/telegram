@@ -418,4 +418,4 @@ def init(context: 'Context') -> Iterable[Awaitable[Any]]:
     Puppet.displayname_template = SimpleTemplate(config["bridge.displayname_template"],
                                                  "displayname")
 
-    return (puppet.start() for puppet in Puppet.all_with_custom_mxid())
+    return (puppet.try_start() for puppet in Puppet.all_with_custom_mxid())
