@@ -13,7 +13,7 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import List, Optional, Tuple, Union, TYPE_CHECKING
+from typing import List, Optional, Tuple, Union, Callable, TYPE_CHECKING
 from abc import ABC
 import asyncio
 
@@ -31,6 +31,7 @@ from telethon.tl.types import (
 from mautrix.errors import MForbidden
 from mautrix.types import (RoomID, UserID, RoomCreatePreset, EventType, Membership, Member,
                            PowerLevelStateEventContent, RoomAlias)
+from mautrix.appservice import IntentAPI
 
 from ..types import TelegramID
 from ..context import Context
@@ -562,28 +563,41 @@ class PortalMetadata(BasePortal, ABC):
             self.save()
         return True
 
-    async def _update_about(self, about: str, save: bool = False) -> bool:
+    async def _try_use_intent(self, sender: Optional['p.Puppet'], action: Callable[[IntentAPI], None]) -> None:
+        if sender:
+            try:
+                await action(sender.intent_for(self))
+            except MForbidden:
+                await action(self.main_intent)
+        else:
+            await action(self.main_intent)
+
+    async def _update_about(self, about: str, sender: Optional['p.Puppet'] = None,
+                            save: bool = False) -> bool:
         if self.about == about:
             return False
 
         self.about = about
-        await self.main_intent.set_room_topic(self.mxid, self.about)
+        await self._try_use_intent(sender,
+                                   lambda intent: intent.set_room_topic(self.mxid, self.about))
         if save:
             self.save()
         return True
 
-    async def _update_title(self, title: str, save: bool = False) -> bool:
+    async def _update_title(self, title: str, sender: Optional['p.Puppet'] = None,
+                            save: bool = False) -> bool:
         if self.title == title:
             return False
 
         self.title = title
-        await self.main_intent.set_room_name(self.mxid, self.title)
+        await self._try_use_intent(sender,
+                                   lambda intent: intent.set_room_name(self.mxid, self.title))
         if save:
             self.save()
         return True
 
-    async def _update_avatar(self, user: 'AbstractUser', photo: TypeChatPhoto, save: bool = False
-                             ) -> bool:
+    async def _update_avatar(self, user: 'AbstractUser', photo: TypeChatPhoto,
+                             sender: Optional['p.Puppet'] = None, save: bool = False) -> bool:
         if isinstance(photo, ChatPhoto):
             loc = InputPeerPhotoFileLocation(
                 peer=await self.get_input_entity(user),
@@ -602,14 +616,16 @@ class PortalMetadata(BasePortal, ABC):
             raise ValueError(f"Unknown photo type {type(photo)}")
         if self.photo_id != photo_id:
             if not photo_id:
-                await self.main_intent.set_room_avatar(self.mxid, None)
+                await self._try_use_intent(sender,
+                                           lambda intent: intent.set_room_avatar(self.mxid, None))
                 self.photo_id = ""
                 if save:
                     self.save()
                 return True
             file = await util.transfer_file_to_matrix(user.client, self.main_intent, loc)
             if file:
-                await self.main_intent.set_room_avatar(self.mxid, file.mxc)
+                await self._try_use_intent(sender, lambda intent: intent.set_room_avatar(self.mxid,
+                                                                                         file.mxc))
                 self.photo_id = photo_id
                 if save:
                     self.save()

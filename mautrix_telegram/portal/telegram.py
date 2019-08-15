@@ -481,11 +481,11 @@ class PortalTelegram(BasePortal, ABC):
         if should_ignore or not self.mxid:
             return
         if isinstance(action, MessageActionChatEditTitle):
-            await self._update_title(action.title, save=True)
+            await self._update_title(action.title, sender=sender, save=True)
         elif isinstance(action, MessageActionChatEditPhoto):
-            await self._update_avatar(source, action.photo, save=True)
+            await self._update_avatar(source, action.photo, sender=sender, save=True)
         elif isinstance(action, MessageActionChatDeletePhoto):
-            await self._update_avatar(source, ChatPhotoEmpty(), save=True)
+            await self._update_avatar(source, ChatPhotoEmpty(), sender=sender, save=True)
         elif isinstance(action, MessageActionChatAddUser):
             for user_id in action.users:
                 await self._add_telegram_user(TelegramID(user_id), source)
