@@ -226,12 +226,12 @@ class MatrixHandler(BaseMatrixHandler):
         portal = po.Portal.get_by_mxid(room_id)
         sender = await u.User.get_by_mxid(sender_mxid).ensure_started()
         if await sender.has_full_access(allow_bot=True) and portal:
-            handler, content_key = {
-                EventType.ROOM_NAME: (portal.handle_matrix_title, "name"),
-                EventType.ROOM_TOPIC: (portal.handle_matrix_about, "topic"),
-                EventType.ROOM_AVATAR: (portal.handle_matrix_avatar, "url"),
+            handler, content_type, content_key = {
+                EventType.ROOM_NAME: (portal.handle_matrix_title, RoomNameStateEventContent, "name"),
+                EventType.ROOM_TOPIC: (portal.handle_matrix_about, RoomTopicStateEventContent, "topic"),
+                EventType.ROOM_AVATAR: (portal.handle_matrix_avatar, RoomAvatarStateEventContent, "url"),
             }[evt_type]
-            if content_key not in content:
+            if not isinstance(content, content_type):
                 return
             await handler(sender, content[content_key])
 
