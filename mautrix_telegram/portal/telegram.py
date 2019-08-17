@@ -353,6 +353,7 @@ class PortalTelegram(BasePortal, ABC):
 
         # TODO remove this stuff once mautrix-python generates m.new_content
         new_content = content.serialize()
+        new_content["net.maunium.telegram.puppet"] = True
         del new_content["m.relates_to"]
         content["m.new_content"] = new_content
         content.body = f"Edit: {content.body}"
