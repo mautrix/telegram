@@ -13,8 +13,10 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
+from telethon.tl.functions.channels import GetFullChannelRequest
+from telethon.tl.functions.messages import GetFullChatRequest
 from telethon.errors import (ChatAdminRequiredError, UsernameInvalidError,
-                             UsernameNotModifiedError, UsernameOccupiedError)
+                             UsernameNotModifiedError, UsernameOccupiedError, RPCError)
 
 from mautrix.types import EventID
 
@@ -44,17 +46,22 @@ async def sync_full(evt: CommandEvent) -> EventID:
     if not portal:
         return await evt.reply("This is not a portal room.")
 
-    if evt.args[0] == "--usebot" and evt.sender.is_admin:
+    if len(evt.args) > 0 and evt.args[0] == "--usebot" and evt.sender.is_admin:
         src = evt.tgbot
     else:
         src = evt.tgbot if await evt.sender.needs_relaybot(portal) else evt.sender
 
     try:
-        entity = await src.client.get_entity(portal.peer)
-    except ValueError:
+        if portal.peer_type == "channel":
+            res = await src.client(GetFullChannelRequest(portal.peer))
+        elif portal.peer_type == "chat":
+            res = await src.client(GetFullChatRequest(portal.tgid))
+        else:
+            return await evt.reply("This is not a channel or chat portal.")
+    except (ValueError, RPCError):
         return await evt.reply("Failed to get portal info from Telegram.")
 
-    await portal.update_matrix_room(src, entity)
+    await portal.update_matrix_room(src, res.full_chat)
     return await evt.reply("Portal synced successfully.")
 
 
