@@ -170,7 +170,9 @@ class MatrixParser:
 
     @classmethod
     def node_to_tmessage(cls, node: HTMLNode, ctx: RecursionContext) -> TelegramMessage:
-        if node.tag == "ol":
+        if node.tag == "mx-reply":
+            return TelegramMessage("")
+        elif node.tag == "ol":
             return cls.list_to_tmessage(node, ctx)
         elif node.tag == "ul":
             return cls.list_to_tmessage(node, ctx.enter_list())
