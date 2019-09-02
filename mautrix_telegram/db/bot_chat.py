@@ -16,9 +16,8 @@
 from typing import Iterable
 
 from sqlalchemy import Column, Integer, String
-from sqlalchemy.engine.result import RowProxy
 
-from mautrix.bridge.db import Base
+from mautrix.util.db import Base
 
 from ..types import TelegramID
 
@@ -35,13 +34,5 @@ class BotChat(Base):
             conn.execute(cls.t.delete().where(cls.c.id == chat_id))
 
     @classmethod
-    def scan(cls, row: RowProxy) -> 'BotChat':
-        return cls(id=row[0], type=row[1])
-
-    @classmethod
     def all(cls) -> Iterable['BotChat']:
         return cls._select_all()
-
-    def insert(self) -> None:
-        with self.db.begin() as conn:
-            conn.execute(self.t.insert().values(id=self.id, type=self.type))

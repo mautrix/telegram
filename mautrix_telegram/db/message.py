@@ -16,11 +16,9 @@
 from typing import Optional, Iterator
 
 from sqlalchemy import Column, UniqueConstraint, Integer, String, and_, func, desc, select
-from sqlalchemy.engine.result import RowProxy
-from sqlalchemy.sql.expression import ClauseElement
 
 from mautrix.types import RoomID, EventID
-from mautrix.bridge.db import Base
+from mautrix.util.db import Base
 
 from ..types import TelegramID
 
@@ -37,28 +35,20 @@ class Message(Base):
     __table_args__ = (UniqueConstraint("mxid", "mx_room", "tg_space", name="_mx_id_room_2"),)
 
     @classmethod
-    def scan(cls, row: RowProxy) -> 'Message':
-        return cls(mxid=row[0], mx_room=row[1], tgid=row[2], tg_space=row[3], edit_index=row[4])
-
-    @classmethod
     def get_all_by_tgid(cls, tgid: TelegramID, tg_space: TelegramID) -> Iterator['Message']:
-        return cls._all(cls.db.execute(cls.t.select().where(and_(cls.c.tgid == tgid,
-                                                                 cls.c.tg_space == tg_space))))
+        return cls._select_all(cls.c.tgid == tgid, cls.c.tg_space == tg_space)
 
     @classmethod
     def get_one_by_tgid(cls, tgid: TelegramID, tg_space: TelegramID, edit_index: int = 0
                         ) -> Optional['Message']:
-        query = cls.t.select()
         if edit_index < 0:
-            query = (query
-                     .where(and_(cls.c.tgid == tgid, cls.c.tg_space == tg_space))
-                     .order_by(desc(cls.c.edit_index))
-                     .limit(1)
-                     .offset(-edit_index - 1))
+            return cls._one_or_none(cls.t.select()
+                                    .where(and_(cls.c.tgid == tgid, cls.c.tg_space == tg_space))
+                                    .order_by(desc(cls.c.edit_index))
+                                    .limit(1).offset(-edit_index - 1))
         else:
-            query = query.where(and_(cls.c.tgid == tgid, cls.c.tg_space == tg_space,
-                                     cls.c.edit_index == edit_index))
-        return cls._one_or_none(cls.db.execute(query))
+            return cls._select_one_or_none(cls.c.tgid == tgid, cls.c.tg_space == tg_space,
+                                           cls.c.edit_index == edit_index)
 
     @classmethod
     def count_spaces_by_mxid(cls, mxid: EventID, mx_room: RoomID) -> int:
@@ -73,9 +63,8 @@ class Message(Base):
     @classmethod
     def get_by_mxid(cls, mxid: EventID, mx_room: RoomID, tg_space: TelegramID
                     ) -> Optional['Message']:
-        return cls._select_one_or_none(and_(cls.c.mxid == mxid,
-                                            cls.c.mx_room == mx_room,
-                                            cls.c.tg_space == tg_space))
+        return cls._select_one_or_none(cls.c.mxid == mxid, cls.c.mx_room == mx_room,
+                                       cls.c.tg_space == tg_space)
 
     @classmethod
     def update_by_tgid(cls, s_tgid: TelegramID, s_tg_space: TelegramID, s_edit_index: int,
@@ -92,14 +81,3 @@ class Message(Base):
             conn.execute(cls.t.update()
                          .where(and_(cls.c.mxid == s_mxid, cls.c.mx_room == s_mx_room))
                          .values(**values))
-
-    @property
-    def _edit_identity(self) -> ClauseElement:
-        return and_(self.c.tgid == self.tgid, self.c.tg_space == self.tg_space,
-                    self.c.edit_index == self.edit_index)
-
-    def insert(self) -> None:
-        with self.db.begin() as conn:
-            conn.execute(self.t.insert().values(mxid=self.mxid, mx_room=self.mx_room,
-                                                tgid=self.tgid, tg_space=self.tg_space,
-                                                edit_index=self.edit_index))

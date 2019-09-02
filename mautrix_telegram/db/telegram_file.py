@@ -19,7 +19,7 @@ from sqlalchemy import Column, ForeignKey, Integer, BigInteger, String, Boolean
 from sqlalchemy.engine.result import RowProxy
 
 from mautrix.types import ContentURI
-from mautrix.bridge.db import Base
+from mautrix.util.db import Base
 
 
 class TelegramFile(Base):
@@ -38,12 +38,10 @@ class TelegramFile(Base):
 
     @classmethod
     def scan(cls, row: RowProxy) -> 'TelegramFile':
-        loc_id, mxc, mime, conv, ts, s, w, h, thumb_id = row
-        thumb = None
-        if thumb_id:
-            thumb = cls.get(thumb_id)
-        return cls(id=loc_id, mxc=mxc, mime_type=mime, was_converted=conv, timestamp=ts,
-                   size=s, width=w, height=h, thumbnail_id=thumb_id, thumbnail=thumb)
+        telegram_file: TelegramFile = super().scan(row)
+        if telegram_file.thumbnail_id:
+            telegram_file.thumbnail = cls.get(telegram_file.thumbnail_id)
+        return telegram_file
 
     @classmethod
     def get(cls, loc_id: str) -> Optional['TelegramFile']:

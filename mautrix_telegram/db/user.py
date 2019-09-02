@@ -16,11 +16,9 @@
 from typing import Optional, Iterable, Tuple
 
 from sqlalchemy import Column, ForeignKey, ForeignKeyConstraint, Integer, String
-from sqlalchemy.engine.result import RowProxy
-from sqlalchemy.sql.expression import ClauseElement
 
 from mautrix.types import UserID
-from mautrix.bridge.db import Base
+from mautrix.util.db import Base
 
 from ..types import TelegramID
 
@@ -33,12 +31,6 @@ class User(Base):
     tg_username: str = Column(String, nullable=True)
     tg_phone: str = Column(String, nullable=True)
     saved_contacts: int = Column(Integer, default=0, nullable=False)
-
-    @classmethod
-    def scan(cls, row: RowProxy) -> 'User':
-        mxid, tgid, tg_username, tg_phone, saved_contacts = row
-        return cls(mxid=mxid, tgid=tgid, tg_username=tg_username, tg_phone=tg_phone,
-                   saved_contacts=saved_contacts)
 
     @classmethod
     def all_with_tgid(cls) -> Iterable['User']:
@@ -55,16 +47,6 @@ class User(Base):
     @classmethod
     def get_by_username(cls, username: str) -> Optional['User']:
         return cls._select_one_or_none(cls.c.tg_username == username)
-
-    @property
-    def _edit_identity(self) -> ClauseElement:
-        return self.c.mxid == self.mxid
-
-    def insert(self) -> None:
-        with self.db.begin() as conn:
-            conn.execute(self.t.insert().values(
-                mxid=self.mxid, tgid=self.tgid, tg_username=self.tg_username,
-                tg_phone=self.tg_phone, saved_contacts=self.saved_contacts))
 
     @property
     def contacts(self) -> Iterable[TelegramID]:

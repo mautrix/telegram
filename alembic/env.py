@@ -7,7 +7,7 @@ from os.path import abspath, dirname
 
 sys.path.insert(0, dirname(dirname(abspath(__file__))))
 
-from mautrix.bridge.db import Base
+from mautrix.util.db import Base
 import mautrix_telegram.db
 from mautrix_telegram.config import Config
 from alchemysession import AlchemySessionContainer

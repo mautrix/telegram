@@ -19,7 +19,7 @@ from itertools import chain
 from alchemysession import AlchemySessionContainer
 
 from mautrix.bridge import Bridge
-from mautrix.bridge.db import Base
+from mautrix.util.db import Base
 
 from .web.provisioning import ProvisioningAPI
 from .web.public import PublicBridgeWebsite

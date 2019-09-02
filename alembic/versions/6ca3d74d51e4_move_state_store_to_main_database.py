@@ -12,7 +12,7 @@ from alembic import context, op
 import sqlalchemy.orm as orm
 import sqlalchemy as sa
 
-from mautrix.bridge.db import Base
+from mautrix.util.db import Base
 
 from mautrix_telegram.config import Config
 

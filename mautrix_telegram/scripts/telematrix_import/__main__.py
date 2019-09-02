@@ -19,7 +19,7 @@ import argparse
 from sqlalchemy import orm
 import sqlalchemy as sql
 
-from mautrix.bridge.db import Base
+from mautrix.util.db import Base
 
 from mautrix_telegram.db import Portal, Message, Puppet, BotChat
 from mautrix_telegram.config import Config

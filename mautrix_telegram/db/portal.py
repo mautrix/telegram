@@ -15,12 +15,10 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from typing import Optional
 
-from sqlalchemy import Column, Integer, String, Boolean, Text, and_
-from sqlalchemy.engine.result import RowProxy
-from sqlalchemy.sql.expression import ClauseElement
+from sqlalchemy import Column, Integer, String, Boolean, Text
 
 from mautrix.types import RoomID
-from mautrix.bridge.db import Base
+from mautrix.util.db import Base
 
 from ..types import TelegramID
 
@@ -46,16 +44,8 @@ class Portal(Base):
     photo_id: str = Column(String, nullable=True)
 
     @classmethod
-    def scan(cls, row: RowProxy) -> Optional['Portal']:
-        (tgid, tg_receiver, peer_type, megagroup, mxid, config, username, title, about,
-         photo_id) = row
-        return cls(tgid=tgid, tg_receiver=tg_receiver, peer_type=peer_type, megagroup=megagroup,
-                   mxid=mxid, config=config, username=username, title=title, about=about,
-                   photo_id=photo_id)
-
-    @classmethod
     def get_by_tgid(cls, tgid: TelegramID, tg_receiver: TelegramID) -> Optional['Portal']:
-        return cls._select_one_or_none(and_(cls.c.tgid == tgid, cls.c.tg_receiver == tg_receiver))
+        return cls._select_one_or_none(cls.c.tgid == tgid, cls.c.tg_receiver == tg_receiver)
 
     @classmethod
     def get_by_mxid(cls, mxid: RoomID) -> Optional['Portal']:
@@ -64,14 +54,3 @@ class Portal(Base):
     @classmethod
     def get_by_username(cls, username: str) -> Optional['Portal']:
         return cls._select_one_or_none(cls.c.username == username)
-
-    @property
-    def _edit_identity(self) -> ClauseElement:
-        return and_(self.c.tgid == self.tgid, self.c.tg_receiver == self.tg_receiver)
-
-    def insert(self) -> None:
-        with self.db.begin() as conn:
-            conn.execute(self.t.insert().values(
-                tgid=self.tgid, tg_receiver=self.tg_receiver, peer_type=self.peer_type,
-                megagroup=self.megagroup, mxid=self.mxid, config=self.config,
-                username=self.username, title=self.title, about=self.about, photo_id=self.photo_id))

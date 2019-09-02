@@ -17,11 +17,9 @@ from typing import Optional, Iterable
 
 from sqlalchemy import Column, Integer, String, Boolean
 from sqlalchemy.sql import expression
-from sqlalchemy.engine.result import RowProxy
-from sqlalchemy.sql.expression import ClauseElement
 
 from mautrix.types import UserID, SyncToken
-from mautrix.bridge.db import Base
+from mautrix.util.db import Base
 
 from ..types import TelegramID
 
@@ -42,19 +40,8 @@ class Puppet(Base):
     disable_updates: bool = Column(Boolean, nullable=False, server_default=expression.false())
 
     @classmethod
-    def scan(cls, row: RowProxy) -> Optional['Puppet']:
-        (id, custom_mxid, access_token, next_batch, displayname, displayname_source, username,
-         photo_id, is_bot, matrix_registered, disable_updates) = row
-        return cls(id=id, custom_mxid=custom_mxid, access_token=access_token, username=username,
-                   next_batch=next_batch, displayname=displayname, photo_id=photo_id,
-                   displayname_source=displayname_source, matrix_registered=matrix_registered,
-                   disable_updates=disable_updates, is_bot=is_bot)
-
-    @classmethod
     def all_with_custom_mxid(cls) -> Iterable['Puppet']:
-        rows = cls.db.execute(cls.t.select().where(cls.c.custom_mxid != None))
-        for row in rows:
-            yield cls.scan(row)
+        yield from cls._select_all(cls.c.custom_mxid != None)
 
     @classmethod
     def get_by_tgid(cls, tgid: TelegramID) -> Optional['Puppet']:
@@ -71,16 +58,3 @@ class Puppet(Base):
     @classmethod
     def get_by_displayname(cls, displayname: str) -> Optional['Puppet']:
         return cls._select_one_or_none(cls.c.displayname == displayname)
-
-    @property
-    def _edit_identity(self) -> ClauseElement:
-        return self.c.id == self.id
-
-    def insert(self) -> None:
-        with self.db.begin() as conn:
-            conn.execute(self.t.insert().values(
-                id=self.id, custom_mxid=self.custom_mxid, access_token=self.access_token,
-                next_batch=self.next_batch, displayname=self.displayname, username=self.username,
-                displayname_source=self.displayname_source, photo_id=self.photo_id,
-                is_bot=self.is_bot, matrix_registered=self.matrix_registered,
-                disable_updates=self.disable_updates))
