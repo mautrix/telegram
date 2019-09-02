@@ -1703,7 +1703,8 @@ class Portal:
                           edit_index=prev_edit_msg.edit_index + 1).insert()
             return
 
-        text, html, _ = await formatter.telegram_to_matrix(evt, source, self.main_intent)
+        text, html, _ = await formatter.telegram_to_matrix(evt, source, self.main_intent,
+                                                           no_reply_fallback=True)
         editing_msg = DBMessage.get_one_by_tgid(TelegramID(evt.id), tg_space)
         if not editing_msg:
             self.log.info(f"Didn't find edited message {evt.id}@{tg_space} (src {source.tgid}) "
