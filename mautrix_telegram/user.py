@@ -175,6 +175,12 @@ class User(AbstractUser, BaseUser):
     # endregion
     # region Telegram connection management
 
+    async def try_ensure_started(self) -> None:
+        try:
+            await self.ensure_started()
+        except Exception:
+            self.log.exception("Exception in ensure_started")
+
     async def ensure_started(self, even_if_no_session=False) -> 'User':
         if not self.puppet_whitelisted or self.connected:
             return self
@@ -432,5 +438,5 @@ def init(context: 'Context') -> Iterable[Awaitable['User']]:
     global config
     config = context.config
 
-    return (User.from_db(db_user).ensure_started()
+    return (User.from_db(db_user).try_ensure_started()
             for db_user in DBUser.all_with_tgid())
