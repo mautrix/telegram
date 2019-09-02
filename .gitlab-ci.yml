@@ -1,0 +1,38 @@
+image: docker:stable
+
+stages:
+- build
+- push
+
+default:
+  before_script:
+  - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+
+build:
+  stage: build
+  script:
+  - docker pull $CI_REGISTRY_IMAGE:latest || true
+  - docker build --pull --cache-from $CI_REGISTRY_IMAGE:latest --tag $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA .
+  - docker push $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA
+
+push latest:
+  stage: push
+  only:
+  - master
+  variables:
+    GIT_STRATEGY: none
+  script:
+  - docker pull $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA
+  - docker tag $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA $CI_REGISTRY_IMAGE:latest
+  - docker push $CI_REGISTRY_IMAGE:latest
+
+push tag:
+  stage: push
+  variables:
+    GIT_STRATEGY: none
+  except:
+  - master
+  script:
+  - docker pull $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA
+  - docker tag $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA $CI_REGISTRY_IMAGE:$CI_COMMIT_REF_NAME
+  - docker push $CI_REGISTRY_IMAGE:$CI_COMMIT_REF_NAME
