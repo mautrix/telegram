@@ -6,16 +6,20 @@ ENV UID=1337 \
 
 COPY . /opt/mautrix-telegram
 WORKDIR /opt/mautrix-telegram
-RUN apk add --no-cache \
+RUN apk add --no-cache --virtual .build-deps \
+      python3-dev \
+      libffi-dev \
+      build-base \
+  && apk add --no-cache \
       py3-virtualenv \
       py3-pillow \
       py3-aiohttp \
       py3-magic \
       py3-sqlalchemy \
-      py3-markdown \
       py3-psycopg2 \
       py3-ruamel.yaml \
       # Indirect dependencies
+      py3-idna \
       #commonmark
         py3-future \
       #alembic
@@ -30,16 +34,16 @@ RUN apk add --no-cache \
           py3-numpy \
       #telethon
         py3-rsa \
+        # cryptg
+          py3-cffi \
       # Other dependencies
-      python3-dev \
-      libffi-dev \
-      build-base \
       ffmpeg \
       ca-certificates \
       su-exec \
       netcat-openbsd \
  && pip3 install .[fast_crypto,hq_thumbnails,metrics] \
- && pip3 install --upgrade 'https://github.com/LonamiWebs/Telethon/tarball/master#egg=telethon'
+ && pip3 install --upgrade 'https://github.com/LonamiWebs/Telethon/tarball/master#egg=telethon' \
+ && apk del .build-deps
 
 VOLUME /data
 
