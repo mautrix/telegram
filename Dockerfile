@@ -37,6 +37,7 @@ RUN apk add --no-cache \
       ffmpeg \
       ca-certificates \
       su-exec \
+      netcat-openbsd \
  && pip3 install .[fast_crypto,hq_thumbnails,metrics] \
  && pip3 install --upgrade 'https://github.com/LonamiWebs/Telethon/tarball/master#egg=telethon'
 
