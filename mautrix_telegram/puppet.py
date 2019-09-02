@@ -226,6 +226,12 @@ class Puppet(CustomPuppetMixin):
             return name
         return cls.displayname_template.format_full(name)
 
+    async def try_update_info(self, source: 'AbstractUser', info: User) -> None:
+        try:
+            await self.update_info(source, info)
+        except Exception:
+            source.log.exception(f"Failed to update info of {self.tgid}")
+
     async def update_info(self, source: 'AbstractUser', info: User) -> None:
         if self.disable_updates:
             return

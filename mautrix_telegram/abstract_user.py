@@ -318,7 +318,7 @@ class AbstractUser(ABC):
         try:
             users = (entity for entity in entities.values() if isinstance(entity, User))
             puppets = ((pu.Puppet.get(TelegramID(user.id)), user) for user in users)
-            await asyncio.gather(*[puppet.update_info(self, info)
+            await asyncio.gather(*[puppet.try_update_info(self, info)
                                    for puppet, info in puppets if puppet])
         except Exception:
             self.log.exception("Failed to handle entity updates")

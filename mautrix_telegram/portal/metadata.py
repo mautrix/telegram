@@ -226,7 +226,11 @@ class PortalMetadata(BasePortal, ABC):
         if self.mxid:
             if update_if_exists:
                 if not entity:
-                    entity = await self.get_entity(user)
+                    try:
+                        entity = await self.get_entity(user)
+                    except Exception:
+                        self.log.exception(f"Failed to get entity through {user.tgid} for update")
+                        return self.mxid
                 update = self.update_matrix_room(user, entity, self.peer_type == "user")
                 if synchronous:
                     await update

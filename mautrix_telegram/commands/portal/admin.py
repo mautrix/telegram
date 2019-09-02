@@ -61,7 +61,7 @@ async def clear_db_cache(evt: CommandEvent) -> EventID:
         for puppet in pu.Puppet.by_custom_mxid.values():
             puppet.sync_task.cancel()
         pu.Puppet.by_custom_mxid = {}
-        await asyncio.gather(*[puppet.start() for puppet in pu.Puppet.all_with_custom_mxid()],
+        await asyncio.gather(*[puppet.try_start() for puppet in pu.Puppet.all_with_custom_mxid()],
                              loop=evt.loop)
         await evt.reply("Cleared puppet cache and restarted custom puppet syncers")
     elif section == "user":
