@@ -161,6 +161,12 @@ class User(AbstractUser):
     # endregion
     # region Telegram connection management
 
+    async def try_ensure_started(self) -> None:
+        try:
+            await self.ensure_started()
+        except Exception:
+            self.log.exception("Exception in ensure_started")
+
     def ensure_started(self, even_if_no_session=False) -> Awaitable['User']:
         return super().ensure_started(even_if_no_session)
 
@@ -400,9 +406,9 @@ class User(AbstractUser):
     # endregion
 
 
-def init(context: 'Context') -> List[Awaitable['User']]:
+def init(context: 'Context') -> List[Awaitable[None]]:
     global config
     config = context.config
 
     users = [User.from_db(user) for user in DBUser.all()]
-    return [user.ensure_started() for user in users if user.tgid]
+    return [user.try_ensure_started() for user in users if user.tgid]

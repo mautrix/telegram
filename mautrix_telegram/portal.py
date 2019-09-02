@@ -346,7 +346,10 @@ class Portal:
                 await self.invite_to_matrix(invites or [])
             return self.mxid
         async with self._room_create_lock:
-            return await self._create_matrix_room(user, entity, invites)
+            try:
+                return await self._create_matrix_room(user, entity, invites)
+            except Exception:
+                self.log.exception("Fatal error creating Matrix room")
 
     async def _create_matrix_room(self, user: 'AbstractUser', entity: TypeChat, invites: InviteList
                                   ) -> Optional[MatrixRoomID]:
