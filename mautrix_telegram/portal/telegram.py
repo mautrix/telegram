@@ -351,17 +351,6 @@ class PortalTelegram(BasePortal, ABC):
         content.external_url = self._get_external_url(evt)
         content.set_edit(editing_msg.mxid)
 
-        # TODO remove this stuff once mautrix-python generates m.new_content
-        new_content = content.serialize()
-        new_content["net.maunium.telegram.puppet"] = True
-        del new_content["m.relates_to"]
-        content["m.new_content"] = new_content
-        content.body = f"Edit: {content.body}"
-        content.format = Format.HTML
-        content.formatted_body = (f"<a href=\"https://matrix.to/#/{editing_msg.mx_room}/"
-                                  f"{editing_msg.mxid}\">Edit</a>: "
-                                  f"{content.formatted_body or escape_html(content.body)}")
-
         intent = sender.intent_for(self) if sender else self.main_intent
         await intent.set_typing(self.mxid, is_typing=False)
         event_id = await intent.send_message(self.mxid, content)

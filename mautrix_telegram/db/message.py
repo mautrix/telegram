@@ -42,10 +42,11 @@ class Message(Base):
     def get_one_by_tgid(cls, tgid: TelegramID, tg_space: TelegramID, edit_index: int = 0
                         ) -> Optional['Message']:
         if edit_index < 0:
-            return cls._one_or_none(cls.t.select()
-                                    .where(and_(cls.c.tgid == tgid, cls.c.tg_space == tg_space))
-                                    .order_by(desc(cls.c.edit_index))
-                                    .limit(1).offset(-edit_index - 1))
+            return cls._one_or_none(cls.db.execute(
+                cls.t.select()
+                    .where(and_(cls.c.tgid == tgid, cls.c.tg_space == tg_space))
+                    .order_by(desc(cls.c.edit_index))
+                    .limit(1).offset(-edit_index - 1)))
         else:
             return cls._select_one_or_none(cls.c.tgid == tgid, cls.c.tg_space == tg_space,
                                            cls.c.edit_index == edit_index)
