@@ -41,7 +41,7 @@ RUN apk add --no-cache --virtual .build-deps \
       ca-certificates \
       su-exec \
       netcat-openbsd \
- && pip3 install .[fast_crypto,hq_thumbnails,metrics] \
+ && pip3 install .[speedups,hq_thumbnails,metrics] \
  && apk del .build-deps
 
 VOLUME /data
