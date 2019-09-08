@@ -5,6 +5,5 @@ python-magic
 SQLAlchemy
 alembic
 commonmark
-#telethon
-git+https://github.com/LonamiWebs/Telethon@master#egg=telethon
+telethon
 telethon-session-sqlalchemy

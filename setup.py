@@ -38,7 +38,7 @@ setuptools.setup(
         "commonmark>=0.8.1,<0.10",
         "ruamel.yaml>=0.15.35,<0.17",
         "python-magic>=0.4.15,<0.5",
-        "telethon>=1.9,<1.10",
+        "telethon>=1.10,<1.11",
         "telethon-session-sqlalchemy>=0.2.14,<0.3",
     ],
     extras_require=extras,
