@@ -19,7 +19,7 @@ config = context.config
 mxtg_config_path = context.get_x_argument(as_dictionary=True).get("config", "config.yaml")
 mxtg_config = Config(mxtg_config_path, None, None)
 mxtg_config.load()
-config.set_main_option("sqlalchemy.url", mxtg_config["appservice.database"])
+config.set_main_option("sqlalchemy.url", mxtg_config["appservice.database"].replace("%", "%%"))
 
 
 AlchemySessionContainer.create_table_classes(None, "telethon_", Base)
