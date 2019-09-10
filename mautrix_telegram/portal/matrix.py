@@ -194,13 +194,31 @@ class PortalMatrix(BasePortal, MautrixBasePortal, ABC):
             tpl_args["message"] = content.body
             content.body = Template(tpl).safe_substitute(tpl_args)
 
+    async def _apply_emote_format(self, sender: 'u.User',
+                                  content: TextMessageEventContent) -> None:
+        if content.format != Format.HTML:
+            content.format = Format.HTML
+            content.formatted_body = escape_html(content.body).replace("\n", "<br/>")
+
+        tpl = self.get_config("emote_format")
+        puppet = p.Puppet.get(sender.tgid)
+        content.formatted_body = Template(tpl).safe_substitute(
+            dict(sender_mxid=sender.mxid,
+                 sender_username=sender.mxid_localpart,
+                 sender_displayname=escape_html(await self.get_displayname(sender)),
+                 mention=f"<a href='https://matrix.to/#/{puppet.mxid}'>{puppet.displayname}</a>",
+                 username=sender.username,
+                 displayname=puppet.displayname,
+                 body=content.body,
+                 formatted_body=content.formatted_body))
+        content.msgtype = MessageType.TEXT
+
     async def _pre_process_matrix_message(self, sender: 'u.User', use_relaybot: bool,
                                           content: MessageEventContent) -> None:
-        if content.msgtype == MessageType.EMOTE:
+        if use_relaybot:
             await self._apply_msg_format(sender, content)
-            content.msgtype = MessageType.TEXT
-        elif use_relaybot:
-            await self._apply_msg_format(sender, content)
+        elif content.msgtype == MessageType.EMOTE:
+            await self._apply_emote_format(sender, content)
 
     @staticmethod
     def _matrix_event_to_entities(event: Union[str, MessageEventContent]

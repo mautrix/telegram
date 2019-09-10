@@ -85,6 +85,7 @@ def config_defaults(evt: CommandEvent) -> Awaitable[EventID]:
         "bot_messages_as_notices": evt.config["bridge.bot_messages_as_notices"],
         "inline_images": evt.config["bridge.inline_images"],
         "message_formats": evt.config["bridge.message_formats"],
+        "emote_format": evt.config["bridge.emote_format"],
         "state_event_formats": evt.config["bridge.state_event_formats"],
         "telegram_link_preview": evt.config["bridge.telegram_link_preview"],
     }, stream)

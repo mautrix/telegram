@@ -117,6 +117,7 @@ class Config(BaseBridgeConfig):
         if "bridge.message_formats.m_text" in self:
             del self["bridge.message_formats"]
         copy_dict("bridge.message_formats", override_existing_map=False)
+        copy("bridge.emote_format")
 
         copy("bridge.state_event_formats.join")
         copy("bridge.state_event_formats.leave")
