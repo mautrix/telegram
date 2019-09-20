@@ -14,7 +14,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from typing import Optional, Tuple, Union, Dict
-from io import BytesIO
+from io import BytesIO, StringIO
 import time
 import logging
 import asyncio
@@ -48,6 +48,17 @@ try:
 except ImportError:
     VideoFileClip = random = string = os = mimetypes = None
 
+try:
+    import cairosvg
+    from tgs.parsers.tgs import parse_tgs as tgs_importer
+    from tgs.exporters import svg as tgs_svg_exporter
+#    from tgs.exporters import gif as tgs_gif_exporter
+except (ImportError, OSError):
+    cairosvg = None
+    tgs_importer = None
+    tgs_svg_exporter = None
+#    tgs_gif_exporter = None
+
 log: logging.Logger = logging.getLogger("mau.util")
 
 TypeLocation = Union[Document, InputDocumentFileLocation, InputPeerPhotoFileLocation,
@@ -70,6 +81,32 @@ def convert_image(file: bytes, source_mime: str = "image/webp", target_type: str
     except Exception:
         log.exception(f"Failed to convert {source_mime} to {target_type}")
         return source_mime, file, None, None
+
+
+def convert_tgs(file: bytes) -> Tuple[str, bytes, Optional[int], Optional[int]]:
+    if cairosvg and tgs_importer and tgs_svg_exporter:
+        try:
+            with BytesIO(file) as fi:
+                animation = tgs_importer(fi)
+                """
+                It's possible to convert to gif, but out animation is too big (~500KB),
+                Convert to mp4 needs opencv2 to be installed...
+                TODO: Maybe should create config parameter 
+                """
+                with StringIO() as svg, BytesIO() as fo:
+                    frame = int(animation.out_point * 0.3)
+                    w, h = 256, 256
+                    tgs_svg_exporter.export_svg(animation, svg, frame=frame)
+                    svg.seek(0)
+                    cairosvg.svg2png(file_obj=svg, write_to=fo, output_width=w, output_height=h)
+                    out = fo.getvalue()
+                    return "image/png", out, w, h
+        # Yep... some animations crash library...
+        except AttributeError:
+            log.exception("Error occurred while converting animated sticker")
+    else:
+        log.warning("Unable to convert animated sticker, install tgs and cairosvg packages")
+    return "application/gzip", file, None, None
 
 
 def _temp_file_name(ext: str) -> str:
@@ -197,6 +234,11 @@ async def _unlocked_transfer_file_to_matrix(client: MautrixTelegramClient, inten
     mime_type = magic.from_buffer(file, mime=True)
 
     image_converted = False
+    if mime_type == "application/gzip" and is_sticker:
+        mime_type, file, width, height = convert_tgs(file)
+        image_converted = width is not None
+        thumbnail = None
+
     if mime_type == "image/webp":
         new_mime_type, file, width, height = convert_image(
             file, source_mime="image/webp", target_type="png",
