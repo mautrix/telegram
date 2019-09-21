@@ -166,9 +166,9 @@ async def transfer_file_to_matrix(client: MautrixTelegramClient, intent: IntentA
     if not location_id:
         return None
 
-    #db_file = DBTelegramFile.get(location_id)
-    #if db_file:
-    #    return db_file
+    db_file = DBTelegramFile.get(location_id)
+    if db_file:
+        return db_file
 
     try:
         lock = transfer_locks[location_id]
@@ -184,9 +184,9 @@ async def _unlocked_transfer_file_to_matrix(client: MautrixTelegramClient, inten
                                             loc_id: str, location: TypeLocation,
                                             thumbnail: TypeThumbnail, is_sticker: bool
                                             ) -> Optional[DBTelegramFile]:
-    #db_file = DBTelegramFile.get(loc_id)
-    #if db_file:
-    #    return db_file
+    db_file = DBTelegramFile.get(loc_id)
+    if db_file:
+        return db_file
 
     try:
         file = await client.download_file(location)
