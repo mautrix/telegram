@@ -341,7 +341,7 @@ class PortalMetadata(BasePortal, ABC):
                 self.log.debug(f"default_banned_rights is None in {entity}")
                 dbr = ChatBannedRights(invite_users=True, change_info=True, pin_messages=True,
                                        send_stickers=False, send_messages=False, until_date=None)
-            levels.ban = 99
+            levels.ban = 50
             levels.kick = 50
             levels.redact = 50
             levels.invite = 50 if dbr.invite_users else 0

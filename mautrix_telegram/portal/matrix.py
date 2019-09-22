@@ -124,27 +124,33 @@ class PortalMatrix(BasePortal, MautrixBasePortal, ABC):
         await user.client.send_read_acknowledge(self.peer, max_id=message.tgid,
                                                 clear_mentions=True)
 
-    async def kick_matrix(self, user: Union['u.User', 'p.Puppet'], source: 'u.User') -> None:
+    async def _preproc_kick_ban(self, user: Union['u.User', 'p.Puppet'], source: 'u.User'
+                                ) -> Optional['AbstractUser']:
         if user.tgid == source.tgid:
-            return
+            return None
         if self.peer_type == "user" and user.tgid == self.tgid:
             self.delete()
-            try:
-                del self.by_tgid[self.tgid_full]
-                del self.by_mxid[self.mxid]
-            except KeyError:
-                pass
-            return
+            return None
         if isinstance(user, u.User) and await user.needs_relaybot(self):
             if not self.bot:
-                return
-            # TODO kick and ban message
-            return
+                return None
+            # TODO kick message
+            return None
         if await source.needs_relaybot(self):
             if not self.has_bot:
-                return
-            source = self.bot
-        await source.client.kick_participant(self.peer, user.peer)
+                return None
+            return self.bot
+        return source
+
+    async def kick_matrix(self, user: Union['u.User', 'p.Puppet'], source: 'u.User') -> None:
+        source = await self._preproc_kick_ban(user, source)
+        if source is not None:
+            await source.client.kick_participant(self.peer, user.peer)
+
+    async def ban_matrix(self, user: Union['u.User', 'p.Puppet'], source: 'u.User'):
+        source = await self._preproc_kick_ban(user, source)
+        if source is not None:
+            await source.client.edit_permissions(self.peer, user.peer, view_messages=False)
 
     async def leave_matrix(self, user: 'u.User', event_id: EventID) -> None:
         if await user.needs_relaybot(self):
