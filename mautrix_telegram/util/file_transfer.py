@@ -49,7 +49,7 @@ try:
 except ImportError:
     VideoFileClip = random = string = os = mimetypes = None
 
-from .tgs_converter import convert_tgs
+from .tgs_converter import convert_tgs_to
 
 log: logging.Logger = logging.getLogger("mau.util")
 
@@ -203,8 +203,9 @@ async def _unlocked_transfer_file_to_matrix(client: MautrixTelegramClient, inten
 
     image_converted = False
     if mime_type == "application/gzip" and is_sticker:
-        mime_type, file, width, height, thumbnail = convert_tgs(file, tgs_convert_type, 256, 256)
+        mime_type, file, width, height = convert_tgs_to(file, tgs_convert_type, 256, 256)
         image_converted = width is not None
+        thumbnail = None
 
     if mime_type == "image/webp":
         new_mime_type, file, width, height = convert_image(

@@ -165,9 +165,9 @@ bridge:
     max_document_size: 100
     # Format, animated sticker convert to (unstable).
     # Supported values:
-    # image - converts to png (preferred),
-    # gif - converts to gif animation (sometimes loses alpha),
-    # video - VP9 video in mp4 container
+    # image - converts to png (fastest and preferred),
+    # gif - converts to gif animation (requires gifski binary and takes a lot of time),
+    # video - video in mp4 container (requires gifski and ffmpeg binary and takes a lot of time, but less than gif)
     animated_sticker_target_type: image
 
     # Whether to bridge Telegram bot messages as m.notices or m.texts.
