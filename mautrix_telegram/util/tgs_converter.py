@@ -20,7 +20,7 @@ try:
     def _tgs_to_png(animation: Animation, width: int = None,
                     height: int = None, frame: int = None) -> Tuple[bytes, Optional[bytes]]:
         if not frame:
-            frame = int(animation.out_point * 0.9)
+            frame = int(animation.out_point * 0.3)
         if not (width and height):
             width = animation.width
             height = animation.height
