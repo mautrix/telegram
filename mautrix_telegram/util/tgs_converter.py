@@ -20,7 +20,7 @@ try:
     def _tgs_to_png(animation: Animation, width: int = None,
                     height: int = None, frame: int = None) -> Tuple[bytes, Optional[bytes]]:
         if not frame:
-            frame = int(animation.out_point * 0.3)
+            frame = int(animation.out_point * 0.9)
         if not (width and height):
             width = animation.width
             height = animation.height
@@ -82,13 +82,9 @@ try:
         import numpy
         import tempfile
         import os
-        from PIL import Image
 
         def _tgs_to_video(animation: Animation, width: int = None, height: int = None) \
                 -> Tuple[bytes, Optional[bytes]]:
-            """
-            FIXME: copy-pasted from tgs.exporters.video, because it's method don't resize images
-            """
             start = int(animation.in_point)
             end = int(animation.out_point)
             with tempfile.NamedTemporaryFile(mode="r+b", suffix=".mp4") as tmp:

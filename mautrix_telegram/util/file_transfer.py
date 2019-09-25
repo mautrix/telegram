@@ -161,7 +161,8 @@ TypeThumbnail = Optional[Union[TypeLocation, TypePhotoSize]]
 
 async def transfer_file_to_matrix(client: MautrixTelegramClient, intent: IntentAPI,
                                   location: TypeLocation, thumbnail: TypeThumbnail = None,
-                                  is_sticker: bool = False) -> Optional[DBTelegramFile]:
+                                  is_sticker: bool = False, tgs_convert_type: str = "image") \
+        -> Optional[DBTelegramFile]:
     location_id = _location_to_id(location)
     if not location_id:
         return None
@@ -177,12 +178,13 @@ async def transfer_file_to_matrix(client: MautrixTelegramClient, intent: IntentA
         transfer_locks[location_id] = lock
     async with lock:
         return await _unlocked_transfer_file_to_matrix(client, intent, location_id, location,
-                                                       thumbnail, is_sticker)
+                                                       thumbnail, is_sticker, tgs_convert_type)
 
 
 async def _unlocked_transfer_file_to_matrix(client: MautrixTelegramClient, intent: IntentAPI,
                                             loc_id: str, location: TypeLocation,
-                                            thumbnail: TypeThumbnail, is_sticker: bool
+                                            thumbnail: TypeThumbnail, is_sticker: bool,
+                                            tgs_convert_type: str
                                             ) -> Optional[DBTelegramFile]:
     db_file = DBTelegramFile.get(loc_id)
     if db_file:
@@ -201,7 +203,7 @@ async def _unlocked_transfer_file_to_matrix(client: MautrixTelegramClient, inten
 
     image_converted = False
     if mime_type == "application/gzip" and is_sticker:
-        mime_type, file, width, height, thumbnail = convert_tgs(file, "image", 256, 256)
+        mime_type, file, width, height, thumbnail = convert_tgs(file, tgs_convert_type, 256, 256)
         image_converted = width is not None
 
     if mime_type == "image/webp":

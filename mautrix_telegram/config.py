@@ -101,6 +101,7 @@ class Config(BaseBridgeConfig):
         copy("bridge.inline_images")
         copy("bridge.image_as_file_size")
         copy("bridge.max_document_size")
+        copy("bridge.animated_sticker_target_type")
 
         copy("bridge.bot_messages_as_notices")
         if isinstance(self["bridge.bridge_notices"], bool):
