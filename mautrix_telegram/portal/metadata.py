@@ -298,6 +298,7 @@ class PortalMetadata(BasePortal, ABC):
             invites = config["bridge.relaybot.private_chat.invite"]
             for invite in invites:
                 power_levels.users[invite] = 100
+            self.title = puppet.displayname
         initial_state = [{
             "type": EventType.ROOM_POWER_LEVELS.serialize(),
             "content": power_levels.serialize(),
