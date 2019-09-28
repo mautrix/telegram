@@ -101,6 +101,7 @@ class Config(BaseBridgeConfig):
         copy("bridge.inline_images")
         copy("bridge.image_as_file_size")
         copy("bridge.max_document_size")
+        copy("bridge.federate_rooms")
 
         copy("bridge.bot_messages_as_notices")
         if isinstance(self["bridge.bridge_notices"], bool):
@@ -144,6 +145,9 @@ class Config(BaseBridgeConfig):
         if "bridge.relaybot" not in self:
             copy("bridge.authless_relaybot_portals", "bridge.relaybot.authless_portals")
         else:
+            copy("bridge.relaybot.private_chat.invite")
+            copy("bridge.relaybot.private_chat.state_changes")
+            copy("bridge.relaybot.private_chat.message")
             copy("bridge.relaybot.authless_portals")
             copy("bridge.relaybot.whitelist_group_admins")
             copy("bridge.relaybot.whitelist")

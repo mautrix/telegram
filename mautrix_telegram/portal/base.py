@@ -147,7 +147,8 @@ class BasePortal(ABC):
 
     @property
     def has_bot(self) -> bool:
-        return bool(self.bot and self.bot.is_in_chat(self.tgid))
+        return ((bool(self.bot) and self.bot.is_in_chat(self.tgid))
+                or (self.peer_type == "user" and self.tg_receiver == self.bot.tgid))
 
     @property
     def main_intent(self) -> IntentAPI:

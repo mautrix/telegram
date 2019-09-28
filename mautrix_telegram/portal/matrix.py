@@ -90,6 +90,8 @@ class PortalMatrix(BasePortal, MautrixBasePortal, ABC):
                                          **kwargs: Any) -> None:
         if not self.has_bot:
             return
+        elif self.peer_type == "user" and not config["bridge.relaybot.private_chat.state_changes"]:
+            return
         async with self.send_lock(self.bot.tgid):
             message = await self._get_state_change_message(event, user, **kwargs)
             if not message:

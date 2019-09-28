@@ -405,10 +405,15 @@ class AbstractUser(ABC):
     async def update_message(self, original_update: UpdateMessage) -> None:
         update, sender, portal = self.get_message_details(original_update)
 
-        if self.is_bot and not portal.mxid:
-            self.log.debug(f"Ignoring message received by bot in unbridged chat %s",
-                           portal.tgid_log)
-            return
+        if self.is_bot:
+            if update.is_private:
+                if not config["bridge.relaybot.private_chat.invite"]:
+                    self.log.debug(f"Ignoring private message to bot from {sender.id}")
+                    return
+            elif not portal.mxid:
+                self.log.debug(
+                    f"Ignoring message received by bot in unbridged chat {portal.tgid_log}")
+                return
 
         if self.ignore_incoming_bot_events and self.relaybot and sender.id == self.relaybot.tgid:
             self.log.debug(f"Ignoring relaybot-sent message %s to %s", update, portal.tgid_log)

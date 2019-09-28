@@ -138,7 +138,6 @@ class MatrixHandler(BaseMatrixHandler):
         portal = po.Portal.get_by_mxid(room_id)
         if user and await user.has_full_access(allow_bot=True) and portal:
             await portal.invite_telegram(inviter, user)
-            return
 
     async def handle_join(self, room_id: RoomID, user_id: UserID, event_id: EventID) -> None:
         user = await u.User.get_by_mxid(user_id).ensure_started()

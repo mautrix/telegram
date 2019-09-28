@@ -163,6 +163,9 @@ bridge:
     image_as_file_size: 10
     # Maximum size of Telegram documents in megabytes to bridge.
     max_document_size: 100
+    # Whether or not created rooms should have federation enabled.
+    # If false, created portal rooms will never be federated.
+    federate_rooms: true
 
     # Whether to bridge Telegram bot messages as m.notices or m.texts.
     bot_messages_as_notices: true
@@ -184,7 +187,6 @@ bridge:
         # The number of latest events to keep when checking for duplicates.
         # You might need to increase this on high-traffic bridge instances.
         cache_queue_length: 20
-
 
     # The formats to use when sending messages to Telegram via the relay bot.
     # Text msgtypes (m.text, m.notice and m.emote) support HTML, media msgtypes don't.
@@ -258,6 +260,15 @@ bridge:
 
     # Options related to the message relay Telegram bot.
     relaybot:
+        private_chat:
+            # List of users to invite to the portal when someone starts a private chat with the bot.
+            # If empty, private chats with the bot won't create a portal.
+            invite: []
+            # Whether or not to bridge state change messages in relaybot private chats.
+            state_changes: true
+            # When private_chat_invite is empty, this message is sent to users /starting the
+            # relaybot. Telegram's "markdown" is supported.
+            message: This is a Matrix bridge relaybot and does not support direct chats
         # Whether or not to allow creating portals from Telegram.
         authless_portals: true
         # Whether or not to allow Telegram group admins to use the bot commands.
