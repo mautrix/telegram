@@ -163,18 +163,13 @@ bridge:
     image_as_file_size: 10
     # Maximum size of Telegram documents in megabytes to bridge.
     max_document_size: 100
-    # Format, animated sticker convert to (unstable).
+    # Format, animated sticker convert to.
     # Supported values:
-    # image - converts to png (fastest and preferred),
-    # gif - converts to gif animation (requires gifski binary and takes a lot of time),
-    # video - video in mp4 container (requires gifski and ffmpeg binary and takes a lot of time, but less than gif)
-    # To install library:
-    # source venv/bin/activate
-    # pip install nodeenv
-    # nodeenv -p
-    # source venv/bin/activate
-    # npm install -g puppeteer-lottie-cli
-    animated_sticker_target_type: image
+    # png - converts to png (fastest and preferred),
+    # gif - converts to gif animation, requires PIL, slow, sometimes loses transparency,
+    # gifc - uses same utility as png, faster but without transparency at all
+    # mp4 - video in mp4 container (ffmpeg binary and takes a lot of time, but less than gif)
+    animated_sticker_target_type: gif
 
     # Whether to bridge Telegram bot messages as m.notices or m.texts.
     bot_messages_as_notices: true
