@@ -161,15 +161,15 @@ TypeThumbnail = Optional[Union[TypeLocation, TypePhotoSize]]
 
 async def transfer_file_to_matrix(client: MautrixTelegramClient, intent: IntentAPI,
                                   location: TypeLocation, thumbnail: TypeThumbnail = None,
-                                  is_sticker: bool = False, tgs_convert_type: str = "image") \
+                                  is_sticker: bool = False, tgs_convert_type: str = "png") \
         -> Optional[DBTelegramFile]:
     location_id = _location_to_id(location)
     if not location_id:
         return None
 
-    #db_file = DBTelegramFile.get(location_id)
-    #if db_file:
-    #    return db_file
+    db_file = DBTelegramFile.get(location_id)
+    if db_file:
+        return db_file
 
     try:
         lock = transfer_locks[location_id]
@@ -186,9 +186,9 @@ async def _unlocked_transfer_file_to_matrix(client: MautrixTelegramClient, inten
                                             thumbnail: TypeThumbnail, is_sticker: bool,
                                             tgs_convert_type: str
                                             ) -> Optional[DBTelegramFile]:
-    #db_file = DBTelegramFile.get(loc_id)
-    #if db_file:
-    #    return db_file
+    db_file = DBTelegramFile.get(loc_id)
+    if db_file:
+        return db_file
 
     try:
         file = await client.download_file(location)
