@@ -164,7 +164,8 @@ class PortalMetadata(BasePortal, ABC):
                 AddChatUserRequest(chat_id=self.tgid, user_id=puppet.tgid, fwd_limit=0))
         elif self.peer_type == "channel":
             await source.client(InviteToChannelRequest(channel=self.peer, users=[puppet.tgid]))
-        else:
+        # We don't care if there are invites for private chat portals with the relaybot.
+        elif not self.bot or self.tg_receiver != self.bot.tgid:
             raise ValueError("Invalid peer type for Telegram user invite")
 
     async def sync_matrix_members(self) -> None:
@@ -293,6 +294,11 @@ class PortalMetadata(BasePortal, ABC):
         if not direct:
             users, participants = await self._get_users(user, entity)
             self._participants_to_power_levels(participants, power_levels)
+        elif self.tg_receiver == self.bot.tgid:
+            invites = config["bridge.relaybot.private_chat.invite"]
+            for invite in invites:
+                power_levels.users[invite] = 100
+            self.title = puppet.displayname
         initial_state = [{
             "type": EventType.ROOM_POWER_LEVELS.serialize(),
             "content": power_levels.serialize(),
@@ -302,11 +308,15 @@ class PortalMetadata(BasePortal, ABC):
                 "type": "m.room.related_groups",
                 "content": {"groups": [config["appservice.community_id"]]},
             })
+        creation_content = {}
+        if not config["bridge.federate_rooms"]:
+            creation_content["m.federate"] = False
 
         room_id = await self.main_intent.create_room(alias_localpart=alias, preset=preset,
                                                      is_direct=direct, invitees=invites or [],
                                                      name=self.title, topic=self.about,
-                                                     initial_state=initial_state)
+                                                     initial_state=initial_state,
+                                                     creation_content=creation_content)
         if not room_id:
             raise Exception(f"Failed to create room")
 
@@ -341,7 +351,7 @@ class PortalMetadata(BasePortal, ABC):
                 self.log.debug(f"default_banned_rights is None in {entity}")
                 dbr = ChatBannedRights(invite_users=True, change_info=True, pin_messages=True,
                                        send_stickers=False, send_messages=False, until_date=None)
-            levels.ban = 99
+            levels.ban = 50
             levels.kick = 50
             levels.redact = 50
             levels.invite = 50 if dbr.invite_users else 0

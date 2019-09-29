@@ -138,7 +138,6 @@ class MatrixHandler(BaseMatrixHandler):
         portal = po.Portal.get_by_mxid(room_id)
         if user and await user.has_full_access(allow_bot=True) and portal:
             await portal.invite_telegram(inviter, user)
-            return
 
     async def handle_join(self, room_id: RoomID, user_id: UserID, event_id: EventID) -> None:
         user = await u.User.get_by_mxid(user_id).ensure_started()
@@ -187,6 +186,30 @@ class MatrixHandler(BaseMatrixHandler):
             await portal.kick_matrix(user, sender)
         else:
             await portal.leave_matrix(user, event_id)
+
+    async def handle_ban(self, room_id: RoomID, user_id: UserID, banned_by: UserID, reason: str,
+                         event_id: EventID) -> None:
+        self.log.debug(f"{user_id} was banned from {room_id} by {banned_by} for {reason}")
+
+        sender = u.User.get_by_mxid(banned_by, create=False)
+        if not sender:
+            return
+        await sender.ensure_started()
+
+        portal = po.Portal.get_by_mxid(room_id)
+        if not portal:
+            return
+
+        puppet = pu.Puppet.get_by_mxid(user_id)
+        if puppet:
+            await portal.ban_matrix(puppet, sender)
+            return
+
+        user = u.User.get_by_mxid(user_id, create=False)
+        if not user:
+            return
+        await user.ensure_started()
+        await portal.ban_matrix(user, sender)
 
     @staticmethod
     async def allow_message(user: 'u.User') -> bool:

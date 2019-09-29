@@ -19,7 +19,7 @@ import logging
 from telethon.tl.patched import Message, MessageService
 from telethon.tl.types import (
     ChannelParticipantAdmin, ChannelParticipantCreator, ChatForbidden, ChatParticipantAdmin,
-    ChatParticipantCreator, InputChannel, InputUser, MessageActionChatAddUser,
+    ChatParticipantCreator, InputChannel, InputUser, MessageActionChatAddUser, PeerUser,
     MessageActionChatDeleteUser, MessageEntityBotCommand, PeerChannel, PeerChat, TypePeer,
     UpdateNewChannelMessage, UpdateNewMessage, MessageActionChatMigrateTo, User)
 from telethon.tl.functions.messages import GetChatsRequest, GetFullChatRequest
@@ -204,7 +204,12 @@ class Bot(AbstractUser):
         # chat is a normal group or a supergroup/channel when using the ID.
         if isinstance(message.to_id, PeerChannel):
             return reply(f"-100{message.to_id.channel_id}")
-        return reply(str(-message.to_id.chat_id))
+        elif isinstance(message.to_id, PeerChat):
+            return reply(str(-message.to_id.chat_id))
+        elif isinstance(message.to_id, PeerUser):
+            return reply(f"Your user ID is {message.from_id}.")
+        else:
+            return reply("Failed to find chat ID.")
 
     def match_command(self, text: str, command: str) -> bool:
         text = text.lower()
@@ -223,12 +228,19 @@ class Bot(AbstractUser):
 
     async def handle_command(self, message: Message) -> None:
         def reply(reply_text: str) -> Awaitable[Message]:
-            return self.client.send_message(message.to_id, reply_text, reply_to=message.id)
+            return self.client.send_message(message.chat_id, reply_text, reply_to=message.id)
 
         text = message.message
 
-        if self.match_command(text, "id"):
+        if self.match_command(text, "start"):
+            pcm = config["bridge.relaybot.private_chat.message"]
+            if pcm:
+                await reply(pcm)
+            return
+        elif self.match_command(text, "id"):
             await self.handle_command_id(message, reply)
+            return
+        elif message.is_private:
             return
 
         portal = po.Portal.get_by_entity(message.to_id)
