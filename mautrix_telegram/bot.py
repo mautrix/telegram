@@ -226,7 +226,7 @@ class Bot(AbstractUser):
 
         return False
 
-    async def handle_command(self, message: Message) -> None:
+    async def handle_command(self, message: Message) -> Optional[bool]:
         def reply(reply_text: str) -> Awaitable[Message]:
             return self.client.send_message(message.chat_id, reply_text, reply_to=message.id)
 
@@ -234,8 +234,9 @@ class Bot(AbstractUser):
 
         if self.match_command(text, "start"):
             pcm = config["bridge.relaybot.private_chat.message"]
-            if pcm:
-                await reply(pcm)
+            if not pcm:
+                return True
+            await reply(pcm)
             return
         elif self.match_command(text, "id"):
             await self.handle_command_id(message, reply)
@@ -289,8 +290,7 @@ class Bot(AbstractUser):
                       and update.message.entities and len(update.message.entities) > 0
                       and isinstance(update.message.entities[0], MessageEntityBotCommand))
         if is_command:
-            await self.handle_command(update.message)
-            return True
+            return not await self.handle_command(update.message)
         return False
 
     def is_in_chat(self, peer_id) -> bool:
