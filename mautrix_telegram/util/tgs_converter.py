@@ -14,137 +14,62 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
+from typing import Dict, Callable, Awaitable, Optional, Tuple, Any
+import asyncio.subprocess
 import logging
-from io import BytesIO
-from typing import Optional, Tuple
+import shutil
+import os.path
+
+log: logging.Logger = logging.getLogger("mau.util.tgs")
+converters: Dict[str, Callable[[bytes, int, int, Any], Awaitable[Tuple[str, bytes]]]] = {}
 
 
-LOG: logging.Logger = logging.getLogger("mau.util.tgs")
+lottieconverter = os.path.abspath(shutil.which("lottieconverter"))
+lottie2ffmpeg = os.path.abspath(shutil.which("lottie2ffmpeg.sh"))
 
-try:
-    import gzip
-    import subprocess
-
-    proc = subprocess.Popen(["lottieconverter"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    _, err = proc.communicate()
-    if err is not None and not err.decode("utf-8").startswith("Usage"):
-        raise ImportError(err)
-
-
-    def _tgs_to_png(file: bytes, width: int,
-                    height: int, frame: int = None) -> Tuple[bytes, Optional[bytes]]:
-        if not frame:
-            frame = 1
-        p = subprocess.run(["lottieconverter", "-", "-", "png",
-                           str.format(f"{width}x{height}"), str(frame)], stdout=subprocess.PIPE,
-                           input=file, universal_newlines=False)
-        return p.stdout, None
+if lottieconverter:
+    async def tgs_to_png(file: bytes, width: int, height: int, **_: Any) -> Tuple[str, bytes]:
+        frame = 1
+        proc = await asyncio.create_subprocess_exec(lottieconverter, "-", "-", "png",
+                                                    f"{width}x{height}", str(frame),
+                                                    stdout=asyncio.subprocess.PIPE,
+                                                    stdin=asyncio.subprocess.PIPE)
+        stdout, _ = await proc.communicate(file)
+        return "image/png", stdout
 
 
-    TGS_CONVERTERS = {"png": _tgs_to_png}
-
-    def _tgs_to_gif(file: bytes, width: int, height: int) -> Tuple[bytes, Optional[bytes]]:
-        p = subprocess.run(["lottieconverter", "-", "-", "gif",
-                            str.format(f"{width}x{height}"), "0", "0x202020"],
-                           stdout=subprocess.PIPE,
-                           input=file, universal_newlines=False)
-        return p.stdout, None
-
-    TGS_CONVERTERS.update({"gifc": _tgs_to_gif})
-
-    try:
-        from PIL import Image
-
-        def _tgs_to_gif(file: bytes, width: int, height: int) \
-                -> Tuple[bytes, Optional[bytes]]:
-            frames = []
-            first_frame = None
-            for i in range(1, 100):
-                frame, _ = _tgs_to_png(file, width, height, i)
-                if not first_frame:
-                    first_frame = frame
-                image = Image.open(BytesIO(frame))
-                if image.mode not in ["RGBA", "RGBa"]:
-                    image = image.convert("RGBA")
-                alpha = image.getchannel("A")
-                image = image.convert('P', palette=Image.ADAPTIVE, colors=255)
-                mask = Image.eval(alpha, lambda a: 255 if a <= 128 else 0)
-                image.paste(255, mask)
-                frames.append(image)
-
-            duration = 100
-            fo = BytesIO()
-            frames[0].save(
-                fo,
-                format='GIF',
-                append_images=frames[1:],
-                save_all=True,
-                duration=duration,
-                loop=0,
-                transparency=255,
-                disposal=2,
-            )
-            return fo.getvalue(), first_frame
-
-        TGS_CONVERTERS.update({"gif": _tgs_to_gif})
-    except ImportError:
-        LOG.warn("Unable to create tgs to gif converter, install PIL")
-
-    try:
-        import cv2
-        import numpy
-        import tempfile
-        import os
-
-        def _tgs_to_video(file: bytes, width: int, height: int) \
-                -> Tuple[bytes, Optional[bytes]]:
-            with tempfile.NamedTemporaryFile(mode="r+b", suffix=".mp4") as tmp:
-                video_tmp_file = tmp.name
-            video = None
-            first_frame = None
-            try:
-                video = cv2.VideoWriter(filename=video_tmp_file, apiPreference=cv2.CAP_ANY,
-                                        fourcc=cv2.VideoWriter_fourcc(*'vp09'),
-                                        fps=10,
-                                        frameSize=(width, height))
-
-                for i in range(1, 100):
-                    frame, _ = _tgs_to_png(file, width, height, i)
-                    if not first_frame:
-                        first_frame = frame
-                    video.write(cv2.cvtColor(numpy.array(Image.open(BytesIO(frame))),
-                                             cv2.COLOR_RGB2BGR))
-
-            finally:
-                if video:
-                    video.release()
-            with open(video_tmp_file, "rb") as video_file:
-                out = video_file.read()
-            os.remove(video_tmp_file)
-            return out, first_frame
-        """
-        It seems, that riot don't wont to play converted videos...
-        """
-        TGS_CONVERTERS.update({"mp4": _tgs_to_video})
-    except ImportError:
-        LOG.warn("Unable to create tgs to video converter, "
-                 "install PIL, numpy and opencv-python-headless")
-
-except (ImportError, OSError):
-    LOG.exception("Unable to init tgs converters, possibly missing lottieconverter")
-    TGS_CONVERTERS = {}
+    async def tgs_to_gif(file: bytes, width: int, height: int, background: str = "202020",
+                         **_: Any) -> Tuple[str, bytes]:
+        proc = await asyncio.create_subprocess_exec(lottieconverter, "-", "-", "gif",
+                                                    f"{width}x{height}", "0", f"0x{background}",
+                                                    stdout=asyncio.subprocess.PIPE,
+                                                    stdin=asyncio.subprocess.PIPE)
+        stdout, _ = await proc.communicate(file)
+        return "image/gif", stdout
 
 
-TYPE_TO_MIME = {"png": "image/png", "gif": "image/gif", "gifc": "image/gif", "mp4": "video/mp4"}
+    converters["png"] = tgs_to_png
+    converters["gif"] = tgs_to_gif
+
+if lottieconverter and lottie2ffmpeg:
+    async def tgs_to_webm(file: bytes, width: int, height: int, **_: Any) -> Tuple[str, bytes]:
+        proc = await asyncio.create_subprocess_exec(lottie2ffmpeg, lottieconverter,
+                                                    f"{width}x{height}",
+                                                    stdout=asyncio.subprocess.PIPE,
+                                                    stdin=asyncio.subprocess.PIPE)
+        stdout, _ = await proc.communicate(file)
+        return "video/webm", stdout
 
 
-def convert_tgs_to(file: bytes, convert_to: str, width: int = 200, height: int = 200) \
-        -> Tuple[str, bytes, Optional[int], Optional[int], Optional[bytes]]:
-    if convert_to in TGS_CONVERTERS:
-        mime = TYPE_TO_MIME[convert_to]
-        converter = TGS_CONVERTERS[convert_to]
-        out, preview = converter(file, width, height)
-        return mime, out, width, height, preview
-    else:
-        LOG.warning(f"Unable to convert animated sticker, type {convert_to} not supported")
+    converters["webm"] = tgs_to_webm
+
+
+async def convert_tgs_to(file: bytes, convert_to: str, width: int, height: int, **kwargs: Any
+                         ) -> Tuple[str, bytes, Optional[int], Optional[int], Optional[bytes]]:
+    if convert_to in converters:
+        converter = converters[convert_to]
+        mime, out = await converter(file, width, height, **kwargs)
+        return mime, out, width, height, None
+    elif convert_to != "disable":
+        log.warning(f"Unable to convert animated sticker, type {convert_to} not supported")
     return "application/gzip", file, None, None, None

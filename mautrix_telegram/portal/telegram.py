@@ -183,8 +183,7 @@ class PortalTelegram(BasePortal, ABC):
             thumb_size = None
         file = await util.transfer_file_to_matrix(source.client, intent, document, thumb_loc,
                                                   is_sticker=attrs.is_sticker,
-                                                  tgs_convert_type=
-                                                  config["bridge.animated_sticker_target_type"])
+                                                  tgs_convert=config["bridge.animated_sticker"])
         if not file:
             return None
 

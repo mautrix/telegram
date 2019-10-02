@@ -161,8 +161,8 @@ TypeThumbnail = Optional[Union[TypeLocation, TypePhotoSize]]
 
 async def transfer_file_to_matrix(client: MautrixTelegramClient, intent: IntentAPI,
                                   location: TypeLocation, thumbnail: TypeThumbnail = None,
-                                  is_sticker: bool = False, tgs_convert_type: str = "png") \
-        -> Optional[DBTelegramFile]:
+                                  is_sticker: bool = False, tgs_convert: Optional[dict] = None
+                                  ) -> Optional[DBTelegramFile]:
     location_id = _location_to_id(location)
     if not location_id:
         return None
@@ -178,13 +178,13 @@ async def transfer_file_to_matrix(client: MautrixTelegramClient, intent: IntentA
         transfer_locks[location_id] = lock
     async with lock:
         return await _unlocked_transfer_file_to_matrix(client, intent, location_id, location,
-                                                       thumbnail, is_sticker, tgs_convert_type)
+                                                       thumbnail, is_sticker, tgs_convert)
 
 
 async def _unlocked_transfer_file_to_matrix(client: MautrixTelegramClient, intent: IntentAPI,
                                             loc_id: str, location: TypeLocation,
                                             thumbnail: TypeThumbnail, is_sticker: bool,
-                                            tgs_convert_type: str
+                                            tgs_convert: Optional[dict]
                                             ) -> Optional[DBTelegramFile]:
     db_file = DBTelegramFile.get(loc_id)
     if db_file:
@@ -202,9 +202,10 @@ async def _unlocked_transfer_file_to_matrix(client: MautrixTelegramClient, inten
     mime_type = magic.from_buffer(file, mime=True)
 
     image_converted = False
-    if mime_type == "application/gzip" and is_sticker:
-        mime_type, file, width, height, thumbnail = convert_tgs_to(file, tgs_convert_type, 256, 256)
-        image_converted = width is not None
+    if mime_type == "application/gzip" and is_sticker and tgs_convert:
+        mime_type, file, width, height, thumbnail = await convert_tgs_to(
+            file, tgs_convert["target"], **tgs_convert["args"])
+        image_converted = mime_type != "application/gzip"
 
     if mime_type == "image/webp":
         new_mime_type, file, width, height = convert_image(
