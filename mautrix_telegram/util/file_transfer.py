@@ -202,7 +202,10 @@ async def _unlocked_transfer_file_to_matrix(client: MautrixTelegramClient, inten
     mime_type = magic.from_buffer(file, mime=True)
 
     image_converted = False
-    if mime_type == "application/gzip" and is_sticker and tgs_convert:
+    # A weird bug in alpine/magic makes it return application/octet-stream for gzips...
+    if is_sticker and tgs_convert and (mime_type == "application/gzip" or (
+           mime_type == "application/octet-stream"
+           and magic.from_buffer(file).startswith("gzip"))):
         mime_type, file, width, height, thumbnail = await convert_tgs_to(
             file, tgs_convert["target"], **tgs_convert["args"])
         image_converted = mime_type != "application/gzip"
