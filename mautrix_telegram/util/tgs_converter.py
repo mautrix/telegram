@@ -24,8 +24,13 @@ log: logging.Logger = logging.getLogger("mau.util.tgs")
 converters: Dict[str, Callable[[bytes, int, int, Any], Awaitable[Tuple[str, bytes]]]] = {}
 
 
-lottieconverter = os.path.abspath(shutil.which("lottieconverter"))
-lottie2ffmpeg = os.path.abspath(shutil.which("lottie2ffmpeg.sh"))
+def abswhich(program: Optional[str]) -> Optional[str]:
+    path = shutil.which(program)
+    return os.path.abspath(path) if path else None
+
+
+lottieconverter = abswhich("lottieconverter")
+lottie2ffmpeg = abswhich("lottie2ffmpeg")
 
 if lottieconverter:
     async def tgs_to_png(file: bytes, width: int, height: int, **_: Any) -> Tuple[str, bytes]:
