@@ -206,8 +206,9 @@ async def _unlocked_transfer_file_to_matrix(client: MautrixTelegramClient, inten
     if is_sticker and tgs_convert and (mime_type == "application/gzip" or (
            mime_type == "application/octet-stream"
            and magic.from_buffer(file).startswith("gzip"))):
-        mime_type, file, width, height, thumbnail = await convert_tgs_to(
+        mime_type, file, width, height = await convert_tgs_to(
             file, tgs_convert["target"], **tgs_convert["args"])
+        thumbnail = None
         image_converted = mime_type != "application/gzip"
 
     if mime_type == "image/webp":
