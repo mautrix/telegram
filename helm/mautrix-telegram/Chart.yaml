@@ -1,0 +1,14 @@
+apiVersion: v1
+name: mautrix-telegram
+version: 0.1.0
+appVersion: "0.7.0"
+description: A Matrix-Telegram hybrid puppeting/relaybot bridge.
+keywords:
+  - matrix
+  - bridge
+  - telegram
+maintainers:
+  - name: Tulir Asokan
+    email: tulir@maunium.net
+sources:
+  - https://github.com/tulir/mautrix-telegram

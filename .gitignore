@@ -1,17 +1,17 @@
-.idea/
+/.idea/
 
-.venv
-env/
+/.venv
+/env/
 pip-selfcheck.json
 *.pyc
 __pycache__
-build
-dist
-*.egg-info
-.eggs
+/build
+/dist
+/*.egg-info
+/.eggs
 
-config.yaml
-registration.yaml
+/config.yaml
+/registration.yaml
 *.log*
 *.db
 *.bak
