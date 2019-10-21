@@ -1,4 +1,4 @@
-Your registration file:
+Your registration file is below. Save it into a YAML file and give the path to that file to synapse:
 
 id: {{ .Values.appservice.id }}
 as_token: {{ .Values.appservice.asToken }}
