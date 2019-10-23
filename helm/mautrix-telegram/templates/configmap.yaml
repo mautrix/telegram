@@ -21,7 +21,11 @@ data:
       port: {{ .Values.service.port }}
       max_body_size: {{ .Values.appservice.maxBodySize }}
 
-      database: {{ .Values.appservice.database }}
+      {{- if .Values.postgresql.enabled }}
+      database: "postgres://postgres:{{ .Values.postgresql.postgresqlPassword }}@{{ .Release.Name }}-postgresql/{{ .Values.postgresql.postgresqlDatabase }}"
+      {{- else }}
+      database: {{ .Values.appservice.database | quote }}
+      {{- end }}
 
       public:
         {{- toYaml .Values.appservice.public | nindent 8 }}
