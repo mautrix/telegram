@@ -295,7 +295,7 @@ class AbstractUser(ABC):
 
     async def update_admin(self, update: UpdateChatParticipantAdmin) -> None:
         # TODO duplication not checked
-        portal = po.Portal.get_by_tgid(TelegramID(update.chat_id), peer_type="chat")
+        portal = po.Portal.get_by_tgid(TelegramID(update.chat_id))
         if not portal or not portal.mxid:
             return
 
@@ -305,7 +305,7 @@ class AbstractUser(ABC):
         if isinstance(update, UpdateUserTyping):
             portal = po.Portal.get_by_tgid(TelegramID(update.user_id), self.tgid, "user")
         else:
-            portal = po.Portal.get_by_tgid(TelegramID(update.chat_id), peer_type="chat")
+            portal = po.Portal.get_by_tgid(TelegramID(update.chat_id))
 
         if not portal or not portal.mxid:
             return
@@ -350,7 +350,7 @@ class AbstractUser(ABC):
                                                                   Optional[pu.Puppet],
                                                                   Optional[po.Portal]]:
         if isinstance(update, UpdateShortChatMessage):
-            portal = po.Portal.get_by_tgid(TelegramID(update.chat_id), peer_type="chat")
+            portal = po.Portal.get_by_tgid(TelegramID(update.chat_id))
             sender = pu.Puppet.get(TelegramID(update.from_id))
         elif isinstance(update, UpdateShortMessage):
             portal = po.Portal.get_by_tgid(TelegramID(update.user_id), self.tgid, "user")
@@ -410,9 +410,10 @@ class AbstractUser(ABC):
                 if not config["bridge.relaybot.private_chat.invite"]:
                     self.log.debug(f"Ignoring private message to bot from {sender.id}")
                     return
-            elif not portal.mxid:
+            elif not portal or not portal.mxid:
+                tgid_log = portal.tgid_log if portal else original_update.chat_id
                 self.log.debug(
-                    f"Ignoring message received by bot in unbridged chat {portal.tgid_log}")
+                    f"Ignoring message received by bot in unbridged chat {tgid_log}")
                 return
 
         if self.ignore_incoming_bot_events and self.relaybot and sender.id == self.relaybot.tgid:
