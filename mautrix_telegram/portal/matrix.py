@@ -57,19 +57,6 @@ config: Optional['Config'] = None
 
 
 class PortalMatrix(BasePortal, MautrixBasePortal, ABC):
-    @staticmethod
-    def _get_file_meta(body: str, mime: str) -> str:
-        try:
-            current_extension = body[body.rindex("."):].lower()
-            body = body[:body.rindex(".")]
-            if mimetypes.types_map[current_extension] == mime:
-                return body + current_extension
-        except (ValueError, KeyError):
-            pass
-        if mime:
-            return f"matrix_upload{sane_mimetypes.guess_extension(mime)}"
-        return ""
-
     async def _get_state_change_message(self, event: str, user: 'u.User', **kwargs: Any
                                         ) -> Optional[str]:
         tpl = self.get_config(f"state_event_formats.{event}")
@@ -266,23 +253,21 @@ class PortalMatrix(BasePortal, MautrixBasePortal, ABC):
         file = await self.main_intent.download_media(content.url)
 
         mime = content.info.mimetype
-
         w, h = content.info.width, content.info.height
+        file_name = content["net.maunium.telegram.internal.filename"]
 
         if content.msgtype == MessageType.STICKER:
             if mime != "image/gif":
                 mime, file, w, h = util.convert_image(file, source_mime=mime, target_type="webp")
             else:
                 # Remove sticker description
-                content["net.maunium.telegram.internal.filename"] = "sticker.gif"
-                content.body = ""
+                file_name = "sticker.gif"
 
-        file_name = self._get_file_meta(content["net.maunium.telegram.internal.filename"], mime)
         attributes = [DocumentAttributeFilename(file_name=file_name)]
         if w and h:
             attributes.append(DocumentAttributeImageSize(w, h))
 
-        caption = content.body if content.body.lower() != file_name.lower() else None
+        caption = content.body if content.body != file_name else None
 
         media = await client.upload_file_direct(
             file, mime, attributes, file_name,
@@ -364,7 +349,15 @@ class PortalMatrix(BasePortal, MautrixBasePortal, ABC):
                  else (sender.tgid if logged_in else self.bot.tgid))
         reply_to = formatter.matrix_reply_to_telegram(content, space, room_id=self.mxid)
 
-        content["net.maunium.telegram.internal.filename"] = content.body
+        media = (MessageType.STICKER, MessageType.IMAGE, MessageType.FILE, MessageType.AUDIO,
+                 MessageType.VIDEO)
+        if content.msgtype in media:
+            content["net.maunium.telegram.internal.filename"] = content.body
+            try:
+                content.body = sender.command_status["caption"]
+                sender.command_status = None
+            except (KeyError, TypeError):
+                pass
         await self._pre_process_matrix_message(sender, not logged_in, content)
 
         if content.msgtype == MessageType.NOTICE:
@@ -378,8 +371,7 @@ class PortalMatrix(BasePortal, MautrixBasePortal, ABC):
         elif content.msgtype == MessageType.LOCATION:
             await self._handle_matrix_location(sender_id, event_id, space, client, content,
                                                reply_to)
-        elif content.msgtype in (MessageType.STICKER, MessageType.IMAGE, MessageType.FILE,
-                                 MessageType.AUDIO, MessageType.VIDEO):
+        elif content.msgtype in media:
             await self._handle_matrix_file(sender_id, event_id, space, client, content, reply_to)
         else:
             self.log.debug(f"Unhandled Matrix event: {content}")
