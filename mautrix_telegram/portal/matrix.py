@@ -17,7 +17,6 @@ from typing import Awaitable, Dict, List, Optional, Tuple, Union, Any, TYPE_CHEC
 from html import escape as escape_html
 from string import Template
 from abc import ABC
-import mimetypes
 
 import magic
 
@@ -32,7 +31,7 @@ from telethon.tl.types import (
     DocumentAttributeFilename, DocumentAttributeImageSize, GeoPoint,
     InputChatUploadedPhoto, MessageActionChatEditPhoto, MessageMediaGeo,
     SendMessageCancelAction, SendMessageTypingAction, TypeInputPeer, TypeMessageEntity,
-    UpdateNewMessage, InputMediaUploadedDocument)
+    UpdateNewMessage, InputMediaUploadedDocument, InputMediaUploadedPhoto)
 
 from mautrix.types import (EventID, RoomID, UserID, ContentURI, MessageType, MessageEventContent,
                            TextMessageEventContent, MediaMessageEventContent, Format,
@@ -41,7 +40,7 @@ from mautrix.bridge import BasePortal as MautrixBasePortal
 
 from ..types import TelegramID
 from ..db import Message as DBMessage
-from ..util import sane_mimetypes
+from ..util import sane_mimetypes, parallel_transfer_to_telegram
 from ..context import Context
 from .. import puppet as p, user as u, formatter, util
 from .base import BasePortal
@@ -250,28 +249,42 @@ class PortalMatrix(BasePortal, MautrixBasePortal, ABC):
     async def _handle_matrix_file(self, sender_id: TelegramID, event_id: EventID,
                                   space: TelegramID, client: 'MautrixTelegramClient',
                                   content: MediaMessageEventContent, reply_to: TelegramID) -> None:
-        file = await self.main_intent.download_media(content.url)
-
         mime = content.info.mimetype
         w, h = content.info.width, content.info.height
         file_name = content["net.maunium.telegram.internal.filename"]
+        max_image_size = config["bridge.image_as_file_size"] * 1000 ** 2
 
-        if content.msgtype == MessageType.STICKER:
-            if mime != "image/gif":
-                mime, file, w, h = util.convert_image(file, source_mime=mime, target_type="webp")
-            else:
-                # Remove sticker description
-                file_name = "sticker.gif"
+        if config["bridge.parallel_file_transfer"]:
+            file_handle, file_size = await parallel_transfer_to_telegram(client, self.main_intent,
+                                                                         content.url, 0)
+        else:
+            file = await self.main_intent.download_media(content.url)
+
+            if content.msgtype == MessageType.STICKER:
+                if mime != "image/gif":
+                    mime, file, w, h = util.convert_image(file, source_mime=mime,
+                                                          target_type="webp")
+                else:
+                    # Remove sticker description
+                    file_name = "sticker.gif"
+
+            file_handle = await client.upload_file(file)
+            file_size = len(file)
+
+        file_handle.name = file_name
 
         attributes = [DocumentAttributeFilename(file_name=file_name)]
         if w and h:
             attributes.append(DocumentAttributeImageSize(w, h))
 
+        if (mime == "image/png" or mime == "image/jpeg") and file_size < max_image_size:
+            media = InputMediaUploadedPhoto(file_handle)
+        else:
+            media = InputMediaUploadedDocument(file=file_handle, attributes=attributes,
+                                               mime_type=mime or "application/octet-stream")
+
         caption = content.body if content.body != file_name else None
 
-        media = await client.upload_file_direct(
-            file, mime, attributes, file_name,
-            max_image_size=config["bridge.image_as_file_size"] * 1000 ** 2)
         async with self.send_lock(sender_id):
             if await self._matrix_document_edit(client, content, space, caption, media, event_id):
                 return
