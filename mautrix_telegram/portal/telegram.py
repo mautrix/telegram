@@ -181,8 +181,10 @@ class PortalTelegram(BasePortal, ABC):
             self.log.debug(f"Unsupported thumbnail type {type(thumb_size)}")
             thumb_loc = None
             thumb_size = None
+        parallel_id = source.tgid if config["bridge.parallel_file_transfer"] else None
         file = await util.transfer_file_to_matrix(source.client, intent, document, thumb_loc,
-                                                  is_sticker=attrs.is_sticker)
+                                                  is_sticker=attrs.is_sticker, filename=attrs.name,
+                                                  parallel_id=parallel_id)
         if not file:
             return None
 
