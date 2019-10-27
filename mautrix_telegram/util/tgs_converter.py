@@ -44,8 +44,8 @@ if lottieconverter:
         if proc.returncode == 0:
             return "image/png", stdout
         else:
-            log.error("lottieconverter error: " + stderr.decode("utf-8") if stderr is not None
-                      else "unknown")
+            log.error("lottieconverter error: " + (stderr.decode("utf-8") if stderr is not None
+                      else f"unknown ({proc.returncode})"))
             return "application/gzip", file
 
 
@@ -59,8 +59,8 @@ if lottieconverter:
         if proc.returncode == 0:
             return "image/gif", stdout
         else:
-            log.error("lottieconverter error: " + stderr.decode("utf-8") if stderr is not None
-                      else "unknown")
+            log.error("lottieconverter error: " + (stderr.decode("utf-8") if stderr is not None
+                      else f"unknown ({proc.returncode})"))
             return "application/gzip", file
 
 
@@ -90,11 +90,11 @@ if lottieconverter and ffmpeg:
                 if proc.returncode == 0:
                     return "video/webm", stdout
                 else:
-                    log.error("ffmpeg error: " + stderr.decode("utf-8") if stderr is not None
-                              else "unknown")
+                    log.error("ffmpeg error: " + (stderr.decode("utf-8") if stderr is not None
+                              else f"unknown ({proc.returncode})"))
             else:
-                log.error("lottieconverter error: " + stderr.decode("utf-8") if stderr is not None
-                          else "unknown")
+                log.error("lottieconverter error: " + (stderr.decode("utf-8") if stderr is not None
+                          else f"unknown ({proc.returncode})"))
         return "application/gzip", file
 
 
