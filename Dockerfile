@@ -15,7 +15,7 @@ RUN apk add --no-cache git build-base cmake \
 RUN apk add --no-cache libpng libpng-dev zlib zlib-dev \
   && git clone https://github.com/Eramde/LottieConverter.git \
   && cd LottieConverter \
-  && make
+  && make CONF=Release
 
 FROM docker.io/alpine:3.10
 
@@ -24,7 +24,7 @@ ENV UID=1337 \
     FFMPEG_BINARY=/usr/bin/ffmpeg
 
 COPY --from=lottieconverter /usr/lib/librlottie* /usr/lib/
-COPY --from=lottieconverter /build/LottieConverter/dist/Debug/GNU-Linux/lottieconverter /usr/local/bin/lottieconverter
+COPY --from=lottieconverter /build/LottieConverter/dist/Release/GNU-Linux/lottieconverter /usr/local/bin/lottieconverter
 
 COPY . /opt/mautrix-telegram
 WORKDIR /opt/mautrix-telegram
