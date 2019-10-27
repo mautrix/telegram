@@ -479,16 +479,22 @@ class PortalMetadata(BasePortal, ABC):
                 if puppet_id and puppet_id not in allowed_tgids:
                     if self.bot and puppet_id == self.bot.tgid:
                         self.bot.remove_chat(self.tgid)
-                    await self.main_intent.kick_user(self.mxid, user_mxid,
-                                                     "User had left this Telegram chat.")
+                    try:
+                        await self.main_intent.kick_user(self.mxid, user_mxid,
+                                                         "User had left this Telegram chat.")
+                    except MForbidden:
+                        pass
                     continue
                 mx_user = u.User.get_by_mxid(user_mxid, create=False)
                 if mx_user and mx_user.is_bot and mx_user.tgid not in allowed_tgids:
                     mx_user.unregister_portal(self)
 
                 if mx_user and not self.has_bot and mx_user.tgid not in allowed_tgids:
-                    await self.main_intent.kick_user(self.mxid, mx_user.mxid,
-                                                     "You had left this Telegram chat.")
+                    try:
+                        await self.main_intent.kick_user(self.mxid, mx_user.mxid,
+                                                         "You had left this Telegram chat.")
+                    except MForbidden:
+                        pass
                     continue
 
     async def _add_telegram_user(self, user_id: TelegramID, source: Optional['AbstractUser'] = None
@@ -543,6 +549,8 @@ class PortalMetadata(BasePortal, ABC):
             changed = False
 
             if self.peer_type == "channel":
+                changed = self.megagroup != entity.megagroup or changed
+                self.megagroup = entity.megagroup
                 changed = await self._update_username(entity.username) or changed
 
             if hasattr(entity, "about"):

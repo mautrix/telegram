@@ -4,3 +4,7 @@
 *.md
 logs
 .venv
+start
+config.yaml
+registration.yaml
+*.db

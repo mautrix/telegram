@@ -305,7 +305,7 @@ class BasePortal(ABC):
 
     def save(self) -> None:
         self.db_instance.edit(mxid=self.mxid, username=self.username, title=self.title,
-                              about=self.about, photo_id=self.photo_id,
+                              about=self.about, photo_id=self.photo_id, megagroup=self.megagroup,
                               config=json.dumps(self.local_config))
 
     def delete(self) -> None:
