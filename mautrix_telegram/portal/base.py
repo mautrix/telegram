@@ -446,12 +446,13 @@ class BasePortal(ABC):
         pass
 
     @abstractmethod
-    async def _update_title(self, title: str, save: bool = False) -> bool:
+    async def _update_title(self, title: str, sender: Optional['p.Puppet'] = None,
+                            save: bool = False) -> bool:
         pass
 
     @abstractmethod
     async def _update_avatar(self, user: 'AbstractUser', photo: Union[TypeChatPhoto],
-                             save: bool = False) -> bool:
+                             sender: Optional['p.Puppet'] = None, save: bool = False) -> bool:
         pass
 
     @abstractmethod

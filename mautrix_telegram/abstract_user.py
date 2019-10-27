@@ -404,6 +404,9 @@ class AbstractUser(ABC):
 
     async def update_message(self, original_update: UpdateMessage) -> None:
         update, sender, portal = self.get_message_details(original_update)
+        if portal and not portal.allow_bridging:
+            self.log.debug(f"Ignoring message in portal {portal.tgid_log} (bridging disallowed)")
+            return
 
         if self.is_bot:
             if update.is_private:
@@ -430,10 +433,8 @@ class AbstractUser(ABC):
                            sender.id)
             return await portal.handle_telegram_action(self, sender, update)
 
-        user = sender.tgid if sender else "admin"
         if isinstance(original_update, (UpdateEditMessage, UpdateEditChannelMessage)):
             return await portal.handle_telegram_edit(self, sender, update)
-
         return await portal.handle_telegram_message(self, sender, update)
 
     # endregion
