@@ -183,8 +183,8 @@ bridge:
         args:
             width: 256
             height: 256
-            background: "020202"        # only for gif
-            fps: 30                     # only for webm
+            background: "020202"  # only for gif
+            fps: 30               # only for webm
 
     # Whether to bridge Telegram bot messages as m.notices or m.texts.
     bot_messages_as_notices: true
