@@ -101,6 +101,7 @@ class Config(BaseBridgeConfig):
         copy("bridge.inline_images")
         copy("bridge.image_as_file_size")
         copy("bridge.max_document_size")
+        copy("bridge.parallel_file_transfer")
         copy("bridge.federate_rooms")
         copy("bridge.animated_sticker.target")
         copy("bridge.animated_sticker.args")

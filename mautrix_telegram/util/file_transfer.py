@@ -34,6 +34,7 @@ from mautrix.appservice import IntentAPI
 from ..tgclient import MautrixTelegramClient
 from ..db import TelegramFile as DBTelegramFile
 from ..util import sane_mimetypes
+from .parallel_file_transfer import parallel_transfer_to_matrix
 
 try:
     from PIL import Image
@@ -129,7 +130,7 @@ async def transfer_thumbnail_to_matrix(client: MautrixTelegramClient, intent: In
         return db_file
 
     video_ext = sane_mimetypes.guess_extension(mime)
-    if VideoFileClip and video_ext:
+    if VideoFileClip and video_ext and video:
         try:
             file, width, height = _read_video_thumbnail(video, video_ext, frame_ext="png")
         except OSError:
@@ -161,7 +162,8 @@ TypeThumbnail = Optional[Union[TypeLocation, TypePhotoSize]]
 
 async def transfer_file_to_matrix(client: MautrixTelegramClient, intent: IntentAPI,
                                   location: TypeLocation, thumbnail: TypeThumbnail = None,
-                                  is_sticker: bool = False, tgs_convert: Optional[dict] = None
+                                  is_sticker: bool = False, tgs_convert: Optional[dict] = None,
+                                  filename: Optional[str] = None, parallel_id: Optional[int] = None
                                   ) -> Optional[DBTelegramFile]:
     location_id = _location_to_id(location)
     if not location_id:
@@ -178,53 +180,61 @@ async def transfer_file_to_matrix(client: MautrixTelegramClient, intent: IntentA
         transfer_locks[location_id] = lock
     async with lock:
         return await _unlocked_transfer_file_to_matrix(client, intent, location_id, location,
-                                                       thumbnail, is_sticker, tgs_convert)
+                                                       thumbnail, is_sticker, tgs_convert,
+                                                       filename, parallel_id)
 
 
 async def _unlocked_transfer_file_to_matrix(client: MautrixTelegramClient, intent: IntentAPI,
                                             loc_id: str, location: TypeLocation,
                                             thumbnail: TypeThumbnail, is_sticker: bool,
-                                            tgs_convert: Optional[dict]
+                                            tgs_convert: Optional[dict], filename: Optional[str],
+                                            parallel_id: Optional[int]
                                             ) -> Optional[DBTelegramFile]:
     db_file = DBTelegramFile.get(loc_id)
     if db_file:
         return db_file
 
-    try:
-        file = await client.download_file(location)
-    except (LocationInvalidError, FileIdInvalidError):
-        return None
-    except (AuthBytesInvalidError, AuthKeyInvalidError, SecurityError) as e:
-        log.exception(f"{e.__class__.__name__} while downloading a file.")
-        return None
+    if parallel_id and isinstance(location, Document) and (not is_sticker or not tgs_convert):
+        db_file = await parallel_transfer_to_matrix(client, intent, loc_id, location, filename,
+                                                    parallel_id)
+        mime_type = location.mime_type
+        file = None
+    else:
+        try:
+            file = await client.download_file(location)
+        except (LocationInvalidError, FileIdInvalidError):
+            return None
+        except (AuthBytesInvalidError, AuthKeyInvalidError, SecurityError) as e:
+            log.exception(f"{e.__class__.__name__} while downloading a file.")
+            return None
 
-    width, height = None, None
-    mime_type = magic.from_buffer(file, mime=True)
+        width, height = None, None
+        mime_type = magic.from_buffer(file, mime=True)
 
-    image_converted = False
-    # A weird bug in alpine/magic makes it return application/octet-stream for gzips...
-    if is_sticker and tgs_convert and (mime_type == "application/gzip" or (
-           mime_type == "application/octet-stream"
-           and magic.from_buffer(file).startswith("gzip"))):
-        mime_type, file, width, height = await convert_tgs_to(
-            file, tgs_convert["target"], **tgs_convert["args"])
-        thumbnail = None
-        image_converted = mime_type != "application/gzip"
+        image_converted = False
+        # A weird bug in alpine/magic makes it return application/octet-stream for gzips...
+        if is_sticker and tgs_convert and (mime_type == "application/gzip" or (
+               mime_type == "application/octet-stream"
+               and magic.from_buffer(file).startswith("gzip"))):
+            mime_type, file, width, height = await convert_tgs_to(
+                file, tgs_convert["target"], **tgs_convert["args"])
+            thumbnail = None
+            image_converted = mime_type != "application/gzip"
 
-    if mime_type == "image/webp":
-        new_mime_type, file, width, height = convert_image(
-            file, source_mime="image/webp", target_type="png",
-            thumbnail_to=(256, 256) if is_sticker else None)
-        image_converted = new_mime_type != mime_type
-        mime_type = new_mime_type
-        thumbnail = None
+        if mime_type == "image/webp":
+            new_mime_type, file, width, height = convert_image(
+                file, source_mime="image/webp", target_type="png",
+                thumbnail_to=(256, 256) if is_sticker else None)
+            image_converted = new_mime_type != mime_type
+            mime_type = new_mime_type
+            thumbnail = None
 
-    content_uri = await intent.upload_media(file, mime_type)
+        content_uri = await intent.upload_media(file, mime_type)
 
-    db_file = DBTelegramFile(id=loc_id, mxc=content_uri,
-                             mime_type=mime_type, was_converted=image_converted,
-                             timestamp=int(time.time()), size=len(file),
-                             width=width, height=height)
+        db_file = DBTelegramFile(id=loc_id, mxc=content_uri,
+                                 mime_type=mime_type, was_converted=image_converted,
+                                 timestamp=int(time.time()), size=len(file),
+                                 width=width, height=height)
     if thumbnail and (mime_type.startswith("video/") or mime_type == "image/gif"):
         if isinstance(thumbnail, (PhotoSize, PhotoCachedSize)):
             thumbnail = thumbnail.location

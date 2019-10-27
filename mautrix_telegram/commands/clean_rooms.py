@@ -155,7 +155,7 @@ async def set_rooms_to_clean(evt, management_rooms: List[ManagementRoom],
         "next": lambda confirm: execute_room_cleanup(confirm, rooms_to_clean),
         "action": "Room cleaning",
     }
-    await evt.reply(f"To confirm cleaning up {len(rooms_to_clean)} rooms, type"
+    await evt.reply(f"To confirm cleaning up {len(rooms_to_clean)} rooms, type "
                     "`$cmdprefix+sp confirm-clean`.")
 
 

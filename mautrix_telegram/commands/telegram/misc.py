@@ -13,7 +13,7 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, cast
 import logging
 import codecs
 import base64
@@ -23,19 +23,35 @@ from telethon.errors import (InviteHashInvalidError, InviteHashExpiredError, Opt
                              UserAlreadyParticipantError, ChatIdInvalidError)
 from telethon.tl.patched import Message
 from telethon.tl.types import (User as TLUser, TypeUpdates, MessageMediaGame, MessageMediaPoll,
-                               TypePeer)
+                               TypeInputPeer)
 from telethon.tl.types.messages import BotCallbackAnswer
 from telethon.tl.functions.messages import (ImportChatInviteRequest, CheckChatInviteRequest,
                                             GetBotCallbackAnswerRequest, SendVoteRequest)
 from telethon.tl.functions.channels import JoinChannelRequest
 
-from mautrix.types import EventID
+from mautrix.types import EventID, Format
 
 from ... import puppet as pu, portal as po
 from ...abstract_user import AbstractUser
 from ...db import Message as DBMessage
 from ...types import TelegramID
 from ...commands import command_handler, CommandEvent, SECTION_MISC, SECTION_CREATING_PORTALS
+
+
+@command_handler(needs_auth=False,
+                 help_section=SECTION_MISC, help_args="<_caption_>",
+                 help_text="Set a caption for the next image you send")
+async def caption(evt: CommandEvent) -> EventID:
+    if len(evt.args) == 0:
+        return await evt.reply("**Usage:** `$cmdprefix+sp caption <caption>`")
+
+    prefix = f"{evt.command_prefix} caption "
+    if evt.content.format == Format.HTML:
+        evt.content.formatted_body = evt.content.formatted_body.replace(prefix, "", 1)
+    evt.content.body = evt.content.body.replace(prefix, "", 1)
+    evt.sender.command_status = {"caption": evt.content}
+    return await evt.reply("Your next image or file will be sent with that caption. "
+                           "Use `$cmdprefix+sp cancel` to cancel the caption.")
 
 
 @command_handler(help_section=SECTION_MISC,
@@ -76,8 +92,7 @@ async def search(evt: CommandEvent) -> EventID:
     return await evt.reply("\n".join(reply))
 
 
-@command_handler(help_section=SECTION_CREATING_PORTALS,
-                 help_args="<_identifier_>",
+@command_handler(help_section=SECTION_CREATING_PORTALS, help_args="<_identifier_>",
                  help_text="Open a private chat with the given Telegram user. The identifier is "
                            "either the internal user ID, the username or the phone number. "
                            "**N.B.** The phone numbers you start chats with must already be in "
@@ -183,7 +198,7 @@ class MessageIDError(ValueError):
 
 
 async def _parse_encoded_msgid(user: AbstractUser, enc_id: str, type_name: str
-                               ) -> Tuple[TypePeer, Message]:
+                               ) -> Tuple[TypeInputPeer, Message]:
     try:
         enc_id += (4 - len(enc_id) % 4) * "="
         enc_id = base64.b64decode(enc_id)
@@ -212,7 +227,7 @@ async def _parse_encoded_msgid(user: AbstractUser, enc_id: str, type_name: str
     msg = await user.client.get_messages(entity=peer, ids=msg_id)
     if not msg:
         raise MessageIDError(f"Invalid {type_name} ID (message not found)")
-    return peer, msg
+    return peer, cast(Message, msg)
 
 
 @command_handler(help_section=SECTION_MISC,
@@ -234,12 +249,13 @@ async def play(evt: CommandEvent) -> EventID:
     if not isinstance(msg.media, MessageMediaGame):
         return await evt.reply("Invalid play ID (message doesn't look like a game)")
 
-    game = await evt.sender.client(GetBotCallbackAnswerRequest(peer=peer, msg_id=msg.id, game=True))
+    game = await evt.sender.client(
+        GetBotCallbackAnswerRequest(peer=peer, msg_id=msg.id, game=True))
     if not isinstance(game, BotCallbackAnswer):
         return await evt.reply("Game request response invalid")
 
     return await evt.reply(f"Click [here]({game.url}) to play {msg.media.game.title}:\n\n"
-                    f"{msg.media.game.description}")
+                           f"{msg.media.game.description}")
 
 
 @command_handler(help_section=SECTION_MISC,

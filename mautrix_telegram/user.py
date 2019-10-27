@@ -219,7 +219,7 @@ class User(AbstractUser, BaseUser):
             else:
                 portal = po.Portal.get_by_entity(message.to_id, receiver_id=self.tgid)
         elif isinstance(update, UpdateShortChatMessage):
-            portal = po.Portal.get_by_tgid(TelegramID(update.chat_id), peer_type="chat")
+            portal = po.Portal.get_by_tgid(TelegramID(update.chat_id))
         elif isinstance(update, UpdateShortMessage):
             portal = po.Portal.get_by_tgid(TelegramID(update.user_id), self.tgid, "user")
         else:

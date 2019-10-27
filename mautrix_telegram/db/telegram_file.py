@@ -30,9 +30,9 @@ class TelegramFile(Base):
     mime_type: str = Column(String)
     was_converted: bool = Column(Boolean)
     timestamp: int = Column(BigInteger)
-    size: int = Column(Integer, nullable=True)
-    width: int = Column(Integer, nullable=True)
-    height: int = Column(Integer, nullable=True)
+    size: Optional[int] = Column(Integer, nullable=True)
+    width: Optional[int] = Column(Integer, nullable=True)
+    height: Optional[int] = Column(Integer, nullable=True)
     thumbnail_id: str = Column("thumbnail", String, ForeignKey("telegram_file.id"), nullable=True)
     thumbnail: Optional['TelegramFile'] = None
 
