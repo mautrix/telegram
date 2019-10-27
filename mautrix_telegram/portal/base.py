@@ -379,6 +379,10 @@ class BasePortal(ABC):
             return cls.from_db(db_portal)
 
         if peer_type:
+            cls.log.info(f"Creating portal for {peer_type} {tgid} (receiver {tg_receiver})")
+            if peer_type == "chat":
+                import traceback
+                cls.log.info("Chat portal stack trace:\n" + "".join(traceback.format_stack()))
             portal = cls(tgid, peer_type=peer_type, tg_receiver=tg_receiver)
             portal.db_instance.insert()
             return portal

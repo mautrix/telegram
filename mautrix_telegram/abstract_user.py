@@ -434,7 +434,6 @@ class AbstractUser(ABC):
         if isinstance(original_update, (UpdateEditMessage, UpdateEditChannelMessage)):
             return await portal.handle_telegram_edit(self, sender, update)
 
-        self.log.debug("Handling message %s to %s by %s", update, portal.tgid_log, user)
         return await portal.handle_telegram_message(self, sender, update)
 
     # endregion
