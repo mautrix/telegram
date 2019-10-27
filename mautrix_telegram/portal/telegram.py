@@ -61,16 +61,6 @@ config: Optional['Config'] = None
 
 
 class PortalTelegram(BasePortal, ABC):
-    _temp_pinned_message_id: Optional[TelegramID]
-    _temp_pinned_message_id_space: Optional[TelegramID]
-    _temp_pinned_message_sender: Optional['p.Puppet']
-
-    def __init__(self, *args, **kwargs) -> None:
-        super().__init__(*args, **kwargs)
-        self._temp_pinned_message_id = None
-        self._temp_pinned_message_id_space = None
-        self._temp_pinned_message_sender = None
-
     async def handle_telegram_typing(self, user: p.Puppet,
                                      _: Union[UpdateUserTyping, UpdateChatUserTyping]) -> None:
         await user.intent_for(self).set_typing(self.mxid, is_typing=True)
@@ -494,8 +484,6 @@ class PortalTelegram(BasePortal, ABC):
             self._migrate_and_save_telegram(TelegramID(action.channel_id))
             await sender.intent_for(self).send_emote(self.mxid,
                                                      "upgraded this group to a supergroup.")
-        elif isinstance(action, MessageActionPinMessage):
-            await self.receive_telegram_pin_sender(sender)
         elif isinstance(action, MessageActionGameScore):
             # TODO handle game score
             pass
@@ -513,31 +501,13 @@ class PortalTelegram(BasePortal, ABC):
             levels.users[puppet.mxid] = 50
         await self.main_intent.set_power_levels(self.mxid, levels)
 
-    async def receive_telegram_pin_sender(self, sender: p.Puppet) -> None:
-        self._temp_pinned_message_sender = sender
-        if self._temp_pinned_message_id:
-            await self.update_telegram_pin()
-
-    async def update_telegram_pin(self) -> None:
-        intent = (self._temp_pinned_message_sender.intent_for(self)
-                  if self._temp_pinned_message_sender else self.main_intent)
-        msg_id = self._temp_pinned_message_id
-        self._temp_pinned_message_id = None
-        self._temp_pinned_message_sender = None
-
-        message = DBMessage.get_one_by_tgid(msg_id, self._temp_pinned_message_id_space)
-        if message:
-            await intent.set_pinned_messages(self.mxid, [message.mxid])
-        else:
-            await intent.set_pinned_messages(self.mxid, [])
-
     async def receive_telegram_pin_id(self, msg_id: TelegramID, receiver: TelegramID) -> None:
-        if msg_id == 0:
-            return await self.update_telegram_pin()
-        self._temp_pinned_message_id = msg_id
-        self._temp_pinned_message_id_space = receiver if self.peer_type != "channel" else self.tgid
-        if self._temp_pinned_message_sender:
-            await self.update_telegram_pin()
+        tg_space = receiver  if self.peer_type != "channel" else self.tgid
+        message = DBMessage.get_one_by_tgid(msg_id, tg_space) if msg_id != 0 else None
+        if message:
+            await self.main_intent.set_pinned_messages(self.mxid, [message.mxid])
+        else:
+            await self.main_intent.set_pinned_messages(self.mxid, [])
 
     async def set_telegram_admins_enabled(self, enabled: bool) -> None:
         level = 50 if enabled else 10
