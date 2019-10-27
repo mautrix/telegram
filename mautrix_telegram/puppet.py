@@ -259,9 +259,7 @@ class Puppet(CustomPuppetMixin):
         allow_source = (source.is_relaybot
                         or self.displayname_source == source.tgid
                         # No displayname source, so just trust anything
-                        or self.displayname_source is None
-                        # No phone -> not in contact list -> can't set custom name
-                        or (isinstance(info, User) and info.phone is None))
+                        or self.displayname_source is None)
         if not allow_source:
             return False
         elif isinstance(info, UpdateUserName):
