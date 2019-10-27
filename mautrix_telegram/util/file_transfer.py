@@ -30,6 +30,7 @@ from telethon.errors import (AuthBytesInvalidError, AuthKeyInvalidError, Locatio
 
 from mautrix.appservice import IntentAPI
 
+
 from ..tgclient import MautrixTelegramClient
 from ..db import TelegramFile as DBTelegramFile
 from ..util import sane_mimetypes
@@ -48,6 +49,8 @@ try:
     import mimetypes
 except ImportError:
     VideoFileClip = random = string = os = mimetypes = None
+
+from .tgs_converter import convert_tgs_to
 
 log: logging.Logger = logging.getLogger("mau.util")
 
@@ -159,8 +162,9 @@ TypeThumbnail = Optional[Union[TypeLocation, TypePhotoSize]]
 
 async def transfer_file_to_matrix(client: MautrixTelegramClient, intent: IntentAPI,
                                   location: TypeLocation, thumbnail: TypeThumbnail = None,
-                                  is_sticker: bool = False, filename: Optional[str] = None,
-                                  parallel_id: Optional[int] = None) -> Optional[DBTelegramFile]:
+                                  is_sticker: bool = False, tgs_convert: Optional[dict] = None,
+                                  filename: Optional[str] = None, parallel_id: Optional[int] = None
+                                  ) -> Optional[DBTelegramFile]:
     location_id = _location_to_id(location)
     if not location_id:
         return None
@@ -176,21 +180,21 @@ async def transfer_file_to_matrix(client: MautrixTelegramClient, intent: IntentA
         transfer_locks[location_id] = lock
     async with lock:
         return await _unlocked_transfer_file_to_matrix(client, intent, location_id, location,
-                                                       thumbnail, is_sticker, filename,
-                                                       parallel_id)
+                                                       thumbnail, is_sticker, tgs_convert,
+                                                       filename, parallel_id)
 
 
 async def _unlocked_transfer_file_to_matrix(client: MautrixTelegramClient, intent: IntentAPI,
                                             loc_id: str, location: TypeLocation,
                                             thumbnail: TypeThumbnail, is_sticker: bool,
-                                            filename: Optional[str],
-                                            parallel_id: Optional[int] = None
+                                            tgs_convert: Optional[dict], filename: Optional[str],
+                                            parallel_id: Optional[int]
                                             ) -> Optional[DBTelegramFile]:
     db_file = DBTelegramFile.get(loc_id)
     if db_file:
         return db_file
 
-    if parallel_id and isinstance(location, Document):
+    if parallel_id and isinstance(location, Document) and (not is_sticker or not tgs_convert):
         db_file = await parallel_transfer_to_matrix(client, intent, loc_id, location, filename,
                                                     parallel_id)
         mime_type = location.mime_type
@@ -208,6 +212,15 @@ async def _unlocked_transfer_file_to_matrix(client: MautrixTelegramClient, inten
         mime_type = magic.from_buffer(file, mime=True)
 
         image_converted = False
+        # A weird bug in alpine/magic makes it return application/octet-stream for gzips...
+        if is_sticker and tgs_convert and (mime_type == "application/gzip" or (
+               mime_type == "application/octet-stream"
+               and magic.from_buffer(file).startswith("gzip"))):
+            mime_type, file, width, height = await convert_tgs_to(
+                file, tgs_convert["target"], **tgs_convert["args"])
+            thumbnail = None
+            image_converted = mime_type != "application/gzip"
+
         if mime_type == "image/webp":
             new_mime_type, file, width, height = convert_image(
                 file, source_mime="image/webp", target_type="png",

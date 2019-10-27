@@ -183,8 +183,9 @@ class PortalTelegram(BasePortal, ABC):
             thumb_size = None
         parallel_id = source.tgid if config["bridge.parallel_file_transfer"] else None
         file = await util.transfer_file_to_matrix(source.client, intent, document, thumb_loc,
-                                                  is_sticker=attrs.is_sticker, filename=attrs.name,
-                                                  parallel_id=parallel_id)
+                                                  is_sticker=attrs.is_sticker,
+                                                  tgs_convert=config["bridge.animated_sticker"],
+                                                  filename=attrs.name, parallel_id=parallel_id)
         if not file:
             return None
 
@@ -192,7 +193,10 @@ class PortalTelegram(BasePortal, ABC):
 
         await intent.set_typing(self.mxid, is_typing=False)
 
-        event_type = EventType.STICKER if attrs.is_sticker else EventType.ROOM_MESSAGE
+        event_type = EventType.ROOM_MESSAGE
+        # Riot only supports images as stickers, so send animated webm stickers as m.video
+        if attrs.is_sticker and file.mime_type.startswith("image/"):
+            event_type = EventType.STICKER
         content = MediaMessageEventContent(
             body=name or "unnamed file", info=info, url=file.mxc, relates_to=relates_to,
             external_url=self._get_external_url(evt),

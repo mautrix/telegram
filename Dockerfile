@@ -1,8 +1,30 @@
+FROM docker.io/alpine:3.10 AS lottieconverter
+
+WORKDIR /build
+
+RUN apk add --no-cache git build-base cmake \
+  && git clone https://github.com/Samsung/rlottie.git \
+  && cd rlottie \
+  && mkdir build \
+  && cd build \
+  && cmake .. \
+  && make -j2 \
+  && make install \
+  && cd ../..
+
+RUN apk add --no-cache libpng libpng-dev zlib zlib-dev \
+  && git clone https://github.com/Eramde/LottieConverter.git \
+  && cd LottieConverter \
+  && make
+
 FROM docker.io/alpine:3.10
 
 ENV UID=1337 \
     GID=1337 \
     FFMPEG_BINARY=/usr/bin/ffmpeg
+
+COPY --from=lottieconverter /usr/lib/librlottie* /usr/lib/
+COPY --from=lottieconverter /build/LottieConverter/dist/Debug/GNU-Linux/lottieconverter /usr/local/bin/lottieconverter
 
 COPY . /opt/mautrix-telegram
 WORKDIR /opt/mautrix-telegram
@@ -41,6 +63,8 @@ RUN apk add --no-cache --virtual .build-deps \
       ca-certificates \
       su-exec \
       netcat-openbsd \
+      # lottieconverter
+      zlib libpng \
  && pip3 install .[speedups,hq_thumbnails,metrics] \
  && apk del .build-deps
 

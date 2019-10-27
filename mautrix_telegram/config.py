@@ -103,6 +103,8 @@ class Config(BaseBridgeConfig):
         copy("bridge.max_document_size")
         copy("bridge.parallel_file_transfer")
         copy("bridge.federate_rooms")
+        copy("bridge.animated_sticker.target")
+        copy("bridge.animated_sticker.args")
 
         copy("bridge.bot_messages_as_notices")
         if isinstance(self["bridge.bridge_notices"], bool):
