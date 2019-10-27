@@ -53,7 +53,6 @@ class DownloadSender:
 
     def __init__(self, sender: MTProtoSender, file: TypeLocation, offset: int, limit: int,
                  stride: int, count: int) -> None:
-        log.debug(f"Creating download sender with {offset=} {limit=} {stride=} {count=}")
         self.sender = sender
         self.request = GetFileRequest(file, offset=offset, limit=limit)
         self.stride = stride
@@ -81,8 +80,6 @@ class UploadSender:
 
     def __init__(self, sender: MTProtoSender, file_id: int, part_count: int, big: bool, index: int,
                  stride: int, loop: asyncio.AbstractEventLoop) -> None:
-        log.debug(
-            f"Creating upload sender with {file_id=} {part_count=} {big=} {index=} {stride=}")
         self.sender = sender
         self.part_count = part_count
         if big:
