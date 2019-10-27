@@ -18,7 +18,7 @@ from typing import Awaitable, Callable, List, Optional, NamedTuple, Any
 
 from telethon.errors import FloodWaitError
 
-from mautrix.types import RoomID, EventID
+from mautrix.types import RoomID, EventID, MessageEventContent
 from mautrix.bridge.commands import (HelpSection, CommandEvent as BaseCommandEvent,
                                      CommandHandler as BaseCommandHandler,
                                      CommandProcessor as BaseCommandProcessor,
@@ -42,10 +42,10 @@ class CommandEvent(BaseCommandEvent):
     sender: u.User
 
     def __init__(self, processor: 'CommandProcessor', room_id: RoomID, event_id: EventID,
-                 sender: u.User, command: str, args: List[str], is_management: bool,
-                 is_portal: bool) -> None:
-        super().__init__(processor, room_id, event_id, sender, command, args, is_management,
-                         is_portal)
+                 sender: u.User, command: str, args: List[str], content: MessageEventContent,
+                 is_management: bool, is_portal: bool) -> None:
+        super().__init__(processor, room_id, event_id, sender, command, args, content,
+                         is_management, is_portal)
         self.bridge = processor.bridge
         self.tgbot = processor.tgbot
         self.config = processor.config
@@ -69,7 +69,7 @@ class CommandHandler(BaseCommandHandler):
     def __init__(self, handler: Callable[[CommandEvent], Awaitable[EventID]],
                  management_only: bool, name: str, help_text: str, help_args: str,
                  help_section: HelpSection, needs_auth: bool, needs_puppeting: bool,
-                 needs_matrix_puppeting: bool, needs_admin: bool,) -> None:
+                 needs_matrix_puppeting: bool, needs_admin: bool) -> None:
         super().__init__(handler, management_only, name, help_text, help_args, help_section,
                          needs_auth=needs_auth, needs_puppeting=needs_puppeting,
                          needs_matrix_puppeting=needs_matrix_puppeting, needs_admin=needs_admin)

@@ -29,7 +29,7 @@ from telethon.tl.functions.messages import (ImportChatInviteRequest, CheckChatIn
                                             GetBotCallbackAnswerRequest, SendVoteRequest)
 from telethon.tl.functions.channels import JoinChannelRequest
 
-from mautrix.types import EventID
+from mautrix.types import EventID, Format
 
 from ... import puppet as pu, portal as po
 from ...abstract_user import AbstractUser
@@ -45,11 +45,12 @@ async def caption(evt: CommandEvent) -> EventID:
     if len(evt.args) == 0:
         return await evt.reply("**Usage:** `$cmdprefix+sp caption <caption>`")
 
-    text = " ".join(evt.args)
-    evt.sender.command_status = {"caption": text}
-    quoted_text = "\n".join(f"> {row}" for row in text.split("\n"))
-    return await evt.reply("Your next image will be captioned with\n\n"
-                           f"{quoted_text}\n\n"
+    prefix = f"{evt.command_prefix} caption "
+    if evt.content.format == Format.HTML:
+        evt.content.formatted_body = evt.content.formatted_body.replace(prefix, "", 1)
+    evt.content.body = evt.content.body.replace(prefix, "", 1)
+    evt.sender.command_status = {"caption": evt.content}
+    return await evt.reply("Your next image or file will be sent with that caption. "
                            "Use `$cmdprefix+sp cancel` to cancel the caption.")
 
 

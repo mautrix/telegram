@@ -169,7 +169,7 @@ class PortalMatrix(BasePortal, MautrixBasePortal, ABC):
 
     async def _apply_msg_format(self, sender: 'u.User', content: MessageEventContent
                                 ) -> None:
-        if isinstance(content, TextMessageEventContent) and content.format != Format.HTML:
+        if not isinstance(content, TextMessageEventContent) or content.format != Format.HTML:
             content.format = Format.HTML
             content.formatted_body = escape_html(content.body).replace("\n", "<br/>")
 
@@ -179,14 +179,9 @@ class PortalMatrix(BasePortal, MautrixBasePortal, ABC):
         tpl_args = dict(sender_mxid=sender.mxid,
                         sender_username=sender.mxid_localpart,
                         sender_displayname=escape_html(displayname),
-                        body=content.body)
-        if isinstance(content, TextMessageEventContent):
-            tpl_args["formatted_body"] = content.formatted_body
-            tpl_args["message"] = content.formatted_body
-            content.formatted_body = Template(tpl).safe_substitute(tpl_args)
-        else:
-            tpl_args["message"] = content.body
-            content.body = Template(tpl).safe_substitute(tpl_args)
+                        message=content.formatted_body,
+                        body=content.body, formatted_body=content.formatted_body)
+        content.formatted_body = Template(tpl).safe_substitute(tpl_args)
 
     async def _apply_emote_format(self, sender: 'u.User',
                                   content: TextMessageEventContent) -> None:
@@ -248,7 +243,8 @@ class PortalMatrix(BasePortal, MautrixBasePortal, ABC):
 
     async def _handle_matrix_file(self, sender_id: TelegramID, event_id: EventID,
                                   space: TelegramID, client: 'MautrixTelegramClient',
-                                  content: MediaMessageEventContent, reply_to: TelegramID) -> None:
+                                  content: MediaMessageEventContent, reply_to: TelegramID,
+                                  caption: TextMessageEventContent = None) -> None:
         mime = content.info.mimetype
         w, h = content.info.width, content.info.height
         file_name = content["net.maunium.telegram.internal.filename"]
@@ -256,7 +252,7 @@ class PortalMatrix(BasePortal, MautrixBasePortal, ABC):
 
         if config["bridge.parallel_file_transfer"]:
             file_handle, file_size = await parallel_transfer_to_telegram(client, self.main_intent,
-                                                                         content.url, 0)
+                                                                         content.url, sender_id)
         else:
             file = await self.main_intent.download_media(content.url)
 
@@ -283,19 +279,19 @@ class PortalMatrix(BasePortal, MautrixBasePortal, ABC):
             media = InputMediaUploadedDocument(file=file_handle, attributes=attributes,
                                                mime_type=mime or "application/octet-stream")
 
-        caption = content.body if content.body != file_name else None
+        caption, entities = self._matrix_event_to_entities(caption) if caption else (None, None)
 
         async with self.send_lock(sender_id):
             if await self._matrix_document_edit(client, content, space, caption, media, event_id):
                 return
             try:
                 response = await client.send_media(self.peer, media, reply_to=reply_to,
-                                                   caption=caption)
+                                                   caption=caption, entities=entities)
             except (PhotoInvalidDimensionsError, PhotoSaveFileInvalidError, PhotoExtInvalidError):
                 media = InputMediaUploadedDocument(file=media.file, mime_type=mime,
                                                    attributes=attributes)
                 response = await client.send_media(self.peer, media, reply_to=reply_to,
-                                                   caption=caption)
+                                                   caption=caption, entities=entities)
             self._add_telegram_message_to_db(event_id, space, 0, response)
 
     async def _matrix_document_edit(self, client: 'MautrixTelegramClient',
@@ -364,14 +360,18 @@ class PortalMatrix(BasePortal, MautrixBasePortal, ABC):
 
         media = (MessageType.STICKER, MessageType.IMAGE, MessageType.FILE, MessageType.AUDIO,
                  MessageType.VIDEO)
+        caption_content = None
         if content.msgtype in media:
             content["net.maunium.telegram.internal.filename"] = content.body
             try:
-                content.body = sender.command_status["caption"]
+                caption_content: MessageEventContent = sender.command_status["caption"]
+                caption_content.msgtype = content.msgtype
+                reply_to = reply_to or formatter.matrix_reply_to_telegram(caption_content, space,
+                                                                          room_id=self.mxid)
                 sender.command_status = None
             except (KeyError, TypeError):
                 pass
-        await self._pre_process_matrix_message(sender, not logged_in, content)
+        await self._pre_process_matrix_message(sender, not logged_in, caption_content or content)
 
         if content.msgtype == MessageType.NOTICE:
             bridge_notices = self.get_config("bridge_notices.default")
@@ -385,7 +385,8 @@ class PortalMatrix(BasePortal, MautrixBasePortal, ABC):
             await self._handle_matrix_location(sender_id, event_id, space, client, content,
                                                reply_to)
         elif content.msgtype in media:
-            await self._handle_matrix_file(sender_id, event_id, space, client, content, reply_to)
+            await self._handle_matrix_file(sender_id, event_id, space, client, content, reply_to,
+                                           caption_content)
         else:
             self.log.debug(f"Unhandled Matrix event: {content}")
 
