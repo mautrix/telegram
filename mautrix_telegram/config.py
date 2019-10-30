@@ -106,6 +106,9 @@ class Config(BaseBridgeConfig):
         copy("bridge.animated_sticker.target")
         copy("bridge.animated_sticker.args")
 
+        copy("bridge.initial_power_level_overrides.group")
+        copy("bridge.initial_power_level_overrides.user")
+
         copy("bridge.bot_messages_as_notices")
         if isinstance(self["bridge.bridge_notices"], bool):
             base["bridge.bridge_notices"] = {

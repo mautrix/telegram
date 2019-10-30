@@ -335,26 +335,28 @@ class PortalMetadata(BasePortal, ABC):
                                entity: TypeChat = None) -> PowerLevelStateEventContent:
         levels = levels or PowerLevelStateEventContent()
         if self.peer_type == "user":
-            levels.ban = 100
-            levels.kick = 100
-            levels.invite = 100
-            levels.redact = 0
+            overrides = config["bridge.initial_power_level_overrides.user"]
+            levels.ban = overrides.get("ban", 100)
+            levels.kick = overrides.get("kick", 100)
+            levels.invite = overrides.get("invite", 100)
+            levels.redact = overrides.get("redact", 0)
             levels.events[EventType.ROOM_NAME] = 0
             levels.events[EventType.ROOM_AVATAR] = 0
             levels.events[EventType.ROOM_TOPIC] = 0
-            levels.state_default = 0
-            levels.users_default = 0
-            levels.events_default = 0
+            levels.state_default = overrides.get("state_default", 0)
+            levels.users_default = overrides.get("users_default", 0)
+            levels.events_default = overrides.get("events_default", 0)
         else:
+            overrides = config["bridge.initial_power_level_overrides.group"]
             dbr = entity.default_banned_rights
             if not dbr:
                 self.log.debug(f"default_banned_rights is None in {entity}")
                 dbr = ChatBannedRights(invite_users=True, change_info=True, pin_messages=True,
                                        send_stickers=False, send_messages=False, until_date=None)
-            levels.ban = 50
-            levels.kick = 50
-            levels.redact = 50
-            levels.invite = 50 if dbr.invite_users else 0
+            levels.ban = overrides.get("ban", 50)
+            levels.kick = overrides.get("kick", 50)
+            levels.redact = overrides.get("redact", 50)
+            levels.invite = overrides.invite or (50 if dbr.invite_users else 0)
             levels.events[EventType.ROOM_ENCRYPTED] = 99
             levels.events[EventType.ROOM_TOMBSTONE] = 99
             levels.events[EventType.ROOM_NAME] = 50 if dbr.change_info else 0
@@ -363,13 +365,19 @@ class PortalMetadata(BasePortal, ABC):
             levels.events[EventType.ROOM_PINNED_EVENTS] = 50 if dbr.pin_messages else 0
             levels.events[EventType.ROOM_POWER_LEVELS] = 75
             levels.events[EventType.ROOM_HISTORY_VISIBILITY] = 75
-            levels.state_default = 50
-            levels.users_default = 0
-            levels.events_default = (50 if (self.peer_type == "channel" and not entity.megagroup
-                                            or entity.default_banned_rights.send_messages)
-                                     else 0)
             levels.events[EventType.STICKER] = 50 if dbr.send_stickers else levels.events_default
-        levels.users[self.main_intent.mxid] = 100
+            levels.state_default = overrides.get("state_default", 50)
+            levels.users_default = overrides.get("users_default", 0)
+            levels.events_default = (
+                overrides.get("events_default",
+                              50 if (self.peer_type == "channel" and not entity.megagroup
+                                     or entity.default_banned_rights.send_messages)
+                              else 0))
+        for evt_type, value in overrides.get("events", {}).items():
+            levels.events[EventType.find(evt_type)] = value
+        levels.users = overrides.get("users", {})
+        if self.main_intent.mxid not in levels.users:
+            levels.users[self.main_intent.mxid] = 100
         return levels
 
     @staticmethod
@@ -585,7 +593,8 @@ class PortalMetadata(BasePortal, ABC):
             self.save()
         return True
 
-    async def _try_use_intent(self, sender: Optional['p.Puppet'], action: Callable[[IntentAPI], None]) -> None:
+    async def _try_use_intent(self, sender: Optional['p.Puppet'],
+                              action: Callable[[IntentAPI], None]) -> None:
         if sender:
             try:
                 await action(sender.intent_for(self))
