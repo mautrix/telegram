@@ -1,0 +1,57 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ template "mautrix-telegram.fullname" . }}
+  labels:
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    helm.sh/chart: {{ .Chart.Name }}-{{ .Chart.Version }}
+    app.kubernetes.io/name: {{ template "mautrix-telegram.name" . }}
+data:
+  config.yaml: |
+    homeserver:
+      address: {{ .Values.homeserver.address }}
+      domain: {{ .Values.homeserver.domain }}
+      verify_ssl: {{ .Values.homeserver.verifySSL }}
+
+    appservice:
+      address: http://{{ include "mautrix-telegram.fullname" . }}:{{ .Values.service.port }}
+
+      hostname: 0.0.0.0
+      port: {{ .Values.service.port }}
+      max_body_size: {{ .Values.appservice.maxBodySize }}
+
+      {{- if .Values.postgresql.enabled }}
+      database: "postgres://postgres:{{ .Values.postgresql.postgresqlPassword }}@{{ .Release.Name }}-postgresql/{{ .Values.postgresql.postgresqlDatabase }}"
+      {{- else }}
+      database: {{ .Values.appservice.database | quote }}
+      {{- end }}
+
+      public:
+        {{- toYaml .Values.appservice.public | nindent 8 }}
+
+      provisioning:
+        {{- toYaml .Values.appservice.provisioning | nindent 8 }}
+
+      id: {{ .Values.appservice.id }}
+      bot_username: {{ .Values.appservice.botUsername }}
+      bot_displayname: {{ .Values.appservice.botDisplayname }}
+      bot_avatar:  {{ .Values.appservice.botAvatar }}
+
+      community_id: {{ .Values.appservice.communityID }}
+
+      as_token: {{ .Values.appservice.asToken }}
+      hs_token: {{ .Values.appservice.hsToken }}
+
+    metrics:
+      {{- toYaml .Values.metrics | nindent 6 }}
+
+    bridge:
+      {{- toYaml .Values.bridge | nindent 6 }}
+
+    telegram:
+      {{- toYaml .Values.telegram | nindent 6 }}
+
+    logging:
+      {{- toYaml .Values.logging | nindent 6 }}
+  registration.yaml: ""
