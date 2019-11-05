@@ -356,7 +356,7 @@ class PortalMetadata(BasePortal, ABC):
             levels.ban = overrides.get("ban", 50)
             levels.kick = overrides.get("kick", 50)
             levels.redact = overrides.get("redact", 50)
-            levels.invite = overrides.invite or (50 if dbr.invite_users else 0)
+            levels.invite = overrides.get("invite", 50 if dbr.invite_users else 0)
             levels.events[EventType.ROOM_ENCRYPTED] = 99
             levels.events[EventType.ROOM_TOMBSTONE] = 99
             levels.events[EventType.ROOM_NAME] = 50 if dbr.change_info else 0
