@@ -49,7 +49,7 @@ async def caption(evt: CommandEvent) -> EventID:
     if evt.content.format == Format.HTML:
         evt.content.formatted_body = evt.content.formatted_body.replace(prefix, "", 1)
     evt.content.body = evt.content.body.replace(prefix, "", 1)
-    evt.sender.command_status = {"caption": evt.content}
+    evt.sender.command_status = {"caption": evt.content, "action": "Caption"}
     return await evt.reply("Your next image or file will be sent with that caption. "
                            "Use `$cmdprefix+sp cancel` to cancel the caption.")
 

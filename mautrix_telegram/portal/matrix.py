@@ -360,18 +360,6 @@ class PortalMatrix(BasePortal, MautrixBasePortal, ABC):
 
         media = (MessageType.STICKER, MessageType.IMAGE, MessageType.FILE, MessageType.AUDIO,
                  MessageType.VIDEO)
-        caption_content = None
-        if content.msgtype in media:
-            content["net.maunium.telegram.internal.filename"] = content.body
-            try:
-                caption_content: MessageEventContent = sender.command_status["caption"]
-                caption_content.msgtype = content.msgtype
-                reply_to = reply_to or formatter.matrix_reply_to_telegram(caption_content, space,
-                                                                          room_id=self.mxid)
-                sender.command_status = None
-            except (KeyError, TypeError):
-                pass
-        await self._pre_process_matrix_message(sender, not logged_in, caption_content or content)
 
         if content.msgtype == MessageType.NOTICE:
             bridge_notices = self.get_config("bridge_notices.default")
@@ -385,6 +373,17 @@ class PortalMatrix(BasePortal, MautrixBasePortal, ABC):
             await self._handle_matrix_location(sender_id, event_id, space, client, content,
                                                reply_to)
         elif content.msgtype in media:
+            content["net.maunium.telegram.internal.filename"] = content.body
+            try:
+                caption_content: MessageEventContent = sender.command_status["caption"]
+                reply_to = reply_to or formatter.matrix_reply_to_telegram(caption_content, space,
+                                                                          room_id=self.mxid)
+                sender.command_status = None
+            except (KeyError, TypeError):
+                caption_content = None if logged_in else TextMessageEventContent(body=content.body)
+            if caption_content:
+                caption_content.msgtype = content.msgtype
+                await self._pre_process_matrix_message(sender, not logged_in, caption_content)
             await self._handle_matrix_file(sender_id, event_id, space, client, content, reply_to,
                                            caption_content)
         else:
