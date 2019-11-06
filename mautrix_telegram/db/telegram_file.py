@@ -39,8 +39,8 @@ class TelegramFile(Base):
     @classmethod
     def scan(cls, row: RowProxy) -> 'TelegramFile':
         telegram_file: TelegramFile = super().scan(row)
-        if telegram_file.thumbnail_id:
-            telegram_file.thumbnail = cls.get(telegram_file.thumbnail_id)
+        if isinstance(telegram_file.thumbnail, str):
+            telegram_file.thumbnail = cls.get(telegram_file.thumbnail)
         return telegram_file
 
     @classmethod
