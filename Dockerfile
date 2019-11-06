@@ -15,6 +15,7 @@ RUN apk add --no-cache git build-base cmake \
 RUN apk add --no-cache libpng libpng-dev zlib zlib-dev \
   && git clone https://github.com/Eramde/LottieConverter.git \
   && cd LottieConverter \
+  && git checkout 543c1d23ac9322f4f03c7fb6612ea7d026d44ac0 \
   && make
 
 FROM docker.io/alpine:3.10
