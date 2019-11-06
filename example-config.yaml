@@ -1,9 +1,9 @@
 # Homeserver details
 homeserver:
     # The address that this appservice can use to connect to the homeserver.
-    address: https://matrix.org
+    address: https://example.com
     # The domain of the homeserver (for MXIDs, etc).
-    domain: matrix.org
+    domain: example.com
     # Whether or not to verify the SSL certificate of the homeserver.
     # Only applies if address starts with https://
     verify_ssl: true
