@@ -351,6 +351,8 @@ class AbstractUser(ABC):
                                                                   Optional[po.Portal]]:
         if isinstance(update, UpdateShortChatMessage):
             portal = po.Portal.get_by_tgid(TelegramID(update.chat_id))
+            if not portal:
+                self.log.warning(f"Received message in chat with unknown type {update.chat_id}")
             sender = pu.Puppet.get(TelegramID(update.from_id))
         elif isinstance(update, UpdateShortMessage):
             portal = po.Portal.get_by_tgid(TelegramID(update.user_id), self.tgid, "user")
@@ -404,7 +406,9 @@ class AbstractUser(ABC):
 
     async def update_message(self, original_update: UpdateMessage) -> None:
         update, sender, portal = self.get_message_details(original_update)
-        if portal and not portal.allow_bridging:
+        if not portal:
+            return
+        elif portal and not portal.allow_bridging:
             self.log.debug(f"Ignoring message in portal {portal.tgid_log} (bridging disallowed)")
             return
 
@@ -413,10 +417,9 @@ class AbstractUser(ABC):
                 if not config["bridge.relaybot.private_chat.invite"]:
                     self.log.debug(f"Ignoring private message to bot from {sender.id}")
                     return
-            elif not portal or not portal.mxid:
-                tgid_log = portal.tgid_log if portal else original_update.chat_id
-                self.log.debug(
-                    f"Ignoring message received by bot in unbridged chat {tgid_log}")
+            elif not portal.mxid and config["bridge.relaybot.ignore_unbridged_group_chat"]:
+                self.log.debug("Ignoring message received by bot"
+                               f" in unbridged chat {portal.tgid_log}")
                 return
 
         if self.ignore_incoming_bot_events and self.relaybot and sender.id == self.relaybot.tgid:

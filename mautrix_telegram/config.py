@@ -154,6 +154,8 @@ class Config(BaseBridgeConfig):
             copy("bridge.relaybot.private_chat.invite")
             copy("bridge.relaybot.private_chat.state_changes")
             copy("bridge.relaybot.private_chat.message")
+            copy("bridge.relaybot.group_chat_invite")
+            copy("bridge.relaybot.ignore_unbridged_group_chat")
             copy("bridge.relaybot.authless_portals")
             copy("bridge.relaybot.whitelist_group_admins")
             copy("bridge.relaybot.whitelist")

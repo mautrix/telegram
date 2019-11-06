@@ -292,6 +292,13 @@ bridge:
             # When private_chat_invite is empty, this message is sent to users /starting the
             # relaybot. Telegram's "markdown" is supported.
             message: This is a Matrix bridge relaybot and does not support direct chats
+        # List of users to invite to all group chat portals created by the bridge.
+        group_chat_invite: []
+        # Whether or not the relaybot should not bridge events in unbridged group chats.
+        # If false, portals will be created when the relaybot receives messages, just like normal
+        # users. This behavior is usually not desirable, as it interferes with manually bridging
+        # the chat to another room.
+        ignore_unbridged_group_chat: true
         # Whether or not to allow creating portals from Telegram.
         authless_portals: true
         # Whether or not to allow Telegram group admins to use the bot commands.
