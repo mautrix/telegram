@@ -368,8 +368,10 @@ class PortalMatrix(BasePortal, MautrixBasePortal, ABC):
                 return
 
         if content.msgtype in (MessageType.TEXT, MessageType.NOTICE):
+            await self._pre_process_matrix_message(sender, not logged_in, content)
             await self._handle_matrix_text(sender_id, event_id, space, client, content, reply_to)
         elif content.msgtype == MessageType.LOCATION:
+            await self._pre_process_matrix_message(sender, not logged_in, content)
             await self._handle_matrix_location(sender_id, event_id, space, client, content,
                                                reply_to)
         elif content.msgtype in media:
