@@ -293,10 +293,11 @@ class PortalMetadata(BasePortal, ABC):
         users = participants = None
         if not direct:
             users, participants = await self._get_users(user, entity)
-            extra_invites = config["bridge.relaybot.group_chat_invite"]
-            invites += extra_invites
-            for invite in extra_invites:
-                power_levels.users.setdefault(invite, 100)
+            if self.has_bot:
+                extra_invites = config["bridge.relaybot.group_chat_invite"]
+                invites += extra_invites
+                for invite in extra_invites:
+                    power_levels.users.setdefault(invite, 100)
             self._participants_to_power_levels(participants, power_levels)
         elif self.bot and self.tg_receiver == self.bot.tgid:
             invites = config["bridge.relaybot.private_chat.invite"]

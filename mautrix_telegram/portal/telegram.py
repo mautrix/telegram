@@ -448,7 +448,7 @@ class PortalTelegram(BasePortal, ABC):
 
     async def _create_room_on_action(self, source: 'AbstractUser',
                                      action: TypeMessageAction) -> bool:
-        if source.is_relaybot:
+        if source.is_relaybot and config["bridge.ignore_unbridged_group_chat"]:
             return False
         create_and_exit = (MessageActionChatCreate, MessageActionChannelCreate)
         create_and_continue = (MessageActionChatAddUser, MessageActionChatJoinedByLink)
