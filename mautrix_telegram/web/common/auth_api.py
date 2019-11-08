@@ -167,9 +167,13 @@ class AuthAPI(abc.ABC):
                         "next": enter_password,
                         "action": "Login (password entry)",
                     }
+                message = (
+                    "Code accepted, but you have 2-factor "
+                    "authentication enabled. Please enter your password."
+                )
                 return self.get_login_response(
-                    mxid=user.mxid, state="password", status=202,
-                    message="Code accepted, but you have 2-factor authentication is enabled.")
+                    mxid=user.mxid, state="password", status=202, message=message
+                )
             return None
         except Exception:
             self.log.exception("Error sending phone code")
