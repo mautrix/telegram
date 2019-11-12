@@ -211,7 +211,7 @@ class PortalTelegram(BasePortal, ABC):
             msgtype=MessageType.LOCATION, geo_uri=f"geo:{lat},{long}",
             body=f"Location: {body}\n{url}",
             relates_to=relates_to, external_url=self._get_external_url(evt))
-        content["format"] = Format.HTML
+        content["format"] = str(Format.HTML)
         content["formatted_body"] = f"Location: <a href='{url}'>{body}</a>"
 
         return intent.send_message(self.mxid, content, timestamp=evt.date)
