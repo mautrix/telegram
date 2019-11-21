@@ -273,10 +273,10 @@ class MatrixHandler(BaseMatrixHandler):
                 await portal.handle_matrix_pin(sender, None)
 
     @staticmethod
-    async def handle_room_upgrade(room_id: RoomID, new_room_id: RoomID) -> None:
+    async def handle_room_upgrade(room_id: RoomID, sender: UserID, new_room_id: RoomID) -> None:
         portal = po.Portal.get_by_mxid(room_id)
         if portal:
-            await portal.handle_matrix_upgrade(new_room_id)
+            await portal.handle_matrix_upgrade(sender, new_room_id)
 
     async def handle_member_info_change(self, room_id: RoomID, user_id: UserID,
                                         profile: MemberStateEventContent,
@@ -373,7 +373,7 @@ class MatrixHandler(BaseMatrixHandler):
                 old_events = set()
             await self.handle_room_pin(evt.room_id, evt.sender, new_events, old_events)
         elif evt.type == EventType.ROOM_TOMBSTONE:
-            await self.handle_room_upgrade(evt.room_id, evt.content.replacement_room)
+            await self.handle_room_upgrade(evt.room_id, evt.sender, evt.content.replacement_room)
 
     # async def handle_event(self, evt: MatrixEvent) -> None:
     #     if self.filter_matrix_event(evt):

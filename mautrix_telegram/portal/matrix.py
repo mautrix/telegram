@@ -494,10 +494,11 @@ class PortalMatrix(BasePortal, MautrixBasePortal, ABC):
                 self.save()
                 break
 
-    async def handle_matrix_upgrade(self, new_room: RoomID) -> None:
+    async def handle_matrix_upgrade(self, sender: UserID, new_room: RoomID) -> None:
+        _, server = self.main_intent.parse_user_id(sender)
         old_room = self.mxid
         self.migrate_and_save_matrix(new_room)
-        await self.main_intent.join_room(new_room)
+        await self.main_intent.join_room(new_room, servers=[server])
         entity: Optional[TypeInputPeer] = None
         user: Optional[AbstractUser] = None
         if self.bot and self.has_bot:
@@ -519,7 +520,7 @@ class PortalMatrix(BasePortal, MautrixBasePortal, ABC):
                            "no Telegram user found.")
             return
         await self.update_matrix_room(user, entity, direct=self.peer_type == "user")
-        self.log.info(f"Upgraded room from {old_room} to {self.mxid}")
+        self.log.info(f"{sender} upgraded room from {old_room} to {self.mxid}")
 
     def migrate_and_save_matrix(self, new_id: RoomID) -> None:
         try:
