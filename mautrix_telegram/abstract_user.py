@@ -216,7 +216,7 @@ class AbstractUser(ABC):
         if not self.client:
             self._init_client()
         await self.client.connect()
-        self.log.debug(f"{self.mxid if not self.is_bot else 'Bot'} connected: {self.connected}")
+        self.log.debug(f"{'Bot' if self.is_relaybot else self.mxid} connected: {self.connected}")
         return self
 
     async def ensure_started(self, even_if_no_session=False) -> 'AbstractUser':
@@ -412,7 +412,7 @@ class AbstractUser(ABC):
             self.log.debug(f"Ignoring message in portal {portal.tgid_log} (bridging disallowed)")
             return
 
-        if self.is_bot:
+        if self.is_relaybot:
             if update.is_private:
                 if not config["bridge.relaybot.private_chat.invite"]:
                     self.log.debug(f"Ignoring private message to bot from {sender.id}")
