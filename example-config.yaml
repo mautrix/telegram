@@ -33,7 +33,7 @@ appservice:
     # the HS database.
     public:
         # Whether or not the public-facing endpoints should be enabled.
-        enabled: true
+        enabled: false
         # The prefix to use in the public-facing endpoints.
         prefix: /public
         # The base URL where the public-facing endpoints are available. The prefix is not added

@@ -19,7 +19,8 @@ import os
 
 from mautrix.types import UserID
 from mautrix.client import Client
-from mautrix.bridge.config import BaseBridgeConfig, ConfigUpdateHelper
+from mautrix.bridge.config import (BaseBridgeConfig, ConfigUpdateHelper, ForbiddenKey,
+                                   ForbiddenDefault)
 
 Permissions = NamedTuple("Permissions", relaybot=bool, user=bool, puppeting=bool,
                          matrix_puppeting=bool, admin=bool, level=str)
@@ -31,6 +32,17 @@ class Config(BaseBridgeConfig):
             return os.environ[f"MAUTRIX_TELEGRAM_{key.replace('.', '_').upper()}"]
         except KeyError:
             return super().__getitem__(key)
+
+    @property
+    def forbidden_defaults(self) -> List[ForbiddenDefault]:
+        return [
+            *super().forbidden_defaults,
+            ForbiddenDefault("appservice.public.external", "https://example.com/public",
+                             condition="appservice.public.enabled"),
+            ForbiddenDefault("bridge.permissions", ForbiddenKey("example.com")),
+            ForbiddenDefault("telegram.api_id", 12345),
+            ForbiddenDefault("telegram.api_hash", "tjyd5yge35lbodk1xwzw2jstp90k55qz"),
+        ]
 
     def do_update(self, helper: ConfigUpdateHelper) -> None:
         copy, copy_dict, base = helper
