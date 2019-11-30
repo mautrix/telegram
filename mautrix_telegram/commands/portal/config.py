@@ -23,7 +23,7 @@ from ... import portal as po, util
 from .. import command_handler, CommandEvent, SECTION_PORTAL_MANAGEMENT
 
 
-@command_handler(help_section=SECTION_PORTAL_MANAGEMENT,
+@command_handler(needs_auth=False, help_section=SECTION_PORTAL_MANAGEMENT,
                  help_text="View or change per-portal settings.",
                  help_args="<`help`|_subcommand_> [...]")
 async def config(evt: CommandEvent) -> None:
@@ -41,6 +41,10 @@ async def config(evt: CommandEvent) -> None:
         return
     elif cmd == "view":
         await config_view(evt, portal)
+        return
+
+    if not await portal.can_user_perform(evt.sender, "config"):
+        await evt.reply("You do not have the permissions to configure this room.")
         return
 
     key = evt.args[1] if len(evt.args) > 1 else None
