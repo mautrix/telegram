@@ -227,7 +227,9 @@ class User(AbstractUser, BaseUser):
 
         if portal:
             self.register_portal(portal)
+            return False
 
+        # Don't bother handling the update
         return True
 
     # endregion
