@@ -32,7 +32,7 @@ setuptools.setup(
 
     install_requires=[
         "aiohttp>=3.0.1,<4",
-        "mautrix>=0.4.0.dev80,<0.5",
+        "mautrix>=0.4.0rc1,<0.5",
         "SQLAlchemy>=1.2.3,<2",
         "alembic>=1.0.0,<2",
         "commonmark>=0.8.1,<0.10",
@@ -56,6 +56,7 @@ setuptools.setup(
         "Programming Language :: Python :: 3",
         "Programming Language :: Python :: 3.6",
         "Programming Language :: Python :: 3.7",
+        "Programming Language :: Python :: 3.8",
     ],
     entry_points="""
         [console_scripts]
