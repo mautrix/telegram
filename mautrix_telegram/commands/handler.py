@@ -112,7 +112,7 @@ def command_handler(_func: Optional[CommandHandlerFunc] = None, *, needs_auth: b
 class CommandProcessor(BaseCommandProcessor):
     def __init__(self, context: c.Context) -> None:
         super().__init__(az=context.az, config=context.config, event_class=CommandEvent,
-                         loop=context.loop)
+                         loop=context.loop, bridge=context.bridge)
         self.tgbot = context.bot
         self.bridge = context.bridge
         self.az, self.config, self.loop, self.tgbot = context.core

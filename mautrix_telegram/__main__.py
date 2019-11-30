@@ -35,7 +35,7 @@ from .portal import init as init_portal
 from .puppet import Puppet, init as init_puppet
 from .sqlstatestore import SQLStateStore
 from .user import User, init as init_user
-from . import __version__
+from .version import version, linkified_version
 
 try:
     import prometheus_client as prometheus
@@ -47,8 +47,10 @@ class TelegramBridge(Bridge):
     name = "mautrix-telegram"
     command = "python -m mautrix-telegram"
     description = "A Matrix-Telegram puppeting bridge."
+    repo_url = "https://github.com/tulir/mautrix-telegram"
     real_user_content_key = "net.maunium.telegram.puppet"
-    version = __version__
+    version = version
+    markdown_version = linkified_version
     config_class = Config
     matrix_class = MatrixHandler
     state_store_class = SQLStateStore
