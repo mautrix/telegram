@@ -160,56 +160,64 @@ class MatrixHandler(BaseMatrixHandler):
         if await user.is_logged_in() or portal.has_bot:
             await portal.join_matrix(user, event_id)
 
-    async def handle_raw_leave(self, room_id: RoomID, user_id: UserID, sender_id: UserID,
-                               reason: str, event_id: EventID) -> None:
+    async def get_leave_handle_info(self) -> Tuple[po.Portal, u.User]:
+        pass
+
+    async def handle_leave(self, room_id: RoomID, user_id: UserID, event_id: EventID) -> None:
         self.log.debug(f"{user_id} left {room_id}")
-
-        sender = u.User.get_by_mxid(sender_id, create=False)
-        if not sender:
-            return
-        await sender.ensure_started()
-
         portal = po.Portal.get_by_mxid(room_id)
         if not portal:
-            return
-
-        puppet = pu.Puppet.get_by_mxid(user_id)
-        if puppet:
-            await portal.kick_matrix(puppet, sender)
             return
 
         user = u.User.get_by_mxid(user_id, create=False)
         if not user:
             return
         await user.ensure_started()
-        if sender_id != user_id:
-            await portal.kick_matrix(user, sender)
+        await portal.leave_matrix(user, event_id)
+
+    async def handle_kick_ban(self, ban: bool, room_id: RoomID, user_id: UserID, sender: UserID,
+                              reason: str, event_id: EventID) -> None:
+        action = "banned" if ban else "kicked"
+        self.log.debug(f"{user_id} was {action} from {room_id} by {sender} for {reason}")
+        portal = po.Portal.get_by_mxid(room_id)
+        if not portal:
+            return
+
+        if sender == self.az.bot_mxid:
+            # Direct chat portal unbridging is handled in portal.kick_matrix
+            if portal.peer_type != "user":
+                await portal.unbridge()
+            return
+
+        sender = u.User.get_by_mxid(sender, create=False)
+        if not sender:
+            return
+        await sender.ensure_started()
+
+        puppet = pu.Puppet.get_by_mxid(user_id)
+        if puppet:
+            if ban:
+                await portal.ban_matrix(puppet, sender)
+            else:
+                await portal.kick_matrix(puppet, sender)
+            return
+
+        user = u.User.get_by_mxid(user_id, create=False)
+        if not user:
+            return
+        await user.ensure_started()
+        if ban:
+            await portal.ban_matrix(user, sender)
         else:
-            await portal.leave_matrix(user, event_id)
+            await portal.kick_matrix(user, sender)
+
+    async def handle_kick(self, room_id: RoomID, user_id: UserID, kicked_by: UserID, reason: str,
+                          event_id: EventID) -> None:
+        await self.handle_kick_ban(False, room_id, user_id, kicked_by, reason, event_id)
 
     async def handle_ban(self, room_id: RoomID, user_id: UserID, banned_by: UserID, reason: str,
                          event_id: EventID) -> None:
-        self.log.debug(f"{user_id} was banned from {room_id} by {banned_by} for {reason}")
-
-        sender = u.User.get_by_mxid(banned_by, create=False)
-        if not sender:
-            return
-        await sender.ensure_started()
-
-        portal = po.Portal.get_by_mxid(room_id)
-        if not portal:
-            return
-
-        puppet = pu.Puppet.get_by_mxid(user_id)
-        if puppet:
-            await portal.ban_matrix(puppet, sender)
-            return
-
-        user = u.User.get_by_mxid(user_id, create=False)
-        if not user:
-            return
-        await user.ensure_started()
-        await portal.ban_matrix(user, sender)
+        await self.handle_kick_ban(True, room_id, user_id, banned_by, reason, event_id)
 
     @staticmethod
     async def allow_message(user: 'u.User') -> bool:
