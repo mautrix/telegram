@@ -29,7 +29,7 @@ from .. import command_handler, CommandEvent, SECTION_ADMIN
 async def set_power_level(evt: CommandEvent) -> EventID:
     try:
         level = int(evt.args[0])
-    except KeyError:
+    except (KeyError, IndexError):
         return await evt.reply("**Usage:** `$cmdprefix+sp set-pl <level> [mxid]`")
     except ValueError:
         return await evt.reply("The level must be an integer.")
