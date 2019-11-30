@@ -278,8 +278,8 @@ class PortalMetadata(BasePortal, ABC):
 
         if self.peer_type == "channel" and entity.username:
             preset = RoomCreatePreset.PUBLIC
-            alias = self._get_alias_localpart(entity.username)
             self.username = entity.username
+            alias = self.alias_localpart
         else:
             preset = RoomCreatePreset.PRIVATE
             # TODO invite link alias?
@@ -438,18 +438,6 @@ class PortalMetadata(BasePortal, ABC):
         if self._participants_to_power_levels(participants, levels):
             await self.main_intent.set_power_levels(self.mxid, levels)
 
-    @property
-    def alias(self) -> Optional[RoomAlias]:
-        if not self.username:
-            return None
-        return RoomAlias(f"#{self._get_alias_localpart()}:{self.hs_domain}")
-
-    def _get_alias_localpart(self, username: Optional[str] = None) -> Optional[str]:
-        username = username or self.username
-        if not username:
-            return None
-        return self.alias_template.format(username)
-
     def _add_bot_chat(self, bot: User) -> None:
         if self.bot and bot.id == self.bot.tgid:
             self.bot.add_chat(self.tgid, self.peer_type)
@@ -584,11 +572,10 @@ class PortalMetadata(BasePortal, ABC):
             return False
 
         if self.username:
-            await self.main_intent.remove_room_alias(self._get_alias_localpart())
+            await self.main_intent.remove_room_alias(self.alias_localpart)
         self.username = username or None
         if self.username:
-            await self.main_intent.add_room_alias(self.mxid, self._get_alias_localpart(),
-                                                  override=True)
+            await self.main_intent.add_room_alias(self.mxid, self.alias_localpart, override=True)
             if self.public_portals:
                 await self.main_intent.set_join_rule(self.mxid, "public")
         else:

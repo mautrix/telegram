@@ -137,6 +137,18 @@ class BasePortal(ABC):
         return f"{self.tg_receiver}<->{self.tgid}"
 
     @property
+    def alias(self) -> Optional[RoomAlias]:
+        if not self.username:
+            return None
+        return RoomAlias(f"#{self.alias_localpart}:{self.hs_domain}")
+
+    @property
+    def alias_localpart(self) -> Optional[str]:
+        if not self.username:
+            return None
+        return self.alias_template.format(self.username)
+
+    @property
     def peer(self) -> Union[TypePeer, TypeInputPeer]:
         if self.peer_type == "user":
             return PeerUser(user_id=self.tgid)
@@ -261,13 +273,17 @@ class BasePortal(ABC):
                 authenticated.append(user)
         return authenticated
 
-    @staticmethod
-    async def cleanup_room(intent: IntentAPI, room_id: RoomID, message: str = "Portal deleted",
-                           puppets_only: bool = False) -> None:
+    async def cleanup_room(self, intent: IntentAPI, room_id: RoomID,
+                           message: str = "Portal deleted", puppets_only: bool = False) -> None:
         try:
             members = await intent.get_room_members(room_id)
         except MatrixRequestError:
             members = []
+        if self.username:
+            try:
+                await intent.remove_room_alias(self.alias_localpart)
+            except (MatrixRequestError, IntentError):
+                self.log.warning("Failed to remove alias when cleaning up room", exc_info=True)
         for user in members:
             puppet = p.Puppet.get_by_mxid(UserID(user), create=False)
             if user != intent.mxid and (not puppets_only or puppet):
@@ -278,7 +294,10 @@ class BasePortal(ABC):
                         await intent.kick_user(room_id, user, message)
                 except (MatrixRequestError, IntentError):
                     pass
-        await intent.leave_room(room_id)
+        try:
+            await intent.leave_room(room_id)
+        except (MatrixRequestError, IntentError):
+            self.log.warning("Failed to leave room when cleaning up room", exc_info=True)
 
     async def unbridge(self) -> None:
         await self.cleanup_room(self.main_intent, self.mxid, "Room unbridged", puppets_only=True)
