@@ -183,7 +183,7 @@ class MatrixHandler(BaseMatrixHandler):
         if not portal:
             return
 
-        if sender == self.az.bot_mxid:
+        if user_id == self.az.bot_mxid:
             # Direct chat portal unbridging is handled in portal.kick_matrix
             if portal.peer_type != "user":
                 await portal.unbridge()
