@@ -42,8 +42,8 @@ if git_tag and __version__ == git_tag[1:].replace("-", ""):
 else:
     if not __version__.endswith("+dev"):
         __version__ += "+dev"
-    version = f"{__version__}@{git_revision}"
+    version = f"{__version__}.{git_revision}"
     if git_revision_url:
-        linkified_version = f"{__version__}[@{git_revision}]({git_revision_url})"
+        linkified_version = f"{__version__}.[{git_revision}]({git_revision_url})"
     else:
         linkified_version = version
