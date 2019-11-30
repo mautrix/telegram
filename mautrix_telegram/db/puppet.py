@@ -53,7 +53,7 @@ class Puppet(Base):
 
     @classmethod
     def get_by_username(cls, username: str) -> Optional['Puppet']:
-        return cls._select_one_or_none(func.lowercase(cls.c.username) == username)
+        return cls._select_one_or_none(func.lower(cls.c.username) == username)
 
     @classmethod
     def get_by_displayname(cls, displayname: str) -> Optional['Puppet']:
