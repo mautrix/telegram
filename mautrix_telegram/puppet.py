@@ -384,8 +384,10 @@ class Puppet(CustomPuppetMixin):
         if not username:
             return None
 
+        username = username.lower()
+
         for _, puppet in cls.cache.items():
-            if puppet.username and puppet.username.lower() == username.lower():
+            if puppet.username and puppet.username.lower() == username:
                 return puppet
 
         dbpuppet = DBPuppet.get_by_username(username)

@@ -424,8 +424,10 @@ class User(AbstractUser, BaseUser):
         if not username:
             return None
 
+        username = username.lower()
+
         for _, user in cls.by_tgid.items():
-            if user.username and user.username.lower() == username.lower():
+            if user.username and user.username.lower() == username:
                 return user
 
         puppet = DBUser.get_by_username(username)

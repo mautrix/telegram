@@ -16,7 +16,7 @@
 from typing import Optional, Iterable
 
 from sqlalchemy import Column, Integer, String, Boolean
-from sqlalchemy.sql import expression
+from sqlalchemy.sql import expression, func
 
 from mautrix.types import UserID, SyncToken
 from mautrix.util.db import Base
@@ -53,7 +53,7 @@ class Puppet(Base):
 
     @classmethod
     def get_by_username(cls, username: str) -> Optional['Puppet']:
-        return cls._select_one_or_none(cls.c.username == username)
+        return cls._select_one_or_none(func.lowercase(cls.c.username) == username)
 
     @classmethod
     def get_by_displayname(cls, displayname: str) -> Optional['Puppet']:

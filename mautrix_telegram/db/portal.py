@@ -15,7 +15,7 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from typing import Optional
 
-from sqlalchemy import Column, Integer, String, Boolean, Text
+from sqlalchemy import Column, Integer, String, Boolean, Text, func
 
 from mautrix.types import RoomID
 from mautrix.util.db import Base
@@ -53,4 +53,4 @@ class Portal(Base):
 
     @classmethod
     def get_by_username(cls, username: str) -> Optional['Portal']:
-        return cls._select_one_or_none(cls.c.username == username)
+        return cls._select_one_or_none(func.lower(cls.c.username) == username)

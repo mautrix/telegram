@@ -354,8 +354,10 @@ class BasePortal(ABC):
         if not username:
             return None
 
+        username = username.lower()
+
         for _, portal in cls.by_tgid.items():
-            if portal.username and portal.username.lower() == username.lower():
+            if portal.username and portal.username.lower() == username:
                 return portal
 
         dbportal = DBPortal.get_by_username(username)

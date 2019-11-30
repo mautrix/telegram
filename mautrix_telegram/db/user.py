@@ -15,7 +15,7 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from typing import Optional, Iterable, Tuple
 
-from sqlalchemy import Column, ForeignKey, ForeignKeyConstraint, Integer, String
+from sqlalchemy import Column, ForeignKey, ForeignKeyConstraint, Integer, String, func
 
 from mautrix.types import UserID
 from mautrix.util.db import Base
@@ -46,7 +46,7 @@ class User(Base):
 
     @classmethod
     def get_by_username(cls, username: str) -> Optional['User']:
-        return cls._select_one_or_none(cls.c.tg_username == username)
+        return cls._select_one_or_none(func.lower(cls.c.tg_username) == username)
 
     @property
     def contacts(self) -> Iterable[TelegramID]:
