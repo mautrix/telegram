@@ -383,10 +383,6 @@ class MatrixHandler(BaseMatrixHandler):
         elif evt.type == EventType.ROOM_TOMBSTONE:
             await self.handle_room_upgrade(evt.room_id, evt.sender, evt.content.replacement_room)
 
-    # async def handle_event(self, evt: MatrixEvent) -> None:
-    #     if self.filter_matrix_event(evt):
-    #         return
-    #     start_time = time.time()
-    #
-    #     if EVENT_TIME:
-    #         EVENT_TIME.labels(event_type=evt_type).observe(time.time() - start_time)
+    async def log_event_handle_duration(self, evt: Event, duration: float) -> None:
+        if EVENT_TIME:
+            EVENT_TIME.labels(event_type=str(evt.type)).observe(duration)
