@@ -19,7 +19,8 @@ import logging
 import asyncio
 
 from telethon.tl.types import (TypeUpdate, UpdateNewMessage, UpdateNewChannelMessage, PeerUser,
-                               UpdateShortChatMessage, UpdateShortMessage, User as TLUser, Chat)
+                               UpdateShortChatMessage, UpdateShortMessage, User as TLUser, Chat,
+                               ChatForbidden)
 from telethon.tl.types.contacts import ContactsNotModified
 from telethon.tl.functions.contacts import GetContactsRequest, SearchRequest
 from telethon.tl.functions.account import UpdateStatusRequest
@@ -327,7 +328,9 @@ class User(AbstractUser, BaseUser):
         async for dialog in self.client.iter_dialogs(limit=limit, ignore_migrated=True,
                                                      archived=False):
             entity = dialog.entity
-            if isinstance(entity, Chat) and (entity.deactivated or entity.left):
+            if isinstance(entity, ChatForbidden):
+                self.log.warning(f"Ignoring forbidden chat {entity} while syncing")
+            elif isinstance(entity, Chat) and (entity.deactivated or entity.left):
                 self.log.warning(f"Ignoring deactivated or left chat {entity} while syncing")
                 continue
             elif isinstance(entity, TLUser) and not config["bridge.sync_direct_chats"]:
