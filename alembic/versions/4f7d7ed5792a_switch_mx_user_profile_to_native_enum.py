@@ -18,6 +18,7 @@ depends_on = None
 def upgrade():
     conn = op.get_bind()
     conn.execute("UPDATE mx_user_profile SET membership=UPPER(membership)")
+    conn.execute("UPDATE mx_user_profile SET membership='LEAVE' WHERE membership='LEFT'")
 
 
 def downgrade():
