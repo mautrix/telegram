@@ -35,6 +35,7 @@ affinity: {}
 postgresql:
   enabled: true
   postgresqlDatabase: mxtg
+  postgresqlPassword: SET TO RANDOM STRING
   persistence:
     size: 2Gi
   resources:
