@@ -273,17 +273,13 @@ class BasePortal(ABC):
                 authenticated.append(user)
         return authenticated
 
-    async def cleanup_room(self, intent: IntentAPI, room_id: RoomID,
-                           message: str = "Portal deleted", puppets_only: bool = False) -> None:
+    @staticmethod
+    async def cleanup_room(intent: IntentAPI, room_id: RoomID, message: str,
+                           puppets_only: bool = False) -> None:
         try:
             members = await intent.get_room_members(room_id)
         except MatrixRequestError:
             members = []
-        if self.username:
-            try:
-                await intent.remove_room_alias(self.alias_localpart)
-            except (MatrixRequestError, IntentError):
-                self.log.warning("Failed to remove alias when cleaning up room", exc_info=True)
         for user in members:
             puppet = p.Puppet.get_by_mxid(UserID(user), create=False)
             if user != intent.mxid and (not puppets_only or puppet):
@@ -299,12 +295,20 @@ class BasePortal(ABC):
         except (MatrixRequestError, IntentError):
             self.log.warning("Failed to leave room when cleaning up room", exc_info=True)
 
+    async def cleanup_portal(self, message: str, puppets_only: bool = False) -> None:
+        if self.username:
+            try:
+                await self.main_intent.remove_room_alias(self.alias_localpart)
+            except (MatrixRequestError, IntentError):
+                self.log.warning("Failed to remove alias when cleaning up room", exc_info=True)
+        await self.cleanup_room(self.main_intent, self.mxid, message, puppets_only)
+
     async def unbridge(self) -> None:
-        await self.cleanup_room(self.main_intent, self.mxid, "Room unbridged", puppets_only=True)
+        await self.cleanup_portal("Room unbridged", puppets_only=True)
         self.delete()
 
     async def cleanup_and_delete(self) -> None:
-        await self.cleanup_room(self.main_intent, self.mxid)
+        await self.cleanup_portal("Portal deleted")
         self.delete()
 
     # endregion

@@ -113,12 +113,10 @@ async def cleanup_old_portal_while_bridging(evt: CommandEvent, portal: "po.Porta
                         "Continuing without touching previous Matrix room...")
         return True, None
     elif evt.args[0] == "delete-and-continue":
-        return True, portal.cleanup_room(portal.main_intent, portal.mxid,
-                                         message="Portal deleted (moving to another room)")
+        return True, portal.cleanup_portal("Portal deleted (moving to another room)")
     elif evt.args[0] == "unbridge-and-continue":
-        return True, portal.cleanup_room(portal.main_intent, portal.mxid,
-                                         message="Room unbridged (portal moving to another room)",
-                                         puppets_only=True)
+        return True, portal.cleanup_portal("Room unbridged (portal moving to another room)",
+                                           puppets_only=True)
     else:
         await evt.reply(
             "The chat you were trying to bridge already has a Matrix portal room.\n\n"

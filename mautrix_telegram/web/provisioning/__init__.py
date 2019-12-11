@@ -149,11 +149,9 @@ class ProvisioningAPI(AuthAPI):
             force = request.query.get("force", None)
             if force in ("delete", "unbridge"):
                 delete = force == "delete"
-                await portal.cleanup_room(portal.main_intent, portal.mxid, puppets_only=not delete,
-                                          message=("Portal deleted (moving to another room)"
-                                                   if delete
-                                                   else "Room unbridged (portal moving to another "
-                                                        "room)"))
+                await portal.cleanup_portal("Portal deleted (moving to another room)" if delete
+                                            else "Room unbridged (portal moving to another room)",
+                                            puppets_only=not delete)
             else:
                 return self.get_error_response(409, "chat_already_bridged",
                                                "Telegram chat is already bridged to another "

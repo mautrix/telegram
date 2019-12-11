@@ -169,7 +169,7 @@ async def execute_room_cleanup(evt, rooms_to_clean: List[Union[po.Portal, RoomID
                 await room.cleanup_and_delete()
                 cleaned += 1
             else:
-                await po.Portal.cleanup_room(evt.az.intent, room, message="Room deleted")
+                await po.Portal.cleanup_room(evt.az.intent, room, "Room deleted")
                 cleaned += 1
         evt.sender.command_status = None
         await evt.reply(f"{cleaned} rooms cleaned up successfully.")
