@@ -199,14 +199,27 @@ class User(AbstractUser, BaseUser):
             self.client.session.delete()
         return self
 
-    async def post_login(self, info: TLUser = None) -> None:
+    async def post_login(self, info: TLUser = None, first_login: bool = False) -> None:
         try:
             await self.update_info(info)
-            if not self.is_bot and config["bridge.startup_sync"]:
+        except Exception:
+            self.log.exception("Failed to update telegram account info")
+            return
+
+        try:
+            puppet = pu.Puppet.get(self.tgid)
+            if puppet.custom_mxid != self.mxid and puppet.can_auto_login(self.mxid):
+                self.log.info(f"Automatically enabling custom puppet")
+                await puppet.switch_mxid(access_token="auto", mxid=self.mxid)
+        except Exception:
+            self.log.exception("Failed to automatically enable custom puppet")
+
+        if not self.is_bot and config["bridge.startup_sync"]:
+            try:
                 await self.sync_dialogs()
                 await self.sync_contacts()
-        except Exception:
-            self.log.exception("Failed to run post-login functions for %s", self.mxid)
+            except Exception:
+                self.log.exception("Failed to run post-login sync")
 
     async def update(self, update: TypeUpdate) -> bool:
         if not self.is_bot:

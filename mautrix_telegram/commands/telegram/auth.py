@@ -20,7 +20,8 @@ from telethon.errors import (  # isort: skip
     AccessTokenExpiredError, AccessTokenInvalidError, FirstNameInvalidError, FloodWaitError,
     PasswordHashInvalidError, PhoneCodeExpiredError, PhoneCodeInvalidError,
     PhoneNumberAppSignupForbiddenError, PhoneNumberBannedError, PhoneNumberFloodError,
-    PhoneNumberOccupiedError, PhoneNumberUnoccupiedError, SessionPasswordNeededError)
+    PhoneNumberOccupiedError, PhoneNumberUnoccupiedError, SessionPasswordNeededError,
+    PhoneNumberInvalidError)
 
 from mautrix.types import EventID
 
@@ -84,7 +85,7 @@ async def enter_code_register(evt: CommandEvent) -> EventID:
         await evt.sender.ensure_started(even_if_no_session=True)
         first_name, last_name = evt.sender.command_status["full_name"]
         user = await evt.sender.client.sign_up(evt.args[0], first_name, last_name)
-        asyncio.ensure_future(evt.sender.post_login(user), loop=evt.loop)
+        asyncio.ensure_future(evt.sender.post_login(user, first_login=True), loop=evt.loop)
         evt.sender.command_status = None
         return await evt.reply(f"Successfully registered to Telegram.")
     except PhoneNumberOccupiedError:
@@ -166,6 +167,8 @@ async def _request_code(evt: CommandEvent, phone_number: str, next_status: Dict[
     except PhoneNumberUnoccupiedError:
         return await  evt.reply("That phone number has not been registered. "
                                 "Please register with `$cmdprefix+sp register <phone>`.")
+    except PhoneNumberInvalidError:
+        return await evt.reply("That phone number is not valid.")
     except Exception:
         evt.log.exception("Error requesting phone code")
         return await evt.reply("Unhandled exception while requesting code. "
@@ -244,7 +247,7 @@ async def _sign_in(evt: CommandEvent, **sign_in_info) -> EventID:
             await evt.reply(f"[{existing_user.displayname}]"
                             f"(https://matrix.to/#/{existing_user.mxid})"
                             " was logged out from the account.")
-        asyncio.ensure_future(evt.sender.post_login(user), loop=evt.loop)
+        asyncio.ensure_future(evt.sender.post_login(user, first_login=True), loop=evt.loop)
         evt.sender.command_status = None
         name = f"@{user.username}" if user.username else f"+{user.phone}"
         return await evt.reply(f"Successfully logged in as {name}")
