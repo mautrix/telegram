@@ -424,7 +424,8 @@ def init(context: 'Context') -> Iterable[Awaitable[Any]]:
     Puppet.displayname_template = SimpleTemplate(config["bridge.displayname_template"],
                                                  "displayname")
 
-    Puppet.login_shared_secret = config["bridge.login_shared_secret"].encode("utf-8")
+    secret = config["bridge.login_shared_secret"]
+    Puppet.login_shared_secret = secret.encode("utf-8") if secret else None
     Puppet.login_device_name = "Telegram Bridge"
 
     return (puppet.try_start() for puppet in Puppet.all_with_custom_mxid())
