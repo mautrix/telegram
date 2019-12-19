@@ -65,6 +65,8 @@ RUN apk add --no-cache --virtual .build-deps \
       ca-certificates \
       su-exec \
       netcat-openbsd \
+	  # SOCKS proxy
+	   py3-pysocks \
       # lottieconverter
       zlib libpng \
  && pip3 install .[speedups,hq_thumbnails,metrics] \
