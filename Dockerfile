@@ -18,7 +18,7 @@ RUN apk add --no-cache libpng libpng-dev zlib zlib-dev \
   && git checkout 543c1d23ac9322f4f03c7fb6612ea7d026d44ac0 \
   && make
 
-FROM docker.io/alpine:3.10
+FROM docker.io/alpine:3.11
 
 ENV UID=1337 \
     GID=1337 \
@@ -33,7 +33,6 @@ RUN apk add --no-cache --virtual .build-deps \
       python3-dev \
       libffi-dev \
       build-base \
-      git \
   && apk add --no-cache \
       py3-virtualenv \
       py3-pillow \
@@ -52,7 +51,7 @@ RUN apk add --no-cache --virtual .build-deps \
         py3-markupsafe \
       #moviepy
         py3-decorator \
-        #py3-tqdm \
+        py3-tqdm \
         py3-requests \
         #imageio
           py3-numpy \
