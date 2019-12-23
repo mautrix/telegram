@@ -33,6 +33,7 @@ RUN apk add --no-cache --virtual .build-deps \
       python3-dev \
       libffi-dev \
       build-base \
+      git \
   && apk add --no-cache \
       py3-virtualenv \
       py3-pillow \
