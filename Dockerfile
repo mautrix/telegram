@@ -68,6 +68,8 @@ RUN apk add --no-cache --virtual .build-deps \
       # lottieconverter
       zlib libpng \
  && pip3 install .[speedups,hq_thumbnails,metrics] \
+ # pip installs the sources to /usr/lib/python3.8/site-packages, so we don't need them here
+ && rm -rf /opt/mautrix-telegram/mautrix_telegram \
  && apk del .build-deps
 
 VOLUME /data
