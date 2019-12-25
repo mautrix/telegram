@@ -258,6 +258,8 @@ class Puppet(CustomPuppetMixin):
             return False
         allow_source = (source.is_relaybot
                         or self.displayname_source == source.tgid
+                        # User is not a contact, so there's no custom name
+                        or not info.contact
                         # No displayname source, so just trust anything
                         or self.displayname_source is None)
         if not allow_source:
