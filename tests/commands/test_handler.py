@@ -26,7 +26,7 @@ def context(request: FixtureRequest) -> Context:
     """
     # Config(path, registration_path, base_path)
     config = getattr(request.cls, 'config', Config("", "", ""))
-    return Context(az=Mock(), config=config, loop=Mock(), session_container=Mock(), bot=Mock())
+    return Context(az=Mock(), config=config, loop=Mock(), session_container=Mock(), bridge=Mock(), bot=Mock())
 
 
 @pytest.fixture
@@ -52,6 +52,7 @@ class TestCommandEvent:
             sender=u.User(UserID("@sender:example.org")),
             command="help",
             args=[],
+            content=Mock(),
             is_management=True,
             is_portal=False,
         )
@@ -107,6 +108,7 @@ class TestCommandEvent:
             sender=u.User(UserID("@sender:example.org")),
             command="help",
             args=[],
+            content=Mock(),
             is_management=False,
             is_portal=False,
         )
@@ -133,6 +135,7 @@ class TestCommandEvent:
             sender=u.User(UserID("@sender:example.org")),
             command="help",
             args=[],
+            content=Mock(),
             is_management=True,
             is_portal=False,
         )
@@ -209,6 +212,7 @@ class TestCommandHandler:
             sender=sender,
             command=command,
             args=[],
+            content=Mock(),
             is_management=False,
             is_portal=boolean,
         )
@@ -271,6 +275,7 @@ class TestCommandHandler:
             sender=sender,
             command=command,
             args=[],
+            content=Mock(),
             is_management=is_management,
             is_portal=boolean,
         )
@@ -307,6 +312,7 @@ class TestCommandProcessor:
             sender=sender,
             command="hElp",
             args=[],
+            content=Mock(),
             is_management=boolean2[0],
             is_portal=boolean2[1])
 
@@ -333,6 +339,7 @@ class TestCommandProcessor:
             sender=sender,
             command="foo",
             args=[],
+            content=Mock(),
             is_management=boolean2[0],
             is_portal=boolean2[1],
         )
@@ -361,6 +368,7 @@ class TestCommandProcessor:
             sender=sender,  # u.User
             command="foo",
             args=[],
+            content=Mock(),
             is_management=boolean2[0],
             is_portal=boolean2[1]
         )
