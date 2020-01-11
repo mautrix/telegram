@@ -222,7 +222,7 @@ class BasePortal(ABC):
             return False
         evt_type = EventType.find(f"net.maunium.telegram.{event}")
         evt_type.t_class = EventType.Class.STATE
-        return self.main_intent.state_store.has_power_level(self.mxid, user.mxid, event=evt_type)
+        return self.main_intent.state_store.has_power_level(self.mxid, user.mxid, evt_type)
 
     def get_input_entity(self, user: 'AbstractUser'
                          ) -> Awaitable[Union[TypeInputPeer, TypeInputChannel]]:
