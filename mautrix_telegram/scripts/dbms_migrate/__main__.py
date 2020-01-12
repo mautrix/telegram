@@ -24,7 +24,8 @@ def log(message, end="\n"):
 
 
 def connect(to):
-    from mautrix.bridge.db import Base, RoomState, UserProfile
+    from mautrix.util.db import Base
+    from mautrix.bridge.db import RoomState, UserProfile
     from mautrix_telegram.db import (Portal, Message, UserPortal, User, Contact, Puppet, BotChat,
                                      TelegramFile)
 
