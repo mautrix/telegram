@@ -13,8 +13,8 @@ build amd64:
     - docker pull $CI_REGISTRY_IMAGE:latest || true
     - docker build --pull --cache-from $CI_REGISTRY_IMAGE:latest --tag $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA .
     - docker push $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA
-    - [ $CI_COMMIT_BRANCH == "master" ] && docker tag $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA $CI_REGISTRY_IMAGE:arm64 && docker push $CI_REGISTRY_IMAGE:latest
-    - [ $CI_COMMIT_BRANCH != "master" ] && docker tag $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA $CI_REGISTRY_IMAGE:$CI_COMMIT_REF_NAME && docker push $CI_REGISTRY_IMAGE:$CI_COMMIT_REF_NAME
+    - if [ $CI_COMMIT_BRANCH == "master" ]; then docker tag $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA $CI_REGISTRY_IMAGE:arm64 && docker push $CI_REGISTRY_IMAGE:latest; fi
+    - if [ $CI_COMMIT_BRANCH != "master" ]; then docker tag $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA $CI_REGISTRY_IMAGE:$CI_COMMIT_REF_NAME && docker push $CI_REGISTRY_IMAGE:$CI_COMMIT_REF_NAME; fi
     - docker rmi $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA
 
 build arm64:
@@ -23,6 +23,6 @@ build arm64:
   - docker pull $CI_REGISTRY_IMAGE:arm64 || true
   - docker build --pull --cache-from $CI_REGISTRY_IMAGE:arm64 --tag $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA-arm64 .
   - docker push $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA-arm64
-  - [ $CI_COMMIT_BRANCH == "master" ] && docker tag $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA-arm64 $CI_REGISTRY_IMAGE:arm64 && docker push $CI_REGISTRY_IMAGE:arm64
-  - [ $CI_COMMIT_BRANCH != "master" ] && docker tag $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA-arm64 $CI_REGISTRY_IMAGE:$CI_COMMIT_REF_NAME-arm64 && docker push $CI_REGISTRY_IMAGE:$CI_COMMIT_REF_NAME-arm64
+  - if [ $CI_COMMIT_BRANCH == "master" ]; then docker tag $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA-arm64 $CI_REGISTRY_IMAGE:arm64 && docker push $CI_REGISTRY_IMAGE:arm64; fi
+  - if [ $CI_COMMIT_BRANCH != "master" ]; then docker tag $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA-arm64 $CI_REGISTRY_IMAGE:$CI_COMMIT_REF_NAME-arm64 && docker push $CI_REGISTRY_IMAGE:$CI_COMMIT_REF_NAME-arm64; fi
   - docker rmi $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA-arm64
