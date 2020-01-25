@@ -97,7 +97,6 @@ class AbstractUser(ABC):
         self.client = None
         self.is_relaybot = False
         self.is_bot = False
-        self.relaybot = None
 
     @property
     def connected(self) -> bool:
@@ -423,7 +422,7 @@ class AbstractUser(ABC):
                 return
 
         if self.ignore_incoming_bot_events and self.relaybot and sender.id == self.relaybot.tgid:
-            self.log.debug(f"Ignoring relaybot-sent message %s to %s", update, portal.tgid_log)
+            self.log.debug(f"Ignoring relaybot-sent message %s to %s", update.id, portal.tgid_log)
             return
 
         if isinstance(update, MessageService):
