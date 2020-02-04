@@ -361,6 +361,11 @@ class PortalTelegram(BasePortal, ABC):
         min_id = last.tgid if last else 0
         self.backfilling = True
         self.backfill_leave = set()
+        if self.peer_type == "user":
+            sender = p.Puppet.get(source.tgid)
+            await self.main_intent.invite_user(self.mxid, sender.default_mxid)
+            await sender.default_mxid_intent.join_room_by_id(self.mxid)
+            self.backfill_leave.add(sender.default_mxid_intent)
         max_file_size = min(config["bridge.max_document_size"], 1500) * 1024 * 1024
         async with source.client.takeout(files=True, megagroups=self.megagroup,
                                          chats=self.peer_type == "chat",

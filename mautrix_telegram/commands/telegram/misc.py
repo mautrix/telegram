@@ -315,5 +315,10 @@ async def backfill(evt: CommandEvent) -> None:
     try:
         await portal.backfill(evt.sender)
     except TakeoutInitDelayError:
-        await evt.reply("Please accept the data export request from a mobile device, "
-                        "then re-run the backfill command.")
+        msg = ("Please accept the data export request from a mobile device, "
+               "then re-run the backfill command.")
+        if portal.peer_type == "user":
+            from mautrix.appservice import IntentAPI
+            await portal.main_intent.send_notice(evt.room_id, msg)
+        else:
+            await evt.reply(msg)
