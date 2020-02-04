@@ -62,6 +62,16 @@ class Message(Base):
             return 0
 
     @classmethod
+    def find_last(cls, mx_room: RoomID, tg_space: TelegramID) -> Optional['Message']:
+        return cls._one_or_none(cls.db.execute(
+            cls._make_simple_select(cls.c.mx_room == mx_room, cls.c.tg_space == tg_space)
+                .order_by(desc(cls.c.tgid)).limit(1)))
+
+    @classmethod
+    def delete_all(cls, mx_room: RoomID) -> None:
+        cls.db.execute(cls.t.delete().where(cls.c.mx_room == mx_room))
+
+    @classmethod
     def get_by_mxid(cls, mxid: EventID, mx_room: RoomID, tg_space: TelegramID
                     ) -> Optional['Message']:
         return cls._select_one_or_none(cls.c.mxid == mxid, cls.c.mx_room == mx_room,

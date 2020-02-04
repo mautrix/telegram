@@ -30,7 +30,6 @@ from telethon.errors import (AuthBytesInvalidError, AuthKeyInvalidError, Locatio
 
 from mautrix.appservice import IntentAPI
 
-
 from ..tgclient import MautrixTelegramClient
 from ..db import TelegramFile as DBTelegramFile
 from ..util import sane_mimetypes
@@ -214,8 +213,8 @@ async def _unlocked_transfer_file_to_matrix(client: MautrixTelegramClient, inten
         image_converted = False
         # A weird bug in alpine/magic makes it return application/octet-stream for gzips...
         if is_sticker and tgs_convert and (mime_type == "application/gzip" or (
-               mime_type == "application/octet-stream"
-               and magic.from_buffer(file).startswith("gzip"))):
+            mime_type == "application/octet-stream"
+            and magic.from_buffer(file).startswith("gzip"))):
             mime_type, file, width, height = await convert_tgs_to(
                 file, tgs_convert["target"], **tgs_convert["args"])
             thumbnail = None
@@ -238,8 +237,11 @@ async def _unlocked_transfer_file_to_matrix(client: MautrixTelegramClient, inten
     if thumbnail and (mime_type.startswith("video/") or mime_type == "image/gif"):
         if isinstance(thumbnail, (PhotoSize, PhotoCachedSize)):
             thumbnail = thumbnail.location
-        db_file.thumbnail = await transfer_thumbnail_to_matrix(client, intent, thumbnail, file,
-                                                               mime_type)
+        try:
+            db_file.thumbnail = await transfer_thumbnail_to_matrix(client, intent, thumbnail, file,
+                                                                   mime_type)
+        except FileIdInvalidError:
+            log.warning(f"Failed to transfer thumbnail for {thumbnail!s}", exc_info=True)
 
     try:
         db_file.insert()

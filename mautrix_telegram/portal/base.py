@@ -13,7 +13,7 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import Awaitable, Dict, List, Optional, Tuple, Union, Any, TYPE_CHECKING
+from typing import Awaitable, Dict, List, Optional, Tuple, Union, Any, Set, TYPE_CHECKING
 from abc import ABC, abstractmethod
 import asyncio
 import logging
@@ -35,7 +35,7 @@ from mautrix.util.simple_template import SimpleTemplate
 
 from ..types import TelegramID
 from ..context import Context
-from ..db import Portal as DBPortal
+from ..db import Portal as DBPortal, Message as DBMessage
 from .. import puppet as p, user as u, util
 from .deduplication import PortalDedup
 from .send_lock import PortalSendLock
@@ -86,6 +86,8 @@ class BasePortal(ABC):
     photo_id: Optional[str]
     local_config: Dict[str, Any]
     deleted: bool
+    backfilling: bool
+    backfill_leave: Optional[Set[IntentAPI]]
     log: logging.Logger
 
     alias: Optional[RoomAlias]
@@ -115,6 +117,8 @@ class BasePortal(ABC):
         self._main_intent = None
         self.deleted = False
         self.log = self.base_log.getChild(self.tgid_log if self.tgid else self.mxid)
+        self.backfilling = True
+        self.backfill_leave = None
 
         self.dedup = PortalDedup(self)
         self.send_lock = PortalSendLock()
@@ -273,8 +277,8 @@ class BasePortal(ABC):
                 authenticated.append(user)
         return authenticated
 
-    @staticmethod
-    async def cleanup_room(intent: IntentAPI, room_id: RoomID, message: str,
+    @classmethod
+    async def cleanup_room(cls, intent: IntentAPI, room_id: RoomID, message: str,
                            puppets_only: bool = False) -> None:
         try:
             members = await intent.get_room_members(room_id)
@@ -293,7 +297,7 @@ class BasePortal(ABC):
         try:
             await intent.leave_room(room_id)
         except (MatrixRequestError, IntentError):
-            self.log.warning("Failed to leave room when cleaning up room", exc_info=True)
+            cls.log.warning(f"Failed to leave room {room_id} when cleaning up room", exc_info=True)
 
     async def cleanup_portal(self, message: str, puppets_only: bool = False) -> None:
         if self.username:
@@ -342,6 +346,7 @@ class BasePortal(ABC):
             pass
         if self._db_instance:
             self._db_instance.delete()
+        DBMessage.delete_all(self.mxid)
         self.deleted = True
 
     @classmethod
@@ -489,6 +494,10 @@ class BasePortal(ABC):
     @abstractmethod
     def handle_matrix_power_levels(self, sender: 'u.User', new_levels: Dict[UserID, int],
                                    old_levels: Dict[UserID, int]) -> Awaitable[None]:
+        pass
+
+    @abstractmethod
+    def backfill(self, source: 'AbstractUser') -> Awaitable[None]:
         pass
 
     # endregion
