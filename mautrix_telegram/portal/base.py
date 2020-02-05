@@ -117,7 +117,7 @@ class BasePortal(ABC):
         self._main_intent = None
         self.deleted = False
         self.log = self.base_log.getChild(self.tgid_log if self.tgid else self.mxid)
-        self.backfilling = True
+        self.backfilling = False
         self.backfill_leave = None
 
         self.dedup = PortalDedup(self)
