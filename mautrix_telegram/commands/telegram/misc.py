@@ -104,7 +104,8 @@ async def pm(evt: CommandEvent) -> EventID:
         return await evt.reply("**Usage:** `$cmdprefix+sp pm <user identifier>`")
 
     try:
-        user = await evt.sender.client.get_entity(evt.args[0])
+        id = "".join(evt.args).translate({ord(c):None for c in "+()- "})
+        user = await evt.sender.client.get_entity(id)
     except ValueError:
         return await evt.reply("Invalid user identifier or user not found.")
 
