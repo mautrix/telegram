@@ -421,7 +421,8 @@ class AbstractUser(ABC):
                                f" in unbridged chat {portal.tgid_log}")
                 return
 
-        if self.ignore_incoming_bot_events and self.relaybot and sender.id == self.relaybot.tgid:
+        if ((self.ignore_incoming_bot_events and self.relaybot
+             and sender and sender.id == self.relaybot.tgid)):
             self.log.debug(f"Ignoring relaybot-sent message %s to %s", update.id, portal.tgid_log)
             return
 
