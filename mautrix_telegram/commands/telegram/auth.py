@@ -15,6 +15,7 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from typing import Any, Dict, Optional
 import asyncio
+import re
 
 from telethon.errors import (  # isort: skip
     AccessTokenExpiredError, AccessTokenInvalidError, FirstNameInvalidError, FloodWaitError,
@@ -61,14 +62,30 @@ async def ping_bot(evt: CommandEvent) -> EventID:
 async def register(evt: CommandEvent) -> Optional[EventID]:
     if await evt.sender.is_logged_in():
         return await evt.reply("You are already logged in.")
-    elif len(evt.args) < 1:
+    if len(evt.args) < 2:
         return await evt.reply("**Usage:** `$cmdprefix+sp register <phone> <full name>`")
 
-    phone_number = evt.args[0]
-    if len(evt.args) == 2:
-        full_name = evt.args[1], ""
+    # split parameters into lists
+    phone_list = name_list = []
+    ptrn = re.compile(r'^([\s\d().+-]+)$')
+    for i, arg in enumerate(evt.args):
+        if ptrn.fullmatch(arg) == None:
+            phone_list = evt.args[:i]
+            name_list = evt.args[i:]
+            break
+
+    if len(name_list) == 0:
+        return await evt.reply("You have to specify a name.")
+    elif len(phone_list) == 0:
+        return await evt.reply("You have to specify a phone number.")
+
+    # join list to a str and remove chars from str if there is no missing
+    phone_number = "".join(phone_list).translate({ord(c):None for c in "+()- "})
+
+    if len(name_list) == 1:
+        full_name = name_list[0], ""
     else:
-        full_name = " ".join(evt.args[1:-1]), evt.args[-1]
+        full_name = " ".join(name_list[0:-1]), name_list[-1]
 
     await _request_code(evt, phone_number, {
         "next": enter_code_register,
@@ -194,7 +211,8 @@ async def enter_phone_or_token(evt: CommandEvent) -> Optional[EventID]:
             return await evt.reply("Unhandled exception while sending auth token. "
                                    "Check console for more details.")
     else:
-        await _request_code(evt, evt.args[0], {
+        # joining args because formatted phone numbers should be accepted
+        await _request_code(evt, "".join(evt.args).translate({ord(c):None for c in "+()- "}), {
             "next": enter_code,
             "action": "Login",
         })
