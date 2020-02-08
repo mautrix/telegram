@@ -25,7 +25,7 @@ from telethon.tl.types import (UserProfilePhoto, User, UpdateUserName, PeerUser,
 from mautrix.appservice import AppService, IntentAPI
 from mautrix.errors import MatrixRequestError
 from mautrix.bridge import CustomPuppetMixin
-from mautrix.types import UserID, SyncToken
+from mautrix.types import UserID, SyncToken, RoomID
 from mautrix.util.simple_template import SimpleTemplate
 
 from .types import TelegramID
@@ -319,6 +319,10 @@ class Puppet(CustomPuppetMixin):
                     self.photo_id = ""
                 return True
         return False
+
+    def default_puppet_should_leave_room(self, room_id: RoomID) -> bool:
+        portal: p.Portal = p.Portal.get_by_mxid(room_id)
+        return portal and not portal.backfilling and portal.peer_type != "user"
 
     # endregion
     # region Getters
