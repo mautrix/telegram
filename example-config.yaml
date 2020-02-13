@@ -409,7 +409,7 @@ logging:
         mau:
             level: DEBUG
         telethon:
-            level: DEBUG
+            level: INFO
         aiohttp:
             level: INFO
     root:
