@@ -133,6 +133,8 @@ class PortalTelegram(BasePortal, ABC):
         generic_types = ("text/plain", "application/octet-stream")
         if file.mime_type in generic_types and document.mime_type not in generic_types:
             mime_type = document.mime_type or file.mime_type
+        elif file.mime_type == 'application/ogg':
+            mime_type = 'audio/ogg'
         else:
             mime_type = file.mime_type or document.mime_type
         info = ImageInfo(size=file.size, mimetype=mime_type)
