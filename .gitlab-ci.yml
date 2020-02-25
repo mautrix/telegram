@@ -2,6 +2,7 @@ image: docker:stable
 
 stages:
 - build
+- manifest
 
 default:
   before_script:
@@ -12,12 +13,10 @@ build amd64:
   tags:
   - amd64
   script:
-  - docker pull $CI_REGISTRY_IMAGE:latest || true
-  - docker build --pull --cache-from $CI_REGISTRY_IMAGE:latest --tag $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA .
-  - docker push $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA
-  - if [ $CI_COMMIT_BRANCH == "master" ]; then docker tag $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA $CI_REGISTRY_IMAGE:arm64 && docker push $CI_REGISTRY_IMAGE:latest; fi
-  - if [ $CI_COMMIT_BRANCH != "master" ]; then docker tag $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA $CI_REGISTRY_IMAGE:$CI_COMMIT_REF_NAME && docker push $CI_REGISTRY_IMAGE:$CI_COMMIT_REF_NAME; fi
-  - docker rmi $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA
+  - docker pull $CI_REGISTRY_IMAGE:amd64 || true
+  - docker build --pull --cache-from $CI_REGISTRY_IMAGE:amd64 --tag $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA-amd64 .
+  - docker push $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA-amd64
+  - docker rmi $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA-amd64
 
 build arm64:
   stage: build
@@ -27,6 +26,14 @@ build arm64:
   - docker pull $CI_REGISTRY_IMAGE:arm64 || true
   - docker build --pull --cache-from $CI_REGISTRY_IMAGE:arm64 --tag $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA-arm64 .
   - docker push $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA-arm64
-  - if [ $CI_COMMIT_BRANCH == "master" ]; then docker tag $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA-arm64 $CI_REGISTRY_IMAGE:arm64 && docker push $CI_REGISTRY_IMAGE:arm64; fi
-  - if [ $CI_COMMIT_BRANCH != "master" ]; then docker tag $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA-arm64 $CI_REGISTRY_IMAGE:$CI_COMMIT_REF_NAME-arm64 && docker push $CI_REGISTRY_IMAGE:$CI_COMMIT_REF_NAME-arm64; fi
   - docker rmi $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA-arm64
+
+manifest:
+  stage: manifest
+  script:
+  - "mkdir -p $HOME/.docker && echo '{\"experimental\": \"enabled\"}' > $HOME/.docker/config.json"
+  - docker pull $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA-amd64
+  - docker pull $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA-arm64
+  - if [ $CI_COMMIT_BRANCH == "master" ]; then docker manifest create $CI_REGISTRY_IMAGE:latest $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA-amd64 $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA-arm64 && docker manifest push $CI_REGISTRY_IMAGE:latest; fi
+  - if [ $CI_COMMIT_BRANCH != "master" ]; then docker manifest create $CI_REGISTRY_IMAGE:$CI_COMMIT_REF_NAME $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA-amd64 $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA-arm64 && docker manifest push $CI_REGISTRY_IMAGE:$CI_COMMIT_REF_NAME; fi
+  - docker rmi $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA-amd64 $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA-arm64
