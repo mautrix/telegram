@@ -2,37 +2,31 @@ image: docker:stable
 
 stages:
 - build
-- push
 
 default:
   before_script:
   - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
 
-build:
+build amd64:
   stage: build
+  tags:
+  - amd64
   script:
   - docker pull $CI_REGISTRY_IMAGE:latest || true
   - docker build --pull --cache-from $CI_REGISTRY_IMAGE:latest --tag $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA .
   - docker push $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA
+  - if [ $CI_COMMIT_BRANCH == "master" ]; then docker tag $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA $CI_REGISTRY_IMAGE:arm64 && docker push $CI_REGISTRY_IMAGE:latest; fi
+  - if [ $CI_COMMIT_BRANCH != "master" ]; then docker tag $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA $CI_REGISTRY_IMAGE:$CI_COMMIT_REF_NAME && docker push $CI_REGISTRY_IMAGE:$CI_COMMIT_REF_NAME; fi
+  - docker rmi $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA
 
-push latest:
-  stage: push
-  only:
-  - master
-  variables:
-    GIT_STRATEGY: none
+build arm64:
+  stage: build
+  tags:
+  - arm64
   script:
-  - docker pull $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA
-  - docker tag $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA $CI_REGISTRY_IMAGE:latest
-  - docker push $CI_REGISTRY_IMAGE:latest
-
-push tag:
-  stage: push
-  variables:
-    GIT_STRATEGY: none
-  except:
-  - master
-  script:
-  - docker pull $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA
-  - docker tag $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA $CI_REGISTRY_IMAGE:$CI_COMMIT_REF_NAME
-  - docker push $CI_REGISTRY_IMAGE:$CI_COMMIT_REF_NAME
+  - docker pull $CI_REGISTRY_IMAGE:arm64 || true
+  - docker build --pull --cache-from $CI_REGISTRY_IMAGE:arm64 --tag $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA-arm64 .
+  - docker push $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA-arm64
+  - if [ $CI_COMMIT_BRANCH == "master" ]; then docker tag $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA-arm64 $CI_REGISTRY_IMAGE:arm64 && docker push $CI_REGISTRY_IMAGE:arm64; fi
+  - if [ $CI_COMMIT_BRANCH != "master" ]; then docker tag $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA-arm64 $CI_REGISTRY_IMAGE:$CI_COMMIT_REF_NAME-arm64 && docker push $CI_REGISTRY_IMAGE:$CI_COMMIT_REF_NAME-arm64; fi
+  - docker rmi $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA-arm64
