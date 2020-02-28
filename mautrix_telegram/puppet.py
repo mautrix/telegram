@@ -372,7 +372,7 @@ class Puppet(CustomPuppetMixin):
 
     @classmethod
     def all_with_custom_mxid(cls) -> Iterable['Puppet']:
-        return (cls.by_custom_mxid[puppet.mxid]
+        return (cls.by_custom_mxid[puppet.custom_mxid]
                 if puppet.custom_mxid in cls.by_custom_mxid
                 else cls.from_db(puppet)
                 for puppet in DBPuppet.all_with_custom_mxid())
