@@ -25,10 +25,10 @@ from .util import user_has_power_level, get_initial_state
                  help_args="[_type_]",
                  help_text="Create a Telegram chat of the given type for the current Matrix room. "
                            "The type is either `group`, `supergroup` or `channel` (defaults to "
-                           "`group`).")
+                           "`supergroup`).")
 async def create(evt: CommandEvent) -> EventID:
-    type = evt.args[0] if len(evt.args) > 0 else "group"
-    if type not in {"chat", "group", "supergroup", "channel"}:
+    type = evt.args[0] if len(evt.args) > 0 else "supergroup"
+    if type not in ("chat", "group", "supergroup", "channel"):
         return await evt.reply(
             "**Usage:** `$cmdprefix+sp create ['group'/'supergroup'/'channel']`")
 
