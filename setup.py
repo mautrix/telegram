@@ -3,14 +3,21 @@ import glob
 
 from mautrix_telegram.get_version import git_tag, git_revision, version, linkified_version
 
-extras = {
-    "speedups": ["cryptg>=0.1,<0.3", "cchardet", "aiodns", "Brotli"],
-    "webp_convert": ["Pillow>=4.3.0,<7"],
-    "hq_thumbnails": ["moviepy>=1.0,<2.0"],
-    "metrics": ["prometheus_client>=0.6.0,<0.8.0"],
-    "postgres": ["psycopg2-binary>=2,<3"],
-}
-extras["all"] = list({dep for deps in extras.values() for dep in deps})
+with open("requirements.txt") as reqs:
+    install_requires = reqs.read().splitlines()
+
+with open("optional-requirements.txt") as reqs:
+    extras_require = {}
+    current = []
+    for line in reqs.read().splitlines():
+        if line.startswith("#/"):
+            extras_require[line[2:]] = current = []
+        elif not line or line.startswith("#"):
+            continue
+        else:
+            current.append(line)
+
+extras_require["all"] = list({dep for deps in extras_require.values() for dep in deps})
 
 try:
     long_desc = open("README.md").read()
@@ -40,18 +47,8 @@ setuptools.setup(
 
     packages=setuptools.find_packages(),
 
-    install_requires=[
-        "aiohttp>=3.0.1,<4",
-        "mautrix>=0.4.0,<0.5",
-        "SQLAlchemy>=1.2.3,<2",
-        "alembic>=1.0.0,<2",
-        "commonmark>=0.8.1,<0.10",
-        "ruamel.yaml>=0.15.35,<0.17",
-        "python-magic>=0.4.15,<0.5",
-        "telethon>=1.10,<1.11",
-        "telethon-session-sqlalchemy>=0.2.14,<0.3",
-    ],
-    extras_require=extras,
+    install_requires=install_requires,
+    extras_require=extras_require,
     python_requires="~=3.6",
 
     setup_requires=["pytest-runner"],
