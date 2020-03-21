@@ -71,9 +71,10 @@ setuptools.setup(
     """,
     package_data={"mautrix_telegram": [
         "web/public/*.mako", "web/public/*.png", "web/public/*.css",
+        "example-config.yaml",
     ]},
     data_files=[
-        (".", ["example-config.yaml", "alembic.ini"]),
+        (".", ["alembic.ini"]),
         ("alembic", ["alembic/env.py"]),
         ("alembic/versions", glob.glob("alembic/versions/*.py"))
     ],
