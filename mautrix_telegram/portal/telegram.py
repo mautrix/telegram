@@ -152,6 +152,9 @@ class PortalTelegram(BasePortal, ABC):
                                                 height=file.thumbnail.height or thumb_size.h,
                                                 width=file.thumbnail.width or thumb_size.w,
                                                 size=file.thumbnail.size)
+        else:
+            info.thumbnail_url = file.mxc
+            info.thumbnail_info = ImageInfo.deserialize(info.serialize())
 
         return info, name
 
