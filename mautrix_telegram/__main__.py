@@ -44,6 +44,7 @@ except ImportError:
 
 
 class TelegramBridge(Bridge):
+    module = "mautrix_telegram"
     name = "mautrix-telegram"
     command = "python -m mautrix-telegram"
     description = "A Matrix-Telegram puppeting bridge."
