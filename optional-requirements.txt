@@ -18,3 +18,6 @@ prometheus_client>=0.6,<0.8
 
 #/postgres
 psycopg2-binary>=2,<3
+
+#/e2be
+matrix-nio[e2e]>=0.9,<0.10

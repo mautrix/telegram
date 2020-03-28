@@ -13,14 +13,14 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import Dict, Set, Tuple, Union, Iterable, TYPE_CHECKING
+from typing import Dict, Set, Tuple, Union, Iterable, Optional, TYPE_CHECKING
 
 from mautrix.bridge import BaseMatrixHandler
 from mautrix.types import (Event, EventType, RoomID, UserID, EventID, ReceiptEvent, ReceiptType,
                            ReceiptEventContent, PresenceEvent, PresenceState, TypingEvent,
                            MessageEvent, StateEvent, RedactionEvent, RoomNameStateEventContent,
                            RoomAvatarStateEventContent, RoomTopicStateEventContent,
-                           MemberStateEventContent)
+                           MemberStateEventContent, EncryptedEvent)
 from mautrix.errors import MatrixError
 
 from . import user as u, portal as po, puppet as pu, commands as com
@@ -37,6 +37,11 @@ except ImportError:
     Histogram = None
     EVENT_TIME = None
 
+try:
+    from .e2ee import EncryptionManager
+except ImportError:
+    EncryptionManager = None
+
 RoomMetaStateEventContent = Union[RoomNameStateEventContent, RoomAvatarStateEventContent,
                                   RoomTopicStateEventContent]
 
@@ -44,13 +49,25 @@ RoomMetaStateEventContent = Union[RoomNameStateEventContent, RoomAvatarStateEven
 class MatrixHandler(BaseMatrixHandler):
     bot: 'Bot'
     commands: 'com.CommandProcessor'
+    e2ee: Optional[EncryptionManager]
     previously_typing: Dict[RoomID, Set[UserID]]
 
     def __init__(self, context: 'Context') -> None:
         super(MatrixHandler, self).__init__(context.az, context.config, loop=context.loop,
                                             command_processor=com.CommandProcessor(context))
+        self.e2ee = None
+        if self.config["bridge.encryption.allow"]:
+            if EncryptionManager:
+                self.e2ee = EncryptionManager(context)
+            else:
+                self.log.warning("Encryption enabled in config, but dependencies not installed.")
         self.bot = context.bot
         self.previously_typing = {}
+
+    async def init_as_bot(self) -> None:
+        await super().init_as_bot()
+        if self.e2ee:
+            await self.e2ee.start()
 
     async def get_user(self, user_id: UserID) -> 'u.User':
         return await u.User.get_by_mxid(user_id).ensure_started()
@@ -355,7 +372,7 @@ class MatrixHandler(BaseMatrixHandler):
         self.previously_typing[room_id] = now_typing
 
     def filter_matrix_event(self, evt: Event) -> bool:
-        if not isinstance(evt, (RedactionEvent, MessageEvent, StateEvent)):
+        if not isinstance(evt, (RedactionEvent, MessageEvent, StateEvent, EncryptedEvent)):
             return True
         return evt.sender and (evt.sender == self.az.bot_mxid
                                or pu.Puppet.get_id_from_mxid(evt.sender) is not None)
@@ -372,6 +389,8 @@ class MatrixHandler(BaseMatrixHandler):
     async def handle_event(self, evt: Event) -> None:
         if evt.type == EventType.ROOM_REDACTION:
             await self.handle_redaction(evt)
+        elif evt.type == EventType.ROOM_ENCRYPTED and self.e2ee:
+            await self.int_handle_event(self.e2ee.decrypt(evt))
 
     async def handle_state_event(self, evt: StateEvent) -> None:
         if evt.type == EventType.ROOM_POWER_LEVELS:
@@ -387,6 +406,11 @@ class MatrixHandler(BaseMatrixHandler):
             await self.handle_room_pin(evt.room_id, evt.sender, new_events, old_events)
         elif evt.type == EventType.ROOM_TOMBSTONE:
             await self.handle_room_upgrade(evt.room_id, evt.sender, evt.content.replacement_room)
+        elif evt.type == EventType.ROOM_ENCRYPTION:
+            portal = po.Portal.get_by_mxid(evt.room_id)
+            if portal:
+                portal.encrypted = True
+                portal.save()
 
     async def log_event_handle_duration(self, evt: Event, duration: float) -> None:
         if EVENT_TIME:

@@ -38,7 +38,7 @@ from telethon.tl.types import (
 from mautrix.appservice import IntentAPI
 from mautrix.types import (EventID, UserID, ImageInfo, ThumbnailInfo, RelatesTo, MessageType,
                            EventType, MediaMessageEventContent, TextMessageEventContent,
-                           LocationMessageEventContent, Format)
+                           LocationMessageEventContent, Format, MessageEventContent)
 
 from ..types import TelegramID
 from ..db import Message as DBMessage, TelegramFile as DBTelegramFile
@@ -71,6 +71,12 @@ class PortalTelegram(BasePortal, ABC):
             return f"https://t.me/c/{self.tgid}/{evt.id}"
         return None
 
+    async def _send_message(self, intent: IntentAPI, content: MessageEventContent,
+                            event_type: EventType = EventType.ROOM_MESSAGE, **kwargs) -> EventID:
+        if self.encrypted and self.matrix.e2ee:
+            event_type, content = await self.matrix.e2ee.encrypt(self.mxid, event_type, content)
+        return await intent.send_message_event(self.mxid, event_type, content, **kwargs)
+
     async def handle_telegram_photo(self, source: 'AbstractUser', intent: IntentAPI, evt: Message,
                                     relates_to: Dict = None) -> Optional[EventID]:
         loc, largest_size = self._get_largest_photo_size(evt.media.photo)
@@ -85,7 +91,7 @@ class PortalTelegram(BasePortal, ABC):
                 prefix_text="Inline image: ")
             content.external_url = self._get_external_url(evt)
             await intent.set_typing(self.mxid, is_typing=False)
-            return await intent.send_message(self.mxid, content, timestamp=evt.date)
+            return await self._send_message(intent, content, timestamp=evt.date)
         info = ImageInfo(
             height=largest_size.h, width=largest_size.w, orientation=0, mimetype=file.mime_type,
             size=(len(largest_size.bytes) if (isinstance(largest_size, PhotoCachedSize))
@@ -95,12 +101,12 @@ class PortalTelegram(BasePortal, ABC):
         content = MediaMessageEventContent(url=file.mxc, msgtype=MessageType.IMAGE, info=info,
                                            body=name, relates_to=relates_to,
                                            external_url=self._get_external_url(evt))
-        result = await intent.send_message(self.mxid, content, timestamp=evt.date)
+        result = await self._send_message(intent, content, timestamp=evt.date)
         if evt.message:
             caption_content = await formatter.telegram_to_matrix(evt, source, self.main_intent,
                                                                  no_reply_fallback=True)
             caption_content.external_url = content.external_url
-            result = await intent.send_message(self.mxid, caption_content, timestamp=evt.date)
+            result = await self._send_message(intent, caption_content, timestamp=evt.date)
         return result
 
     @staticmethod
@@ -168,6 +174,7 @@ class PortalTelegram(BasePortal, ABC):
         if document.size > config["bridge.max_document_size"] * 1000 ** 2:
             name = attrs.name or ""
             caption = f"\n{evt.message}" if evt.message else ""
+            # TODO encrypt
             return await intent.send_notice(self.mxid, f"Too large file {name}{caption}")
 
         thumb_loc, thumb_size = self._get_largest_photo_size(document)
@@ -199,7 +206,7 @@ class PortalTelegram(BasePortal, ABC):
                 "audio/": MessageType.AUDIO,
                 "image/": MessageType.IMAGE,
             }.get(info.mimetype[:6], MessageType.FILE))
-        return await intent.send_message_event(self.mxid, event_type, content, timestamp=evt.date)
+        return await self._send_message(intent, content, event_type=event_type, timestamp=evt.date)
 
     def handle_telegram_location(self, _: 'AbstractUser', intent: IntentAPI, evt: Message,
                                  relates_to: dict = None) -> Awaitable[EventID]:
@@ -218,7 +225,7 @@ class PortalTelegram(BasePortal, ABC):
         content["format"] = str(Format.HTML)
         content["formatted_body"] = f"Location: <a href='{url}'>{body}</a>"
 
-        return intent.send_message(self.mxid, content, timestamp=evt.date)
+        return self._send_message(intent, content, timestamp=evt.date)
 
     async def handle_telegram_text(self, source: 'AbstractUser', intent: IntentAPI, is_bot: bool,
                                    evt: Message) -> EventID:
@@ -228,7 +235,7 @@ class PortalTelegram(BasePortal, ABC):
         if is_bot and self.get_config("bot_messages_as_notices"):
             content.msgtype = MessageType.NOTICE
         await intent.set_typing(self.mxid, is_typing=False)
-        return await intent.send_message(self.mxid, content, timestamp=evt.date)
+        return await self._send_message(intent, content, timestamp=evt.date)
 
     async def handle_telegram_unsupported(self, source: 'AbstractUser', intent: IntentAPI,
                                           evt: Message, relates_to: dict = None) -> EventID:
@@ -241,7 +248,7 @@ class PortalTelegram(BasePortal, ABC):
         content.external_url = self._get_external_url(evt)
         content["net.maunium.telegram.unsupported"] = True
         await intent.set_typing(self.mxid, is_typing=False)
-        return await intent.send_message(self.mxid, content, timestamp=evt.date)
+        return await self._send_message(intent, content, timestamp=evt.date)
 
     async def handle_telegram_poll(self, source: 'AbstractUser', intent: IntentAPI, evt: Message,
                                    relates_to: RelatesTo) -> EventID:
@@ -267,7 +274,7 @@ class PortalTelegram(BasePortal, ABC):
             relates_to=relates_to, external_url=self._get_external_url(evt))
 
         await intent.set_typing(self.mxid, is_typing=False)
-        return await intent.send_message(self.mxid, content, timestamp=evt.date)
+        return await self._send_message(intent, content, timestamp=evt.date)
 
     @staticmethod
     def _int_to_bytes(i: int) -> bytes:
@@ -309,7 +316,7 @@ class PortalTelegram(BasePortal, ABC):
         content["net.maunium.telegram.game"] = play_id
 
         await intent.set_typing(self.mxid, is_typing=False)
-        return await intent.send_message(self.mxid, content, timestamp=evt.date)
+        return await self._send_message(intent, content, timestamp=evt.date)
 
     async def handle_telegram_edit(self, source: 'AbstractUser', sender: p.Puppet, evt: Message
                                    ) -> None:
@@ -353,7 +360,7 @@ class PortalTelegram(BasePortal, ABC):
 
         intent = sender.intent_for(self) if sender else self.main_intent
         await intent.set_typing(self.mxid, is_typing=False)
-        event_id = await intent.send_message(self.mxid, content)
+        event_id = await self._send_message(intent, content)
 
         prev_edit_msg = DBMessage.get_one_by_tgid(TelegramID(evt.id), tg_space, -1) or editing_msg
         DBMessage(mxid=event_id, mx_room=self.mxid, tg_space=tg_space, tgid=TelegramID(evt.id),
@@ -522,6 +529,7 @@ class PortalTelegram(BasePortal, ABC):
         elif isinstance(action, MessageActionChatMigrateTo):
             self.peer_type = "channel"
             self._migrate_and_save_telegram(TelegramID(action.channel_id))
+            # TODO encrypt
             await sender.intent_for(self).send_emote(self.mxid,
                                                      "upgraded this group to a supergroup.")
         elif isinstance(action, MessageActionGameScore):

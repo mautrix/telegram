@@ -15,7 +15,7 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from typing import Optional
 
-from sqlalchemy import Column, Integer, String, Boolean, Text, func
+from sqlalchemy import Column, Integer, String, Boolean, Text, func, sql
 
 from mautrix.types import RoomID
 from mautrix.util.db import Base
@@ -34,6 +34,7 @@ class Portal(Base):
 
     # Matrix portal information
     mxid: RoomID = Column(String, unique=True, nullable=True)
+    encrypted: bool = Column(Boolean, nullable=False, server_default=sql.expression.false())
 
     config: str = Column(Text, nullable=True)
 

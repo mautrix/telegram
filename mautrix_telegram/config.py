@@ -118,6 +118,8 @@ class Config(BaseBridgeConfig):
         copy("bridge.federate_rooms")
         copy("bridge.animated_sticker.target")
         copy("bridge.animated_sticker.args")
+        copy("bridge.encryption.allow")
+        copy("bridge.encryption.default")
 
         copy("bridge.initial_power_level_overrides.group")
         copy("bridge.initial_power_level_overrides.user")

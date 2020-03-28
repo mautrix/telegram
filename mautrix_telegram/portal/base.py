@@ -44,6 +44,7 @@ if TYPE_CHECKING:
     from ..bot import Bot
     from ..abstract_user import AbstractUser
     from ..config import Config
+    from ..matrix import MatrixHandler
     from . import Portal
 
 TypeParticipant = Union[TypeChatParticipant, TypeChannelParticipant]
@@ -58,6 +59,7 @@ class BasePortal(ABC):
     az: AppService = None
     bot: 'Bot' = None
     loop: asyncio.AbstractEventLoop = None
+    matrix: 'MatrixHandler' = None
 
     # Config cache
     filter_mode: str = None
@@ -85,6 +87,7 @@ class BasePortal(ABC):
     about: Optional[str]
     photo_id: Optional[str]
     local_config: Dict[str, Any]
+    encrypted: bool
     deleted: bool
     backfilling: bool
     backfill_leave: Optional[Set[IntentAPI]]
@@ -102,7 +105,8 @@ class BasePortal(ABC):
                  mxid: Optional[RoomID] = None, username: Optional[str] = None,
                  megagroup: Optional[bool] = False, title: Optional[str] = None,
                  about: Optional[str] = None, photo_id: Optional[str] = None,
-                 local_config: Optional[str] = None, db_instance: DBPortal = None) -> None:
+                 local_config: Optional[str] = None, encrypted: Optional[bool] = False,
+                 db_instance: DBPortal = None) -> None:
         self.mxid = mxid
         self.tgid = tgid
         self.tg_receiver = tg_receiver or tgid
@@ -113,6 +117,7 @@ class BasePortal(ABC):
         self.about = about
         self.photo_id = photo_id
         self.local_config = json.loads(local_config or "{}")
+        self.encrypted = encrypted
         self._db_instance = db_instance
         self._main_intent = None
         self.deleted = False
@@ -328,12 +333,12 @@ class BasePortal(ABC):
         return DBPortal(tgid=self.tgid, tg_receiver=self.tg_receiver, peer_type=self.peer_type,
                         mxid=self.mxid, username=self.username, megagroup=self.megagroup,
                         title=self.title, about=self.about, photo_id=self.photo_id,
-                        config=json.dumps(self.local_config))
+                        config=json.dumps(self.local_config), encrypted=self.encrypted)
 
     def save(self) -> None:
         self.db_instance.edit(mxid=self.mxid, username=self.username, title=self.title,
                               about=self.about, photo_id=self.photo_id, megagroup=self.megagroup,
-                              config=json.dumps(self.local_config))
+                              config=json.dumps(self.local_config), encrypted=self.encrypted)
 
     def delete(self) -> None:
         try:
@@ -352,10 +357,10 @@ class BasePortal(ABC):
     @classmethod
     def from_db(cls, db_portal: DBPortal) -> 'Portal':
         return cls(tgid=db_portal.tgid, tg_receiver=db_portal.tg_receiver,
-                   peer_type=db_portal.peer_type, mxid=db_portal.mxid,
-                   username=db_portal.username, megagroup=db_portal.megagroup,
-                   title=db_portal.title, about=db_portal.about, photo_id=db_portal.photo_id,
-                   local_config=db_portal.config, db_instance=db_portal)
+                   peer_type=db_portal.peer_type, mxid=db_portal.mxid, username=db_portal.username,
+                   megagroup=db_portal.megagroup, title=db_portal.title, about=db_portal.about,
+                   photo_id=db_portal.photo_id, local_config=db_portal.config,
+                   encrypted=db_portal.encrypted, db_instance=db_portal)
 
     # endregion
     # region Class instance lookup
@@ -506,6 +511,7 @@ class BasePortal(ABC):
 def init(context: Context) -> None:
     global config
     BasePortal.az, config, BasePortal.loop, BasePortal.bot = context.core
+    BasePortal.matrix = context.mx
     BasePortal.max_initial_member_sync = config["bridge.max_initial_member_sync"]
     BasePortal.sync_channel_members = config["bridge.sync_channel_members"]
     BasePortal.sync_matrix_state = config["bridge.sync_matrix_state"]
