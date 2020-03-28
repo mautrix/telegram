@@ -53,7 +53,9 @@ RUN apk add --no-cache \
       su-exec \
       netcat-openbsd \
       # lottieconverter
-      zlib libpng
+      zlib libpng \
+ && apk add --no-cache --repository=http://dl-cdn.alpinelinux.org/alpine/edge/community \
+      olm-dev
 
 COPY requirements.txt /opt/mautrix-telegram/requirements.txt
 COPY optional-requirements.txt /opt/mautrix-telegram/optional-requirements.txt
@@ -67,7 +69,7 @@ RUN apk add --virtual .build-deps \
  && apk del .build-deps
 
 COPY . /opt/mautrix-telegram
-RUN apk add git && pip3 install .[speedups,hq_thumbnails,metrics] && apk del git
+RUN apk add git && pip3 install .[speedups,hq_thumbnails,metrics,e2be] && apk del git
 
 COPY --from=lottieconverter /usr/lib/librlottie* /usr/lib/
 COPY --from=lottieconverter /build/LottieConverter/dist/Debug/GNU-Linux/lottieconverter /usr/local/bin/lottieconverter
