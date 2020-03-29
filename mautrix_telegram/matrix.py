@@ -48,8 +48,14 @@ class MatrixHandler(BaseMatrixHandler):
     previously_typing: Dict[RoomID, Set[UserID]]
 
     def __init__(self, context: 'Context') -> None:
+        prefix, suffix = context.config["bridge.username_template"].format(userid=":").split(":")
+        homeserver = context.config["homeserver.domain"]
+        self.user_id_prefix = f"@{prefix}"
+        self.user_id_suffix = f"{suffix}:{homeserver}"
+
         super(MatrixHandler, self).__init__(context.az, context.config, loop=context.loop,
                                             command_processor=com.CommandProcessor(context))
+
         self.bot = context.bot
         self.previously_typing = {}
 
