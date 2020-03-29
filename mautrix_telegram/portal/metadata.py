@@ -30,7 +30,7 @@ from telethon.tl.types import (
 
 from mautrix.errors import MForbidden
 from mautrix.types import (RoomID, UserID, RoomCreatePreset, EventType, Membership, Member,
-                           PowerLevelStateEventContent, RoomAlias)
+                           PowerLevelStateEventContent)
 from mautrix.appservice import IntentAPI
 
 from ..types import TelegramID
@@ -316,9 +316,9 @@ class PortalMetadata(BasePortal, ABC):
             })
             if direct:
                 invites.append(self.az.bot_mxid)
-            # The bridge bot needs to join for e2ee, but that messes up the default name generation
-            # If/when canonical DMs happen, this might not be necessary anymore.
-            self.title = puppet.displayname
+                # The bridge bot needs to join for e2ee, but that messes up the default name
+                # generation. If/when canonical DMs happen, this might not be necessary anymore.
+                self.title = puppet.displayname
         if config["appservice.community_id"]:
             initial_state.append({
                 "type": "m.room.related_groups",
@@ -336,12 +336,15 @@ class PortalMetadata(BasePortal, ABC):
         if not room_id:
             raise Exception(f"Failed to create room")
 
-        if self.encrypted and direct:
-            try:
-                await self.az.intent.join_room_by_id(room_id)
-                # TODO feed info about room to matrix-nio
-            except Exception:
-                self.log.warning(f"Failed to add bridge bot to new private chat portal {room_id}")
+        if self.encrypted:
+            members = [self.main_intent.mxid]
+            if direct:
+                try:
+                    await self.az.intent.join_room_by_id(room_id)
+                    members += [self.az.intent.mxid]
+                except Exception:
+                    self.log.warning(f"Failed to add bridge bot to new private chat {room_id}")
+            await self.matrix.e2ee.add_room(room_id, members=members, encrypted=True)
 
         self.mxid = RoomID(room_id)
         self.by_mxid[self.mxid] = self

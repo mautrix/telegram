@@ -13,7 +13,7 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import Dict, Set, Tuple, Union, Iterable, Optional, TYPE_CHECKING
+from typing import Dict, Set, Tuple, Union, Iterable, List, TYPE_CHECKING
 
 from mautrix.bridge import BaseMatrixHandler
 from mautrix.types import (Event, EventType, RoomID, UserID, EventID, ReceiptEvent, ReceiptType,
@@ -38,11 +38,6 @@ except ImportError:
     Histogram = None
     EVENT_TIME = None
 
-try:
-    from mautrix.bridge.e2ee import EncryptionManager
-except ImportError:
-    EncryptionManager = None
-
 RoomMetaStateEventContent = Union[RoomNameStateEventContent, RoomAvatarStateEventContent,
                                   RoomTopicStateEventContent]
 
@@ -50,30 +45,13 @@ RoomMetaStateEventContent = Union[RoomNameStateEventContent, RoomAvatarStateEven
 class MatrixHandler(BaseMatrixHandler):
     bot: 'Bot'
     commands: 'com.CommandProcessor'
-    e2ee: Optional[EncryptionManager]
     previously_typing: Dict[RoomID, Set[UserID]]
 
     def __init__(self, context: 'Context') -> None:
         super(MatrixHandler, self).__init__(context.az, context.config, loop=context.loop,
                                             command_processor=com.CommandProcessor(context))
-        self.e2ee = None
-        if self.config["bridge.encryption.allow"]:
-            if not EncryptionManager:
-                self.log.error("Encryption enabled in config, but dependencies not installed.")
-            elif not self.config["bridge.login_shared_secret"]:
-                self.log.warning("Encryption enabled in config, but login_shared_secret not set.")
-            else:
-                self.e2ee = EncryptionManager(
-                    bot_mxid=self.az.bot_mxid,
-                    login_shared_secret=self.config["bridge.login_shared_secret"],
-                    homeserver_address=self.config["homeserver.address"], loop=context.loop)
         self.bot = context.bot
         self.previously_typing = {}
-
-    async def init_as_bot(self) -> None:
-        await super().init_as_bot()
-        if self.e2ee:
-            await self.e2ee.start()
 
     async def get_user(self, user_id: UserID) -> 'u.User':
         return await u.User.get_by_mxid(user_id).ensure_started()
@@ -129,7 +107,7 @@ class MatrixHandler(BaseMatrixHandler):
             portal.mxid = room_id
             e2be_ok = None
             if self.config["bridge.encryption.default"] and self.e2ee:
-                e2be_ok = await self._enable_dm_encryption(portal)
+                e2be_ok = await self.enable_dm_encryption(portal, members=members)
             portal.save()
             inviter.register_portal(portal)
             if e2be_ok is True:
@@ -149,27 +127,15 @@ class MatrixHandler(BaseMatrixHandler):
             await intent.send_notice(room_id, "This puppet will remain inactive until a "
                                               "Telegram chat is created for this room.")
 
-    async def _enable_dm_encryption(self, portal: po.Portal) -> bool:
-        try:
-            await portal.main_intent.invite_user(portal.mxid, self.az.bot_mxid)
-            await self.az.intent.join_room_by_id(portal.mxid)
-            await portal.main_intent.send_state_event(portal.mxid, EventType.ROOM_ENCRYPTION, {
-                "algorithm": "m.megolm.v1.aes-sha2"
-            })
-            # TODO feed info about room to matrix-nio
-        except Exception:
-            self.log.warning(f"Failed to enable end-to-bridge encryption in {portal.mxid}",
-                             exc_info=True)
-            return False
-
-        try:
-            puppet = pu.Puppet.get(portal.tgid)
-            await portal.main_intent.set_room_name(portal.mxid, puppet.displayname)
-        except Exception:
-            self.log.warning(f"Failed to set room name for {portal.mxid}", exc_info=True)
-
-        portal.encrypted = True
-        return True
+    async def enable_dm_encryption(self, portal: po.Portal, members: List[UserID]) -> bool:
+        ok = await super().enable_dm_encryption(portal, members)
+        if ok:
+            try:
+                puppet = pu.Puppet.get(portal.tgid)
+                await portal.main_intent.set_room_name(portal.mxid, puppet.displayname)
+            except Exception:
+                self.log.warning(f"Failed to set room name for {portal.mxid}", exc_info=True)
+        return ok
 
     async def send_welcome_message(self, room_id: RoomID, inviter: 'u.User') -> None:
         try:
@@ -431,8 +397,6 @@ class MatrixHandler(BaseMatrixHandler):
     async def handle_event(self, evt: Event) -> None:
         if evt.type == EventType.ROOM_REDACTION:
             await self.handle_redaction(evt)
-        elif evt.type == EventType.ROOM_ENCRYPTED and self.e2ee:
-            await self.int_handle_event(self.e2ee.decrypt(evt))
 
     async def handle_state_event(self, evt: StateEvent) -> None:
         if evt.type == EventType.ROOM_POWER_LEVELS:
