@@ -54,7 +54,8 @@ class MatrixHandler(BaseMatrixHandler):
         self.user_id_suffix = f"{suffix}:{homeserver}"
 
         super(MatrixHandler, self).__init__(context.az, context.config, loop=context.loop,
-                                            command_processor=com.CommandProcessor(context))
+                                            command_processor=com.CommandProcessor(context),
+                                            bridge=context.bridge)
 
         self.bot = context.bot
         self.previously_typing = {}

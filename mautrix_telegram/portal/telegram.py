@@ -80,7 +80,8 @@ class PortalTelegram(BasePortal, ABC):
     async def handle_telegram_photo(self, source: 'AbstractUser', intent: IntentAPI, evt: Message,
                                     relates_to: Dict = None) -> Optional[EventID]:
         loc, largest_size = self._get_largest_photo_size(evt.media.photo)
-        file = await util.transfer_file_to_matrix(source.client, intent, loc)
+        file = await util.transfer_file_to_matrix(source.client, intent, loc,
+                                                  encrypt=self.encrypted)
         if not file:
             return None
         if self.get_config("inline_images") and (evt.message
@@ -98,9 +99,13 @@ class PortalTelegram(BasePortal, ABC):
                   else largest_size.size))
         name = f"image{sane_mimetypes.guess_extension(file.mime_type)}"
         await intent.set_typing(self.mxid, is_typing=False)
-        content = MediaMessageEventContent(url=file.mxc, msgtype=MessageType.IMAGE, info=info,
+        content = MediaMessageEventContent(msgtype=MessageType.IMAGE, info=info,
                                            body=name, relates_to=relates_to,
                                            external_url=self._get_external_url(evt))
+        if file.decryption_info:
+            content.file = file.decryption_info
+        else:
+            content.url = file.mxc
         result = await self._send_message(intent, content, timestamp=evt.date)
         if evt.message:
             caption_content = await formatter.telegram_to_matrix(evt, source, self.main_intent,
@@ -153,13 +158,20 @@ class PortalTelegram(BasePortal, ABC):
             info.width, info.height = attrs.width, attrs.height
 
         if file.thumbnail:
-            info.thumbnail_url = file.thumbnail.mxc
+            if file.thumbnail.decryption_info:
+                info.thumbnail_file = file.thumbnail.decryption_info
+            else:
+                info.thumbnail_url = file.thumbnail.mxc
             info.thumbnail_info = ThumbnailInfo(mimetype=file.thumbnail.mime_type,
                                                 height=file.thumbnail.height or thumb_size.h,
                                                 width=file.thumbnail.width or thumb_size.w,
                                                 size=file.thumbnail.size)
         else:
-            info.thumbnail_url = file.mxc
+            # This is a hack for bad clients like Riot iOS that require a thumbnail
+            if file.decryption_info:
+                info.thumbnail_file = file.decryption_info
+            else:
+                info.thumbnail_url = file.mxc
             info.thumbnail_info = ImageInfo.deserialize(info.serialize())
 
         return info, name
@@ -186,7 +198,8 @@ class PortalTelegram(BasePortal, ABC):
         file = await util.transfer_file_to_matrix(source.client, intent, document, thumb_loc,
                                                   is_sticker=attrs.is_sticker,
                                                   tgs_convert=config["bridge.animated_sticker"],
-                                                  filename=attrs.name, parallel_id=parallel_id)
+                                                  filename=attrs.name, parallel_id=parallel_id,
+                                                  encrypt=self.encrypted)
         if not file:
             return None
 
@@ -199,13 +212,17 @@ class PortalTelegram(BasePortal, ABC):
         if attrs.is_sticker and file.mime_type.startswith("image/"):
             event_type = EventType.STICKER
         content = MediaMessageEventContent(
-            body=name or "unnamed file", info=info, url=file.mxc, relates_to=relates_to,
+            body=name or "unnamed file", info=info, relates_to=relates_to,
             external_url=self._get_external_url(evt),
             msgtype={
                 "video/": MessageType.VIDEO,
                 "audio/": MessageType.AUDIO,
                 "image/": MessageType.IMAGE,
             }.get(info.mimetype[:6], MessageType.FILE))
+        if file.decryption_info:
+            content.file = file.decryption_info
+        else:
+            content.url = file.mxc
         return await self._send_message(intent, content, event_type=event_type, timestamp=evt.date)
 
     def handle_telegram_location(self, _: 'AbstractUser', intent: IntentAPI, evt: Message,

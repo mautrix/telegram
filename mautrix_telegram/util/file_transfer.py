@@ -29,11 +29,13 @@ from telethon.errors import (AuthBytesInvalidError, AuthKeyInvalidError, Locatio
                              SecurityError, FileIdInvalidError)
 
 from mautrix.appservice import IntentAPI
+from mautrix.types import EncryptedFile
 
 from ..tgclient import MautrixTelegramClient
 from ..db import TelegramFile as DBTelegramFile
 from ..util import sane_mimetypes
 from .parallel_file_transfer import parallel_transfer_to_matrix
+from .tgs_converter import convert_tgs_to
 
 try:
     from PIL import Image
@@ -49,7 +51,10 @@ try:
 except ImportError:
     VideoFileClip = random = string = os = mimetypes = None
 
-from .tgs_converter import convert_tgs_to
+try:
+    from nio.crypto import encrypt_attachment
+except ImportError:
+    encrypt_attachment = None
 
 log: logging.Logger = logging.getLogger("mau.util")
 
@@ -115,8 +120,8 @@ def _location_to_id(location: TypeLocation) -> str:
 
 
 async def transfer_thumbnail_to_matrix(client: MautrixTelegramClient, intent: IntentAPI,
-                                       thumbnail_loc: TypeLocation, video: bytes,
-                                       mime: str) -> Optional[DBTelegramFile]:
+                                       thumbnail_loc: TypeLocation, video: bytes, mime: str,
+                                       encrypt: bool) -> Optional[DBTelegramFile]:
     if not Image or not VideoFileClip:
         return None
 
@@ -140,11 +145,19 @@ async def transfer_thumbnail_to_matrix(client: MautrixTelegramClient, intent: In
         width, height = None, None
         mime_type = magic.from_buffer(file, mime=True)
 
-    content_uri = await intent.upload_media(file, mime_type)
+    decryption_info = None
+    upload_mime_type = mime_type
+    if encrypt:
+        file, decryption_info_dict = encrypt_attachment(file)
+        decryption_info = EncryptedFile.deserialize(decryption_info_dict)
+        upload_mime_type = "application/octet-stream"
+    content_uri = await intent.upload_media(file, upload_mime_type)
+    if decryption_info:
+        decryption_info.url = content_uri
 
     db_file = DBTelegramFile(id=loc_id, mxc=content_uri, mime_type=mime_type,
                              was_converted=False, timestamp=int(time.time()), size=len(file),
-                             width=width, height=height)
+                             width=width, height=height, decryption_info=decryption_info)
     try:
         db_file.insert()
     except (IntegrityError, InvalidRequestError) as e:
@@ -160,10 +173,10 @@ TypeThumbnail = Optional[Union[TypeLocation, TypePhotoSize]]
 
 
 async def transfer_file_to_matrix(client: MautrixTelegramClient, intent: IntentAPI,
-                                  location: TypeLocation, thumbnail: TypeThumbnail = None,
+                                  location: TypeLocation, thumbnail: TypeThumbnail = None, *,
                                   is_sticker: bool = False, tgs_convert: Optional[dict] = None,
-                                  filename: Optional[str] = None, parallel_id: Optional[int] = None
-                                  ) -> Optional[DBTelegramFile]:
+                                  filename: Optional[str] = None, encrypt: bool = False,
+                                  parallel_id: Optional[int] = None) -> Optional[DBTelegramFile]:
     location_id = _location_to_id(location)
     if not location_id:
         return None
@@ -180,14 +193,14 @@ async def transfer_file_to_matrix(client: MautrixTelegramClient, intent: IntentA
     async with lock:
         return await _unlocked_transfer_file_to_matrix(client, intent, location_id, location,
                                                        thumbnail, is_sticker, tgs_convert,
-                                                       filename, parallel_id)
+                                                       filename, encrypt, parallel_id)
 
 
 async def _unlocked_transfer_file_to_matrix(client: MautrixTelegramClient, intent: IntentAPI,
                                             loc_id: str, location: TypeLocation,
                                             thumbnail: TypeThumbnail, is_sticker: bool,
                                             tgs_convert: Optional[dict], filename: Optional[str],
-                                            parallel_id: Optional[int]
+                                            encrypt: bool, parallel_id: Optional[int]
                                             ) -> Optional[DBTelegramFile]:
     db_file = DBTelegramFile.get(loc_id)
     if db_file:
@@ -195,7 +208,7 @@ async def _unlocked_transfer_file_to_matrix(client: MautrixTelegramClient, inten
 
     if parallel_id and isinstance(location, Document) and (not is_sticker or not tgs_convert):
         db_file = await parallel_transfer_to_matrix(client, intent, loc_id, location, filename,
-                                                    parallel_id)
+                                                    encrypt, parallel_id)
         mime_type = location.mime_type
         file = None
     else:
@@ -228,9 +241,17 @@ async def _unlocked_transfer_file_to_matrix(client: MautrixTelegramClient, inten
             mime_type = new_mime_type
             thumbnail = None
 
-        content_uri = await intent.upload_media(file, mime_type)
+        decryption_info = None
+        upload_mime_type = mime_type
+        if encrypt and encrypt_attachment:
+            file, decryption_info_dict = encrypt_attachment(file)
+            decryption_info = EncryptedFile.deserialize(decryption_info_dict)
+            upload_mime_type = "application/octet-stream"
+        content_uri = await intent.upload_media(file, upload_mime_type)
+        if decryption_info:
+            decryption_info.url = content_uri
 
-        db_file = DBTelegramFile(id=loc_id, mxc=content_uri,
+        db_file = DBTelegramFile(id=loc_id, mxc=content_uri, decryption_info=decryption_info,
                                  mime_type=mime_type, was_converted=image_converted,
                                  timestamp=int(time.time()), size=len(file),
                                  width=width, height=height)
@@ -239,7 +260,7 @@ async def _unlocked_transfer_file_to_matrix(client: MautrixTelegramClient, inten
             thumbnail = thumbnail.location
         try:
             db_file.thumbnail = await transfer_thumbnail_to_matrix(client, intent, thumbnail, file,
-                                                                   mime_type)
+                                                                   mime_type, encrypt)
         except FileIdInvalidError:
             log.warning(f"Failed to transfer thumbnail for {thumbnail!s}", exc_info=True)
 

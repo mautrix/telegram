@@ -34,10 +34,15 @@ from telethon.crypto import AuthKey
 from telethon import utils, helpers
 
 from mautrix.appservice import IntentAPI
-from mautrix.types import ContentURI
+from mautrix.types import ContentURI, EncryptedFile
 
 from ..tgclient import MautrixTelegramClient
 from ..db import TelegramFile as DBTelegramFile
+
+try:
+    from nio.crypto import async_encrypt_attachment
+except ImportError:
+    async_encrypt_attachment = None
 
 log: logging.Logger = logging.getLogger("mau.util")
 
@@ -242,18 +247,34 @@ parallel_transfer_locks: DefaultDict[int, asyncio.Lock] = defaultdict(lambda: as
 
 async def parallel_transfer_to_matrix(client: MautrixTelegramClient, intent: IntentAPI,
                                       loc_id: str, location: TypeLocation, filename: str,
-                                      parallel_id: int) -> DBTelegramFile:
+                                      encrypt: bool, parallel_id: int) -> DBTelegramFile:
     size = location.size
     mime_type = location.mime_type
     dc_id, location = utils.get_input_location(location)
     # We lock the transfers because telegram has connection count limits
     async with parallel_transfer_locks[parallel_id]:
         downloader = ParallelTransferrer(client, dc_id)
-        content_uri = await intent.upload_media(downloader.download(location, size),
-                                                mime_type=mime_type, filename=filename, size=size)
+        data = downloader.download(location, size)
+        decryption_info = None
+        up_mime_type = mime_type
+        if encrypt and async_encrypt_attachment:
+            async def encrypted(stream):
+                nonlocal decryption_info
+                async for chunk in async_encrypt_attachment(stream):
+                    if isinstance(chunk, dict):
+                        decryption_info = EncryptedFile.deserialize(chunk)
+                    else:
+                        yield chunk
+
+            data = encrypted(data)
+            up_mime_type = "application/octet-stream"
+        content_uri = await intent.upload_media(data, mime_type=up_mime_type, filename=filename,
+                                                size=size if not encrypt else None)
+        if decryption_info:
+            decryption_info.url = content_uri
     return DBTelegramFile(id=loc_id, mxc=content_uri, mime_type=mime_type,
                           was_converted=False, timestamp=int(time.time()), size=size,
-                          width=None, height=None)
+                          width=None, height=None, decryption_info=decryption_info)
 
 
 async def _internal_transfer_to_telegram(client: MautrixTelegramClient, response: ClientResponse
