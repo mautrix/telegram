@@ -367,7 +367,7 @@ class PortalMatrix(BasePortal, MautrixBasePortal, ABC):
             if not bridge_notices and not excepted:
                 return
 
-        if content.msgtype in (MessageType.TEXT, MessageType.NOTICE):
+        if content.msgtype in (MessageType.TEXT, MessageType.EMOTE, MessageType.NOTICE):
             await self._pre_process_matrix_message(sender, not logged_in, content)
             await self._handle_matrix_text(sender_id, event_id, space, client, content, reply_to)
         elif content.msgtype == MessageType.LOCATION:

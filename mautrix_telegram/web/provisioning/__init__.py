@@ -355,6 +355,7 @@ class ProvisioningAPI(AuthAPI):
         if err is not None:
             return err
         await user.log_out()
+        return web.json_response({}, status=200)
 
     async def bridge_info(self, request: web.Request) -> web.Response:
         return web.json_response({

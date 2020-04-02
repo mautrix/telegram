@@ -51,6 +51,10 @@ class CommandEvent(BaseCommandEvent):
         self.config = processor.config
         self.public_website = processor.public_website
 
+    @property
+    def print_error_traceback(self) -> bool:
+        return self.sender.is_admin
+
     async def get_help_key(self) -> HelpCacheKey:
         return HelpCacheKey(self.is_management, self.is_portal, self.sender.puppet_whitelisted,
                             self.sender.matrix_puppet_whitelisted, self.sender.is_admin,

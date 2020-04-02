@@ -20,7 +20,8 @@ import base64
 import re
 
 from telethon.errors import (InviteHashInvalidError, InviteHashExpiredError, OptionsTooMuchError,
-                             UserAlreadyParticipantError, ChatIdInvalidError)
+                             UserAlreadyParticipantError, ChatIdInvalidError,
+                             TakeoutInitDelayError)
 from telethon.tl.patched import Message
 from telethon.tl.types import (User as TLUser, TypeUpdates, MessageMediaGame, MessageMediaPoll,
                                TypeInputPeer)
@@ -35,7 +36,8 @@ from ... import puppet as pu, portal as po
 from ...abstract_user import AbstractUser
 from ...db import Message as DBMessage
 from ...types import TelegramID
-from ...commands import command_handler, CommandEvent, SECTION_MISC, SECTION_CREATING_PORTALS
+from ...commands import (command_handler, CommandEvent, SECTION_MISC, SECTION_CREATING_PORTALS,
+                         SECTION_PORTAL_MANAGEMENT)
 
 
 @command_handler(needs_auth=False,
@@ -102,7 +104,8 @@ async def pm(evt: CommandEvent) -> EventID:
         return await evt.reply("**Usage:** `$cmdprefix+sp pm <user identifier>`")
 
     try:
-        user = await evt.sender.client.get_entity(evt.args[0])
+        id = "".join(evt.args).translate({ord(c):None for c in "+()- "})
+        user = await evt.sender.client.get_entity(id)
     except ValueError:
         return await evt.reply("Invalid user identifier or user not found.")
 
@@ -303,3 +306,20 @@ async def vote(evt: CommandEvent) -> EventID:
         return await evt.reply("You passed too many options.")
     # TODO use response
     return await evt.mark_read()
+
+
+@command_handler(help_section=SECTION_PORTAL_MANAGEMENT,
+                 help_args="<_number of messages_> [--takeout]",
+                 help_text="Backfill messages from Telegram history.")
+async def backfill(evt: CommandEvent) -> None:
+    portal = po.Portal.get_by_mxid(evt.room_id)
+    try:
+        await portal.backfill(evt.sender)
+    except TakeoutInitDelayError:
+        msg = ("Please accept the data export request from a mobile device, "
+               "then re-run the backfill command.")
+        if portal.peer_type == "user":
+            from mautrix.appservice import IntentAPI
+            await portal.main_intent.send_notice(evt.room_id, msg)
+        else:
+            await evt.reply(msg)

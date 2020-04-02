@@ -109,6 +109,7 @@ class Config(BaseBridgeConfig):
         copy("bridge.plaintext_highlights")
         copy("bridge.public_portals")
         copy("bridge.sync_with_custom_puppets")
+        copy("bridge.login_shared_secret")
         copy("bridge.telegram_link_preview")
         copy("bridge.inline_images")
         copy("bridge.image_as_file_size")

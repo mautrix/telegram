@@ -25,7 +25,7 @@ from telethon.tl.types import (UserProfilePhoto, User, UpdateUserName, PeerUser,
 from mautrix.appservice import AppService, IntentAPI
 from mautrix.errors import MatrixRequestError
 from mautrix.bridge import CustomPuppetMixin
-from mautrix.types import UserID, SyncToken
+from mautrix.types import UserID, SyncToken, RoomID
 from mautrix.util.simple_template import SimpleTemplate
 
 from .types import TelegramID
@@ -258,6 +258,8 @@ class Puppet(CustomPuppetMixin):
             return False
         allow_source = (source.is_relaybot
                         or self.displayname_source == source.tgid
+                        # User is not a contact, so there's no custom name
+                        or not info.contact
                         # No displayname source, so just trust anything
                         or self.displayname_source is None)
         if not allow_source:
@@ -318,6 +320,10 @@ class Puppet(CustomPuppetMixin):
                 return True
         return False
 
+    def default_puppet_should_leave_room(self, room_id: RoomID) -> bool:
+        portal: p.Portal = p.Portal.get_by_mxid(room_id)
+        return portal and not portal.backfilling and portal.peer_type != "user"
+
     # endregion
     # region Getters
 
@@ -366,7 +372,7 @@ class Puppet(CustomPuppetMixin):
 
     @classmethod
     def all_with_custom_mxid(cls) -> Iterable['Puppet']:
-        return (cls.by_custom_mxid[puppet.mxid]
+        return (cls.by_custom_mxid[puppet.custom_mxid]
                 if puppet.custom_mxid in cls.by_custom_mxid
                 else cls.from_db(puppet)
                 for puppet in DBPuppet.all_with_custom_mxid())
@@ -423,5 +429,9 @@ def init(context: 'Context') -> Iterable[Awaitable[Any]]:
                                           prefix="@", suffix=f":{Puppet.hs_domain}", type=int)
     Puppet.displayname_template = SimpleTemplate(config["bridge.displayname_template"],
                                                  "displayname")
+
+    secret = config["bridge.login_shared_secret"]
+    Puppet.login_shared_secret = secret.encode("utf-8") if secret else None
+    Puppet.login_device_name = "Telegram Bridge"
 
     return (puppet.try_start() for puppet in Puppet.all_with_custom_mxid())

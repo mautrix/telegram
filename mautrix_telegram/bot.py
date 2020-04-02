@@ -108,9 +108,9 @@ class Bot(AbstractUser):
             if isinstance(chat, ChatForbidden) or chat.left or chat.deactivated:
                 self.remove_chat(TelegramID(chat.id))
 
-        channel_ids = (InputChannel(chat_id, 0)
+        channel_ids = [InputChannel(chat_id, 0)
                        for chat_id, chat_type in self.chats.items()
-                       if chat_type == "channel")
+                       if chat_type == "channel"]
         for channel_id in channel_ids:
             try:
                 await self.client(GetChannelsRequest([channel_id]))
