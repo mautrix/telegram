@@ -336,7 +336,7 @@ class PortalMetadata(BasePortal, ABC):
         if not room_id:
             raise Exception(f"Failed to create room")
 
-        if self.encrypted:
+        if self.encrypted and self.matrix.e2ee:
             members = [self.main_intent.mxid]
             if direct:
                 try:
