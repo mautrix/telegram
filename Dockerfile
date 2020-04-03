@@ -44,6 +44,8 @@ RUN apk add --no-cache \
           py3-numpy \
       #telethon
         py3-rsa \
+        # Optional for socks proxies
+        py3-pysocks \
         # cryptg
           py3-cffi \
       py3-brotli \
