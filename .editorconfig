@@ -13,3 +13,6 @@ max_line_length = 99
 
 [*.{yaml,yml,py}]
 indent_style = space
+
+[.gitlab-ci.yml]
+indent_size = 2
