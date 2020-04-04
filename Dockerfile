@@ -64,9 +64,6 @@ RUN apk add --virtual .build-deps \
 COPY . /opt/mautrix-telegram
 RUN apk add git && pip3 install .[speedups,hq_thumbnails,metrics,e2be] && apk del git
 
-COPY --from=lottieconverter /usr/lib/librlottie* /usr/lib/
-COPY --from=lottieconverter /build/LottieConverter/dist/Debug/GNU-Linux/lottieconverter /usr/local/bin/lottieconverter
-
 VOLUME /data
 ENV UID=1337 GID=1337 \
     FFMPEG_BINARY=/usr/bin/ffmpeg
