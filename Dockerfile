@@ -1,24 +1,4 @@
-FROM docker.io/alpine:3.10 AS lottieconverter
-
-WORKDIR /build
-
-RUN apk add --no-cache git build-base cmake \
-  && git clone https://github.com/Samsung/rlottie.git \
-  && cd rlottie \
-  && mkdir build \
-  && cd build \
-  && cmake .. \
-  && make -j2 \
-  && make install \
-  && cd ../..
-
-RUN apk add --no-cache libpng libpng-dev zlib zlib-dev \
-  && git clone https://github.com/Eramde/LottieConverter.git \
-  && cd LottieConverter \
-  && git checkout 543c1d23ac9322f4f03c7fb6612ea7d026d44ac0 \
-  && make
-
-FROM docker.io/alpine:3.11
+FROM dock.mau.dev/tulir/lottieconverter:alpine-3.11
 
 RUN echo "@edge_main http://dl-cdn.alpinelinux.org/alpine/edge/main" >> /etc/apk/repositories
 RUN echo "@edge_testing http://dl-cdn.alpinelinux.org/alpine/edge/testing" >> /etc/apk/repositories
@@ -54,8 +34,6 @@ RUN apk add --no-cache \
       ca-certificates \
       su-exec \
       netcat-openbsd \
-      # lottieconverter
-      zlib libpng \
       # olm
       olm-dev@edge_community \
       # matrix-nio?
