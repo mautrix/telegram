@@ -13,14 +13,15 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import Dict, Set, Tuple, Union, Iterable, TYPE_CHECKING
+from typing import Dict, Set, Tuple, Union, Iterable, List, TYPE_CHECKING
 
 from mautrix.bridge import BaseMatrixHandler
 from mautrix.types import (Event, EventType, RoomID, UserID, EventID, ReceiptEvent, ReceiptType,
                            ReceiptEventContent, PresenceEvent, PresenceState, TypingEvent,
                            MessageEvent, StateEvent, RedactionEvent, RoomNameStateEventContent,
                            RoomAvatarStateEventContent, RoomTopicStateEventContent,
-                           MemberStateEventContent)
+                           MemberStateEventContent, EncryptedEvent, TextMessageEventContent,
+                           MessageType)
 from mautrix.errors import MatrixError
 
 from . import user as u, portal as po, puppet as pu, commands as com
@@ -47,8 +48,15 @@ class MatrixHandler(BaseMatrixHandler):
     previously_typing: Dict[RoomID, Set[UserID]]
 
     def __init__(self, context: 'Context') -> None:
+        prefix, suffix = context.config["bridge.username_template"].format(userid=":").split(":")
+        homeserver = context.config["homeserver.domain"]
+        self.user_id_prefix = f"@{prefix}"
+        self.user_id_suffix = f"{suffix}:{homeserver}"
+
         super(MatrixHandler, self).__init__(context.az, context.config, loop=context.loop,
-                                            command_processor=com.CommandProcessor(context))
+                                            command_processor=com.CommandProcessor(context),
+                                            bridge=context.bridge)
+
         self.bot = context.bot
         self.previously_typing = {}
 
@@ -104,13 +112,37 @@ class MatrixHandler(BaseMatrixHandler):
                 except MatrixError:
                     pass
             portal.mxid = room_id
+            e2be_ok = None
+            if self.config["bridge.encryption.default"] and self.e2ee:
+                e2be_ok = await self.enable_dm_encryption(portal, members=members)
             portal.save()
             inviter.register_portal(portal)
-            await intent.send_notice(room_id, "Portal to private chat created.")
+            if e2be_ok is True:
+                evt_type, content = await self.e2ee.encrypt(
+                    room_id, EventType.ROOM_MESSAGE,
+                    TextMessageEventContent(msgtype=MessageType.NOTICE,
+                                            body="Portal to private chat created and end-to-bridge"
+                                                 " encryption enabled."))
+                await intent.send_message_event(room_id, evt_type, content)
+            else:
+                message = "Portal to private chat created."
+                if e2be_ok is False:
+                    message += "\n\nWarning: Failed to enable end-to-bridge encryption"
+                await intent.send_notice(room_id, message)
         else:
             await intent.join_room(room_id)
             await intent.send_notice(room_id, "This puppet will remain inactive until a "
                                               "Telegram chat is created for this room.")
+
+    async def enable_dm_encryption(self, portal: po.Portal, members: List[UserID]) -> bool:
+        ok = await super().enable_dm_encryption(portal, members)
+        if ok:
+            try:
+                puppet = pu.Puppet.get(portal.tgid)
+                await portal.main_intent.set_room_name(portal.mxid, puppet.displayname)
+            except Exception:
+                self.log.warning(f"Failed to set room name for {portal.mxid}", exc_info=True)
+        return ok
 
     async def send_welcome_message(self, room_id: RoomID, inviter: 'u.User') -> None:
         try:
@@ -156,7 +188,7 @@ class MatrixHandler(BaseMatrixHandler):
                                                "messages for unauthenticated users.")
             return
 
-        self.log.debug(f"{user} joined {room_id}")
+        self.log.debug(f"{user.mxid} joined {room_id}")
         if await user.is_logged_in() or portal.has_bot:
             await portal.join_matrix(user, event_id)
 
@@ -355,7 +387,7 @@ class MatrixHandler(BaseMatrixHandler):
         self.previously_typing[room_id] = now_typing
 
     def filter_matrix_event(self, evt: Event) -> bool:
-        if not isinstance(evt, (RedactionEvent, MessageEvent, StateEvent)):
+        if not isinstance(evt, (RedactionEvent, MessageEvent, StateEvent, EncryptedEvent)):
             return True
         return evt.sender and (evt.sender == self.az.bot_mxid
                                or pu.Puppet.get_id_from_mxid(evt.sender) is not None)
@@ -387,6 +419,11 @@ class MatrixHandler(BaseMatrixHandler):
             await self.handle_room_pin(evt.room_id, evt.sender, new_events, old_events)
         elif evt.type == EventType.ROOM_TOMBSTONE:
             await self.handle_room_upgrade(evt.room_id, evt.sender, evt.content.replacement_room)
+        elif evt.type == EventType.ROOM_ENCRYPTION:
+            portal = po.Portal.get_by_mxid(evt.room_id)
+            if portal:
+                portal.encrypted = True
+                portal.save()
 
     async def log_event_handle_duration(self, evt: Event, duration: float) -> None:
         if EVENT_TIME:

@@ -50,6 +50,11 @@ if TYPE_CHECKING:
     from ..tgclient import MautrixTelegramClient
     from ..config import Config
 
+try:
+    from nio.crypto import decrypt_attachment
+except ImportError:
+    decrypt_attachment = None
+
 TypeMessage = Union[Message, MessageService]
 
 config: Optional['Config'] = None
@@ -250,11 +255,20 @@ class PortalMatrix(BasePortal, MautrixBasePortal, ABC):
         file_name = content["net.maunium.telegram.internal.filename"]
         max_image_size = config["bridge.image_as_file_size"] * 1000 ** 2
 
-        if config["bridge.parallel_file_transfer"]:
+        if config["bridge.parallel_file_transfer"] and content.url:
             file_handle, file_size = await parallel_transfer_to_telegram(client, self.main_intent,
                                                                          content.url, sender_id)
         else:
-            file = await self.main_intent.download_media(content.url)
+            if content.file:
+                if not decrypt_attachment:
+                    self.log.warning(f"Can't bridge encrypted media event {event_id}:"
+                                     " matrix-nio not installed")
+                    return
+                file = await self.main_intent.download_media(content.file.url)
+                file = decrypt_attachment(file, content.file.key.key,
+                                          content.file.hashes.get("sha256"), content.file.iv)
+            else:
+                file = await self.main_intent.download_media(content.url)
 
             if content.msgtype == MessageType.STICKER:
                 if mime != "image/gif":
