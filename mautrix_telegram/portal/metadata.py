@@ -433,7 +433,7 @@ class PortalMetadata(BasePortal, ABC):
             return False
         changed = False
         admin_power_level = min(75 if self.peer_type == "channel" else 50, bot_level)
-        if levels.events[EventType.ROOM_POWER_LEVELS] != admin_power_level:
+        if levels.get_event_level(EventType.ROOM_POWER_LEVELS) != admin_power_level:
             changed = True
             levels.events[EventType.ROOM_POWER_LEVELS] = admin_power_level
 
