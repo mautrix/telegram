@@ -13,8 +13,6 @@ sed -i "s#sqlite:///mautrix-telegram.db#sqlite:////data/mautrix-telegram.db#" /d
 if [ -f /data/mx-state.json ]; then
 	ln -s /data/mx-state.json
 fi
-# Check that database is in the right state
-alembic -x config=/data/config.yaml upgrade head
 
 if [ ! -f /data/config.yaml ]; then
 	cp mautrix_telegram/example-config.yaml /data/config.yaml
@@ -34,6 +32,9 @@ if [ ! -f /data/registration.yaml ]; then
 	fixperms
 	exit
 fi
+
+# Check that database is in the right state
+alembic -x config=/data/config.yaml upgrade head
 
 fixperms
 exec su-exec $UID:$GID python3 -m mautrix_telegram -c /data/config.yaml
