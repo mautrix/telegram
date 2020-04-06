@@ -315,7 +315,7 @@ class ProvisioningAPI(AuthAPI):
 
         if not user.is_bot:
             return web.json_response([{
-                "id": get_peer_id(chat),
+                "id": chat.id,
                 "title": chat.title,
             } async for chat in user.client.iter_dialogs(ignore_migrated=True, archived=False)])
         else:
