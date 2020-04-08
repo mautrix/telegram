@@ -57,6 +57,9 @@ class Config(BaseBridgeConfig):
             base["appservice.address"] = f"{protocol}://{hostname}:{port}"
         else:
             copy("appservice.address")
+
+        copy("appservice.tls_cert")
+        copy("appservice.tls_key")
         copy("appservice.hostname")
         copy("appservice.port")
         copy("appservice.max_body_size")
