@@ -13,6 +13,9 @@ homeserver:
 appservice:
     # The address that the homeserver can use to connect to this appservice.
     address: http://localhost:29317
+    # When using https:// the TLS certificate and key files for the address.
+    tls_cert: false
+    tls_key: false
 
     # The hostname and port where this appservice should listen.
     hostname: 0.0.0.0
