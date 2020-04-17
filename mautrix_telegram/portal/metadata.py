@@ -249,6 +249,9 @@ class PortalMetadata(BasePortal, ABC):
                                   ) -> Optional[RoomID]:
         direct = self.peer_type == "user"
 
+        if invites is None:
+            invites = []
+
         if self.mxid:
             return self.mxid
 
