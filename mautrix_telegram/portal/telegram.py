@@ -29,11 +29,11 @@ from telethon.tl.types import (
     MessageMediaPoll, MessageActionChannelCreate, MessageActionChatAddUser,
     MessageActionChatCreate, MessageActionChatDeletePhoto, MessageActionChatDeleteUser,
     MessageActionChatEditPhoto, MessageActionChatEditTitle, MessageActionChatJoinedByLink,
-    MessageActionChatMigrateTo, MessageActionChannelMigrateFrom, MessageActionGameScore,
-    MessageMediaDocument, MessageMediaGeo, MessageMediaPhoto, MessageMediaUnsupported,
-    MessageMediaGame, PeerUser, PhotoCachedSize, TypeChannelParticipant, TypeChatParticipant,
-    TypeDocumentAttribute, TypeMessageAction, TypePhotoSize, PhotoSize, UpdateChatUserTyping,
-    UpdateUserTyping, MessageEntityPre, ChatPhotoEmpty)
+    MessageActionChatMigrateTo, MessageActionGameScore, MessageMediaDocument, MessageMediaGeo,
+    MessageMediaPhoto, MessageMediaDice, MessageMediaGame, MessageMediaUnsupported, PeerUser,
+    PhotoCachedSize, TypeChannelParticipant, TypeChatParticipant, TypeDocumentAttribute,
+    TypeMessageAction, TypePhotoSize, PhotoSize, UpdateChatUserTyping, UpdateUserTyping,
+    MessageEntityPre, ChatPhotoEmpty)
 
 from mautrix.appservice import IntentAPI
 from mautrix.types import (EventID, UserID, ImageInfo, ThumbnailInfo, RelatesTo, MessageType,
@@ -74,6 +74,8 @@ class PortalTelegram(BasePortal, ABC):
     async def _send_message(self, intent: IntentAPI, content: MessageEventContent,
                             event_type: EventType = EventType.ROOM_MESSAGE, **kwargs) -> EventID:
         if self.encrypted and self.matrix.e2ee:
+            if intent.api.is_real_user:
+                content[intent.api.real_user_content_key] = True
             event_type, content = await self.matrix.e2ee.encrypt(self.mxid, event_type, content)
         return await intent.send_message_event(self.mxid, event_type, content, **kwargs)
 
@@ -293,6 +295,17 @@ class PortalTelegram(BasePortal, ABC):
         await intent.set_typing(self.mxid, is_typing=False)
         return await self._send_message(intent, content, timestamp=evt.date)
 
+    async def handle_telegram_dice(self, source: 'AbstractUser', intent: IntentAPI, evt: Message,
+                                   relates_to: RelatesTo) -> EventID:
+        content = TextMessageEventContent(
+            msgtype=MessageType.TEXT, format=Format.HTML,
+            body=f"Dice roll result: {evt.media.value}",
+            formatted_body=f'<h4>Dice roll result: {evt.media.value}</h4>',
+            relates_to=relates_to, external_url=self._get_external_url(evt))
+        content["net.maunium.telegram.dice"] = evt.media.value
+        await intent.set_typing(self.mxid, is_typing=False)
+        return await self._send_message(intent, content, timestamp=evt.date)
+
     @staticmethod
     def _int_to_bytes(i: int) -> bytes:
         hex_value = "{0:010x}".format(i)
@@ -457,7 +470,8 @@ class PortalTelegram(BasePortal, ABC):
             await sender.update_info(source, entity)
 
         allowed_media = (MessageMediaPhoto, MessageMediaDocument, MessageMediaGeo,
-                         MessageMediaGame, MessageMediaPoll, MessageMediaUnsupported)
+                         MessageMediaGame, MessageMediaDice, MessageMediaPoll,
+                         MessageMediaUnsupported)
         media = evt.media if hasattr(evt, "media") and isinstance(evt.media,
                                                                   allowed_media) else None
         if sender:
@@ -476,6 +490,7 @@ class PortalTelegram(BasePortal, ABC):
                 MessageMediaDocument: self.handle_telegram_document,
                 MessageMediaGeo: self.handle_telegram_location,
                 MessageMediaPoll: self.handle_telegram_poll,
+                MessageMediaDice: self.handle_telegram_dice,
                 MessageMediaUnsupported: self.handle_telegram_unsupported,
                 MessageMediaGame: self.handle_telegram_game,
             }[type(media)](source, intent, evt,

@@ -24,7 +24,7 @@ from telethon.errors import (InviteHashInvalidError, InviteHashExpiredError, Opt
                              TakeoutInitDelayError)
 from telethon.tl.patched import Message
 from telethon.tl.types import (User as TLUser, TypeUpdates, MessageMediaGame, MessageMediaPoll,
-                               TypeInputPeer)
+                               TypeInputPeer, InputMediaDice)
 from telethon.tl.types.messages import BotCallbackAnswer
 from telethon.tl.functions.messages import (ImportChatInviteRequest, CheckChatInviteRequest,
                                             GetBotCallbackAnswerRequest, SendVoteRequest)
@@ -104,7 +104,7 @@ async def pm(evt: CommandEvent) -> EventID:
         return await evt.reply("**Usage:** `$cmdprefix+sp pm <user identifier>`")
 
     try:
-        id = "".join(evt.args).translate({ord(c):None for c in "+()- "})
+        id = "".join(evt.args).translate({ord(c): None for c in "+()- "})
         user = await evt.sender.client.get_entity(id)
     except ValueError:
         return await evt.reply("Invalid user identifier or user not found.")
@@ -306,6 +306,15 @@ async def vote(evt: CommandEvent) -> EventID:
         return await evt.reply("You passed too many options.")
     # TODO use response
     return await evt.mark_read()
+
+
+@command_handler(help_section=SECTION_MISC,
+                 help_text="Roll a dice on the Telegram servers.")
+async def roll(evt: CommandEvent) -> EventID:
+    if not evt.is_portal:
+        return await evt.reply("You can only roll dice in portal rooms")
+    portal = po.Portal.get_by_mxid(evt.room_id)
+    await evt.sender.client.send_media(await portal.get_input_entity(evt.sender), InputMediaDice())
 
 
 @command_handler(help_section=SECTION_PORTAL_MANAGEMENT,
