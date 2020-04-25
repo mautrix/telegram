@@ -273,7 +273,7 @@ class Puppet(CustomPuppetMixin):
         displayname = self.get_displayname(info)
         if displayname != self.displayname:
             self.log.debug(f"Updating displayname of {self.id} (src: {source.tgid}, allowed "
-                           f"because {allow_because}) from {displayname} to {self.displayname}")
+                           f"because {allow_because}) from {self.displayname} to {displayname}")
             self.displayname = displayname
             self.displayname_source = source.tgid
             try:
