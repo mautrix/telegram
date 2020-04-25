@@ -256,19 +256,24 @@ class Puppet(CustomPuppetMixin):
                                  ) -> bool:
         if self.disable_updates:
             return False
-        allow_source = (source.is_relaybot
-                        or self.displayname_source == source.tgid
-                        # User is not a contact, so there's no custom name
-                        or not info.contact
-                        # No displayname source, so just trust anything
-                        or self.displayname_source is None)
-        if not allow_source:
+        if source.is_relaybot or source.is_bot:
+            allow_because = "user is bot"
+        elif self.displayname_source == source.tgid:
+            allow_because = "user is the primary source"
+        elif not info.contact:
+            allow_because = "user is not a contact"
+        elif self.displayname_source is None:
+            allow_because = "no primary source set"
+        else:
             return False
-        elif isinstance(info, UpdateUserName):
+
+        if isinstance(info, UpdateUserName):
             info = await source.client.get_entity(PeerUser(self.tgid))
 
         displayname = self.get_displayname(info)
         if displayname != self.displayname:
+            self.log.debug(f"Updating displayname of {self.id} (src: {source.tgid}, allowed "
+                           f"because {allow_because}) from {displayname} to {self.displayname}")
             self.displayname = displayname
             self.displayname_source = source.tgid
             try:
