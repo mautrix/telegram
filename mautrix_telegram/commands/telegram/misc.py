@@ -21,7 +21,7 @@ import re
 
 from telethon.errors import (InviteHashInvalidError, InviteHashExpiredError, OptionsTooMuchError,
                              UserAlreadyParticipantError, ChatIdInvalidError,
-                             TakeoutInitDelayError)
+                             TakeoutInitDelayError, EmoticonInvalidError)
 from telethon.tl.patched import Message
 from telethon.tl.types import (User as TLUser, TypeUpdates, MessageMediaGame, MessageMediaPoll,
                                TypeInputPeer, InputMediaDice)
@@ -308,13 +308,19 @@ async def vote(evt: CommandEvent) -> EventID:
     return await evt.mark_read()
 
 
-@command_handler(help_section=SECTION_MISC,
-                 help_text="Roll a dice on the Telegram servers.")
-async def roll(evt: CommandEvent) -> EventID:
+@command_handler(help_section=SECTION_MISC, help_args="<_emoji_>",
+                 help_text="Roll a dice (\U0001F3B2) or throw a dart (\U0001F3AF) "
+                           "on the Telegram servers.")
+async def random(evt: CommandEvent) -> EventID:
     if not evt.is_portal:
         return await evt.reply("You can only roll dice in portal rooms")
     portal = po.Portal.get_by_mxid(evt.room_id)
-    await evt.sender.client.send_media(await portal.get_input_entity(evt.sender), InputMediaDice())
+    try:
+        await evt.sender.client.send_media(await portal.get_input_entity(evt.sender),
+                                           InputMediaDice(evt.args[0] if len(evt.args) > 0
+                                                          else "\U0001F3B2"))
+    except EmoticonInvalidError:
+        return await evt.reply("Invalid emoji for randomization")
 
 
 @command_handler(help_section=SECTION_PORTAL_MANAGEMENT,

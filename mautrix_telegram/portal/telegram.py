@@ -297,12 +297,16 @@ class PortalTelegram(BasePortal, ABC):
 
     async def handle_telegram_dice(self, source: 'AbstractUser', intent: IntentAPI, evt: Message,
                                    relates_to: RelatesTo) -> EventID:
-        content = TextMessageEventContent(
-            msgtype=MessageType.TEXT, format=Format.HTML,
-            body=f"Dice roll result: {evt.media.value}",
-            formatted_body=f'<h4>Dice roll result: {evt.media.value}</h4>',
-            relates_to=relates_to, external_url=self._get_external_url(evt))
-        content["net.maunium.telegram.dice"] = evt.media.value
+        emoji_text = {
+            "\U0001F3AF": " Dart throw",
+            "\U0001F3B2": " Dice roll",
+        }
+        roll: MessageMediaDice = evt.media
+        text = f"{roll.emoticon}{emoji_text.get(roll.emoticon, '')} result: {roll.value}"
+        content = TextMessageEventContent(msgtype=MessageType.TEXT, format=Format.HTML, body=text,
+                                          formatted_body=f"<h4>{text}</h4>", relates_to=relates_to,
+                                          external_url=self._get_external_url(evt))
+        content["net.maunium.telegram.dice"] = {"emoticon": roll.emoticon, "value": roll.value}
         await intent.set_typing(self.mxid, is_typing=False)
         return await self._send_message(intent, content, timestamp=evt.date)
 
