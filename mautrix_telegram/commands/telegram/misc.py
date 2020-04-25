@@ -328,9 +328,11 @@ async def random(evt: CommandEvent) -> EventID:
 
 
 @command_handler(help_section=SECTION_PORTAL_MANAGEMENT,
-                 help_args="<_number of messages_> [--takeout]",
                  help_text="Backfill messages from Telegram history.")
 async def backfill(evt: CommandEvent) -> None:
+    if not evt.is_portal:
+        await evt.reply("You can only use backfill in portal rooms")
+        return
     portal = po.Portal.get_by_mxid(evt.room_id)
     try:
         await portal.backfill(evt.sender)
