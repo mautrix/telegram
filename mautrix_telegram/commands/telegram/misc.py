@@ -315,10 +315,14 @@ async def random(evt: CommandEvent) -> EventID:
     if not evt.is_portal:
         return await evt.reply("You can only roll dice in portal rooms")
     portal = po.Portal.get_by_mxid(evt.room_id)
+    arg = evt.args[0] if len(evt.args) > 0 else "dice"
+    emoticon = {
+        "dart": "\U0001F3AF",
+        "dice": "\U0001F3B2",
+    }.get(arg, arg)
     try:
         await evt.sender.client.send_media(await portal.get_input_entity(evt.sender),
-                                           InputMediaDice(evt.args[0] if len(evt.args) > 0
-                                                          else "\U0001F3B2"))
+                                           InputMediaDice(emoticon))
     except EmoticonInvalidError:
         return await evt.reply("Invalid emoji for randomization")
 
