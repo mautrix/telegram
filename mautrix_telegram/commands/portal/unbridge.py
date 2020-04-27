@@ -22,9 +22,7 @@ from .. import command_handler, CommandEvent, SECTION_PORTAL_MANAGEMENT
 from .util import user_has_power_level
 
 
-async def _get_portal_and_check_permission(evt: CommandEvent, permission: str,
-                                           action: Optional[str] = None
-                                           ) -> Optional[po.Portal]:
+async def _get_portal_and_check_permission(evt: CommandEvent) -> Optional[po.Portal]:
     room_id = RoomID(evt.args[0]) if len(evt.args) > 0 else evt.room_id
 
     portal = po.Portal.get_by_mxid(room_id)
@@ -33,9 +31,8 @@ async def _get_portal_and_check_permission(evt: CommandEvent, permission: str,
         await evt.reply(f"{that_this} is not a portal room.")
         return None
 
-    if not await user_has_power_level(portal.mxid, evt.az.intent, evt.sender, permission):
-        action = action or f"{permission.replace('_', ' ')}s"
-        await evt.reply(f"You do not have the permissions to {action} that portal.")
+    if not await user_has_power_level(portal.mxid, evt.az.intent, evt.sender, "unbridge"):
+        await evt.reply("You do not have the permissions to unbridge that portal.")
         return None
     return portal
 
@@ -64,7 +61,7 @@ def _get_portal_murder_function(action: str, room_id: str, function: Callable, c
                            "Only works for group chats; to delete a private chat portal, simply "
                            "leave the room.")
 async def delete_portal(evt: CommandEvent) -> Optional[EventID]:
-    portal = await _get_portal_and_check_permission(evt, "unbridge")
+    portal = await _get_portal_and_check_permission(evt)
     if not portal:
         return None
 
@@ -85,7 +82,7 @@ async def delete_portal(evt: CommandEvent) -> Optional[EventID]:
                  help_section=SECTION_PORTAL_MANAGEMENT,
                  help_text="Remove puppets from the current portal room and forget the portal.")
 async def unbridge(evt: CommandEvent) -> Optional[EventID]:
-    portal = await _get_portal_and_check_permission(evt, "unbridge")
+    portal = await _get_portal_and_check_permission(evt)
     if not portal:
         return None
 
