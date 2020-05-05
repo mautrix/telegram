@@ -310,6 +310,21 @@ class PortalMetadata(BasePortal, ABC):
         initial_state = [{
             "type": EventType.ROOM_POWER_LEVELS.serialize(),
             "content": power_levels.serialize(),
+        }, {
+            "type": "m.bridge",
+            "state_key": f"net.maunium.telegram://telegram/{self.tgid}",
+            "content": {
+                "bridgebot": self.az.bot_mxid,
+                "creator": self.main_intent.mxid,
+                "protocol": {
+                    "id": "telegram",
+                    "displayname": "Telegram",
+                    "avatar_url": config["appservice.bot_avatar"],
+                },
+                "channel": {
+                    "id": self.tgid
+                }
+            }
         }]
         if config["bridge.encryption.default"] and self.matrix.e2ee:
             self.encrypted = True
