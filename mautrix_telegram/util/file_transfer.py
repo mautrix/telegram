@@ -18,6 +18,7 @@ from io import BytesIO
 import time
 import logging
 import asyncio
+import tempfile
 
 import magic
 from sqlalchemy.exc import IntegrityError, InvalidRequestError
@@ -44,12 +45,8 @@ except ImportError:
 
 try:
     from moviepy.editor import VideoFileClip
-    import random
-    import string
-    import os
-    import mimetypes
 except ImportError:
-    VideoFileClip = random = string = os = mimetypes = None
+    VideoFileClip = None
 
 try:
     from nio.crypto import encrypt_attachment
@@ -80,31 +77,22 @@ def convert_image(file: bytes, source_mime: str = "image/webp", target_type: str
         return source_mime, file, None, None
 
 
-def _temp_file_name(ext: str) -> str:
-    return ("/tmp/mxtg-video-"
-            + "".join(random.choice(string.ascii_uppercase + string.digits) for _ in range(10))
-            + ext)
-
-
 def _read_video_thumbnail(data: bytes, video_ext: str = "mp4", frame_ext: str = "png",
                           max_size: Tuple[int, int] = (1024, 720)) -> Tuple[bytes, int, int]:
-    # We don't have any way to read the video from memory, so save it to disk.
-    temp_file = _temp_file_name(video_ext)
-    with open(temp_file, "wb") as file:
+    with tempfile.TemporaryFile(prefix="mxtg_video_", suffix=f".{video_ext}") as file:
+        # We don't have any way to read the video from memory, so save it to disk.
         file.write(data)
 
-    # Read temp file and get frame
-    clip = VideoFileClip(temp_file)
-    frame = clip.get_frame(0)
+        # Read temp file and get frame
+        frame = VideoFileClip(file.name).get_frame(0)
 
     # Convert to png and save to BytesIO
     image = Image.fromarray(frame).convert("RGBA")
+
     thumbnail_file = BytesIO()
     if max_size:
         image.thumbnail(max_size, Image.ANTIALIAS)
     image.save(thumbnail_file, frame_ext)
-
-    os.remove(temp_file)
 
     w, h = image.size
     return thumbnail_file.getvalue(), w, h
