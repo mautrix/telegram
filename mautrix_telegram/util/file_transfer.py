@@ -79,7 +79,7 @@ def convert_image(file: bytes, source_mime: str = "image/webp", target_type: str
 
 def _read_video_thumbnail(data: bytes, video_ext: str = "mp4", frame_ext: str = "png",
                           max_size: Tuple[int, int] = (1024, 720)) -> Tuple[bytes, int, int]:
-    with tempfile.TemporaryFile(prefix="mxtg_video_", suffix=f".{video_ext}") as file:
+    with tempfile.NamedTemporaryFile(prefix="mxtg_video_", suffix=f".{video_ext}") as file:
         # We don't have any way to read the video from memory, so save it to disk.
         file.write(data)
 
