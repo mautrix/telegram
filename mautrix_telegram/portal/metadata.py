@@ -307,24 +307,30 @@ class PortalMetadata(BasePortal, ABC):
             for invite in invites:
                 power_levels.users.setdefault(invite, 100)
             self.title = puppet.displayname
+        bridge_info = {
+            "bridgebot": self.az.bot_mxid,
+            "creator": self.main_intent.mxid,
+            "protocol": {
+                "id": "telegram",
+                "displayname": "Telegram",
+                "avatar_url": config["appservice.bot_avatar"],
+            },
+            "channel": {
+                "id": self.tgid
+            }
+        }
         initial_state = [{
             "type": EventType.ROOM_POWER_LEVELS.serialize(),
             "content": power_levels.serialize(),
         }, {
             "type": "m.bridge",
             "state_key": f"net.maunium.telegram://telegram/{self.tgid}",
-            "content": {
-                "bridgebot": self.az.bot_mxid,
-                "creator": self.main_intent.mxid,
-                "protocol": {
-                    "id": "telegram",
-                    "displayname": "Telegram",
-                    "avatar_url": config["appservice.bot_avatar"],
-                },
-                "channel": {
-                    "id": self.tgid
-                }
-            }
+            "content": bridge_info
+        }, {
+            # TODO remove this once https://github.com/matrix-org/matrix-doc/pull/2346 is in spec
+            "type": "uk.half-shot.bridge",
+            "state_key": f"net.maunium.telegram://telegram/{self.tgid}",
+            "content": bridge_info
         }]
         if config["bridge.encryption.default"] and self.matrix.e2ee:
             self.encrypted = True
