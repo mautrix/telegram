@@ -348,7 +348,7 @@ class User(AbstractUser, BaseUser):
                 continue
             elif isinstance(entity, TLUser) and not config["bridge.sync_direct_chats"]:
                 continue
-            portal = po.Portal.get_by_entity(entity)
+            portal = po.Portal.get_by_entity(entity, receiver_id=self.tgid)
             self.portals[portal.tgid_full] = portal
             creators.append(
                 portal.create_matrix_room(self, entity, invites=[self.mxid],

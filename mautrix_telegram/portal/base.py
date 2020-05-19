@@ -402,6 +402,8 @@ class BasePortal(ABC):
     @classmethod
     def get_by_tgid(cls, tgid: TelegramID, tg_receiver: Optional[TelegramID] = None,
                     peer_type: str = None) -> Optional['Portal']:
+        if peer_type == "user" and tg_receiver is None:
+            raise ValueError("tg_receiver is required when peer_type is \"user\"")
         tg_receiver = tg_receiver or tgid
         tgid_full = (tgid, tg_receiver)
         try:
