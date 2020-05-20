@@ -64,7 +64,7 @@ RUN apk add --virtual .build-deps \
 COPY . /opt/mautrix-telegram
 RUN apk add git && pip3 install .[speedups,hq_thumbnails,metrics,e2be] && apk del git \
   # This doesn't make the image smaller, but it's needed so that the `version` command works properly
-  && rm -rf mautrix_telegram
+  && cp mautrix_telegram/example-config.yaml . && rm -rf mautrix_telegram
 
 VOLUME /data
 ENV UID=1337 GID=1337 \
