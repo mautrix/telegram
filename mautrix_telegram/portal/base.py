@@ -397,6 +397,7 @@ class BasePortal(MautrixBasePortal, ABC):
 
         return None
 
+
     @classmethod
     def get_by_tgid(cls, tgid: TelegramID, tg_receiver: Optional[TelegramID] = None,
                     peer_type: str = None) -> Optional['Portal']:
@@ -455,6 +456,11 @@ class BasePortal(MautrixBasePortal, ABC):
         return cls.get_by_tgid(TelegramID(entity_id),
                                receiver_id if type_name == "user" else entity_id,
                                type_name if create else None)
+
+    @classmethod
+    def reached_portal_limit(cls, username: str) -> int:
+         return config["bridge.max_portal_rooms"] !== -1 and
+                DBPortal.count() >= config["bridge.max_portal_rooms"]
 
     # endregion
     # region Abstract methods (cross-called in matrix/metadata/telegram classes)

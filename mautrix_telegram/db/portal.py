@@ -53,9 +53,13 @@ class Portal(Base):
     def find_private_chats(cls, tg_receiver: TelegramID) -> Iterable['Portal']:
         yield from cls._select_all(cls.c.tg_receiver == tg_receiver, cls.c.peer_type == "user")
 
-    @classmethod
-    def get_by_mxid(cls, mxid: RoomID) -> Optional['Portal']:
-        return cls._select_one_or_none(cls.c.mxid == mxid)
+    def count(cls) -> int:
+        rows = cls.db.execute(select([func.count()].select_from(self.t))
+        try:
+            count, = next(rows)
+            return count
+        except StopIteration:
+            return 0
 
     @classmethod
     def get_by_username(cls, username: str) -> Optional['Portal']:
@@ -64,3 +68,7 @@ class Portal(Base):
     @classmethod
     def all(cls) -> Iterable['Portal']:
         yield from cls._select_all()
+
+    @classmethod
+    def get_by_mxid(cls, mxid: RoomID) -> Integer:
+        return cls._select_one_or_none(cls.c.mxid == mxid)
