@@ -686,7 +686,7 @@ class PortalMetadata(BasePortal, ABC):
         elif isinstance(photo, Photo):
             loc, largest = self._get_largest_photo_size(photo)
             photo_id = f"{largest.location.volume_id}-{largest.location.local_id}"
-        elif isinstance(photo, (UserProfilePhotoEmpty, ChatPhotoEmpty, PhotoEmpty)):
+        elif isinstance(photo, (UserProfilePhotoEmpty, ChatPhotoEmpty, PhotoEmpty, type(None))):
             photo_id = ""
             loc = None
         else:
