@@ -13,7 +13,7 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import List, Optional, Tuple, Union, Callable, TYPE_CHECKING
+from typing import List, Optional, Tuple, Union, Callable, Awaitable, TYPE_CHECKING
 from abc import ABC
 import asyncio
 
@@ -26,7 +26,7 @@ from telethon.tl.types import (
     Channel, ChatBannedRights, ChannelParticipantsRecent, ChannelParticipantsSearch, ChatPhoto,
     PhotoEmpty, InputChannel, InputUser, ChatPhotoEmpty, PeerUser, Photo, TypeChat, TypeInputPeer,
     TypeUser, User, InputPeerPhotoFileLocation, ChatParticipantAdmin, ChannelParticipantAdmin,
-    ChatParticipantCreator, ChannelParticipantCreator)
+    ChatParticipantCreator, ChannelParticipantCreator, UserProfilePhoto, UserProfilePhotoEmpty)
 
 from mautrix.errors import MForbidden
 from mautrix.types import (RoomID, UserID, RoomCreatePreset, EventType, Membership, Member,
@@ -218,10 +218,17 @@ class PortalMetadata(BasePortal, ABC):
                 puppet = p.Puppet.get(self.tgid)
             await puppet.update_info(user, entity)
             await puppet.intent_for(self).join_room(self.mxid)
+            if self.encrypted or self.private_chat_portal_meta:
+                # The bridge bot needs to join for e2ee, but that messes up the default name
+                # generation. If/when canonical DMs happen, this might not be necessary anymore.
+                changed = await self._update_title(puppet.displayname)
+                changed = await self._update_avatar(user, entity.photo) or changed
+                if changed:
+                    self.save()
         if self.sync_matrix_state:
             await self.sync_matrix_members()
 
-    async def create_matrix_room(self, user: 'AbstractUser', entity: TypeChat = None,
+    async def create_matrix_room(self, user: 'AbstractUser', entity: Union[TypeChat, User] = None,
                                  invites: InviteList = None, update_if_exists: bool = True,
                                  synchronous: bool = False) -> Optional[str]:
         if self.mxid:
@@ -245,8 +252,8 @@ class PortalMetadata(BasePortal, ABC):
             except Exception:
                 self.log.exception("Fatal error creating Matrix room")
 
-    async def _create_matrix_room(self, user: 'AbstractUser', entity: TypeChat, invites: InviteList
-                                  ) -> Optional[RoomID]:
+    async def _create_matrix_room(self, user: 'AbstractUser', entity: Union[TypeChat, User],
+                                  invites: InviteList) -> Optional[RoomID]:
         direct = self.peer_type == "user"
 
         if invites is None:
@@ -274,6 +281,8 @@ class PortalMetadata(BasePortal, ABC):
             self.about = "Your Telegram cloud storage chat"
 
         puppet = p.Puppet.get(self.tgid) if direct else None
+        if puppet:
+            await puppet.update_info(user, entity)
         self._main_intent = puppet.intent_for(self) if direct else self.az.intent
 
         if self.peer_type == "channel":
@@ -340,9 +349,8 @@ class PortalMetadata(BasePortal, ABC):
             })
             if direct:
                 invites.append(self.az.bot_mxid)
-                # The bridge bot needs to join for e2ee, but that messes up the default name
-                # generation. If/when canonical DMs happen, this might not be necessary anymore.
-                self.title = puppet.displayname
+        if direct and (self.encrypted or self.private_chat_portal_meta):
+            self.title = puppet.displayname
         if config["appservice.community_id"]:
             initial_state.append({
                 "type": "m.room.related_groups",
@@ -587,12 +595,12 @@ class PortalMetadata(BasePortal, ABC):
             self.log.warning("Called update_info() for direct chat portal")
             return
 
+        changed = False
         self.log.debug("Updating info")
         try:
             if not entity:
                 entity = await self.get_entity(user)
                 self.log.debug(f"Fetched data: {entity}")
-            changed = False
 
             if self.peer_type == "channel":
                 changed = self.megagroup != entity.megagroup or changed
@@ -631,7 +639,7 @@ class PortalMetadata(BasePortal, ABC):
         return True
 
     async def _try_use_intent(self, sender: Optional['p.Puppet'],
-                              action: Callable[[IntentAPI], None]) -> None:
+                              action: Callable[[IntentAPI], Awaitable[None]]) -> None:
         if sender:
             try:
                 await action(sender.intent_for(self))
@@ -666,18 +674,19 @@ class PortalMetadata(BasePortal, ABC):
 
     async def _update_avatar(self, user: 'AbstractUser', photo: TypeChatPhoto,
                              sender: Optional['p.Puppet'] = None, save: bool = False) -> bool:
-        if isinstance(photo, ChatPhoto):
+        if isinstance(photo, (ChatPhoto, UserProfilePhoto)):
             loc = InputPeerPhotoFileLocation(
                 peer=await self.get_input_entity(user),
                 local_id=photo.photo_big.local_id,
                 volume_id=photo.photo_big.volume_id,
                 big=True
             )
-            photo_id = f"{loc.volume_id}-{loc.local_id}"
+            photo_id = (f"{loc.volume_id}-{loc.local_id}" if isinstance(photo, ChatPhoto)
+                        else photo.photo_id)
         elif isinstance(photo, Photo):
             loc, largest = self._get_largest_photo_size(photo)
             photo_id = f"{largest.location.volume_id}-{largest.location.local_id}"
-        elif isinstance(photo, (ChatPhotoEmpty, PhotoEmpty)):
+        elif isinstance(photo, (UserProfilePhotoEmpty, ChatPhotoEmpty, PhotoEmpty)):
             photo_id = ""
             loc = None
         else:

@@ -69,6 +69,7 @@ class BasePortal(ABC):
     sync_channel_members: bool = True
     sync_matrix_state: bool = True
     public_portals: bool = False
+    private_chat_portal_meta: bool = False
 
     alias_template: SimpleTemplate[str]
     hs_domain: str
@@ -518,6 +519,7 @@ def init(context: Context) -> None:
     BasePortal.sync_channel_members = config["bridge.sync_channel_members"]
     BasePortal.sync_matrix_state = config["bridge.sync_matrix_state"]
     BasePortal.public_portals = config["bridge.public_portals"]
+    BasePortal.private_chat_portal_meta = config["bridge.private_chat_portal_meta"]
     BasePortal.filter_mode = config["bridge.filter.mode"]
     BasePortal.filter_list = config["bridge.filter.list"]
     BasePortal.hs_domain = config["homeserver.domain"]

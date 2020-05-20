@@ -123,6 +123,7 @@ class Config(BaseBridgeConfig):
         copy("bridge.animated_sticker.args")
         copy("bridge.encryption.allow")
         copy("bridge.encryption.default")
+        copy("bridge.private_chat_portal_meta")
 
         copy("bridge.initial_power_level_overrides.group")
         copy("bridge.initial_power_level_overrides.user")

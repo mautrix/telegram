@@ -242,8 +242,7 @@ class Puppet(CustomPuppetMixin):
 
         try:
             changed = await self.update_displayname(source, info) or changed
-            if isinstance(info.photo, UserProfilePhoto):
-                changed = await self.update_avatar(source, info.photo) or changed
+            changed = await self.update_avatar(source, info.photo) or changed
         except Exception:
             self.log.exception(f"Failed to update info from source {source.tgid}")
 
@@ -294,10 +293,13 @@ class Puppet(CustomPuppetMixin):
         if self.disable_updates:
             return False
 
-        if isinstance(photo, UserProfilePhotoEmpty):
+        if photo is None or isinstance(photo, UserProfilePhotoEmpty):
             photo_id = ""
-        else:
+        elif isinstance(photo, UserProfilePhoto):
             photo_id = str(photo.photo_id)
+        else:
+            self.log.warning(f"Unknown user profile photo type: {type(photo)}")
+            return False
         if self.photo_id != photo_id:
             if not photo_id:
                 self.photo_id = ""
