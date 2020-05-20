@@ -342,7 +342,7 @@ class PortalMatrix(BasePortal, MautrixBasePortal, ABC):
 
     def _add_telegram_message_to_db(self, event_id: EventID, space: TelegramID,
                                     edit_index: int, response: TypeMessage) -> None:
-        self.log.debug("Handled Matrix message: %s", response)
+        self.log.trace("Handled Matrix message: %s", response)
         self.dedup.check(response, (event_id, space), force_hash=edit_index != 0)
         if edit_index < 0:
             prev_edit = DBMessage.get_one_by_tgid(TelegramID(response.id), space, -1)
@@ -403,7 +403,7 @@ class PortalMatrix(BasePortal, MautrixBasePortal, ABC):
             await self._handle_matrix_file(sender_id, event_id, space, client, content, reply_to,
                                            caption_content)
         else:
-            self.log.debug(f"Unhandled Matrix event: {content}")
+            self.log.trace("Unhandled Matrix event: %s", content)
 
     async def handle_matrix_pin(self, sender: 'u.User',
                                 pinned_message: Optional[EventID]) -> None:

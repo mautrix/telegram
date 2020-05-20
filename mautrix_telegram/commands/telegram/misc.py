@@ -165,7 +165,9 @@ async def join(evt: CommandEvent) -> Optional[EventID]:
             try:
                 await portal.create_matrix_room(evt.sender, chat, [evt.sender.mxid])
             except ChatIdInvalidError as e:
-                logging.getLogger("mau.commands").info(updates.stringify())
+                logging.getLogger("mau.commands").trace("ChatIdInvalidError while creating portal "
+                                                        "from !tg join command: %s",
+                                                        updates.stringify())
                 raise e
             return await evt.reply(f"Created room for {portal.title}")
     return None

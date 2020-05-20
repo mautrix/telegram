@@ -13,7 +13,8 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from mautrix.util.color_log import ColorFormatter as BaseColorFormatter, PREFIX, MXID_COLOR, RESET
+from mautrix.util.logging.color import (ColorFormatter as BaseColorFormatter,
+                                        PREFIX, MXID_COLOR, RESET)
 
 TELETHON_COLOR = PREFIX + "35;1m"  # magenta
 TELETHON_MODULE_COLOR = PREFIX + "35m"

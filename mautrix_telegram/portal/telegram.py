@@ -80,7 +80,7 @@ class PortalTelegram(BasePortal, ABC):
         return await intent.send_message_event(self.mxid, event_type, content, **kwargs)
 
     async def handle_telegram_photo(self, source: 'AbstractUser', intent: IntentAPI, evt: Message,
-                                    relates_to: Dict = None) -> Optional[EventID]:
+                                    relates_to: RelatesTo = None) -> Optional[EventID]:
         loc, largest_size = self._get_largest_photo_size(evt.media.photo)
         file = await util.transfer_file_to_matrix(source.client, intent, loc,
                                                   encrypt=self.encrypted)
@@ -227,8 +227,8 @@ class PortalTelegram(BasePortal, ABC):
             content.url = file.mxc
         return await self._send_message(intent, content, event_type=event_type, timestamp=evt.date)
 
-    def handle_telegram_location(self, _: 'AbstractUser', intent: IntentAPI, evt: Message,
-                                 relates_to: dict = None) -> Awaitable[EventID]:
+    def handle_telegram_location(self, source: 'AbstractUser', intent: IntentAPI, evt: Message,
+                                 relates_to: RelatesTo = None) -> Awaitable[EventID]:
         long = evt.media.geo.long
         lat = evt.media.geo.lat
         long_char = "E" if long > 0 else "W"
@@ -257,7 +257,7 @@ class PortalTelegram(BasePortal, ABC):
         return await self._send_message(intent, content, timestamp=evt.date)
 
     async def handle_telegram_unsupported(self, source: 'AbstractUser', intent: IntentAPI,
-                                          evt: Message, relates_to: dict = None) -> EventID:
+                                          evt: Message, relates_to: RelatesTo = None) -> EventID:
         override_text = ("This message is not supported on your version of Mautrix-Telegram. "
                          "Please check https://github.com/tulir/mautrix-telegram or ask your "
                          "bridge administrator about possible updates.")
@@ -312,7 +312,7 @@ class PortalTelegram(BasePortal, ABC):
 
     @staticmethod
     def _int_to_bytes(i: int) -> bytes:
-        hex_value = "{0:010x}".format(i)
+        hex_value = "{0:010x}".format(i).encode("utf-8")
         return codecs.decode(hex_value, "hex_codec")
 
     def _encode_msgid(self, source: 'AbstractUser', evt: Message) -> str:
@@ -355,6 +355,7 @@ class PortalTelegram(BasePortal, ABC):
     async def handle_telegram_edit(self, source: 'AbstractUser', sender: p.Puppet, evt: Message
                                    ) -> None:
         if not self.mxid:
+            self.log.trace("Ignoring edit to %d as chat has no Matrix room", evt.id)
             return
         elif hasattr(evt, "media") and isinstance(evt.media, MessageMediaGame):
             self.log.debug("Ignoring game message edit event")
@@ -402,17 +403,21 @@ class PortalTelegram(BasePortal, ABC):
         DBMessage.update_by_mxid(temporary_identifier, self.mxid, mxid=event_id)
 
     async def backfill(self, source: 'AbstractUser') -> None:
+        self.log.debug("Backfilling history through %s", source.mxid)
         last = DBMessage.find_last(self.mxid, (source.tgid if self.peer_type != "channel"
                                                else self.tgid))
         min_id = last.tgid if last else 0
         self.backfilling = True
         self.backfill_leave = set()
         if self.peer_type == "user":
+            self.log.debug("Adding %s's default puppet to room for backfilling", source.mxid)
             sender = p.Puppet.get(source.tgid)
             await self.main_intent.invite_user(self.mxid, sender.default_mxid)
             await sender.default_mxid_intent.join_room_by_id(self.mxid)
             self.backfill_leave.add(sender.default_mxid_intent)
         max_file_size = min(config["bridge.max_document_size"], 1500) * 1024 * 1024
+        self.log.trace("Opening takeout client for %d, message ID %d->", source.tgid, min_id)
+        count = 0
         async with source.client.takeout(files=True, megagroups=self.megagroup,
                                          chats=self.peer_type == "chat",
                                          users=self.peer_type == "user",
@@ -426,14 +431,18 @@ class PortalTelegram(BasePortal, ABC):
                 # if isinstance(message, MessageService):
                 #    await self.handle_telegram_action(source, sender, message)
                 await self.handle_telegram_message(source, sender, message)
+                count += 1
         for intent in self.backfill_leave:
+            self.log.trace("Leaving room with %s post-backfill", intent.mxid)
             await intent.leave_room(self.mxid)
         self.backfilling = False
         self.backfill_leave = None
+        self.log.info("Backfilled %d messages through %s", count, source.mxid)
 
     async def handle_telegram_message(self, source: 'AbstractUser', sender: p.Puppet,
                                       evt: Message) -> None:
         if not self.mxid:
+            self.log.trace("Got telegram message %d, but no room exists, creating...", evt.id)
             await self.create_matrix_room(source, invites=[source.mxid], update_if_exists=False)
 
         if (self.peer_type == "user" and sender.tgid == self.tg_receiver
@@ -466,6 +475,8 @@ class PortalTelegram(BasePortal, ABC):
                                "check. If you get this message often, consider increasing"
                                "bridge.deduplication.cache_queue_length in the config.")
                 return
+
+        self.log.trace("Handling Telegram message %s", evt)
 
         if sender and not sender.displayname:
             self.log.debug(f"Telegram user {sender.tgid} sent a message, but doesn't have a "
@@ -500,7 +511,7 @@ class PortalTelegram(BasePortal, ABC):
             }[type(media)](source, intent, evt,
                            relates_to=formatter.telegram_reply_to_matrix(evt, source))
         else:
-            self.log.debug("Unhandled Telegram message: %s", evt)
+            self.log.debug("Unhandled Telegram message %d", evt.id)
             return
 
         if not event_id:
@@ -517,7 +528,7 @@ class PortalTelegram(BasePortal, ABC):
             await intent.redact(self.mxid, event_id)
             return
 
-        self.log.debug("Handled Telegram message: %s", evt)
+        self.log.debug("Handled telegram message %d -> %s", evt.id, event_id)
         try:
             DBMessage(tgid=TelegramID(evt.id), mx_room=self.mxid, mxid=event_id,
                       tg_space=tg_space, edit_index=0).insert()
@@ -572,7 +583,7 @@ class PortalTelegram(BasePortal, ABC):
             # TODO handle game score
             pass
         else:
-            self.log.debug("Unhandled Telegram action in %s: %s", self.title, action)
+            self.log.trace("Unhandled Telegram action in %s: %s", self.title, action)
 
     async def set_telegram_admin(self, user_id: TelegramID) -> None:
         puppet = p.Puppet.get(user_id)

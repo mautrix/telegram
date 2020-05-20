@@ -32,6 +32,7 @@ from mautrix.errors import MatrixRequestError, IntentError
 from mautrix.appservice import AppService, IntentAPI
 from mautrix.types import RoomID, RoomAlias, UserID, EventType, PowerLevelStateEventContent
 from mautrix.util.simple_template import SimpleTemplate
+from mautrix.util.logging import TraceLogger
 
 from ..types import TelegramID
 from ..context import Context
@@ -55,7 +56,7 @@ config: Optional['Config'] = None
 
 
 class BasePortal(ABC):
-    base_log: logging.Logger = logging.getLogger("mau.portal")
+    base_log: TraceLogger = logging.getLogger("mau.portal")
     az: AppService = None
     bot: 'Bot' = None
     loop: asyncio.AbstractEventLoop = None
@@ -92,7 +93,7 @@ class BasePortal(ABC):
     deleted: bool
     backfilling: bool
     backfill_leave: Optional[Set[IntentAPI]]
-    log: logging.Logger
+    log: TraceLogger
 
     alias: Optional[RoomAlias]
 
@@ -243,8 +244,7 @@ class BasePortal(ABC):
             return await user.client.get_entity(self.peer)
         except ValueError:
             if user.is_bot:
-                self.log.warning(f"Could not find entity with bot {user.tgid}. "
-                                 "Failing...")
+                self.log.warning(f"Could not find entity with bot {user.tgid}. Failing...")
                 raise
             self.log.warning(f"Could not find entity with user {user.tgid}. "
                              "falling back to get_dialogs.")

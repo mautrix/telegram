@@ -13,7 +13,7 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import Optional, List, AsyncGenerator, Union, Awaitable, DefaultDict, Tuple
+from typing import Optional, List, AsyncGenerator, Union, Awaitable, DefaultDict, Tuple, cast
 from collections import defaultdict
 import hashlib
 import asyncio
@@ -35,6 +35,7 @@ from telethon import utils, helpers
 
 from mautrix.appservice import IntentAPI
 from mautrix.types import ContentURI, EncryptedFile
+from mautrix.util.logging import TraceLogger
 
 from ..tgclient import MautrixTelegramClient
 from ..db import TelegramFile as DBTelegramFile
@@ -44,7 +45,7 @@ try:
 except ImportError:
     async_encrypt_attachment = None
 
-log: logging.Logger = logging.getLogger("mau.util")
+log: TraceLogger = cast(TraceLogger, logging.getLogger("mau.util"))
 
 TypeLocation = Union[Document, InputDocumentFileLocation, InputPeerPhotoFileLocation,
                      InputFileLocation, InputPhotoFileLocation]
@@ -102,7 +103,7 @@ class UploadSender:
 
     async def _next(self, data: bytes) -> None:
         self.request.bytes = data
-        log.debug(f"Sending file part {self.request.file_part}/{self.part_count}"
+        log.trace(f"Sending file part {self.request.file_part}/{self.part_count}"
                   f" with {len(data)} bytes")
         await self.sender.send(self.request)
         self.request.file_part += self.stride
@@ -236,7 +237,7 @@ class ParallelTransferrer:
                     break
                 yield data
                 part += 1
-                log.debug(f"Part {part} downloaded")
+                log.trace(f"Part {part} downloaded")
 
         log.debug("Parallel download finished, cleaning up connections")
         await self._cleanup()

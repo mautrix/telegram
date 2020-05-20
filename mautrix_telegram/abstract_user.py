@@ -35,6 +35,7 @@ from telethon.tl.types import (
 from mautrix.types import UserID, PresenceState
 from mautrix.errors import MatrixError
 from mautrix.appservice import AppService
+from mautrix.util.logging import TraceLogger
 from alchemysession import AlchemySessionContainer
 
 from . import portal as po, puppet as pu, __version__
@@ -68,7 +69,7 @@ except ImportError:
 class AbstractUser(ABC):
     session_container: AlchemySessionContainer = None
     loop: asyncio.AbstractEventLoop = None
-    log: logging.Logger
+    log: TraceLogger
     az: AppService
     relaybot: Optional['Bot']
     ignore_incoming_bot_events: bool = True
@@ -258,7 +259,7 @@ class AbstractUser(ABC):
         elif isinstance(update, UpdateReadHistoryOutbox):
             await self.update_read_receipt(update)
         else:
-            self.log.debug("Unhandled update: %s", update)
+            self.log.trace("Unhandled update: %s", update)
 
     async def update_pinned_messages(self, update: Union[UpdateChannelPinnedMessage,
                                                          UpdateChatPinnedMessage]) -> None:
@@ -333,7 +334,7 @@ class AbstractUser(ABC):
             if await puppet.update_avatar(self, update.photo):
                 puppet.save()
         else:
-            self.log.warning("Unexpected other user info update: %s", update)
+            self.log.warning(f"Unexpected other user info update: {type(update)}")
 
     async def update_status(self, update: UpdateUserStatus) -> None:
         puppet = pu.Puppet.get(TelegramID(update.user_id))
@@ -342,7 +343,7 @@ class AbstractUser(ABC):
         elif isinstance(update.status, UserStatusOffline):
             await puppet.default_mxid_intent.set_presence(PresenceState.OFFLINE)
         else:
-            self.log.warning("Unexpected user status update: %s", update)
+            self.log.warning(f"Unexpected user status update: type({update})")
         return
 
     def get_message_details(self, update: UpdateMessage) -> Tuple[UpdateMessageContent,
@@ -366,8 +367,7 @@ class AbstractUser(ABC):
                 portal = po.Portal.get_by_entity(update.to_id, receiver_id=self.tgid)
             sender = pu.Puppet.get(update.from_id) if update.from_id else None
         else:
-            self.log.warning(
-                f"Unexpected message type in User#get_message_details: {type(update)}")
+            self.log.warning(f"Unexpected message type in User#get_message_details: {type(update)}")
             return update, None, None
         return update, sender, portal
 
@@ -428,11 +428,10 @@ class AbstractUser(ABC):
 
         if isinstance(update, MessageService):
             if isinstance(update.action, MessageActionChannelMigrateFrom):
-                self.log.debug(f"Ignoring action %s to %s by %d", update.action,
-                               portal.tgid_log,
+                self.log.trace(f"Ignoring action %s to %s by %d", update.action, portal.tgid_log,
                                sender.id)
                 return
-            self.log.debug("Handling action %s to %s by %d", update.action, portal.tgid_log,
+            self.log.trace("Handling action %s to %s by %d", update.action, portal.tgid_log,
                            sender.id)
             return await portal.handle_telegram_action(self, sender, update)
 

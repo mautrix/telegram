@@ -267,7 +267,7 @@ class PortalMetadata(BasePortal, ABC):
 
         if not entity:
             entity = await self.get_entity(user)
-            self.log.debug(f"Fetched data: {entity}")
+            self.log.trace("Fetched data: %s", entity)
 
         self.log.debug("Creating room")
 
@@ -600,7 +600,7 @@ class PortalMetadata(BasePortal, ABC):
         try:
             if not entity:
                 entity = await self.get_entity(user)
-                self.log.debug(f"Fetched data: {entity}")
+                self.log.trace("Fetched data: %s", entity)
 
             if self.peer_type == "channel":
                 changed = self.megagroup != entity.megagroup or changed
