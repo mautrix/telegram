@@ -29,6 +29,7 @@ from mautrix.client import Client
 from mautrix.errors import MatrixRequestError
 from mautrix.types import UserID
 from mautrix.bridge import BaseUser
+from mautrix.util.logging import TraceLogger
 
 from .types import TelegramID
 from .db import User as DBUser
@@ -45,7 +46,7 @@ SearchResult = NewType('SearchResult', Tuple['pu.Puppet', int])
 
 
 class User(AbstractUser, BaseUser):
-    log: logging.Logger = logging.getLogger("mau.user")
+    log: TraceLogger = logging.getLogger("mau.user")
     by_mxid: Dict[str, 'User'] = {}
     by_tgid: Dict[int, 'User'] = {}
 
@@ -343,10 +344,12 @@ class User(AbstractUser, BaseUser):
             entity = dialog.entity
             if isinstance(entity, ChatForbidden):
                 self.log.warning(f"Ignoring forbidden chat {entity} while syncing")
+                continue
             elif isinstance(entity, Chat) and (entity.deactivated or entity.left):
                 self.log.warning(f"Ignoring deactivated or left chat {entity} while syncing")
                 continue
             elif isinstance(entity, TLUser) and not config["bridge.sync_direct_chats"]:
+                self.log.trace(f"Ignoring user {entity.id} while syncing")
                 continue
             portal = po.Portal.get_by_entity(entity, receiver_id=self.tgid)
             self.portals[portal.tgid_full] = portal
