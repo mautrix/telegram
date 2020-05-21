@@ -459,7 +459,7 @@ class BasePortal(MautrixBasePortal, ABC):
 
     @classmethod
     def reached_portal_limit(cls, username: str) -> int:
-         return config["bridge.max_portal_rooms"] !== -1 and
+         return config["bridge.max_portal_rooms"] > 0 and
                 DBPortal.count() >= config["bridge.max_portal_rooms"]
 
     # endregion
