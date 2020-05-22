@@ -147,7 +147,7 @@ class Bot(AbstractUser):
         if self.whitelist_group_admins:
             if isinstance(chat, PeerChannel):
                 p = await self.client(GetParticipantRequest(chat, tgid))
-                return isinstance(p, (ChannelParticipantCreator, ChannelParticipantAdmin))
+                return isinstance(p.participant, (ChannelParticipantCreator, ChannelParticipantAdmin))
             elif isinstance(chat, PeerChat):
                 chat = await self.client(GetFullChatRequest(chat.chat_id))
                 participants = chat.full_chat.participants.participants
