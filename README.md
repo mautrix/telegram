@@ -7,6 +7,9 @@
 
 A Matrix-Telegram hybrid puppeting/relaybot bridge.
 
+## Sponsors
+* [Joel Lehtonen / Zouppen](https://github.com/zouppen)
+
 ### [Wiki](https://github.com/tulir/mautrix-telegram/wiki)
 
 ### [Features & Roadmap](https://github.com/tulir/mautrix-telegram/blob/master/ROADMAP.md)
