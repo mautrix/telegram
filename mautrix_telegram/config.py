@@ -58,10 +58,6 @@ class Config(BaseBridgeConfig):
             base["logging.loggers.mau.level"] = level
             base["logging.loggers.telethon.level"] = level
 
-        # TODO move these to mautrix-python
-        copy("appservice.tls_cert")
-        copy("appservice.tls_key")
-
         copy("appservice.public.enabled")
         copy("appservice.public.prefix")
         copy("appservice.public.external")
