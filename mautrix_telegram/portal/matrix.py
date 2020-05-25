@@ -228,6 +228,13 @@ class PortalMatrix(BasePortal, MautrixBasePortal, ABC):
             message, entities = None, None
         return message, entities
 
+    async def _send_delivery_receipt(self, event_id: EventID) -> None:
+        if event_id and config["bridge.delivery_receipts"]:
+            try:
+                await self.az.intent.mark_read(self.mxid, event_id)
+            except Exception:
+                self.log.exception("Failed to send delivery receipt for %s", event_id)
+
     async def _handle_matrix_text(self, sender_id: TelegramID, event_id: EventID,
                                   space: TelegramID, client: 'MautrixTelegramClient',
                                   content: TextMessageEventContent, reply_to: TelegramID) -> None:
@@ -245,6 +252,7 @@ class PortalMatrix(BasePortal, MautrixBasePortal, ABC):
                                                  parse_mode=self._matrix_event_to_entities,
                                                  link_preview=lp)
             self._add_telegram_message_to_db(event_id, space, 0, response)
+        await self._send_delivery_receipt(event_id)
 
     async def _handle_matrix_file(self, sender_id: TelegramID, event_id: EventID,
                                   space: TelegramID, client: 'MautrixTelegramClient',
@@ -307,6 +315,7 @@ class PortalMatrix(BasePortal, MautrixBasePortal, ABC):
                 response = await client.send_media(self.peer, media, reply_to=reply_to,
                                                    caption=caption, entities=entities)
             self._add_telegram_message_to_db(event_id, space, 0, response)
+        await self._send_delivery_receipt(event_id)
 
     async def _matrix_document_edit(self, client: 'MautrixTelegramClient',
                                     content: MessageEventContent, space: TelegramID,
@@ -317,6 +326,7 @@ class PortalMatrix(BasePortal, MautrixBasePortal, ABC):
                 response = await client.edit_message(self.peer, orig_msg.tgid,
                                                      caption, file=media)
                 self._add_telegram_message_to_db(event_id, space, -1, response)
+                await self._send_delivery_receipt(event_id)
                 return True
         return False
 
@@ -339,6 +349,7 @@ class PortalMatrix(BasePortal, MautrixBasePortal, ABC):
             response = await client.send_media(self.peer, media, reply_to=reply_to,
                                                caption=caption, entities=entities)
             self._add_telegram_message_to_db(event_id, space, 0, response)
+        await self._send_delivery_receipt(event_id)
 
     def _add_telegram_message_to_db(self, event_id: EventID, space: TelegramID,
                                     edit_index: int, response: TypeMessage) -> None:
@@ -405,8 +416,8 @@ class PortalMatrix(BasePortal, MautrixBasePortal, ABC):
         else:
             self.log.trace("Unhandled Matrix event: %s", content)
 
-    async def handle_matrix_pin(self, sender: 'u.User',
-                                pinned_message: Optional[EventID]) -> None:
+    async def handle_matrix_pin(self, sender: 'u.User', pinned_message: Optional[EventID],
+                                pin_event_id: EventID) -> None:
         if self.peer_type != "chat" and self.peer_type != "channel":
             return
         try:
@@ -419,10 +430,12 @@ class PortalMatrix(BasePortal, MautrixBasePortal, ABC):
                     self.log.warning(f"Could not find pinned {pinned_message} in {self.mxid}")
                     return
                 await sender.client(UpdatePinnedMessageRequest(peer=self.peer, id=message.tgid))
+            await self._send_delivery_receipt(pin_event_id)
         except ChatNotModifiedError:
             pass
 
-    async def handle_matrix_deletion(self, deleter: 'u.User', event_id: EventID) -> None:
+    async def handle_matrix_deletion(self, deleter: 'u.User', event_id: EventID,
+                                     redaction_event_id: EventID) -> None:
         real_deleter = deleter if not await deleter.needs_relaybot(self) else self.bot
         space = self.tgid if self.peer_type == "channel" else real_deleter.tgid
         message = DBMessage.get_by_mxid(event_id, self.mxid, space)
@@ -430,6 +443,7 @@ class PortalMatrix(BasePortal, MautrixBasePortal, ABC):
             return
         if message.edit_index == 0:
             await real_deleter.client.delete_messages(self.peer, [message.tgid])
+            await self._send_delivery_receipt(redaction_event_id)
         else:
             self.log.debug(f"Ignoring deletion of edit event {message.mxid} in {message.mx_room}")
 
@@ -444,7 +458,8 @@ class PortalMatrix(BasePortal, MautrixBasePortal, ABC):
                                        pin_messages=moderator, add_admins=admin)
 
     async def handle_matrix_power_levels(self, sender: 'u.User', new_users: Dict[UserID, int],
-                                         old_users: Dict[UserID, int]) -> None:
+                                         old_users: Dict[UserID, int], event_id: Optional[EventID]
+                                         ) -> None:
         # TODO handle all power level changes and bridge exact admin rights to supergroups/channels
         for user, level in new_users.items():
             if not user or user == self.main_intent.mxid or user == sender.mxid:
@@ -460,15 +475,16 @@ class PortalMatrix(BasePortal, MautrixBasePortal, ABC):
             if user not in old_users or level != old_users[user]:
                 await self._update_telegram_power_level(sender, user_id, level)
 
-    async def handle_matrix_about(self, sender: 'u.User', about: str) -> None:
+    async def handle_matrix_about(self, sender: 'u.User', about: str, event_id: EventID) -> None:
         if self.peer_type not in ("chat", "channel"):
             return
         peer = await self.get_input_entity(sender)
         await sender.client(EditChatAboutRequest(peer=peer, about=about))
         self.about = about
         self.save()
+        await self._send_delivery_receipt(event_id)
 
-    async def handle_matrix_title(self, sender: 'u.User', title: str) -> None:
+    async def handle_matrix_title(self, sender: 'u.User', title: str, event_id: EventID) -> None:
         if self.peer_type not in ("chat", "channel"):
             return
 
@@ -480,8 +496,10 @@ class PortalMatrix(BasePortal, MautrixBasePortal, ABC):
         self.dedup.register_outgoing_actions(response)
         self.title = title
         self.save()
+        await self._send_delivery_receipt(event_id)
 
-    async def handle_matrix_avatar(self, sender: 'u.User', url: ContentURI) -> None:
+    async def handle_matrix_avatar(self, sender: 'u.User', url: ContentURI, event_id: EventID
+                                   ) -> None:
         if self.peer_type not in ("chat", "channel"):
             # Invalid peer type
             return
@@ -507,8 +525,10 @@ class PortalMatrix(BasePortal, MautrixBasePortal, ABC):
                 self.photo_id = f"{size.location.volume_id}-{size.location.local_id}"
                 self.save()
                 break
+        await self._send_delivery_receipt(event_id)
 
-    async def handle_matrix_upgrade(self, sender: UserID, new_room: RoomID) -> None:
+    async def handle_matrix_upgrade(self, sender: UserID, new_room: RoomID, event_id: EventID
+                                    ) -> None:
         _, server = self.main_intent.parse_user_id(sender)
         old_room = self.mxid
         self.migrate_and_save_matrix(new_room)
@@ -535,6 +555,7 @@ class PortalMatrix(BasePortal, MautrixBasePortal, ABC):
             return
         await self.update_matrix_room(user, entity, direct=self.peer_type == "user")
         self.log.info(f"{sender} upgraded room from {old_room} to {self.mxid}")
+        await self._send_delivery_receipt(event_id)
 
     def migrate_and_save_matrix(self, new_id: RoomID) -> None:
         try:

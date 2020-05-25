@@ -210,6 +210,9 @@ bridge:
     # Whether or not to explicitly set the avatar and room name for private
     # chat portal rooms. This will be implicitly enabled if encryption.default is true.
     private_chat_portal_meta: false
+    # Whether or not the bridge should send a read receipt from the bridge bot when a message has
+    # been sent to Telegram.
+    delivery_receipts: false
 
     # Overrides for base power levels.
     initial_power_level_overrides:

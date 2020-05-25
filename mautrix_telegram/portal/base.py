@@ -30,7 +30,8 @@ from telethon.tl.types import (Channel, ChannelFull, Chat, ChatFull, ChatInviteE
 
 from mautrix.errors import MatrixRequestError, IntentError
 from mautrix.appservice import AppService, IntentAPI
-from mautrix.types import RoomID, RoomAlias, UserID, EventType, PowerLevelStateEventContent
+from mautrix.types import (RoomID, RoomAlias, UserID, EventID, EventType,
+                           PowerLevelStateEventContent)
 from mautrix.util.simple_template import SimpleTemplate
 from mautrix.util.logging import TraceLogger
 
@@ -501,7 +502,8 @@ class BasePortal(ABC):
 
     @abstractmethod
     def handle_matrix_power_levels(self, sender: 'u.User', new_levels: Dict[UserID, int],
-                                   old_levels: Dict[UserID, int]) -> Awaitable[None]:
+                                   old_levels: Dict[UserID, int], event_id: Optional[EventID]
+                                   ) -> Awaitable[None]:
         pass
 
     @abstractmethod

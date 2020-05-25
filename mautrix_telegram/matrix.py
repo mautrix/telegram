@@ -278,7 +278,7 @@ class MatrixHandler(BaseMatrixHandler):
         if not portal:
             return
 
-        await portal.handle_matrix_deletion(sender, evt.redacts)
+        await portal.handle_matrix_deletion(sender, evt.redacts, evt.event_id)
 
     @staticmethod
     async def handle_power_levels(evt: StateEvent) -> None:
@@ -286,11 +286,12 @@ class MatrixHandler(BaseMatrixHandler):
         sender = await u.User.get_by_mxid(evt.sender).ensure_started()
         if await sender.has_full_access(allow_bot=True) and portal:
             await portal.handle_matrix_power_levels(sender, evt.content.users,
-                                                    evt.unsigned.prev_content.users)
+                                                    evt.unsigned.prev_content.users,
+                                                    evt.event_id)
 
     @staticmethod
     async def handle_room_meta(evt_type: EventType, room_id: RoomID, sender_mxid: UserID,
-                               content: RoomMetaStateEventContent) -> None:
+                               content: RoomMetaStateEventContent, event_id: EventID) -> None:
         portal = po.Portal.get_by_mxid(room_id)
         sender = await u.User.get_by_mxid(sender_mxid).ensure_started()
         if await sender.has_full_access(allow_bot=True) and portal:
@@ -301,27 +302,29 @@ class MatrixHandler(BaseMatrixHandler):
             }[evt_type]
             if not isinstance(content, content_type):
                 return
-            await handler(sender, content[content_key])
+            await handler(sender, content[content_key], event_id)
 
     @staticmethod
     async def handle_room_pin(room_id: RoomID, sender_mxid: UserID,
-                              new_events: Set[str], old_events: Set[str]) -> None:
+                              new_events: Set[str], old_events: Set[str],
+                              event_id: EventID) -> None:
         portal = po.Portal.get_by_mxid(room_id)
         sender = await u.User.get_by_mxid(sender_mxid).ensure_started()
         if await sender.has_full_access(allow_bot=True) and portal:
             events = new_events - old_events
             if len(events) > 0:
                 # New event pinned, set that as pinned in Telegram.
-                await portal.handle_matrix_pin(sender, EventID(events.pop()))
+                await portal.handle_matrix_pin(sender, EventID(events.pop()), event_id)
             elif len(new_events) == 0:
                 # All pinned events removed, remove pinned event in Telegram.
-                await portal.handle_matrix_pin(sender, None)
+                await portal.handle_matrix_pin(sender, None, event_id)
 
     @staticmethod
-    async def handle_room_upgrade(room_id: RoomID, sender: UserID, new_room_id: RoomID) -> None:
+    async def handle_room_upgrade(room_id: RoomID, sender: UserID, new_room_id: RoomID,
+                                  event_id: EventID) -> None:
         portal = po.Portal.get_by_mxid(room_id)
         if portal:
-            await portal.handle_matrix_upgrade(sender, new_room_id)
+            await portal.handle_matrix_upgrade(sender, new_room_id, event_id)
 
     async def handle_member_info_change(self, room_id: RoomID, user_id: UserID,
                                         profile: MemberStateEventContent,
@@ -409,16 +412,19 @@ class MatrixHandler(BaseMatrixHandler):
         if evt.type == EventType.ROOM_POWER_LEVELS:
             await self.handle_power_levels(evt)
         elif evt.type in (EventType.ROOM_NAME, EventType.ROOM_AVATAR, EventType.ROOM_TOPIC):
-            await self.handle_room_meta(evt.type, evt.room_id, evt.sender, evt.content)
+            await self.handle_room_meta(evt.type, evt.room_id, evt.sender, evt.content,
+                                        evt.event_id)
         elif evt.type == EventType.ROOM_PINNED_EVENTS:
             new_events = set(evt.content.pinned)
             try:
                 old_events = set(evt.unsigned.prev_content.pinned)
             except (KeyError, ValueError, TypeError, AttributeError):
                 old_events = set()
-            await self.handle_room_pin(evt.room_id, evt.sender, new_events, old_events)
+            await self.handle_room_pin(evt.room_id, evt.sender, new_events, old_events,
+                                       evt.event_id)
         elif evt.type == EventType.ROOM_TOMBSTONE:
-            await self.handle_room_upgrade(evt.room_id, evt.sender, evt.content.replacement_room)
+            await self.handle_room_upgrade(evt.room_id, evt.sender, evt.content.replacement_room,
+                                           evt.event_id)
         elif evt.type == EventType.ROOM_ENCRYPTION:
             portal = po.Portal.get_by_mxid(evt.room_id)
             if portal:

@@ -155,7 +155,7 @@ class PortalMetadata(BasePortal, ABC):
         if levels.get_user_level(self.main_intent.mxid) == 100:
             levels = self._get_base_power_levels(levels, entity)
             await self.main_intent.set_power_levels(self.mxid, levels)
-        await self.handle_matrix_power_levels(source, levels.users, {})
+        await self.handle_matrix_power_levels(source, levels.users, {}, None)
 
     async def invite_telegram(self, source: 'u.User',
                               puppet: Union[p.Puppet, 'AbstractUser']) -> None:

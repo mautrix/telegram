@@ -45,26 +45,22 @@ class Config(BaseBridgeConfig):
         ]
 
     def do_update(self, helper: ConfigUpdateHelper) -> None:
+        super().do_update(helper)
         copy, copy_dict, base = helper
-
-        copy("homeserver.address")
-        copy("homeserver.domain")
-        copy("homeserver.verify_ssl")
 
         if "appservice.protocol" in self and "appservice.address" not in self:
             protocol, hostname, port = (self["appservice.protocol"], self["appservice.hostname"],
                                         self["appservice.port"])
             base["appservice.address"] = f"{protocol}://{hostname}:{port}"
-        else:
-            copy("appservice.address")
+        if "appservice.debug" in self and "logging" not in self:
+            level = "DEBUG" if self["appservice.debug"] else "INFO"
+            base["logging.root.level"] = level
+            base["logging.loggers.mau.level"] = level
+            base["logging.loggers.telethon.level"] = level
 
+        # TODO move these to mautrix-python
         copy("appservice.tls_cert")
         copy("appservice.tls_key")
-        copy("appservice.hostname")
-        copy("appservice.port")
-        copy("appservice.max_body_size")
-
-        copy("appservice.database")
 
         copy("appservice.public.enabled")
         copy("appservice.public.prefix")
@@ -76,15 +72,7 @@ class Config(BaseBridgeConfig):
         if base["appservice.provisioning.shared_secret"] == "generate":
             base["appservice.provisioning.shared_secret"] = self._new_token()
 
-        copy("appservice.id")
-        copy("appservice.bot_username")
-        copy("appservice.bot_displayname")
-        copy("appservice.bot_avatar")
-
         copy("appservice.community_id")
-
-        copy("appservice.as_token")
-        copy("appservice.hs_token")
 
         copy("metrics.enabled")
         copy("metrics.listen_port")
@@ -124,6 +112,7 @@ class Config(BaseBridgeConfig):
         copy("bridge.encryption.allow")
         copy("bridge.encryption.default")
         copy("bridge.private_chat_portal_meta")
+        copy("bridge.delivery_receipts")
 
         copy("bridge.initial_power_level_overrides.group")
         copy("bridge.initial_power_level_overrides.user")
@@ -207,14 +196,6 @@ class Config(BaseBridgeConfig):
         copy("telegram.proxy.rdns")
         copy("telegram.proxy.username")
         copy("telegram.proxy.password")
-
-        if "appservice.debug" in self and "logging" not in self:
-            level = "DEBUG" if self["appservice.debug"] else "INFO"
-            base["logging.root.level"] = level
-            base["logging.loggers.mau.level"] = level
-            base["logging.loggers.telethon.level"] = level
-        else:
-            copy("logging")
 
     def _get_permissions(self, key: str) -> Permissions:
         level = self["bridge.permissions"].get(key, "")
