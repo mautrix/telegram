@@ -30,8 +30,9 @@ from telethon.tl.types import (
 
 from mautrix.errors import MForbidden
 from mautrix.types import (RoomID, UserID, RoomCreatePreset, EventType, Membership, Member,
-                           PowerLevelStateEventContent)
-from mautrix.appservice import IntentAPI
+                           PowerLevelStateEventContent, RoomTopicStateEventContent,
+                           RoomNameStateEventContent, RoomAvatarStateEventContent,
+                           StateEventContent)
 
 from ..types import TelegramID
 from ..context import Context
@@ -638,15 +639,18 @@ class PortalMetadata(BasePortal, ABC):
             self.save()
         return True
 
-    async def _try_use_intent(self, sender: Optional['p.Puppet'],
-                              action: Callable[[IntentAPI], Awaitable[None]]) -> None:
+    async def _try_set_state(self, sender: Optional['p.Puppet'], evt_type: EventType,
+                             content: StateEventContent) -> None:
         if sender:
             try:
-                await action(sender.intent_for(self))
+                intent = sender.intent_for(self)
+                if sender.is_real_user:
+                    content[self.az.real_user_content_key] = True
+                await intent.send_state_event(self.mxid, evt_type, content)
             except MForbidden:
-                await action(self.main_intent)
+                await self.main_intent.send_state_event(self.mxid, evt_type, content)
         else:
-            await action(self.main_intent)
+            await self.main_intent.send_state_event(self.mxid, evt_type, content)
 
     async def _update_about(self, about: str, sender: Optional['p.Puppet'] = None,
                             save: bool = False) -> bool:
@@ -654,8 +658,8 @@ class PortalMetadata(BasePortal, ABC):
             return False
 
         self.about = about
-        await self._try_use_intent(sender,
-                                   lambda intent: intent.set_room_topic(self.mxid, self.about))
+        await self._try_set_state(sender, EventType.ROOM_TOPIC,
+                                  RoomTopicStateEventContent(topic=self.about))
         if save:
             self.save()
         return True
@@ -666,8 +670,8 @@ class PortalMetadata(BasePortal, ABC):
             return False
 
         self.title = title
-        await self._try_use_intent(sender,
-                                   lambda intent: intent.set_room_name(self.mxid, self.title))
+        await self._try_set_state(sender, EventType.ROOM_NAME,
+                                  RoomNameStateEventContent(name=self.title))
         if save:
             self.save()
         return True
@@ -693,16 +697,16 @@ class PortalMetadata(BasePortal, ABC):
             raise ValueError(f"Unknown photo type {type(photo)}")
         if self.photo_id != photo_id:
             if not photo_id:
-                await self._try_use_intent(sender,
-                                           lambda intent: intent.set_room_avatar(self.mxid, None))
+                await self._try_set_state(sender, EventType.ROOM_AVATAR,
+                                          RoomAvatarStateEventContent(url=None))
                 self.photo_id = ""
                 if save:
                     self.save()
                 return True
             file = await util.transfer_file_to_matrix(user.client, self.main_intent, loc)
             if file:
-                await self._try_use_intent(sender, lambda intent: intent.set_room_avatar(self.mxid,
-                                                                                         file.mxc))
+                await self._try_set_state(sender, EventType.ROOM_AVATAR,
+                                          RoomAvatarStateEventContent(url=file.mxc))
                 self.photo_id = photo_id
                 if save:
                     self.save()

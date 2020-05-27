@@ -371,11 +371,6 @@ class PortalMatrix(BasePortal, MautrixBasePortal, ABC):
             self.log.debug(f"Ignoring message {event_id} in {self.mxid} without body or msgtype")
             return
 
-        puppet = p.Puppet.get_by_custom_mxid(sender.mxid)
-        if puppet and content.get("net.maunium.telegram.puppet", False):
-            self.log.debug("Ignoring puppet-sent message by confirmed puppet user %s", sender.mxid)
-            return
-
         logged_in = not await sender.needs_relaybot(self)
         client = sender.client if logged_in else self.bot.client
         sender_id = sender.tgid if logged_in else self.bot.tgid
