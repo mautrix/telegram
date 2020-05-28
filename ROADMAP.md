@@ -29,6 +29,9 @@
   * [x] Message deletions
   * [x] Message edits
   * [ ] Message history
+    * [x] Manually (`!tg backfill`)
+    * [ ] Automatically when creating portal
+    * [ ] Automatically for missed messages
   * [x] Avatars
   * [x] Presence
   * [x] Typing notifications
