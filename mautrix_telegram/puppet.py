@@ -1,5 +1,5 @@
 # mautrix-telegram - A Matrix-Telegram puppeting bridge
-# Copyright (C) 2019 Tulir Asokan
+# Copyright (C) 2020 Tulir Asokan
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as published by
@@ -299,6 +299,8 @@ class Puppet(CustomPuppetMixin):
             photo_id = str(photo.photo_id)
         else:
             self.log.warning(f"Unknown user profile photo type: {type(photo)}")
+            return False
+        if not photo_id and not config["bridge.allow_avatar_remove"]:
             return False
         if self.photo_id != photo_id:
             if not photo_id:

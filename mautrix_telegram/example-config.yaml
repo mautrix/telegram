@@ -121,6 +121,10 @@ bridge:
     - phone number
     # Maximum length of displayname
     displayname_max_length: 100
+    # Remove avatars from Telegram ghost users when removed on Telegram. This is disabled by default
+    # as there's no way to determine whether an avatar is removed or just hidden from some users. If
+    # you're on a single-user instance, this should be safe to enable.
+    allow_avatar_remove: false
 
     # Maximum number of members to sync per portal when starting up. Other members will be
     # synced when they send messages. The maximum is 10000, after which the Telegram server
