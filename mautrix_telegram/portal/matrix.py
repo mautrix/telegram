@@ -1,5 +1,5 @@
 # mautrix-telegram - A Matrix-Telegram puppeting bridge
-# Copyright (C) 2019 Tulir Asokan
+# Copyright (C) 2020 Tulir Asokan
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as published by
@@ -25,7 +25,8 @@ from telethon.tl.functions.messages import (EditChatPhotoRequest, EditChatTitleR
                                             EditChatAboutRequest)
 from telethon.tl.functions.channels import EditPhotoRequest, EditTitleRequest, JoinChannelRequest
 from telethon.errors import (ChatNotModifiedError, PhotoExtInvalidError,
-                             PhotoInvalidDimensionsError, PhotoSaveFileInvalidError)
+                             PhotoInvalidDimensionsError, PhotoSaveFileInvalidError,
+                             RPCError)
 from telethon.tl.patched import Message, MessageService
 from telethon.tl.types import (
     DocumentAttributeFilename, DocumentAttributeImageSize, GeoPoint,
@@ -365,8 +366,22 @@ class PortalMatrix(BasePortal, MautrixBasePortal, ABC):
             mxid=event_id,
             edit_index=edit_index).insert()
 
+    async def _send_bridge_error(self, msg: str) -> None:
+        if config["bridge.delivery_error_reports"]:
+            await self._send_message(self.main_intent,
+                                     TextMessageEventContent(msgtype=MessageType.NOTICE, body=msg))
+
     async def handle_matrix_message(self, sender: 'u.User', content: MessageEventContent,
                                     event_id: EventID) -> None:
+        try:
+            await self._handle_matrix_message(sender, content, event_id)
+        except RPCError as e:
+            if config["bridge.delivery_error_reports"]:
+                await self._send_bridge_error(f"\u26a0 Your message may not have been bridged: {e}")
+            raise
+
+    async def _handle_matrix_message(self, sender: 'u.User', content: MessageEventContent,
+                                     event_id: EventID) -> None:
         if not content.body or not content.msgtype:
             self.log.debug(f"Ignoring message {event_id} in {self.mxid} without body or msgtype")
             return

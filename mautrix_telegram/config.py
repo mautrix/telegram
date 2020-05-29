@@ -110,6 +110,7 @@ class Config(BaseBridgeConfig):
         copy("bridge.encryption.default")
         copy("bridge.private_chat_portal_meta")
         copy("bridge.delivery_receipts")
+        copy("bridge.delivery_error_reports")
 
         copy("bridge.initial_power_level_overrides.group")
         copy("bridge.initial_power_level_overrides.user")

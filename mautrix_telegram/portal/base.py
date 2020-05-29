@@ -1,5 +1,5 @@
 # mautrix-telegram - A Matrix-Telegram puppeting bridge
-# Copyright (C) 2019 Tulir Asokan
+# Copyright (C) 2020 Tulir Asokan
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as published by
@@ -30,7 +30,7 @@ from telethon.tl.types import (Channel, ChannelFull, Chat, ChatFull, ChatInviteE
 
 from mautrix.errors import MatrixRequestError, IntentError
 from mautrix.appservice import AppService, IntentAPI
-from mautrix.types import (RoomID, RoomAlias, UserID, EventID, EventType,
+from mautrix.types import (RoomID, RoomAlias, UserID, EventID, EventType, MessageEventContent,
                            PowerLevelStateEventContent)
 from mautrix.util.simple_template import SimpleTemplate
 from mautrix.util.logging import TraceLogger
@@ -136,7 +136,7 @@ class BasePortal(ABC):
         if mxid:
             self.by_mxid[mxid] = self
 
-    # region Propegrties
+    # region Properties
 
     @property
     def tgid_full(self) -> Tuple[TelegramID, TelegramID]:
@@ -461,6 +461,15 @@ class BasePortal(ABC):
                                type_name if create else None)
 
     # endregion
+
+    async def _send_message(self, intent: IntentAPI, content: MessageEventContent,
+                            event_type: EventType = EventType.ROOM_MESSAGE, **kwargs) -> EventID:
+        if self.encrypted and self.matrix.e2ee:
+            if intent.api.is_real_user:
+                content[intent.api.real_user_content_key] = True
+            event_type, content = await self.matrix.e2ee.encrypt(self.mxid, event_type, content)
+        return await intent.send_message_event(self.mxid, event_type, content, **kwargs)
+
     # region Abstract methods (cross-called in matrix/metadata/telegram classes)
 
     @abstractmethod

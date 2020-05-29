@@ -1,5 +1,5 @@
 # mautrix-telegram - A Matrix-Telegram puppeting bridge
-# Copyright (C) 2019 Tulir Asokan
+# Copyright (C) 2020 Tulir Asokan
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as published by
@@ -70,14 +70,6 @@ class PortalTelegram(BasePortal, ABC):
         elif self.peer_type != "user":
             return f"https://t.me/c/{self.tgid}/{evt.id}"
         return None
-
-    async def _send_message(self, intent: IntentAPI, content: MessageEventContent,
-                            event_type: EventType = EventType.ROOM_MESSAGE, **kwargs) -> EventID:
-        if self.encrypted and self.matrix.e2ee:
-            if intent.api.is_real_user:
-                content[intent.api.real_user_content_key] = True
-            event_type, content = await self.matrix.e2ee.encrypt(self.mxid, event_type, content)
-        return await intent.send_message_event(self.mxid, event_type, content, **kwargs)
 
     async def handle_telegram_photo(self, source: 'AbstractUser', intent: IntentAPI, evt: Message,
                                     relates_to: RelatesTo = None) -> Optional[EventID]:

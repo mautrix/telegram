@@ -217,6 +217,8 @@ bridge:
     # Whether or not the bridge should send a read receipt from the bridge bot when a message has
     # been sent to Telegram.
     delivery_receipts: false
+    # Whether or not delivery errors should be reported as messages in the Matrix room.
+    delivery_error_reports: false
 
     # Overrides for base power levels.
     initial_power_level_overrides:
