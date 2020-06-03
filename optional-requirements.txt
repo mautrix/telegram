@@ -14,10 +14,10 @@ pillow>=4.3,<8
 moviepy>=1,<2
 
 #/metrics
-prometheus_client>=0.6,<0.8
+prometheus_client>=0.6,<0.9
 
 #/postgres
 psycopg2-binary>=2,<3
 
 #/e2be
-matrix-nio[e2e]>=0.9,<0.11
+matrix-nio[e2e]>=0.9,<0.13
