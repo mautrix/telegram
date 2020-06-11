@@ -531,6 +531,7 @@ class PortalTelegram(BasePortal, ABC):
                                "dedup cache queue. You can try enabling bridge.deduplication."
                                "pre_db_check in the config.")
             await intent.redact(self.mxid, event_id)
+        await self._send_delivery_receipt(event_id)
 
     async def _create_room_on_action(self, source: 'AbstractUser',
                                      action: TypeMessageAction) -> bool:

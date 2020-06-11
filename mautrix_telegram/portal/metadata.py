@@ -32,7 +32,7 @@ from mautrix.errors import MForbidden
 from mautrix.types import (RoomID, UserID, RoomCreatePreset, EventType, Membership, Member,
                            PowerLevelStateEventContent, RoomTopicStateEventContent,
                            RoomNameStateEventContent, RoomAvatarStateEventContent,
-                           StateEventContent)
+                           StateEventContent, EventID)
 
 from ..types import TelegramID
 from ..context import Context
@@ -761,6 +761,13 @@ class PortalMetadata(BasePortal, ABC):
         return [], []
 
     # endregion
+
+    async def _send_delivery_receipt(self, event_id: EventID) -> None:
+        if event_id and config["bridge.delivery_receipts"]:
+            try:
+                await self.az.intent.mark_read(self.mxid, event_id)
+            except Exception:
+                self.log.exception("Failed to send delivery receipt for %s", event_id)
 
 
 def init(context: Context) -> None:

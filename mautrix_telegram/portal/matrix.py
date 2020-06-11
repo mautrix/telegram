@@ -229,13 +229,6 @@ class PortalMatrix(BasePortal, MautrixBasePortal, ABC):
             message, entities = None, None
         return message, entities
 
-    async def _send_delivery_receipt(self, event_id: EventID) -> None:
-        if event_id and config["bridge.delivery_receipts"]:
-            try:
-                await self.az.intent.mark_read(self.mxid, event_id)
-            except Exception:
-                self.log.exception("Failed to send delivery receipt for %s", event_id)
-
     async def _handle_matrix_text(self, sender_id: TelegramID, event_id: EventID,
                                   space: TelegramID, client: 'MautrixTelegramClient',
                                   content: TextMessageEventContent, reply_to: TelegramID) -> None:

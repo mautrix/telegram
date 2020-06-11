@@ -519,6 +519,10 @@ class BasePortal(ABC):
     def backfill(self, source: 'AbstractUser') -> Awaitable[None]:
         pass
 
+    @abstractmethod
+    async def _send_delivery_receipt(self, event_id: EventID) -> None:
+        pass
+
     # endregion
 
 
