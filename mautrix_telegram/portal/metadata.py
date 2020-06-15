@@ -263,13 +263,14 @@ class PortalMetadata(BasePortal, ABC):
 
     @property
     def bridge_info(self) -> Dict[str, Any]:
-        return {
+        info = {
             "bridgebot": self.az.bot_mxid,
             "creator": self.main_intent.mxid,
             "protocol": {
                 "id": "telegram",
                 "displayname": "Telegram",
                 "avatar_url": config["appservice.bot_avatar"],
+                "external_url": "https://telegram.org",
             },
             "channel": {
                 "id": str(self.tgid),
@@ -277,6 +278,13 @@ class PortalMetadata(BasePortal, ABC):
                 "avatar_url": self.avatar_url,
             }
         }
+        if self.username:
+            info["channel"]["external_url"] = f"https://t.me/{self.username}"
+        elif self.peer_type == "user":
+            puppet = p.Puppet.get(self.tgid)
+            if puppet and puppet.username:
+                info["channel"]["external_url"] = f"https://t.me/{puppet.username}"
+        return info
 
     async def _update_bridge_info(self) -> None:
         try:
