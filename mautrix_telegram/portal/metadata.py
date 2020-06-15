@@ -229,7 +229,7 @@ class PortalMetadata(BasePortal, ABC):
                 changed = await self._update_avatar(user, entity.photo) or changed
                 if changed:
                     self.save()
-                    await self._update_bridge_info()
+                    await self.update_bridge_info()
         if self.sync_matrix_state:
             await self.sync_matrix_members()
 
@@ -286,7 +286,7 @@ class PortalMetadata(BasePortal, ABC):
                 info["channel"]["external_url"] = f"https://t.me/{puppet.username}"
         return info
 
-    async def _update_bridge_info(self) -> None:
+    async def update_bridge_info(self) -> None:
         try:
             self.log.debug("Updating bridge info...")
             await self.main_intent.send_state_event(self.mxid, StateBridge,
@@ -664,7 +664,7 @@ class PortalMetadata(BasePortal, ABC):
 
         if changed:
             self.save()
-            await self._update_bridge_info()
+            await self.update_bridge_info()
 
     async def _update_username(self, username: str, save: bool = False) -> bool:
         if self.username == username:

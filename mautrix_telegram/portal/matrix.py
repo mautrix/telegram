@@ -500,7 +500,7 @@ class PortalMatrix(BasePortal, MautrixBasePortal, ABC):
         self.title = title
         self.save()
         await self._send_delivery_receipt(event_id)
-        await self._update_bridge_info()
+        await self.update_bridge_info()
 
     async def handle_matrix_avatar(self, sender: 'u.User', url: ContentURI, event_id: EventID
                                    ) -> None:
@@ -533,7 +533,7 @@ class PortalMatrix(BasePortal, MautrixBasePortal, ABC):
                 self.save()
                 break
         await self._send_delivery_receipt(event_id)
-        await self._update_bridge_info()
+        await self.update_bridge_info()
 
     async def handle_matrix_upgrade(self, sender: UserID, new_room: RoomID, event_id: EventID
                                     ) -> None:

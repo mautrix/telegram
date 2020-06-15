@@ -13,7 +13,7 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import Optional
+from typing import Optional, Iterable
 
 from sqlalchemy import Column, Integer, String, Boolean, Text, func, sql
 
@@ -56,3 +56,7 @@ class Portal(Base):
     @classmethod
     def get_by_username(cls, username: str) -> Optional['Portal']:
         return cls._select_one_or_none(func.lower(cls.c.username) == username)
+
+    @classmethod
+    def all(cls) -> Iterable['Portal']:
+        yield from cls._select_all()

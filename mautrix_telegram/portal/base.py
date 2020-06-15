@@ -13,7 +13,7 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import Awaitable, Dict, List, Optional, Tuple, Union, Any, Set, TYPE_CHECKING
+from typing import Awaitable, Dict, List, Optional, Tuple, Union, Any, Set, Iterable, TYPE_CHECKING
 from abc import ABC, abstractmethod
 import asyncio
 import logging
@@ -373,6 +373,14 @@ class BasePortal(ABC):
     # region Class instance lookup
 
     @classmethod
+    def all(cls) -> Iterable['Portal']:
+        for db_portal in DBPortal.all():
+            try:
+                yield cls.by_tgid[(db_portal.tgid, db_portal.tg_receiver)]
+            except KeyError:
+                yield cls.from_db(db_portal)
+
+    @classmethod
     def get_by_mxid(cls, mxid: RoomID) -> Optional['Portal']:
         try:
             return cls.by_mxid[mxid]
@@ -515,7 +523,7 @@ class BasePortal(ABC):
         pass
 
     @abstractmethod
-    async def _update_bridge_info(self) -> None:
+    async def update_bridge_info(self) -> None:
         pass
 
     @abstractmethod

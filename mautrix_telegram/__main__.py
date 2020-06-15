@@ -31,7 +31,7 @@ from .context import Context
 from .db import init as init_db
 from .formatter import init as init_formatter
 from .matrix import MatrixHandler
-from .portal import init as init_portal
+from .portal import Portal, init as init_portal
 from .puppet import Puppet, init as init_puppet
 from .sqlstatestore import SQLStateStore
 from .user import User, init as init_user
@@ -97,10 +97,20 @@ class TelegramBridge(Bridge):
         init_abstract_user(context)
         init_formatter(context)
         init_portal(context)
-        puppet_startup = init_puppet(context)
-        user_startup = init_user(context)
-        bot_startup = [self.bot.start()] if self.bot else []
-        self.startup_actions = chain(puppet_startup, user_startup, bot_startup)
+        self.add_startup_actions(init_puppet(context))
+        self.add_startup_actions(init_user(context))
+        if self.bot:
+            self.add_startup_actions(self.bot.start())
+        if self.config["bridge.resend_bridge_info"]:
+            self.add_startup_actions(self.resend_bridge_info())
+
+    async def resend_bridge_info(self) -> None:
+        self.config["bridge.resend_bridge_info"] = False
+        self.config.save()
+        self.log.info("Re-sending bridge info state event to all portals")
+        for portal in Portal.all():
+            await portal.update_bridge_info()
+        self.log.info("Finished re-sending bridge info state events")
 
     def prepare_stop(self) -> None:
         for puppet in Puppet.by_custom_mxid.values():
