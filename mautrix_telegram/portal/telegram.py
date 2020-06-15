@@ -555,10 +555,13 @@ class PortalTelegram(BasePortal, ABC):
             return
         if isinstance(action, MessageActionChatEditTitle):
             await self._update_title(action.title, sender=sender, save=True)
+            await self._update_bridge_info()
         elif isinstance(action, MessageActionChatEditPhoto):
             await self._update_avatar(source, action.photo, sender=sender, save=True)
+            await self._update_bridge_info()
         elif isinstance(action, MessageActionChatDeletePhoto):
             await self._update_avatar(source, ChatPhotoEmpty(), sender=sender, save=True)
+            await self._update_bridge_info()
         elif isinstance(action, MessageActionChatAddUser):
             for user_id in action.users:
                 await self._add_telegram_user(TelegramID(user_id), source)
@@ -572,6 +575,7 @@ class PortalTelegram(BasePortal, ABC):
             # TODO encrypt
             await sender.intent_for(self).send_emote(self.mxid,
                                                      "upgraded this group to a supergroup.")
+            await self._update_bridge_info()
         elif isinstance(action, MessageActionGameScore):
             # TODO handle game score
             pass

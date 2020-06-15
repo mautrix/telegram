@@ -31,7 +31,7 @@ from telethon.tl.types import (Channel, ChannelFull, Chat, ChatFull, ChatInviteE
 from mautrix.errors import MatrixRequestError, IntentError
 from mautrix.appservice import AppService, IntentAPI
 from mautrix.types import (RoomID, RoomAlias, UserID, EventID, EventType, MessageEventContent,
-                           PowerLevelStateEventContent)
+                           PowerLevelStateEventContent, ContentURI)
 from mautrix.util.simple_template import SimpleTemplate
 from mautrix.util.logging import TraceLogger
 
@@ -90,6 +90,7 @@ class BasePortal(ABC):
     about: Optional[str]
     photo_id: Optional[str]
     local_config: Dict[str, Any]
+    avatar_url: Optional[ContentURI]
     encrypted: bool
     deleted: bool
     backfilling: bool
@@ -108,8 +109,8 @@ class BasePortal(ABC):
                  mxid: Optional[RoomID] = None, username: Optional[str] = None,
                  megagroup: Optional[bool] = False, title: Optional[str] = None,
                  about: Optional[str] = None, photo_id: Optional[str] = None,
-                 local_config: Optional[str] = None, encrypted: Optional[bool] = False,
-                 db_instance: DBPortal = None) -> None:
+                 local_config: Optional[str] = None, avatar_url: Optional[ContentURI] = None,
+                 encrypted: Optional[bool] = False, db_instance: DBPortal = None) -> None:
         self.mxid = mxid
         self.tgid = tgid
         self.tg_receiver = tg_receiver or tgid
@@ -120,6 +121,7 @@ class BasePortal(ABC):
         self.about = about
         self.photo_id = photo_id
         self.local_config = json.loads(local_config or "{}")
+        self.avatar_url = avatar_url
         self.encrypted = encrypted
         self._db_instance = db_instance
         self._main_intent = None
@@ -335,12 +337,14 @@ class BasePortal(ABC):
         return DBPortal(tgid=self.tgid, tg_receiver=self.tg_receiver, peer_type=self.peer_type,
                         mxid=self.mxid, username=self.username, megagroup=self.megagroup,
                         title=self.title, about=self.about, photo_id=self.photo_id,
-                        config=json.dumps(self.local_config), encrypted=self.encrypted)
+                        config=json.dumps(self.local_config), avatar_url=self.avatar_url,
+                        encrypted=self.encrypted)
 
     def save(self) -> None:
         self.db_instance.edit(mxid=self.mxid, username=self.username, title=self.title,
                               about=self.about, photo_id=self.photo_id, megagroup=self.megagroup,
-                              config=json.dumps(self.local_config), encrypted=self.encrypted)
+                              config=json.dumps(self.local_config), avatar_url=self.avatar_url,
+                              encrypted=self.encrypted)
 
     def delete(self) -> None:
         try:
@@ -362,7 +366,8 @@ class BasePortal(ABC):
                    peer_type=db_portal.peer_type, mxid=db_portal.mxid, username=db_portal.username,
                    megagroup=db_portal.megagroup, title=db_portal.title, about=db_portal.about,
                    photo_id=db_portal.photo_id, local_config=db_portal.config,
-                   encrypted=db_portal.encrypted, db_instance=db_portal)
+                   avatar_url=db_portal.avatar_url, encrypted=db_portal.encrypted,
+                   db_instance=db_portal)
 
     # endregion
     # region Class instance lookup
@@ -510,6 +515,10 @@ class BasePortal(ABC):
         pass
 
     @abstractmethod
+    async def _update_bridge_info(self) -> None:
+        pass
+
+    @abstractmethod
     def handle_matrix_power_levels(self, sender: 'u.User', new_levels: Dict[UserID, int],
                                    old_levels: Dict[UserID, int], event_id: Optional[EventID]
                                    ) -> Awaitable[None]:
@@ -520,7 +529,8 @@ class BasePortal(ABC):
         pass
 
     @abstractmethod
-    async def _send_delivery_receipt(self, event_id: EventID) -> None:
+    async def _send_delivery_receipt(self, event_id: EventID, room_id: Optional[RoomID] = None
+                                     ) -> None:
         pass
 
     # endregion

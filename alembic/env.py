@@ -21,7 +21,6 @@ mxtg_config = Config(mxtg_config_path, None, None)
 mxtg_config.load()
 config.set_main_option("sqlalchemy.url", mxtg_config["appservice.database"].replace("%", "%%"))
 
-
 AlchemySessionContainer.create_table_classes(None, "telethon_", Base)
 
 # Interpret the config file for Python logging.
@@ -55,7 +54,8 @@ def run_migrations_offline():
     """
     url = config.get_main_option("sqlalchemy.url")
     context.configure(
-        url=url, target_metadata=target_metadata, literal_binds=True)
+        url=url, target_metadata=target_metadata, literal_binds=True,
+        render_as_batch=True)
 
     with context.begin_transaction():
         context.run_migrations()
@@ -76,7 +76,8 @@ def run_migrations_online():
     with connectable.connect() as connection:
         context.configure(
             connection=connection,
-            target_metadata=target_metadata
+            target_metadata=target_metadata,
+            render_as_batch=True
         )
 
         with context.begin_transaction():

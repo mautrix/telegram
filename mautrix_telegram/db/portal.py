@@ -17,7 +17,7 @@ from typing import Optional
 
 from sqlalchemy import Column, Integer, String, Boolean, Text, func, sql
 
-from mautrix.types import RoomID
+from mautrix.types import RoomID, ContentURI
 from mautrix.util.db import Base
 
 from ..types import TelegramID
@@ -33,7 +33,8 @@ class Portal(Base):
     megagroup: bool = Column(Boolean)
 
     # Matrix portal information
-    mxid: RoomID = Column(String, unique=True, nullable=True)
+    mxid: Optional[RoomID] = Column(String, unique=True, nullable=True)
+    avatar_url: Optional[ContentURI] = Column(String, nullable=True)
     encrypted: bool = Column(Boolean, nullable=False, server_default=sql.expression.false())
 
     config: str = Column(Text, nullable=True)

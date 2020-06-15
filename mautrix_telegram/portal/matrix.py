@@ -500,13 +500,17 @@ class PortalMatrix(BasePortal, MautrixBasePortal, ABC):
         self.title = title
         self.save()
         await self._send_delivery_receipt(event_id)
+        await self._update_bridge_info()
 
     async def handle_matrix_avatar(self, sender: 'u.User', url: ContentURI, event_id: EventID
                                    ) -> None:
         if self.peer_type not in ("chat", "channel"):
             # Invalid peer type
             return
+        elif self.avatar_url == url:
+            return
 
+        self.avatar_url = url
         file = await self.main_intent.download_media(url)
         mime = magic.from_buffer(file, mime=True)
         ext = sane_mimetypes.guess_extension(mime)
@@ -529,6 +533,7 @@ class PortalMatrix(BasePortal, MautrixBasePortal, ABC):
                 self.save()
                 break
         await self._send_delivery_receipt(event_id)
+        await self._update_bridge_info()
 
     async def handle_matrix_upgrade(self, sender: UserID, new_room: RoomID, event_id: EventID
                                     ) -> None:
@@ -558,7 +563,7 @@ class PortalMatrix(BasePortal, MautrixBasePortal, ABC):
             return
         await self.update_matrix_room(user, entity, direct=self.peer_type == "user")
         self.log.info(f"{sender} upgraded room from {old_room} to {self.mxid}")
-        await self._send_delivery_receipt(event_id)
+        await self._send_delivery_receipt(event_id, room_id=old_room)
 
     def migrate_and_save_matrix(self, new_id: RoomID) -> None:
         try:

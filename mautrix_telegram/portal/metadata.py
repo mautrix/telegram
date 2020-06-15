@@ -13,7 +13,7 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import List, Optional, Tuple, Union, Callable, Awaitable, TYPE_CHECKING
+from typing import List, Optional, Tuple, Union, Dict, Any, TYPE_CHECKING
 from abc import ABC
 import asyncio
 
@@ -44,6 +44,9 @@ if TYPE_CHECKING:
     from ..config import Config
 
 config: Optional['Config'] = None
+
+StateBridge = EventType.find("m.bridge", EventType.Class.STATE)
+StateHalfShotBridge = EventType.find("uk.half-shot.bridge", EventType.Class.STATE)
 
 
 class PortalMetadata(BasePortal, ABC):
@@ -226,6 +229,7 @@ class PortalMetadata(BasePortal, ABC):
                 changed = await self._update_avatar(user, entity.photo) or changed
                 if changed:
                     self.save()
+                    await self._update_bridge_info()
         if self.sync_matrix_state:
             await self.sync_matrix_members()
 
@@ -252,6 +256,38 @@ class PortalMetadata(BasePortal, ABC):
                 return await self._create_matrix_room(user, entity, invites)
             except Exception:
                 self.log.exception("Fatal error creating Matrix room")
+
+    @property
+    def bridge_info_state_key(self) -> str:
+        return f"net.maunium.telegram://telegram/{self.tgid}"
+
+    @property
+    def bridge_info(self) -> Dict[str, Any]:
+        return {
+            "bridgebot": self.az.bot_mxid,
+            "creator": self.main_intent.mxid,
+            "protocol": {
+                "id": "telegram",
+                "displayname": "Telegram",
+                "avatar_url": config["appservice.bot_avatar"],
+            },
+            "channel": {
+                "id": str(self.tgid),
+                "displayname": self.title,
+                "avatar_url": self.avatar_url,
+            }
+        }
+
+    async def _update_bridge_info(self) -> None:
+        try:
+            self.log.debug("Updating bridge info...")
+            await self.main_intent.send_state_event(self.mxid, StateBridge,
+                                                    self.bridge_info, self.bridge_info_state_key)
+            # TODO remove this once https://github.com/matrix-org/matrix-doc/pull/2346 is in spec
+            await self.main_intent.send_state_event(self.mxid, StateHalfShotBridge,
+                                                    self.bridge_info, self.bridge_info_state_key)
+        except Exception:
+            self.log.warning("Failed to update bridge info", exc_info=True)
 
     async def _create_matrix_room(self, user: 'AbstractUser', entity: Union[TypeChat, User],
                                   invites: InviteList) -> Optional[RoomID]:
@@ -333,14 +369,14 @@ class PortalMetadata(BasePortal, ABC):
             "type": EventType.ROOM_POWER_LEVELS.serialize(),
             "content": power_levels.serialize(),
         }, {
-            "type": "m.bridge",
-            "state_key": f"net.maunium.telegram://telegram/{self.tgid}",
-            "content": bridge_info
+            "type": str(StateBridge),
+            "state_key": self.bridge_info_state_key,
+            "content": self.bridge_info,
         }, {
             # TODO remove this once https://github.com/matrix-org/matrix-doc/pull/2346 is in spec
-            "type": "uk.half-shot.bridge",
-            "state_key": f"net.maunium.telegram://telegram/{self.tgid}",
-            "content": bridge_info
+            "type": str(StateHalfShotBridge),
+            "state_key": self.bridge_info_state_key,
+            "content": self.bridge_info,
         }]
         if config["bridge.encryption.default"] and self.matrix.e2ee:
             self.encrypted = True
@@ -620,6 +656,7 @@ class PortalMetadata(BasePortal, ABC):
 
         if changed:
             self.save()
+            await self._update_bridge_info()
 
     async def _update_username(self, username: str, save: bool = False) -> bool:
         if self.username == username:
@@ -702,6 +739,7 @@ class PortalMetadata(BasePortal, ABC):
                 await self._try_set_state(sender, EventType.ROOM_AVATAR,
                                           RoomAvatarStateEventContent(url=None))
                 self.photo_id = ""
+                self.avatar_url = None
                 if save:
                     self.save()
                 return True
@@ -710,6 +748,7 @@ class PortalMetadata(BasePortal, ABC):
                 await self._try_set_state(sender, EventType.ROOM_AVATAR,
                                           RoomAvatarStateEventContent(url=file.mxc))
                 self.photo_id = photo_id
+                self.avatar_url = file.mxc
                 if save:
                     self.save()
                 return True
@@ -762,10 +801,11 @@ class PortalMetadata(BasePortal, ABC):
 
     # endregion
 
-    async def _send_delivery_receipt(self, event_id: EventID) -> None:
+    async def _send_delivery_receipt(self, event_id: EventID, room_id: Optional[RoomID] = None
+                                     ) -> None:
         if event_id and config["bridge.delivery_receipts"]:
             try:
-                await self.az.intent.mark_read(self.mxid, event_id)
+                await self.az.intent.mark_read(room_id or self.mxid, event_id)
             except Exception:
                 self.log.exception("Failed to send delivery receipt for %s", event_id)
 
