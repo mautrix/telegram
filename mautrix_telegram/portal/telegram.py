@@ -225,12 +225,13 @@ class PortalTelegram(BasePortal, ABC):
         lat = evt.media.geo.lat
         long_char = "E" if long > 0 else "W"
         lat_char = "N" if lat > 0 else "S"
+        geo = f"{round(lat, 6)},{round(long, 6)}"
 
-        body = f"{round(lat, 5)}° {lat_char}, {round(long, 5)}° {long_char}"
-        url = f"https://maps.google.com/?q={lat},{long}"
+        body = f"{round(abs(lat), 4)}° {lat_char}, {round(abs(long), 4)}° {long_char}"
+        url = f"https://maps.google.com/?q={geo}"
 
         content = LocationMessageEventContent(
-            msgtype=MessageType.LOCATION, geo_uri=f"geo:{lat},{long}",
+            msgtype=MessageType.LOCATION, geo_uri=f"geo:{geo}",
             body=f"Location: {body}\n{url}",
             relates_to=relates_to, external_url=self._get_external_url(evt))
         content["format"] = str(Format.HTML)
