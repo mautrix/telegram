@@ -232,6 +232,12 @@ class PortalMetadata(BasePortal, ABC):
                     await self.update_bridge_info()
         if self.sync_matrix_state:
             await self.sync_matrix_members()
+        puppet = p.Puppet.get_by_custom_mxid(user.mxid)
+        if puppet:
+            try:
+                await puppet.intent.ensure_joined(self.mxid)
+            except Exception:
+                self.log.exception("Failed to ensure %s is joined to portal", user.mxid)
 
     async def create_matrix_room(self, user: 'AbstractUser', entity: Union[TypeChat, User] = None,
                                  invites: InviteList = None, update_if_exists: bool = True,
@@ -364,18 +370,7 @@ class PortalMetadata(BasePortal, ABC):
             for invite in invites:
                 power_levels.users.setdefault(invite, 100)
             self.title = puppet.displayname
-        bridge_info = {
-            "bridgebot": self.az.bot_mxid,
-            "creator": self.main_intent.mxid,
-            "protocol": {
-                "id": "telegram",
-                "displayname": "Telegram",
-                "avatar_url": config["appservice.bot_avatar"],
-            },
-            "channel": {
-                "id": self.tgid
-            }
-        }
+
         initial_state = [{
             "type": EventType.ROOM_POWER_LEVELS.serialize(),
             "content": power_levels.serialize(),
