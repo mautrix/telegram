@@ -126,7 +126,7 @@ class PortalTelegram(BasePortal, ABC):
     def _parse_telegram_document_meta(evt: Message, file: DBTelegramFile, attrs: DocAttrs,
                                       thumb_size: TypePhotoSize) -> Tuple[ImageInfo, str]:
         document = evt.media.document
-        name = evt.message or attrs.name
+        name = attrs.name
         if attrs.is_sticker:
             alt = attrs.sticker_alt
             if len(alt) > 0:
@@ -217,7 +217,13 @@ class PortalTelegram(BasePortal, ABC):
             content.file = file.decryption_info
         else:
             content.url = file.mxc
-        return await self._send_message(intent, content, event_type=event_type, timestamp=evt.date)
+        res = await self._send_message(intent, content, event_type=event_type, timestamp=evt.date)
+        if evt.message:
+            caption_content = await formatter.telegram_to_matrix(evt, source, self.main_intent,
+                                                                 no_reply_fallback=True)
+            caption_content.external_url = content.external_url
+            res = await self._send_message(intent, caption_content, timestamp=evt.date)
+        return res
 
     def handle_telegram_location(self, source: 'AbstractUser', intent: IntentAPI, evt: Message,
                                  relates_to: RelatesTo = None) -> Awaitable[EventID]:
