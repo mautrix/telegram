@@ -8,7 +8,11 @@ aiodns
 brotli
 
 #/webp_convert
-pillow>=4.3,<8
+pillow>=4,<8
+
+#/qr_login
+pillow>=4,<8
+qrcode>=6,<7
 
 #/hq_thumbnails
 moviepy>=1,<2
