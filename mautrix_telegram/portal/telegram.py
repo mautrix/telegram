@@ -247,7 +247,7 @@ class PortalTelegram(BasePortal, ABC):
 
     async def handle_telegram_text(self, source: 'AbstractUser', intent: IntentAPI, is_bot: bool,
                                    evt: Message) -> EventID:
-        self.log.debug(f"Sending {evt.message} to {self.mxid} by {intent.mxid}")
+        self.log.trace(f"Sending {evt.message} to {self.mxid} by {intent.mxid}")
         content = await formatter.telegram_to_matrix(evt, source, self.main_intent)
         content.external_url = self._get_external_url(evt)
         if is_bot and self.get_config("bot_messages_as_notices"):
