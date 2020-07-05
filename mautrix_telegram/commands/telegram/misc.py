@@ -321,6 +321,8 @@ async def random(evt: CommandEvent) -> EventID:
     emoticon = {
         "dart": "\U0001F3AF",
         "dice": "\U0001F3B2",
+        "ball": "\U0001F3C0",
+        "basketball": "\U0001F3C0",
     }.get(arg, arg)
     try:
         await evt.sender.client.send_media(await portal.get_input_entity(evt.sender),
