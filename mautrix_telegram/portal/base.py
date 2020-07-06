@@ -208,9 +208,8 @@ class BasePortal(ABC):
     def _get_largest_photo_size(photo: Union[Photo, Document]
                                 ) -> Tuple[Optional[InputPhotoFileLocation],
                                            Optional[TypePhotoSize]]:
-        if not photo:
-            return None, None
-        if isinstance(photo, Document) and not photo.thumbs:
+        if not photo or isinstance(photo, PhotoEmpty) or (isinstance(photo, Document)
+                                                          and not photo.thumbs):
             return None, None
 
         largest = max(photo.thumbs if isinstance(photo, Document) else photo.sizes,

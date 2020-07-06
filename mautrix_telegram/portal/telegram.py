@@ -74,6 +74,11 @@ class PortalTelegram(BasePortal, ABC):
     async def handle_telegram_photo(self, source: 'AbstractUser', intent: IntentAPI, evt: Message,
                                     relates_to: RelatesTo = None) -> Optional[EventID]:
         loc, largest_size = self._get_largest_photo_size(evt.media.photo)
+        if loc is None:
+            content = TextMessageEventContent(msgtype=MessageType.TEXT,
+                                              body="Failed to bridge image",
+                                              external_url=self._get_external_url(evt))
+            return await self._send_message(intent, content, timestamp=evt.date)
         file = await util.transfer_file_to_matrix(source.client, intent, loc,
                                                   encrypt=self.encrypted)
         if not file:
