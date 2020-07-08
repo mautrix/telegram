@@ -49,7 +49,7 @@ except ImportError:
     VideoFileClip = None
 
 try:
-    from nio.crypto import encrypt_attachment
+    from mautrix.crypto.attachments import encrypt_attachment
 except ImportError:
     encrypt_attachment = None
 

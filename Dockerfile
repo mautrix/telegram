@@ -30,26 +30,18 @@ RUN apk add --no-cache \
         py3-pysocks \
         # cryptg
           py3-cffi \
+	  py3-qrcode@edge \
       py3-brotli \
       # Other dependencies
       ffmpeg \
       ca-certificates \
       su-exec \
       netcat-openbsd \
-      # olm
+      # encryption
       olm-dev \
-      # matrix-nio?
-      py3-future \
-      py3-atomicwrites \
       py3-pycryptodome \
-      py3-peewee \
-      py3-pyrsistent \
-      py3-jsonschema \
-      #py3-aiofiles \ # (too new)
-      py3-cachetools \
       py3-unpaddedbase64 \
-      py3-h2@edge \
-      py3-logbook@edge
+      py3-future
 
 COPY requirements.txt /opt/mautrix-telegram/requirements.txt
 COPY optional-requirements.txt /opt/mautrix-telegram/optional-requirements.txt

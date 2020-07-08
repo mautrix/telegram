@@ -108,6 +108,7 @@ class Config(BaseBridgeConfig):
         copy("bridge.animated_sticker.args")
         copy("bridge.encryption.allow")
         copy("bridge.encryption.default")
+        copy("bridge.encryption.database")
         copy("bridge.private_chat_portal_meta")
         copy("bridge.delivery_receipts")
         copy("bridge.delivery_error_reports")

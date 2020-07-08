@@ -411,17 +411,13 @@ class PortalMetadata(BasePortal, ABC):
         if not room_id:
             raise Exception(f"Failed to create room")
 
-        if self.encrypted and self.matrix.e2ee:
-            members = [self.main_intent.mxid]
-            if direct:
-                try:
-                    await self.az.intent.join_room_by_id(room_id)
-                    members += [self.az.intent.mxid]
-                except Exception:
-                    self.log.warning(f"Failed to add bridge bot to new private chat {room_id}")
-            await self.matrix.e2ee.add_room(room_id, members=members, encrypted=True)
+        if self.encrypted and self.matrix.e2ee and direct:
+            try:
+                await self.az.intent.ensure_joined(room_id)
+            except Exception:
+                self.log.warning(f"Failed to add bridge bot to new private chat {room_id}")
 
-        self.mxid = RoomID(room_id)
+        self.mxid = room_id
         self.by_mxid[self.mxid] = self
         self.save()
         self.az.state_store.set_power_levels(self.mxid, power_levels)

@@ -52,7 +52,7 @@ if TYPE_CHECKING:
     from ..config import Config
 
 try:
-    from nio.crypto import decrypt_attachment
+    from mautrix.crypto.attachments import decrypt_attachment
 except ImportError:
     decrypt_attachment = None
 

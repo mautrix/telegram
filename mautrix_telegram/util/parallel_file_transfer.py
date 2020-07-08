@@ -41,7 +41,7 @@ from ..tgclient import MautrixTelegramClient
 from ..db import TelegramFile as DBTelegramFile
 
 try:
-    from nio.crypto import async_encrypt_attachment
+    from mautrix.crypto.attachments import async_encrypt_attachment
 except ImportError:
     async_encrypt_attachment = None
 

@@ -24,4 +24,7 @@ prometheus_client>=0.6,<0.9
 psycopg2-binary>=2,<3
 
 #/e2be
-matrix-nio[e2e]>=0.9,<0.14
+asyncpg>=0.20,<0.21
+python-olm>=3,<4
+pycryptodome>=3,<4
+unpaddedbase64>=1,<2
