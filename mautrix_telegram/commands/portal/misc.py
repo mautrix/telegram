@@ -35,7 +35,7 @@ async def sync_state(evt: CommandEvent) -> EventID:
     elif not await user_has_power_level(evt.room_id, evt.az.intent, evt.sender, "bridge"):
         return await evt.reply(f"You do not have the permissions to synchronize this room.")
 
-    await portal.sync_matrix_members()
+    await portal.main_intent.get_joined_members(portal.mxid)
     await evt.reply("Synchronization complete")
 
 

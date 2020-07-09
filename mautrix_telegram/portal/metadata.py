@@ -172,17 +172,6 @@ class PortalMetadata(BasePortal, ABC):
         elif not self.bot or self.tg_receiver != self.bot.tgid:
             raise ValueError("Invalid peer type for Telegram user invite")
 
-    async def sync_matrix_members(self) -> None:
-        resp = await self.main_intent.get_room_joined_memberships(self.mxid)
-        members = resp["joined"]
-        for mxid, info in members.items():
-            member = Member(membership=Membership.JOIN)
-            if "display_name" in info:
-                member.displayname = info["display_name"]
-            if "avatar_url" in info:
-                member.avatar_url = info["avatar_url"]
-            self.az.state_store.set_member(self.mxid, mxid, member)
-
     # endregion
     # region Telegram -> Matrix
 
@@ -231,7 +220,7 @@ class PortalMetadata(BasePortal, ABC):
                     self.save()
                     await self.update_bridge_info()
         if self.sync_matrix_state:
-            await self.sync_matrix_members()
+            await self.main_intent.get_joined_members(self.mxid)
         puppet = p.Puppet.get_by_custom_mxid(user.mxid)
         if puppet:
             try:

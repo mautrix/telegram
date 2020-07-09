@@ -72,7 +72,7 @@ class MatrixHandler(BaseMatrixHandler):
     async def handle_puppet_invite(self, room_id: RoomID, puppet: pu.Puppet, inviter: u.User,
                                    event_id: EventID) -> None:
         intent = puppet.default_mxid_intent
-        self.log.debug(f"{inviter} invited puppet for {puppet.tgid} to {room_id}")
+        self.log.debug(f"{inviter.mxid} invited puppet for {puppet.tgid} to {room_id}")
         if not await inviter.is_logged_in():
             await intent.error_and_leave(
                 room_id, text="Please log in before inviting Telegram puppets.")
@@ -87,11 +87,12 @@ class MatrixHandler(BaseMatrixHandler):
             await intent.join_room(room_id)
             return
         try:
-            members = await self.az.intent.get_room_members(room_id)
+            members = await intent.get_room_members(room_id)
         except MatrixError:
-            members = []
+            self.log.exception(f"Failed to get members after joining {room_id} as {intent.mxid}")
+            return
         if self.az.bot_mxid not in members:
-            if len(members) > 1:
+            if len(members) > 2:
                 await intent.error_and_leave(room_id, text=None, html=(
                     f"Please invite "
                     f"<a href='https://matrix.to/#/{self.az.bot_mxid}'>the bridge bot</a> "
