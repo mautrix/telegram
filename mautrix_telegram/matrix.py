@@ -115,7 +115,7 @@ class MatrixHandler(BaseMatrixHandler):
             portal.mxid = room_id
             e2be_ok = None
             if self.config["bridge.encryption.default"] and self.e2ee:
-                e2be_ok = await self.enable_dm_encryption(portal, members=members)
+                e2be_ok = await portal.enable_dm_encryption()
             portal.save()
             inviter.register_portal(portal)
             if e2be_ok is True:
@@ -134,16 +134,6 @@ class MatrixHandler(BaseMatrixHandler):
             await intent.join_room(room_id)
             await intent.send_notice(room_id, "This puppet will remain inactive until a "
                                               "Telegram chat is created for this room.")
-
-    async def enable_dm_encryption(self, portal: po.Portal, members: List[UserID]) -> bool:
-        ok = await super().enable_dm_encryption(portal, members)
-        if ok:
-            try:
-                puppet = pu.Puppet.get(portal.tgid)
-                await portal.main_intent.set_room_name(portal.mxid, puppet.displayname)
-            except Exception:
-                self.log.warning(f"Failed to set room name for {portal.mxid}", exc_info=True)
-        return ok
 
     async def send_welcome_message(self, room_id: RoomID, inviter: 'u.User') -> None:
         try:

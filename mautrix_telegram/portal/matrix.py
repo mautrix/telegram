@@ -574,6 +574,15 @@ class PortalMatrix(BasePortal, MautrixBasePortal, ABC):
         self.db_instance.edit(mxid=self.mxid)
         self.by_mxid[self.mxid] = self
 
+    async def enable_dm_encryption(self) -> bool:
+        ok = await super().enable_dm_encryption()
+        if ok:
+            try:
+                puppet = p.Puppet.get(self.tgid)
+                await self.main_intent.set_room_name(self.mxid, puppet.displayname)
+            except Exception:
+                self.log.warning(f"Failed to set room name", exc_info=True)
+        return ok
 
 def init(context: Context) -> None:
     global config
