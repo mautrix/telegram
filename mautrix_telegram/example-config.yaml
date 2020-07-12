@@ -217,7 +217,7 @@ bridge:
         # or a pickle file if the appservice database is sqlite.
         #
         # Format examples:
-        #   Pickle:   pickle://filename.pickle
+        #   Pickle:   pickle:///filename.pickle
         #   Postgres: postgres://username:password@hostname/dbname
         database: default
     # Whether or not to explicitly set the avatar and room name for private

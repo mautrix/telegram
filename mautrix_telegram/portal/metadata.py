@@ -219,14 +219,14 @@ class PortalMetadata(BasePortal, ABC):
                 if changed:
                     self.save()
                     await self.update_bridge_info()
-        if self.sync_matrix_state:
-            await self.main_intent.get_joined_members(self.mxid)
         puppet = p.Puppet.get_by_custom_mxid(user.mxid)
         if puppet:
             try:
                 await puppet.intent.ensure_joined(self.mxid)
             except Exception:
                 self.log.exception("Failed to ensure %s is joined to portal", user.mxid)
+        if self.sync_matrix_state:
+            await self.main_intent.get_joined_members(self.mxid)
 
     async def create_matrix_room(self, user: 'AbstractUser', entity: Union[TypeChat, User] = None,
                                  invites: InviteList = None, update_if_exists: bool = True,
@@ -409,7 +409,7 @@ class PortalMetadata(BasePortal, ABC):
         self.mxid = room_id
         self.by_mxid[self.mxid] = self
         self.save()
-        self.az.state_store.set_power_levels(self.mxid, power_levels)
+        await self.az.state_store.set_power_levels(self.mxid, power_levels)
         user.register_portal(self)
         asyncio.ensure_future(self.update_matrix_room(user, entity, direct, puppet,
                                                       levels=power_levels, users=users,

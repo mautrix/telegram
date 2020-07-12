@@ -15,7 +15,7 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from sqlalchemy.engine.base import Engine
 
-from mautrix.bridge.db import UserProfile, RoomState
+from mautrix.client.state_store.sqlalchemy import UserProfile, RoomState
 
 from .bot_chat import BotChat
 from .message import Message
@@ -28,7 +28,4 @@ from .user import User, UserPortal, Contact
 def init(db_engine: Engine) -> None:
     for table in (Portal, Message, User, Contact, UserPortal, Puppet, TelegramFile, UserProfile,
                   RoomState, BotChat):
-        table.db = db_engine
-        table.t = table.__table__
-        table.c = table.t.c
-        table.column_names = table.c.keys()
+        table.bind(db_engine)

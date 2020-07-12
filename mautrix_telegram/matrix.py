@@ -13,7 +13,7 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import Dict, Set, Tuple, Union, Iterable, List, TYPE_CHECKING
+from typing import Dict, Set, Tuple, Union, Iterable, TYPE_CHECKING
 
 from mautrix.bridge import BaseMatrixHandler
 from mautrix.types import (Event, EventType, RoomID, UserID, EventID, ReceiptEvent, ReceiptType,
@@ -59,15 +59,6 @@ class MatrixHandler(BaseMatrixHandler):
 
         self.bot = context.bot
         self.previously_typing = {}
-
-    async def get_user(self, user_id: UserID) -> 'u.User':
-        return await u.User.get_by_mxid(user_id).ensure_started()
-
-    async def get_portal(self, room_id: RoomID) -> 'po.Portal':
-        return po.Portal.get_by_mxid(room_id)
-
-    async def get_puppet(self, user_id: UserID) -> 'pu.Puppet':
-        return pu.Puppet.get_by_mxid(user_id)
 
     async def handle_puppet_invite(self, room_id: RoomID, puppet: pu.Puppet, inviter: u.User,
                                    event_id: EventID) -> None:

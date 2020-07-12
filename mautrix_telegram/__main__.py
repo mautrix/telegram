@@ -17,6 +17,7 @@ from typing import Optional
 
 from alchemysession import AlchemySessionContainer
 
+from mautrix.types import UserID, RoomID
 from mautrix.bridge import Bridge
 from mautrix.util.db import Base
 
@@ -32,7 +33,6 @@ from .formatter import init as init_formatter
 from .matrix import MatrixHandler
 from .portal import Portal, init as init_portal
 from .puppet import Puppet, init as init_puppet
-from .sqlstatestore import SQLStateStore
 from .user import User, init as init_user
 from .version import version, linkified_version
 
@@ -53,7 +53,6 @@ class TelegramBridge(Bridge):
     markdown_version = linkified_version
     config_class = Config
     matrix_class = MatrixHandler
-    state_store_class = SQLStateStore
 
     config: Config
     session_container: AlchemySessionContainer
@@ -118,6 +117,18 @@ class TelegramBridge(Bridge):
         if self.manhole:
             self.manhole.close()
             self.manhole = None
+
+    async def get_user(self, user_id: UserID) -> User:
+        return await User.get_by_mxid(user_id).ensure_started()
+
+    async def get_portal(self, room_id: RoomID) -> Portal:
+        return Portal.get_by_mxid(room_id)
+
+    async def get_puppet(self, user_id: UserID, create: bool = False) -> Puppet:
+        return Puppet.get_by_mxid(user_id, create=create)
+
+    async def get_double_puppet(self, user_id: UserID) -> Puppet:
+        return Puppet.get_by_custom_mxid(user_id)
 
 
 TelegramBridge().run()

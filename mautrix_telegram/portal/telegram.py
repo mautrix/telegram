@@ -451,8 +451,8 @@ class PortalTelegram(BasePortal, ABC):
             await self.create_matrix_room(source, invites=[source.mxid], update_if_exists=False)
 
         if (self.peer_type == "user" and sender.tgid == self.tg_receiver
-            and not sender.is_real_user and not self.az.state_store.is_joined(self.mxid,
-                                                                              sender.mxid)):
+            and not sender.is_real_user and not await self.az.state_store.is_joined(self.mxid,
+                                                                                    sender.mxid)):
             self.log.debug(f"Ignoring private chat message {evt.id}@{source.tgid} as receiver does"
                            " not have matrix puppeting and their default puppet isn't in the room")
             return
