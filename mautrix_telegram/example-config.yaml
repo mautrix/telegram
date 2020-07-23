@@ -44,7 +44,7 @@ appservice:
         external: https://example.com/public
 
     # Provisioning API part of the web server for automated portal creation and fetching information.
-    # Used by things like Dimension (https://dimension.t2bot.io/).
+    # Used by things like mautrix-manager (https://github.com/tulir/mautrix-manager).
     provisioning:
         # Whether or not the provisioning API should be enabled.
         enabled: true
