@@ -374,7 +374,7 @@ class MatrixHandler(BaseMatrixHandler):
     def filter_matrix_event(self, evt: Event) -> bool:
         if not isinstance(evt, (RedactionEvent, MessageEvent, StateEvent, EncryptedEvent)):
             return True
-        if evt.content.get("net.maunium.telegram.puppet", False):
+        if evt.content.get(self.az.real_user_content_key, False):
             puppet = pu.Puppet.get_by_custom_mxid(evt.sender)
             if puppet:
                 self.log.debug("Ignoring puppet-sent event %s", evt.event_id)
