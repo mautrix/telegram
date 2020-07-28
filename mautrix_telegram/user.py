@@ -21,6 +21,7 @@ import asyncio
 from telethon.tl.types import (TypeUpdate, UpdateNewMessage, UpdateNewChannelMessage, PeerUser,
                                UpdateShortChatMessage, UpdateShortMessage, User as TLUser, Chat,
                                ChatForbidden)
+from telethon.tl.custom import Dialog
 from telethon.tl.types.contacts import ContactsNotModified
 from telethon.tl.functions.contacts import GetContactsRequest, SearchRequest
 from telethon.tl.functions.account import UpdateStatusRequest
@@ -333,12 +334,13 @@ class User(AbstractUser, BaseUser):
 
         return await self._search_remote(query), True
 
-    async def sync_dialogs(self, synchronous_create: bool = False) -> None:
+    async def sync_dialogs(self) -> None:
         if self.is_bot:
             return
         creators = []
         limit = config["bridge.sync_dialog_limit"] or None
-        self.log.debug(f"Syncing dialogs (limit={limit}, synchronous_create={synchronous_create})")
+        self.log.debug(f"Syncing dialogs (limit={limit})")
+        dialog: Dialog
         async for dialog in self.client.iter_dialogs(limit=limit, ignore_migrated=True,
                                                      archived=False):
             entity = dialog.entity
@@ -353,11 +355,16 @@ class User(AbstractUser, BaseUser):
                 continue
             portal = po.Portal.get_by_entity(entity, receiver_id=self.tgid)
             self.portals[portal.tgid_full] = portal
-            creators.append(
-                portal.create_matrix_room(self, entity, invites=[self.mxid],
-                                          synchronous=synchronous_create))
+            if portal.mxid:
+                update_task = portal.update_matrix_room(self, entity)
+                backfill_task = portal.backfill(self, last_known_id=dialog.message.id)
+                creators.append(self.loop.create_task(update_task))
+                creators.append(self.loop.create_task(backfill_task))
+            else:
+                create_task = portal.create_matrix_room(self, entity, invites=[self.mxid])
+                creators.append(self.loop.create_task(create_task))
         self.save(portals=True)
-        await asyncio.gather(*creators, loop=self.loop)
+        await asyncio.gather(*creators)
         self.log.debug("Dialog syncing complete")
 
     def register_portal(self, portal: po.Portal) -> None:

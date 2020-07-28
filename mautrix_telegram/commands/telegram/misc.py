@@ -185,8 +185,10 @@ async def sync(evt: CommandEvent) -> EventID:
         sync_only = None
 
     if not sync_only or sync_only == "chats":
-        await evt.sender.sync_dialogs(synchronous_create=True)
+        await evt.reply("Synchronizing chats...")
+        await evt.sender.sync_dialogs()
     if not sync_only or sync_only == "contacts":
+        await evt.reply("Synchronizing contacts...")
         await evt.sender.sync_contacts()
     if not sync_only or sync_only == "me":
         await evt.sender.update_info()

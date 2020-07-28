@@ -31,7 +31,7 @@
   * [x] Message history
     * [x] Manually (`!tg backfill`)
     * [x] Automatically when creating portal
-    * [ ] Automatically for missed messages
+    * [x] Automatically for missed messages
   * [x] Avatars
   * [x] Presence
   * [x] Typing notifications

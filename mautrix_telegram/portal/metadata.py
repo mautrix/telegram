@@ -223,8 +223,8 @@ class PortalMetadata(BasePortal, ABC):
             await self.main_intent.get_joined_members(self.mxid)
 
     async def create_matrix_room(self, user: 'AbstractUser', entity: Union[TypeChat, User] = None,
-                                 invites: InviteList = None, update_if_exists: bool = True,
-                                 synchronous: bool = False) -> Optional[str]:
+                                 invites: InviteList = None, update_if_exists: bool = True
+                                 ) -> Optional[RoomID]:
         if self.mxid:
             if update_if_exists:
                 if not entity:
@@ -234,10 +234,7 @@ class PortalMetadata(BasePortal, ABC):
                         self.log.exception(f"Failed to get entity through {user.tgid} for update")
                         return self.mxid
                 update = self.update_matrix_room(user, entity, self.peer_type == "user")
-                if synchronous:
-                    await update
-                else:
-                    asyncio.ensure_future(update, loop=self.loop)
+                self.loop.create_task(update)
                 await self.invite_to_matrix(invites or [])
             return self.mxid
         async with self._room_create_lock:

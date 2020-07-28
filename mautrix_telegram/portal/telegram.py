@@ -421,7 +421,7 @@ class PortalTelegram(BasePortal, ABC):
         }
 
     async def backfill(self, source: 'AbstractUser', is_initial: bool = False,
-                       limit: Optional[int] = None) -> None:
+                       limit: Optional[int] = None, last_id: Optional[int] = None) -> None:
         limit = limit or (config["bridge.backfill.initial_limit"] if is_initial
                           else config["bridge.backfill.missed_limit"])
         if limit == 0:
@@ -429,18 +429,23 @@ class PortalTelegram(BasePortal, ABC):
         last = DBMessage.find_last(self.mxid, (source.tgid if self.peer_type != "channel"
                                                else self.tgid))
         min_id = last.tgid if last else 0
-        message = (await source.client.get_messages(self.peer, limit=1))[0]
+        if last_id is None:
+            message = (await source.client.get_messages(self.peer, limit=1))[0]
+            last_id = message.id
+        if last_id <= min_id:
+            # Nothing to backfill
+            return
         if limit < 0:
             limit = None
-            self.log.debug(f"Backfilling approximately {message.id - min_id} messages "
+            self.log.debug(f"Backfilling approximately {last_id - min_id} messages "
                            f"through {source.mxid}")
         elif self.peer_type == "channel":
             # This is a channel or supergroup, so we'll backfill messages based on the ID.
             # There are some cases, such as deleted messages, where this may backfill less
             # messages than the limit.
-            min_id = max(message.id - limit, min_id)
+            min_id = max(last_id - limit, min_id)
             limit = None
-            self.log.debug(f"Backfilling messages after ID {min_id} (last message: {message.id}) "
+            self.log.debug(f"Backfilling messages after ID {min_id} (last message: {last_id}) "
                            f"through {source.mxid}")
         else:
             # Private chats and normal groups don't have their own message ID namespace,
