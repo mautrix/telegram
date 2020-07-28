@@ -1,5 +1,5 @@
 # mautrix-telegram - A Matrix-Telegram puppeting bridge
-# Copyright (C) 2019 Tulir Asokan
+# Copyright (C) 2020 Tulir Asokan
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as published by
@@ -13,7 +13,7 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import (Awaitable, Dict, List, Iterable, NewType, Optional, Tuple, Any, cast,
+from typing import (Awaitable, Dict, List, Iterable, NamedTuple, Optional, Tuple, Any, cast,
                     TYPE_CHECKING)
 import logging
 import asyncio
@@ -42,7 +42,7 @@ if TYPE_CHECKING:
 
 config: Optional['Config'] = None
 
-SearchResult = NewType('SearchResult', Tuple['pu.Puppet', int])
+SearchResult = NamedTuple('SearchResult', puppet='pu.Puppet', similarity=int)
 
 
 class User(AbstractUser, BaseUser):
@@ -306,7 +306,7 @@ class User(AbstractUser, BaseUser):
         for contact in self.contacts:
             similarity = contact.similarity(query)
             if similarity >= min_similarity:
-                results.append(SearchResult((contact, similarity)))
+                results.append(SearchResult(contact, similarity))
         results.sort(key=lambda tup: tup[1], reverse=True)
         return results[0:max_results]
 
@@ -318,7 +318,7 @@ class User(AbstractUser, BaseUser):
         for user in server_results.users:
             puppet = pu.Puppet.get(user.id)
             await puppet.update_info(self, user)
-            results.append(SearchResult((puppet, puppet.similarity(query))))
+            results.append(SearchResult(puppet, puppet.similarity(query)))
         results.sort(key=lambda tup: tup[1], reverse=True)
         return results[0:max_results]
 

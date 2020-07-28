@@ -129,8 +129,8 @@ bridge:
     # Maximum number of members to sync per portal when starting up. Other members will be
     # synced when they send messages. The maximum is 10000, after which the Telegram server
     # will not send any more members.
-    # Defaults to no local limit (-> limited to 10000 by server)
-    max_initial_member_sync: -1
+    # -1 means no limit (which means it's limited to 10000 by the server)
+    max_initial_member_sync: 100
     # Whether or not to sync the member list in channels.
     # If no channel admins have logged into the bridge, the bridge won't be able to sync the member
     # list regardless of this setting.
@@ -232,6 +232,30 @@ bridge:
     # This field will automatically be changed back to false after it,
     # except if the config file is not writable.
     resend_bridge_info: false
+    # Settings for backfilling messages from Telegram.
+    backfill:
+        # Whether or not the Telegram ghosts of logged in Matrix users should be
+        # invited to private chats when backfilling history from Telegram. This is
+        # usually needed to prevent rate limits and to allow timestamp massaging.
+        invite_own_puppet: true
+        # Maximum number of messages to backfill without using a takeout.
+        # The first time a takeout is used, the user has to manually approve it from a different
+        # device. If initial_limit or missed_limit are higher than this value, the bridge will ask
+        # the user to accept the takeout after logging in before syncing any chats.
+        takeout_limit: 100
+        # Maximum number of messages to backfill initially.
+        # Set to 0 to disable backfilling when creating portal, or -1 to disable the limit.
+        #
+        # N.B. Initial backfill will only start after member sync. Make sure your
+        #      max_initial_member_sync is set to a low enough value so it doesn't take forever.
+        initial_limit: 0
+        # Maximum number of messages to backfill if messages were missed while
+        # the bridge was disconnected.
+        # Set to 0 to disable backfilling missed messages.
+        missed_limit: 100
+        # If using double puppeting, should notifications be disabled
+        # while the initial backfill is in progress?
+        disable_notifications: false
 
     # Overrides for base power levels.
     initial_power_level_overrides:

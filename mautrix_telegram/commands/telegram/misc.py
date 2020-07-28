@@ -1,5 +1,5 @@
 # mautrix-telegram - A Matrix-Telegram puppeting bridge
-# Copyright (C) 2019 Tulir Asokan
+# Copyright (C) 2020 Tulir Asokan
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as published by
@@ -331,15 +331,19 @@ async def random(evt: CommandEvent) -> EventID:
         return await evt.reply("Invalid emoji for randomization")
 
 
-@command_handler(help_section=SECTION_PORTAL_MANAGEMENT,
+@command_handler(help_section=SECTION_PORTAL_MANAGEMENT, help_args="[_limit_]",
                  help_text="Backfill messages from Telegram history.")
 async def backfill(evt: CommandEvent) -> None:
     if not evt.is_portal:
         await evt.reply("You can only use backfill in portal rooms")
         return
+    try:
+        limit = int(evt.args[0])
+    except (ValueError, IndexError):
+        limit = -1
     portal = po.Portal.get_by_mxid(evt.room_id)
     try:
-        await portal.backfill(evt.sender)
+        await portal.backfill(evt.sender, limit=limit)
     except TakeoutInitDelayError:
         msg = ("Please accept the data export request from a mobile device, "
                "then re-run the backfill command.")
