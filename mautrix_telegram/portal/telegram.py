@@ -305,7 +305,8 @@ class PortalTelegram(BasePortal, ABC):
         emoji_text = {
             "\U0001F3AF": " Dart throw",
             "\U0001F3B2": " Dice roll",
-            "\U0001F3C0": " Basketball throw"
+            "\U0001F3C0": " Basketball throw",
+            "\u26BD": " Football kick"
         }
         roll: MessageMediaDice = evt.media
         text = f"{roll.emoticon}{emoji_text.get(roll.emoticon, '')} result: {roll.value}"

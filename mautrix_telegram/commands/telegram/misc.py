@@ -311,11 +311,11 @@ async def vote(evt: CommandEvent) -> EventID:
 
 
 @command_handler(help_section=SECTION_MISC, help_args="<_emoji_>",
-                 help_text="Roll a dice (\U0001F3B2) or throw a dart (\U0001F3AF) "
-                           "on the Telegram servers.")
+                 help_text="Roll a dice (\U0001F3B2), kick a football (\u26BD\uFE0F) or throw a "
+                           "dart (\U0001F3AF) or basketball (\U0001F3C0) on the Telegram servers.")
 async def random(evt: CommandEvent) -> EventID:
     if not evt.is_portal:
-        return await evt.reply("You can only roll dice in portal rooms")
+        return await evt.reply("You can only randomize values in portal rooms")
     portal = po.Portal.get_by_mxid(evt.room_id)
     arg = evt.args[0] if len(evt.args) > 0 else "dice"
     emoticon = {
@@ -323,6 +323,8 @@ async def random(evt: CommandEvent) -> EventID:
         "dice": "\U0001F3B2",
         "ball": "\U0001F3C0",
         "basketball": "\U0001F3C0",
+        "football": "\u26BD",
+        "soccer": "\u26BD",
     }.get(arg, arg)
     try:
         await evt.sender.client.send_media(await portal.get_input_entity(evt.sender),
