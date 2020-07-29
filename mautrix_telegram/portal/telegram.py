@@ -487,7 +487,7 @@ class PortalTelegram(BasePortal, ABC):
             self.log.debug(f"Iterating all messages starting with {min_id} (approx: {limit})")
             messages = client.iter_messages(entity, reverse=True, min_id=min_id)
             async for message in messages:
-                sender = p.Puppet.get(message.sender_id)
+                sender = p.Puppet.get(message.from_id) if message.from_id else None
                 # TODO handle service messages?
                 await self.handle_telegram_message(source, sender, message)
                 count += 1
@@ -495,7 +495,7 @@ class PortalTelegram(BasePortal, ABC):
             self.log.debug(f"Fetching up to {limit} most recent messages")
             messages = await client.get_messages(entity, limit=limit)
             for message in reversed(messages):
-                sender = p.Puppet.get(message.sender_id)
+                sender = p.Puppet.get(message.from_id) if message.from_id else None
                 await self.handle_telegram_message(source, sender, message)
                 count += 1
         return count
