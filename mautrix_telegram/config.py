@@ -89,7 +89,12 @@ class Config(BaseBridgeConfig):
         copy("bridge.sync_channel_members")
         copy("bridge.skip_deleted_members")
         copy("bridge.startup_sync")
-        copy("bridge.sync_dialog_limit")
+        if "bridge.sync_dialog_limit" in self:
+            base["bridge.sync_create_limit"] = self["bridge.sync_dialog_limit"]
+            base["bridge.sync_update_limit"] = self["bridge.sync_dialog_limit"]
+        else:
+            copy("bridge.sync_update_limit")
+            copy("bridge.sync_create_limit")
         copy("bridge.sync_direct_chats")
         copy("bridge.max_telegram_delete")
         copy("bridge.sync_matrix_state")

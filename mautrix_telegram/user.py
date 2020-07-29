@@ -338,10 +338,13 @@ class User(AbstractUser, BaseUser):
         if self.is_bot:
             return
         creators = []
-        limit = config["bridge.sync_dialog_limit"] or None
-        self.log.debug(f"Syncing dialogs (limit={limit})")
+        update_limit = config["bridge.sync_update_limit"] or None
+        create_limit = config["bridge.sync_create_limit"]
+        index = 0
+        self.log.debug(f"Syncing dialogs (update_limit={update_limit}, "
+                       f"create_limit={create_limit})")
         dialog: Dialog
-        async for dialog in self.client.iter_dialogs(limit=limit, ignore_migrated=True,
+        async for dialog in self.client.iter_dialogs(limit=update_limit, ignore_migrated=True,
                                                      archived=False):
             entity = dialog.entity
             if isinstance(entity, ChatForbidden):
@@ -357,12 +360,13 @@ class User(AbstractUser, BaseUser):
             self.portals[portal.tgid_full] = portal
             if portal.mxid:
                 update_task = portal.update_matrix_room(self, entity)
-                backfill_task = portal.backfill(self, last_known_id=dialog.message.id)
+                backfill_task = portal.backfill(self, last_id=dialog.message.id)
                 creators.append(self.loop.create_task(update_task))
                 creators.append(self.loop.create_task(backfill_task))
-            else:
+            elif not create_limit or index < create_limit:
                 create_task = portal.create_matrix_room(self, entity, invites=[self.mxid])
                 creators.append(self.loop.create_task(create_task))
+            index += 1
         self.save(portals=True)
         await asyncio.gather(*creators)
         self.log.debug("Dialog syncing complete")

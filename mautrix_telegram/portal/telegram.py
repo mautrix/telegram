@@ -436,7 +436,7 @@ class PortalTelegram(BasePortal, ABC):
             # Nothing to backfill
             return
         if limit < 0:
-            limit = None
+            limit = last_id - min_id
             self.log.debug(f"Backfilling approximately {last_id - min_id} messages "
                            f"through {source.mxid}")
         elif self.peer_type == "channel":
@@ -444,7 +444,6 @@ class PortalTelegram(BasePortal, ABC):
             # There are some cases, such as deleted messages, where this may backfill less
             # messages than the limit.
             min_id = max(last_id - limit, min_id)
-            limit = None
             self.log.debug(f"Backfilling messages after ID {min_id} (last message: {last_id}) "
                            f"through {source.mxid}")
         else:
@@ -456,20 +455,19 @@ class PortalTelegram(BasePortal, ABC):
         with self.backfill_lock:
             await self._backfill(source, min_id, limit)
 
-    async def _backfill(self, source: 'AbstractUser', min_id: Optional[int], limit: Optional[int]
-                        ) -> None:
+    async def _backfill(self, source: 'AbstractUser', min_id: Optional[int], limit: int) -> None:
         self.backfill_leave = set()
-        if ((self.peer_type == "user" and self.tg_receiver != source.tgid
+        if ((self.peer_type == "user" and self.tgid != source.tgid
              and config["bridge.backfill.invite_own_puppet"])):
             self.log.debug("Adding %s's default puppet to room for backfilling", source.mxid)
             sender = p.Puppet.get(source.tgid)
             await self.main_intent.invite_user(self.mxid, sender.default_mxid)
             await sender.default_mxid_intent.join_room_by_id(self.mxid)
             self.backfill_leave.add(sender.default_mxid_intent)
-        self.log.trace("Opening takeout client for %d, message ID %d->", source.tgid, min_id)
 
         client = source.client
         if limit > config["bridge.backfill.takeout_limit"]:
+            self.log.debug(f"Opening takeout client for {source.tgid}")
             async with client.takeout(**self._takeout_options) as takeout:
                 count = await self._backfill_messages(source, min_id, limit, takeout)
         else:
@@ -481,11 +479,12 @@ class PortalTelegram(BasePortal, ABC):
         self.backfill_leave = None
         self.log.info("Backfilled %d messages through %s", count, source.mxid)
 
-    async def _backfill_messages(self, source: 'AbstractUser', min_id: Optional[int],
-                                 limit: Optional[int], client: TelegramClient) -> int:
+    async def _backfill_messages(self, source: 'AbstractUser', min_id: Optional[int], limit: int,
+                                 client: TelegramClient) -> int:
         count = 0
         entity = await self.get_input_entity(source)
         if min_id is not None:
+            self.log.debug(f"Iterating all messages starting with {min_id} (approx: {limit})")
             messages = client.iter_messages(entity, reverse=True, min_id=min_id)
             async for message in messages:
                 sender = p.Puppet.get(message.sender_id)
@@ -493,6 +492,7 @@ class PortalTelegram(BasePortal, ABC):
                 await self.handle_telegram_message(source, sender, message)
                 count += 1
         else:
+            self.log.debug(f"Fetching up to {limit} most recent messages")
             messages = await client.get_messages(entity, limit=limit)
             for message in reversed(messages):
                 sender = p.Puppet.get(message.sender_id)

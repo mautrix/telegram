@@ -534,7 +534,7 @@ class BasePortal(ABC):
 
     @abstractmethod
     def backfill(self, source: 'AbstractUser', is_initial: bool = False,
-                 limit: Optional[int] = None) -> Awaitable[None]:
+                 limit: Optional[int] = None, last_id: Optional[int] = None) -> Awaitable[None]:
         pass
 
     @abstractmethod
