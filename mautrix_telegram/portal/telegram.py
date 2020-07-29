@@ -39,6 +39,7 @@ from mautrix.appservice import IntentAPI
 from mautrix.types import (EventID, UserID, ImageInfo, ThumbnailInfo, RelatesTo, MessageType,
                            EventType, MediaMessageEventContent, TextMessageEventContent,
                            LocationMessageEventContent, Format)
+from mautrix.bridge import NotificationDisabler
 
 from ..types import TelegramID
 from ..db import Message as DBMessage, TelegramFile as DBTelegramFile
@@ -466,12 +467,13 @@ class PortalTelegram(BasePortal, ABC):
             self.backfill_leave.add(sender.default_mxid_intent)
 
         client = source.client
-        if limit > config["bridge.backfill.takeout_limit"]:
-            self.log.debug(f"Opening takeout client for {source.tgid}")
-            async with client.takeout(**self._takeout_options) as takeout:
-                count = await self._backfill_messages(source, min_id, limit, takeout)
-        else:
-            count = await self._backfill_messages(source, min_id, limit, client)
+        async with NotificationDisabler(self.mxid, source):
+            if limit > config["bridge.backfill.takeout_limit"]:
+                self.log.debug(f"Opening takeout client for {source.tgid}")
+                async with client.takeout(**self._takeout_options) as takeout:
+                    count = await self._backfill_messages(source, min_id, limit, takeout)
+            else:
+                count = await self._backfill_messages(source, min_id, limit, client)
 
         for intent in self.backfill_leave:
             self.log.trace("Leaving room with %s post-backfill", intent.mxid)
@@ -683,3 +685,5 @@ class PortalTelegram(BasePortal, ABC):
 def init(context: Context) -> None:
     global config
     config = context.config
+    NotificationDisabler.puppet_cls = p.Puppet
+    NotificationDisabler.config_enabled = config["bridge.backfill.disable_notifications"]
