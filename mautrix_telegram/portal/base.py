@@ -33,6 +33,7 @@ from mautrix.appservice import AppService, IntentAPI
 from mautrix.types import (RoomID, RoomAlias, UserID, EventID, EventType, MessageEventContent,
                            PowerLevelStateEventContent, ContentURI)
 from mautrix.util.simple_template import SimpleTemplate
+from mautrix.util.simple_lock import SimpleLock
 from mautrix.util.logging import TraceLogger
 
 from ..types import TelegramID
@@ -93,7 +94,7 @@ class BasePortal(ABC):
     avatar_url: Optional[ContentURI]
     encrypted: bool
     deleted: bool
-    backfilling: bool
+    backfill_lock: SimpleLock
     backfill_leave: Optional[Set[IntentAPI]]
     log: TraceLogger
 
@@ -127,7 +128,8 @@ class BasePortal(ABC):
         self._main_intent = None
         self.deleted = False
         self.log = self.base_log.getChild(self.tgid_log if self.tgid else self.mxid)
-        self.backfilling = False
+        self.backfill_lock = SimpleLock("Waiting for backfilling to finish before handling %s",
+                                        log=self.log, loop=self.loop)
         self.backfill_leave = None
 
         self.dedup = PortalDedup(self)
@@ -531,7 +533,8 @@ class BasePortal(ABC):
         pass
 
     @abstractmethod
-    def backfill(self, source: 'AbstractUser') -> Awaitable[None]:
+    def backfill(self, source: 'AbstractUser', is_initial: bool = False,
+                 limit: Optional[int] = None, last_id: Optional[int] = None) -> Awaitable[None]:
         pass
 
     @abstractmethod

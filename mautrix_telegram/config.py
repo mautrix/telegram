@@ -1,5 +1,5 @@
 # mautrix-telegram - A Matrix-Telegram puppeting bridge
-# Copyright (C) 2019 Tulir Asokan
+# Copyright (C) 2020 Tulir Asokan
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as published by
@@ -89,7 +89,12 @@ class Config(BaseBridgeConfig):
         copy("bridge.sync_channel_members")
         copy("bridge.skip_deleted_members")
         copy("bridge.startup_sync")
-        copy("bridge.sync_dialog_limit")
+        if "bridge.sync_dialog_limit" in self:
+            base["bridge.sync_create_limit"] = self["bridge.sync_dialog_limit"]
+            base["bridge.sync_update_limit"] = self["bridge.sync_dialog_limit"]
+        else:
+            copy("bridge.sync_update_limit")
+            copy("bridge.sync_create_limit")
         copy("bridge.sync_direct_chats")
         copy("bridge.max_telegram_delete")
         copy("bridge.sync_matrix_state")
@@ -113,6 +118,11 @@ class Config(BaseBridgeConfig):
         copy("bridge.delivery_receipts")
         copy("bridge.delivery_error_reports")
         copy("bridge.resend_bridge_info")
+        copy("bridge.backfill.invite_own_puppet")
+        copy("bridge.backfill.takeout_limit")
+        copy("bridge.backfill.initial_limit")
+        copy("bridge.backfill.missed_limit")
+        copy("bridge.backfill.disable_notifications")
 
         copy("bridge.initial_power_level_overrides.group")
         copy("bridge.initial_power_level_overrides.user")

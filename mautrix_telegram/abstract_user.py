@@ -1,5 +1,5 @@
 # mautrix-telegram - A Matrix-Telegram puppeting bridge
-# Copyright (C) 2019 Tulir Asokan
+# Copyright (C) 2020 Tulir Asokan
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as published by
@@ -425,6 +425,8 @@ class AbstractUser(ABC):
              and sender and sender.id == self.relaybot.tgid)):
             self.log.debug(f"Ignoring relaybot-sent message %s to %s", update.id, portal.tgid_log)
             return
+
+        await portal.backfill_lock.wait(update.id)
 
         if isinstance(update, MessageService):
             if isinstance(update.action, MessageActionChannelMigrateFrom):

@@ -1,5 +1,5 @@
 # mautrix-telegram - A Matrix-Telegram puppeting bridge
-# Copyright (C) 2019 Tulir Asokan
+# Copyright (C) 2020 Tulir Asokan
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as published by
@@ -185,8 +185,10 @@ async def sync(evt: CommandEvent) -> EventID:
         sync_only = None
 
     if not sync_only or sync_only == "chats":
-        await evt.sender.sync_dialogs(synchronous_create=True)
+        await evt.reply("Synchronizing chats...")
+        await evt.sender.sync_dialogs()
     if not sync_only or sync_only == "contacts":
+        await evt.reply("Synchronizing contacts...")
         await evt.sender.sync_contacts()
     if not sync_only or sync_only == "me":
         await evt.sender.update_info()
@@ -311,11 +313,11 @@ async def vote(evt: CommandEvent) -> EventID:
 
 
 @command_handler(help_section=SECTION_MISC, help_args="<_emoji_>",
-                 help_text="Roll a dice (\U0001F3B2) or throw a dart (\U0001F3AF) "
-                           "on the Telegram servers.")
+                 help_text="Roll a dice (\U0001F3B2), kick a football (\u26BD\uFE0F) or throw a "
+                           "dart (\U0001F3AF) or basketball (\U0001F3C0) on the Telegram servers.")
 async def random(evt: CommandEvent) -> EventID:
     if not evt.is_portal:
-        return await evt.reply("You can only roll dice in portal rooms")
+        return await evt.reply("You can only randomize values in portal rooms")
     portal = po.Portal.get_by_mxid(evt.room_id)
     arg = evt.args[0] if len(evt.args) > 0 else "dice"
     emoticon = {
@@ -323,6 +325,8 @@ async def random(evt: CommandEvent) -> EventID:
         "dice": "\U0001F3B2",
         "ball": "\U0001F3C0",
         "basketball": "\U0001F3C0",
+        "football": "\u26BD",
+        "soccer": "\u26BD",
     }.get(arg, arg)
     try:
         await evt.sender.client.send_media(await portal.get_input_entity(evt.sender),
@@ -331,15 +335,19 @@ async def random(evt: CommandEvent) -> EventID:
         return await evt.reply("Invalid emoji for randomization")
 
 
-@command_handler(help_section=SECTION_PORTAL_MANAGEMENT,
+@command_handler(help_section=SECTION_PORTAL_MANAGEMENT, help_args="[_limit_]",
                  help_text="Backfill messages from Telegram history.")
 async def backfill(evt: CommandEvent) -> None:
     if not evt.is_portal:
         await evt.reply("You can only use backfill in portal rooms")
         return
+    try:
+        limit = int(evt.args[0])
+    except (ValueError, IndexError):
+        limit = -1
     portal = po.Portal.get_by_mxid(evt.room_id)
     try:
-        await portal.backfill(evt.sender)
+        await portal.backfill(evt.sender, limit=limit)
     except TakeoutInitDelayError:
         msg = ("Please accept the data export request from a mobile device, "
                "then re-run the backfill command.")

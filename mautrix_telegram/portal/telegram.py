@@ -38,12 +38,13 @@ from telethon.tl.types import (
 from mautrix.appservice import IntentAPI
 from mautrix.types import (EventID, UserID, ImageInfo, ThumbnailInfo, RelatesTo, MessageType,
                            EventType, MediaMessageEventContent, TextMessageEventContent,
-                           LocationMessageEventContent, Format, MessageEventContent)
+                           LocationMessageEventContent, Format)
 
 from ..types import TelegramID
 from ..db import Message as DBMessage, TelegramFile as DBTelegramFile
 from ..util import sane_mimetypes
 from ..context import Context
+from ..tgclient import TelegramClient
 from .. import puppet as p, user as u, formatter, util
 from .base import BasePortal
 
@@ -304,7 +305,8 @@ class PortalTelegram(BasePortal, ABC):
         emoji_text = {
             "\U0001F3AF": " Dart throw",
             "\U0001F3B2": " Dice roll",
-            "\U0001F3C0": " Basketball throw"
+            "\U0001F3C0": " Basketball throw",
+            "\u26BD": " Football kick"
         }
         roll: MessageMediaDice = evt.media
         text = f"{roll.emoticon}{emoji_text.get(roll.emoticon, '')} result: {roll.value}"
@@ -407,42 +409,96 @@ class PortalTelegram(BasePortal, ABC):
                   edit_index=prev_edit_msg.edit_index + 1).insert()
         DBMessage.update_by_mxid(temporary_identifier, self.mxid, mxid=event_id)
 
-    async def backfill(self, source: 'AbstractUser') -> None:
-        self.log.debug("Backfilling history through %s", source.mxid)
+    @property
+    def _takeout_options(self) -> Dict[str, Union[bool, int]]:
+        return {
+            "files": True,
+            "megagroups": self.megagroup,
+            "chats": self.peer_type == "chat",
+            "users": self.peer_type == "user",
+            "channels": (self.peer_type == "channel" and not self.megagroup),
+            "max_file_size": min(config["bridge.max_document_size"], 2000) * 1024 * 1024
+        }
+
+    async def backfill(self, source: 'AbstractUser', is_initial: bool = False,
+                       limit: Optional[int] = None, last_id: Optional[int] = None) -> None:
+        limit = limit or (config["bridge.backfill.initial_limit"] if is_initial
+                          else config["bridge.backfill.missed_limit"])
+        if limit == 0:
+            return
         last = DBMessage.find_last(self.mxid, (source.tgid if self.peer_type != "channel"
                                                else self.tgid))
         min_id = last.tgid if last else 0
-        self.backfilling = True
+        if last_id is None:
+            message = (await source.client.get_messages(self.peer, limit=1))[0]
+            last_id = message.id
+        if last_id <= min_id:
+            # Nothing to backfill
+            return
+        if limit < 0:
+            limit = last_id - min_id
+            self.log.debug(f"Backfilling approximately {last_id - min_id} messages "
+                           f"through {source.mxid}")
+        elif self.peer_type == "channel":
+            # This is a channel or supergroup, so we'll backfill messages based on the ID.
+            # There are some cases, such as deleted messages, where this may backfill less
+            # messages than the limit.
+            min_id = max(last_id - limit, min_id)
+            self.log.debug(f"Backfilling messages after ID {min_id} (last message: {last_id}) "
+                           f"through {source.mxid}")
+        else:
+            # Private chats and normal groups don't have their own message ID namespace,
+            # which means we'll have to fetch messages a different way.
+            # The _backfill_messages method will detect min_id=None and not use reverse=True
+            min_id = None
+            self.log.debug(f"Backfilling up to {limit} messages through {source.mxid}")
+        with self.backfill_lock:
+            await self._backfill(source, min_id, limit)
+
+    async def _backfill(self, source: 'AbstractUser', min_id: Optional[int], limit: int) -> None:
         self.backfill_leave = set()
-        if self.peer_type == "user":
+        if ((self.peer_type == "user" and self.tgid != source.tgid
+             and config["bridge.backfill.invite_own_puppet"])):
             self.log.debug("Adding %s's default puppet to room for backfilling", source.mxid)
             sender = p.Puppet.get(source.tgid)
             await self.main_intent.invite_user(self.mxid, sender.default_mxid)
             await sender.default_mxid_intent.join_room_by_id(self.mxid)
             self.backfill_leave.add(sender.default_mxid_intent)
-        max_file_size = min(config["bridge.max_document_size"], 1500) * 1024 * 1024
-        self.log.trace("Opening takeout client for %d, message ID %d->", source.tgid, min_id)
-        count = 0
-        async with source.client.takeout(files=True, megagroups=self.megagroup,
-                                         chats=self.peer_type == "chat",
-                                         users=self.peer_type == "user",
-                                         channels=(self.peer_type == "channel"
-                                                   and not self.megagroup),
-                                         max_file_size=max_file_size
-                                         ) as takeout_client:
-            async for message in takeout_client.iter_messages(await self.get_input_entity(source),
-                                                              reverse=True, min_id=min_id):
-                sender = p.Puppet.get(message.sender_id)
-                # if isinstance(message, MessageService):
-                #    await self.handle_telegram_action(source, sender, message)
-                await self.handle_telegram_message(source, sender, message)
-                count += 1
+
+        client = source.client
+        if limit > config["bridge.backfill.takeout_limit"]:
+            self.log.debug(f"Opening takeout client for {source.tgid}")
+            async with client.takeout(**self._takeout_options) as takeout:
+                count = await self._backfill_messages(source, min_id, limit, takeout)
+        else:
+            count = await self._backfill_messages(source, min_id, limit, client)
+
         for intent in self.backfill_leave:
             self.log.trace("Leaving room with %s post-backfill", intent.mxid)
             await intent.leave_room(self.mxid)
-        self.backfilling = False
         self.backfill_leave = None
         self.log.info("Backfilled %d messages through %s", count, source.mxid)
+
+    async def _backfill_messages(self, source: 'AbstractUser', min_id: Optional[int], limit: int,
+                                 client: TelegramClient) -> int:
+        count = 0
+        entity = await self.get_input_entity(source)
+        if min_id is not None:
+            self.log.debug(f"Iterating all messages starting with {min_id} (approx: {limit})")
+            messages = client.iter_messages(entity, reverse=True, min_id=min_id)
+            async for message in messages:
+                sender = p.Puppet.get(message.sender_id)
+                # TODO handle service messages?
+                await self.handle_telegram_message(source, sender, message)
+                count += 1
+        else:
+            self.log.debug(f"Fetching up to {limit} most recent messages")
+            messages = await client.get_messages(entity, limit=limit)
+            for message in reversed(messages):
+                sender = p.Puppet.get(message.sender_id)
+                await self.handle_telegram_message(source, sender, message)
+                count += 1
+        return count
 
     async def handle_telegram_message(self, source: 'AbstractUser', sender: p.Puppet,
                                       evt: Message) -> None:
@@ -472,7 +528,7 @@ class PortalTelegram(BasePortal, ABC):
                               tg_space=tg_space, edit_index=0).insert()
                 return
 
-        if self.backfilling or (self.dedup.pre_db_check and self.peer_type == "channel"):
+        if self.backfill_lock.locked or (self.dedup.pre_db_check and self.peer_type == "channel"):
             msg = DBMessage.get_one_by_tgid(TelegramID(evt.id), tg_space)
             if msg:
                 self.log.debug(f"Ignoring message {evt.id} (src {source.tgid}) as it was already"
@@ -496,7 +552,8 @@ class PortalTelegram(BasePortal, ABC):
                                                                   allowed_media) else None
         if sender:
             intent = sender.intent_for(self)
-            if self.backfilling and intent != sender.default_mxid_intent:
+            if ((self.backfill_lock.locked and intent != sender.default_mxid_intent
+                 and config["bridge.backfill.invite_own_puppet"])):
                 intent = sender.default_mxid_intent
                 self.backfill_leave.add(intent)
         else:

@@ -219,18 +219,12 @@ class PortalMetadata(BasePortal, ABC):
                 if changed:
                     self.save()
                     await self.update_bridge_info()
-        puppet = p.Puppet.get_by_custom_mxid(user.mxid)
-        if puppet:
-            try:
-                await puppet.intent.ensure_joined(self.mxid)
-            except Exception:
-                self.log.exception("Failed to ensure %s is joined to portal", user.mxid)
         if self.sync_matrix_state:
             await self.main_intent.get_joined_members(self.mxid)
 
     async def create_matrix_room(self, user: 'AbstractUser', entity: Union[TypeChat, User] = None,
-                                 invites: InviteList = None, update_if_exists: bool = True,
-                                 synchronous: bool = False) -> Optional[str]:
+                                 invites: InviteList = None, update_if_exists: bool = True
+                                 ) -> Optional[RoomID]:
         if self.mxid:
             if update_if_exists:
                 if not entity:
@@ -240,10 +234,7 @@ class PortalMetadata(BasePortal, ABC):
                         self.log.exception(f"Failed to get entity through {user.tgid} for update")
                         return self.mxid
                 update = self.update_matrix_room(user, entity, self.peer_type == "user")
-                if synchronous:
-                    await update
-                else:
-                    asyncio.ensure_future(update, loop=self.loop)
+                self.loop.create_task(update)
                 await self.invite_to_matrix(invites or [])
             return self.mxid
         async with self._room_create_lock:
@@ -392,28 +383,40 @@ class PortalMetadata(BasePortal, ABC):
         if not config["bridge.federate_rooms"]:
             creation_content["m.federate"] = False
 
-        room_id = await self.main_intent.create_room(alias_localpart=alias, preset=preset,
-                                                     is_direct=direct, invitees=invites or [],
-                                                     name=self.title, topic=self.about,
-                                                     initial_state=initial_state,
-                                                     creation_content=creation_content)
-        if not room_id:
-            raise Exception(f"Failed to create room")
+        with self.backfill_lock:
+            room_id = await self.main_intent.create_room(alias_localpart=alias, preset=preset,
+                                                         is_direct=direct, invitees=invites or [],
+                                                         name=self.title, topic=self.about,
+                                                         initial_state=initial_state,
+                                                         creation_content=creation_content)
+            if not room_id:
+                raise Exception(f"Failed to create room")
 
-        if self.encrypted and self.matrix.e2ee and direct:
-            try:
-                await self.az.intent.ensure_joined(room_id)
-            except Exception:
-                self.log.warning(f"Failed to add bridge bot to new private chat {room_id}")
+            if self.encrypted and self.matrix.e2ee and direct:
+                try:
+                    await self.az.intent.ensure_joined(room_id)
+                except Exception:
+                    self.log.warning(f"Failed to add bridge bot to new private chat {room_id}")
 
-        self.mxid = room_id
-        self.by_mxid[self.mxid] = self
-        self.save()
-        await self.az.state_store.set_power_levels(self.mxid, power_levels)
-        user.register_portal(self)
-        asyncio.ensure_future(self.update_matrix_room(user, entity, direct, puppet,
-                                                      levels=power_levels, users=users,
-                                                      participants=participants), loop=self.loop)
+            self.mxid = room_id
+            self.by_mxid[self.mxid] = self
+            self.save()
+            await self.az.state_store.set_power_levels(self.mxid, power_levels)
+            user.register_portal(self)
+
+            update_room = self.loop.create_task(self.update_matrix_room(
+                user, entity, direct, puppet,
+                levels=power_levels, users=users, participants=participants))
+
+            if config["bridge.backfill.initial_limit"] > 0:
+                self.log.debug("Initial backfill is enabled. Waiting for room members to sync "
+                               "and then starting backfill")
+                await update_room
+
+                try:
+                    await self.backfill(user, is_initial=True)
+                except Exception:
+                    self.log.exception("Failed to backfill new portal")
 
         return self.mxid
 
@@ -544,6 +547,13 @@ class PortalMetadata(BasePortal, ABC):
             user = u.User.get_by_tgid(TelegramID(entity.id))
             if user:
                 await self.invite_to_matrix(user.mxid)
+
+                puppet = p.Puppet.get_by_custom_mxid(user.mxid)
+                if puppet:
+                    try:
+                        await puppet.intent.ensure_joined(self.mxid)
+                    except Exception:
+                        self.log.exception("Failed to ensure %s is joined to portal", user.mxid)
 
         # We can't trust the member list if any of the following cases is true:
         #  * There are close to 10 000 users, because Telegram might not be sending all members.

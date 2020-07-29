@@ -1,5 +1,5 @@
 # mautrix-telegram - A Matrix-Telegram puppeting bridge
-# Copyright (C) 2019 Tulir Asokan
+# Copyright (C) 2020 Tulir Asokan
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as published by
@@ -13,7 +13,7 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import (Awaitable, Dict, List, Iterable, NewType, Optional, Tuple, Any, cast,
+from typing import (Awaitable, Dict, List, Iterable, NamedTuple, Optional, Tuple, Any, cast,
                     TYPE_CHECKING)
 import logging
 import asyncio
@@ -21,6 +21,7 @@ import asyncio
 from telethon.tl.types import (TypeUpdate, UpdateNewMessage, UpdateNewChannelMessage, PeerUser,
                                UpdateShortChatMessage, UpdateShortMessage, User as TLUser, Chat,
                                ChatForbidden)
+from telethon.tl.custom import Dialog
 from telethon.tl.types.contacts import ContactsNotModified
 from telethon.tl.functions.contacts import GetContactsRequest, SearchRequest
 from telethon.tl.functions.account import UpdateStatusRequest
@@ -42,7 +43,7 @@ if TYPE_CHECKING:
 
 config: Optional['Config'] = None
 
-SearchResult = NewType('SearchResult', Tuple['pu.Puppet', int])
+SearchResult = NamedTuple('SearchResult', puppet='pu.Puppet', similarity=int)
 
 
 class User(AbstractUser, BaseUser):
@@ -306,7 +307,7 @@ class User(AbstractUser, BaseUser):
         for contact in self.contacts:
             similarity = contact.similarity(query)
             if similarity >= min_similarity:
-                results.append(SearchResult((contact, similarity)))
+                results.append(SearchResult(contact, similarity))
         results.sort(key=lambda tup: tup[1], reverse=True)
         return results[0:max_results]
 
@@ -318,7 +319,7 @@ class User(AbstractUser, BaseUser):
         for user in server_results.users:
             puppet = pu.Puppet.get(user.id)
             await puppet.update_info(self, user)
-            results.append(SearchResult((puppet, puppet.similarity(query))))
+            results.append(SearchResult(puppet, puppet.similarity(query)))
         results.sort(key=lambda tup: tup[1], reverse=True)
         return results[0:max_results]
 
@@ -333,13 +334,17 @@ class User(AbstractUser, BaseUser):
 
         return await self._search_remote(query), True
 
-    async def sync_dialogs(self, synchronous_create: bool = False) -> None:
+    async def sync_dialogs(self) -> None:
         if self.is_bot:
             return
         creators = []
-        limit = config["bridge.sync_dialog_limit"] or None
-        self.log.debug(f"Syncing dialogs (limit={limit}, synchronous_create={synchronous_create})")
-        async for dialog in self.client.iter_dialogs(limit=limit, ignore_migrated=True,
+        update_limit = config["bridge.sync_update_limit"] or None
+        create_limit = config["bridge.sync_create_limit"]
+        index = 0
+        self.log.debug(f"Syncing dialogs (update_limit={update_limit}, "
+                       f"create_limit={create_limit})")
+        dialog: Dialog
+        async for dialog in self.client.iter_dialogs(limit=update_limit, ignore_migrated=True,
                                                      archived=False):
             entity = dialog.entity
             if isinstance(entity, ChatForbidden):
@@ -353,11 +358,17 @@ class User(AbstractUser, BaseUser):
                 continue
             portal = po.Portal.get_by_entity(entity, receiver_id=self.tgid)
             self.portals[portal.tgid_full] = portal
-            creators.append(
-                portal.create_matrix_room(self, entity, invites=[self.mxid],
-                                          synchronous=synchronous_create))
+            if portal.mxid:
+                update_task = portal.update_matrix_room(self, entity)
+                backfill_task = portal.backfill(self, last_id=dialog.message.id)
+                creators.append(self.loop.create_task(update_task))
+                creators.append(self.loop.create_task(backfill_task))
+            elif not create_limit or index < create_limit:
+                create_task = portal.create_matrix_room(self, entity, invites=[self.mxid])
+                creators.append(self.loop.create_task(create_task))
+            index += 1
         self.save(portals=True)
-        await asyncio.gather(*creators, loop=self.loop)
+        await asyncio.gather(*creators)
         self.log.debug("Dialog syncing complete")
 
     def register_portal(self, portal: po.Portal) -> None:
