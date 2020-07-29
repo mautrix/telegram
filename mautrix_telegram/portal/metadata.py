@@ -219,6 +219,14 @@ class PortalMetadata(BasePortal, ABC):
                 if changed:
                     self.save()
                     await self.update_bridge_info()
+
+            puppet = p.Puppet.get_by_custom_mxid(user.mxid)
+            if puppet:
+                try:
+                    await puppet.intent.ensure_joined(self.mxid)
+                except Exception:
+                    self.log.exception("Failed to ensure %s is joined to portal", user.mxid)
+
         if self.sync_matrix_state:
             await self.main_intent.get_joined_members(self.mxid)
 
