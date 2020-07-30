@@ -25,7 +25,7 @@ RUN apk add --no-cache \
         py3-requests \
         #imageio
           py3-numpy \
-      py3-telethon@edge \
+      #py3-telethon@edge \ (outdated)
         # Optional for socks proxies
         py3-pysocks \
         # cryptg
