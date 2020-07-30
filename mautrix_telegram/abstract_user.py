@@ -26,11 +26,12 @@ from telethon.network import (ConnectionTcpMTProxyRandomizedIntermediate, Connec
 from telethon.tl.patched import MessageService, Message
 from telethon.tl.types import (
     Channel, Chat, MessageActionChannelMigrateFrom, PeerUser, TypeUpdate, UpdateChatPinnedMessage,
-    UpdateChannelPinnedMessage, UpdateChatParticipantAdmin, UpdateChatParticipants,
+    UpdateChannelPinnedMessage, UpdateChatParticipantAdmin, UpdateChatParticipants, PeerChat,
     UpdateChatUserTyping, UpdateDeleteChannelMessages, UpdateNewMessage, UpdateDeleteMessages,
     UpdateEditChannelMessage, UpdateEditMessage, UpdateNewChannelMessage, UpdateReadHistoryOutbox,
     UpdateShortChatMessage, UpdateShortMessage, UpdateUserName, UpdateUserPhoto, UpdateUserStatus,
-    UpdateUserTyping, User, UserStatusOffline, UserStatusOnline)
+    UpdateUserTyping, User, UserStatusOffline, UserStatusOnline, UpdateReadHistoryInbox,
+    UpdateReadChannelInbox)
 
 from mautrix.types import UserID, PresenceState
 from mautrix.errors import MatrixError
@@ -258,6 +259,8 @@ class AbstractUser(ABC):
             await self.update_others_info(update)
         elif isinstance(update, UpdateReadHistoryOutbox):
             await self.update_read_receipt(update)
+        elif isinstance(update, (UpdateReadHistoryInbox, UpdateReadChannelInbox)):
+            await self.update_own_read_receipt(update)
         else:
             self.log.trace("Unhandled update: %s", update)
 
@@ -291,6 +294,36 @@ class AbstractUser(ABC):
             return
 
         puppet = pu.Puppet.get(TelegramID(update.peer.user_id))
+        await puppet.intent.mark_read(portal.mxid, message.mxid)
+
+    async def update_own_read_receipt(self, update: Union[UpdateReadHistoryInbox,
+                                                          UpdateReadChannelInbox]) -> None:
+        if not isinstance(update.peer, PeerUser):
+            self.log.debug("Unexpected read receipt peer: %s", update.peer)
+            return
+
+        puppet = pu.Puppet.get(self.tgid)
+        if not puppet.is_real_user:
+            return
+
+        if isinstance(update, UpdateReadChannelInbox):
+            portal = po.Portal.get_by_tgid(TelegramID(update.channel_id))
+        elif isinstance(update.peer, PeerChat):
+            portal = po.Portal.get_by_tgid(TelegramID(update.peer.chat_id))
+        elif isinstance(update.peer, PeerUser):
+            portal = po.Portal.get_by_tgid(TelegramID(update.peer.user_id), self.tgid)
+        else:
+            self.log.debug("Unexpected own read receipt peer: %s", update.peer)
+            return
+
+        if not portal or not portal.mxid:
+            return
+
+        tg_space = portal.tgid if portal.peer_type == "channel" else self.tgid
+        message = DBMessage.get_one_by_tgid(TelegramID(update.max_id), tg_space, edit_index=-1)
+        if not message:
+            return
+
         await puppet.intent.mark_read(portal.mxid, message.mxid)
 
     async def update_admin(self, update: UpdateChatParticipantAdmin) -> None:
