@@ -298,10 +298,6 @@ class AbstractUser(ABC):
 
     async def update_own_read_receipt(self, update: Union[UpdateReadHistoryInbox,
                                                           UpdateReadChannelInbox]) -> None:
-        if not isinstance(update.peer, PeerUser):
-            self.log.debug("Unexpected read receipt peer: %s", update.peer)
-            return
-
         puppet = pu.Puppet.get(self.tgid)
         if not puppet.is_real_user:
             return
