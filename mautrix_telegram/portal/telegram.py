@@ -20,6 +20,7 @@ import mimetypes
 import codecs
 import unicodedata
 import base64
+import asyncio
 
 from sqlalchemy.exc import IntegrityError
 
@@ -73,9 +74,22 @@ class PortalTelegram(BasePortal, ABC):
             return f"https://t.me/c/{self.tgid}/{evt.id}"
         return None
 
+    async def _expire_telegram_photo(self, intent: IntentAPI, event_id: EventID, ttl: int) -> None:
+        try:
+            content = TextMessageEventContent(msgtype=MessageType.NOTICE, body="Photo has expired")
+            content.set_edit(event_id)
+            await asyncio.sleep(ttl)
+            await self._send_message(intent, content)
+        except Exception:
+            self.log.warning("Failed to expire Telegram photo %s", event_id, exc_info=True)
+
     async def handle_telegram_photo(self, source: 'AbstractUser', intent: IntentAPI, evt: Message,
                                     relates_to: RelatesTo = None) -> Optional[EventID]:
-        loc, largest_size = self._get_largest_photo_size(evt.media.photo)
+        media: MessageMediaPhoto = evt.media
+        if media.photo is None and media.ttl_seconds:
+            return await self._send_message(intent, TextMessageEventContent(
+                msgtype=MessageType.NOTICE, body="Photo has expired"))
+        loc, largest_size = self._get_largest_photo_size(media.photo)
         if loc is None:
             content = TextMessageEventContent(msgtype=MessageType.TEXT,
                                               body="Failed to bridge image",
@@ -98,7 +112,8 @@ class PortalTelegram(BasePortal, ABC):
             height=largest_size.h, width=largest_size.w, orientation=0, mimetype=file.mime_type,
             size=(len(largest_size.bytes) if (isinstance(largest_size, PhotoCachedSize))
                   else largest_size.size))
-        name = f"image{sane_mimetypes.guess_extension(file.mime_type)}"
+        ext = sane_mimetypes.guess_extension(file.mime_type)
+        name = f"disappearing_image{ext}" if media.ttl_seconds else f"image{ext}"
         await intent.set_typing(self.mxid, is_typing=False)
         content = MediaMessageEventContent(msgtype=MessageType.IMAGE, info=info,
                                            body=name, relates_to=relates_to,
@@ -108,6 +123,9 @@ class PortalTelegram(BasePortal, ABC):
         else:
             content.url = file.mxc
         result = await self._send_message(intent, content, timestamp=evt.date)
+        if media.ttl_seconds:
+            self.loop.create_task(self._expire_telegram_photo(intent, result,
+                                                              media.ttl_seconds))
         if evt.message:
             caption_content = await formatter.telegram_to_matrix(evt, source, self.main_intent,
                                                                  no_reply_fallback=True)
@@ -535,9 +553,9 @@ class PortalTelegram(BasePortal, ABC):
         if self.backfill_lock.locked or (self.dedup.pre_db_check and self.peer_type == "channel"):
             msg = DBMessage.get_one_by_tgid(TelegramID(evt.id), tg_space)
             if msg:
-                self.log.debug(f"Ignoring message {evt.id} (src {source.tgid}) as it was already"
+                self.log.debug(f"Ignoring message {evt.id} (src {source.tgid}) as it was already "
                                f"handled into {msg.mxid}. This duplicate was catched in the db "
-                               "check. If you get this message often, consider increasing"
+                               "check. If you get this message often, consider increasing "
                                "bridge.deduplication.cache_queue_length in the config.")
                 return
 

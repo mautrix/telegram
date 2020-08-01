@@ -50,7 +50,7 @@ class PortalDedup:
 
     @property
     def _always_force_hash(self) -> bool:
-        return self._portal.peer_type != 'channel'
+        return self._portal.peer_type == 'chat'
 
     @staticmethod
     def _hash_event(event: TypeMessage) -> str:
@@ -69,7 +69,7 @@ class PortalDedup:
                     hash_content += {
                         MessageMediaContact: lambda media: [media.user_id],
                         MessageMediaDocument: lambda media: [media.document.id],
-                        MessageMediaPhoto: lambda media: [media.photo.id],
+                        MessageMediaPhoto: lambda media: [media.photo.id if media.photo else 0],
                         MessageMediaGeo: lambda media: [media.geo.long, media.geo.lat],
                     }[type(event.media)](event.media)
                 except KeyError:
