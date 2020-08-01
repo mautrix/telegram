@@ -120,8 +120,8 @@ class Bot(AbstractUser):
     def register_portal(self, portal: po.Portal) -> None:
         self.add_chat(portal.tgid, portal.peer_type)
 
-    def unregister_portal(self, portal: po.Portal) -> None:
-        self.remove_chat(portal.tgid)
+    def unregister_portal(self, tgid: int, tg_receiver: int) -> None:
+        self.remove_chat(tgid)
 
     def add_chat(self, chat_id: TelegramID, chat_type: str) -> None:
         if chat_id not in self.chats:

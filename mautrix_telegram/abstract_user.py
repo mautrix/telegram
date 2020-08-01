@@ -186,7 +186,7 @@ class AbstractUser(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def unregister_portal(self, portal: po.Portal) -> None:
+    def unregister_portal(self, tgid: int, tg_receiver: int) -> None:
         raise NotImplementedError()
 
     async def _update_catch(self, update: TypeUpdate) -> None:
@@ -459,8 +459,10 @@ class AbstractUser(ABC):
 
         if isinstance(update, MessageService):
             if isinstance(update.action, MessageActionChannelMigrateFrom):
-                self.log.trace(f"Ignoring action %s to %s by %d", update.action, portal.tgid_log,
-                               sender.id)
+                self.log.trace(f"Received %s in %s by %d, unregistering portal...",
+                               update.action, portal.tgid_log, sender.id)
+                self.unregister_portal(update.action.chat_id, update.action.chat_id)
+                self.register_portal(portal)
                 return
             self.log.trace("Handling action %s to %s by %d", update.action, portal.tgid_log,
                            sender.id)

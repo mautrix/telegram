@@ -587,7 +587,7 @@ class PortalMetadata(BasePortal, ABC):
                     continue
                 mx_user = u.User.get_by_mxid(user_mxid, create=False)
                 if mx_user and mx_user.is_bot and mx_user.tgid not in allowed_tgids:
-                    mx_user.unregister_portal(self)
+                    mx_user.unregister_portal(*self.tgid_full)
 
                 if mx_user and not self.has_bot and mx_user.tgid not in allowed_tgids:
                     try:
@@ -624,7 +624,7 @@ class PortalMetadata(BasePortal, ABC):
         else:
             await puppet.intent_for(self).leave_room(self.mxid)
         if user:
-            user.unregister_portal(self)
+            user.unregister_portal(*self.tgid_full)
             if sender.tgid != puppet.tgid:
                 try:
                     await sender.intent_for(self).kick_user(self.mxid, puppet.mxid)

@@ -372,6 +372,7 @@ class User(AbstractUser, BaseUser):
         self.log.debug("Dialog syncing complete")
 
     def register_portal(self, portal: po.Portal) -> None:
+        self.log.trace(f"Registering portal {portal.tgid_full}")
         try:
             if self.portals[portal.tgid_full] == portal:
                 return
@@ -380,9 +381,10 @@ class User(AbstractUser, BaseUser):
         self.portals[portal.tgid_full] = portal
         self.save(portals=True)
 
-    def unregister_portal(self, portal: po.Portal) -> None:
+    def unregister_portal(self, tgid: int, tg_receiver: int) -> None:
+        self.log.trace(f"Unregistering portal {(tgid, tg_receiver)}")
         try:
-            del self.portals[portal.tgid_full]
+            del self.portals[(tgid, tg_receiver)]
             self.save(portals=True)
         except KeyError:
             pass
