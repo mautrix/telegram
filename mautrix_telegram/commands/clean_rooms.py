@@ -17,7 +17,7 @@ from typing import List, NamedTuple, Tuple, Union
 
 from mautrix.appservice import IntentAPI
 from mautrix.errors import MatrixRequestError
-from mautrix.types import RoomID, UserID, EventID
+from mautrix.types import RoomID, UserID, EventID, EventType
 
 from . import command_handler, CommandEvent, SECTION_ADMIN
 from .. import puppet as pu, portal as po
@@ -25,10 +25,11 @@ from .. import puppet as pu, portal as po
 ManagementRoom = NamedTuple('ManagementRoom', room_id=RoomID, user_id=UserID)
 
 
-async def _find_rooms(intent: IntentAPI) -> Tuple[List[ManagementRoom], List[RoomID],
+async def _find_rooms(intent: IntentAPI) -> Tuple[List[ManagementRoom], List[RoomID], List[RoomID],
                                                   List['po.Portal'], List['po.Portal']]:
     management_rooms: List[ManagementRoom] = []
     unidentified_rooms: List[RoomID] = []
+    tombstoned_rooms: List[RoomID] = []
     portals: List[po.Portal] = []
     empty_portals: List[po.Portal] = []
 
@@ -36,6 +37,13 @@ async def _find_rooms(intent: IntentAPI) -> Tuple[List[ManagementRoom], List[Roo
     for room_id in rooms:
         portal = po.Portal.get_by_mxid(room_id)
         if not portal:
+            try:
+                tombstone = await intent.get_state_event(room_id, EventType.ROOM_TOMBSTONE)
+                if tombstone and tombstone.replacement_room:
+                    tombstoned_rooms.append(room_id)
+                    continue
+            except MatrixRequestError:
+                pass
             try:
                 members = await intent.get_room_members(room_id)
             except MatrixRequestError:
@@ -55,14 +63,15 @@ async def _find_rooms(intent: IntentAPI) -> Tuple[List[ManagementRoom], List[Roo
             else:
                 portals.append(portal)
 
-    return management_rooms, unidentified_rooms, portals, empty_portals
+    return management_rooms, unidentified_rooms, tombstoned_rooms, portals, empty_portals
 
 
 @command_handler(needs_admin=True, needs_auth=False, management_only=True, name="clean-rooms",
                  help_section=SECTION_ADMIN,
                  help_text="Clean up unused portal/management rooms.")
 async def clean_rooms(evt: CommandEvent) -> EventID:
-    management_rooms, unidentified_rooms, portals, empty_portals = await _find_rooms(evt.az.intent)
+    (management_rooms, unidentified_rooms, tombstoned_rooms,
+     portals, empty_portals) = await _find_rooms(evt.az.intent)
 
     reply = ["#### Management rooms (M)"]
     reply += ([f"{n+1}. [M{n+1}](https://matrix.to/#/{room}) (with {other_member}"
@@ -77,6 +86,10 @@ async def clean_rooms(evt: CommandEvent) -> EventID:
     reply += ([f"{n+1}. [U{n+1}](https://matrix.to/#/{room})"
                for n, room in enumerate(unidentified_rooms)]
               or ["No unidentified rooms found."])
+    reply.append("#### Tombstoned rooms (T)")
+    reply += ([f"{n+1}. [T{n+1}](https://matrix.to/#/{room})"
+               for n, room in enumerate(tombstoned_rooms)]
+              or ["No tombstoned rooms found."])
     reply.append("#### Inactive portal rooms (I)")
     reply += ([f"{n}. [I{n}](https://matrix.to/#/{portal.mxid}) "
                f"(to Telegram chat \"{portal.title}\")"
@@ -88,7 +101,7 @@ async def clean_rooms(evt: CommandEvent) -> EventID:
                "type `$cmdprefix+sp clean-recommended`"),
               "",
               ("To clean other groups of rooms, type `$cmdprefix+sp clean-groups <letters>` "
-               "where `letters` are the first letters of the group names (M, A, U, I)"),
+               "where `letters` are the first letters of the group names (M, A, U, I, T)"),
               "",
               ("To clean specific rooms, type `$cmdprefix+sp clean-range <range>` "
                "where `range` is the range (e.g. `5-21`) prefixed with the first letter of"
@@ -99,7 +112,8 @@ async def clean_rooms(evt: CommandEvent) -> EventID:
 
     evt.sender.command_status = {
         "next": lambda clean_evt: set_rooms_to_clean(clean_evt, management_rooms,
-                                                     unidentified_rooms, portals, empty_portals),
+                                                     unidentified_rooms, tombstoned_rooms, portals,
+                                                     empty_portals),
         "action": "Room cleaning",
     }
 
@@ -107,8 +121,8 @@ async def clean_rooms(evt: CommandEvent) -> EventID:
 
 
 async def set_rooms_to_clean(evt, management_rooms: List[ManagementRoom],
-                             unidentified_rooms: List[RoomID], portals: List["po.Portal"],
-                             empty_portals: List["po.Portal"]) -> None:
+                             unidentified_rooms: List[RoomID], tombstoned_rooms: List[RoomID],
+                             portals: List["po.Portal"], empty_portals: List["po.Portal"]) -> None:
     command = evt.args[0]
     rooms_to_clean: List[Union[po.Portal, RoomID]] = []
     if command == "clean-recommended":
@@ -126,6 +140,8 @@ async def set_rooms_to_clean(evt, management_rooms: List[ManagementRoom],
             rooms_to_clean += unidentified_rooms
         if "I" in groups_to_clean:
             rooms_to_clean += empty_portals
+        if "T" in groups_to_clean:
+            rooms_to_clean += tombstoned_rooms
     elif command == "clean-range":
         try:
             clean_range = evt.args[1]
@@ -140,6 +156,8 @@ async def set_rooms_to_clean(evt, management_rooms: List[ManagementRoom],
                 group = unidentified_rooms
             elif group == "I":
                 group = empty_portals
+            elif group == "T":
+                group = tombstoned_rooms
             else:
                 raise ValueError("Unknown group")
             rooms_to_clean = group[start - 1:end]
