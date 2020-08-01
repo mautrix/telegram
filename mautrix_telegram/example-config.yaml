@@ -260,6 +260,10 @@ bridge:
         # If using double puppeting, should notifications be disabled
         # while the initial backfill is in progress?
         disable_notifications: false
+        # Whether or not to enable backfilling in normal groups.
+        # Normal groups have numerous technical problems in Telegram, and backfilling normal groups
+        # will likely cause problems if there are multiple Matrix users in the group.
+        normal_groups: false
 
     # Overrides for base power levels.
     initial_power_level_overrides:

@@ -427,6 +427,8 @@ class PortalTelegram(BasePortal, ABC):
                           else config["bridge.backfill.missed_limit"])
         if limit == 0:
             return
+        if not config["bridge.backfill.normal_groups"] and self.peer_type == "chat":
+            return
         last = DBMessage.find_last(self.mxid, (source.tgid if self.peer_type != "channel"
                                                else self.tgid))
         min_id = last.tgid if last else 0

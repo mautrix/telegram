@@ -346,6 +346,9 @@ async def backfill(evt: CommandEvent) -> None:
     except (ValueError, IndexError):
         limit = -1
     portal = po.Portal.get_by_mxid(evt.room_id)
+    if not evt.config["bridge.backfill.normal_groups"] and portal.peer_type == "chat":
+        await evt.reply("Backfilling normal groups is disabled in the bridge config")
+        return
     try:
         await portal.backfill(evt.sender, limit=limit)
     except TakeoutInitDelayError:
