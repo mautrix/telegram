@@ -13,8 +13,10 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import Awaitable
+from typing import Awaitable, Any
 from io import StringIO
+
+from ruamel.yaml import YAMLError
 
 from mautrix.util.config import yaml
 from mautrix.types import EventID
@@ -48,7 +50,11 @@ async def config(evt: CommandEvent) -> None:
         return
 
     key = evt.args[1] if len(evt.args) > 1 else None
-    value = yaml.load(" ".join(evt.args[2:])) if len(evt.args) > 2 else None
+    try:
+        value = yaml.load(" ".join(evt.args[2:])) if len(evt.args) > 2 else None
+    except YAMLError as e:
+        await evt.reply(f"Invalid value provided. Values must be valid YAML.\n{e}")
+        return
     if cmd == "set":
         await config_set(evt, portal, key, value)
     elif cmd == "unset":
@@ -74,14 +80,11 @@ def config_help(evt: CommandEvent) -> Awaitable[EventID]:
 
 
 def config_view(evt: CommandEvent, portal: po.Portal) -> Awaitable[EventID]:
-    stream = StringIO()
-    yaml.dump(portal.local_config, stream)
-    return evt.reply(f"Room-specific config:\n\n```yaml\n{stream.getvalue()}```")
+    return evt.reply(f"Room-specific config:\n{_str_value(portal.local_config).rstrip()}")
 
 
 def config_defaults(evt: CommandEvent) -> Awaitable[EventID]:
-    stream = StringIO()
-    yaml.dump({
+    value = _str_value({
         "bridge_notices": {
             "default": evt.config["bridge.bridge_notices.default"],
             "exceptions": evt.config["bridge.bridge_notices.exceptions"],
@@ -92,15 +95,25 @@ def config_defaults(evt: CommandEvent) -> Awaitable[EventID]:
         "emote_format": evt.config["bridge.emote_format"],
         "state_event_formats": evt.config["bridge.state_event_formats"],
         "telegram_link_preview": evt.config["bridge.telegram_link_preview"],
-    }, stream)
-    return evt.reply(f"Bridge instance wide config:\n\n```yaml\n{stream.getvalue()}```")
+    })
+    return evt.reply(f"Bridge instance wide config:\n{value.rstrip()}")
 
 
-def config_set(evt: CommandEvent, portal: po.Portal, key: str, value: str) -> Awaitable[EventID]:
+def _str_value(value: Any) -> str:
+    stream = StringIO()
+    yaml.dump(value, stream)
+    value_str = stream.getvalue()
+    if "\n" in value_str:
+        return f"\n```yaml\n{value_str}\n```\n"
+    else:
+        return f"`{value_str}`"
+
+
+def config_set(evt: CommandEvent, portal: po.Portal, key: str, value: Any) -> Awaitable[EventID]:
     if not key or value is None:
         return evt.reply(f"**Usage:** `$cmdprefix+sp config set <key> <value>`")
     elif util.recursive_set(portal.local_config, key, value):
-        return evt.reply(f"Successfully set the value of `{key}` to `{value}`.")
+        return evt.reply(f"Successfully set the value of `{key}` to {_str_value(value)}".rstrip())
     else:
         return evt.reply(f"Failed to set value of `{key}`. "
                          "Does the path contain non-map types?")
@@ -128,11 +141,11 @@ def config_add_del(evt: CommandEvent, portal: po.Portal, key: str, value: str, c
         return evt.reply("`{key}` does not seem to be an array.")
     elif cmd == "add":
         if value in arr:
-            return evt.reply(f"The array at `{key}` already contains `{value}`.")
+            return evt.reply(f"The array at `{key}` already contains {_str_value(value)}".rstrip())
         arr.append(value)
-        return evt.reply(f"Successfully added `{value}` to the array at `{key}`")
+        return evt.reply(f"Successfully added {_str_value(value)} to the array at `{key}`")
     else:
         if value not in arr:
-            return evt.reply(f"The array at `{key}` does not contain `{value}`.")
+            return evt.reply(f"The array at `{key}` does not contain {_str_value(value)}")
         arr.remove(value)
-        return evt.reply(f"Successfully removed `{value}` from the array at `{key}`")
+        return evt.reply(f"Successfully removed {_str_value(value)} from the array at `{key}`")
