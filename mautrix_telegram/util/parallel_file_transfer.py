@@ -186,9 +186,9 @@ class ParallelTransferrer:
 
     async def _create_sender(self) -> MTProtoSender:
         dc = await self.client._get_dc(self.dc_id)
-        sender = MTProtoSender(self.auth_key, self.loop, loggers=self.client._log)
+        sender = MTProtoSender(self.auth_key, loggers=self.client._log)
         await sender.connect(self.client._connection(dc.ip_address, dc.port, dc.id,
-                                                     loop=self.loop, loggers=self.client._log,
+                                                     loggers=self.client._log,
                                                      proxy=self.client._proxy))
         if not self.auth_key:
             log.debug(f"Exporting auth to DC {self.dc_id}")
