@@ -24,7 +24,7 @@ from telethon.tl.types import (UserProfilePhoto, User, UpdateUserName, PeerUser,
 
 from mautrix.appservice import AppService, IntentAPI
 from mautrix.errors import MatrixRequestError
-from mautrix.bridge import CustomPuppetMixin
+from mautrix.bridge import BasePuppet
 from mautrix.types import UserID, SyncToken, RoomID
 from mautrix.util.simple_template import SimpleTemplate
 
@@ -41,7 +41,7 @@ if TYPE_CHECKING:
 config: Optional['Config'] = None
 
 
-class Puppet(CustomPuppetMixin):
+class Puppet(BasePuppet):
     log: logging.Logger = logging.getLogger("mau.puppet")
     az: AppService
     mx: 'MatrixHandler'
@@ -166,7 +166,7 @@ class Puppet(CustomPuppetMixin):
     def new_db_instance(self) -> DBPuppet:
         return DBPuppet(id=self.id, **self._fields)
 
-    def save(self) -> None:
+    async def save(self) -> None:
         self.db_instance.edit(**self._fields)
 
     @classmethod
@@ -249,7 +249,7 @@ class Puppet(CustomPuppetMixin):
         self.is_bot = info.bot
 
         if changed:
-            self.save()
+            await self.save()
 
     async def update_displayname(self, source: 'AbstractUser', info: Union[User, UpdateUserName]
                                  ) -> bool:
@@ -355,7 +355,7 @@ class Puppet(CustomPuppetMixin):
         return None
 
     @classmethod
-    def get_by_mxid(cls, mxid: UserID, create: bool = True) -> Optional['Puppet']:
+    def deprecated_sync_get_by_mxid(cls, mxid: UserID, create: bool = True) -> Optional['Puppet']:
         tgid = cls.get_id_from_mxid(mxid)
         if tgid:
             return cls.get(tgid, create)
@@ -363,7 +363,11 @@ class Puppet(CustomPuppetMixin):
         return None
 
     @classmethod
-    def get_by_custom_mxid(cls, mxid: UserID) -> Optional['Puppet']:
+    async def get_by_mxid(cls, mxid: UserID, create: bool = True) -> Optional['Puppet']:
+        return cls.deprecated_sync_get_by_mxid(mxid, create)
+
+    @classmethod
+    def deprecated_sync_get_by_custom_mxid(cls, mxid: UserID) -> Optional['Puppet']:
         if not mxid:
             raise ValueError("Matrix ID can't be empty")
 
@@ -378,6 +382,10 @@ class Puppet(CustomPuppetMixin):
             return puppet
 
         return None
+
+    @classmethod
+    async def get_by_custom_mxid(cls, mxid: UserID) -> Optional['Puppet']:
+        return cls.deprecated_sync_get_by_custom_mxid(mxid)
 
     @classmethod
     def all_with_custom_mxid(cls) -> Iterable['Puppet']:

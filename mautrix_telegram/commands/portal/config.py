@@ -63,7 +63,7 @@ async def config(evt: CommandEvent) -> None:
         await config_add_del(evt, portal, key, value, cmd)
     else:
         return
-    portal.save()
+    await portal.save()
 
 
 def config_help(evt: CommandEvent) -> Awaitable[EventID]:

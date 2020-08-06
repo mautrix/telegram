@@ -136,8 +136,7 @@ async def transfer_thumbnail_to_matrix(client: MautrixTelegramClient, intent: In
     decryption_info = None
     upload_mime_type = mime_type
     if encrypt:
-        file, decryption_info_dict = encrypt_attachment(file)
-        decryption_info = EncryptedFile.deserialize(decryption_info_dict)
+        file, decryption_info = encrypt_attachment(file)
         upload_mime_type = "application/octet-stream"
     content_uri = await intent.upload_media(file, upload_mime_type)
     if decryption_info:
@@ -232,8 +231,7 @@ async def _unlocked_transfer_file_to_matrix(client: MautrixTelegramClient, inten
         decryption_info = None
         upload_mime_type = mime_type
         if encrypt and encrypt_attachment:
-            file, decryption_info_dict = encrypt_attachment(file)
-            decryption_info = EncryptedFile.deserialize(decryption_info_dict)
+            file, decryption_info = encrypt_attachment(file)
             upload_mime_type = "application/octet-stream"
         content_uri = await intent.upload_media(file, upload_mime_type)
         if decryption_info:

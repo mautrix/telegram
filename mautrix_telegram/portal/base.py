@@ -35,6 +35,7 @@ from mautrix.types import (RoomID, RoomAlias, UserID, EventID, EventType, Messag
 from mautrix.util.simple_template import SimpleTemplate
 from mautrix.util.simple_lock import SimpleLock
 from mautrix.util.logging import TraceLogger
+from mautrix.bridge import BasePortal as MautrixBasePortal
 
 from ..types import TelegramID
 from ..context import Context
@@ -57,7 +58,7 @@ InviteList = Union[UserID, List[UserID]]
 config: Optional['Config'] = None
 
 
-class BasePortal(ABC):
+class BasePortal(MautrixBasePortal, ABC):
     base_log: TraceLogger = logging.getLogger("mau.portal")
     az: AppService = None
     bot: 'Bot' = None
@@ -129,7 +130,7 @@ class BasePortal(ABC):
         self.deleted = False
         self.log = self.base_log.getChild(self.tgid_log if self.tgid else self.mxid)
         self.backfill_lock = SimpleLock("Waiting for backfilling to finish before handling %s",
-                                        log=self.log, loop=self.loop)
+                                        log=self.log)
         self.backfill_leave = None
 
         self.dedup = PortalDedup(self)
@@ -289,12 +290,13 @@ class BasePortal(ABC):
     @classmethod
     async def cleanup_room(cls, intent: IntentAPI, room_id: RoomID, message: str,
                            puppets_only: bool = False) -> None:
+        # TODO use the cleanup_room from BasePortal instead of this
         try:
             members = await intent.get_room_members(room_id)
         except MatrixRequestError:
             members = []
         for user in members:
-            puppet = p.Puppet.get_by_mxid(UserID(user), create=False)
+            puppet = await p.Puppet.get_by_mxid(UserID(user), create=False)
             if user != intent.mxid and (not puppets_only or puppet):
                 try:
                     if puppet:
@@ -340,7 +342,7 @@ class BasePortal(ABC):
                         config=json.dumps(self.local_config), avatar_url=self.avatar_url,
                         encrypted=self.encrypted)
 
-    def save(self) -> None:
+    async def save(self) -> None:
         self.db_instance.edit(mxid=self.mxid, username=self.username, title=self.title,
                               about=self.about, photo_id=self.photo_id, megagroup=self.megagroup,
                               config=json.dumps(self.local_config), avatar_url=self.avatar_url,
@@ -474,15 +476,6 @@ class BasePortal(ABC):
                                type_name if create else None)
 
     # endregion
-
-    async def _send_message(self, intent: IntentAPI, content: MessageEventContent,
-                            event_type: EventType = EventType.ROOM_MESSAGE, **kwargs) -> EventID:
-        if self.encrypted and self.matrix.e2ee:
-            if intent.api.is_real_user:
-                content[intent.api.real_user_content_key] = True
-            event_type, content = await self.matrix.e2ee.encrypt(self.mxid, event_type, content)
-        return await intent.send_message_event(self.mxid, event_type, content, **kwargs)
-
     # region Abstract methods (cross-called in matrix/metadata/telegram classes)
 
     @abstractmethod

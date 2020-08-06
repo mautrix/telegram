@@ -53,9 +53,7 @@ class MatrixHandler(BaseMatrixHandler):
         self.user_id_prefix = f"@{prefix}"
         self.user_id_suffix = f"{suffix}:{homeserver}"
 
-        super(MatrixHandler, self).__init__(context.az, context.config, loop=context.loop,
-                                            command_processor=com.CommandProcessor(context),
-                                            bridge=context.bridge)
+        super().__init__(command_processor=com.CommandProcessor(context), bridge=context.bridge)
 
         self.bot = context.bot
         self.previously_typing = {}
@@ -107,8 +105,8 @@ class MatrixHandler(BaseMatrixHandler):
             e2be_ok = None
             if self.config["bridge.encryption.default"] and self.e2ee:
                 e2be_ok = await portal.enable_dm_encryption()
-            portal.save()
-            inviter.register_portal(portal)
+            await portal.save()
+            await inviter.register_portal(portal)
             if e2be_ok is True:
                 evt_type, content = await self.e2ee.encrypt(
                     room_id, EventType.ROOM_MESSAGE,
@@ -208,7 +206,7 @@ class MatrixHandler(BaseMatrixHandler):
             return
         await sender.ensure_started()
 
-        puppet = pu.Puppet.get_by_mxid(user_id)
+        puppet = await pu.Puppet.get_by_mxid(user_id)
         if puppet:
             if ban:
                 await portal.ban_matrix(puppet, sender)
@@ -375,7 +373,7 @@ class MatrixHandler(BaseMatrixHandler):
         if not isinstance(evt, (RedactionEvent, MessageEvent, StateEvent, EncryptedEvent)):
             return True
         if evt.content.get(self.az.real_user_content_key, False):
-            puppet = pu.Puppet.get_by_custom_mxid(evt.sender)
+            puppet = pu.Puppet.deprecated_sync_get_by_custom_mxid(evt.sender)
             if puppet:
                 self.log.debug("Ignoring puppet-sent event %s", evt.event_id)
                 return True
@@ -412,11 +410,6 @@ class MatrixHandler(BaseMatrixHandler):
         elif evt.type == EventType.ROOM_TOMBSTONE:
             await self.handle_room_upgrade(evt.room_id, evt.sender, evt.content.replacement_room,
                                            evt.event_id)
-        elif evt.type == EventType.ROOM_ENCRYPTION:
-            portal = po.Portal.get_by_mxid(evt.room_id)
-            if portal:
-                portal.encrypted = True
-                portal.save()
 
     async def log_event_handle_duration(self, evt: Event, duration: float) -> None:
         if EVENT_TIME:

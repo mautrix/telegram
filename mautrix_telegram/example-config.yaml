@@ -223,6 +223,18 @@ bridge:
         #   Pickle:   pickle:///filename.pickle
         #   Postgres: postgres://username:password@hostname/dbname
         database: default
+        # Options for automatic key sharing.
+        key_sharing:
+            # Enable key sharing? If enabled, key requests for rooms where users are in will be fulfilled.
+            # You must use a client that supports requesting keys from other users to use this feature.
+            allow: false
+            # Require the requesting device to have a valid cross-signing signature?
+            # This doesn't require that the bridge has verified the device, only that the user has verified it.
+            # Not yet implemented.
+            require_cross_signing: false
+            # Require devices to be verified by the bridge?
+            # Verification by the bridge is not yet implemented.
+            require_verification: true
     # Whether or not to explicitly set the avatar and room name for private
     # chat portal rooms. This will be implicitly enabled if encryption.default is true.
     private_chat_portal_meta: false

@@ -48,7 +48,7 @@ class MatrixParser(BaseMatrixParser[TelegramMessage]):
 
     @classmethod
     def user_pill_to_fstring(cls, msg: TelegramMessage, user_id: UserID) -> TelegramMessage:
-        user = (pu.Puppet.get_by_mxid(user_id)
+        user = (pu.Puppet.deprecated_sync_get_by_mxid(user_id)
                 or u.User.get_by_mxid(user_id, create=False))
         if not user:
             return msg

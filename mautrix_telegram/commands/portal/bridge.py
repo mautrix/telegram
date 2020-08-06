@@ -177,7 +177,7 @@ async def confirm_bridge(evt: CommandEvent) -> Optional[EventID]:
     portal.mxid = bridge_to_mxid
     portal.title, portal.about, levels = await get_initial_state(evt.az.intent, evt.room_id)
     portal.photo_id = ""
-    portal.save()
+    await portal.save()
 
     asyncio.ensure_future(portal.update_matrix_room(user, entity, direct, levels=levels),
                           loop=evt.loop)

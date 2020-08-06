@@ -125,10 +125,10 @@ class TelegramBridge(Bridge):
         return Portal.get_by_mxid(room_id)
 
     async def get_puppet(self, user_id: UserID, create: bool = False) -> Puppet:
-        return Puppet.get_by_mxid(user_id, create=create)
+        return await Puppet.get_by_mxid(user_id, create=create)
 
     async def get_double_puppet(self, user_id: UserID) -> Puppet:
-        return Puppet.get_by_custom_mxid(user_id)
+        return await Puppet.get_by_custom_mxid(user_id)
 
 
 TelegramBridge().run()

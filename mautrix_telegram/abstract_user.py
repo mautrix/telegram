@@ -182,11 +182,11 @@ class AbstractUser(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def register_portal(self, portal: po.Portal) -> None:
+    async def register_portal(self, portal: po.Portal) -> None:
         raise NotImplementedError()
 
     @abstractmethod
-    def unregister_portal(self, tgid: int, tg_receiver: int) -> None:
+    async def unregister_portal(self, tgid: int, tg_receiver: int) -> None:
         raise NotImplementedError()
 
     async def _update_catch(self, update: TypeUpdate) -> None:
@@ -358,10 +358,10 @@ class AbstractUser(ABC):
         if isinstance(update, UpdateUserName):
             puppet.username = update.username
             if await puppet.update_displayname(self, update):
-                puppet.save()
+                await puppet.save()
         elif isinstance(update, UpdateUserPhoto):
             if await puppet.update_avatar(self, update.photo):
-                puppet.save()
+                await puppet.save()
         else:
             self.log.warning(f"Unexpected other user info update: {type(update)}")
 
@@ -461,8 +461,8 @@ class AbstractUser(ABC):
             if isinstance(update.action, MessageActionChannelMigrateFrom):
                 self.log.trace(f"Received %s in %s by %d, unregistering portal...",
                                update.action, portal.tgid_log, sender.id)
-                self.unregister_portal(update.action.chat_id, update.action.chat_id)
-                self.register_portal(portal)
+                await self.unregister_portal(update.action.chat_id, update.action.chat_id)
+                await self.register_portal(portal)
                 return
             self.log.trace("Handling action %s to %s by %d", update.action, portal.tgid_log,
                            sender.id)

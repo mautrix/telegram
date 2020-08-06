@@ -183,7 +183,7 @@ class ProvisioningAPI(AuthAPI):
         portal.mxid = room_id
         portal.title, portal.about, levels = await get_initial_state(self.az.intent, room_id)
         portal.photo_id = ""
-        portal.save()
+        await portal.save()
 
         asyncio.ensure_future(portal.update_matrix_room(user, entity, direct, levels=levels),
                               loop=self.loop)

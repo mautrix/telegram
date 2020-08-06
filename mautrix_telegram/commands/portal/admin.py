@@ -86,7 +86,7 @@ async def reload_user(evt: CommandEvent) -> EventID:
     user = u.User.get_by_mxid(mxid, create=False)
     if not user:
         return await evt.reply("User not found")
-    puppet = pu.Puppet.get_by_custom_mxid(mxid)
+    puppet = await pu.Puppet.get_by_custom_mxid(mxid)
     if puppet:
         puppet.sync_task.cancel()
     await user.stop()

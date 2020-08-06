@@ -114,7 +114,7 @@ class PortalMetadata(BasePortal, ABC):
         await source.client(
             UpdateUsernameRequest(await self.get_input_entity(source), username))
         if await self._update_username(username):
-            self.save()
+            await self.save()
 
     async def create_telegram_chat(self, source: 'u.User', supergroup: bool = False) -> None:
         if not self.mxid:
@@ -217,10 +217,10 @@ class PortalMetadata(BasePortal, ABC):
                 changed = await self._update_title(puppet.displayname)
                 changed = await self._update_avatar(user, entity.photo) or changed
                 if changed:
-                    self.save()
+                    await self.save()
                     await self.update_bridge_info()
 
-            puppet = p.Puppet.get_by_custom_mxid(user.mxid)
+            puppet = await p.Puppet.get_by_custom_mxid(user.mxid)
             if puppet:
                 try:
                     await puppet.intent.ensure_joined(self.mxid)
@@ -352,7 +352,7 @@ class PortalMetadata(BasePortal, ABC):
                 invites += extra_invites
                 for invite in extra_invites:
                     power_levels.users.setdefault(invite, 100)
-            self._participants_to_power_levels(participants, power_levels)
+            await self._participants_to_power_levels(participants, power_levels)
         elif self.bot and self.tg_receiver == self.bot.tgid:
             invites = config["bridge.relaybot.private_chat.invite"]
             for invite in invites:
@@ -408,9 +408,9 @@ class PortalMetadata(BasePortal, ABC):
 
             self.mxid = room_id
             self.by_mxid[self.mxid] = self
-            self.save()
+            await self.save()
             await self.az.state_store.set_power_levels(self.mxid, power_levels)
-            user.register_portal(self)
+            await user.register_portal(self)
 
             update_room = self.loop.create_task(self.update_matrix_room(
                 user, entity, direct, puppet,
@@ -497,8 +497,8 @@ class PortalMetadata(BasePortal, ABC):
             return True
         return False
 
-    def _participants_to_power_levels(self, participants: List[TypeParticipant],
-                                      levels: PowerLevelStateEventContent) -> bool:
+    async def _participants_to_power_levels(self, participants: List[TypeParticipant],
+                                            levels: PowerLevelStateEventContent) -> bool:
         bot_level = levels.get_user_level(self.main_intent.mxid)
         if bot_level < levels.get_event_level(EventType.ROOM_POWER_LEVELS):
             return False
@@ -514,7 +514,7 @@ class PortalMetadata(BasePortal, ABC):
             new_level = self._get_level_from_participant(participant)
 
             if user:
-                user.register_portal(self)
+                await user.register_portal(self)
                 changed = self._participant_to_power_levels(levels, user, new_level,
                                                             bot_level) or changed
 
@@ -527,17 +527,17 @@ class PortalMetadata(BasePortal, ABC):
                                            levels: PowerLevelStateEventContent = None) -> None:
         if not levels:
             levels = await self.main_intent.get_power_levels(self.mxid)
-        if self._participants_to_power_levels(participants, levels):
+        if await self._participants_to_power_levels(participants, levels):
             await self.main_intent.set_power_levels(self.mxid, levels)
 
-    def _add_bot_chat(self, bot: User) -> None:
+    async def _add_bot_chat(self, bot: User) -> None:
         if self.bot and bot.id == self.bot.tgid:
             self.bot.add_chat(self.tgid, self.peer_type)
             return
 
         user = u.User.get_by_tgid(TelegramID(bot.id))
         if user and user.is_bot:
-            user.register_portal(self)
+            await user.register_portal(self)
 
     async def _sync_telegram_users(self, source: 'AbstractUser', users: List[User]) -> None:
         allowed_tgids = set()
@@ -547,7 +547,7 @@ class PortalMetadata(BasePortal, ABC):
                 continue
             puppet = p.Puppet.get(TelegramID(entity.id))
             if entity.bot:
-                self._add_bot_chat(entity)
+                await self._add_bot_chat(entity)
             allowed_tgids.add(entity.id)
             await puppet.intent_for(self).ensure_joined(self.mxid)
             await puppet.update_info(source, entity)
@@ -556,7 +556,7 @@ class PortalMetadata(BasePortal, ABC):
             if user:
                 await self.invite_to_matrix(user.mxid)
 
-                puppet = p.Puppet.get_by_custom_mxid(user.mxid)
+                puppet = await p.Puppet.get_by_custom_mxid(user.mxid)
                 if puppet:
                     try:
                         await puppet.intent.ensure_joined(self.mxid)
@@ -587,7 +587,7 @@ class PortalMetadata(BasePortal, ABC):
                     continue
                 mx_user = u.User.get_by_mxid(user_mxid, create=False)
                 if mx_user and mx_user.is_bot and mx_user.tgid not in allowed_tgids:
-                    mx_user.unregister_portal(*self.tgid_full)
+                    await mx_user.unregister_portal(*self.tgid_full)
 
                 if mx_user and not self.has_bot and mx_user.tgid not in allowed_tgids:
                     try:
@@ -607,7 +607,7 @@ class PortalMetadata(BasePortal, ABC):
 
         user = u.User.get_by_tgid(user_id)
         if user:
-            user.register_portal(self)
+            await user.register_portal(self)
             await self.invite_to_matrix(user.mxid)
 
     async def _delete_telegram_user(self, user_id: TelegramID, sender: p.Puppet) -> None:
@@ -624,7 +624,7 @@ class PortalMetadata(BasePortal, ABC):
         else:
             await puppet.intent_for(self).leave_room(self.mxid)
         if user:
-            user.unregister_portal(*self.tgid_full)
+            await user.unregister_portal(*self.tgid_full)
             if sender.tgid != puppet.tgid:
                 try:
                     await sender.intent_for(self).kick_user(self.mxid, puppet.mxid)
@@ -664,7 +664,7 @@ class PortalMetadata(BasePortal, ABC):
             self.log.exception(f"Failed to update info from source {user.tgid}")
 
         if changed:
-            self.save()
+            await self.save()
             await self.update_bridge_info()
 
     async def _update_username(self, username: str, save: bool = False) -> bool:
@@ -682,7 +682,7 @@ class PortalMetadata(BasePortal, ABC):
             await self.main_intent.set_join_rule(self.mxid, "invite")
 
         if save:
-            self.save()
+            await self.save()
         return True
 
     async def _try_set_state(self, sender: Optional['p.Puppet'], evt_type: EventType,
@@ -707,7 +707,7 @@ class PortalMetadata(BasePortal, ABC):
         await self._try_set_state(sender, EventType.ROOM_TOPIC,
                                   RoomTopicStateEventContent(topic=self.about))
         if save:
-            self.save()
+            await self.save()
         return True
 
     async def _update_title(self, title: str, sender: Optional['p.Puppet'] = None,
@@ -719,7 +719,7 @@ class PortalMetadata(BasePortal, ABC):
         await self._try_set_state(sender, EventType.ROOM_NAME,
                                   RoomNameStateEventContent(name=self.title))
         if save:
-            self.save()
+            await self.save()
         return True
 
     async def _update_avatar(self, user: 'AbstractUser', photo: TypeChatPhoto,
@@ -750,7 +750,7 @@ class PortalMetadata(BasePortal, ABC):
                 self.photo_id = ""
                 self.avatar_url = None
                 if save:
-                    self.save()
+                    await self.save()
                 return True
             file = await util.transfer_file_to_matrix(user.client, self.main_intent, loc)
             if file:
@@ -759,7 +759,7 @@ class PortalMetadata(BasePortal, ABC):
                 self.photo_id = photo_id
                 self.avatar_url = file.mxc
                 if save:
-                    self.save()
+                    await self.save()
                 return True
         return False
 

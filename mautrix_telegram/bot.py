@@ -117,10 +117,10 @@ class Bot(AbstractUser):
             except (ChannelPrivateError, ChannelInvalidError):
                 self.remove_chat(TelegramID(channel_id.channel_id))
 
-    def register_portal(self, portal: po.Portal) -> None:
+    async def register_portal(self, portal: po.Portal) -> None:
         self.add_chat(portal.tgid, portal.peer_type)
 
-    def unregister_portal(self, tgid: int, tg_receiver: int) -> None:
+    async def unregister_portal(self, tgid: int, tg_receiver: int) -> None:
         self.remove_chat(tgid)
 
     def add_chat(self, chat_id: TelegramID, chat_type: str) -> None:

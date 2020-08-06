@@ -152,7 +152,7 @@ class User(AbstractUser, BaseUser):
         return DBUser(mxid=self.mxid, tgid=self.tgid, tg_username=self.username,
                       saved_contacts=self.saved_contacts, portals=self.db_portals)
 
-    def save(self, contacts: bool = False, portals: bool = False) -> None:
+    async def save(self, contacts: bool = False, portals: bool = False) -> None:
         self.db_instance.edit(tgid=self.tgid, tg_username=self.username, tg_phone=self.phone,
                               saved_contacts=self.saved_contacts)
         if contacts:
@@ -242,7 +242,7 @@ class User(AbstractUser, BaseUser):
             return False
 
         if portal:
-            self.register_portal(portal)
+            await self.register_portal(portal)
             return False
 
         # Don't bother handling the update
@@ -271,7 +271,7 @@ class User(AbstractUser, BaseUser):
             self.tgid = TelegramID(info.id)
             self.by_tgid[self.tgid] = self
         if changed:
-            self.save()
+            await self.save()
 
     async def log_out(self) -> bool:
         puppet = pu.Puppet.get(self.tgid)
@@ -287,14 +287,14 @@ class User(AbstractUser, BaseUser):
                 pass
         self.portals = {}
         self.contacts = []
-        self.save(portals=True, contacts=True)
+        await self.save(portals=True, contacts=True)
         if self.tgid:
             try:
                 del self.by_tgid[self.tgid]
             except KeyError:
                 pass
             self.tgid = None
-            self.save()
+            await self.save()
         ok = await self.client.log_out()
         if not ok:
             return False
@@ -367,11 +367,11 @@ class User(AbstractUser, BaseUser):
                 create_task = portal.create_matrix_room(self, entity, invites=[self.mxid])
                 creators.append(self.loop.create_task(create_task))
             index += 1
-        self.save(portals=True)
+        await self.save(portals=True)
         await asyncio.gather(*creators)
         self.log.debug("Dialog syncing complete")
 
-    def register_portal(self, portal: po.Portal) -> None:
+    async def register_portal(self, portal: po.Portal) -> None:
         self.log.trace(f"Registering portal {portal.tgid_full}")
         try:
             if self.portals[portal.tgid_full] == portal:
@@ -379,13 +379,13 @@ class User(AbstractUser, BaseUser):
         except KeyError:
             pass
         self.portals[portal.tgid_full] = portal
-        self.save(portals=True)
+        await self.save(portals=True)
 
-    def unregister_portal(self, tgid: int, tg_receiver: int) -> None:
+    async def unregister_portal(self, tgid: int, tg_receiver: int) -> None:
         self.log.trace(f"Unregistering portal {(tgid, tg_receiver)}")
         try:
             del self.portals[(tgid, tg_receiver)]
-            self.save(portals=True)
+            await self.save(portals=True)
         except KeyError:
             pass
 
@@ -410,7 +410,7 @@ class User(AbstractUser, BaseUser):
             puppet = pu.Puppet.get(user.id)
             await puppet.update_info(self, user)
             self.contacts.append(puppet)
-        self.save(contacts=True)
+        await self.save(contacts=True)
 
     # endregion
     # region Class instance lookup

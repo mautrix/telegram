@@ -37,7 +37,6 @@ from telethon.tl.types import (
 from mautrix.types import (EventID, RoomID, UserID, ContentURI, MessageType, MessageEventContent,
                            TextMessageEventContent, MediaMessageEventContent, Format,
                            LocationMessageEventContent)
-from mautrix.bridge import BasePortal as MautrixBasePortal
 
 from ..types import TelegramID
 from ..db import Message as DBMessage
@@ -61,7 +60,7 @@ TypeMessage = Union[Message, MessageService]
 config: Optional['Config'] = None
 
 
-class PortalMatrix(BasePortal, MautrixBasePortal, ABC):
+class PortalMatrix(BasePortal, ABC):
     async def _get_state_change_message(self, event: str, user: 'u.User', **kwargs: Any
                                         ) -> Optional[str]:
         tpl = self.get_config(f"state_event_formats.{event}")
@@ -484,7 +483,7 @@ class PortalMatrix(BasePortal, MautrixBasePortal, ABC):
         peer = await self.get_input_entity(sender)
         await sender.client(EditChatAboutRequest(peer=peer, about=about))
         self.about = about
-        self.save()
+        await self.save()
         await self._send_delivery_receipt(event_id)
 
     async def handle_matrix_title(self, sender: 'u.User', title: str, event_id: EventID) -> None:
@@ -498,7 +497,7 @@ class PortalMatrix(BasePortal, MautrixBasePortal, ABC):
             response = await sender.client(EditTitleRequest(channel=channel, title=title))
         self.dedup.register_outgoing_actions(response)
         self.title = title
-        self.save()
+        await self.save()
         await self._send_delivery_receipt(event_id)
         await self.update_bridge_info()
 
@@ -530,7 +529,7 @@ class PortalMatrix(BasePortal, MautrixBasePortal, ABC):
             if is_photo_update:
                 loc, size = self._get_largest_photo_size(update.message.action.photo)
                 self.photo_id = f"{size.location.volume_id}-{size.location.local_id}"
-                self.save()
+                await self.save()
                 break
         await self._send_delivery_receipt(event_id)
         await self.update_bridge_info()
