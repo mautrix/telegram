@@ -334,6 +334,12 @@ class User(AbstractUser, BaseUser):
 
         return await self._search_remote(query), True
 
+    async def _catch(self, action: str, task: asyncio.Task) -> None:
+        try:
+            await task
+        except Exception:
+            self.log.exception(f"Error while {action}")
+
     async def sync_dialogs(self) -> None:
         if self.is_bot:
             return
@@ -361,11 +367,14 @@ class User(AbstractUser, BaseUser):
             if portal.mxid:
                 update_task = portal.update_matrix_room(self, entity)
                 backfill_task = portal.backfill(self, last_id=dialog.message.id)
-                creators.append(self.loop.create_task(update_task))
-                creators.append(self.loop.create_task(backfill_task))
+                creators.append(self._catch(f"updating {portal.tgid_log}",
+                                            self.loop.create_task(update_task)))
+                creators.append(self._catch(f"backfilling {portal.tgid_log}",
+                                            self.loop.create_task(backfill_task)))
             elif not create_limit or index < create_limit:
                 create_task = portal.create_matrix_room(self, entity, invites=[self.mxid])
-                creators.append(self.loop.create_task(create_task))
+                creators.append(self._catch(f"creating {portal.tgid_log}",
+                                            self.loop.create_task(create_task)))
             index += 1
         await self.save(portals=True)
         await asyncio.gather(*creators)
