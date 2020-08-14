@@ -14,7 +14,7 @@ build amd64:
   - amd64
   script:
   - docker pull $CI_REGISTRY_IMAGE:latest || true
-  - docker build --pull --cache-from $CI_REGISTRY_IMAGE:latest --tag $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA-amd64 .
+  - docker build --pull --cache-from $CI_REGISTRY_IMAGE:latest --build-arg TARGETARCH=amd64 --tag $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA-amd64 .
   - docker push $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA-amd64
   - docker rmi $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA-amd64
 
@@ -24,7 +24,7 @@ build arm64:
   - arm64
   script:
   - docker pull $CI_REGISTRY_IMAGE:latest || true
-  - docker build --pull --cache-from $CI_REGISTRY_IMAGE:latest --tag $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA-arm64 .
+  - docker build --pull --cache-from $CI_REGISTRY_IMAGE:latest --build-arg TARGETARCH=arm64 --tag $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA-arm64 .
   - docker push $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA-arm64
   - docker rmi $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA-arm64
 
