@@ -226,7 +226,7 @@ class Bot(AbstractUser):
 
         return False
 
-    async def handle_command(self, message: Message) -> Optional[bool]:
+    async def handle_command(self, message: Message) -> None:
         def reply(reply_text: str) -> Awaitable[Message]:
             return self.client.send_message(message.chat_id, reply_text, reply_to=message.id)
 
@@ -234,9 +234,8 @@ class Bot(AbstractUser):
 
         if self.match_command(text, "start"):
             pcm = config["bridge.relaybot.private_chat.message"]
-            if not pcm:
-                return True
-            await reply(pcm)
+            if pcm:
+                await reply(pcm)
             return
         elif self.match_command(text, "id"):
             await self.handle_command_id(message, reply)
@@ -246,18 +245,19 @@ class Bot(AbstractUser):
 
         portal = po.Portal.get_by_entity(message.to_id)
 
-        if self.match_command(text, "portal"):
+        is_portal_cmd = self.match_command(text, "portal")
+        is_invite_cmd = self.match_command(text, "invite")
+        if is_portal_cmd or is_invite_cmd:
             if not await self.check_can_use_commands(message, reply):
                 return
-            await self.handle_command_portal(portal, reply)
-        elif self.match_command(text, "invite"):
-            if not await self.check_can_use_commands(message, reply):
-                return
-            try:
-                mxid = text[text.index(" ") + 1:]
-            except ValueError:
-                mxid = ""
-            await self.handle_command_invite(portal, reply, mxid_input=UserID(mxid))
+            if is_portal_cmd:
+                await self.handle_command_portal(portal, reply)
+            elif is_invite_cmd:
+                try:
+                    mxid = text[text.index(" ") + 1:]
+                except ValueError:
+                    mxid = ""
+                await self.handle_command_invite(portal, reply, mxid_input=UserID(mxid))
 
     def handle_service_message(self, message: MessageService) -> None:
         to_peer = message.to_id
@@ -291,7 +291,7 @@ class Bot(AbstractUser):
                       and isinstance(update.message.entities[0], MessageEntityBotCommand)
                       and update.message.entities[0].offset == 0)
         if is_command:
-            return not await self.handle_command(update.message)
+            await self.handle_command(update.message)
         return False
 
     def is_in_chat(self, peer_id) -> bool:
