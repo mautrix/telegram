@@ -288,7 +288,8 @@ class Bot(AbstractUser):
 
         is_command = (isinstance(update.message, Message)
                       and update.message.entities and len(update.message.entities) > 0
-                      and isinstance(update.message.entities[0], MessageEntityBotCommand))
+                      and isinstance(update.message.entities[0], MessageEntityBotCommand)
+                      and update.message.entities[0].offset == 0)
         if is_command:
             return not await self.handle_command(update.message)
         return False
