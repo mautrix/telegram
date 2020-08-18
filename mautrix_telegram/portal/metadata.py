@@ -543,14 +543,16 @@ class PortalMetadata(BasePortal, ABC):
         allowed_tgids = set()
         skip_deleted = config["bridge.skip_deleted_members"]
         for entity in users:
-            if skip_deleted and entity.deleted:
-                continue
             puppet = p.Puppet.get(TelegramID(entity.id))
             if entity.bot:
                 await self._add_bot_chat(entity)
             allowed_tgids.add(entity.id)
-            await puppet.intent_for(self).ensure_joined(self.mxid)
+
             await puppet.update_info(source, entity)
+            if skip_deleted and entity.deleted:
+                continue
+
+            await puppet.intent_for(self).ensure_joined(self.mxid)
 
             user = u.User.get_by_tgid(TelegramID(entity.id))
             if user:
