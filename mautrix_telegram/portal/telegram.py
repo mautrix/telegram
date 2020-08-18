@@ -441,6 +441,11 @@ class PortalTelegram(BasePortal, ABC):
 
     async def backfill(self, source: 'AbstractUser', is_initial: bool = False,
                        limit: Optional[int] = None, last_id: Optional[int] = None) -> None:
+        async with self.backfill_method_lock:
+            await self._locked_backfill(source, is_initial, limit, last_id)
+
+    async def _locked_backfill(self, source: 'AbstractUser', is_initial: bool = False,
+                               limit: Optional[int] = None, last_id: Optional[int] = None) -> None:
         limit = limit or (config["bridge.backfill.initial_limit"] if is_initial
                           else config["bridge.backfill.missed_limit"])
         if limit == 0:

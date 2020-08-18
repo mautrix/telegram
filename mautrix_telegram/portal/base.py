@@ -96,6 +96,7 @@ class BasePortal(MautrixBasePortal, ABC):
     encrypted: bool
     deleted: bool
     backfill_lock: SimpleLock
+    backfill_method_lock: asyncio.Lock
     backfill_leave: Optional[Set[IntentAPI]]
     log: TraceLogger
 
@@ -131,6 +132,7 @@ class BasePortal(MautrixBasePortal, ABC):
         self.log = self.base_log.getChild(self.tgid_log if self.tgid else self.mxid)
         self.backfill_lock = SimpleLock("Waiting for backfilling to finish before handling %s",
                                         log=self.log)
+        self.backfill_method_lock = asyncio.Lock()
         self.backfill_leave = None
 
         self.dedup = PortalDedup(self)
