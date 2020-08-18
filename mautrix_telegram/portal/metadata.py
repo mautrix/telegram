@@ -570,8 +570,9 @@ class PortalMetadata(BasePortal, ABC):
         #  * There are close to 10 000 users, because Telegram might not be sending all members.
         #  * The member sync count is limited, because then we might ignore some members.
         #  * It's a channel, because non-admins don't have access to the member list.
-        trust_member_list = (len(allowed_tgids) < 9900
-                             and self.max_initial_member_sync > len(allowed_tgids) + 10
+        trust_member_list = ((len(allowed_tgids) < 9900
+                              if self.max_initial_member_sync < 0
+                              else len(allowed_tgids) < self.max_initial_member_sync - 10)
                              and (self.megagroup or self.peer_type != "channel"))
         if trust_member_list:
             joined_mxids = await self.main_intent.get_room_members(self.mxid)
