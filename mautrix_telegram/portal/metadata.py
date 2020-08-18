@@ -571,7 +571,7 @@ class PortalMetadata(BasePortal, ABC):
         #  * The member sync count is limited, because then we might ignore some members.
         #  * It's a channel, because non-admins don't have access to the member list.
         trust_member_list = (len(allowed_tgids) < 9900
-                             and self.max_initial_member_sync == -1
+                             and self.max_initial_member_sync > len(allowed_tgids) + 10
                              and (self.megagroup or self.peer_type != "channel"))
         if trust_member_list:
             joined_mxids = await self.main_intent.get_room_members(self.mxid)
