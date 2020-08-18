@@ -233,18 +233,17 @@ class Puppet(BasePuppet):
             source.log.exception(f"Failed to update info of {self.tgid}")
 
     async def update_info(self, source: 'AbstractUser', info: User) -> None:
-        if self.disable_updates:
-            return
         changed = False
         if self.username != info.username:
             self.username = info.username
             changed = True
 
-        try:
-            changed = await self.update_displayname(source, info) or changed
-            changed = await self.update_avatar(source, info.photo) or changed
-        except Exception:
-            self.log.exception(f"Failed to update info from source {source.tgid}")
+        if not self.disable_updates:
+            try:
+                changed = await self.update_displayname(source, info) or changed
+                changed = await self.update_avatar(source, info.photo) or changed
+            except Exception:
+                self.log.exception(f"Failed to update info from source {source.tgid}")
 
         self.is_bot = info.bot
 
