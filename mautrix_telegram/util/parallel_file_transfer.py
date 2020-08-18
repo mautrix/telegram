@@ -262,8 +262,8 @@ async def parallel_transfer_to_matrix(client: MautrixTelegramClient, intent: Int
             async def encrypted(stream):
                 nonlocal decryption_info
                 async for chunk in async_encrypt_attachment(stream):
-                    if isinstance(chunk, dict):
-                        decryption_info = EncryptedFile.deserialize(chunk)
+                    if isinstance(chunk, EncryptedFile):
+                        decryption_info = chunk
                     else:
                         yield chunk
 
