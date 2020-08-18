@@ -185,27 +185,24 @@ class PortalMetadata(BasePortal, ABC):
     async def update_matrix_room(self, user: 'AbstractUser', entity: Union[TypeChat, User],
                                  direct: bool = None, puppet: p.Puppet = None,
                                  levels: PowerLevelStateEventContent = None,
-                                 users: List[User] = None,
-                                 participants: List[TypeParticipant] = None) -> None:
+                                 users: List[User] = None) -> None:
         if direct is None:
             direct = self.peer_type == "user"
         try:
-            await self._update_matrix_room(user, entity, direct, puppet, levels, users,
-                                           participants)
+            await self._update_matrix_room(user, entity, direct, puppet, levels, users)
         except Exception:
             self.log.exception("Fatal error updating Matrix room")
 
     async def _update_matrix_room(self, user: 'AbstractUser', entity: Union[TypeChat, User],
                                   direct: bool, puppet: p.Puppet = None,
                                   levels: PowerLevelStateEventContent = None,
-                                  users: List[User] = None,
-                                  participants: List[TypeParticipant] = None) -> None:
+                                  users: List[User] = None) -> None:
         if not direct:
             await self.update_info(user, entity)
-            if not users or not participants:
-                users, participants = await self._get_users(user, entity)
+            if not users:
+                users = await self._get_users(user, entity)
             await self._sync_telegram_users(user, users)
-            await self.update_telegram_participants(participants, levels)
+            await self.update_power_levels(users, levels)
         else:
             if not puppet:
                 puppet = p.Puppet.get(self.tgid)
@@ -344,15 +341,15 @@ class PortalMetadata(BasePortal, ABC):
             await self.main_intent.remove_room_alias(alias)
 
         power_levels = self._get_base_power_levels(entity=entity)
-        users = participants = None
+        users = None
         if not direct:
-            users, participants = await self._get_users(user, entity)
+            users = await self._get_users(user, entity)
             if self.has_bot:
                 extra_invites = config["bridge.relaybot.group_chat_invite"]
                 invites += extra_invites
                 for invite in extra_invites:
                     power_levels.users.setdefault(invite, 100)
-            await self._participants_to_power_levels(participants, power_levels)
+            await self._participants_to_power_levels(users, power_levels)
         elif self.bot and self.tg_receiver == self.bot.tgid:
             invites = config["bridge.relaybot.private_chat.invite"]
             for invite in invites:
@@ -414,7 +411,7 @@ class PortalMetadata(BasePortal, ABC):
 
             update_room = self.loop.create_task(self.update_matrix_room(
                 user, entity, direct, puppet,
-                levels=power_levels, users=users, participants=participants))
+                levels=power_levels, users=users))
 
             if config["bridge.backfill.initial_limit"] > 0:
                 self.log.debug("Initial backfill is enabled. Waiting for room members to sync "
@@ -497,7 +494,7 @@ class PortalMetadata(BasePortal, ABC):
             return True
         return False
 
-    async def _participants_to_power_levels(self, participants: List[TypeParticipant],
+    async def _participants_to_power_levels(self, users: List[Union[TypeUser, TypeParticipant]],
                                             levels: PowerLevelStateEventContent) -> bool:
         bot_level = levels.get_user_level(self.main_intent.mxid)
         if bot_level < levels.get_event_level(EventType.ROOM_POWER_LEVELS):
@@ -508,7 +505,11 @@ class PortalMetadata(BasePortal, ABC):
             changed = True
             levels.events[EventType.ROOM_POWER_LEVELS] = admin_power_level
 
-        for participant in participants:
+        for user in users:
+            # The User objects we get from TelegramClient.get_participants have a custom
+            # participant property
+            participant = getattr(user, "participant", user)
+
             puppet = p.Puppet.get(TelegramID(participant.user_id))
             user = u.User.get_by_tgid(TelegramID(participant.user_id))
             new_level = self._get_level_from_participant(participant)
@@ -523,11 +524,11 @@ class PortalMetadata(BasePortal, ABC):
                                                             bot_level) or changed
         return changed
 
-    async def update_telegram_participants(self, participants: List[TypeParticipant],
-                                           levels: PowerLevelStateEventContent = None) -> None:
+    async def update_power_levels(self, users: List[Union[TypeUser, TypeParticipant]],
+                                  levels: PowerLevelStateEventContent = None) -> None:
         if not levels:
             levels = await self.main_intent.get_power_levels(self.mxid)
-        if await self._participants_to_power_levels(participants, levels):
+        if await self._participants_to_power_levels(users, levels):
             await self.main_intent.set_power_levels(self.mxid, levels)
 
     async def _add_bot_chat(self, bot: User) -> None:
@@ -767,48 +768,18 @@ class PortalMetadata(BasePortal, ABC):
 
     async def _get_users(self, user: 'AbstractUser',
                          entity: Union[TypeInputPeer, InputUser, TypeChat, TypeUser, InputChannel]
-                         ) -> Tuple[List[TypeUser], List[TypeParticipant]]:
-        # TODO replace with client.get_participants
-        if self.peer_type == "chat":
-            chat = await user.client(GetFullChatRequest(chat_id=self.tgid))
-            return chat.users, chat.full_chat.participants.participants
-        elif self.peer_type == "channel":
-            if not self.megagroup and not self.sync_channel_members:
-                return [], []
-
-            limit = self.max_initial_member_sync
-            if limit == 0:
-                return [], []
-
-            try:
-                if 0 < limit <= 200:
-                    response = await user.client(GetParticipantsRequest(
-                        entity, ChannelParticipantsRecent(), offset=0, limit=limit, hash=0))
-                    return response.users, response.participants
-                elif limit > 200 or limit == -1:
-                    users: List[TypeUser] = []
-                    participants: List[TypeParticipant] = []
-                    offset = 0
-                    remaining_quota = limit if limit > 0 else 1000000
-                    query = (ChannelParticipantsSearch("") if limit == -1
-                             else ChannelParticipantsRecent())
-                    while True:
-                        if remaining_quota <= 0:
-                            break
-                        response = await user.client(GetParticipantsRequest(
-                            entity, query, offset=offset, limit=min(remaining_quota, 100), hash=0))
-                        if not response.users:
-                            break
-                        participants += response.participants
-                        users += response.users
-                        offset += len(response.participants)
-                        remaining_quota -= len(response.participants)
-                    return users, participants
-            except ChatAdminRequiredError:
-                return [], []
-        elif self.peer_type == "user":
-            return [entity], []
-        return [], []
+                         ) -> List[TypeUser]:
+        if self.peer_type == "user":
+            return [entity]
+        limit = self.max_initial_member_sync
+        if limit == 0:
+            return []
+        elif limit < 0:
+            limit = None
+        try:
+            return await user.client.get_participants(entity, limit=limit)
+        except ChatAdminRequiredError:
+            return []
 
     # endregion
 

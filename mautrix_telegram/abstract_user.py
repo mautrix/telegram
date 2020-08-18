@@ -277,7 +277,7 @@ class AbstractUser(ABC):
     async def update_participants(update: UpdateChatParticipants) -> None:
         portal = po.Portal.get_by_tgid(TelegramID(update.participants.chat_id))
         if portal and portal.mxid:
-            await portal.update_telegram_participants(update.participants.participants)
+            await portal.update_power_levels(update.participants.participants)
 
     async def update_read_receipt(self, update: UpdateReadHistoryOutbox) -> None:
         if not isinstance(update.peer, PeerUser):
