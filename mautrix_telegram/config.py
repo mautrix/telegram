@@ -48,6 +48,8 @@ class Config(BaseBridgeConfig):
         super().do_update(helper)
         copy, copy_dict, base = helper
 
+        copy("homeserver.asmux")
+
         if "appservice.protocol" in self and "appservice.address" not in self:
             protocol, hostname, port = (self["appservice.protocol"], self["appservice.hostname"],
                                         self["appservice.port"])
@@ -102,6 +104,7 @@ class Config(BaseBridgeConfig):
         copy("bridge.plaintext_highlights")
         copy("bridge.public_portals")
         copy("bridge.sync_with_custom_puppets")
+        copy("bridge.sync_direct_chat_list")
         copy("bridge.login_shared_secret")
         copy("bridge.telegram_link_preview")
         copy("bridge.inline_images")

@@ -50,6 +50,10 @@ class Portal(Base):
         return cls._select_one_or_none(cls.c.tgid == tgid, cls.c.tg_receiver == tg_receiver)
 
     @classmethod
+    def find_private_chats(cls, tg_receiver: TelegramID) -> Iterable['Portal']:
+        yield from cls._select_all(cls.c.tg_receiver == tg_receiver, cls.c.peer_type == "user")
+
+    @classmethod
     def get_by_mxid(cls, mxid: RoomID) -> Optional['Portal']:
         return cls._select_one_or_none(cls.c.mxid == mxid)
 

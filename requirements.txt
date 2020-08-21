@@ -4,6 +4,6 @@ ruamel.yaml>=0.15.35,<0.17
 python-magic>=0.4,<0.5
 commonmark>=0.8,<0.10
 aiohttp>=3,<4
-mautrix==0.7.0rc1
+mautrix==0.7.0rc2
 telethon>=1.16,<1.17
 telethon-session-sqlalchemy>=0.2.14,<0.3

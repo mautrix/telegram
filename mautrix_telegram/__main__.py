@@ -130,5 +130,8 @@ class TelegramBridge(Bridge):
     async def get_double_puppet(self, user_id: UserID) -> Puppet:
         return await Puppet.get_by_custom_mxid(user_id)
 
+    def is_bridge_ghost(self, user_id: UserID) -> bool:
+        return bool(Puppet.get_id_from_mxid(user_id))
+
 
 TelegramBridge().run()

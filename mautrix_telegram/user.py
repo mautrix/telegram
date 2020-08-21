@@ -28,12 +28,12 @@ from telethon.tl.functions.account import UpdateStatusRequest
 
 from mautrix.client import Client
 from mautrix.errors import MatrixRequestError
-from mautrix.types import UserID
+from mautrix.types import UserID, RoomID
 from mautrix.bridge import BaseUser
 from mautrix.util.logging import TraceLogger
 
 from .types import TelegramID
-from .db import User as DBUser
+from .db import User as DBUser, Portal as DBPortal
 from .abstract_user import AbstractUser
 from . import portal as po, puppet as pu
 
@@ -79,6 +79,7 @@ class User(AbstractUser, BaseUser):
         self.db_portals = db_portals or []
         self._db_instance = db_instance
         self._ensure_started_lock = asyncio.Lock()
+        self.dm_update_lock = asyncio.Lock()
 
         self.command_status = None
 
@@ -340,6 +341,13 @@ class User(AbstractUser, BaseUser):
         except Exception:
             self.log.exception(f"Error while {action}")
 
+    async def get_direct_chats(self) -> Dict[UserID, List[RoomID]]:
+        return {
+            pu.Puppet.get_mxid_from_id(portal.tgid): [portal.mxid]
+            for portal in DBPortal.find_private_chats(self.tgid)
+            if portal.mxid
+        }
+
     async def sync_dialogs(self) -> None:
         if self.is_bot:
             return
@@ -378,6 +386,7 @@ class User(AbstractUser, BaseUser):
             index += 1
         await self.save(portals=True)
         await asyncio.gather(*creators)
+        await self.update_direct_chats()
         self.log.debug("Dialog syncing complete")
 
     async def register_portal(self, portal: po.Portal) -> None:
@@ -482,6 +491,7 @@ class User(AbstractUser, BaseUser):
 def init(context: 'Context') -> Iterable[Awaitable['User']]:
     global config
     config = context.config
+    User.bridge = context.bridge
 
     return (User.from_db(db_user).try_ensure_started()
             for db_user in DBUser.all_with_tgid())

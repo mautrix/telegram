@@ -220,7 +220,9 @@ class PortalMetadata(BasePortal, ABC):
             puppet = await p.Puppet.get_by_custom_mxid(user.mxid)
             if puppet:
                 try:
-                    await puppet.intent.ensure_joined(self.mxid)
+                    did_join = await puppet.intent.ensure_joined(self.mxid)
+                    if isinstance(user, u.User) and did_join and self.peer_type == "user":
+                        await user.update_direct_chats({self.main_intent.mxid: [self.mxid]})
                 except Exception:
                     self.log.exception("Failed to ensure %s is joined to portal", user.mxid)
 
