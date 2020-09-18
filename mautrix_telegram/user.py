@@ -31,6 +31,7 @@ from mautrix.errors import MatrixRequestError
 from mautrix.types import UserID, RoomID
 from mautrix.bridge import BaseUser
 from mautrix.util.logging import TraceLogger
+from mautrix.util.opt_prometheus import Enum
 
 from .types import TelegramID
 from .db import User as DBUser, Portal as DBPortal
@@ -44,6 +45,11 @@ if TYPE_CHECKING:
 config: Optional['Config'] = None
 
 SearchResult = NamedTuple('SearchResult', puppet='pu.Puppet', similarity=int)
+
+METRIC_LOGGED_IN = Enum('bridge_logged_in', 'Bridge Logged in', states=["true", "false"],
+                        labelnames=("tgid",))
+METRIC_CONNECTED = Enum('bridge_connected', 'Bridge Connected', states=["true", "false"],
+                        labelnames=("tgid",))
 
 
 class User(AbstractUser, BaseUser):
@@ -193,14 +199,20 @@ class User(AbstractUser, BaseUser):
 
     async def start(self, delete_unless_authenticated: bool = False) -> 'User':
         await super().start()
+        METRIC_CONNECTED.labels(tgid=self.tgid).state("true")
         if await self.is_logged_in():
             self.log.debug(f"Ensuring post_login() for {self.name}")
             asyncio.ensure_future(self.post_login(), loop=self.loop)
         elif delete_unless_authenticated:
             self.log.debug(f"Unauthenticated user {self.name} start()ed, deleting session...")
             await self.client.disconnect()
+            METRIC_CONNECTED.labels(tgid=self.tgid).state("false")
             self.client.session.delete()
         return self
+
+    async def stop(self) -> None:
+        await super().stop()
+        METRIC_CONNECTED.labels(tgid=self.tgid).state("true")
 
     async def post_login(self, info: TLUser = None, first_login: bool = False) -> None:
         try:
@@ -208,6 +220,8 @@ class User(AbstractUser, BaseUser):
         except Exception:
             self.log.exception("Failed to update telegram account info")
             return
+
+        METRIC_LOGGED_IN.labels(tgid=self.tgid).state("true")
 
         try:
             puppet = pu.Puppet.get(self.tgid)
@@ -300,6 +314,7 @@ class User(AbstractUser, BaseUser):
         if not ok:
             return False
         self.delete()
+        METRIC_LOGGED_IN.labels(tgid=self.tgid).state("false")
         return True
 
     def _search_local(self, query: str, max_results: int = 5, min_similarity: int = 45

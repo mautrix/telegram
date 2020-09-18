@@ -37,6 +37,7 @@ from mautrix.types import UserID, PresenceState
 from mautrix.errors import MatrixError
 from mautrix.appservice import AppService
 from mautrix.util.logging import TraceLogger
+from mautrix.util.opt_prometheus import Histogram, Counter
 from alchemysession import AlchemySessionContainer
 
 from . import portal as po, puppet as pu, __version__
@@ -57,14 +58,10 @@ UpdateMessage = Union[UpdateShortChatMessage, UpdateShortMessage, UpdateNewChann
                       UpdateNewMessage, UpdateEditMessage, UpdateEditChannelMessage]
 UpdateMessageContent = Union[UpdateShortMessage, UpdateShortChatMessage, Message, MessageService]
 
-try:
-    from prometheus_client import Histogram
-
-    UPDATE_TIME = Histogram("telegram_update", "Time spent processing Telegram updates",
-                            ["update_type"])
-except ImportError:
-    Histogram = None
-    UPDATE_TIME = None
+UPDATE_TIME = Histogram("bridge_telegram_update", "Time spent processing Telegram updates",
+                        ("update_type",))
+UPDATE_ERRORS = Counter("bridge_telegram_update_error",
+                        "Number of fatal errors while handling Telegram updates", ("update_type",))
 
 
 class AbstractUser(ABC):
@@ -191,13 +188,14 @@ class AbstractUser(ABC):
 
     async def _update_catch(self, update: TypeUpdate) -> None:
         start_time = time.time()
+        update_type = type(update).__name__
         try:
             if not await self.update(update):
                 await self._update(update)
         except Exception:
             self.log.exception(f"Failed to handle Telegram update {update}")
-        if UPDATE_TIME:
-            UPDATE_TIME.labels(update_type=type(update).__name__).observe(time.time() - start_time)
+            UPDATE_ERRORS.labels(update_type=update_type).inc()
+        UPDATE_TIME.labels(update_type=update_type).observe(time.time() - start_time)
 
     @property
     @abstractmethod
@@ -396,7 +394,8 @@ class AbstractUser(ABC):
                 portal = po.Portal.get_by_entity(update.to_id, receiver_id=self.tgid)
             sender = pu.Puppet.get(update.from_id) if update.from_id else None
         else:
-            self.log.warning(f"Unexpected message type in User#get_message_details: {type(update)}")
+            self.log.warning("Unexpected message type in User#get_message_details: "
+                             f"{type(update)}")
             return update, None, None
         return update, sender, portal
 

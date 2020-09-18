@@ -30,14 +30,6 @@ if TYPE_CHECKING:
     from .context import Context
     from .bot import Bot
 
-try:
-    from prometheus_client import Histogram
-
-    EVENT_TIME = Histogram("matrix_event", "Time spent processing Matrix events", ["event_type"])
-except ImportError:
-    Histogram = None
-    EVENT_TIME = None
-
 RoomMetaStateEventContent = Union[RoomNameStateEventContent, RoomAvatarStateEventContent,
                                   RoomTopicStateEventContent]
 
@@ -410,7 +402,3 @@ class MatrixHandler(BaseMatrixHandler):
         elif evt.type == EventType.ROOM_TOMBSTONE:
             await self.handle_room_upgrade(evt.room_id, evt.sender, evt.content.replacement_room,
                                            evt.event_id)
-
-    async def log_event_handle_duration(self, evt: Event, duration: float) -> None:
-        if EVENT_TIME:
-            EVENT_TIME.labels(event_type=str(evt.type)).observe(duration)
