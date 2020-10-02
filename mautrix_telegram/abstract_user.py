@@ -164,6 +164,7 @@ class AbstractUser(ABC):
             request_retries=config["telegram.connection.request_retries"],
             connection=connection,
             proxy=proxy,
+            raise_last_call_error=True,
 
             loop=self.loop,
             base_logger=base_logger
@@ -392,7 +393,8 @@ class AbstractUser(ABC):
                                                tg_receiver=self.tgid)
             else:
                 portal = po.Portal.get_by_entity(update.to_id, receiver_id=self.tgid)
-            sender = pu.Puppet.get(update.from_id) if update.from_id else None
+            sender = (pu.Puppet.get(update.from_id.user_id)
+                      if isinstance(update.from_id, PeerUser) else None)
         else:
             self.log.warning("Unexpected message type in User#get_message_details: "
                              f"{type(update)}")

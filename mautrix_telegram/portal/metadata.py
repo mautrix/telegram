@@ -29,7 +29,7 @@ from telethon.tl.types import (
     ChatParticipantCreator, ChannelParticipantCreator, UserProfilePhoto, UserProfilePhotoEmpty)
 
 from mautrix.errors import MForbidden
-from mautrix.types import (RoomID, UserID, RoomCreatePreset, EventType, Membership, Member,
+from mautrix.types import (RoomID, UserID, RoomCreatePreset, EventType, Membership,
                            PowerLevelStateEventContent, RoomTopicStateEventContent,
                            RoomNameStateEventContent, RoomAvatarStateEventContent,
                            StateEventContent, EventID)
