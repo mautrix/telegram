@@ -31,7 +31,7 @@ from telethon.tl.types import (
     UpdateEditChannelMessage, UpdateEditMessage, UpdateNewChannelMessage, UpdateReadHistoryOutbox,
     UpdateShortChatMessage, UpdateShortMessage, UpdateUserName, UpdateUserPhoto, UpdateUserStatus,
     UpdateUserTyping, User, UserStatusOffline, UserStatusOnline, UpdateReadHistoryInbox,
-    UpdateReadChannelInbox)
+    UpdateReadChannelInbox, MessageEmpty)
 
 from mautrix.types import UserID, PresenceState
 from mautrix.errors import MatrixError
@@ -388,12 +388,14 @@ class AbstractUser(ABC):
         elif isinstance(update, (UpdateNewMessage, UpdateNewChannelMessage,
                                  UpdateEditMessage, UpdateEditChannelMessage)):
             update = update.message
+            if isinstance(update, MessageEmpty):
+                return update, None, None
             if isinstance(update.to_id, PeerUser) and not update.out:
                 portal = po.Portal.get_by_tgid(update.from_id, peer_type="user",
                                                tg_receiver=self.tgid)
             else:
                 portal = po.Portal.get_by_entity(update.to_id, receiver_id=self.tgid)
-            sender = (pu.Puppet.get(update.from_id.user_id)
+            sender = (pu.Puppet.get(TelegramID(update.from_id.user_id))
                       if isinstance(update.from_id, PeerUser) else None)
         else:
             self.log.warning("Unexpected message type in User#get_message_details: "
