@@ -21,8 +21,23 @@ import shutil
 import os.path
 import tempfile
 
+from attr import dataclass
+
 log: logging.Logger = logging.getLogger("mau.util.tgs")
-converters: Dict[str, Callable[[bytes, int, int, Any], Awaitable[Tuple[str, bytes]]]] = {}
+
+
+@dataclass
+class ConvertedSticker:
+    mime: str
+    data: bytes
+    thumbnail_mime: Optional[str] = None
+    thumbnail_data: Optional[bytes] = None
+    width: int = 0
+    height: int = 0
+
+
+Converter = Callable[[bytes, int, int, Any], Awaitable[ConvertedSticker]]
+converters: Dict[str, Converter] = {}
 
 
 def abswhich(program: Optional[str]) -> Optional[str]:
@@ -34,7 +49,7 @@ lottieconverter = abswhich("lottieconverter")
 ffmpeg = abswhich("ffmpeg")
 
 if lottieconverter:
-    async def tgs_to_png(file: bytes, width: int, height: int, **_: Any) -> Tuple[str, bytes]:
+    async def tgs_to_png(file: bytes, width: int, height: int, **_: Any) -> ConvertedSticker:
         frame = 1
         proc = await asyncio.create_subprocess_exec(lottieconverter, "-", "-", "png",
                                                     f"{width}x{height}", str(frame),
@@ -42,26 +57,26 @@ if lottieconverter:
                                                     stdin=asyncio.subprocess.PIPE)
         stdout, stderr = await proc.communicate(file)
         if proc.returncode == 0:
-            return "image/png", stdout
+            return ConvertedSticker("image/png", stdout)
         else:
             log.error("lottieconverter error: " + (stderr.decode("utf-8") if stderr is not None
-                      else f"unknown ({proc.returncode})"))
-            return "application/gzip", file
+                                                   else f"unknown ({proc.returncode})"))
+            return ConvertedSticker("application/gzip", file)
 
 
     async def tgs_to_gif(file: bytes, width: int, height: int, background: str = "202020",
-                         **_: Any) -> Tuple[str, bytes]:
+                         **_: Any) -> ConvertedSticker:
         proc = await asyncio.create_subprocess_exec(lottieconverter, "-", "-", "gif",
                                                     f"{width}x{height}", f"0x{background}",
                                                     stdout=asyncio.subprocess.PIPE,
                                                     stdin=asyncio.subprocess.PIPE)
         stdout, stderr = await proc.communicate(file)
         if proc.returncode == 0:
-            return "image/gif", stdout
+            return ConvertedSticker("image/gif", stdout)
         else:
             log.error("lottieconverter error: " + (stderr.decode("utf-8") if stderr is not None
-                      else f"unknown ({proc.returncode})"))
-            return "application/gzip", file
+                                                   else f"unknown ({proc.returncode})"))
+            return ConvertedSticker("application/gzip", file)
 
 
     converters["png"] = tgs_to_png
@@ -69,7 +84,7 @@ if lottieconverter:
 
 if lottieconverter and ffmpeg:
     async def tgs_to_webm(file: bytes, width: int, height: int, fps: int = 30,
-                          **_: Any) -> Tuple[str, bytes]:
+                          **_: Any) -> ConvertedSticker:
         with tempfile.TemporaryDirectory(prefix="tgs_") as tmpdir:
             file_template = tmpdir + "/out_"
             proc = await asyncio.create_subprocess_exec(lottieconverter, "-", file_template,
@@ -78,6 +93,8 @@ if lottieconverter and ffmpeg:
                                                         stdin=asyncio.subprocess.PIPE)
             _, stderr = await proc.communicate(file)
             if proc.returncode == 0:
+                with open(f"{file_template}00.png", "rb") as first_frame_file:
+                    first_frame_data = first_frame_file.read()
                 proc = await asyncio.create_subprocess_exec(ffmpeg, "-hide_banner", "-loglevel",
                                                             "error", "-framerate", str(fps),
                                                             "-pattern_type", "glob", "-i",
@@ -88,25 +105,27 @@ if lottieconverter and ffmpeg:
                                                             stdin=asyncio.subprocess.PIPE)
                 stdout, stderr = await proc.communicate()
                 if proc.returncode == 0:
-                    return "video/webm", stdout
+                    return ConvertedSticker("video/webm", stdout, "image/png", first_frame_data)
                 else:
                     log.error("ffmpeg error: " + (stderr.decode("utf-8") if stderr is not None
-                              else f"unknown ({proc.returncode})"))
+                                                  else f"unknown ({proc.returncode})"))
             else:
                 log.error("lottieconverter error: " + (stderr.decode("utf-8") if stderr is not None
-                          else f"unknown ({proc.returncode})"))
-        return "application/gzip", file
+                                                       else f"unknown ({proc.returncode})"))
+        return ConvertedSticker("application/gzip", file)
 
 
     converters["webm"] = tgs_to_webm
 
 
 async def convert_tgs_to(file: bytes, convert_to: str, width: int, height: int, **kwargs: Any
-                         ) -> Tuple[str, bytes, Optional[int], Optional[int]]:
+                         ) -> ConvertedSticker:
     if convert_to in converters:
         converter = converters[convert_to]
-        mime, out = await converter(file, width, height, **kwargs)
-        return mime, out, width, height
+        converted = await converter(file, width, height, **kwargs)
+        converted.width = width
+        converted.height = height
+        return converted
     elif convert_to != "disable":
         log.warning(f"Unable to convert animated sticker, type {convert_to} not supported")
-    return "application/gzip", file, None, None
+    return ConvertedSticker("application/gzip", file)

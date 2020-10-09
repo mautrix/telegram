@@ -108,8 +108,10 @@ def _location_to_id(location: TypeLocation) -> str:
 
 
 async def transfer_thumbnail_to_matrix(client: MautrixTelegramClient, intent: IntentAPI,
-                                       thumbnail_loc: TypeLocation, video: bytes, mime: str,
-                                       encrypt: bool) -> Optional[DBTelegramFile]:
+                                       thumbnail_loc: TypeLocation, mime_type: str, encrypt: bool,
+                                       video: Optional[bytes], custom_data: Optional[bytes] = None,
+                                       width: Optional[int] = None, height: [int] = None
+                                       ) -> Optional[DBTelegramFile]:
     if not Image or not VideoFileClip:
         return None
 
@@ -117,12 +119,17 @@ async def transfer_thumbnail_to_matrix(client: MautrixTelegramClient, intent: In
     if not loc_id:
         return None
 
+    if custom_data:
+        loc_id += "-mau_custom_thumbnail"
+
     db_file = DBTelegramFile.get(loc_id)
     if db_file:
         return db_file
 
-    video_ext = sane_mimetypes.guess_extension(mime)
-    if VideoFileClip and video_ext and video:
+    video_ext = sane_mimetypes.guess_extension(mime_type)
+    if custom_data:
+        file = custom_data
+    elif VideoFileClip and video_ext and video:
         try:
             file, width, height = _read_video_thumbnail(video, video_ext, frame_ext="png")
         except OSError:
@@ -193,6 +200,8 @@ async def _unlocked_transfer_file_to_matrix(client: MautrixTelegramClient, inten
     if db_file:
         return db_file
 
+    converted_anim = None
+
     if parallel_id and isinstance(location, Document) and (not is_sticker or not tgs_convert):
         db_file = await parallel_transfer_to_matrix(client, intent, loc_id, location, filename,
                                                     encrypt, parallel_id)
@@ -212,13 +221,17 @@ async def _unlocked_transfer_file_to_matrix(client: MautrixTelegramClient, inten
 
         image_converted = False
         # A weird bug in alpine/magic makes it return application/octet-stream for gzips...
-        if is_sticker and tgs_convert and (mime_type == "application/gzip" or (
-            mime_type == "application/octet-stream"
-            and magic.from_buffer(file).startswith("gzip"))):
-            mime_type, file, width, height = await convert_tgs_to(
-                file, tgs_convert["target"], **tgs_convert["args"])
-            thumbnail = None
+        is_tgs = (mime_type == "application/gzip" or (mime_type == "application/octet-stream"
+                                                      and magic.from_buffer(file).startswith(
+                "gzip")))
+        if is_sticker and tgs_convert and is_tgs:
+            converted_anim = await convert_tgs_to(file, tgs_convert["target"],
+                                                  **tgs_convert["args"])
+            mime_type = converted_anim.mime
+            file = converted_anim.data
+            width, height = converted_anim.width, converted_anim.height
             image_converted = mime_type != "application/gzip"
+            thumbnail = None
 
         if mime_type == "image/webp":
             new_mime_type, file, width, height = convert_image(
@@ -245,10 +258,16 @@ async def _unlocked_transfer_file_to_matrix(client: MautrixTelegramClient, inten
         if isinstance(thumbnail, (PhotoSize, PhotoCachedSize)):
             thumbnail = thumbnail.location
         try:
-            db_file.thumbnail = await transfer_thumbnail_to_matrix(client, intent, thumbnail, file,
-                                                                   mime_type, encrypt)
+            db_file.thumbnail = await transfer_thumbnail_to_matrix(client, intent, thumbnail,
+                                                                   video=file, mime_type=mime_type,
+                                                                   encrypt=encrypt)
         except FileIdInvalidError:
             log.warning(f"Failed to transfer thumbnail for {thumbnail!s}", exc_info=True)
+    elif converted_anim and converted_anim.thumbnail_data:
+        db_file.thumbnail = await transfer_thumbnail_to_matrix(
+            client, intent, location, video=None, encrypt=encrypt,
+            custom_data=converted_anim.thumbnail_data, mime_type=converted_anim.thumbnail_mime,
+            width=converted_anim.width, height=converted_anim.height)
 
     try:
         db_file.insert()
