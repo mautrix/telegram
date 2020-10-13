@@ -36,7 +36,7 @@ from telethon.tl.types import (
 
 from mautrix.types import (EventID, RoomID, UserID, ContentURI, MessageType, MessageEventContent,
                            TextMessageEventContent, MediaMessageEventContent, Format,
-                           LocationMessageEventContent)
+                           LocationMessageEventContent, ImageInfo, VideoInfo)
 
 from ..types import TelegramID
 from ..db import Message as DBMessage
@@ -252,7 +252,10 @@ class PortalMatrix(BasePortal, ABC):
                                   content: MediaMessageEventContent, reply_to: TelegramID,
                                   caption: TextMessageEventContent = None) -> None:
         mime = content.info.mimetype
-        w, h = content.info.width, content.info.height
+        if isinstance(content.info, (ImageInfo, VideoInfo)):
+            w, h = content.info.width, content.info.height
+        else:
+            w = h = None
         file_name = content["net.maunium.telegram.internal.filename"]
         max_image_size = config["bridge.image_as_file_size"] * 1000 ** 2
 
