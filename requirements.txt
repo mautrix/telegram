@@ -3,7 +3,8 @@ alembic>=1,<2
 ruamel.yaml>=0.15.35,<0.17
 python-magic>=0.4,<0.5
 commonmark>=0.8,<0.10
-aiohttp>=3,<4
-mautrix>=0.7.13,<0.8
+aiohttp>=3,<3.7
+yarl<1.6
+mautrix==0.8.0.beta3
 telethon>=1.16,<1.17
 telethon-session-sqlalchemy>=0.2.14,<0.3

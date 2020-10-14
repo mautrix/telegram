@@ -173,12 +173,19 @@ bridge:
     # Note that updating the m.direct event is not atomic (except with mautrix-asmux)
     # and is therefore prone to race conditions.
     sync_direct_chat_list: false
-    # Shared secret for https://github.com/devture/matrix-synapse-shared-secret-auth
+    # Servers to always allow double puppeting from
+    double_puppet_server_map:
+        example.com: https://example.com
+    # Allow using double puppeting from any server with a valid client .well-known file.
+    double_puppet_allow_discovery: false
+    # Shared secrets for https://github.com/devture/matrix-synapse-shared-secret-auth
     #
     # If set, custom puppets will be enabled automatically for local users
     # instead of users having to find an access token and run `login-matrix`
     # manually.
-    login_shared_secret: null
+    # If using this for other servers than the bridge's server,
+    # you must also set the URL in the double_puppet_server_map.
+    login_shared_secret_map: {}
     # Set to false to disable link previews in messages sent to Telegram.
     telegram_link_preview: true
     # Use inline images instead of a separate message for the caption.

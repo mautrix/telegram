@@ -22,14 +22,21 @@ from mautrix.types import RoomID, EventID, MessageEventContent
 from mautrix.bridge.commands import (HelpSection, CommandEvent as BaseCommandEvent,
                                      CommandHandler as BaseCommandHandler,
                                      CommandProcessor as BaseCommandProcessor,
-                                     CommandHandlerFunc, command_handler as base_command_handler)
+                                     CommandHandlerFunc, command_handler as base_command_handler,
+                                     HelpCacheKey as BaseHelpCacheKey)
 
 from ..util import format_duration
-from .. import user as u, context as c
+from .. import user as u, context as c, portal as po
 
-HelpCacheKey = NamedTuple('HelpCacheKey',
-                          is_management=bool, is_portal=bool, puppet_whitelisted=bool,
-                          matrix_puppet_whitelisted=bool, is_admin=bool, is_logged_in=bool)
+
+class HelpCacheKey(BaseHelpCacheKey, NamedTuple):
+    is_management: bool
+    is_portal: bool
+    puppet_whitelisted: bool
+    matrix_puppet_whitelisted: bool
+    is_admin: bool
+    is_logged_in: bool
+
 
 SECTION_AUTH = HelpSection("Authentication", 10, "")
 SECTION_CREATING_PORTALS = HelpSection("Creating portals", 20, "")
@@ -40,12 +47,13 @@ SECTION_ADMIN = HelpSection("Administration", 50, "")
 
 class CommandEvent(BaseCommandEvent):
     sender: u.User
+    portal: po.Portal
 
     def __init__(self, processor: 'CommandProcessor', room_id: RoomID, event_id: EventID,
                  sender: u.User, command: str, args: List[str], content: MessageEventContent,
-                 is_management: bool, is_portal: bool) -> None:
+                 portal: Optional['po.Portal'], is_management: bool, has_bridge_bot: bool) -> None:
         super().__init__(processor, room_id, event_id, sender, command, args, content,
-                         is_management, is_portal)
+                         portal, is_management, has_bridge_bot)
         self.bridge = processor.bridge
         self.tgbot = processor.tgbot
         self.config = processor.config
@@ -56,19 +64,16 @@ class CommandEvent(BaseCommandEvent):
         return self.sender.is_admin
 
     async def get_help_key(self) -> HelpCacheKey:
-        return HelpCacheKey(self.is_management, self.is_portal, self.sender.puppet_whitelisted,
-                            self.sender.matrix_puppet_whitelisted, self.sender.is_admin,
-                            await self.sender.is_logged_in())
+        return HelpCacheKey(self.is_management, self.portal is not None,
+                            self.sender.puppet_whitelisted, self.sender.matrix_puppet_whitelisted,
+                            self.sender.is_admin, await self.sender.is_logged_in())
 
 
 class CommandHandler(BaseCommandHandler):
     name: str
 
-    management_only: bool
-    needs_auth: bool
     needs_puppeting: bool
     needs_matrix_puppeting: bool
-    needs_admin: bool
 
     def __init__(self, handler: Callable[[CommandEvent], Awaitable[EventID]],
                  management_only: bool, name: str, help_text: str, help_args: str,
@@ -79,25 +84,16 @@ class CommandHandler(BaseCommandHandler):
                          needs_matrix_puppeting=needs_matrix_puppeting, needs_admin=needs_admin)
 
     async def get_permission_error(self, evt: CommandEvent) -> Optional[str]:
-        if self.management_only and not evt.is_management:
-            return (f"`{evt.command}` is a restricted command: "
-                    "you may only run it in management rooms.")
-        elif self.needs_puppeting and not evt.sender.puppet_whitelisted:
+        if self.needs_puppeting and not evt.sender.puppet_whitelisted:
             return "This command requires puppeting privileges."
         elif self.needs_matrix_puppeting and not evt.sender.matrix_puppet_whitelisted:
             return "This command requires Matrix puppeting privileges."
-        elif self.needs_admin and not evt.sender.is_admin:
-            return "This command requires administrator privileges."
-        elif self.needs_auth and not await evt.sender.is_logged_in():
-            return "This command requires you to be logged in."
-        return None
+        return await super().get_permission_error(evt)
 
     def has_permission(self, key: HelpCacheKey) -> bool:
-        return ((not self.management_only or key.is_management) and
+        return (super().has_permission(key) and
                 (not self.needs_puppeting or key.puppet_whitelisted) and
-                (not self.needs_matrix_puppeting or key.matrix_puppet_whitelisted) and
-                (not self.needs_admin or key.is_admin) and
-                (not self.needs_auth or key.is_logged_in))
+                (not self.needs_matrix_puppeting or key.matrix_puppet_whitelisted))
 
 
 def command_handler(_func: Optional[CommandHandlerFunc] = None, *, needs_auth: bool = True,
@@ -117,10 +113,7 @@ class CommandProcessor(BaseCommandProcessor):
     def __init__(self, context: c.Context) -> None:
         super().__init__(event_class=CommandEvent, bridge=context.bridge)
         self.tgbot = context.bot
-        self.bridge = context.bridge
-        self.az, self.config, self.loop, self.tgbot = context.core
         self.public_website = context.public_website
-        self.command_prefix = self.config["bridge.command_prefix"]
 
     @staticmethod
     async def _run_handler(handler: Callable[[CommandEvent], Awaitable[Any]], evt: CommandEvent

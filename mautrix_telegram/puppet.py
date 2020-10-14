@@ -21,6 +21,7 @@ import logging
 
 from telethon.tl.types import (UserProfilePhoto, User, UpdateUserName, PeerUser, TypeInputPeer,
                                InputPeerPhotoFileLocation, UserProfilePhotoEmpty, TypeInputUser)
+from yarl import URL
 
 from mautrix.appservice import AppService, IntentAPI
 from mautrix.errors import MatrixRequestError
@@ -57,6 +58,7 @@ class Puppet(BasePuppet):
     access_token: Optional[str]
     custom_mxid: Optional[UserID]
     _next_batch: Optional[SyncToken]
+    base_url: Optional[URL]
     default_mxid: UserID
 
     username: Optional[str]
@@ -79,6 +81,7 @@ class Puppet(BasePuppet):
                  access_token: Optional[str] = None,
                  custom_mxid: Optional[UserID] = None,
                  next_batch: Optional[SyncToken] = None,
+                 base_url: Optional[str] = None,
                  username: Optional[str] = None,
                  displayname: Optional[str] = None,
                  displayname_source: Optional[TelegramID] = None,
@@ -91,6 +94,7 @@ class Puppet(BasePuppet):
         self.access_token = access_token
         self.custom_mxid = custom_mxid
         self._next_batch = next_batch
+        self.base_url = URL(base_url) if base_url else None
         self.default_mxid = self.get_mxid_from_id(self.id)
 
         self.username = username
@@ -161,7 +165,7 @@ class Puppet(BasePuppet):
                     custom_mxid=self.custom_mxid, username=self.username, is_bot=self.is_bot,
                     displayname=self.displayname, displayname_source=self.displayname_source,
                     photo_id=self.photo_id, matrix_registered=self.is_registered,
-                    disable_updates=self.disable_updates)
+                    disable_updates=self.disable_updates, base_url=self.base_url)
 
     def new_db_instance(self) -> DBPuppet:
         return DBPuppet(id=self.id, **self._fields)
@@ -172,9 +176,9 @@ class Puppet(BasePuppet):
     @classmethod
     def from_db(cls, db_puppet: DBPuppet) -> 'Puppet':
         return Puppet(db_puppet.id, db_puppet.access_token, db_puppet.custom_mxid,
-                      db_puppet.next_batch, db_puppet.username, db_puppet.displayname,
-                      db_puppet.displayname_source, db_puppet.photo_id, db_puppet.is_bot,
-                      db_puppet.matrix_registered, db_puppet.disable_updates,
+                      db_puppet.next_batch, db_puppet.base_url, db_puppet.username,
+                      db_puppet.displayname, db_puppet.displayname_source, db_puppet.photo_id,
+                      db_puppet.is_bot, db_puppet.matrix_registered, db_puppet.disable_updates,
                       db_instance=db_puppet)
 
     # endregion
@@ -446,8 +450,12 @@ def init(context: 'Context') -> Iterable[Awaitable[Any]]:
     Puppet.displayname_template = SimpleTemplate(config["bridge.displayname_template"],
                                                  "displayname")
 
-    secret = config["bridge.login_shared_secret"]
-    Puppet.login_shared_secret = secret.encode("utf-8") if secret else None
+    Puppet.sync_with_custom_puppets = config["bridge.sync_with_custom_puppets"]
+    Puppet.homeserver_url_map = {server: URL(url) for server, url
+                                 in config["bridge.double_puppet_server_map"].items()}
+    Puppet.allow_discover_url = config["bridge.double_puppet_allow_discovery"]
+    Puppet.login_shared_secret_map = {server: secret.encode("utf-8") for server, secret
+                                      in config["bridge.login_shared_secret_map"].items()}
     Puppet.login_device_name = "Telegram Bridge"
 
     return (puppet.try_start() for puppet in Puppet.all_with_custom_mxid())

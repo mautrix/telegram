@@ -15,32 +15,10 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 import asyncio
 
-from mautrix.errors import MatrixRequestError
 from mautrix.types import EventID
 
 from ... import portal as po, puppet as pu, user as u
 from .. import command_handler, CommandEvent, SECTION_ADMIN
-
-
-@command_handler(needs_admin=True, needs_auth=False, name="set-pl",
-                 help_section=SECTION_ADMIN,
-                 help_args="<_level_> [_mxid_]",
-                 help_text="Set a temporary power level without affecting Telegram.")
-async def set_power_level(evt: CommandEvent) -> EventID:
-    try:
-        level = int(evt.args[0])
-    except (KeyError, IndexError):
-        return await evt.reply("**Usage:** `$cmdprefix+sp set-pl <level> [mxid]`")
-    except ValueError:
-        return await evt.reply("The level must be an integer.")
-    levels = await evt.az.intent.get_power_levels(evt.room_id)
-    mxid = evt.args[1] if len(evt.args) > 1 else evt.sender.mxid
-    levels.users[mxid] = level
-    try:
-        return await evt.az.intent.set_power_levels(evt.room_id, levels)
-    except MatrixRequestError:
-        evt.log.exception("Failed to set power level.")
-        return await evt.reply("Failed to set power level.")
 
 
 @command_handler(needs_admin=True, needs_auth=False,
