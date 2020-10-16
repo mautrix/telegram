@@ -111,8 +111,11 @@ class TelegramBridge(Bridge):
             self.manhole.close()
             self.manhole = None
 
-    async def get_user(self, user_id: UserID) -> User:
-        return await User.get_by_mxid(user_id).ensure_started()
+    async def get_user(self, user_id: UserID, create: bool = True) -> User:
+        user = User.get_by_mxid(user_id, create=create)
+        if user:
+            await user.ensure_started()
+        return user
 
     async def get_portal(self, room_id: RoomID) -> Portal:
         return Portal.get_by_mxid(room_id)
