@@ -64,7 +64,6 @@ class User(AbstractUser, BaseUser):
 
     _db_instance: Optional[DBUser]
     _ensure_started_lock: asyncio.Lock
-    _metric_value: Dict[Gauge, bool]
     _track_connection_task: Optional[asyncio.Task]
 
     def __init__(self, mxid: UserID, tgid: Optional[TelegramID] = None,
@@ -199,14 +198,6 @@ class User(AbstractUser, BaseUser):
             return self
         async with self._ensure_started_lock:
             return cast(User, await super().ensure_started(even_if_no_session))
-
-    def _track_metric(self, metric: Gauge, value: bool) -> None:
-        if self._metric_value[metric] != value:
-            if value:
-                metric.inc(1)
-            else:
-                metric.dec(1)
-            self._metric_value[metric] = value
 
     async def start(self, delete_unless_authenticated: bool = False) -> 'User':
         await super().start()
