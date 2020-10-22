@@ -22,7 +22,7 @@ from telethon.tl.types import (MessageEntityMention, MessageEntityMentionName, M
                                MessageEntityEmail, MessageEntityTextUrl, MessageEntityBold,
                                MessageEntityItalic, MessageEntityCode, MessageEntityPre,
                                MessageEntityBotCommand, MessageEntityHashtag, MessageEntityCashtag,
-                               MessageEntityPhone, TypeMessageEntity, PeerChannel,
+                               MessageEntityPhone, TypeMessageEntity, PeerChannel, PeerChat,
                                MessageEntityBlockquote, MessageEntityStrike, MessageFwdHeader,
                                MessageEntityUnderline, PeerUser)
 from telethon.tl.custom import Message
@@ -45,11 +45,11 @@ log: logging.Logger = logging.getLogger("mau.fmt.tg")
 
 
 def telegram_reply_to_matrix(evt: Message, source: 'AbstractUser') -> Optional[RelatesTo]:
-    if evt.reply_to_msg_id:
-        space = (evt.to_id.channel_id
-                 if isinstance(evt, Message) and isinstance(evt.to_id, PeerChannel)
+    if evt.reply_to:
+        space = (evt.peer_id.channel_id
+                 if isinstance(evt, Message) and isinstance(evt.peer_id, PeerChannel)
                  else source.tgid)
-        msg = DBMessage.get_one_by_tgid(TelegramID(evt.reply_to_msg_id), space)
+        msg = DBMessage.get_one_by_tgid(TelegramID(evt.reply_to.reply_to_msg_id), space)
         if msg:
             return RelatesTo(rel_type=RelationType.REFERENCE, event_id=msg.mxid)
     return None
@@ -61,15 +61,15 @@ async def _add_forward_header(source: 'AbstractUser', content: TextMessageEventC
         content.format = Format.HTML
         content.formatted_body = escape(content.body)
     fwd_from_html, fwd_from_text = None, None
-    if fwd_from.from_id:
-        user = u.User.get_by_tgid(TelegramID(fwd_from.from_id))
+    if isinstance(fwd_from.from_id, PeerUser):
+        user = u.User.get_by_tgid(TelegramID(fwd_from.from_id.user_id))
         if user:
             fwd_from_text = user.displayname or user.mxid
             fwd_from_html = (f"<a href='https://matrix.to/#/{user.mxid}'>"
                              f"{escape(fwd_from_text)}</a>")
 
         if not fwd_from_text:
-            puppet = pu.Puppet.get(TelegramID(fwd_from.from_id), create=False)
+            puppet = pu.Puppet.get(TelegramID(fwd_from.from_id.user_id), create=False)
             if puppet and puppet.displayname:
                 fwd_from_text = puppet.displayname or puppet.mxid
                 fwd_from_html = (f"<a href='https://matrix.to/#/{puppet.mxid}'>"
@@ -77,14 +77,16 @@ async def _add_forward_header(source: 'AbstractUser', content: TextMessageEventC
 
         if not fwd_from_text:
             try:
-                user = await source.client.get_entity(PeerUser(fwd_from.from_id))
+                user = await source.client.get_entity(fwd_from.from_id)
                 if user:
                     fwd_from_text = pu.Puppet.get_displayname(user, False)
                     fwd_from_html = f"<b>{escape(fwd_from_text)}</b>"
             except (ValueError, RPCError):
                 fwd_from_text = fwd_from_html = "unknown user"
-    elif fwd_from.channel_id:
-        portal = po.Portal.get_by_tgid(TelegramID(fwd_from.channel_id))
+    elif isinstance(fwd_from.from_id, (PeerChannel, PeerChat)):
+        from_id = (fwd_from.from_id.chat_id if isinstance(fwd_from.from_id, PeerChat)
+                   else fwd_from.from_id.channel_id)
+        portal = po.Portal.get_by_tgid(TelegramID(from_id))
         if portal:
             fwd_from_text = portal.title
             if portal.alias:
@@ -94,7 +96,7 @@ async def _add_forward_header(source: 'AbstractUser', content: TextMessageEventC
                 fwd_from_html = f"channel <b>{escape(fwd_from_text)}</b>"
         else:
             try:
-                channel = await source.client.get_entity(PeerChannel(fwd_from.channel_id))
+                channel = await source.client.get_entity(fwd_from.from_id)
                 if channel:
                     fwd_from_text = f"channel {channel.title}"
                     fwd_from_html = f"channel <b>{escape(channel.title)}</b>"
@@ -116,11 +118,11 @@ async def _add_forward_header(source: 'AbstractUser', content: TextMessageEventC
 
 async def _add_reply_header(source: 'AbstractUser', content: TextMessageEventContent, evt: Message,
                             main_intent: IntentAPI):
-    space = (evt.to_id.channel_id
-             if isinstance(evt, Message) and isinstance(evt.to_id, PeerChannel)
+    space = (evt.peer_id.channel_id
+             if isinstance(evt, Message) and isinstance(evt.peer_id, PeerChannel)
              else source.tgid)
 
-    msg = DBMessage.get_one_by_tgid(TelegramID(evt.reply_to_msg_id), space)
+    msg = DBMessage.get_one_by_tgid(TelegramID(evt.reply_to.reply_to_msg_id), space)
     if not msg:
         return
 
@@ -162,7 +164,7 @@ async def telegram_to_matrix(evt: Message, source: "AbstractUser",
     if evt.fwd_from:
         await _add_forward_header(source, content, evt.fwd_from)
 
-    if evt.reply_to_msg_id and not no_reply_fallback:
+    if evt.reply_to and not no_reply_fallback:
         await _add_reply_header(source, content, evt, main_intent)
 
     if isinstance(evt, Message) and evt.post and evt.post_author:

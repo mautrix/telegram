@@ -87,9 +87,9 @@ class PortalMatrix(BasePortal, ABC):
             message = await self._get_state_change_message(event, user, **kwargs)
             if not message:
                 return
-            response = await self.bot.client.send_message(
-                self.peer, message,
-                parse_mode=self._matrix_event_to_entities)
+            message, entities = formatter.matrix_to_telegram(message)
+            response = await self.bot.client.send_message(self.peer, message,
+                                                          formatting_entities=entities)
             space = self.tgid if self.peer_type == "channel" else self.bot.tgid
             self.dedup.check(response, (event_id, space))
 
@@ -231,18 +231,22 @@ class PortalMatrix(BasePortal, ABC):
     async def _handle_matrix_text(self, sender_id: TelegramID, event_id: EventID,
                                   space: TelegramID, client: 'MautrixTelegramClient',
                                   content: TextMessageEventContent, reply_to: TelegramID) -> None:
+        if content.formatted_body and content.format == Format.HTML:
+            message, entities = formatter.matrix_to_telegram(content.formatted_body)
+        else:
+            message, entities = formatter.matrix_text_to_telegram(content.body)
         async with self.send_lock(sender_id):
             lp = self.get_config("telegram_link_preview")
             if content.get_edit():
                 orig_msg = DBMessage.get_by_mxid(content.get_edit(), self.mxid, space)
                 if orig_msg:
-                    response = await client.edit_message(self.peer, orig_msg.tgid, content,
-                                                         parse_mode=self._matrix_event_to_entities,
+                    response = await client.edit_message(self.peer, orig_msg.tgid, message,
+                                                         formatting_entities=entities,
                                                          link_preview=lp)
                     self._add_telegram_message_to_db(event_id, space, -1, response)
                     return
-            response = await client.send_message(self.peer, content, reply_to=reply_to,
-                                                 parse_mode=self._matrix_event_to_entities,
+            response = await client.send_message(self.peer, message, reply_to=reply_to,
+                                                 formatting_entities=entities,
                                                  link_preview=lp)
             self._add_telegram_message_to_db(event_id, space, 0, response)
         await self._send_delivery_receipt(event_id)
@@ -297,7 +301,13 @@ class PortalMatrix(BasePortal, ABC):
             media = InputMediaUploadedDocument(file=file_handle, attributes=attributes,
                                                mime_type=mime or "application/octet-stream")
 
-        caption, entities = self._matrix_event_to_entities(caption) if caption else (None, None)
+        if caption:
+            if caption.formatted_body and caption.format == Format.HTML:
+                caption, entities = formatter.matrix_to_telegram(caption.formatted_body)
+            else:
+                caption, entities = formatter.matrix_text_to_telegram(content.body)
+        else:
+            caption, entities = None, None
 
         async with self.send_lock(sender_id):
             if await self._matrix_document_edit(client, content, space, caption, media, event_id):
@@ -336,7 +346,7 @@ class PortalMatrix(BasePortal, ABC):
         except (KeyError, ValueError):
             self.log.exception("Failed to parse location")
             return None
-        caption, entities = self._matrix_event_to_entities(content)
+        caption, entities = formatter.matrix_text_to_telegram(content.body)
         media = MessageMediaGeo(geo=GeoPoint(lat, long, access_hash=0))
 
         async with self.send_lock(sender_id):
@@ -372,7 +382,8 @@ class PortalMatrix(BasePortal, ABC):
             await self._handle_matrix_message(sender, content, event_id)
         except RPCError as e:
             if config["bridge.delivery_error_reports"]:
-                await self._send_bridge_error(f"\u26a0 Your message may not have been bridged: {e}")
+                await self._send_bridge_error(
+                    f"\u26a0 Your message may not have been bridged: {e}")
             raise
 
     async def _handle_matrix_message(self, sender: 'u.User', content: MessageEventContent,
@@ -585,6 +596,7 @@ class PortalMatrix(BasePortal, ABC):
             except Exception:
                 self.log.warning(f"Failed to set room name", exc_info=True)
         return ok
+
 
 def init(context: Context) -> None:
     global config
