@@ -390,13 +390,13 @@ class AbstractUser(ABC):
             update = update.message
             if isinstance(update, MessageEmpty):
                 return update, None, None
-            if isinstance(update.to_id, PeerUser) and not update.out:
-                portal = po.Portal.get_by_tgid(update.from_id, peer_type="user",
-                                               tg_receiver=self.tgid)
+            portal = po.Portal.get_by_entity(update.peer_id, receiver_id=self.tgid)
+            if update.out:
+                sender = pu.Puppet.get(self.tgid)
+            elif isinstance(update.from_id, PeerUser):
+                sender = pu.Puppet.get(TelegramID(update.from_id.user_id))
             else:
-                portal = po.Portal.get_by_entity(update.to_id, receiver_id=self.tgid)
-            sender = (pu.Puppet.get(TelegramID(update.from_id.user_id))
-                      if isinstance(update.from_id, PeerUser) else None)
+                sender = None
         else:
             self.log.warning("Unexpected message type in User#get_message_details: "
                              f"{type(update)}")

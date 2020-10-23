@@ -258,12 +258,7 @@ class User(AbstractUser, BaseUser):
             return False
 
         if isinstance(update, (UpdateNewMessage, UpdateNewChannelMessage)):
-            message = update.message
-            if isinstance(message.to_id, PeerUser) and not message.out:
-                portal = po.Portal.get_by_tgid(message.from_id, peer_type="user",
-                                               tg_receiver=self.tgid)
-            else:
-                portal = po.Portal.get_by_entity(message.to_id, receiver_id=self.tgid)
+            portal = po.Portal.get_by_entity(update.message.peer_id, receiver_id=self.tgid)
         elif isinstance(update, UpdateShortChatMessage):
             portal = po.Portal.get_by_tgid(TelegramID(update.chat_id))
         elif isinstance(update, UpdateShortMessage):
