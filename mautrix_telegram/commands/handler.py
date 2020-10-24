@@ -22,14 +22,13 @@ from mautrix.types import RoomID, EventID, MessageEventContent
 from mautrix.bridge.commands import (HelpSection, CommandEvent as BaseCommandEvent,
                                      CommandHandler as BaseCommandHandler,
                                      CommandProcessor as BaseCommandProcessor,
-                                     CommandHandlerFunc, command_handler as base_command_handler,
-                                     HelpCacheKey as BaseHelpCacheKey)
+                                     CommandHandlerFunc, command_handler as base_command_handler)
 
 from ..util import format_duration
 from .. import user as u, context as c, portal as po
 
 
-class HelpCacheKey(BaseHelpCacheKey, NamedTuple):
+class HelpCacheKey(NamedTuple):
     is_management: bool
     is_portal: bool
     puppet_whitelisted: bool
