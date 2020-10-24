@@ -6,9 +6,9 @@
   * [x] Message edits
   * [ ] ‡ Message history
   * [x] Presence
-  * [x] Typing notifications*
-  * [x] Read receipts*
-  * [x] Pinning messages*
+  * [x] Typing notifications
+  * [x] Read receipts
+  * [x] Pinning messages
   * [x] Power level
     * [x] Normal chats
       * [ ] Non-hardcoded PL requirements
@@ -59,6 +59,5 @@
   * [ ] ‡ Secret chats (i.e. End-to-bridge encryption on Telegram)
   * [x] End-to-bridge encryption in Matrix rooms (see [wiki](https://github.com/tulir/mautrix-telegram/wiki/End%E2%80%90to%E2%80%90bridge-encryption))
 
-\* Requires [double puppeting](https://github.com/tulir/mautrix-telegram/wiki/Authentication#replacing-telegram-accounts-matrix-puppet-with-matrix-account) to be enabled  
-† Information not automatically sent from source, i.e. implementation may not be possible  
+† Information not automatically sent from source, i.e. implementation may not be possible
 ‡ Maybe, i.e. this feature may or may not be implemented at some point
