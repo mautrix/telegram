@@ -455,8 +455,11 @@ class PortalTelegram(BasePortal, ABC):
                                                else self.tgid))
         min_id = last.tgid if last else 0
         if last_id is None:
-            message = (await source.client.get_messages(self.peer, limit=1))[0]
-            last_id = message.id
+            messages = await source.client.get_messages(self.peer, limit=1)
+            if not messages:
+                # The chat seems empty
+                return
+            last_id = messages[0].id
         if last_id <= min_id:
             # Nothing to backfill
             return
