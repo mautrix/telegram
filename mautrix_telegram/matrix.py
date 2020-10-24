@@ -362,7 +362,9 @@ class MatrixHandler(BaseMatrixHandler):
         self.previously_typing[room_id] = now_typing
 
     def filter_matrix_event(self, evt: Event) -> bool:
-        if not isinstance(evt, (RedactionEvent, MessageEvent, StateEvent, EncryptedEvent)):
+        if isinstance(evt, (TypingEvent, ReceiptEvent, PresenceEvent)):
+            return False
+        elif not isinstance(evt, (RedactionEvent, MessageEvent, StateEvent, EncryptedEvent)):
             return True
         if evt.content.get(self.az.real_user_content_key, False):
             puppet = pu.Puppet.deprecated_sync_get_by_custom_mxid(evt.sender)
