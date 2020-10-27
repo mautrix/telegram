@@ -38,6 +38,7 @@ from ..types import TelegramID
 from ..context import Context
 from .. import puppet as p, user as u, util
 from .base import BasePortal, InviteList, TypeParticipant, TypeChatPhoto
+from .db import UserPortal as DBUserPortal
 
 if TYPE_CHECKING:
     from ..abstract_user import AbstractUser
@@ -228,6 +229,15 @@ class PortalMetadata(BasePortal, ABC):
 
         if self.sync_matrix_state:
             await self.main_intent.get_joined_members(self.mxid)
+
+        up = DBUserPortal.get(user.tgid, self.tgid, self.tg_receiver)
+        if not up:
+            in_community = await user._community_helper.add_room(user._community_id, self.mxid)
+            DBUserPortal(user=user.tgid, portal=self.tgid, portal_receiver=self.tg_receiver,
+                         in_community=in_community).insert()
+        elif not up.in_community:
+            in_community = await user._community_helper.add_room(user._community_id, self.mxid)
+            up.edit(in_community=in_community)
 
     async def create_matrix_room(self, user: 'AbstractUser', entity: Union[TypeChat, User] = None,
                                  invites: InviteList = None, update_if_exists: bool = True

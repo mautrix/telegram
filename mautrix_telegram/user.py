@@ -31,11 +31,13 @@ from mautrix.client import Client
 from mautrix.errors import MatrixRequestError
 from mautrix.types import UserID, RoomID
 from mautrix.bridge import BaseUser
+from mautrix.bridge._community import CommunityHelper, CommunityID
 from mautrix.util.logging import TraceLogger
 from mautrix.util.opt_prometheus import Gauge
 
 from .types import TelegramID
-from .db import User as DBUser, Portal as DBPortal
+from .db import (User as DBUser, Portal as DBPortal,
+                 UserPortal as DBUserPortal, Contact as DBContact)
 from .abstract_user import AbstractUser
 from . import portal as po, puppet as pu
 
@@ -66,6 +68,9 @@ class User(AbstractUser, BaseUser):
     _ensure_started_lock: asyncio.Lock
     _track_connection_task: Optional[asyncio.Task]
 
+    _community_helper: CommunityHelper
+    _community_id: Optional[CommunityID]
+
     def __init__(self, mxid: UserID, tgid: Optional[TelegramID] = None,
                  username: Optional[str] = None, phone: Optional[str] = None,
                  db_contacts: Optional[Iterable[TelegramID]] = None,
@@ -84,6 +89,7 @@ class User(AbstractUser, BaseUser):
         self.portals = {}
         self.db_portals = db_portals or []
         self._db_instance = db_instance
+        self._community_id = None
         self._ensure_started_lock = asyncio.Lock()
         self.dm_update_lock = asyncio.Lock()
         self._metric_value = defaultdict(lambda: False)
@@ -246,12 +252,53 @@ class User(AbstractUser, BaseUser):
         except Exception:
             self.log.exception("Failed to automatically enable custom puppet")
 
+        await self._create_community()
+
         if not self.is_bot and config["bridge.startup_sync"]:
             try:
                 await self.sync_dialogs()
                 await self.sync_contacts()
             except Exception:
                 self.log.exception("Failed to run post-login sync")
+
+    async def _create_community(self) -> None:
+        template = config["bridge.community_template"]
+        if not template:
+            return
+        localpart, server = Client.parse_user_id(self.mxid)
+        community_localpart = template.format(localpart=localpart, server=server)
+        self.log.debug(f"Creating personal filtering community {community_localpart}...")
+        self._community_id, created = await self._community_helper.create(community_localpart)
+        if created:
+            await self._community_helper.update(self._community_id, name="Telegram",
+                                                avatar_url=config["appservice.bot_avatar"],
+                                                short_desc="Your Telegram bridged chats")
+            await self._community_helper.invite(self._community_id, self.mxid)
+
+    async def _add_community(self, up: Optional[DBUserPortal], contact: Optional[DBContact],
+                             portal: 'po.Portal', puppet: Optional['pu.Puppet']) -> None:
+        if portal.mxid:
+            if not up or not up.in_community:
+                ic = await self._community_helper.add_room(self._community_id, portal.mxid)
+                if up and ic:
+                    up.edit(in_community=True)
+                elif not up:
+                    DBUserPortal(user=self.tgid, in_community=ic, portal=portal.tgid,
+                                 portal_receiver=portal.tg_receiver).insert()
+        if puppet:
+            await self._add_community_puppet(contact, puppet)
+
+    async def _add_community_puppet(self, contact: Optional[DBContact],
+                                    puppet: 'pu.Puppet') -> None:
+        if not contact or not contact.in_community:
+            await puppet.default_mxid_intent.ensure_registered()
+            ic = await self._community_helper.join(self._community_id,
+                                                   puppet.default_mxid_intent)
+            if contact and ic:
+                contact.edit(in_community=True)
+            elif not contact:
+                # This uses upsert instead of insert as a hacky fix for potential conflicts
+                DBContact(user=self.tgid, contact=puppet.tgid, in_community=ic).upsert()
 
     async def update(self, update: TypeUpdate) -> bool:
         if not self.is_bot:
@@ -448,10 +495,12 @@ class User(AbstractUser, BaseUser):
             return
         self.log.debug(f"Updating contacts of {self.name}...")
         self.contacts = []
+        db_contacts = DBContact.all(self.tgid)
         self.saved_contacts = response.saved_count
         for user in response.users:
             puppet = pu.Puppet.get(user.id)
             await puppet.update_info(self, user)
+            await self._add_community_puppet(db_contacts.get(puppet.tgid, None), puppet)
             self.contacts.append(puppet)
         await self.save(contacts=True)
 
@@ -517,6 +566,7 @@ def init(context: 'Context') -> Iterable[Awaitable['User']]:
     global config
     config = context.config
     User.bridge = context.bridge
+    User._community_helper = CommunityHelper(User.az)
 
     return (User.from_db(db_user).try_ensure_started()
             for db_user in DBUser.all_with_tgid())

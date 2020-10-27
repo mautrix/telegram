@@ -102,6 +102,12 @@ bridge:
     # Localpart template of MXIDs for Telegram users.
     # {userid} is replaced with the user ID of the Telegram user.
     username_template: "telegram_{userid}"
+    # Localpart template for per-user room grouping community IDs.
+    # The bridge will create these communities and add all of the specific user's portals to the community.
+    # {localpart} is the MXID localpart and {server} is the MXID server part of the user.
+    #
+    # `telegram_{localpart}={server}` is a good value.
+    community_template: null
     # Localpart template of room aliases for Telegram portal rooms.
     # {groupname} is replaced with the name part of the public channel/group invite link ( https://t.me/{} )
     alias_template: "telegram_{groupname}"

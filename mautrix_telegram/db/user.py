@@ -13,9 +13,11 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import Optional, Iterable, Tuple
+from typing import Optional, Iterable, Tuple, Dict
 
-from sqlalchemy import Column, ForeignKey, ForeignKeyConstraint, Integer, String, func
+from sqlalchemy import (Column, ForeignKey, ForeignKeyConstraint, Integer, String, func,
+                        Boolean, and_)
+from sqlalchemy.sql import expression
 
 from mautrix.types import UserID
 from mautrix.util.db import Base
@@ -95,14 +97,24 @@ class UserPortal(Base):
                                                   ondelete="CASCADE"), primary_key=True)
     portal: TelegramID = Column(Integer, primary_key=True)
     portal_receiver: TelegramID = Column(Integer, primary_key=True)
+    in_community: bool = Column(Boolean, nullable=False, server_default=expression.false())
 
     __table_args__ = (ForeignKeyConstraint(("portal", "portal_receiver"),
                                            ("portal.tgid", "portal.tg_receiver"),
                                            onupdate="CASCADE", ondelete="CASCADE"),)
 
+    @classmethod
+    def get(cls, user: str, portal: str, portal_receiver: str) -> Optional['UserPortal']:
+        return cls._select_one_or_none(and_(cls.c.user == user, cls.c.portal == portal,
+                                            cls.c.portal_receiver == portal_receiver))
 
 class Contact(Base):
     __tablename__ = "contact"
 
     user: TelegramID = Column(Integer, ForeignKey("user.tgid"), primary_key=True)
     contact: TelegramID = Column(Integer, ForeignKey("puppet.id"), primary_key=True)
+    in_community: bool = Column(Boolean, nullable=False, server_default=expression.false())
+
+    @classmethod
+    def all(cls, user: str) -> Dict[str, 'Contact']:
+        return {c.contact: c for c in cls._select_all(cls.c.user == user)}
