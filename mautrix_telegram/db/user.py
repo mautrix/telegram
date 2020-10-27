@@ -54,7 +54,7 @@ class User(Base):
     def contacts(self) -> Iterable[TelegramID]:
         rows = self.db.execute(Contact.t.select().where(Contact.c.user == self.tgid))
         for row in rows:
-            user, contact = row
+            user, contact, in_community = row
             yield contact
 
     @contacts.setter
@@ -69,7 +69,7 @@ class User(Base):
     def portals(self) -> Iterable[Tuple[TelegramID, TelegramID]]:
         rows = self.db.execute(UserPortal.t.select().where(UserPortal.c.user == self.tgid))
         for row in rows:
-            user, portal, portal_receiver = row
+            user, portal, portal_receiver, in_community = row
             yield (portal, portal_receiver)
 
     @portals.setter
