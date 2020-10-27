@@ -18,10 +18,12 @@ depends_on = None
 
 def upgrade():
     with op.batch_alter_table('contact') as batch_op:
-        batch_op.add_column(sa.Column('in_community', sa.Boolean(), nullable=False))
+        batch_op.add_column(sa.Column('in_community', sa.Boolean(), server_default=sa.false(),
+                            nullable=False))
 
     with op.batch_alter_table('user_portal') as batch_op:
-        batch_op.add_column(sa.Column('in_community', sa.Boolean(), nullable=False))
+        batch_op.add_column(sa.Column('in_community', sa.Boolean(), server_default=sa.false(),
+                            nullable=False))
 
 
 def downgrade():
