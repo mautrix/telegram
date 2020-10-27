@@ -459,7 +459,8 @@ class User(AbstractUser, BaseUser):
     # region Class instance lookup
 
     @classmethod
-    def get_by_mxid(cls, mxid: UserID, create: bool = True) -> Optional['User']:
+    def get_by_mxid(cls, mxid: UserID, create: bool = True, check_db: bool = True
+                    ) -> Optional['User']:
         if not mxid:
             raise ValueError("Matrix ID can't be empty")
 
@@ -468,10 +469,11 @@ class User(AbstractUser, BaseUser):
         except KeyError:
             pass
 
-        user = DBUser.get_by_mxid(mxid)
-        if user:
-            user = cls.from_db(user)
-            return user
+        if check_db:
+            user = DBUser.get_by_mxid(mxid)
+            if user:
+                user = cls.from_db(user)
+                return user
 
         if create:
             user = cls(mxid)

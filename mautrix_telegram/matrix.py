@@ -328,17 +328,15 @@ class MatrixHandler(BaseMatrixHandler):
             return
 
         for user_id, event_id in receipts:
-            user = await u.User.get_by_mxid(user_id).ensure_started()
-            if not await user.is_logged_in():
-                continue
-            await portal.mark_read(user, event_id)
+            user = u.User.get_by_mxid(user_id, check_db=False, create=False)
+            if user and await user.is_logged_in():
+                await portal.mark_read(user, event_id)
 
     @staticmethod
     async def handle_presence(user_id: UserID, presence: PresenceState) -> None:
-        user = await u.User.get_by_mxid(user_id).ensure_started()
-        if not await user.is_logged_in():
-            return
-        await user.set_presence(presence == PresenceState.ONLINE)
+        user = u.User.get_by_mxid(user_id, check_db=False, create=False)
+        if user and await user.is_logged_in():
+            await user.set_presence(presence == PresenceState.ONLINE)
 
     async def handle_typing(self, room_id: RoomID, now_typing: Set[UserID]) -> None:
         portal = po.Portal.get_by_mxid(room_id)
@@ -353,11 +351,9 @@ class MatrixHandler(BaseMatrixHandler):
             if is_typing and was_typing:
                 continue
 
-            user = await u.User.get_by_mxid(user_id).ensure_started()
-            if not await user.is_logged_in():
-                continue
-
-            await portal.set_typing(user, is_typing)
+            user = u.User.get_by_mxid(user_id, check_db=False, create=False)
+            if user and await user.is_logged_in():
+                await portal.set_typing(user, is_typing)
 
         self.previously_typing[room_id] = now_typing
 
