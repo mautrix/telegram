@@ -38,7 +38,7 @@ from ..types import TelegramID
 from ..context import Context
 from .. import puppet as p, user as u, util
 from .base import BasePortal, InviteList, TypeParticipant, TypeChatPhoto
-from .db import UserPortal as DBUserPortal
+from ..db import UserPortal as DBUserPortal
 
 if TYPE_CHECKING:
     from ..abstract_user import AbstractUser
