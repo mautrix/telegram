@@ -80,6 +80,7 @@ class Config(BaseBridgeConfig):
         copy("manhole.whitelist")
 
         copy("bridge.username_template")
+        copy("bridge.community_template")
         copy("bridge.alias_template")
         copy("bridge.displayname_template")
 
