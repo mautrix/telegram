@@ -48,7 +48,7 @@ config: Optional['Config'] = None
 SearchResult = NamedTuple('SearchResult', puppet='pu.Puppet', similarity=int)
 
 METRIC_LOGGED_IN = Gauge('bridge_logged_in', 'Users logged into bridge')
-METRIC_CONNECTED = Gauge('bridge_connected', 'Users connected')
+METRIC_CONNECTED = Gauge('bridge_connected', 'Users connected to Telegram')
 
 
 class User(AbstractUser, BaseUser):
@@ -201,7 +201,6 @@ class User(AbstractUser, BaseUser):
 
     async def start(self, delete_unless_authenticated: bool = False) -> 'User':
         await super().start()
-        self._track_metric(METRIC_CONNECTED, True)
         if await self.is_logged_in():
             self.log.debug(f"Ensuring post_login() for {self.name}")
             self.loop.create_task(self.post_login())
@@ -210,7 +209,6 @@ class User(AbstractUser, BaseUser):
         elif delete_unless_authenticated:
             self.log.debug(f"Unauthenticated user {self.name} start()ed, deleting session...")
             await self.client.disconnect()
-            self._track_metric(METRIC_CONNECTED, False)
             self.client.session.delete()
         return self
 
