@@ -204,8 +204,6 @@ class User(AbstractUser, BaseUser):
         if await self.is_logged_in():
             self.log.debug(f"Ensuring post_login() for {self.name}")
             self.loop.create_task(self.post_login())
-            if config["metrics.enabled"]:
-                self._track_connection_task = self.loop.create_task(self._track_connection())
         elif delete_unless_authenticated:
             self.log.debug(f"Unauthenticated user {self.name} start()ed, deleting session...")
             await self.client.disconnect()
@@ -228,6 +226,9 @@ class User(AbstractUser, BaseUser):
         self._track_metric(METRIC_CONNECTED, False)
 
     async def post_login(self, info: TLUser = None, first_login: bool = False) -> None:
+        if config["metrics.enabled"] and not self._track_connection_task:
+            self._track_connection_task = self.loop.create_task(self._track_connection())
+
         try:
             await self.update_info(info)
         except Exception:
