@@ -304,11 +304,14 @@ class User(AbstractUser, BaseUser):
         for _, portal in self.portals.items():
             if not portal or portal.deleted or not portal.mxid or portal.has_bot:
                 continue
-            try:
-                await portal.main_intent.kick_user(portal.mxid, self.mxid,
-                                                   "Logged out of Telegram.")
-            except MatrixRequestError:
-                pass
+            if portal.peer_type == "user":
+                await portal.cleanup_portal("Logged out of Telegram")
+            else:
+                try:
+                    await portal.main_intent.kick_user(portal.mxid, self.mxid,
+                                                       "Logged out of Telegram.")
+                except MatrixRequestError:
+                    pass
         self.portals = {}
         self.contacts = []
         await self.save(portals=True, contacts=True)
