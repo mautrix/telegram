@@ -31,6 +31,12 @@ async def _get_portal_and_check_permission(evt: CommandEvent) -> Optional[po.Por
         await evt.reply(f"{that_this} is not a portal room.")
         return None
 
+    if portal.peer_type == "user":
+        if portal.tg_receiver != evt.sender.tgid:
+            await evt.reply("You do not have the permissions to unbridge that portal.")
+            return None
+        return portal
+
     if not await user_has_power_level(portal.mxid, evt.az.intent, evt.sender, "unbridge"):
         await evt.reply("You do not have the permissions to unbridge that portal.")
         return None
