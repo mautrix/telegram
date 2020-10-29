@@ -31,7 +31,7 @@ from mautrix.types import (EventID, UserID, MediaMessageEventContent, ImageInfo,
 from ... import user as u
 from ...types import TelegramID
 from ...commands import command_handler, CommandEvent, SECTION_AUTH
-from ...util import format_duration
+from ...util import format_duration as fmt_duration
 
 try:
     import qrcode
@@ -70,7 +70,7 @@ async def ping_bot(evt: CommandEvent) -> EventID:
                  help_section=SECTION_AUTH,
                  help_args="<_phone_> <_full name_>",
                  help_text="Register to Telegram")
-async def register(evt: CommandEvent) -> Optional[EventID]:
+async def register(evt: CommandEvent) -> EventID:
     if await evt.sender.is_logged_in():
         return await evt.reply("You are already logged in.")
     elif len(evt.args) < 1:
@@ -87,7 +87,8 @@ async def register(evt: CommandEvent) -> Optional[EventID]:
         "action": "Register",
         "full_name": full_name,
     })
-    return None
+    return await evt.reply("By signing up for Telegram, you agree to "
+                           "the terms of service: https://telegram.org/tos")
 
 
 async def enter_code_register(evt: CommandEvent) -> EventID:
@@ -222,21 +223,18 @@ async def _request_code(evt: CommandEvent, phone_number: str, next_status: Dict[
         ok = True
         return await evt.reply(f"Login code sent to {phone_number}. Please send the code here.")
     except PhoneNumberAppSignupForbiddenError:
-        return await evt.reply(
-            "Your phone number does not allow 3rd party apps to sign in.")
+        return await evt.reply("Your phone number does not allow 3rd party apps to sign in.")
     except PhoneNumberFloodError:
-        return await evt.reply(
-            "Your phone number has been temporarily blocked for flooding. "
-            "The ban is usually applied for around a day.")
+        return await evt.reply("Your phone number has been temporarily blocked for flooding. "
+                               "The ban is usually applied for around a day.")
     except FloodWaitError as e:
-        return await evt.reply(
-            "Your phone number has been temporarily blocked for flooding. "
-            f"Please wait for {format_duration(e.seconds)} before trying again.")
+        return await evt.reply("Your phone number has been temporarily blocked for flooding. "
+                               f"Please wait for {fmt_duration(e.seconds)} before trying again.")
     except PhoneNumberBannedError:
-        return await  evt.reply("Your phone number has been banned from Telegram.")
+        return await evt.reply("Your phone number has been banned from Telegram.")
     except PhoneNumberUnoccupiedError:
-        return await  evt.reply("That phone number has not been registered. "
-                                "Please register with `$cmdprefix+sp register <phone>`.")
+        return await evt.reply("That phone number has not been registered. "
+                               "Please register with `$cmdprefix+sp register <phone>`.")
     except PhoneNumberInvalidError:
         return await evt.reply("That phone number is not valid.")
     except Exception:

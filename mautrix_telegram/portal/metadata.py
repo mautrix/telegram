@@ -586,32 +586,38 @@ class PortalMetadata(BasePortal, ABC):
                               if self.max_initial_member_sync < 0
                               else len(allowed_tgids) < self.max_initial_member_sync - 10)
                              and (self.megagroup or self.peer_type != "channel"))
-        if trust_member_list:
-            joined_mxids = await self.main_intent.get_room_members(self.mxid)
-            for user_mxid in joined_mxids:
-                if user_mxid == self.az.bot_mxid:
-                    continue
-                puppet_id = p.Puppet.get_id_from_mxid(user_mxid)
-                if puppet_id and puppet_id not in allowed_tgids:
-                    if self.bot and puppet_id == self.bot.tgid:
-                        self.bot.remove_chat(self.tgid)
-                    try:
-                        await self.main_intent.kick_user(self.mxid, user_mxid,
-                                                         "User had left this Telegram chat.")
-                    except MForbidden:
-                        pass
-                    continue
-                mx_user = u.User.get_by_mxid(user_mxid, create=False)
-                if mx_user and mx_user.is_bot and mx_user.tgid not in allowed_tgids:
-                    await mx_user.unregister_portal(*self.tgid_full)
+        if not trust_member_list:
+            return
 
-                if mx_user and not self.has_bot and mx_user.tgid not in allowed_tgids:
+        for user_mxid in await self.main_intent.get_room_members(self.mxid):
+            if user_mxid == self.az.bot_mxid:
+                continue
+
+            puppet_id = p.Puppet.get_id_from_mxid(user_mxid)
+            if puppet_id:
+                if puppet_id in allowed_tgids:
+                    continue
+                if self.bot and puppet_id == self.bot.tgid:
+                    self.bot.remove_chat(self.tgid)
+                try:
+                    await self.main_intent.kick_user(self.mxid, user_mxid,
+                                                     "User had left this Telegram chat.")
+                except MForbidden:
+                    pass
+                continue
+
+            mx_user = u.User.get_by_mxid(user_mxid, create=False)
+            if mx_user:
+                if mx_user.tgid in allowed_tgids:
+                    continue
+                if mx_user.is_bot:
+                    await mx_user.unregister_portal(*self.tgid_full)
+                if not self.has_bot:
                     try:
                         await self.main_intent.kick_user(self.mxid, mx_user.mxid,
                                                          "You had left this Telegram chat.")
                     except MForbidden:
                         pass
-                    continue
 
     async def _add_telegram_user(self, user_id: TelegramID, source: Optional['AbstractUser'] = None
                                  ) -> None:
