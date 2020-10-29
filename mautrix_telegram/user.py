@@ -326,6 +326,7 @@ class User(AbstractUser, BaseUser):
         if not ok:
             return False
         self.delete()
+        await self.stop()
         self._track_metric(METRIC_LOGGED_IN, False)
         return True
 
