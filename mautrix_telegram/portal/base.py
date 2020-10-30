@@ -302,9 +302,6 @@ class BasePortal(MautrixBasePortal, ABC):
         await self.cleanup_room(self.main_intent, self.mxid, message, puppets_only)
         if delete:
             await self.delete()
-        else:
-            self.delete_matrix()
-            self.mxid = None
 
     # endregion
     # region Database conversion
@@ -331,21 +328,18 @@ class BasePortal(MautrixBasePortal, ABC):
     async def delete(self) -> None:
         self.delete_sync()
 
-    def delete_matrix(self) -> None:
-        try:
-            del self.by_mxid[self.mxid]
-        except KeyError:
-            pass
-        DBMessage.delete_all(self.mxid)
-
     def delete_sync(self) -> None:
         try:
             del self.by_tgid[self.tgid_full]
         except KeyError:
             pass
+        try:
+            del self.by_mxid[self.mxid]
+        except KeyError:
+            pass
         if self._db_instance:
             self._db_instance.delete()
-        self.delete_matrix()
+        DBMessage.delete_all(self.mxid)
         self.deleted = True
 
     @classmethod

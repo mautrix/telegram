@@ -13,7 +13,7 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import Optional, Tuple, Coroutine, Dict, Any
+from typing import Optional, Tuple, Awaitable
 import asyncio
 
 from telethon.tl.types import ChatForbidden, ChannelForbidden
@@ -105,8 +105,7 @@ async def bridge(evt: CommandEvent) -> EventID:
 
 
 async def cleanup_old_portal_while_bridging(evt: CommandEvent, portal: "po.Portal"
-                                            ) -> Tuple[
-    bool, Optional[Coroutine[None, None, None]]]:
+                                            ) -> Tuple[bool, Optional[Awaitable[None]]]:
     if not portal.mxid:
         await evt.reply("The portal seems to have lost its Matrix room between you"
                         "calling `$cmdprefix+sp bridge` and this command.\n\n"
@@ -156,10 +155,6 @@ async def confirm_bridge(evt: CommandEvent) -> Optional[EventID]:
     evt.sender.command_status = None
     is_logged_in = await evt.sender.is_logged_in() and not status["force_use_bot"]
     async with portal._room_create_lock:
-        if portal.mxid:
-            return await evt.reply("The portal seems to have created a Matrix room while you were "
-                                   "calling this command.\n\n"
-                                   "Please start over by calling the bridge command again.")
         await _locked_confirm_bridge(evt, portal=portal, room_id=bridge_to_mxid,
                                      is_logged_in=is_logged_in)
 
