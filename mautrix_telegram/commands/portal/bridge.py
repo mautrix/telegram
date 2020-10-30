@@ -13,7 +13,7 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import Optional, Tuple, Coroutine
+from typing import Optional, Tuple, Coroutine, Dict, Any
 import asyncio
 
 from telethon.tl.types import ChatForbidden, ChannelForbidden
@@ -113,10 +113,10 @@ async def cleanup_old_portal_while_bridging(evt: CommandEvent, portal: "po.Porta
                         "Continuing without touching previous Matrix room...")
         return True, None
     elif evt.args[0] == "delete-and-continue":
-        return True, portal.cleanup_portal("Portal deleted (moving to another room)")
+        return True, portal.cleanup_portal("Portal deleted (moving to another room)", delete=False)
     elif evt.args[0] == "unbridge-and-continue":
         return True, portal.cleanup_portal("Room unbridged (portal moving to another room)",
-                                           puppets_only=True)
+                                           puppets_only=True, delete=False)
     else:
         await evt.reply(
             "The chat you were trying to bridge already has a Matrix portal room.\n\n"
@@ -155,6 +155,17 @@ async def confirm_bridge(evt: CommandEvent) -> Optional[EventID]:
 
     evt.sender.command_status = None
     is_logged_in = await evt.sender.is_logged_in() and not status["force_use_bot"]
+    async with portal._room_create_lock:
+        if portal.mxid:
+            return await evt.reply("The portal seems to have created a Matrix room while you were "
+                                   "calling this command.\n\n"
+                                   "Please start over by calling the bridge command again.")
+        await _locked_confirm_bridge(evt, portal=portal, room_id=bridge_to_mxid,
+                                     is_logged_in=is_logged_in)
+
+
+async def _locked_confirm_bridge(evt: CommandEvent, portal: 'po.Portal', room_id: RoomID,
+                                 is_logged_in: bool) -> Optional[EventID]:
     user = evt.sender if is_logged_in else evt.tgbot
     try:
         entity = await user.client.get_entity(portal.peer)
@@ -172,14 +183,13 @@ async def confirm_bridge(evt: CommandEvent) -> Optional[EventID]:
         else:
             return await evt.reply("The bot doesn't seem to be in that chat.")
 
-    direct = False
-
-    portal.mxid = bridge_to_mxid
+    portal.mxid = room_id
+    portal.by_mxid[portal.mxid] = portal
     portal.title, portal.about, levels = await get_initial_state(evt.az.intent, evt.room_id)
     portal.photo_id = ""
     await portal.save()
 
-    asyncio.ensure_future(portal.update_matrix_room(user, entity, direct, levels=levels),
+    asyncio.ensure_future(portal.update_matrix_room(user, entity, direct=False, levels=levels),
                           loop=evt.loop)
 
     return await evt.reply("Bridging complete. Portal synchronization should begin momentarily.")

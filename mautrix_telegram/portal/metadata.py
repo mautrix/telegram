@@ -97,7 +97,7 @@ class PortalMetadata(BasePortal, ABC):
             pass
         try:
             existing = self.by_tgid[(new_id, new_id)]
-            existing.delete()
+            existing.delete_sync()
         except KeyError:
             pass
         self.db_instance.edit(tgid=new_id, tg_receiver=new_id, peer_type=self.peer_type)
@@ -295,16 +295,13 @@ class PortalMetadata(BasePortal, ABC):
 
     async def _create_matrix_room(self, user: 'AbstractUser', entity: Union[TypeChat, User],
                                   invites: InviteList) -> Optional[RoomID]:
-        direct = self.peer_type == "user"
-
-        if invites is None:
-            invites = []
-
         if self.mxid:
             return self.mxid
-
-        if not self.allow_bridging:
+        elif not self.allow_bridging:
             return None
+
+        direct = self.peer_type == "user"
+        invites = invites or []
 
         if not entity:
             entity = await self.get_entity(user)

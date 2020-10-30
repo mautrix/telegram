@@ -244,7 +244,7 @@ class ProvisioningAPI(AuthAPI):
         try:
             await portal.create_telegram_chat(user, supergroup=supergroup)
         except ValueError as e:
-            portal.delete()
+            await portal.delete()
             return self.get_error_response(500, "unknown_error", e.args[0])
 
         return web.json_response({

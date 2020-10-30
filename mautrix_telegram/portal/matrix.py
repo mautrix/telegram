@@ -122,7 +122,7 @@ class PortalMatrix(BasePortal, ABC):
         if user.tgid == source.tgid:
             return None
         if self.peer_type == "user" and user.tgid == self.tgid:
-            self.delete()
+            await self.delete()
             return None
         if isinstance(user, u.User) and await user.needs_relaybot(self):
             if not self.bot:
@@ -152,7 +152,7 @@ class PortalMatrix(BasePortal, ABC):
 
         if self.peer_type == "user":
             await self.main_intent.leave_room(self.mxid)
-            self.delete()
+            await self.delete()
             try:
                 del self.by_tgid[self.tgid_full]
                 del self.by_mxid[self.mxid]
