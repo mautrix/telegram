@@ -136,6 +136,9 @@ async def confirm_bridge(evt: CommandEvent) -> Optional[EventID]:
         return await evt.reply("Fatal error: tgid or peer_type missing from command_status. "
                                "This shouldn't happen unless you're messing with the command "
                                "handler code.")
+
+    is_logged_in = await evt.sender.is_logged_in() and not status["force_use_bot"]
+
     if "mxid" in status:
         ok, coro = await cleanup_old_portal_while_bridging(evt, portal)
         if not ok:
@@ -153,7 +156,6 @@ async def confirm_bridge(evt: CommandEvent) -> Optional[EventID]:
                                "`$cmdprefix+sp cancel` to cancel.")
 
     evt.sender.command_status = None
-    is_logged_in = await evt.sender.is_logged_in() and not status["force_use_bot"]
     async with portal._room_create_lock:
         await _locked_confirm_bridge(evt, portal=portal, room_id=bridge_to_mxid,
                                      is_logged_in=is_logged_in)
@@ -180,7 +182,8 @@ async def _locked_confirm_bridge(evt: CommandEvent, portal: 'po.Portal', room_id
 
     portal.mxid = room_id
     portal.by_mxid[portal.mxid] = portal
-    portal.title, portal.about, levels = await get_initial_state(evt.az.intent, evt.room_id)
+    (portal.title, portal.about, levels,
+     portal.encrypted) = await get_initial_state(evt.az.intent, evt.room_id)
     portal.photo_id = ""
     await portal.save()
 

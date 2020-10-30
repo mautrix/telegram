@@ -141,6 +141,12 @@ class ProvisioningAPI(AuthAPI):
             return self.get_error_response(403, "not_enough_permissions",
                                            "You do not have the permissions to bridge that room.")
 
+        is_logged_in = user is not None and await user.is_logged_in()
+        acting_user = user if is_logged_in else self.context.bot
+        if not acting_user:
+            return self.get_login_response(status=403, errcode="not_logged_in",
+                                           error="You are not logged in and there is no relay bot.")
+
         portal = Portal.get_by_tgid(tgid, peer_type=peer_type)
         if portal.mxid == room_id:
             return self.get_error_response(200, "bridge_exists",
@@ -157,35 +163,30 @@ class ProvisioningAPI(AuthAPI):
                                                "Telegram chat is already bridged to another "
                                                "Matrix room.")
 
-        is_logged_in = user is not None and await user.is_logged_in()
-        acting_user = user if is_logged_in else self.context.bot
-        if not acting_user:
-            return self.get_login_response(status=403, errcode="not_logged_in",
-                                           error="You are not logged in and there is no relay bot.")
+        async with portal._room_create_lock:
+            entity: Optional[TypeChat] = None
+            try:
+                entity = await acting_user.client.get_entity(portal.peer)
+            except Exception:
+                self.log.exception("Failed to get_entity(%s) for manual bridging.", portal.peer)
 
-        entity: Optional[TypeChat] = None
-        try:
-            entity = await acting_user.client.get_entity(portal.peer)
-        except Exception:
-            self.log.exception("Failed to get_entity(%s) for manual bridging.", portal.peer)
-
-        if not entity or isinstance(entity, (ChatForbidden, ChannelForbidden)):
-            if is_logged_in:
-                return self.get_error_response(403, "user_not_in_chat",
+            if not entity or isinstance(entity, (ChatForbidden, ChannelForbidden)):
+                if is_logged_in:
+                    return self.get_error_response(403, "user_not_in_chat",
+                                                   "Failed to get info of Telegram chat. "
+                                                   "Are you in the chat?")
+                return self.get_error_response(403, "bot_not_in_chat",
                                                "Failed to get info of Telegram chat. "
-                                               "Are you in the chat?")
-            return self.get_error_response(403, "bot_not_in_chat",
-                                           "Failed to get info of Telegram chat. "
-                                           "Is the relay bot in the chat?")
+                                               "Is the relay bot in the chat?")
 
-        direct = False
+            portal.mxid = room_id
+            portal.by_mxid[portal.mxid] = portal
+            (portal.title, portal.about, levels,
+             portal.encrypted) = await get_initial_state(self.az.intent, room_id)
+            portal.photo_id = ""
+            await portal.save()
 
-        portal.mxid = room_id
-        portal.title, portal.about, levels = await get_initial_state(self.az.intent, room_id)
-        portal.photo_id = ""
-        await portal.save()
-
-        asyncio.ensure_future(portal.update_matrix_room(user, entity, direct, levels=levels),
+        asyncio.ensure_future(portal.update_matrix_room(user, entity, direct=False, levels=levels),
                               loop=self.loop)
 
         return web.Response(status=202, body="{}")
@@ -216,7 +217,7 @@ class ProvisioningAPI(AuthAPI):
                                            "You do not have the permissions to bridge that room.")
 
         try:
-            title, about, _ = await get_initial_state(self.az.intent, room_id)
+            title, about, _, encrypted = await get_initial_state(self.az.intent, room_id)
         except (MatrixRequestError, IntentError):
             return self.get_error_response(403, "bot_not_in_room",
                                            "The bridge bot is not in the given room.")
@@ -240,7 +241,8 @@ class ProvisioningAPI(AuthAPI):
             "group": "chat",
         }[type]
 
-        portal = Portal(tgid=TelegramID(0), mxid=room_id, title=title, about=about, peer_type=type)
+        portal = Portal(tgid=TelegramID(0), mxid=room_id, title=title, about=about, peer_type=type,
+                        encrypted=encrypted)
         try:
             await portal.create_telegram_chat(user, supergroup=supergroup)
         except ValueError as e:

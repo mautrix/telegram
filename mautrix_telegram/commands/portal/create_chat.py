@@ -38,7 +38,7 @@ async def create(evt: CommandEvent) -> EventID:
     if not await user_has_power_level(evt.room_id, evt.az.intent, evt.sender, "bridge"):
         return await evt.reply("You do not have the permissions to bridge this room.")
 
-    title, about, levels = await get_initial_state(evt.az.intent, evt.room_id)
+    title, about, levels, encrypted = await get_initial_state(evt.az.intent, evt.room_id)
     if not title:
         return await evt.reply("Please set a title before creating a Telegram chat.")
 
@@ -50,8 +50,8 @@ async def create(evt: CommandEvent) -> EventID:
         "group": "chat",
     }[type]
 
-    portal = po.Portal(tgid=TelegramID(0), peer_type=type,
-                       mxid=evt.room_id, title=title, about=about)
+    portal = po.Portal(tgid=TelegramID(0), peer_type=type, mxid=evt.room_id,
+                       title=title, about=about, encrypted=encrypted)
     try:
         await portal.create_telegram_chat(evt.sender, supergroup=supergroup)
     except ValueError as e:

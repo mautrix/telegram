@@ -107,6 +107,7 @@ class BasePortal(MautrixBasePortal, ABC):
 
     _db_instance: DBPortal
     _main_intent: Optional[IntentAPI]
+    _room_create_lock: asyncio.Lock
 
     def __init__(self, tgid: TelegramID, peer_type: str, tg_receiver: Optional[TelegramID] = None,
                  mxid: Optional[RoomID] = None, username: Optional[str] = None,

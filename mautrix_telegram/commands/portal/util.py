@@ -25,11 +25,12 @@ OptStr = Optional[str]
 
 
 async def get_initial_state(intent: IntentAPI, room_id: RoomID
-                            ) -> Tuple[OptStr, OptStr, Optional[PowerLevelStateEventContent]]:
+                            ) -> Tuple[OptStr, OptStr, Optional[PowerLevelStateEventContent], bool]:
     state = await intent.get_state(room_id)
     title: OptStr = None
     about: OptStr = None
     levels: Optional[PowerLevelStateEventContent] = None
+    encrypted: bool = False
     for event in state:
         try:
             if event.type == EventType.ROOM_NAME:
@@ -40,10 +41,12 @@ async def get_initial_state(intent: IntentAPI, room_id: RoomID
                 levels = event.content
             elif event.type == EventType.ROOM_CANONICAL_ALIAS:
                 title = title or event.content.canonical_alias
+            elif event.type == EventType.ROOM_ENCRYPTION:
+                encrypted = True
         except KeyError:
             # Some state event probably has empty content
             pass
-    return title, about, levels
+    return title, about, levels, encrypted
 
 
 async def user_has_power_level(room_id: RoomID, intent: IntentAPI, sender: u.User,
