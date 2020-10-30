@@ -13,14 +13,14 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import Any, Dict, List, NamedTuple
+from typing import Any, List, NamedTuple
 from ruamel.yaml.comments import CommentedMap
 import os
 
 from mautrix.types import UserID
 from mautrix.client import Client
-from mautrix.bridge.config import (BaseBridgeConfig, ConfigUpdateHelper, ForbiddenKey,
-                                   ForbiddenDefault)
+from mautrix.bridge.config import BaseBridgeConfig
+from mautrix.util.config import ForbiddenKey, ForbiddenDefault, ConfigUpdateHelper
 
 Permissions = NamedTuple("Permissions", relaybot=bool, user=bool, puppeting=bool,
                          matrix_puppeting=bool, admin=bool, level=str)
@@ -240,24 +240,3 @@ class Config(BaseBridgeConfig):
             return self._get_permissions(homeserver)
 
         return self._get_permissions("*")
-
-    @property
-    def namespaces(self) -> Dict[str, List[Dict[str, Any]]]:
-        homeserver = self["homeserver.domain"]
-
-        username_format = self["bridge.username_template"].format(userid=".+")
-        alias_format = self["bridge.alias_template"].format(groupname=".+")
-        group_id = ({"group_id": self["appservice.community_id"]}
-                    if self["appservice.community_id"] else {})
-
-        return {
-            "users": [{
-                "exclusive": True,
-                "regex": f"@{username_format}:{homeserver}",
-                **group_id,
-            }],
-            "aliases": [{
-                "exclusive": True,
-                "regex": f"#{alias_format}:{homeserver}",
-            }]
-        }
