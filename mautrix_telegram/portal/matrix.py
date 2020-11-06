@@ -305,7 +305,7 @@ class PortalMatrix(BasePortal, ABC):
             if caption.formatted_body and caption.format == Format.HTML:
                 caption, entities = formatter.matrix_to_telegram(caption.formatted_body)
             else:
-                caption, entities = formatter.matrix_text_to_telegram(content.body)
+                caption, entities = formatter.matrix_text_to_telegram(caption.body)
         else:
             caption, entities = None, None
 
