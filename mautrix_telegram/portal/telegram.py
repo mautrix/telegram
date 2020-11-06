@@ -694,13 +694,20 @@ class PortalTelegram(BasePortal, ABC):
             levels.users[puppet.mxid] = 50
         await self.main_intent.set_power_levels(self.mxid, levels)
 
-    async def receive_telegram_pin_id(self, msg_id: TelegramID, receiver: TelegramID) -> None:
-        tg_space = receiver if self.peer_type != "channel" else self.tgid
-        message = DBMessage.get_one_by_tgid(msg_id, tg_space) if msg_id != 0 else None
-        if message:
-            await self.main_intent.set_pinned_messages(self.mxid, [message.mxid])
-        else:
-            await self.main_intent.set_pinned_messages(self.mxid, [])
+    async def receive_telegram_pin_ids(self, msg_ids: List[TelegramID], receiver: TelegramID,
+                                       remove: bool) -> None:
+        async with self._pin_lock:
+            tg_space = receiver if self.peer_type != "channel" else self.tgid
+            previously_pinned = await self.main_intent.get_pinned_messages(self.mxid)
+            currently_pinned_dict = {event_id: True for event_id in previously_pinned}
+            for message in DBMessage.get_first_by_tgids(msg_ids, tg_space):
+                if remove:
+                    currently_pinned_dict.pop(message.mxid, None)
+                else:
+                    currently_pinned_dict[message.mxid] = True
+            currently_pinned = list(currently_pinned_dict.keys())
+            if currently_pinned != previously_pinned:
+                await self.main_intent.set_pinned_messages(self.mxid, currently_pinned)
 
     async def set_telegram_admins_enabled(self, enabled: bool) -> None:
         level = 50 if enabled else 10

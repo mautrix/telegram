@@ -13,7 +13,7 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import Awaitable, Dict, List, Optional, Tuple, Union, Any, TYPE_CHECKING
+from typing import Awaitable, Dict, List, Optional, Tuple, Union, Any, Set, TYPE_CHECKING
 from html import escape as escape_html
 from string import Template
 from abc import ABC
@@ -22,11 +22,10 @@ import magic
 
 from telethon.tl.functions.messages import (EditChatPhotoRequest, EditChatTitleRequest,
                                             UpdatePinnedMessageRequest, SetTypingRequest,
-                                            EditChatAboutRequest)
+                                            EditChatAboutRequest, UnpinAllMessagesRequest)
 from telethon.tl.functions.channels import EditPhotoRequest, EditTitleRequest, JoinChannelRequest
-from telethon.errors import (ChatNotModifiedError, PhotoExtInvalidError,
-                             PhotoInvalidDimensionsError, PhotoSaveFileInvalidError,
-                             RPCError)
+from telethon.errors import (ChatNotModifiedError, PhotoExtInvalidError, MessageIdInvalidError,
+                             PhotoInvalidDimensionsError, PhotoSaveFileInvalidError, RPCError)
 from telethon.tl.patched import Message, MessageService
 from telethon.tl.types import (
     DocumentAttributeFilename, DocumentAttributeImageSize, GeoPoint,
@@ -432,23 +431,23 @@ class PortalMatrix(BasePortal, ABC):
         else:
             self.log.trace("Unhandled Matrix event: %s", content)
 
-    async def handle_matrix_pin(self, sender: 'u.User', pinned_message: Optional[EventID],
+    async def handle_matrix_unpin_all(self, sender: 'u.User', pin_event_id: EventID) -> None:
+        await sender.client(UnpinAllMessagesRequest(peer=self.peer))
+        await self._send_delivery_receipt(pin_event_id)
+
+    async def handle_matrix_pin(self, sender: 'u.User', changes: Dict[EventID, bool],
                                 pin_event_id: EventID) -> None:
-        if self.peer_type != "chat" and self.peer_type != "channel":
-            return
-        try:
-            if not pinned_message:
-                await sender.client(UpdatePinnedMessageRequest(peer=self.peer, id=0))
-            else:
-                tg_space = self.tgid if self.peer_type == "channel" else sender.tgid
-                message = DBMessage.get_by_mxid(pinned_message, self.mxid, tg_space)
-                if message is None:
-                    self.log.warning(f"Could not find pinned {pinned_message} in {self.mxid}")
-                    return
-                await sender.client(UpdatePinnedMessageRequest(peer=self.peer, id=message.tgid))
-            await self._send_delivery_receipt(pin_event_id)
-        except ChatNotModifiedError:
-            pass
+        tg_space = self.tgid if self.peer_type == "channel" else sender.tgid
+        ids = {msg.mxid: msg.tgid
+               for msg in DBMessage.get_by_mxids(list(changes.keys()),
+                                                 mx_room=self.mxid, tg_space=tg_space)}
+        for event_id, pinned in changes.items():
+            try:
+                await sender.client(UpdatePinnedMessageRequest(peer=self.peer, id=ids[event_id],
+                                                               unpin=not pinned))
+            except (ChatNotModifiedError, MessageIdInvalidError, KeyError):
+                pass
+        await self._send_delivery_receipt(pin_event_id)
 
     async def handle_matrix_deletion(self, deleter: 'u.User', event_id: EventID,
                                      redaction_event_id: EventID) -> None:

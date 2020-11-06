@@ -25,8 +25,8 @@ from telethon.network import (ConnectionTcpMTProxyRandomizedIntermediate, Connec
                               Connection)
 from telethon.tl.patched import MessageService, Message
 from telethon.tl.types import (
-    Channel, Chat, MessageActionChannelMigrateFrom, PeerUser, TypeUpdate, UpdateChatPinnedMessage,
-    UpdateChannelPinnedMessage, UpdateChatParticipantAdmin, UpdateChatParticipants, PeerChat,
+    Channel, Chat, MessageActionChannelMigrateFrom, PeerUser, TypeUpdate, UpdatePinnedMessages,
+    UpdatePinnedChannelMessages, UpdateChatParticipantAdmin, UpdateChatParticipants, PeerChat,
     UpdateChatUserTyping, UpdateDeleteChannelMessages, UpdateNewMessage, UpdateDeleteMessages,
     UpdateEditChannelMessage, UpdateEditMessage, UpdateNewChannelMessage, UpdateReadHistoryOutbox,
     UpdateShortChatMessage, UpdateShortMessage, UpdateUserName, UpdateUserPhoto, UpdateUserStatus,
@@ -252,7 +252,7 @@ class AbstractUser(ABC):
             await self.update_admin(update)
         elif isinstance(update, UpdateChatParticipants):
             await self.update_participants(update)
-        elif isinstance(update, (UpdateChannelPinnedMessage, UpdateChatPinnedMessage)):
+        elif isinstance(update, (UpdatePinnedMessages, UpdatePinnedChannelMessages)):
             await self.update_pinned_messages(update)
         elif isinstance(update, (UpdateUserName, UpdateUserPhoto)):
             await self.update_others_info(update)
@@ -263,14 +263,15 @@ class AbstractUser(ABC):
         else:
             self.log.trace("Unhandled update: %s", update)
 
-    async def update_pinned_messages(self, update: Union[UpdateChannelPinnedMessage,
-                                                         UpdateChatPinnedMessage]) -> None:
-        if isinstance(update, UpdateChatPinnedMessage):
-            portal = po.Portal.get_by_tgid(TelegramID(update.chat_id))
+    async def update_pinned_messages(self, update: Union[UpdatePinnedMessages,
+                                                         UpdatePinnedChannelMessages]) -> None:
+        if isinstance(update, UpdatePinnedMessages):
+            portal = po.Portal.get_by_entity(update.peer, receiver_id=self.tgid)
         else:
             portal = po.Portal.get_by_tgid(TelegramID(update.channel_id))
         if portal and portal.mxid:
-            await portal.receive_telegram_pin_id(update.id, self.tgid)
+            await portal.receive_telegram_pin_ids(update.messages, self.tgid,
+                                                  remove=not update.pinned)
 
     @staticmethod
     async def update_participants(update: UpdateChatParticipants) -> None:
