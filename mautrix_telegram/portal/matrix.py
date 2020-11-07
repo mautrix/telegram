@@ -13,7 +13,7 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import Awaitable, Dict, List, Optional, Tuple, Union, Any, TYPE_CHECKING
+from typing import Awaitable, Dict, Optional, Union, Any, TYPE_CHECKING
 from html import escape as escape_html
 from string import Template
 from abc import ABC
@@ -28,11 +28,11 @@ from telethon.errors import (ChatNotModifiedError, PhotoExtInvalidError,
                              PhotoInvalidDimensionsError, PhotoSaveFileInvalidError,
                              RPCError)
 from telethon.tl.patched import Message, MessageService
-from telethon.tl.types import (
-    DocumentAttributeFilename, DocumentAttributeImageSize, GeoPoint,
-    InputChatUploadedPhoto, MessageActionChatEditPhoto, MessageMediaGeo,
-    SendMessageCancelAction, SendMessageTypingAction, TypeInputPeer, TypeMessageEntity,
-    UpdateNewMessage, InputMediaUploadedDocument, InputMediaUploadedPhoto)
+from telethon.tl.types import (DocumentAttributeFilename, DocumentAttributeImageSize, GeoPoint,
+                               InputChatUploadedPhoto, MessageActionChatEditPhoto, MessageMediaGeo,
+                               SendMessageCancelAction, SendMessageTypingAction, TypeInputPeer,
+                               UpdateNewMessage, InputMediaUploadedDocument,
+                               InputMediaUploadedPhoto)
 
 from mautrix.types import (EventID, RoomID, UserID, ContentURI, MessageType, MessageEventContent,
                            TextMessageEventContent, MediaMessageEventContent, Format,
@@ -87,7 +87,7 @@ class PortalMatrix(BasePortal, ABC):
             message = await self._get_state_change_message(event, user, **kwargs)
             if not message:
                 return
-            message, entities = formatter.matrix_to_telegram(message)
+            message, entities = await formatter.matrix_to_telegram(self.bot.client, html=message)
             response = await self.bot.client.send_message(self.peer, message,
                                                           formatting_entities=entities)
             space = self.tgid if self.peer_type == "channel" else self.bot.tgid
@@ -214,27 +214,11 @@ class PortalMatrix(BasePortal, ABC):
         elif content.msgtype == MessageType.EMOTE:
             await self._apply_emote_format(sender, content)
 
-    @staticmethod
-    def _matrix_event_to_entities(event: Union[str, MessageEventContent]
-                                  ) -> Tuple[str, Optional[List[TypeMessageEntity]]]:
-        try:
-            if isinstance(event, str):
-                message, entities = formatter.matrix_to_telegram(event)
-            elif isinstance(event, TextMessageEventContent) and event.format == Format.HTML:
-                message, entities = formatter.matrix_to_telegram(event.formatted_body)
-            else:
-                message, entities = formatter.matrix_text_to_telegram(event.body)
-        except KeyError:
-            message, entities = None, None
-        return message, entities
-
     async def _handle_matrix_text(self, sender_id: TelegramID, event_id: EventID,
                                   space: TelegramID, client: 'MautrixTelegramClient',
                                   content: TextMessageEventContent, reply_to: TelegramID) -> None:
-        if content.formatted_body and content.format == Format.HTML:
-            message, entities = formatter.matrix_to_telegram(content.formatted_body)
-        else:
-            message, entities = formatter.matrix_text_to_telegram(content.body)
+        message, entities = await formatter.matrix_to_telegram(client, text=content.body,
+                                                               html=content.formatted(Format.HTML))
         async with self.send_lock(sender_id):
             lp = self.get_config("telegram_link_preview")
             if content.get_edit():
@@ -301,25 +285,21 @@ class PortalMatrix(BasePortal, ABC):
             media = InputMediaUploadedDocument(file=file_handle, attributes=attributes,
                                                mime_type=mime or "application/octet-stream")
 
-        if caption:
-            if caption.formatted_body and caption.format == Format.HTML:
-                caption, entities = formatter.matrix_to_telegram(caption.formatted_body)
-            else:
-                caption, entities = formatter.matrix_text_to_telegram(caption.body)
-        else:
-            caption, entities = None, None
+        capt, entities = (await formatter.matrix_to_telegram(client, text=caption.body,
+                                                             html=caption.formatted(Format.HTML))
+                          if caption else (None, None))
 
         async with self.send_lock(sender_id):
-            if await self._matrix_document_edit(client, content, space, caption, media, event_id):
+            if await self._matrix_document_edit(client, content, space, capt, media, event_id):
                 return
             try:
                 response = await client.send_media(self.peer, media, reply_to=reply_to,
-                                                   caption=caption, entities=entities)
+                                                   caption=capt, entities=entities)
             except (PhotoInvalidDimensionsError, PhotoSaveFileInvalidError, PhotoExtInvalidError):
                 media = InputMediaUploadedDocument(file=media.file, mime_type=mime,
                                                    attributes=attributes)
                 response = await client.send_media(self.peer, media, reply_to=reply_to,
-                                                   caption=caption, entities=entities)
+                                                   caption=capt, entities=entities)
             self._add_telegram_message_to_db(event_id, space, 0, response)
         await self._send_delivery_receipt(event_id)
 
@@ -346,7 +326,7 @@ class PortalMatrix(BasePortal, ABC):
         except (KeyError, ValueError):
             self.log.exception("Failed to parse location")
             return None
-        caption, entities = formatter.matrix_text_to_telegram(content.body)
+        caption, entities = await formatter.matrix_to_telegram(client, text=content.body)
         media = MessageMediaGeo(geo=GeoPoint(lat, long, access_hash=0))
 
         async with self.send_lock(sender_id):
