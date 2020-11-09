@@ -30,7 +30,8 @@ from telethon.errors import (AuthBytesInvalidError, AuthKeyInvalidError, Locatio
                              SecurityError, FileIdInvalidError)
 
 from mautrix.appservice import IntentAPI
-from mautrix.types import EncryptedFile
+from mautrix.types import ContentURI
+from mautrix.errors import MatrixRequestError, MatrixConnectionError
 
 from ..tgclient import MautrixTelegramClient
 from ..db import TelegramFile as DBTelegramFile
@@ -107,6 +108,28 @@ def _location_to_id(location: TypeLocation) -> str:
         return f"{location.volume_id}-{location.local_id}"
 
 
+bad_gateway_sleep = 5
+
+
+async def _try_upload_media(intent: IntentAPI, file: bytes, mime: str, retries: int = 2
+                            ) -> ContentURI:
+    while True:
+        try:
+            return await intent.upload_media(file, mime)
+        except MatrixRequestError as e:
+            if not retries or e.http_status not in (502, 504):
+                raise
+            log.warning("Got gateway error trying to upload media, retrying in "
+                        f"{bad_gateway_sleep} seconds")
+        except MatrixConnectionError as e:
+            if not retries:
+                raise
+            log.warning(f"Got connection error trying to upload media: {e}, retrying in "
+                        f"{bad_gateway_sleep} seconds")
+        await asyncio.sleep(bad_gateway_sleep)
+        retries -= 1
+
+
 async def transfer_thumbnail_to_matrix(client: MautrixTelegramClient, intent: IntentAPI,
                                        thumbnail_loc: TypeLocation, mime_type: str, encrypt: bool,
                                        video: Optional[bytes], custom_data: Optional[bytes] = None,
@@ -145,7 +168,7 @@ async def transfer_thumbnail_to_matrix(client: MautrixTelegramClient, intent: In
     if encrypt:
         file, decryption_info = encrypt_attachment(file)
         upload_mime_type = "application/octet-stream"
-    content_uri = await intent.upload_media(file, upload_mime_type)
+    content_uri = await _try_upload_media(intent, file, upload_mime_type)
     if decryption_info:
         decryption_info.url = content_uri
 
@@ -246,7 +269,7 @@ async def _unlocked_transfer_file_to_matrix(client: MautrixTelegramClient, inten
         if encrypt and encrypt_attachment:
             file, decryption_info = encrypt_attachment(file)
             upload_mime_type = "application/octet-stream"
-        content_uri = await intent.upload_media(file, upload_mime_type)
+        content_uri = await _try_upload_media(intent, file, upload_mime_type)
         if decryption_info:
             decryption_info.url = content_uri
 
