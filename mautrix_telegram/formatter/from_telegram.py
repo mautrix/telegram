@@ -51,7 +51,7 @@ def telegram_reply_to_matrix(evt: Message, source: 'AbstractUser') -> Optional[R
                  else source.tgid)
         msg = DBMessage.get_one_by_tgid(TelegramID(evt.reply_to.reply_to_msg_id), space)
         if msg:
-            return RelatesTo(rel_type=RelationType.REFERENCE, event_id=msg.mxid)
+            return RelatesTo(rel_type=RelationType.REPLY, event_id=msg.mxid)
     return None
 
 
@@ -126,7 +126,7 @@ async def _add_reply_header(source: 'AbstractUser', content: TextMessageEventCon
     if not msg:
         return
 
-    content.relates_to = RelatesTo(rel_type=RelationType.REFERENCE, event_id=msg.mxid)
+    content.relates_to = RelatesTo(rel_type=RelationType.REPLY, event_id=msg.mxid)
 
     try:
         event: MessageEvent = await main_intent.get_event(msg.mx_room, msg.mxid)
