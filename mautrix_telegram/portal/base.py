@@ -458,9 +458,11 @@ class BasePortal(MautrixBasePortal, ABC):
                                type_name if create else None)
 
     @classmethod
-    def reached_portal_limit(cls, username: str) -> int:
-         return config["bridge.max_portal_rooms"] > 0 and
-                DBPortal.count() >= config["bridge.max_portal_rooms"]
+    async def reached_portal_limit(cls) -> bool:
+        limit = config.get("bridge.max_portal_rooms", 0)
+        if limit == 0:
+            return False
+        return DBPortal.count() >= limit
 
     # endregion
     # region Abstract methods (cross-called in matrix/metadata/telegram classes)
