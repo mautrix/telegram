@@ -523,7 +523,7 @@ def init(context: Context) -> None:
     global config
     BasePortal.az, config, BasePortal.loop, BasePortal.bot = context.core
     BasePortal.matrix = context.mx
-    BasePortal.bridge = context.bridge
+    MautrixBasePortal.bridge = context.bridge
     BasePortal.max_initial_member_sync = config["bridge.max_initial_member_sync"]
     BasePortal.sync_channel_members = config["bridge.sync_channel_members"]
     BasePortal.sync_matrix_state = config["bridge.sync_matrix_state"]
