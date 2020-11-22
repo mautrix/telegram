@@ -327,7 +327,7 @@ class PortalMatrix(BasePortal, ABC):
             self.log.exception("Failed to parse location")
             return None
         caption, entities = await formatter.matrix_to_telegram(client, text=content.body)
-        media = MessageMediaGeo(geo=GeoPoint(lat, long, access_hash=0))
+        media = MessageMediaGeo(geo=GeoPoint(lat=lat, long=long, access_hash=0))
 
         async with self.send_lock(sender_id):
             if await self._matrix_document_edit(client, content, space, caption, media, event_id):
