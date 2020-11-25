@@ -15,7 +15,7 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from typing import Optional, Iterable
 
-from sqlalchemy import Column, Integer, String, Boolean, Text, func, sql
+from sqlalchemy import Column, Integer, String, Boolean, Text, func, sql, select
 
 from mautrix.types import RoomID, ContentURI
 from mautrix.util.db import Base
@@ -53,8 +53,9 @@ class Portal(Base):
     def find_private_chats(cls, tg_receiver: TelegramID) -> Iterable['Portal']:
         yield from cls._select_all(cls.c.tg_receiver == tg_receiver, cls.c.peer_type == "user")
 
+    @classmethod
     def count(cls) -> int:
-        rows = cls.db.execute(select([func.count()].select_from(self.t))
+        rows = cls.db.execute(select([func.count()]))
         try:
             count, = next(rows)
             return count
