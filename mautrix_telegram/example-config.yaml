@@ -210,7 +210,7 @@ bridge:
     federate_rooms: true
     # The maximum number of rooms that can be bridged on this instance.
     # When the maximum number of rooms has been reached, attempts to create new links will error. Set to -1 to disable.
-    max_bridged_rooms: -1
+    max_portal_rooms: -1
     # Settings for converting animated stickers.
     animated_sticker:
         # Format to which animated stickers should be converted.
