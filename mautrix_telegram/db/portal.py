@@ -15,7 +15,7 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from typing import Optional, Iterable
 
-from sqlalchemy import Column, Integer, String, Boolean, Text, func, sql, select
+from sqlalchemy import Column, Integer, String, Boolean, Text, Table, MetaData, func, sql, select
 
 from mautrix.types import RoomID, ContentURI
 from mautrix.util.db import Base
@@ -55,12 +55,8 @@ class Portal(Base):
 
     @classmethod
     def count(cls) -> int:
-        rows = cls.db.execute(select([func.count()]))
-        try:
-            count, = next(rows)
-            return count
-        except StopIteration:
-            return 0
+        count = cls.db.execute(select([func.count('*')]).select_from(Table("portal", MetaData()))).scalar()
+        return count
 
     @classmethod
     def get_by_mxid(cls, mxid: RoomID) -> Optional['Portal']:
