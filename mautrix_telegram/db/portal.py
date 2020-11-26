@@ -63,13 +63,13 @@ class Portal(Base):
             return 0
 
     @classmethod
+    def get_by_mxid(cls, mxid: RoomID) -> Optional['Portal']:
+        return cls._select_one_or_none(cls.c.mxid == mxid)
+
+    @classmethod
     def get_by_username(cls, username: str) -> Optional['Portal']:
         return cls._select_one_or_none(func.lower(cls.c.username) == username)
 
     @classmethod
     def all(cls) -> Iterable['Portal']:
         yield from cls._select_all()
-
-    @classmethod
-    def get_by_mxid(cls, mxid: RoomID) -> Integer:
-        return cls._select_one_or_none(cls.c.mxid == mxid)
