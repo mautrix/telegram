@@ -459,7 +459,7 @@ class BasePortal(MautrixBasePortal, ABC):
 
     @classmethod
     async def reached_portal_limit(cls) -> bool:
-        limit = config.get("bridge.max_portal_rooms", 0)
+        limit = config.get("bridge.max_portal_rooms", -1)
         if limit == -1:
             return False
         return DBPortal.count() >= limit
