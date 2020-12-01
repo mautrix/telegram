@@ -182,6 +182,10 @@ class BasePortal(MautrixBasePortal, ABC):
             return PeerChannel(channel_id=self.tgid)
 
     @property
+    def is_direct(self) -> bool:
+        return self.peer_type == "user"
+
+    @property
     def has_bot(self) -> bool:
         return (bool(self.bot)
                 and (self.bot.is_in_chat(self.tgid)
