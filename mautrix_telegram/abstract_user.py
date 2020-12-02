@@ -469,7 +469,7 @@ class AbstractUser(ABC):
                 await self.register_portal(portal)
                 return
             self.log.trace("Handling action %s to %s by %d", update.action, portal.tgid_log,
-                           sender.id)
+                           (sender.id if sender else 0))
             return await portal.handle_telegram_action(self, sender, update)
 
         if isinstance(original_update, (UpdateEditMessage, UpdateEditChannelMessage)):

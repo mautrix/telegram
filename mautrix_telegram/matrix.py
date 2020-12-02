@@ -282,7 +282,7 @@ class MatrixHandler(BaseMatrixHandler):
         sender = await u.User.get_by_mxid(sender_mxid).ensure_started()
         if await sender.has_full_access(allow_bot=True) and portal:
             if not new_events:
-                await portal.handle_matrix_unpin_all(sender)
+                await portal.handle_matrix_unpin_all(sender, event_id)
             else:
                 changes = {event_id: event_id in new_events
                            for event_id in new_events ^ old_events}
