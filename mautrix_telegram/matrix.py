@@ -281,13 +281,12 @@ class MatrixHandler(BaseMatrixHandler):
         portal = po.Portal.get_by_mxid(room_id)
         sender = await u.User.get_by_mxid(sender_mxid).ensure_started()
         if await sender.has_full_access(allow_bot=True) and portal:
-            events = new_events - old_events
-            if len(events) > 0:
-                # New event pinned, set that as pinned in Telegram.
-                await portal.handle_matrix_pin(sender, EventID(events.pop()), event_id)
-            elif len(new_events) == 0:
-                # All pinned events removed, remove pinned event in Telegram.
-                await portal.handle_matrix_pin(sender, None, event_id)
+            if not new_events:
+                await portal.handle_matrix_unpin_all(sender)
+            else:
+                changes = {event_id: event_id in new_events
+                           for event_id in new_events ^ old_events}
+                await portal.handle_matrix_pin(sender, changes, event_id)
 
     @staticmethod
     async def handle_room_upgrade(room_id: RoomID, sender: UserID, new_room_id: RoomID,

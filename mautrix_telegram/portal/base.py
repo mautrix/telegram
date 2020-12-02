@@ -104,6 +104,7 @@ class BasePortal(MautrixBasePortal, ABC):
 
     dedup: PortalDedup
     send_lock: PortalSendLock
+    _pin_lock: asyncio.Lock
 
     _db_instance: DBPortal
     _main_intent: Optional[IntentAPI]
@@ -138,6 +139,7 @@ class BasePortal(MautrixBasePortal, ABC):
 
         self.dedup = PortalDedup(self)
         self.send_lock = PortalSendLock()
+        self._pin_lock = asyncio.Lock()
 
         if tgid:
             self.by_tgid[self.tgid_full] = self

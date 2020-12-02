@@ -13,7 +13,7 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import Optional, Iterator
+from typing import Optional, Iterator, List
 
 from sqlalchemy import Column, UniqueConstraint, Integer, String, and_, func, desc, select
 
@@ -52,6 +52,12 @@ class Message(Base):
                                            cls.c.edit_index == edit_index)
 
     @classmethod
+    def get_first_by_tgids(cls, tgids: List[TelegramID], tg_space: TelegramID
+                           ) -> Iterator['Message']:
+        return cls._select_all(cls.c.tgid.in_(tgids), cls.c.tg_space == tg_space,
+                               cls.c.edit_index == 0)
+
+    @classmethod
     def count_spaces_by_mxid(cls, mxid: EventID, mx_room: RoomID) -> int:
         rows = cls.db.execute(select([func.count(cls.c.tg_space)])
                               .where(and_(cls.c.mxid == mxid, cls.c.mx_room == mx_room)))
@@ -76,6 +82,12 @@ class Message(Base):
                     ) -> Optional['Message']:
         return cls._select_one_or_none(cls.c.mxid == mxid, cls.c.mx_room == mx_room,
                                        cls.c.tg_space == tg_space)
+
+    @classmethod
+    def get_by_mxids(cls, mxids: List[EventID], mx_room: RoomID, tg_space: TelegramID
+                     ) -> Iterator['Message']:
+        return cls._select_all(cls.c.mxid.in_(mxids), cls.c.mx_room == mx_room,
+                               cls.c.tg_space == tg_space)
 
     @classmethod
     def update_by_tgid(cls, s_tgid: TelegramID, s_tg_space: TelegramID, s_edit_index: int,
