@@ -450,7 +450,7 @@ class PortalMetadata(BasePortal, ABC):
             levels.kick = overrides.get("kick", 50)
             levels.redact = overrides.get("redact", 50)
             levels.invite = overrides.get("invite", 50 if dbr.invite_users else 0)
-            levels.events[EventType.ROOM_ENCRYPTION] = 99
+            levels.events[EventType.ROOM_ENCRYPTION] = overrides.get("encryption", 50 if self.matrix.e2ee else 99)
             levels.events[EventType.ROOM_TOMBSTONE] = 99
             levels.events[EventType.ROOM_NAME] = 50 if dbr.change_info else 0
             levels.events[EventType.ROOM_AVATAR] = 50 if dbr.change_info else 0
