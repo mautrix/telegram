@@ -8,10 +8,10 @@ aiodns
 brotli
 
 #/webp_convert
-pillow>=4,<8
+pillow>=4,<9
 
 #/qr_login
-pillow>=4,<8
+pillow>=4,<9
 qrcode>=6,<7
 
 #/hq_thumbnails
