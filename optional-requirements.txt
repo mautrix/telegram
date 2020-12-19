@@ -7,9 +7,6 @@ cchardet
 aiodns
 brotli
 
-#/webp_convert
-pillow>=4,<9
-
 #/qr_login
 pillow>=4,<9
 qrcode>=6,<7

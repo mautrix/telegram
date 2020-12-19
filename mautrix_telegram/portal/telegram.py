@@ -229,6 +229,14 @@ class PortalTelegram(BasePortal, ABC):
         # Elements only support images as stickers, so send animated webm stickers as m.video
         if attrs.is_sticker and file.mime_type.startswith("image/"):
             event_type = EventType.STICKER
+            # Tell clients to render the stickers as 256x256 if they're bigger
+            if info.width > 256 or info.height > 256:
+                if info.width > info.height:
+                    info.height = int(info.height / (info.width / 256))
+                    info.width = 256
+                else:
+                    info.width = int(info.width / (info.height / 256))
+                    info.height = 256
         content = MediaMessageEventContent(
             body=name or "unnamed file", info=info, relates_to=relates_to,
             external_url=self._get_external_url(evt),
