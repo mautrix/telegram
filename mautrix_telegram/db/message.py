@@ -15,7 +15,8 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from typing import Optional, Iterator, List
 
-from sqlalchemy import Column, UniqueConstraint, Integer, String, and_, func, desc, select
+from sqlalchemy import (Column, UniqueConstraint, Integer, String, Boolean, and_, func, desc,
+                        select, false)
 
 from mautrix.types import RoomID, EventID
 from mautrix.util.db import Base
@@ -31,6 +32,7 @@ class Message(Base):
     tgid: TelegramID = Column(Integer, primary_key=True)
     tg_space: TelegramID = Column(Integer, primary_key=True)
     edit_index: int = Column(Integer, primary_key=True)
+    redacted: bool = Column(Boolean, server_default=false())
 
     __table_args__ = (UniqueConstraint("mxid", "mx_room", "tg_space", name="_mx_id_room_2"),)
 

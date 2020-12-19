@@ -435,12 +435,18 @@ class PortalMatrix(BasePortal, ABC):
         space = self.tgid if self.peer_type == "channel" else real_deleter.tgid
         message = DBMessage.get_by_mxid(event_id, self.mxid, space)
         if not message:
-            return
-        if message.edit_index == 0:
+            self.log.trace(f"Ignoring Matrix redaction of unknown event {event_id}")
+        elif message.redacted:
+            self.log.debug("Ignoring Matrix redaction of already redacted event "
+                           f"{message.mxid} in {message.mx_room}")
+        elif message.edit_index != 0:
+            message.edit(redacted=True)
+            self.log.debug("Ignoring Matrix redaction of edit event "
+                           f"{message.mxid} in {message.mx_room}")
+        else:
+            message.edit(redacted=True)
             await real_deleter.client.delete_messages(self.peer, [message.tgid])
             await self._send_delivery_receipt(redaction_event_id)
-        else:
-            self.log.debug(f"Ignoring deletion of edit event {message.mxid} in {message.mx_room}")
 
     async def _update_telegram_power_level(self, sender: 'u.User', user_id: TelegramID,
                                            level: int) -> None:
