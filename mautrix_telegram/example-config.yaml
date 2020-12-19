@@ -214,18 +214,19 @@ bridge:
     # Settings for converting animated stickers.
     animated_sticker:
         # Format to which animated stickers should be converted.
-        # disable - No conversion, send as-is (gzipped lottie)
-        # png - converts to non-animated png (fastest),
+        # disable - No conversion, send raw lottie JSON
+        # png - converts to non-animated png (fastest)
         # gif - converts to animated gif, but loses transparency
-        # webm - converts to webm video, requires ffmpeg executable with vp9 codec and webm container support
+        # webp - converts to animated webp
+        # video - converts to webm video, requires ffmpeg executable with vp9 codec and webm container support
         target: gif
         # Arguments for converter. All converters take width and height.
         # GIF converter takes background as a hex color.
         args:
             width: 256
             height: 256
-            background: "020202"  # only for gif
-            fps: 30               # only for webm
+            #format: webm  # only for video, supports mp4 and webm
+            thumbnail: false  # whether or not the first frame should be included as a thumbnail
     # End-to-bridge encryption support options. These require matrix-nio to be installed with pip
     # and login_shared_secret to be configured in order to get a device for the bridge bot.
     #

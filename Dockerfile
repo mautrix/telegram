@@ -1,4 +1,4 @@
-FROM dock.mau.dev/tulir/lottieconverter:alpine-3.12
+FROM alpine:3.12
 
 ARG TARGETARCH=amd64
 
@@ -19,6 +19,7 @@ RUN apk add --no-cache \
       py3-psycopg2 \
       py3-ruamel.yaml \
       py3-commonmark@edge \
+      py3-cairosvg@edge \
       # Indirect dependencies
       py3-idna \
       #moviepy
