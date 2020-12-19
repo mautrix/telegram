@@ -151,7 +151,7 @@ async def join(evt: CommandEvent) -> Optional[EventID]:
     if evt.config["bridge.invite_link_resolve"]:
         try:
             async with ClientSession() as sess, sess.get(url) as resp:
-                url = resp.url
+                url = str(resp.url)
         except InvalidURL:
             return await evt.reply("That doesn't look like a Telegram invite link.")
 
