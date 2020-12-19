@@ -63,7 +63,7 @@ class PortalDedup:
         else:
             hash_content = [event.date.timestamp(), event.message.strip()]
             if event.fwd_from:
-                hash_content += [event.fwd_from.from_id, event.fwd_from.channel_id]
+                hash_content += [event.fwd_from.from_id]
             elif isinstance(event, Message) and event.media:
                 try:
                     hash_content += {
