@@ -194,6 +194,9 @@ bridge:
         example.com: foobar
     # Set to false to disable link previews in messages sent to Telegram.
     telegram_link_preview: true
+    # Whether or not the !tg join command should do a HTTP request
+    # to resolve redirects in invite links.
+    invite_link_resolve: false
     # Use inline images instead of a separate message for the caption.
     # N.B. Inline images are not supported on all clients (e.g. Riot iOS).
     inline_images: false

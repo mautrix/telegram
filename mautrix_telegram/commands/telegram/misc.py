@@ -18,6 +18,8 @@ import codecs
 import base64
 import re
 
+from aiohttp import ClientSession, InvalidURL
+
 from telethon.errors import (InviteHashInvalidError, InviteHashExpiredError, OptionsTooMuchError,
                              UserAlreadyParticipantError, ChatIdInvalidError,
                              TakeoutInitDelayError, EmoticonInvalidError)
@@ -145,9 +147,17 @@ async def join(evt: CommandEvent) -> Optional[EventID]:
     if len(evt.args) == 0:
         return await evt.reply("**Usage:** `$cmdprefix+sp join <invite link>`")
 
+    url = evt.args[0]
+    if evt.config["bridge.invite_link_resolve"]:
+        try:
+            async with ClientSession() as sess, sess.get(url) as resp:
+                url = resp.url
+        except InvalidURL:
+            return await evt.reply("That doesn't look like a Telegram invite link.")
+
     regex = re.compile(r"(?:https?://)?t(?:elegram)?\.(?:dog|me)"
                        r"(?:/(?P<type>joinchat|s))?/(?P<id>[^/]+)/?", flags=re.IGNORECASE)
-    arg = regex.match(evt.args[0])
+    arg = regex.match(url)
     if not arg:
         return await evt.reply("That doesn't look like a Telegram invite link.")
 
