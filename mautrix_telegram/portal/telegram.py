@@ -185,7 +185,7 @@ class PortalTelegram(BasePortal, ABC):
                                                 width=file.thumbnail.width or thumb_size.w,
                                                 size=file.thumbnail.size)
         else:
-            # This is a hack for bad clients like Riot iOS that require a thumbnail
+            # This is a hack for bad clients like Element iOS that require a thumbnail
             if file.decryption_info:
                 info.thumbnail_file = file.decryption_info
             else:
@@ -226,7 +226,7 @@ class PortalTelegram(BasePortal, ABC):
         await intent.set_typing(self.mxid, is_typing=False)
 
         event_type = EventType.ROOM_MESSAGE
-        # Riot only supports images as stickers, so send animated webm stickers as m.video
+        # Elements only support images as stickers, so send animated webm stickers as m.video
         if attrs.is_sticker and file.mime_type.startswith("image/"):
             event_type = EventType.STICKER
         content = MediaMessageEventContent(

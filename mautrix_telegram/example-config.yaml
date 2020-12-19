@@ -198,7 +198,7 @@ bridge:
     # to resolve redirects in invite links.
     invite_link_resolve: false
     # Use inline images instead of a separate message for the caption.
-    # N.B. Inline images are not supported on all clients (e.g. Riot iOS).
+    # N.B. Inline images are not supported on all clients (e.g. Element iOS/Android).
     inline_images: false
     # Maximum size of image in megabytes before sending to Telegram as a document.
     image_as_file_size: 10
