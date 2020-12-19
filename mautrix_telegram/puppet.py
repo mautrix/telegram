@@ -165,7 +165,8 @@ class Puppet(BasePuppet):
                     custom_mxid=self.custom_mxid, username=self.username, is_bot=self.is_bot,
                     displayname=self.displayname, displayname_source=self.displayname_source,
                     photo_id=self.photo_id, matrix_registered=self.is_registered,
-                    disable_updates=self.disable_updates, base_url=self.base_url)
+                    disable_updates=self.disable_updates,
+                    base_url=str(self.base_url) if self.base_url else None)
 
     def new_db_instance(self) -> DBPuppet:
         return DBPuppet(id=self.id, **self._fields)
