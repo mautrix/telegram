@@ -26,8 +26,9 @@ from yarl import URL
 from mautrix.appservice import AppService, IntentAPI
 from mautrix.errors import MatrixRequestError
 from mautrix.bridge import BasePuppet
-from mautrix.types import UserID, SyncToken, RoomID
+from mautrix.types import UserID, SyncToken, RoomID, ContentURI
 from mautrix.util.simple_template import SimpleTemplate
+from mautrix.util.logging import TraceLogger
 
 from .types import TelegramID
 from .db import Puppet as DBPuppet
@@ -43,7 +44,7 @@ config: Optional['Config'] = None
 
 
 class Puppet(BasePuppet):
-    log: logging.Logger = logging.getLogger("mau.puppet")
+    log: TraceLogger = logging.getLogger("mau.puppet")
     az: AppService
     mx: 'MatrixHandler'
     loop: asyncio.AbstractEventLoop
@@ -277,6 +278,7 @@ class Puppet(BasePuppet):
         if displayname != self.displayname:
             self.log.debug(f"Updating displayname of {self.id} (src: {source.tgid}, allowed "
                            f"because {allow_because}) from {self.displayname} to {displayname}")
+            self.log.trace("Displayname source data: %s", info)
             self.displayname = displayname
             self.displayname_source = source.tgid
             try:
@@ -310,7 +312,7 @@ class Puppet(BasePuppet):
             if not photo_id:
                 self.photo_id = ""
                 try:
-                    await self.default_mxid_intent.set_avatar_url("")
+                    await self.default_mxid_intent.set_avatar_url(ContentURI(""))
                 except MatrixRequestError:
                     self.log.exception("Failed to set avatar")
                     self.photo_id = ""
