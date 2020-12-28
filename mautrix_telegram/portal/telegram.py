@@ -34,7 +34,7 @@ from telethon.tl.types import (
     MessageMediaPhoto, MessageMediaDice, MessageMediaGame, MessageMediaUnsupported, PeerUser,
     PhotoCachedSize, TypeChannelParticipant, TypeChatParticipant, TypeDocumentAttribute,
     TypeMessageAction, TypePhotoSize, PhotoSize, UpdateChatUserTyping, UpdateUserTyping,
-    MessageEntityPre, ChatPhotoEmpty)
+    MessageEntityPre, ChatPhotoEmpty, DocumentAttributeImageSize)
 
 from mautrix.appservice import IntentAPI
 from mautrix.types import (EventID, UserID, ImageInfo, ThumbnailInfo, RelatesTo, MessageType,
@@ -144,6 +144,8 @@ class PortalTelegram(BasePortal, ABC):
                 sticker_alt = attr.alt
             elif isinstance(attr, DocumentAttributeVideo):
                 width, height = attr.w, attr.h
+            elif isinstance(attr, DocumentAttributeImageSize):
+                width, height = attr.w, attr.h
         return DocAttrs(name, mime_type, is_sticker, sticker_alt, width, height)
 
     @staticmethod
@@ -237,6 +239,10 @@ class PortalTelegram(BasePortal, ABC):
                 else:
                     info.width = int(info.width / (info.height / 256))
                     info.height = 256
+            if info.thumbnail_info:
+                info.thumbnail_info.width = info.width
+                info.thumbnail_info.height = info.height
+
         content = MediaMessageEventContent(
             body=name or "unnamed file", info=info, relates_to=relates_to,
             external_url=self._get_external_url(evt),
