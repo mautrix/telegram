@@ -65,6 +65,7 @@ class Puppet(BasePuppet):
     username: Optional[str]
     displayname: Optional[str]
     displayname_source: Optional[TelegramID]
+    displayname_contact: bool
     photo_id: Optional[str]
     is_bot: bool
     is_registered: bool
@@ -86,6 +87,7 @@ class Puppet(BasePuppet):
                  username: Optional[str] = None,
                  displayname: Optional[str] = None,
                  displayname_source: Optional[TelegramID] = None,
+                 displayname_contact: bool = False,
                  photo_id: Optional[str] = None,
                  is_bot: bool = False,
                  is_registered: bool = False,
@@ -101,6 +103,7 @@ class Puppet(BasePuppet):
         self.username = username
         self.displayname = displayname
         self.displayname_source = displayname_source
+        self.displayname_contact = displayname_contact
         self.photo_id = photo_id
         self.is_bot = is_bot
         self.is_registered = is_registered
@@ -165,8 +168,8 @@ class Puppet(BasePuppet):
         return dict(access_token=self.access_token, next_batch=self._next_batch,
                     custom_mxid=self.custom_mxid, username=self.username, is_bot=self.is_bot,
                     displayname=self.displayname, displayname_source=self.displayname_source,
-                    photo_id=self.photo_id, matrix_registered=self.is_registered,
-                    disable_updates=self.disable_updates,
+                    displayname_contact=self.displayname_contact, photo_id=self.photo_id,
+                    matrix_registered=self.is_registered, disable_updates=self.disable_updates,
                     base_url=str(self.base_url) if self.base_url else None)
 
     def new_db_instance(self) -> DBPuppet:
@@ -179,8 +182,9 @@ class Puppet(BasePuppet):
     def from_db(cls, db_puppet: DBPuppet) -> 'Puppet':
         return Puppet(db_puppet.id, db_puppet.access_token, db_puppet.custom_mxid,
                       db_puppet.next_batch, db_puppet.base_url, db_puppet.username,
-                      db_puppet.displayname, db_puppet.displayname_source, db_puppet.photo_id,
-                      db_puppet.is_bot, db_puppet.matrix_registered, db_puppet.disable_updates,
+                      db_puppet.displayname, db_puppet.displayname_source,
+                      db_puppet.displayname_contact, db_puppet.photo_id, db_puppet.is_bot,
+                      db_puppet.matrix_registered, db_puppet.disable_updates,
                       db_instance=db_puppet)
 
     # endregion
@@ -273,6 +277,10 @@ class Puppet(BasePuppet):
 
         if isinstance(info, UpdateUserName):
             info = await source.client.get_entity(PeerUser(self.tgid))
+        if not info.contact:
+            self.displayname_contact = False
+        elif not self.displayname_contact:
+            return False
 
         displayname = self.get_displayname(info)
         if displayname != self.displayname:

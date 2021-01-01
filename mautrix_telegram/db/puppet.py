@@ -34,6 +34,7 @@ class Puppet(Base):
     base_url: str = Column(Text, nullable=True)
     displayname: str = Column(String, nullable=True)
     displayname_source: TelegramID = Column(Integer, nullable=True)
+    displayname_contact: bool = Column(Boolean, nullable=False, server_default=expression.true())
     username: str = Column(String, nullable=True)
     photo_id: str = Column(String, nullable=True)
     is_bot: bool = Column(Boolean, nullable=True)
