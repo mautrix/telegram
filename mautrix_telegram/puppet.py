@@ -343,7 +343,7 @@ class Puppet(BasePuppet):
                 return True
         return False
 
-    def default_puppet_should_leave_room(self, room_id: RoomID) -> bool:
+    async def default_puppet_should_leave_room(self, room_id: RoomID) -> bool:
         portal: p.Portal = p.Portal.get_by_mxid(room_id)
         return portal and not portal.backfill_lock.locked and portal.peer_type != "user"
 
