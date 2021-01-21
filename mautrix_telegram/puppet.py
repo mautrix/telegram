@@ -270,8 +270,10 @@ class Puppet(BasePuppet):
             allow_because = "user is the primary source"
         elif not isinstance(info, UpdateUserName) and not info.contact:
             allow_because = "user is not a contact"
-        elif self.displayname_source is None:
+        elif not self.displayname_source:
             allow_because = "no primary source set"
+        elif not self.displayname:
+            allow_because = "user has no name"
         else:
             return False
 

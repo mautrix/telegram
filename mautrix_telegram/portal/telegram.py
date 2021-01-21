@@ -589,6 +589,9 @@ class PortalTelegram(BasePortal, ABC):
                            "displayname, updating info...")
             entity = await source.client.get_entity(PeerUser(sender.tgid))
             await sender.update_info(source, entity)
+            if not sender.displayname:
+                self.log.debug(f"Telegram user {sender.tgid} doesn't have a displayname even after"
+                               f" updating with data {entity!s}")
 
         allowed_media = (MessageMediaPhoto, MessageMediaDocument, MessageMediaGeo,
                          MessageMediaGame, MessageMediaDice, MessageMediaPoll,
