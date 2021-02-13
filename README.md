@@ -10,15 +10,16 @@ A Matrix-Telegram hybrid puppeting/relaybot bridge.
 ## Sponsors
 * [Joel Lehtonen / Zouppen](https://github.com/zouppen)
 
-### Wiki
-All setup and usage instructions are located in the GitHub
-[wiki](https://github.com/tulir/mautrix-telegram/wiki). Some quick links:
+### Documentation
+All setup and usage instructions are located on
+[docs.mau.fi](https://docs.mau.fi/bridges/python/telegram/index.html).
+Some quick links:
 
-* [Bridge setup](https://github.com/tulir/mautrix-telegram/wiki/Bridge-setup)
-  (or [with Docker](https://github.com/tulir/mautrix-telegram/wiki/Bridge-setup-with-Docker))
-* Basic usage: [Authentication](https://github.com/tulir/mautrix-telegram/wiki/Authentication),
-  [Creating chats](https://github.com/tulir/mautrix-telegram/wiki/Creating-and-managing-chats),
-  [Relaybot setup](https://github.com/tulir/mautrix-telegram/wiki/Relay-bot)
+* [Bridge setup](https://docs.mau.fi/bridges/python/setup/index.html?bridge=telegram)
+  (or [with Docker](https://docs.mau.fi/bridges/python/setup/docker.html?bridge=telegram))
+* Basic usage: [Authentication](https://docs.mau.fi/bridges/python/telegram/authentication.html),
+  [Creating chats](https://docs.mau.fi/bridges/python/telegram/creating-and-managing-chats.html),
+  [Relaybot setup](https://docs.mau.fi/bridges/python/telegram/relay-bot.html)
 
 ### Features & Roadmap
 [ROADMAP.md](https://github.com/tulir/mautrix-telegram/blob/master/ROADMAP.md)
