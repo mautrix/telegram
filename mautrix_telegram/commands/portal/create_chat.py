@@ -52,8 +52,14 @@ async def create(evt: CommandEvent) -> EventID:
 
     portal = po.Portal(tgid=TelegramID(0), peer_type=type, mxid=evt.room_id,
                        title=title, about=about, encrypted=encrypted)
+    invites, errors = await portal.get_telegram_users_in_matrix_room(evt.sender)
+    if len(errors) > 0:
+        error_list = "\n".join(f"* [{mxid}](https://matrix.to/#/{mxid})" for mxid in errors)
+        await evt.reply(f"Failed to add the following users to the chat:\n\n{error_list}\n\n"
+                        "You can try `$cmdprefix+sp search -r <username>` to help the bridge find "
+                        "those users.")
     try:
-        await portal.create_telegram_chat(evt.sender, supergroup=supergroup)
+        await portal.create_telegram_chat(evt.sender, invites=invites, supergroup=supergroup)
     except ValueError as e:
         await portal.delete()
         return await evt.reply(e.args[0])

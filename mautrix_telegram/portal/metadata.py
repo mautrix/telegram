@@ -13,7 +13,7 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import List, Optional, Iterable, Union, Dict, Any, TYPE_CHECKING
+from typing import List, Optional, Iterable, Union, Dict, Any, Tuple, TYPE_CHECKING
 from abc import ABC
 import asyncio
 
@@ -26,7 +26,8 @@ from telethon.tl.types import (
     Channel, ChatBannedRights, ChannelParticipantsRecent, ChannelParticipantsSearch, ChatPhoto,
     PhotoEmpty, InputChannel, InputUser, ChatPhotoEmpty, PeerUser, Photo, TypeChat, TypeInputPeer,
     TypeUser, User, InputPeerPhotoFileLocation, ChatParticipantAdmin, ChannelParticipantAdmin,
-    ChatParticipantCreator, ChannelParticipantCreator, UserProfilePhoto, UserProfilePhotoEmpty)
+    ChatParticipantCreator, ChannelParticipantCreator, UserProfilePhoto, UserProfilePhotoEmpty,
+    InputPeerUser)
 
 from mautrix.errors import MForbidden
 from mautrix.types import (RoomID, UserID, RoomCreatePreset, EventType, Membership,
@@ -58,21 +59,30 @@ class PortalMetadata(BasePortal, ABC):
 
     # region Matrix -> Telegram
 
-    async def _get_telegram_users_in_matrix_room(self) -> List[Union[InputUser, PeerUser]]:
-        user_tgids = set()
+    async def get_telegram_users_in_matrix_room(self, source: 'u.User'
+                                                ) -> Tuple[List[InputPeerUser], List[UserID]]:
+        user_tgids = {}
         user_mxids = await self.main_intent.get_room_members(self.mxid, (Membership.JOIN,
                                                                          Membership.INVITE))
-        for user_str in user_mxids:
-            user = UserID(user_str)
-            if user == self.az.bot_mxid:
+        for mxid in user_mxids:
+            if mxid == self.az.bot_mxid:
                 continue
-            mx_user = u.User.get_by_mxid(user, create=False)
+            mx_user = u.User.get_by_mxid(mxid, create=False)
             if mx_user and mx_user.tgid:
-                user_tgids.add(mx_user.tgid)
-            puppet_id = p.Puppet.get_id_from_mxid(user)
+                user_tgids[mx_user.tgid] = mxid
+            puppet_id = p.Puppet.get_id_from_mxid(mxid)
             if puppet_id:
-                user_tgids.add(puppet_id)
-        return [PeerUser(user_id) for user_id in user_tgids]
+                user_tgids[puppet_id] = mxid
+        input_users = []
+        errors = []
+        for tgid, mxid in user_tgids.items():
+            try:
+                input_users.append(await source.client.get_input_entity(tgid))
+            except ValueError as e:
+                source.log.debug(f"Failed to find the input entity for {tgid} ({mxid}) for "
+                                 f"creating a group: {e}")
+                errors.append(mxid)
+        return input_users, errors
 
     async def upgrade_telegram_chat(self, source: 'u.User') -> None:
         if self.peer_type != "chat":
@@ -116,13 +126,13 @@ class PortalMetadata(BasePortal, ABC):
         if await self._update_username(username):
             await self.save()
 
-    async def create_telegram_chat(self, source: 'u.User', supergroup: bool = False) -> None:
+    async def create_telegram_chat(self, source: 'u.User', invites: List[InputUser],
+                                   supergroup: bool = False) -> None:
         if not self.mxid:
             raise ValueError("Can't create Telegram chat for portal without Matrix room.")
         elif self.tgid:
             raise ValueError("Can't create Telegram chat for portal with existing Telegram chat.")
 
-        invites = await self._get_telegram_users_in_matrix_room()
         if len(invites) < 2:
             if self.bot is not None:
                 info, mxid = await self.bot.get_me()
