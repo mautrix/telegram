@@ -207,6 +207,7 @@ bridge:
     # Enable experimental parallel file transfer, which makes uploads/downloads much faster by
     # streaming from/to Matrix and using many connections for Telegram.
     # Note that generating HQ thumbnails for videos is not possible with streamed transfers.
+    # This option uses internal Telethon implementation details and may break with minor updates.
     parallel_file_transfer: false
     # Whether or not created rooms should have federation enabled.
     # If false, created portal rooms will never be federated.

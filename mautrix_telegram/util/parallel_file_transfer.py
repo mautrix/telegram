@@ -27,8 +27,10 @@ from telethon.tl.types import (Document, InputFileLocation, InputDocumentFileLoc
                                InputPhotoFileLocation, InputPeerPhotoFileLocation, TypeInputFile,
                                InputFileBig, InputFile)
 from telethon.tl.functions.auth import ExportAuthorizationRequest, ImportAuthorizationRequest
+from telethon.tl.functions import InvokeWithLayerRequest
 from telethon.tl.functions.upload import (GetFileRequest, SaveFilePartRequest,
                                           SaveBigFilePartRequest)
+from telethon.tl.alltlobjects import LAYER
 from telethon.network import MTProtoSender
 from telethon.crypto import AuthKey
 from telethon import utils, helpers
@@ -193,9 +195,9 @@ class ParallelTransferrer:
         if not self.auth_key:
             log.debug(f"Exporting auth to DC {self.dc_id}")
             auth = await self.client(ExportAuthorizationRequest(self.dc_id))
-            req = self.client._init_with(ImportAuthorizationRequest(
-                id=auth.id, bytes=auth.bytes
-            ))
+            self.client._init_request.query = ImportAuthorizationRequest(id=auth.id,
+                                                                         bytes=auth.bytes)
+            req = InvokeWithLayerRequest(LAYER, self.client._init_request)
             await sender.send(req)
             self.auth_key = sender.auth_key
         return sender
