@@ -27,7 +27,7 @@ from telethon.tl.types import (Channel, ChannelFull, Chat, ChatFull, InputChanne
                                TypeUser, TypeUserFull, User, UserFull, TypeInputChannel, Photo,
                                Document, TypePhotoSize, PhotoSize, InputPhotoFileLocation,
                                TypeChatParticipant, TypeChannelParticipant, PhotoEmpty, ChatPhoto,
-                               ChatPhotoEmpty)
+                               ChatPhotoEmpty, PhotoSizeProgressive, PhotoSizeEmpty)
 
 from mautrix.errors import MatrixRequestError, IntentError
 from mautrix.appservice import AppService, IntentAPI
@@ -222,7 +222,18 @@ class BasePortal(MautrixBasePortal, ABC):
         return config[f"bridge.{key}"]
 
     @staticmethod
-    def _get_largest_photo_size(photo: Union[Photo, Document]
+    def _photo_size_key(photo: TypePhotoSize) -> int:
+        if isinstance(photo, PhotoSize):
+            return photo.size
+        elif isinstance(photo, PhotoSizeProgressive):
+            return max(photo.sizes)
+        elif isinstance(photo, PhotoSizeEmpty):
+            return 0
+        else:
+            return len(photo.bytes)
+
+    @classmethod
+    def _get_largest_photo_size(cls, photo: Union[Photo, Document]
                                 ) -> Tuple[Optional[InputPhotoFileLocation],
                                            Optional[TypePhotoSize]]:
         if not photo or isinstance(photo, PhotoEmpty) or (isinstance(photo, Document)
@@ -230,9 +241,7 @@ class BasePortal(MautrixBasePortal, ABC):
             return None, None
 
         largest = max(photo.thumbs if isinstance(photo, Document) else photo.sizes,
-                      key=(lambda photo2: (len(photo2.bytes)
-                                           if not isinstance(photo2, PhotoSize)
-                                           else photo2.size)))
+                      key=cls._photo_size_key)
         return InputPhotoFileLocation(
             id=photo.id,
             access_hash=photo.access_hash,

@@ -109,8 +109,7 @@ class PortalTelegram(BasePortal, ABC):
             return await self._send_message(intent, content, timestamp=evt.date)
         info = ImageInfo(
             height=largest_size.h, width=largest_size.w, orientation=0, mimetype=file.mime_type,
-            size=(len(largest_size.bytes) if (isinstance(largest_size, PhotoCachedSize))
-                  else largest_size.size))
+            size=self._photo_size_key(largest_size))
         ext = sane_mimetypes.guess_extension(file.mime_type)
         name = f"disappearing_image{ext}" if media.ttl_seconds else f"image{ext}"
         await intent.set_typing(self.mxid, is_typing=False)
