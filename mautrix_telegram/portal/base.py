@@ -15,12 +15,13 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from typing import Awaitable, Dict, List, Optional, Tuple, Union, Any, Set, Iterable, TYPE_CHECKING
 from abc import ABC, abstractmethod
+from datetime import datetime
 import asyncio
 import logging
 import json
 
 from telethon.tl.functions.messages import ExportChatInviteRequest
-from telethon.tl.types import (Channel, ChannelFull, Chat, ChatFull, ChatInviteEmpty, InputChannel,
+from telethon.tl.types import (Channel, ChannelFull, Chat, ChatFull, InputChannel,
                                InputPeerChannel, InputPeerChat, InputPeerUser, InputUser,
                                PeerChannel, PeerChat, PeerUser, TypeChat, TypeInputPeer, TypePeer,
                                TypeUser, TypeUserFull, User, UserFull, TypeInputChannel, Photo,
@@ -30,7 +31,7 @@ from telethon.tl.types import (Channel, ChannelFull, Chat, ChatFull, ChatInviteE
 
 from mautrix.errors import MatrixRequestError, IntentError
 from mautrix.appservice import AppService, IntentAPI
-from mautrix.types import (RoomID, RoomAlias, UserID, EventID, EventType, MessageEventContent,
+from mautrix.types import (RoomID, RoomAlias, UserID, EventID, EventType,
                            PowerLevelStateEventContent, ContentURI)
 from mautrix.util.simple_template import SimpleTemplate
 from mautrix.util.simple_lock import SimpleLock
@@ -270,14 +271,14 @@ class BasePortal(MautrixBasePortal, ABC):
                     return dialog.entity
             raise
 
-    async def get_invite_link(self, user: 'u.User') -> str:
+    async def get_invite_link(self, user: 'u.User', uses: Optional[int] = None,
+                              expire: Optional[datetime] = None) -> str:
         if self.peer_type == "user":
             raise ValueError("You can't invite users to private chats.")
         if self.username:
             return f"https://t.me/{self.username}"
-        link = await user.client(ExportChatInviteRequest(peer=await self.get_input_entity(user)))
-        if isinstance(link, ChatInviteEmpty):
-            raise ValueError("Failed to get invite link.")
+        link = await user.client(ExportChatInviteRequest(peer=await self.get_input_entity(user),
+                                                         expire_date=expire, usage_limit=uses))
         return link.link
 
     # endregion
