@@ -15,7 +15,7 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from typing import Optional, Iterable, Tuple
 
-from sqlalchemy import Column, ForeignKey, ForeignKeyConstraint, Integer, String, func
+from sqlalchemy import Column, ForeignKey, ForeignKeyConstraint, BigInteger, Integer, String, func
 
 from mautrix.types import UserID
 from mautrix.util.db import Base
@@ -27,7 +27,7 @@ class User(Base):
     __tablename__ = "user"
 
     mxid: UserID = Column(String, primary_key=True)
-    tgid: Optional[TelegramID] = Column(Integer, nullable=True, unique=True)
+    tgid: Optional[TelegramID] = Column(BigInteger, nullable=True, unique=True)
     tg_username: str = Column(String, nullable=True)
     tg_phone: str = Column(String, nullable=True)
     saved_contacts: int = Column(Integer, default=0, nullable=False)
@@ -91,10 +91,10 @@ class User(Base):
 class UserPortal(Base):
     __tablename__ = "user_portal"
 
-    user: TelegramID = Column(Integer, ForeignKey("user.tgid", onupdate="CASCADE",
+    user: TelegramID = Column(BigInteger, ForeignKey("user.tgid", onupdate="CASCADE",
                                                   ondelete="CASCADE"), primary_key=True)
-    portal: TelegramID = Column(Integer, primary_key=True)
-    portal_receiver: TelegramID = Column(Integer, primary_key=True)
+    portal: TelegramID = Column(BigInteger, primary_key=True)
+    portal_receiver: TelegramID = Column(BigInteger, primary_key=True)
 
     __table_args__ = (ForeignKeyConstraint(("portal", "portal_receiver"),
                                            ("portal.tgid", "portal.tg_receiver"),
@@ -104,5 +104,5 @@ class UserPortal(Base):
 class Contact(Base):
     __tablename__ = "contact"
 
-    user: TelegramID = Column(Integer, ForeignKey("user.tgid"), primary_key=True)
-    contact: TelegramID = Column(Integer, ForeignKey("puppet.id"), primary_key=True)
+    user: TelegramID = Column(BigInteger, ForeignKey("user.tgid"), primary_key=True)
+    contact: TelegramID = Column(BigInteger, ForeignKey("puppet.id"), primary_key=True)

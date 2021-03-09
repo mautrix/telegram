@@ -21,7 +21,7 @@ prometheus_client>=0.6,<0.10
 psycopg2-binary>=2,<3
 
 #/e2be
-asyncpg>=0.20,<0.22
+asyncpg>=0.20,<0.23
 python-olm>=3,<4
 pycryptodome>=3,<4
 unpaddedbase64>=1,<2

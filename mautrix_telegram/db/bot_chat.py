@@ -15,7 +15,7 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from typing import Iterable
 
-from sqlalchemy import Column, Integer, String
+from sqlalchemy import Column, BigInteger, String
 
 from mautrix.util.db import Base
 
@@ -25,7 +25,7 @@ from ..types import TelegramID
 # Fucking Telegram not telling bots what chats they are in 3:<
 class BotChat(Base):
     __tablename__ = "bot_chat"
-    id: TelegramID = Column(Integer, primary_key=True)
+    id: TelegramID = Column(BigInteger, primary_key=True)
     type: str = Column(String, nullable=False)
 
     @classmethod

@@ -15,7 +15,7 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from typing import Optional, Iterable
 
-from sqlalchemy import Column, Integer, String, Text, Boolean
+from sqlalchemy import Column, BigInteger, String, Text, Boolean
 from sqlalchemy.sql import expression, func
 
 from mautrix.types import UserID, SyncToken
@@ -27,13 +27,13 @@ from ..types import TelegramID
 class Puppet(Base):
     __tablename__ = "puppet"
 
-    id: TelegramID = Column(Integer, primary_key=True)
+    id: TelegramID = Column(BigInteger, primary_key=True)
     custom_mxid: UserID = Column(String, nullable=True)
     access_token: str = Column(String, nullable=True)
     next_batch: SyncToken = Column(String, nullable=True)
     base_url: str = Column(Text, nullable=True)
     displayname: str = Column(String, nullable=True)
-    displayname_source: TelegramID = Column(Integer, nullable=True)
+    displayname_source: TelegramID = Column(BigInteger, nullable=True)
     displayname_contact: bool = Column(Boolean, nullable=False, server_default=expression.true())
     username: str = Column(String, nullable=True)
     photo_id: str = Column(String, nullable=True)

@@ -15,7 +15,7 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from typing import Optional, Iterable
 
-from sqlalchemy import Column, Integer, String, Boolean, Text, func, sql
+from sqlalchemy import Column, BigInteger, String, Boolean, Text, func, sql
 
 from mautrix.types import RoomID, ContentURI
 from mautrix.util.db import Base
@@ -27,8 +27,8 @@ class Portal(Base):
     __tablename__ = "portal"
 
     # Telegram chat information
-    tgid: TelegramID = Column(Integer, primary_key=True)
-    tg_receiver: TelegramID = Column(Integer, primary_key=True)
+    tgid: TelegramID = Column(BigInteger, primary_key=True)
+    tg_receiver: TelegramID = Column(BigInteger, primary_key=True)
     peer_type: str = Column(String, nullable=False)
     megagroup: bool = Column(Boolean)
 
