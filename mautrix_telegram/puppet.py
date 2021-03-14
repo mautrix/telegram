@@ -24,7 +24,7 @@ from telethon.tl.types import (UserProfilePhoto, User, UpdateUserName, PeerUser,
 from yarl import URL
 
 from mautrix.appservice import AppService, IntentAPI
-from mautrix.errors import MatrixRequestError
+from mautrix.errors import MatrixRequestError, MatrixError
 from mautrix.bridge import BasePuppet
 from mautrix.types import UserID, SyncToken, RoomID, ContentURI
 from mautrix.util.simple_template import SimpleTemplate
@@ -297,7 +297,7 @@ class Puppet(BasePuppet):
             try:
                 await self.default_mxid_intent.set_displayname(
                     displayname[:config["bridge.displayname_max_length"]])
-            except MatrixRequestError:
+            except MatrixError:
                 self.log.exception("Failed to set displayname")
                 self.displayname = ""
                 self.displayname_source = None
@@ -326,7 +326,7 @@ class Puppet(BasePuppet):
                 self.photo_id = ""
                 try:
                     await self.default_mxid_intent.set_avatar_url(ContentURI(""))
-                except MatrixRequestError:
+                except MatrixError:
                     self.log.exception("Failed to set avatar")
                     self.photo_id = ""
                 return True
@@ -342,7 +342,7 @@ class Puppet(BasePuppet):
                 self.photo_id = photo_id
                 try:
                     await self.default_mxid_intent.set_avatar_url(file.mxc)
-                except MatrixRequestError:
+                except MatrixError:
                     self.log.exception("Failed to set avatar")
                     self.photo_id = ""
                 return True
