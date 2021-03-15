@@ -1,4 +1,4 @@
-SQLAlchemy>=1.2,<2
+SQLAlchemy>=1.2,<1.4
 alembic>=1,<2
 ruamel.yaml>=0.15.35,<0.17
 python-magic>=0.4,<0.5
