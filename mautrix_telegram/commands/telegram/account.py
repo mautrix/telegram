@@ -16,7 +16,7 @@
 from typing import Optional
 
 from telethon.errors import (UsernameInvalidError, UsernameNotModifiedError, UsernameOccupiedError,
-                             HashInvalidError, AuthKeyError, FirstNameInvalidError)
+                             HashInvalidError, AuthKeyError, FirstNameInvalidError, AboutTooLongError)
 from telethon.tl.types import Authorization
 from telethon.tl.functions.account import (UpdateUsernameRequest, GetAuthorizationsRequest,
                                            ResetAuthorizationRequest, UpdateProfileRequest)
@@ -53,6 +53,23 @@ async def username(evt: CommandEvent) -> EventID:
     else:
         await evt.reply(f"Username changed to {evt.sender.username}")
 
+@command_handler(needs_auth=True,
+                 help_section=SECTION_AUTH,
+                 help_args="<_new about_>",
+                 help_text="Change your Telegram about section.")
+async def about(evt: CommandEvent) -> EventID:
+    if len(evt.args) == 0:
+        return await evt.reply("**Usage:** `$cmdprefix+sp about <new about>`")
+    if evt.sender.is_bot:
+        return await evt.reply("Bots can't set their own about section.")
+    new_about = " ".join(evt.args)
+    if new_about == "-":
+        new_about = ""
+    try:
+        await evt.sender.client(UpdateProfileRequest(about=new_about))
+    except AboutTooLongError:
+        return await evt.reply("The provided about section is too long")
+    return await evt.reply("About section updated")
 
 @command_handler(needs_auth=True, help_section=SECTION_AUTH, help_args="<_new displayname_>",
                  help_text="Change your Telegram displayname.")
