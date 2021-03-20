@@ -62,6 +62,16 @@ config: Optional['Config'] = None
 class PortalMatrix(BasePortal, ABC):
     async def _get_state_change_message(self, event: str, user: 'u.User', **kwargs: Any
                                         ) -> Optional[str]:
+        # First check if state event messages are blacklisted or whitelisted for this room
+        state_event_filters_mode = self.get_config("state_event_filters.mode")
+        if state_event_filters_mode:
+            state_event_filters = self.get_config("state_event_filters.list")
+            if state_event_filters_mode == "blacklist" and self.mxid in state_event_filters:
+                self.log.debug(f"Not sending state change message to {self.mxid} due to blacklist")
+                return None
+            if state_event_filters_mode == "whitelist" and self.mxid not in state_event_filters:
+                self.log.debug(f"Not sending state change message to {self.mxid} due to missing from whitelist")
+                return None
         tpl = self.get_config(f"state_event_formats.{event}")
         if len(tpl) == 0:
             # Empty format means they don't want the message

@@ -352,12 +352,25 @@ bridge:
     #    $mention     - Telegram @username or displayname mention (depending on which exists)
     emote_format: "* $mention $formatted_body"
 
+    # Filters to use when sending Matrix state events to Telegram via the relay bot
+    #
+    # Filters do not affect direct chats.
+    # An empty blacklist will essentially disable the filter.
+    state_event_filters:
+        # Filter mode to use. Either "blacklist" or "whitelist".
+        # If the mode is "blacklist", state events for the listed chats will not be sent via the relay bot
+        # If the mode is "whitelist", state events for only the listed chat will be sent by the relay bot
+        mode: blacklist
+        # The list of Matrix room ID's to filter with
+        list: []
+
     # The formats to use when sending state events to Telegram via the relay bot.
     #
     # Variables from `message_formats` that have the `sender_` prefix are available without the prefix.
     # In name_change events, `$prev_displayname` is the previous displayname.
     #
     # Set format to an empty string to disable the messages for that event.
+    # See `state_event_filters` for blacklisting/whitelisting state events over relay bot per room
     state_event_formats:
         join: "<b>$displayname</b> joined the room."
         leave: "<b>$displayname</b> left the room."

@@ -159,6 +159,8 @@ class Config(BaseBridgeConfig):
         copy_dict("bridge.message_formats", override_existing_map=False)
         copy("bridge.emote_format")
 
+        copy("bridge.state_event_filters.mode")
+        copy("bridge.state_event_filters.list")
         copy("bridge.state_event_formats.join")
         copy("bridge.state_event_formats.leave")
         copy("bridge.state_event_formats.name_change")
