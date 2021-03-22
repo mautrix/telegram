@@ -13,14 +13,16 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import Optional, cast, Dict, Any
+from typing import Optional, cast, Dict, Any, TYPE_CHECKING
 
 from sqlalchemy import (Column, ForeignKey, Integer, BigInteger, String, Boolean, Text,
                         TypeDecorator)
-from sqlalchemy.engine.result import RowProxy
 
 from mautrix.types import ContentURI, EncryptedFile
 from mautrix.util.db import Base
+
+if TYPE_CHECKING:
+    from sqlalchemy.engine.result import RowProxy
 
 
 class DBEncryptedFile(TypeDecorator):
@@ -60,7 +62,7 @@ class TelegramFile(Base):
     thumbnail: Optional['TelegramFile'] = None
 
     @classmethod
-    def scan(cls, row: RowProxy) -> 'TelegramFile':
+    def scan(cls, row: 'RowProxy') -> 'TelegramFile':
         telegram_file = cast(TelegramFile, super().scan(row))
         if isinstance(telegram_file.thumbnail, str):
             telegram_file.thumbnail = cls.get(telegram_file.thumbnail)
