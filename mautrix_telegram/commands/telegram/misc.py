@@ -116,8 +116,8 @@ async def pm(evt: CommandEvent) -> EventID:
         return await evt.reply("That doesn't seem to be a user.")
     portal = po.Portal.get_by_entity(user, evt.sender.tgid)
     await portal.create_matrix_room(evt.sender, user, [evt.sender.mxid])
-    return await evt.reply("Created private chat room with "
-                           f"{pu.Puppet.get_displayname(user, False)}")
+    displayname, _ = pu.Puppet.get_displayname(user, False)
+    return await evt.reply(f"Created private chat room with {displayname}")
 
 
 async def _join(evt: CommandEvent, identifier: str, link_type: str

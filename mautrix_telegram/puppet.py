@@ -240,7 +240,7 @@ class Puppet(BasePuppet):
             name = str(info.id)
             quality = 0
 
-        return cls.displayname_template.format_full(name) if enable_format else name, quality
+        return (cls.displayname_template.format_full(name) if enable_format else name), quality
 
     async def try_update_info(self, source: 'AbstractUser', info: User) -> None:
         try:

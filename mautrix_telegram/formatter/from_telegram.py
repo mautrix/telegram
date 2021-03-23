@@ -79,7 +79,7 @@ async def _add_forward_header(source: 'AbstractUser', content: TextMessageEventC
             try:
                 user = await source.client.get_entity(fwd_from.from_id)
                 if user:
-                    fwd_from_text = pu.Puppet.get_displayname(user, False)
+                    fwd_from_text, _ = pu.Puppet.get_displayname(user, False)
                     fwd_from_html = f"<b>{escape(fwd_from_text)}</b>"
             except (ValueError, RPCError):
                 fwd_from_text = fwd_from_html = "unknown user"
