@@ -13,7 +13,7 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import Awaitable, Any, Dict, Iterable, Optional, Union, TYPE_CHECKING
+from typing import Awaitable, Any, Dict, Iterable, Optional, Union, Tuple, TYPE_CHECKING
 from difflib import SequenceMatcher
 import unicodedata
 import asyncio
@@ -66,6 +66,7 @@ class Puppet(BasePuppet):
     displayname: Optional[str]
     displayname_source: Optional[TelegramID]
     displayname_contact: bool
+    displayname_quality: int
     photo_id: Optional[str]
     is_bot: bool
     is_registered: bool
@@ -88,6 +89,7 @@ class Puppet(BasePuppet):
                  displayname: Optional[str] = None,
                  displayname_source: Optional[TelegramID] = None,
                  displayname_contact: bool = True,
+                 displayname_quality: int = 0,
                  photo_id: Optional[str] = None,
                  is_bot: bool = False,
                  is_registered: bool = False,
@@ -104,6 +106,7 @@ class Puppet(BasePuppet):
         self.displayname = displayname
         self.displayname_source = displayname_source
         self.displayname_contact = displayname_contact
+        self.displayname_quality = displayname_quality
         self.photo_id = photo_id
         self.is_bot = is_bot
         self.is_registered = is_registered
@@ -168,7 +171,8 @@ class Puppet(BasePuppet):
         return dict(access_token=self.access_token, next_batch=self._next_batch,
                     custom_mxid=self.custom_mxid, username=self.username, is_bot=self.is_bot,
                     displayname=self.displayname, displayname_source=self.displayname_source,
-                    displayname_contact=self.displayname_contact, photo_id=self.photo_id,
+                    displayname_contact=self.displayname_contact,
+                    displayname_quality=self.displayname_quality, photo_id=self.photo_id,
                     matrix_registered=self.is_registered, disable_updates=self.disable_updates,
                     base_url=str(self.base_url) if self.base_url else None)
 
@@ -183,9 +187,9 @@ class Puppet(BasePuppet):
         return Puppet(db_puppet.id, db_puppet.access_token, db_puppet.custom_mxid,
                       db_puppet.next_batch, db_puppet.base_url, db_puppet.username,
                       db_puppet.displayname, db_puppet.displayname_source,
-                      db_puppet.displayname_contact, db_puppet.photo_id, db_puppet.is_bot,
-                      db_puppet.matrix_registered, db_puppet.disable_updates,
-                      db_instance=db_puppet)
+                      db_puppet.displayname_contact, db_puppet.displayname_quality,
+                      db_puppet.photo_id, db_puppet.is_bot, db_puppet.matrix_registered,
+                      db_puppet.disable_updates, db_instance=db_puppet)
 
     # endregion
     # region Info updating
@@ -209,7 +213,7 @@ class Puppet(BasePuppet):
         return name
 
     @classmethod
-    def get_displayname(cls, info: User, enable_format: bool = True) -> str:
+    def get_displayname(cls, info: User, enable_format: bool = True) -> Tuple[str, int]:
         fn = cls._filter_name(info.first_name)
         ln = cls._filter_name(info.last_name)
         data = {
@@ -222,19 +226,21 @@ class Puppet(BasePuppet):
         }
         preferences = config["bridge.displayname_preference"]
         name = None
+        quality = 99
         for preference in preferences:
             name = data[preference]
             if name:
                 break
+            quality -= 1
 
         if isinstance(info, User) and info.deleted:
             name = f"Deleted account {info.id}"
+            quality = 99
         elif not name:
             name = str(info.id)
+            quality = 0
 
-        if not enable_format:
-            return name
-        return cls.displayname_template.format_full(name)
+        return cls.displayname_template.format_full(name) if enable_format else name, quality
 
     async def try_update_info(self, source: 'AbstractUser', info: User) -> None:
         try:
@@ -287,13 +293,15 @@ class Puppet(BasePuppet):
             else:
                 return False
 
-        displayname = self.get_displayname(info)
-        if displayname != self.displayname:
+        displayname, quality = self.get_displayname(info)
+        if displayname != self.displayname and quality >= self.displayname_quality:
+            allow_because = f"{allow_because} and quality {quality} >= {self.displayname_quality}"
             self.log.debug(f"Updating displayname of {self.id} (src: {source.tgid}, allowed "
                            f"because {allow_because}) from {self.displayname} to {displayname}")
             self.log.trace("Displayname source data: %s", info)
             self.displayname = displayname
             self.displayname_source = source.tgid
+            self.displayname_quality = quality
             try:
                 await self.default_mxid_intent.set_displayname(
                     displayname[:config["bridge.displayname_max_length"]])
@@ -301,6 +309,7 @@ class Puppet(BasePuppet):
                 self.log.exception("Failed to set displayname")
                 self.displayname = ""
                 self.displayname_source = None
+                self.displayname_quality = 0
             return True
         elif source.is_relaybot or self.displayname_source is None:
             self.displayname_source = source.tgid
