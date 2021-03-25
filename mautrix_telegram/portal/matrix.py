@@ -112,7 +112,11 @@ class PortalMatrix(BasePortal, ABC):
         space = self.tgid if self.peer_type == "channel" else user.tgid
         message = DBMessage.get_by_mxid(event_id, self.mxid, space)
         if not message:
+            self.log.debug(f"Dropping Matrix read receipt from {user.mxid}: "
+                           f"target message {event_id} not known")
             return
+        self.log.debug(f"Marking messages up to {message.mxid}/{message.tgid} "
+                       f"as read by {user.mxid}/{user.tgid}")
         await user.client.send_read_acknowledge(self.peer, max_id=message.tgid,
                                                 clear_mentions=True)
 
