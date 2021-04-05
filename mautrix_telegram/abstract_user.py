@@ -31,7 +31,7 @@ from telethon.tl.types import (
     UpdateEditChannelMessage, UpdateEditMessage, UpdateNewChannelMessage, UpdateReadHistoryOutbox,
     UpdateShortChatMessage, UpdateShortMessage, UpdateUserName, UpdateUserPhoto, UpdateUserStatus,
     UpdateUserTyping, User, UserStatusOffline, UserStatusOnline, UpdateReadHistoryInbox,
-    UpdateReadChannelInbox, MessageEmpty)
+    UpdateReadChannelInbox, MessageEmpty, UpdateDialogFilter, UpdateDialogFilterOrder)
 
 from mautrix.types import UserID, PresenceState
 from mautrix.errors import MatrixError
@@ -260,6 +260,10 @@ class AbstractUser(ABC):
             await self.update_read_receipt(update)
         elif isinstance(update, (UpdateReadHistoryInbox, UpdateReadChannelInbox)):
             await self.update_own_read_receipt(update)
+        elif isinstance(update, UpdateDialogFilter):
+            await self.update_dialog_filter(update)
+        elif isinstance(update, UpdateDialogFilterOrder):
+            await self.update_dialog_filter_order(update)
         else:
             self.log.trace("Unhandled update: %s", update)
 
@@ -479,6 +483,16 @@ class AbstractUser(ABC):
         if isinstance(original_update, (UpdateEditMessage, UpdateEditChannelMessage)):
             return await portal.handle_telegram_edit(self, sender, update)
         return await portal.handle_telegram_message(self, sender, update)
+
+    async def update_dialog_filter(self, update: UpdateDialogFilter) -> None:
+        if update.filter is None:
+            # Folder was deleted
+            pass
+        else:
+            pass
+
+    async def update_dialog_filter_order(self, update: UpdateDialogFilterOrder) -> None:
+        pass
 
     # endregion
 

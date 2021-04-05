@@ -21,11 +21,12 @@ import asyncio
 
 from telethon.tl.types import (TypeUpdate, UpdateNewMessage, UpdateNewChannelMessage,
                                UpdateShortChatMessage, UpdateShortMessage, User as TLUser, Chat,
-                               ChatForbidden)
+                               ChatForbidden, DialogFilter)
 from telethon.tl.custom import Dialog
 from telethon.tl.types.contacts import ContactsNotModified
 from telethon.tl.functions.contacts import GetContactsRequest, SearchRequest
 from telethon.tl.functions.account import UpdateStatusRequest
+from telethon.tl.functions.messages import GetDialogFiltersRequest
 
 from mautrix.client import Client
 from mautrix.errors import MatrixRequestError
@@ -435,8 +436,20 @@ class User(AbstractUser, BaseUser):
             index += 1
         await self.save(portals=True)
         await asyncio.gather(*creators)
-        await self.update_direct_chats()
+        try:
+            await self.sync_folders()
+        except Exception:
+            self.log.exception("Failed to sync folders")
+        try:
+            await self.update_direct_chats()
+        except Exception:
+            self.log.exception("Failed to sync direct chat list")
         self.log.debug("Dialog syncing complete")
+
+    async def sync_folders(self) -> None:
+        folders: List[DialogFilter] = await self.client(GetDialogFiltersRequest())
+        for folder in folders:
+            pass
 
     async def register_portal(self, portal: po.Portal) -> None:
         self.log.trace(f"Registering portal {portal.tgid_full}")
