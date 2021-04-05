@@ -15,7 +15,7 @@ qrcode>=6,<7
 moviepy>=1,<2
 
 #/metrics
-prometheus_client>=0.6,<0.10
+prometheus_client>=0.6,<0.11
 
 #/postgres
 psycopg2-binary>=2,<3
