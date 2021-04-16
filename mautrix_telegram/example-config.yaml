@@ -8,6 +8,8 @@ homeserver:
     # Only applies if address starts with https://
     verify_ssl: true
     asmux: false
+    # Number of retries for all HTTP requests if the homeserver isn't reachable.
+    http_retry_count: 4
 
 # Application service host/registration related details
 # Changing these values requires regeneration of the registration.

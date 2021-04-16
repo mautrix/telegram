@@ -30,7 +30,6 @@ from telethon.errors import (AuthBytesInvalidError, AuthKeyInvalidError, Locatio
                              SecurityError, FileIdInvalidError)
 
 from mautrix.appservice import IntentAPI
-from mautrix.util.network_retry import call_with_net_retry
 
 from ..tgclient import MautrixTelegramClient
 from ..db import TelegramFile as DBTelegramFile
@@ -145,8 +144,7 @@ async def transfer_thumbnail_to_matrix(client: MautrixTelegramClient, intent: In
     if encrypt:
         file, decryption_info = encrypt_attachment(file)
         upload_mime_type = "application/octet-stream"
-    content_uri = await call_with_net_retry(intent.upload_media, file, upload_mime_type,
-                                            _action="upload media")
+    content_uri = await intent.upload_media(file, upload_mime_type)
     if decryption_info:
         decryption_info.url = content_uri
 
@@ -239,8 +237,7 @@ async def _unlocked_transfer_file_to_matrix(client: MautrixTelegramClient, inten
         if encrypt and encrypt_attachment:
             file, decryption_info = encrypt_attachment(file)
             upload_mime_type = "application/octet-stream"
-        content_uri = await call_with_net_retry(intent.upload_media, file, upload_mime_type,
-                                                _action="upload media")
+        content_uri = await intent.upload_media(file, upload_mime_type)
         if decryption_info:
             decryption_info.url = content_uri
 
