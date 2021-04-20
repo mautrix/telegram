@@ -273,6 +273,13 @@ bridge:
     # This field will automatically be changed back to false after it,
     # except if the config file is not writable.
     resend_bridge_info: false
+    # When using double puppeting, should muted chats be muted in Matrix?
+    mute_bridging: false
+    # When using double puppeting, should pinned chats be moved to a specific tag in Matrix?
+    # The favorites tag is `m.favourite`.
+    pinned_tag: null
+    # Same as above for archived chats, the low priority tag is `m.lowpriority`.
+    archive_tag: null
     # Settings for backfilling messages from Telegram.
     backfill:
         # Whether or not the Telegram ghosts of logged in Matrix users should be

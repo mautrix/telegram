@@ -1,5 +1,5 @@
 # mautrix-telegram - A Matrix-Telegram puppeting bridge
-# Copyright (C) 2020 Tulir Asokan
+# Copyright (C) 2021 Tulir Asokan
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as published by
@@ -15,9 +15,9 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from typing import Tuple, Optional, Union, Dict, Type, Any, TYPE_CHECKING
 from abc import ABC, abstractmethod
+import platform
 import asyncio
 import logging
-import platform
 import time
 
 from telethon.sessions import Session
@@ -31,7 +31,8 @@ from telethon.tl.types import (
     UpdateEditChannelMessage, UpdateEditMessage, UpdateNewChannelMessage, UpdateReadHistoryOutbox,
     UpdateShortChatMessage, UpdateShortMessage, UpdateUserName, UpdateUserPhoto, UpdateUserStatus,
     UpdateUserTyping, User, UserStatusOffline, UserStatusOnline, UpdateReadHistoryInbox,
-    UpdateReadChannelInbox, MessageEmpty)
+    UpdateReadChannelInbox, MessageEmpty, UpdateFolderPeers, UpdatePinnedDialogs,
+    UpdateNotifySettings)
 
 from mautrix.types import UserID, PresenceState
 from mautrix.errors import MatrixError
@@ -235,8 +236,7 @@ class AbstractUser(ABC):
     # region Telegram update handling
 
     async def _update(self, update: TypeUpdate) -> None:
-        asyncio.ensure_future(self._handle_entity_updates(getattr(update, "_entities", {})),
-                              loop=self.loop)
+        asyncio.create_task(self._handle_entity_updates(getattr(update, "_entities", {})))
         if isinstance(update, (UpdateShortChatMessage, UpdateShortMessage, UpdateNewChannelMessage,
                                UpdateNewMessage, UpdateEditMessage, UpdateEditChannelMessage)):
             await self.update_message(update)
@@ -260,8 +260,23 @@ class AbstractUser(ABC):
             await self.update_read_receipt(update)
         elif isinstance(update, (UpdateReadHistoryInbox, UpdateReadChannelInbox)):
             await self.update_own_read_receipt(update)
+        elif isinstance(update, UpdateFolderPeers):
+            await self.update_folder_peers(update)
+        elif isinstance(update, UpdatePinnedDialogs):
+            await self.update_pinned_dialogs(update)
+        elif isinstance(update, UpdateNotifySettings):
+            await self.update_notify_settings(update)
         else:
             self.log.trace("Unhandled update: %s", update)
+
+    async def update_folder_peers(self, update: UpdateFolderPeers) -> None:
+        pass
+
+    async def update_pinned_dialogs(self, update: UpdatePinnedDialogs) -> None:
+        pass
+
+    async def update_notify_settings(self, update: UpdateNotifySettings) -> None:
+        pass
 
     async def update_pinned_messages(self, update: Union[UpdatePinnedMessages,
                                                          UpdatePinnedChannelMessages]) -> None:
