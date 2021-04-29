@@ -135,6 +135,7 @@ class Config(BaseBridgeConfig):
         copy("bridge.mute_bridging")
         copy("bridge.pinned_tag")
         copy("bridge.archive_tag")
+        copy("bridge.tag_only_on_create")
         copy("bridge.backfill.invite_own_puppet")
         copy("bridge.backfill.takeout_limit")
         copy("bridge.backfill.initial_limit")

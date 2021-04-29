@@ -280,6 +280,8 @@ bridge:
     pinned_tag: null
     # Same as above for archived chats, the low priority tag is `m.lowpriority`.
     archive_tag: null
+    # Whether or not mute status and tags should only be bridged when the portal room is created.
+    tag_only_on_create: true
     # Settings for backfilling messages from Telegram.
     backfill:
         # Whether or not the Telegram ghosts of logged in Matrix users should be

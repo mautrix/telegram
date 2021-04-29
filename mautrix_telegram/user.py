@@ -406,6 +406,8 @@ class User(AbstractUser, BaseUser):
                 pass
 
     async def update_folder_peers(self, update: UpdateFolderPeers) -> None:
+        if config["bridge.tag_only_on_create"]:
+            return
         puppet = await pu.Puppet.get_by_custom_mxid(self.mxid)
         if not puppet or not puppet.is_real_user:
             return
@@ -415,6 +417,8 @@ class User(AbstractUser, BaseUser):
                                  peer.folder_id == 1)
 
     async def update_pinned_dialogs(self, update: UpdatePinnedDialogs) -> None:
+        if config["bridge.tag_only_on_create"]:
+            return
         puppet = await pu.Puppet.get_by_custom_mxid(self.mxid)
         if not puppet or not puppet.is_real_user:
             return
@@ -424,7 +428,9 @@ class User(AbstractUser, BaseUser):
             await self._tag_room(puppet, portal, config["bridge.pinned_tag"], True)
 
     async def update_notify_settings(self, update: UpdateNotifySettings) -> None:
-        if not isinstance(update.peer, NotifyPeer):
+        if config["bridge.tag_only_on_create"]:
+            return
+        elif not isinstance(update.peer, NotifyPeer):
             # TODO handle global notification setting changes?
             return
         puppet = await pu.Puppet.get_by_custom_mxid(self.mxid)
@@ -435,6 +441,7 @@ class User(AbstractUser, BaseUser):
 
     async def _sync_dialog(self, portal: po.Portal, dialog: Dialog, should_create: bool,
                            puppet: Optional[pu.Puppet]) -> None:
+        was_created = False
         if portal.mxid:
             try:
                 await portal.backfill(self, last_id=dialog.message.id)
@@ -447,6 +454,7 @@ class User(AbstractUser, BaseUser):
         elif should_create:
             try:
                 await portal.create_matrix_room(self, dialog.entity, invites=[self.mxid])
+                was_created = True
             except Exception:
                 self.log.exception(f"Error while creating {portal.tgid_log}")
         if portal.mxid and puppet and puppet.is_real_user:
@@ -460,9 +468,10 @@ class User(AbstractUser, BaseUser):
                                                       dialog.dialog.read_inbox_max_id)
             if last_read:
                 await puppet.intent.mark_read(last_read.mx_room, last_read.mxid)
-            await self._mute_room(puppet, portal, dialog.dialog.notify_settings.mute_until)
-            await self._tag_room(puppet, portal, config["bridge.pinned_tag"], dialog.pinned)
-            await self._tag_room(puppet, portal, config["bridge.archive_tag"], dialog.archived)
+            if was_created or not config["bridge.tag_only_on_create"]:
+                await self._mute_room(puppet, portal, dialog.dialog.notify_settings.mute_until)
+                await self._tag_room(puppet, portal, config["bridge.pinned_tag"], dialog.pinned)
+                await self._tag_room(puppet, portal, config["bridge.archive_tag"], dialog.archived)
 
     async def sync_dialogs(self) -> None:
         if self.is_bot:
