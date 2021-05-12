@@ -186,6 +186,7 @@ async def _locked_confirm_bridge(evt: CommandEvent, portal: 'po.Portal', room_id
      portal.encrypted) = await get_initial_state(evt.az.intent, evt.room_id)
     portal.photo_id = ""
     await portal.save()
+    await portal.update_bridge_info()
 
     asyncio.ensure_future(portal.update_matrix_room(user, entity, direct=False, levels=levels),
                           loop=evt.loop)

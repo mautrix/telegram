@@ -109,6 +109,7 @@ class MatrixHandler(BaseMatrixHandler):
                 if e2be_ok is False:
                     message += "\n\nWarning: Failed to enable end-to-bridge encryption"
                 await intent.send_notice(room_id, message)
+            await portal.update_bridge_info()
         else:
             await intent.join_room(room_id)
             await intent.send_notice(room_id, "This puppet will remain inactive until a "
