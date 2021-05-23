@@ -209,7 +209,9 @@ class Puppet(BasePuppet):
         whitespace = ("\t\n\r\v\f \u00a0\u034f\u180e\u2063\u202f\u205f\u2800\u3000\u3164\ufeff"
                       "\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200a\u200b"
                       "\u200c\u200d\u200e\u200f\ufe0f")
-        name = "".join(c for c in name.strip(whitespace) if unicodedata.category(c) != 'Cf')
+        allowed_other_format = ("\u200d", "\u200c")
+        name = "".join(c for c in name.strip(whitespace) if unicodedata.category(c) != 'Cf'
+                                                         or c in allowed_other_format)
         return name
 
     @classmethod
