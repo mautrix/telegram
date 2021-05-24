@@ -34,7 +34,7 @@ from telethon.tl.types import (
     MessageMediaPhoto, MessageMediaDice, MessageMediaGame, MessageMediaUnsupported, PeerUser,
     PhotoCachedSize, TypeChannelParticipant, TypeChatParticipant, TypeDocumentAttribute,
     TypeMessageAction, TypePhotoSize, PhotoSize, UpdateChatUserTyping, UpdateUserTyping,
-    MessageEntityPre, ChatPhotoEmpty, DocumentAttributeImageSize)
+    MessageEntityPre, ChatPhotoEmpty, DocumentAttributeImageSize, DocumentAttributeAnimated)
 
 from mautrix.appservice import IntentAPI
 from mautrix.types import (EventID, UserID, ImageInfo, ThumbnailInfo, RelatesTo, MessageType,
@@ -57,7 +57,7 @@ if TYPE_CHECKING:
 InviteList = Union[UserID, List[UserID]]
 TypeParticipant = Union[TypeChatParticipant, TypeChannelParticipant]
 DocAttrs = NamedTuple("DocAttrs", name=Optional[str], mime_type=Optional[str], is_sticker=bool,
-                      sticker_alt=Optional[str], width=int, height=int)
+                      sticker_alt=Optional[str], width=int, height=int, is_gif=bool)
 
 config: Optional['Config'] = None
 
@@ -134,6 +134,7 @@ class PortalTelegram(BasePortal, ABC):
     @staticmethod
     def _parse_telegram_document_attributes(attributes: List[TypeDocumentAttribute]) -> DocAttrs:
         name, mime_type, is_sticker, sticker_alt, width, height = None, None, False, None, 0, 0
+        is_gif = False
         for attr in attributes:
             if isinstance(attr, DocumentAttributeFilename):
                 name = name or attr.file_name
@@ -141,11 +142,13 @@ class PortalTelegram(BasePortal, ABC):
             elif isinstance(attr, DocumentAttributeSticker):
                 is_sticker = True
                 sticker_alt = attr.alt
+            elif isinstance(attr, DocumentAttributeAnimated):
+                is_gif = True
             elif isinstance(attr, DocumentAttributeVideo):
                 width, height = attr.w, attr.h
             elif isinstance(attr, DocumentAttributeImageSize):
                 width, height = attr.w, attr.h
-        return DocAttrs(name, mime_type, is_sticker, sticker_alt, width, height)
+        return DocAttrs(name, mime_type, is_sticker, sticker_alt, width, height, is_gif)
 
     @staticmethod
     def _parse_telegram_document_meta(evt: Message, file: DBTelegramFile, attrs: DocAttrs,
@@ -241,6 +244,11 @@ class PortalTelegram(BasePortal, ABC):
             if info.thumbnail_info:
                 info.thumbnail_info.width = info.width
                 info.thumbnail_info.height = info.height
+        if attrs.is_gif:
+            info["fi.mau.telegram.gif"] = True
+            info["fi.mau.loop"] = True
+            info["fi.mau.autoplay"] = True
+            info["fi.mau.no_audio"] = True
 
         content = MediaMessageEventContent(
             body=name or "unnamed file", info=info, relates_to=relates_to,
