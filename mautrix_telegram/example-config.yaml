@@ -10,6 +10,10 @@ homeserver:
     asmux: false
     # Number of retries for all HTTP requests if the homeserver isn't reachable.
     http_retry_count: 4
+    # The URL to push real-time bridge status to.
+    # If set, the bridge will make POST requests to this URL whenever a user's Telegram connection state changes.
+    # The bridge will use the appservice as_token to authorize requests.
+    status_endpoint: null
 
 # Application service host/registration related details
 # Changing these values requires regeneration of the registration.

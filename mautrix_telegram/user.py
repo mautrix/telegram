@@ -15,7 +15,6 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from typing import (Awaitable, Dict, List, Iterable, NamedTuple, Optional, Tuple, Any, cast,
                     TYPE_CHECKING)
-from collections import defaultdict
 from datetime import datetime, timezone
 import logging
 import asyncio
@@ -32,7 +31,7 @@ from telethon.tl.functions.account import UpdateStatusRequest
 from mautrix.client import Client
 from mautrix.errors import MatrixRequestError, MNotFound
 from mautrix.types import UserID, RoomID, PushRuleScope, PushRuleKind, PushActionType, RoomTagInfo
-from mautrix.bridge import BaseUser
+from mautrix.bridge import BaseUser, BridgeState
 from mautrix.util.logging import TraceLogger
 from mautrix.util.opt_prometheus import Gauge
 
@@ -51,6 +50,11 @@ SearchResult = NamedTuple('SearchResult', puppet='pu.Puppet', similarity=int)
 
 METRIC_LOGGED_IN = Gauge('bridge_logged_in', 'Users logged into bridge')
 METRIC_CONNECTED = Gauge('bridge_connected', 'Users connected to Telegram')
+
+BridgeState.human_readable_errors.update({
+    "tg-not-connected": "Your Telegram connection failed",
+    "logged-out": "You're not logged into Telegram",
+})
 
 
 class User(AbstractUser, BaseUser):
@@ -74,8 +78,9 @@ class User(AbstractUser, BaseUser):
                  saved_contacts: int = 0, is_bot: bool = False,
                  db_portals: Optional[Iterable[Tuple[TelegramID, TelegramID]]] = None,
                  db_instance: Optional[DBUser] = None) -> None:
-        super().__init__()
+        AbstractUser.__init__(self)
         self.mxid = mxid
+        BaseUser.__init__(self)
         self.tgid = tgid
         self.is_bot = is_bot
         self.username = username
@@ -87,11 +92,7 @@ class User(AbstractUser, BaseUser):
         self.db_portals = db_portals or []
         self._db_instance = db_instance
         self._ensure_started_lock = asyncio.Lock()
-        self.dm_update_lock = asyncio.Lock()
-        self._metric_value = defaultdict(lambda: False)
         self._track_connection_task = None
-
-        self.command_status = None
 
         (self.relaybot_whitelisted,
          self.whitelisted,
@@ -103,8 +104,6 @@ class User(AbstractUser, BaseUser):
         self.by_mxid[mxid] = self
         if tgid:
             self.by_tgid[tgid] = self
-
-        self.log = self.log.getChild(self.mxid)
 
     @property
     def name(self) -> str:
@@ -219,6 +218,21 @@ class User(AbstractUser, BaseUser):
             connected = bool(self.client._sender._transport_connected
                              if self.client and self.client._sender else False)
             self._track_metric(METRIC_CONNECTED, connected)
+            await self.push_bridge_state(ok=connected, ttl=3600 if connected else 240,
+                                         error="tg-not-connected" if not connected else None)
+
+    async def fill_bridge_state(self, state: BridgeState) -> None:
+        await super().fill_bridge_state(state)
+        state.remote_id = str(self.tgid)
+        state.remote_name = self.human_tg_id
+
+    async def get_bridge_state(self) -> BridgeState:
+        if not self.client:
+            return BridgeState(ok=False, error="logged-out")
+        elif not self.client._sender or not self.client._sender._transport_connected:
+            return BridgeState(ok=False, error="tg-not-connected")
+        else:
+            return BridgeState(ok=True)
 
     async def stop(self) -> None:
         await super().stop()
@@ -226,6 +240,7 @@ class User(AbstractUser, BaseUser):
             self._track_connection_task.cancel()
             self._track_connection_task = None
         self._track_metric(METRIC_CONNECTED, False)
+        await self.push_bridge_state(ok=False, error="tg-not-connected")
 
     async def post_login(self, info: TLUser = None, first_login: bool = False) -> None:
         if config["metrics.enabled"] and not self._track_connection_task:
@@ -330,6 +345,7 @@ class User(AbstractUser, BaseUser):
         self.delete()
         await self.stop()
         self._track_metric(METRIC_LOGGED_IN, False)
+        await self.push_bridge_state(ok=False, error="logged-out")
         return True
 
     def _search_local(self, query: str, max_results: int = 5, min_similarity: int = 45
