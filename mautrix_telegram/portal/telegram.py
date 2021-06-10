@@ -34,7 +34,8 @@ from telethon.tl.types import (
     MessageMediaPhoto, MessageMediaDice, MessageMediaGame, MessageMediaUnsupported, PeerUser,
     PhotoCachedSize, TypeChannelParticipant, TypeChatParticipant, TypeDocumentAttribute,
     TypeMessageAction, TypePhotoSize, PhotoSize, UpdateChatUserTyping, UpdateUserTyping,
-    MessageEntityPre, ChatPhotoEmpty, DocumentAttributeImageSize, DocumentAttributeAnimated)
+    MessageEntityPre, ChatPhotoEmpty, DocumentAttributeImageSize, DocumentAttributeAnimated,
+    UpdateChannelUserTyping, SendMessageTypingAction)
 
 from mautrix.appservice import IntentAPI
 from mautrix.types import (EventID, UserID, ImageInfo, ThumbnailInfo, RelatesTo, MessageType,
@@ -56,6 +57,7 @@ if TYPE_CHECKING:
 
 InviteList = Union[UserID, List[UserID]]
 TypeParticipant = Union[TypeChatParticipant, TypeChannelParticipant]
+UpdateTyping = Union[UpdateUserTyping, UpdateChatUserTyping, UpdateChannelUserTyping]
 DocAttrs = NamedTuple("DocAttrs", name=Optional[str], mime_type=Optional[str], is_sticker=bool,
                       sticker_alt=Optional[str], width=int, height=int, is_gif=bool)
 
@@ -63,9 +65,10 @@ config: Optional['Config'] = None
 
 
 class PortalTelegram(BasePortal, ABC):
-    async def handle_telegram_typing(self, user: p.Puppet,
-                                     _: Union[UpdateUserTyping, UpdateChatUserTyping]) -> None:
-        await user.intent_for(self).set_typing(self.mxid, is_typing=True)
+    async def handle_telegram_typing(self, user: p.Puppet, update: UpdateTyping) -> None:
+        is_typing = isinstance(update.action, SendMessageTypingAction)
+        # Always use the default puppet here to avoid any problems with echoing
+        await user.default_mxid_intent.set_typing(self.mxid, is_typing=is_typing)
 
     def _get_external_url(self, evt: Message) -> Optional[str]:
         if self.peer_type == "channel" and self.username is not None:

@@ -32,7 +32,7 @@ from telethon.tl.types import (
     UpdateShortChatMessage, UpdateShortMessage, UpdateUserName, UpdateUserPhoto, UpdateUserStatus,
     UpdateUserTyping, User, UserStatusOffline, UserStatusOnline, UpdateReadHistoryInbox,
     UpdateReadChannelInbox, MessageEmpty, UpdateFolderPeers, UpdatePinnedDialogs,
-    UpdateNotifySettings)
+    UpdateNotifySettings, UpdateChannelUserTyping)
 
 from mautrix.types import UserID, PresenceState
 from mautrix.errors import MatrixError
@@ -58,6 +58,7 @@ MAX_DELETIONS: int = 10
 UpdateMessage = Union[UpdateShortChatMessage, UpdateShortMessage, UpdateNewChannelMessage,
                       UpdateNewMessage, UpdateEditMessage, UpdateEditChannelMessage]
 UpdateMessageContent = Union[UpdateShortMessage, UpdateShortChatMessage, Message, MessageService]
+UpdateTyping = Union[UpdateUserTyping, UpdateChatUserTyping, UpdateChannelUserTyping]
 
 UPDATE_TIME = Histogram("bridge_telegram_update", "Time spent processing Telegram updates",
                         ("update_type",))
@@ -244,7 +245,7 @@ class AbstractUser(ABC):
             await self.delete_message(update)
         elif isinstance(update, UpdateDeleteChannelMessages):
             await self.delete_channel_message(update)
-        elif isinstance(update, (UpdateChatUserTyping, UpdateUserTyping)):
+        elif isinstance(update, (UpdateChatUserTyping, UpdateChannelUserTyping, UpdateUserTyping)):
             await self.update_typing(update)
         elif isinstance(update, UpdateUserStatus):
             await self.update_status(update)
@@ -345,16 +346,27 @@ class AbstractUser(ABC):
 
         await portal.set_telegram_admin(TelegramID(update.user_id))
 
-    async def update_typing(self, update: Union[UpdateUserTyping, UpdateChatUserTyping]) -> None:
+    async def update_typing(self, update: UpdateTyping) -> None:
+        sender = None
         if isinstance(update, UpdateUserTyping):
             portal = po.Portal.get_by_tgid(TelegramID(update.user_id), self.tgid, "user")
-        else:
+            sender = pu.Puppet.get(TelegramID(update.user_id))
+        elif isinstance(update, UpdateChannelUserTyping):
+            portal = po.Portal.get_by_tgid(TelegramID(update.channel_id))
+        elif isinstance(update, UpdateChatUserTyping):
             portal = po.Portal.get_by_tgid(TelegramID(update.chat_id))
-
-        if not portal or not portal.mxid:
+        else:
             return
 
-        sender = pu.Puppet.get(TelegramID(update.user_id))
+        if isinstance(update, (UpdateChannelUserTyping, UpdateChatUserTyping)):
+            # Can typing notifications come from non-user peers?
+            if not update.from_id.user_id:
+                return
+            sender = pu.Puppet.get(TelegramID(update.from_id.user_id))
+
+        if not sender or not portal or not portal.mxid:
+            return
+
         await portal.handle_telegram_typing(sender, update)
 
     async def _handle_entity_updates(self, entities: Dict[int, Union[User, Chat, Channel]]
