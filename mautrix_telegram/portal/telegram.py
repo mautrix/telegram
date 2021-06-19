@@ -66,8 +66,10 @@ config: Optional['Config'] = None
 
 class PortalTelegram(BasePortal, ABC):
     async def handle_telegram_typing(self, user: p.Puppet, update: UpdateTyping) -> None:
+        if user.is_real_user:
+            # Ignore typing notifications from double puppeted users to avoid echoing
+            return
         is_typing = isinstance(update.action, SendMessageTypingAction)
-        # Always use the default puppet here to avoid any problems with echoing
         await user.default_mxid_intent.set_typing(self.mxid, is_typing=is_typing)
 
     def _get_external_url(self, evt: Message) -> Optional[str]:
