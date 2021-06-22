@@ -747,15 +747,13 @@ class PortalMetadata(BasePortal, ABC):
         if isinstance(photo, (ChatPhoto, UserProfilePhoto)):
             loc = InputPeerPhotoFileLocation(
                 peer=await self.get_input_entity(user),
-                local_id=photo.photo_big.local_id,
-                volume_id=photo.photo_big.volume_id,
+                photo_id=photo.photo_id,
                 big=True
             )
-            photo_id = (f"{loc.volume_id}-{loc.local_id}" if isinstance(photo, ChatPhoto)
-                        else photo.photo_id)
+            photo_id = str(photo.photo_id)
         elif isinstance(photo, Photo):
-            loc, largest = self._get_largest_photo_size(photo)
-            photo_id = f"{largest.location.volume_id}-{largest.location.local_id}"
+            loc, _ = self._get_largest_photo_size(photo)
+            photo_id = str(loc.id)
         elif isinstance(photo, (UserProfilePhotoEmpty, ChatPhotoEmpty, PhotoEmpty, type(None))):
             photo_id = ""
             loc = None

@@ -344,8 +344,7 @@ class Puppet(BasePuppet):
 
             loc = InputPeerPhotoFileLocation(
                 peer=await self.get_input_entity(source),
-                local_id=photo.photo_big.local_id,
-                volume_id=photo.photo_big.volume_id,
+                photo_id=photo.photo_id,
                 big=True
             )
             file = await util.transfer_file_to_matrix(source.client, self.default_mxid_intent, loc)

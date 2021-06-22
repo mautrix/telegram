@@ -102,8 +102,10 @@ def _location_to_id(location: TypeLocation) -> str:
         return f"{location.id}-{location.access_hash}"
     elif isinstance(location, (InputDocumentFileLocation, InputPhotoFileLocation)):
         return f"{location.id}-{location.access_hash}-{location.thumb_size}"
-    elif isinstance(location, (InputFileLocation, InputPeerPhotoFileLocation)):
+    elif isinstance(location, InputFileLocation):
         return f"{location.volume_id}-{location.local_id}"
+    elif isinstance(location, InputPeerPhotoFileLocation):
+        return str(location.photo_id)
 
 
 async def transfer_thumbnail_to_matrix(client: MautrixTelegramClient, intent: IntentAPI,
