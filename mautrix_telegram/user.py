@@ -211,12 +211,16 @@ class User(AbstractUser, BaseUser):
             self.client.session.delete()
         return self
 
+    @property
+    def _is_connected(self) -> bool:
+        return bool(self.client and self.client._sender
+                    and self.client._sender._transport_connected)
+
     async def _track_connection(self) -> None:
         self.log.debug("Starting loop to track connection state")
         while True:
             await asyncio.sleep(3)
-            connected = bool(self.client._sender._transport_connected
-                             if self.client and self.client._sender else False)
+            connected = self._is_connected
             self._track_metric(METRIC_CONNECTED, connected)
             await self.push_bridge_state(ok=connected, ttl=3600 if connected else 240,
                                          error="tg-not-connected" if not connected else None)
@@ -227,12 +231,17 @@ class User(AbstractUser, BaseUser):
         state.remote_name = self.human_tg_id
 
     async def get_bridge_state(self) -> BridgeState:
-        if not self.client:
+        if not self.tgid:
             return BridgeState(ok=False, error="logged-out")
-        elif not self.client._sender or not self.client._sender._transport_connected:
+        elif not self._is_connected:
             return BridgeState(ok=False, error="tg-not-connected")
         else:
             return BridgeState(ok=True)
+
+    async def get_puppet(self) -> Optional['pu.Puppet']:
+        if not self.tgid:
+            return None
+        return pu.Puppet.get(self.tgid)
 
     async def stop(self) -> None:
         await super().stop()
@@ -332,6 +341,7 @@ class User(AbstractUser, BaseUser):
         self.portals = {}
         self.contacts = []
         await self.save(portals=True, contacts=True)
+        await self.push_bridge_state(ok=False, error="logged-out")
         if self.tgid:
             try:
                 del self.by_tgid[self.tgid]
@@ -345,7 +355,6 @@ class User(AbstractUser, BaseUser):
         self.delete()
         await self.stop()
         self._track_metric(METRIC_LOGGED_IN, False)
-        await self.push_bridge_state(ok=False, error="logged-out")
         return True
 
     def _search_local(self, query: str, max_results: int = 5, min_similarity: int = 45
