@@ -1,4 +1,4 @@
-FROM dock.mau.dev/tulir/lottieconverter:alpine-3.13
+FROM dock.mau.dev/tulir/lottieconverter:alpine-3.14
 
 ARG TARGETARCH=amd64
 
@@ -14,6 +14,7 @@ RUN apk add --no-cache \
       py3-psycopg2 \
       py3-ruamel.yaml \
       py3-commonmark \
+      py3-prometheus-client \
       # Indirect dependencies
       py3-idna \
       #moviepy
@@ -25,6 +26,7 @@ RUN apk add --no-cache \
       #py3-telethon \ (outdated)
         # Optional for socks proxies
         py3-pysocks \
+        py3-pyaes \
         # cryptg
           py3-cffi \
 	  py3-qrcode \
@@ -35,7 +37,7 @@ RUN apk add --no-cache \
       su-exec \
       netcat-openbsd \
       # encryption
-      olm-dev \
+      py3-olm \
       py3-pycryptodome \
       py3-unpaddedbase64 \
       py3-future \
