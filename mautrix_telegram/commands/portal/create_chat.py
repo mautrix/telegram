@@ -18,7 +18,7 @@ from mautrix.types import EventID
 from ... import portal as po
 from ...types import TelegramID
 from .. import command_handler, CommandEvent, SECTION_CREATING_PORTALS
-from .util import user_has_power_level, get_initial_state
+from .util import user_has_power_level, get_initial_state, warn_missing_power
 
 
 @command_handler(help_section=SECTION_CREATING_PORTALS,
@@ -58,6 +58,9 @@ async def create(evt: CommandEvent) -> EventID:
         await evt.reply(f"Failed to add the following users to the chat:\n\n{error_list}\n\n"
                         "You can try `$cmdprefix+sp search -r <username>` to help the bridge find "
                         "those users.")
+
+    await warn_missing_power(levels, evt)
+
     try:
         await portal.create_telegram_chat(evt.sender, invites=invites, supergroup=supergroup)
     except ValueError as e:

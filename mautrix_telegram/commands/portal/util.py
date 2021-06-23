@@ -18,14 +18,16 @@ from typing import Tuple, Optional
 from mautrix.errors import MatrixRequestError
 from mautrix.appservice import IntentAPI
 from mautrix.types import RoomID, EventType, PowerLevelStateEventContent
+from .. import CommandEvent
 
 from ... import user as u
 
 OptStr = Optional[str]
 
 
-async def get_initial_state(intent: IntentAPI, room_id: RoomID
-                            ) -> Tuple[OptStr, OptStr, Optional[PowerLevelStateEventContent], bool]:
+async def get_initial_state(
+    intent: IntentAPI, room_id: RoomID
+) -> Tuple[OptStr, OptStr, Optional[PowerLevelStateEventContent], bool]:
     state = await intent.get_state(room_id)
     title: OptStr = None
     about: OptStr = None
@@ -47,6 +49,14 @@ async def get_initial_state(intent: IntentAPI, room_id: RoomID
             # Some state event probably has empty content
             pass
     return title, about, levels, encrypted
+
+
+async def warn_missing_power(levels: PowerLevelStateEventContent, evt: CommandEvent) -> None:
+    if levels.get_user_level(evt.az.bot_mxid) < levels.redact:
+        await evt.reply("Warning: The bot does not have privileges to redact messages on Matrix. "
+                        "Message deletions from Telegram will not be bridged unless you give "
+                        "redaction permissions to "
+                        f"[{evt.az.bot_mxid}](https://matrix.to/#/{evt.az.bot_mxid})")
 
 
 async def user_has_power_level(room_id: RoomID, intent: IntentAPI, sender: u.User,

@@ -23,7 +23,7 @@ from mautrix.types import EventID, RoomID
 from ...types import TelegramID
 from ... import portal as po
 from .. import command_handler, CommandEvent, SECTION_CREATING_PORTALS
-from .util import user_has_power_level, get_initial_state
+from .util import user_has_power_level, get_initial_state, warn_missing_power
 
 
 @command_handler(needs_auth=False, needs_puppeting=False,
@@ -190,5 +190,7 @@ async def _locked_confirm_bridge(evt: CommandEvent, portal: 'po.Portal', room_id
 
     asyncio.ensure_future(portal.update_matrix_room(user, entity, direct=False, levels=levels),
                           loop=evt.loop)
+
+    await warn_missing_power(levels, evt)
 
     return await evt.reply("Bridging complete. Portal synchronization should begin momentarily.")
