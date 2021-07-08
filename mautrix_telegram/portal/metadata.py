@@ -368,6 +368,7 @@ class PortalMetadata(BasePortal, ABC):
 
         initial_state = [{
             "type": EventType.ROOM_POWER_LEVELS.serialize(),
+            "state_key": "",
             "content": power_levels.serialize(),
         }, {
             "type": str(StateBridge),
