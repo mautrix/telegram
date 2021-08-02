@@ -332,7 +332,7 @@ class PortalMatrix(BasePortal, ABC):
                                       content: LocationMessageEventContent, reply_to: TelegramID
                                       ) -> None:
         try:
-            lat, long = content.geo_uri[len("geo:"):].split(",")
+            lat, long = content.geo_uri[len("geo:"):].split(";")[0].split(",")
             lat, long = float(lat), float(long)
         except (KeyError, ValueError):
             self.log.exception("Failed to parse location")
