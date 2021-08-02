@@ -134,7 +134,7 @@ class ParallelTransferrer:
         self.upload_ticker = 0
 
     async def _cleanup(self) -> None:
-        await asyncio.gather(*[sender.disconnect() for sender in self.senders])
+        await asyncio.gather(*(sender.disconnect() for sender in self.senders))
         self.senders = None
 
     @staticmethod
@@ -161,9 +161,9 @@ class ParallelTransferrer:
             await self._create_download_sender(file, 0, part_size, connections * part_size,
                                                get_part_count()),
             *await asyncio.gather(
-                *[self._create_download_sender(file, i, part_size, connections * part_size,
+                *(self._create_download_sender(file, i, part_size, connections * part_size,
                                                get_part_count())
-                  for i in range(1, connections)])
+                  for i in range(1, connections)))
         ]
 
     async def _create_download_sender(self, file: TypeLocation, index: int, part_size: int,
@@ -177,8 +177,8 @@ class ParallelTransferrer:
         self.senders = [
             await self._create_upload_sender(file_id, part_count, big, 0, connections),
             *await asyncio.gather(
-                *[self._create_upload_sender(file_id, part_count, big, i, connections)
-                  for i in range(1, connections)])
+                *(self._create_upload_sender(file_id, part_count, big, i, connections)
+                  for i in range(1, connections)))
         ]
 
     async def _create_upload_sender(self, file_id: int, part_count: int, big: bool, index: int,

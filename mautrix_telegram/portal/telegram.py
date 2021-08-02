@@ -410,7 +410,7 @@ class PortalTelegram(BasePortal, ABC):
 
     @staticmethod
     def _int_to_bytes(i: int) -> bytes:
-        hex_value = "{0:010x}".format(i).encode("utf-8")
+        hex_value = f"{i:010x}".encode("utf-8")
         return codecs.decode(hex_value, "hex_codec")
 
     def _encode_msgid(self, source: 'AbstractUser', evt: Message) -> str:
