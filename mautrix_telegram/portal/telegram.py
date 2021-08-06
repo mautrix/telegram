@@ -308,7 +308,7 @@ class PortalTelegram(BasePortal, ABC):
     async def handle_telegram_unsupported(self, source: 'AbstractUser', intent: IntentAPI,
                                           evt: Message, relates_to: RelatesTo = None) -> EventID:
         override_text = ("This message is not supported on your version of Mautrix-Telegram. "
-                         "Please check https://github.com/tulir/mautrix-telegram or ask your "
+                         "Please check https://github.com/mautrix/telegram or ask your "
                          "bridge administrator about possible updates.")
         content = await formatter.telegram_to_matrix(
             evt, source, self.main_intent, override_text=override_text)

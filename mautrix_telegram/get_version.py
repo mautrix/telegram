@@ -18,7 +18,7 @@ def run(cmd):
 if os.path.exists(".git") and shutil.which("git"):
     try:
         git_revision = run(["git", "rev-parse", "HEAD"]).strip().decode("ascii")
-        git_revision_url = f"https://github.com/tulir/mautrix-telegram/commit/{git_revision}"
+        git_revision_url = f"https://github.com/mautrix/telegram/commit/{git_revision}"
         git_revision = git_revision[:8]
     except (subprocess.SubprocessError, OSError):
         git_revision = "unknown"
@@ -33,7 +33,7 @@ else:
     git_revision_url = None
     git_tag = None
 
-git_tag_url = (f"https://github.com/tulir/mautrix-telegram/releases/tag/{git_tag}"
+git_tag_url = (f"https://github.com/mautrix/telegram/releases/tag/{git_tag}"
                if git_tag else None)
 
 if git_tag and __version__ == git_tag[1:].replace("-", ""):

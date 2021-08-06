@@ -1,9 +1,8 @@
 # mautrix-telegram
-![Languages](https://img.shields.io/github/languages/top/tulir/mautrix-telegram.svg)
-[![License](https://img.shields.io/github/license/tulir/mautrix-telegram.svg)](LICENSE)
-[![Release](https://img.shields.io/github/release/tulir/mautrix-telegram/all.svg)](https://github.com/tulir/mautrix-telegram/releases)
-[![GitLab CI](https://mau.dev/tulir/mautrix-telegram/badges/master/pipeline.svg)](https://mau.dev/tulir/mautrix-telegram/container_registry)
-[![Maintainability](https://img.shields.io/codeclimate/maintainability/tulir/mautrix-telegram.svg)](https://codeclimate.com/github/tulir/mautrix-telegram)
+![Languages](https://img.shields.io/github/languages/top/mautrix/telegram.svg)
+[![License](https://img.shields.io/github/license/mautrix/telegram.svg)](LICENSE)
+[![Release](https://img.shields.io/github/release/mautrix/telegram/all.svg)](https://github.com/mautrix/telegram/releases)
+[![GitLab CI](https://mau.dev/mautrix/telegram/badges/master/pipeline.svg)](https://mau.dev/mautrix/telegram/container_registry)
 
 A Matrix-Telegram hybrid puppeting/relaybot bridge.
 
@@ -22,7 +21,7 @@ Some quick links:
   [Relaybot setup](https://docs.mau.fi/bridges/python/telegram/relay-bot.html)
 
 ### Features & Roadmap
-[ROADMAP.md](https://github.com/tulir/mautrix-telegram/blob/master/ROADMAP.md)
+[ROADMAP.md](https://github.com/mautrix/telegram/blob/master/ROADMAP.md)
 contains a general overview of what is supported by the bridge.
 
 ## Discussion
