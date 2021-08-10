@@ -32,6 +32,7 @@ from mautrix.client import Client
 from mautrix.errors import MatrixRequestError, MNotFound
 from mautrix.types import UserID, RoomID, PushRuleScope, PushRuleKind, PushActionType, RoomTagInfo
 from mautrix.bridge import BaseUser, BridgeState
+from mautrix.util.bridge_state import BridgeStateEvent
 from mautrix.util.logging import TraceLogger
 from mautrix.util.opt_prometheus import Gauge
 
@@ -93,6 +94,7 @@ class User(AbstractUser, BaseUser):
         self._db_instance = db_instance
         self._ensure_started_lock = asyncio.Lock()
         self._track_connection_task = None
+        self._is_backfilling = False
 
         (self.relaybot_whitelisted,
          self.whitelisted,
@@ -222,21 +224,17 @@ class User(AbstractUser, BaseUser):
             await asyncio.sleep(3)
             connected = self._is_connected
             self._track_metric(METRIC_CONNECTED, connected)
-            await self.push_bridge_state(ok=connected, ttl=3600 if connected else 240,
-                                         error="tg-not-connected" if not connected else None)
+            if connected:
+                await self.push_bridge_state(BridgeStateEvent.BACKFILLING if self._is_backfilling
+                                             else BridgeStateEvent.CONNECTED, ttl=3600)
+            else:
+                await self.push_bridge_state(BridgeStateEvent.UNKNOWN_ERROR, ttl=240,
+                                             error="tg-not-connected")
 
     async def fill_bridge_state(self, state: BridgeState) -> None:
         await super().fill_bridge_state(state)
         state.remote_id = str(self.tgid)
         state.remote_name = self.human_tg_id
-
-    async def get_bridge_state(self) -> BridgeState:
-        if not self.tgid:
-            return BridgeState(ok=False, error="logged-out")
-        elif not self._is_connected:
-            return BridgeState(ok=False, error="tg-not-connected")
-        else:
-            return BridgeState(ok=True)
 
     async def get_puppet(self) -> Optional['pu.Puppet']:
         if not self.tgid:
@@ -249,7 +247,8 @@ class User(AbstractUser, BaseUser):
             self._track_connection_task.cancel()
             self._track_connection_task = None
         self._track_metric(METRIC_CONNECTED, False)
-        await self.push_bridge_state(ok=False, error="tg-not-connected")
+        await self.push_bridge_state(state_event=BridgeStateEvent.UNKNOWN_ERROR,
+                                     error="tg-not-connected")
 
     async def post_login(self, info: TLUser = None, first_login: bool = False) -> None:
         if config["metrics.enabled"] and not self._track_connection_task:
@@ -273,10 +272,13 @@ class User(AbstractUser, BaseUser):
 
         if not self.is_bot and config["bridge.startup_sync"]:
             try:
+                self._is_backfilling = True
                 await self.sync_dialogs()
                 await self.sync_contacts()
             except Exception:
                 self.log.exception("Failed to run post-login sync")
+            finally:
+                self._is_backfilling = False
 
     async def update(self, update: TypeUpdate) -> bool:
         if not self.is_bot:
@@ -341,7 +343,7 @@ class User(AbstractUser, BaseUser):
         self.portals = {}
         self.contacts = []
         await self.save(portals=True, contacts=True)
-        await self.push_bridge_state(ok=False, error="logged-out")
+        await self.push_bridge_state(BridgeStateEvent.LOGGED_OUT)
         if self.tgid:
             try:
                 del self.by_tgid[self.tgid]
@@ -507,6 +509,7 @@ class User(AbstractUser, BaseUser):
         index = 0
         self.log.debug(f"Syncing dialogs (update_limit={update_limit}, "
                        f"create_limit={create_limit})")
+        await self.push_bridge_state(BridgeStateEvent.BACKFILLING)
         puppet = await pu.Puppet.get_by_custom_mxid(self.mxid)
         dialog: Dialog
         async for dialog in self.client.iter_dialogs(limit=update_limit, ignore_migrated=True,
