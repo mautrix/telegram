@@ -94,6 +94,7 @@ class User(AbstractUser, BaseUser):
         self._db_instance = db_instance
         self._ensure_started_lock = asyncio.Lock()
         self._track_connection_task = None
+        self._is_backfilling = False
 
         (self.relaybot_whitelisted,
          self.whitelisted,
@@ -224,7 +225,8 @@ class User(AbstractUser, BaseUser):
             connected = self._is_connected
             self._track_metric(METRIC_CONNECTED, connected)
             if connected:
-                await self.push_bridge_state(BridgeStateEvent.CONNECTED, ttl=3600)
+                await self.push_bridge_state(BridgeStateEvent.BACKFILLING if self._is_backfilling
+                                             else BridgeStateEvent.CONNECTED, ttl=3600)
             else:
                 await self.push_bridge_state(BridgeStateEvent.UNKNOWN_ERROR, ttl=240,
                                              error="tg-not-connected")
@@ -270,10 +272,13 @@ class User(AbstractUser, BaseUser):
 
         if not self.is_bot and config["bridge.startup_sync"]:
             try:
+                self._is_backfilling = True
                 await self.sync_dialogs()
                 await self.sync_contacts()
             except Exception:
                 self.log.exception("Failed to run post-login sync")
+            finally:
+                self._is_backfilling = False
 
     async def update(self, update: TypeUpdate) -> bool:
         if not self.is_bot:
