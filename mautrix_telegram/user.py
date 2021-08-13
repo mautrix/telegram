@@ -27,6 +27,7 @@ from telethon.tl.custom import Dialog
 from telethon.tl.types.contacts import ContactsNotModified
 from telethon.tl.functions.contacts import GetContactsRequest, SearchRequest
 from telethon.tl.functions.account import UpdateStatusRequest
+from telethon.errors import AuthKeyDuplicatedError
 
 from mautrix.client import Client
 from mautrix.errors import MatrixRequestError, MNotFound
@@ -54,7 +55,7 @@ METRIC_CONNECTED = Gauge('bridge_connected', 'Users connected to Telegram')
 
 BridgeState.human_readable_errors.update({
     "tg-not-connected": "Your Telegram connection failed",
-    "logged-out": "You're not logged into Telegram",
+    "tg-auth-key-duplicated": "The bridge accidentally logged you out",
 })
 
 
@@ -203,7 +204,16 @@ class User(AbstractUser, BaseUser):
             return cast(User, await super().ensure_started(even_if_no_session))
 
     async def start(self, delete_unless_authenticated: bool = False) -> 'User':
-        await super().start()
+        try:
+            await super().start()
+        except AuthKeyDuplicatedError:
+            self.log.warning("Got AuthKeyDuplicatedError in start()")
+            await self.push_bridge_state(BridgeStateEvent.BAD_CREDENTIALS,
+                                         error="tg-auth-key-duplicated")
+            # Don't return, let the session be deleted if delete_unless_authenticated is true
+        except Exception:
+            await self.push_bridge_state(BridgeStateEvent.UNKNOWN_ERROR)
+            raise
         if await self.is_logged_in():
             self.log.debug(f"Ensuring post_login() for {self.name}")
             self.loop.create_task(self.post_login())
@@ -391,12 +401,6 @@ class User(AbstractUser, BaseUser):
             return results, False
 
         return await self._search_remote(query), True
-
-    async def _catch(self, action: str, task: asyncio.Task) -> None:
-        try:
-            await task
-        except Exception:
-            self.log.exception(f"Error while {action}")
 
     async def get_direct_chats(self) -> Dict[UserID, List[RoomID]]:
         return {
