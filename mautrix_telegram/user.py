@@ -252,13 +252,11 @@ class User(AbstractUser, BaseUser):
         return pu.Puppet.get(self.tgid)
 
     async def stop(self) -> None:
-        await super().stop()
         if self._track_connection_task:
             self._track_connection_task.cancel()
             self._track_connection_task = None
+        await super().stop()
         self._track_metric(METRIC_CONNECTED, False)
-        await self.push_bridge_state(state_event=BridgeStateEvent.UNKNOWN_ERROR,
-                                     error="tg-not-connected")
 
     async def post_login(self, info: TLUser = None, first_login: bool = False) -> None:
         if config["metrics.enabled"] and not self._track_connection_task:
