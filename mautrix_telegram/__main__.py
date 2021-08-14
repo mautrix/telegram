@@ -13,8 +13,9 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import Optional
+from typing import Dict, Any
 
+from telethon import __version__ as __telethon_version__
 from alchemysession import AlchemySessionContainer
 
 from mautrix.types import UserID, RoomID
@@ -23,7 +24,6 @@ from mautrix.util.db import Base
 
 from .web.provisioning import ProvisioningAPI
 from .web.public import PublicBridgeWebsite
-from .commands.manhole import ManholeState
 from .abstract_user import init as init_abstract_user
 from .bot import Bot, init as init_bot
 from .config import Config
@@ -57,7 +57,6 @@ class TelegramBridge(Bridge):
     config: Config
     session_container: AlchemySessionContainer
     bot: Bot
-    manhole: Optional[ManholeState]
 
     def prepare_db(self) -> None:
         super().prepare_db()
@@ -83,7 +82,6 @@ class TelegramBridge(Bridge):
         context = Context(self.az, self.config, self.loop, self.session_container, self, self.bot)
         self._prepare_website(context)
         self.matrix = context.mx = MatrixHandler(context)
-        self.manhole = None
 
         init_abstract_user(context)
         init_formatter(context)
@@ -107,9 +105,6 @@ class TelegramBridge(Bridge):
         for puppet in Puppet.by_custom_mxid.values():
             puppet.stop()
         self.shutdown_actions = (user.stop() for user in User.by_tgid.values())
-        if self.manhole:
-            self.manhole.close()
-            self.manhole = None
 
     async def get_user(self, user_id: UserID, create: bool = True) -> User:
         user = User.get_by_mxid(user_id, create=create)
@@ -131,6 +126,18 @@ class TelegramBridge(Bridge):
 
     async def count_logged_in_users(self) -> int:
         return len([user for user in User.by_tgid.values() if user.tgid])
+
+    async def manhole_global_namespace(self, user_id: UserID) -> Dict[str, Any]:
+        return {
+            **await super().manhole_global_namespace(user_id),
+            "User": User,
+            "Portal": Portal,
+            "Puppet": Puppet,
+        }
+
+    @property
+    def manhole_banner_program_version(self) -> str:
+        return f"{super().manhole_banner_program_version} and Telethon {__telethon_version__}"
 
 
 TelegramBridge().run()
