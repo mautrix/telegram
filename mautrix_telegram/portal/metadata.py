@@ -337,12 +337,13 @@ class PortalMetadata(BasePortal, ABC):
         if self.peer_type == "channel":
             self.megagroup = entity.megagroup
 
+        preset = RoomCreatePreset.PRIVATE
         if self.peer_type == "channel" and entity.username:
-            preset = RoomCreatePreset.PUBLIC
+            if self.public_portals:
+                preset = RoomCreatePreset.PUBLIC
             self.username = entity.username
             alias = self.alias_localpart
         else:
-            preset = RoomCreatePreset.PRIVATE
             # TODO invite link alias?
             alias = None
 
