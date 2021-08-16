@@ -129,9 +129,9 @@ class AbstractUser(ABC):
     def _init_client(self) -> None:
         self.log.debug(f"Initializing client for {self.name}")
 
-        self.session = self.session_container.new_session(self.name)
+        session = self.session_container.new_session(self.name)
         if config["telegram.server.enabled"]:
-            self.session.set_dc(config["telegram.server.dc"],
+            session.set_dc(config["telegram.server.dc"],
                                 config["telegram.server.ip"],
                                 config["telegram.server.port"])
 
@@ -145,10 +145,10 @@ class AbstractUser(ABC):
         appversion = config["telegram.device_info.app_version"]
         connection, proxy = self._proxy_settings
 
-        assert isinstance(self.session, Session)
+        assert isinstance(session, Session)
 
         self.client = MautrixTelegramClient(
-            session=self.session,
+            session=session,
 
             api_id=config["telegram.api_id"],
             api_hash=config["telegram.api_hash"],

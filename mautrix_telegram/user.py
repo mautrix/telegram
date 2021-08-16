@@ -210,7 +210,13 @@ class User(AbstractUser, BaseUser):
             self.log.warning("Got AuthKeyDuplicatedError in start()")
             await self.push_bridge_state(BridgeStateEvent.BAD_CREDENTIALS,
                                          error="tg-auth-key-duplicated")
-            # Don't return, let the session be deleted if delete_unless_authenticated is true
+            await self.client.disconnect()
+            self.client.session.delete()
+            self.client = None
+            if not delete_unless_authenticated:
+                # The caller wants the client to be connected, so restart the connection.
+                await super().start()
+            return self
         except Exception:
             await self.push_bridge_state(BridgeStateEvent.UNKNOWN_ERROR)
             raise
