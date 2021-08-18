@@ -195,7 +195,7 @@ class Bot(AbstractUser):
             return await reply("That user seems to be logged in. "
                                f"Just invite [{displayname}](tg://user?id={user.tgid})")
         else:
-            await portal.main_intent.invite_user(portal.mxid, user.mxid)
+            await portal.invite_to_matrix(user.mxid)
             return await reply(f"Invited `{user.mxid}` to the portal.")
 
     @staticmethod

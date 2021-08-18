@@ -84,7 +84,7 @@ class MatrixHandler(BaseMatrixHandler):
             portal = po.Portal.get_by_tgid(puppet.tgid, inviter.tgid, "user")
             if portal.mxid:
                 try:
-                    await intent.invite_user(portal.mxid, inviter.mxid)
+                    await portal.invite_to_matrix(inviter.mxid)
                     await intent.send_notice(
                         room_id, text=f"You already have a private chat with me: {portal.mxid}",
                         html=("You already have a private chat with me: "

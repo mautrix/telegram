@@ -186,12 +186,27 @@ class PortalMetadata(BasePortal, ABC):
     # endregion
     # region Telegram -> Matrix
 
+    def _get_invite_content(self, double_puppet: Optional['p.Puppet']) -> Dict[str, Any]:
+        invite_content = {}
+        if double_puppet:
+            invite_content["fi.mau.will_auto_accept"] = True
+        if self.is_direct:
+            invite_content["is_direct"] = True
+        return invite_content
+
     async def invite_to_matrix(self, users: InviteList) -> None:
         if isinstance(users, list):
             for user in users:
-                await self.main_intent.invite_user(self.mxid, user, check_cache=True)
+                await self.invite_to_matrix(user)
         else:
-            await self.main_intent.invite_user(self.mxid, users, check_cache=True)
+            puppet = await p.Puppet.get_by_custom_mxid(users)
+            await self.main_intent.invite_user(self.mxid, users, check_cache=True,
+                                               extra_content=self._get_invite_content(puppet))
+            if puppet:
+                try:
+                    await puppet.intent.ensure_joined(self.mxid)
+                except Exception:
+                    self.log.exception("Failed to ensure %s is joined to portal", users)
 
     async def update_matrix_room(self, user: 'AbstractUser', entity: Union[TypeChat, User],
                                  direct: bool = None, puppet: p.Puppet = None,
@@ -380,6 +395,7 @@ class PortalMetadata(BasePortal, ABC):
             "state_key": self.bridge_info_state_key,
             "content": self.bridge_info,
         }]
+        create_invites = []
         if config["bridge.encryption.default"] and self.matrix.e2ee:
             self.encrypted = True
             initial_state.append({
@@ -387,7 +403,7 @@ class PortalMetadata(BasePortal, ABC):
                 "content": {"algorithm": "m.megolm.v1.aes-sha2"},
             })
             if direct:
-                invites.append(self.az.bot_mxid)
+                create_invites.append(self.az.bot_mxid)
         if direct and (self.encrypted or self.private_chat_portal_meta):
             self.title = puppet.displayname
         if config["appservice.community_id"]:
@@ -401,7 +417,7 @@ class PortalMetadata(BasePortal, ABC):
 
         with self.backfill_lock:
             room_id = await self.main_intent.create_room(alias_localpart=alias, preset=preset,
-                                                         is_direct=direct, invitees=invites or [],
+                                                         is_direct=direct, invitees=create_invites,
                                                          name=self.title, topic=self.about,
                                                          initial_state=initial_state,
                                                          creation_content=creation_content)
@@ -419,6 +435,8 @@ class PortalMetadata(BasePortal, ABC):
             await self.save()
             await self.az.state_store.set_power_levels(self.mxid, power_levels)
             await user.register_portal(self)
+
+            await self.invite_to_matrix(invites)
 
             update_room = self.loop.create_task(self.update_matrix_room(
                 user, entity, direct, puppet,
@@ -569,13 +587,6 @@ class PortalMetadata(BasePortal, ABC):
             user = u.User.get_by_tgid(TelegramID(entity.id))
             if user:
                 await self.invite_to_matrix(user.mxid)
-
-                puppet = await p.Puppet.get_by_custom_mxid(user.mxid)
-                if puppet:
-                    try:
-                        await puppet.intent.ensure_joined(self.mxid)
-                    except Exception:
-                        self.log.exception("Failed to ensure %s is joined to portal", user.mxid)
 
         # We can't trust the member list if any of the following cases is true:
         #  * There are close to 10 000 users, because Telegram might not be sending all members.
