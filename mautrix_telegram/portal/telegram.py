@@ -249,10 +249,14 @@ class PortalTelegram(BasePortal, ABC):
             if info.thumbnail_info:
                 info.thumbnail_info.width = info.width
                 info.thumbnail_info.height = info.height
-        if attrs.is_gif:
-            info["fi.mau.telegram.gif"] = True
+        if attrs.is_gif or (attrs.is_sticker and info.mimetype == "video/webm"):
+            if attrs.is_gif:
+                info["fi.mau.telegram.gif"] = True
+            else:
+                info["fi.mau.telegram.animated_sticker"] = True
             info["fi.mau.loop"] = True
             info["fi.mau.autoplay"] = True
+            info["fi.mau.hide_controls"] = True
             info["fi.mau.no_audio"] = True
 
         content = MediaMessageEventContent(
