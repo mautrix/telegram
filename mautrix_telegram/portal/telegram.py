@@ -193,13 +193,13 @@ class PortalTelegram(BasePortal, ABC):
                                                 height=file.thumbnail.height or thumb_size.h,
                                                 width=file.thumbnail.width or thumb_size.w,
                                                 size=file.thumbnail.size)
-        else:
+        elif attrs.is_sticker:
             # This is a hack for bad clients like Element iOS that require a thumbnail
+            info.thumbnail_info = ImageInfo.deserialize(info.serialize())
             if file.decryption_info:
                 info.thumbnail_file = file.decryption_info
             else:
                 info.thumbnail_url = file.mxc
-            info.thumbnail_info = ImageInfo.deserialize(info.serialize())
 
         return info, name
 
