@@ -258,9 +258,12 @@ class PortalTelegram(BasePortal, ABC):
             info["fi.mau.autoplay"] = True
             info["fi.mau.hide_controls"] = True
             info["fi.mau.no_audio"] = True
+        if not name:
+            ext = sane_mimetypes.guess_extension(file.mime_type)
+            name = "unnamed_file" + ext
 
         content = MediaMessageEventContent(
-            body=name or "unnamed file", info=info, relates_to=relates_to,
+            body=name, info=info, relates_to=relates_to,
             external_url=self._get_external_url(evt),
             msgtype={
                 "video/": MessageType.VIDEO,
