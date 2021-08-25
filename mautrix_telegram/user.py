@@ -232,7 +232,7 @@ class User(AbstractUser, BaseUser):
     @property
     def _is_connected(self) -> bool:
         return bool(self.client and self.client._sender
-                    and self.client._sender._transport_connected)
+                    and self.client._sender._transport_connected())
 
     async def _track_connection(self) -> None:
         self.log.debug("Starting loop to track connection state")
@@ -251,6 +251,18 @@ class User(AbstractUser, BaseUser):
         await super().fill_bridge_state(state)
         state.remote_id = str(self.tgid)
         state.remote_name = self.human_tg_id
+
+    async def get_bridge_states(self) -> List[BridgeState]:
+        if not self.tgid:
+            return []
+        if self._is_connected and await self.is_logged_in():
+            state_event = (BridgeStateEvent.BACKFILLING if self._is_backfilling
+                           else BridgeStateEvent.CONNECTED)
+            ttl = 3600
+        else:
+            state_event = BridgeStateEvent.UNKNOWN_ERROR
+            ttl = 240
+        return [BridgeState(state_event=state_event, ttl=ttl)]
 
     async def get_puppet(self) -> Optional['pu.Puppet']:
         if not self.tgid:
