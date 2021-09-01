@@ -92,6 +92,11 @@ async def bridge(evt: CommandEvent) -> EventID:
                                "`$cmdprefix+sp delete-and-continue`. To unbridge the portal "
                                "without kicking Matrix users, use `$cmdprefix+sp unbridge-and-"
                                "continue`. To cancel, use `$cmdprefix+sp cancel`")
+
+    if await po.Portal.reached_portal_limit():
+        return await evt.reply("This bridge has reached the maximum number of rooms that "
+                               "can be bridged.")
+
     evt.sender.command_status = {
         "next": confirm_bridge,
         "action": "Room bridging",

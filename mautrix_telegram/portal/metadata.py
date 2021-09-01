@@ -132,6 +132,8 @@ class PortalMetadata(BasePortal, ABC):
             raise ValueError("Can't create Telegram chat for portal without Matrix room.")
         elif self.tgid:
             raise ValueError("Can't create Telegram chat for portal with existing Telegram chat.")
+        elif await self.reached_portal_limit():
+            raise ValueError("Can't create Telegram chat, reached portal limit.")
 
         if len(invites) < 2:
             if self.bot is not None:
@@ -328,6 +330,10 @@ class PortalMetadata(BasePortal, ABC):
 
         direct = self.peer_type == "user"
         invites = invites or []
+
+        if await self.reached_portal_limit():
+            raise ValueError("Can't create Telegram chat, reached portal limit.")
+
 
         if not entity:
             entity = await self.get_entity(user)

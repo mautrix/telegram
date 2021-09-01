@@ -138,6 +138,7 @@ class Config(BaseBridgeConfig):
         copy("bridge.backfill.missed_limit")
         copy("bridge.backfill.disable_notifications")
         copy("bridge.backfill.normal_groups")
+        copy("bridge.max_portal_rooms")
 
         copy("bridge.initial_power_level_overrides.group")
         copy("bridge.initial_power_level_overrides.user")
