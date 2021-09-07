@@ -169,6 +169,11 @@ class Config(BaseBridgeConfig):
 
         copy("bridge.command_prefix")
 
+        copy("bridge.limits.max_puppet_limit")
+        copy("bridge.limits.min_puppet_activity_days")
+        copy("bridge.limits.puppet_inactivity_days")
+        copy("bridge.limits.block_on_limit_reached")
+
         migrate_permissions = ("bridge.permissions" not in self
                                or "bridge.whitelist" in self
                                or "bridge.admins" in self)

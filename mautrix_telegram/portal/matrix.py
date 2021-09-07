@@ -369,6 +369,11 @@ class PortalMatrix(BasePortal, ABC):
 
     async def handle_matrix_message(self, sender: 'u.User', content: MessageEventContent,
                                     event_id: EventID) -> None:
+        if self.bridge.is_blocked:
+            self.log.debug(f"Bridge is blocked, dropping matrix event {event_id}")
+            await self._send_bridge_error(f"\u26a0 The bridge is blocked due to reaching its user limit")
+            return
+
         try:
             await self._handle_matrix_message(sender, content, event_id)
         except RPCError as e:
