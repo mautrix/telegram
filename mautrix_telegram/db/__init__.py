@@ -23,9 +23,10 @@ from .portal import Portal
 from .puppet import Puppet
 from .telegram_file import TelegramFile
 from .user import User, UserPortal, Contact
+from .user_activity import UserActivity
 
 
 def init(db_engine: Engine) -> None:
     for table in (Portal, Message, User, Contact, UserPortal, Puppet, TelegramFile, UserProfile,
-                  RoomState, BotChat):
+                  RoomState, BotChat, UserActivity):
         table.bind(db_engine)

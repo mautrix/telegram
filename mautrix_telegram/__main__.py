@@ -14,6 +14,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from typing import Dict, Any
+import asyncio
 
 from telethon import __version__ as __telethon_version__
 from alchemysession import AlchemySessionContainer
@@ -21,6 +22,7 @@ from alchemysession import AlchemySessionContainer
 from mautrix.types import UserID, RoomID
 from mautrix.bridge import Bridge
 from mautrix.util.db import Base
+from mautrix.util.opt_prometheus import Gauge
 
 from .web.provisioning import ProvisioningAPI
 from .web.public import PublicBridgeWebsite
@@ -29,6 +31,7 @@ from .bot import Bot, init as init_bot
 from .config import Config
 from .context import Context
 from .db import init as init_db
+from .db.user_activity import UserActivity
 from .formatter import init as init_formatter
 from .matrix import MatrixHandler
 from .portal import Portal, init as init_portal
@@ -41,6 +44,9 @@ try:
 except ImportError:
     prometheus = None
 
+ACTIVE_USER_METRICS_INTERVAL_S = 5
+METRIC_ACTIVE_PUPPETS = Gauge('bridge_active_puppets_total', 'Number of active Telegram users bridged into Matrix')
+METRIC_BLOCKING = Gauge('bridge_blocked', 'Is the bridge currently blocking messages')
 
 class TelegramBridge(Bridge):
     module = "mautrix_telegram"
@@ -57,6 +63,9 @@ class TelegramBridge(Bridge):
     config: Config
     session_container: AlchemySessionContainer
     bot: Bot
+
+    periodic_active_metrics_task: asyncio.Task
+    is_blocked: bool = False
 
     def prepare_db(self) -> None:
         super().prepare_db()
@@ -92,6 +101,7 @@ class TelegramBridge(Bridge):
             self.add_startup_actions(self.bot.start())
         if self.config["bridge.resend_bridge_info"]:
             self.add_startup_actions(self.resend_bridge_info())
+        self.add_startup_actions(self._loop_active_puppet_metric())
 
     async def resend_bridge_info(self) -> None:
         self.config["bridge.resend_bridge_info"] = False
@@ -126,6 +136,35 @@ class TelegramBridge(Bridge):
 
     async def count_logged_in_users(self) -> int:
         return len([user for user in User.by_tgid.values() if user.tgid])
+
+    async def _update_active_puppet_metric(self) -> None:
+        active_users = UserActivity.get_active_count(
+            self.config['bridge.limits.puppet_inactivity_days'],
+            self.config['bridge.limits.min_puppet_activity_days'],
+        )
+
+        block_on_limit_reached = self.config['bridge.limits.block_on_limit_reached']
+        max_puppet_limit = self.config['bridge.limits.max_puppet_limit']
+        if block_on_limit_reached is not None and max_puppet_limit is not None:
+            self.is_blocked = max_puppet_limit < active_users
+            METRIC_BLOCKING.set(int(self.is_blocked))
+        self.log.debug(f"Current active puppet count is {active_users}")
+        METRIC_ACTIVE_PUPPETS.set(active_users)
+
+    async def _loop_active_puppet_metric(self) -> None:
+        while True:
+            try:
+                await asyncio.sleep(ACTIVE_USER_METRICS_INTERVAL_S)
+            except asyncio.CancelledError:
+                return
+            self.log.info("Executing periodic active puppet metric check")
+            try:
+                await self._update_active_puppet_metric()
+            except asyncio.CancelledError:
+                return
+            except Exception as e:
+                self.log.exception(f"Error while checking: {e}")
+
 
     async def manhole_global_namespace(self, user_id: UserID) -> Dict[str, Any]:
         return {

@@ -44,7 +44,7 @@ from mautrix.types import (EventID, UserID, ImageInfo, ThumbnailInfo, RelatesTo,
 from mautrix.bridge import NotificationDisabler
 
 from ..types import TelegramID
-from ..db import Message as DBMessage, TelegramFile as DBTelegramFile
+from ..db import Message as DBMessage, TelegramFile as DBTelegramFile, UserActivity
 from ..util import sane_mimetypes
 from ..context import Context
 from ..tgclient import TelegramClient
@@ -613,6 +613,10 @@ class PortalTelegram(BasePortal, ABC):
 
     async def handle_telegram_message(self, source: 'AbstractUser', sender: p.Puppet,
                                       evt: Message) -> None:
+        if self.bridge.is_blocked:
+            self.log.debug(f"Bridge is blocked, dropping telegram message {evt.id}")
+            return
+
         if not self.mxid:
             self.log.trace("Got telegram message %d, but no room exists, creating...", evt.id)
             await self.create_matrix_room(source, invites=[source.mxid], update_if_exists=False)
@@ -704,6 +708,7 @@ class PortalTelegram(BasePortal, ABC):
             await intent.redact(self.mxid, event_id)
             return
 
+        UserActivity.update_for_puppet(sender, evt.date)
         self.log.debug("Handled telegram message %d -> %s", evt.id, event_id)
         try:
             DBMessage(tgid=TelegramID(evt.id), mx_room=self.mxid, mxid=event_id,

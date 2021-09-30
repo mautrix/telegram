@@ -443,6 +443,18 @@ bridge:
         - myusername
         - 12345678
 
+    # Limit usage of the bridge
+    limits:
+        # The maximum number of bridge puppets that can be "active" before the limit is reached
+        max_puppet_limit: 0
+        # The minimum amount of days a puppet must be active for before they are considered "active".
+        min_puppet_activity_days: 0
+        # The number of days after a puppets last activity where they are considered inactive again.
+        puppet_inactivity_days: 30
+        # Should the bridge block traffic when a limit has been reached
+        block_on_limit_reached: false
+
+
 # Telegram config
 telegram:
     # Get your own API keys at https://my.telegram.org/apps
