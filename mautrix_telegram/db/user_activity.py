@@ -37,8 +37,8 @@ class UserActivity(Base):
     log: TraceLogger = logging.getLogger("mau.user_activity")
 
     puppet_id: TelegramID = Column(BigInteger, primary_key=True)
-    first_activity_ts: Optional[int] = Column(Integer)
-    last_activity_ts: Optional[int] = Column(Integer)
+    first_activity_ts: Optional[int] = Column(BigInteger)
+    last_activity_ts: Optional[int] = Column(BigInteger)
 
     def update(self, activity_ts: int) -> None:
         if self.last_activity_ts > activity_ts:
