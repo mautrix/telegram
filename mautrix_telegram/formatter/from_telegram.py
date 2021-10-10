@@ -32,7 +32,7 @@ from telethon.helpers import add_surrogate, del_surrogate
 from mautrix.errors import MatrixRequestError
 from mautrix.appservice import IntentAPI
 from mautrix.types import (TextMessageEventContent, RelatesTo, RelationType, Format, MessageType,
-                           MessageEvent)
+                           MessageEvent, EventType)
 
 from .. import user as u, puppet as pu, portal as po
 from ..types import TelegramID
@@ -129,12 +129,14 @@ async def _add_reply_header(source: 'AbstractUser', content: TextMessageEventCon
     content.relates_to = RelatesTo(rel_type=RelationType.REPLY, event_id=msg.mxid)
 
     try:
-        event: MessageEvent = await main_intent.get_event(msg.mx_room, msg.mxid)
+        event = await main_intent.get_event(msg.mx_room, msg.mxid)
+        if event.type == EventType.ROOM_ENCRYPTED and source.bridge.matrix.e2ee:
+            event = await source.bridge.matrix.e2ee.decrypt(event)
         if isinstance(event.content, TextMessageEventContent):
             event.content.trim_reply_fallback()
         puppet = await pu.Puppet.get_by_mxid(event.sender, create=False)
         content.set_reply(event, displayname=puppet.displayname if puppet else event.sender)
-    except MatrixRequestError:
+    except Exception:
         log.exception("Failed to get event to add reply fallback")
 
 
