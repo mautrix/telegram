@@ -145,7 +145,7 @@ class TelegramBridge(Bridge):
 
         block_on_limit_reached = self.config['bridge.limits.block_on_limit_reached']
         max_puppet_limit = self.config['bridge.limits.max_puppet_limit']
-        if block_on_limit_reached is not None and max_puppet_limit is not None:
+        if block_on_limit_reached and max_puppet_limit is not None:
             self.is_blocked = max_puppet_limit < active_users
             METRIC_BLOCKING.set(int(self.is_blocked))
         self.log.debug(f"Current active puppet count is {active_users}")
