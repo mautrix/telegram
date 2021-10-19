@@ -194,6 +194,9 @@ class Config(BaseBridgeConfig):
             copy("bridge.relaybot.whitelist")
             copy("bridge.relaybot.ignore_own_incoming_events")
 
+        copy_dict("bridge.management_room_text")
+        copy("bridge.management_room_multiple_messages")
+
         copy("telegram.api_id")
         copy("telegram.api_hash")
         copy("telegram.bot_token")
