@@ -119,7 +119,7 @@ class MatrixHandler(BaseMatrixHandler):
             await intent.send_notice(room_id, "This puppet will remain inactive until a "
                                               "Telegram chat is created for this room.")
 
-    def _get_welcome_message_string(self, statement_name: str, default_plain: str, default_html: Optional[str]):
+    def _get_welcome_message_string(self, statement_name: str, default_plain: str, default_html: Optional[str] = None):
         plain = self.management_room_text.get(statement_name, {}).get("plain", None)
         html = self.management_room_text.get(statement_name, {}).get("html", None)
         return plain or default_plain, html or plain or default_html or default_plain
