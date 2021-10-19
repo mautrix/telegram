@@ -160,7 +160,7 @@ class MatrixHandler(BaseMatrixHandler):
                 html += logged_in_html
         else:
             unconnected_text, unconnected_html = self._get_welcome_message_string(
-                "welcome_connected",
+                "welcome_unconnected",
                 f"Use `help` for help or `login` to log in.",
                 (f"Use <code>help</code> for help"
                     f" or <code>login</code> to log in.")
