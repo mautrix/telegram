@@ -13,7 +13,7 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import Dict, Set, Tuple, Union, Iterable, TYPE_CHECKING
+from typing import Dict, Optional, Set, Tuple, Union, Iterable, TYPE_CHECKING
 
 from mautrix.bridge import BaseMatrixHandler
 from mautrix.types import (Event, EventType, RoomID, UserID, EventID, ReceiptEvent, ReceiptType,
@@ -38,12 +38,16 @@ class MatrixHandler(BaseMatrixHandler):
     bot: 'Bot'
     commands: 'com.CommandProcessor'
     previously_typing: Dict[RoomID, Set[UserID]]
+    management_room_text: Dict[str, Dict[str, str]]
+    management_room_multiple_messages: bool
 
     def __init__(self, context: 'Context') -> None:
         prefix, suffix = context.config["bridge.username_template"].format(userid=":").split(":")
         homeserver = context.config["homeserver.domain"]
         self.user_id_prefix = f"@{prefix}"
         self.user_id_suffix = f"{suffix}:{homeserver}"
+        self.management_room_text = context.config["bridge.management_room_text"]
+        self.management_room_multiple_messages = context.config["bridge.management_room_multiple_messages"] or False
 
         super().__init__(command_processor=com.CommandProcessor(context), bridge=context.bridge)
 
@@ -115,6 +119,12 @@ class MatrixHandler(BaseMatrixHandler):
             await intent.send_notice(room_id, "This puppet will remain inactive until a "
                                               "Telegram chat is created for this room.")
 
+    def _get_welcome_message_string(self, statement_name: str, default_plain: str, default_html: Optional[str]):
+        plain = self.management_room_text.get(statement_name, {}).get("plain", None)
+        html = self.management_room_text.get(statement_name, {}).get("html", None)
+        return plain or default_plain, html or plain or default_html or default_plain
+
+
     async def send_welcome_message(self, room_id: RoomID, inviter: 'u.User') -> None:
         try:
             is_management = len(await self.az.intent.get_room_members(room_id)) == 2
@@ -122,15 +132,60 @@ class MatrixHandler(BaseMatrixHandler):
             # The AS bot is not in the room.
             return
         cmd_prefix = self.commands.command_prefix
-        text = html = "Hello, I'm a Telegram bridge bot. "
-        if is_management and inviter.puppet_whitelisted and not await inviter.is_logged_in():
-            text += f"Use `{cmd_prefix} help` for help or `{cmd_prefix} login` to log in."
-            html += (f"Use <code>{cmd_prefix} help</code> for help"
-                     f" or <code>{cmd_prefix} login</code> to log in.")
-        else:
+        text = html = "Hello, I'm a Telegram bridge bot."
+
+        if not is_management or not inviter.puppet_whitelisted:
             text += f"Use `{cmd_prefix} help` for help."
             html += f"Use <code>{cmd_prefix} help</code> for help."
-        await self.az.intent.send_notice(room_id, text=text, html=html)
+            await self.az.intent.send_notice(room_id, text=text, html=html)
+            return
+
+        # Get welcome text
+        welcome_text, welcome_plain = self._get_welcome_message_string("welcome", text)
+        if self.management_room_multiple_messages:
+            await self.az.intent.send_notice(room_id, text=welcome_text, html=welcome_plain)
+        else:
+            text += welcome_text, welcome_plain
+
+        if await inviter.is_logged_in():
+            logged_in_text, logged_in_html = self._get_welcome_message_string(
+                "welcome_connected",
+                f"Use `help` for help.",
+                f"Use <code>help</code> for help."
+            )
+            if self.management_room_multiple_messages:
+                await self.az.intent.send_notice(room_id, text=logged_in_text, html=logged_in_html)
+            else:
+                text += logged_in_text
+                html += logged_in_html
+        else:
+            unconnected_text, unconnected_html = self._get_welcome_message_string(
+                "welcome_connected",
+                f"Use `help` for help or `login` to log in.",
+                (f"Use <code>help</code> for help"
+                    f" or <code>login</code> to log in.")
+            )
+
+            text += unconnected_text
+            html += unconnected_html
+            if self.management_room_multiple_messages:
+                await self.az.intent.send_notice(room_id, text=unconnected_text, html=unconnected_html)
+            else:
+                text += unconnected_text
+                html += unconnected_html
+
+        additional_help_text, additional_help_html = self._get_welcome_message_string("additional_help", "")
+
+        if additional_help_text:
+            if self.management_room_multiple_messages:
+                await self.az.intent.send_notice(room_id, text=additional_help_text, html=additional_help_html)
+            else:
+                text += additional_help_text
+                html += additional_help_html
+
+        # If we're not using multiple messages
+        if not self.management_room_multiple_messages:
+            await self.az.intent.send_notice(room_id, text=text, html=html)
 
     async def handle_invite(self, room_id: RoomID, user_id: UserID, inviter: 'u.User',
                             event_id: EventID) -> None:
