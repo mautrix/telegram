@@ -394,9 +394,9 @@ bridge:
     # The prefix for commands. Only required in non-management rooms.
     command_prefix: "!tg"
 
-    # Send each message as a seperate message (for readability in some clients)
-    management_room_multiple_messages: false
-
+    # Messages to be sent to each user upon creating a management room.
+    # The defaults are listed below. If `plain` is not set, the text will
+    # not be used. If `html` is not set, `plain` will be used as HTML text.
     management_room_text:
         welcome: 
             plain: "Hello, I'm a Telegram bridge bot."
@@ -407,9 +407,13 @@ bridge:
         welcome_unconnected:
             plain: "Use `help` for help or `login` to log in."
             html: "Use <code>help</code> for help or <code>login</code> to log in."
-        additional_help:
-            plain: "This would be some additional text in case you need it."
-            html: "This would be some additional <b>text</b> in case you need it."
+        # Not sent by default
+        # additional_help:
+        #    plain: "This would be some additional text in case you need it."
+        #    html: "This would be some additional <b>text</b> in case you need it."
+
+    # Send each message as a seperate message (for readability in some clients)
+    management_room_multiple_messages: false
 
     # Permissions for using the bridge.
     # Permitted values:
