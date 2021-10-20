@@ -398,12 +398,11 @@ class User(AbstractUser, BaseUser):
             self.tgid = None
             await self.save()
         ok = await self.client.log_out()
-        if not ok:
-            return False
+        self.client.session.delete()
         self.delete()
         await self.stop()
         self._track_metric(METRIC_LOGGED_IN, False)
-        return True
+        return ok
 
     def _search_local(self, query: str, max_results: int = 5, min_similarity: int = 45
                       ) -> List[SearchResult]:

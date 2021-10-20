@@ -465,7 +465,7 @@ class ProvisioningAPI(AuthAPI):
                                                 Optional[web.Response]]):
         err = self.check_authorization(request)
         if err is not None:
-            return err
+            return None, None, err
 
         data = None
         if want_data and (request.method == "POST" or request.method == "PUT"):
