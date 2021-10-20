@@ -22,12 +22,14 @@ import asyncio
 from telethon.tl.types import (TypeUpdate, UpdateNewMessage, UpdateNewChannelMessage,
                                UpdateShortChatMessage, UpdateShortMessage, User as TLUser, Chat,
                                ChatForbidden, UpdateFolderPeers, UpdatePinnedDialogs,
-                               UpdateNotifySettings, NotifyPeer)
+                               UpdateNotifySettings, NotifyPeer, InputUserSelf)
 from telethon.tl.custom import Dialog
 from telethon.tl.types.contacts import ContactsNotModified
 from telethon.tl.functions.contacts import GetContactsRequest, SearchRequest
 from telethon.tl.functions.account import UpdateStatusRequest
-from telethon.errors import AuthKeyDuplicatedError
+from telethon.tl.functions.users import GetUsersRequest
+from telethon.errors import (AuthKeyDuplicatedError, UserDeactivatedError, UserDeactivatedBanError,
+                             SessionRevokedError, UnauthorizedError)
 
 from mautrix.client import Client
 from mautrix.errors import MatrixRequestError, MNotFound
@@ -333,8 +335,22 @@ class User(AbstractUser, BaseUser):
         if not self.is_bot:
             await self.client(UpdateStatusRequest(offline=not online))
 
+    async def get_me(self) -> Optional[TLUser]:
+        try:
+            return (await self.client(GetUsersRequest([InputUserSelf()])))[0]
+        except UnauthorizedError as e:
+            self.log.error(f"Authorization error in get_me(): {e}")
+            await self.push_bridge_state(BridgeStateEvent.BAD_CREDENTIALS, error="tg-auth-error",
+                                         message=str(e), ttl=3600)
+            await self.stop()
+            return None
+
     async def update_info(self, info: TLUser = None) -> None:
-        info = info or await self.client.get_me()
+        if not info:
+            info = await self.get_me()
+            if not info:
+                self.log.warning("get_me() returned None, aborting update_info()")
+                return
         changed = False
         if self.is_bot != info.bot:
             self.is_bot = info.bot
@@ -350,6 +366,7 @@ class User(AbstractUser, BaseUser):
             self.by_tgid[self.tgid] = self
         if changed:
             await self.save()
+        return info
 
     async def log_out(self) -> bool:
         puppet = pu.Puppet.get(self.tgid)

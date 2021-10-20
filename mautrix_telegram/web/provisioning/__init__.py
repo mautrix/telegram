@@ -21,7 +21,10 @@ import json
 from aiohttp import web
 
 from telethon.utils import get_peer_id, resolve_id
-from telethon.tl.types import ChatForbidden, ChannelForbidden, TypeChat
+from telethon.tl.types import ChatForbidden, ChannelForbidden, TypeChat, InputUserSelf
+from telethon.tl.functions.users import GetUsersRequest
+from telethon.errors import (UserDeactivatedError, UserDeactivatedBanError, SessionRevokedError,
+                             UnauthorizedError)
 
 from mautrix.appservice import AppService
 from mautrix.errors import MatrixRequestError, IntentError
@@ -294,16 +297,17 @@ class ProvisioningAPI(AuthAPI):
 
         user_data = None
         if await user.is_logged_in():
-            me = await user.client.get_me()
-            await user.update_info(me)
-            user_data = {
-                "id": user.tgid,
-                "username": user.username,
-                "first_name": me.first_name,
-                "last_name": me.last_name,
-                "phone": me.phone,
-                "is_bot": user.is_bot,
-            }
+            me = await user.get_me()
+            if me:
+                await user.update_info(me)
+                user_data = {
+                    "id": user.tgid,
+                    "username": user.username,
+                    "first_name": me.first_name,
+                    "last_name": me.last_name,
+                    "phone": me.phone,
+                    "is_bot": user.is_bot,
+                }
         return web.json_response({
             "telegram": user_data,
             "mxid": user.mxid,

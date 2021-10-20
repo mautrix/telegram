@@ -46,10 +46,13 @@ except ImportError:
                  help_section=SECTION_AUTH,
                  help_text="Check if you're logged into Telegram.")
 async def ping(evt: CommandEvent) -> EventID:
-    me = await evt.sender.client.get_me() if await evt.sender.is_logged_in() else None
-    if me:
-        human_tg_id = f"@{me.username}" if me.username else f"+{me.phone}"
-        return await evt.reply(f"You're logged in as {human_tg_id}")
+    if await evt.sender.is_logged_in():
+        me = await evt.sender.get_me()
+        if me:
+            human_tg_id = f"@{me.username}" if me.username else f"+{me.phone}"
+            return await evt.reply(f"You're logged in as {human_tg_id}")
+        else:
+            return await evt.reply("You were logged in, but there appears to have been an error.")
     else:
         return await evt.reply("You're not logged in.")
 
