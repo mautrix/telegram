@@ -58,6 +58,7 @@ METRIC_CONNECTED = Gauge('bridge_connected', 'Users connected to Telegram')
 BridgeState.human_readable_errors.update({
     "tg-not-connected": "Your Telegram connection failed",
     "tg-auth-key-duplicated": "The bridge accidentally logged you out",
+    "tg-not-authenticated": "The stored auth token did not work",
 })
 
 
@@ -228,6 +229,9 @@ class User(AbstractUser, BaseUser):
         elif delete_unless_authenticated:
             self.log.debug(f"Unauthenticated user {self.name} start()ed, deleting session...")
             await self.client.disconnect()
+            if self.tgid:
+                await self.push_bridge_state(BridgeStateEvent.BAD_CREDENTIALS,
+                                             error="tg-not-authenticated")
             self.client.session.delete()
         return self
 
@@ -366,7 +370,6 @@ class User(AbstractUser, BaseUser):
             self.by_tgid[self.tgid] = self
         if changed:
             await self.save()
-        return info
 
     async def log_out(self) -> bool:
         puppet = pu.Puppet.get(self.tgid)
