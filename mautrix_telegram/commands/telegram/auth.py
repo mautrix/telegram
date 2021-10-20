@@ -349,10 +349,12 @@ async def _finish_sign_in(evt: CommandEvent, user: User, login_as: 'u.User' = No
     return await evt.reply(msg)
 
 
-@command_handler(needs_auth=True,
+@command_handler(needs_auth=False,
                  help_section=SECTION_AUTH,
                  help_text="Log out from Telegram.")
 async def logout(evt: CommandEvent) -> EventID:
+    if not evt.sender.tgid:
+        return await evt.reply("You're not logged in")
     if await evt.sender.log_out():
         return await evt.reply("Logged out successfully.")
     return await evt.reply("Failed to log out.")

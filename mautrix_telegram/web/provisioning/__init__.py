@@ -355,7 +355,7 @@ class ProvisioningAPI(AuthAPI):
         return await self.post_login_password(user, data.get("password", ""))
 
     async def logout(self, request: web.Request) -> web.Response:
-        _, user, err = await self.get_user_request_info(request, expect_logged_in=True,
+        _, user, err = await self.get_user_request_info(request, expect_logged_in=None,
                                                         require_puppeting=False,
                                                         want_data=False)
         if err is not None:
