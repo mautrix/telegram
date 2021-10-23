@@ -115,23 +115,6 @@ class MatrixHandler(BaseMatrixHandler):
             await intent.send_notice(room_id, "This puppet will remain inactive until a "
                                               "Telegram chat is created for this room.")
 
-    async def send_welcome_message(self, room_id: RoomID, inviter: 'u.User') -> None:
-        try:
-            is_management = len(await self.az.intent.get_room_members(room_id)) == 2
-        except MatrixError:
-            # The AS bot is not in the room.
-            return
-        cmd_prefix = self.commands.command_prefix
-        text = html = "Hello, I'm a Telegram bridge bot. "
-        if is_management and inviter.puppet_whitelisted and not await inviter.is_logged_in():
-            text += f"Use `{cmd_prefix} help` for help or `{cmd_prefix} login` to log in."
-            html += (f"Use <code>{cmd_prefix} help</code> for help"
-                     f" or <code>{cmd_prefix} login</code> to log in.")
-        else:
-            text += f"Use `{cmd_prefix} help` for help."
-            html += f"Use <code>{cmd_prefix} help</code> for help."
-        await self.az.intent.send_notice(room_id, text=text, html=html)
-
     async def handle_invite(self, room_id: RoomID, user_id: UserID, inviter: 'u.User',
                             event_id: EventID) -> None:
         user = u.User.get_by_mxid(user_id, create=False)
