@@ -838,15 +838,16 @@ class PortalMetadata(BasePortal, ABC):
     async def _get_users(self, user: 'AbstractUser',
                          entity: Union[TypeInputPeer, InputUser, TypeChat, TypeUser, InputChannel]
                          ) -> List[TypeUser]:
+        limit = self.max_initial_member_sync
         if self.peer_type == "chat":
             chat = await user.client(GetFullChatRequest(chat_id=self.tgid))
-            return list(self._filter_participants(chat.users,
-                                                  chat.full_chat.participants.participants))
+            return list(
+                self._filter_participants(chat.users, chat.full_chat.participants.participants)
+            )[:limit]
         elif self.peer_type == "channel":
             if not self.megagroup and not self.sync_channel_members:
                 return []
 
-            limit = self.max_initial_member_sync
             if limit == 0:
                 return []
 
