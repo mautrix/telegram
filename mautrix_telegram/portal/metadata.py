@@ -27,7 +27,7 @@ from telethon.tl.types import (
     PhotoEmpty, InputChannel, InputUser, ChatPhotoEmpty, PeerUser, Photo, TypeChat, TypeInputPeer,
     TypeUser, User, InputPeerPhotoFileLocation, ChatParticipantAdmin, ChannelParticipantAdmin,
     ChatParticipantCreator, ChannelParticipantCreator, UserProfilePhoto, UserProfilePhotoEmpty,
-    InputPeerUser)
+    InputPeerUser, ChannelParticipantBanned)
 
 from mautrix.errors import MForbidden
 from mautrix.types import (RoomID, UserID, RoomCreatePreset, EventType, Membership,
@@ -797,7 +797,8 @@ class PortalMetadata(BasePortal, ABC):
     @staticmethod
     def _filter_participants(users: List[TypeUser], participants: List[TypeParticipant]
                              ) -> Iterable[TypeUser]:
-        participant_map = {part.user_id: part for part in participants}
+        participant_map = {part.user_id: part for part in participants
+                           if not isinstance(part, ChannelParticipantBanned)}
         for user in users:
             try:
                 user.participant = participant_map[user.id]
