@@ -198,7 +198,7 @@ class AbstractUser(ABC):
             if not await self.update(update):
                 await self._update(update)
         except Exception:
-            self.log.exception(f"Failed to handle Telegram update {update}")
+            self.log.exception("Failed to handle Telegram update")
             UPDATE_ERRORS.labels(update_type=update_type).inc()
         UPDATE_TIME.labels(update_type=update_type).observe(time.time() - start_time)
 
