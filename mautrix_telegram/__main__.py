@@ -67,6 +67,8 @@ class TelegramBridge(Bridge):
     periodic_active_metrics_task: asyncio.Task
     is_blocked: bool = False
 
+    periodic_sync_task: asyncio.Task
+
     def prepare_db(self) -> None:
         super().prepare_db()
         init_db(self.db)
@@ -101,7 +103,10 @@ class TelegramBridge(Bridge):
             self.add_startup_actions(self.bot.start())
         if self.config["bridge.resend_bridge_info"]:
             self.add_startup_actions(self.resend_bridge_info())
-        self.add_startup_actions(self._loop_active_puppet_metric())
+
+        # Do not block startup on this
+        self.periodic_sync_task = asyncio.create_task(self._loop_active_puppet_metric())
+        
 
     async def resend_bridge_info(self) -> None:
         self.config["bridge.resend_bridge_info"] = False
@@ -112,6 +117,7 @@ class TelegramBridge(Bridge):
         self.log.info("Finished re-sending bridge info state events")
 
     def prepare_stop(self) -> None:
+        self.periodic_sync_task.cancel()
         for puppet in Puppet.by_custom_mxid.values():
             puppet.stop()
         self.shutdown_actions = (user.stop() for user in User.by_tgid.values())
