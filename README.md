@@ -1,3 +1,12 @@
+## Element fork
+
+The Element fork includes the following changes:
+ - Add config limits for portal rooms https://github.com/mautrix/telegram/pull/469
+ - Make max_initial_member_sync work for Chats as well as Channels https://github.com/mautrix/telegram/pull/680
+
+Some changes that appear here may get upstreamed to https://github.com/mautrix/telegram, and will be removed from
+the list when they appear in both versions.
+
 # mautrix-telegram
 ![Languages](https://img.shields.io/github/languages/top/mautrix/telegram.svg)
 [![License](https://img.shields.io/github/license/mautrix/telegram.svg)](LICENSE)
@@ -5,7 +14,6 @@
 [![GitLab CI](https://mau.dev/mautrix/telegram/badges/master/pipeline.svg)](https://mau.dev/mautrix/telegram/container_registry)
 
 A Matrix-Telegram hybrid puppeting/relaybot bridge.
-
 ## Sponsors
 * [Joel Lehtonen / Zouppen](https://github.com/zouppen)
 
