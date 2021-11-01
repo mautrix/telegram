@@ -157,15 +157,14 @@ class TelegramBridge(Bridge):
                 await asyncio.sleep(ACTIVE_USER_METRICS_INTERVAL_S)
             except asyncio.CancelledError:
                 return
-            self.log.info("Executing periodic active puppet metric check")
+            self.log.debug("Executing periodic active puppet metric check")
             try:
                 await self._update_active_puppet_metric()
             except asyncio.CancelledError:
                 return
             except Exception as e:
                 self.log.exception(f"Error while checking: {e}")
-
-
+    
     async def manhole_global_namespace(self, user_id: UserID) -> Dict[str, Any]:
         return {
             **await super().manhole_global_namespace(user_id),
