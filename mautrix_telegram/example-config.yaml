@@ -35,7 +35,7 @@ appservice:
     # Other DBMSes supported by SQLAlchemy may or may not work.
     # Format examples:
     #   SQLite:   sqlite:///filename.db
-    #   Postgres: postgres://username:password@hostname/dbname
+    #   Postgres: postgresql://username:password@hostname/dbname
     database: sqlite:///mautrix-telegram.db
     # Optional extra arguments for SQLAlchemy's create_engine
     database_opts: {}
@@ -251,7 +251,7 @@ bridge:
         #
         # Format examples:
         #   Pickle:   pickle:///filename.pickle
-        #   Postgres: postgres://username:password@hostname/dbname
+        #   Postgres: postgresql://username:password@hostname/dbname
         database: default
         # Options for automatic key sharing.
         key_sharing:
