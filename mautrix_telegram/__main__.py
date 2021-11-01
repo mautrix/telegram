@@ -67,6 +67,8 @@ class TelegramBridge(Bridge):
     periodic_active_metrics_task: asyncio.Task
     is_blocked: bool = False
 
+    periodic_sync_task: asyncio.Task
+
     def prepare_db(self) -> None:
         super().prepare_db()
         init_db(self.db)
@@ -101,7 +103,10 @@ class TelegramBridge(Bridge):
             self.add_startup_actions(self.bot.start())
         if self.config["bridge.resend_bridge_info"]:
             self.add_startup_actions(self.resend_bridge_info())
-        self.add_startup_actions(self._loop_active_puppet_metric())
+
+        # Explicitly not a startup_action, as startup_actions block startup
+        self.periodic_sync_task = asyncio.create_task(self._loop_active_puppet_metric())
+        
 
     async def resend_bridge_info(self) -> None:
         self.config["bridge.resend_bridge_info"] = False
@@ -112,6 +117,7 @@ class TelegramBridge(Bridge):
         self.log.info("Finished re-sending bridge info state events")
 
     def prepare_stop(self) -> None:
+        self.periodic_sync_task.cancel()
         for puppet in Puppet.by_custom_mxid.values():
             puppet.stop()
         self.shutdown_actions = (user.stop() for user in User.by_tgid.values())
@@ -157,15 +163,14 @@ class TelegramBridge(Bridge):
                 await asyncio.sleep(ACTIVE_USER_METRICS_INTERVAL_S)
             except asyncio.CancelledError:
                 return
-            self.log.info("Executing periodic active puppet metric check")
+            self.log.debug("Executing periodic active puppet metric check")
             try:
                 await self._update_active_puppet_metric()
             except asyncio.CancelledError:
                 return
             except Exception as e:
                 self.log.exception(f"Error while checking: {e}")
-
-
+    
     async def manhole_global_namespace(self, user_id: UserID) -> Dict[str, Any]:
         return {
             **await super().manhole_global_namespace(user_id),
