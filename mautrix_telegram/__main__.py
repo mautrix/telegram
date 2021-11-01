@@ -104,7 +104,7 @@ class TelegramBridge(Bridge):
         if self.config["bridge.resend_bridge_info"]:
             self.add_startup_actions(self.resend_bridge_info())
 
-        # Do not block startup on this
+        # Explicitly not a startup_action, as startup_actions block startup
         self.periodic_sync_task = asyncio.create_task(self._loop_active_puppet_metric())
         
 
