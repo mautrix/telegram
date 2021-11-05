@@ -69,7 +69,7 @@ class UserActivity(Base):
 
     @classmethod
     def get_active_count(cls, min_activity_days: int, max_activity_days: Optional[int]) -> int:
-        current_ms = time.time() / 1000
+        current_ms = time.time() * 1000
         active_count = 0
         for user in cls._select_all():
             activity_days = (user.last_activity_ts - user.first_activity_ts / 1000) / ONE_DAY_MS

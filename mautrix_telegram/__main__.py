@@ -145,8 +145,8 @@ class TelegramBridge(Bridge):
 
     async def _update_active_puppet_metric(self) -> None:
         active_users = UserActivity.get_active_count(
-            self.config['bridge.limits.puppet_inactivity_days'],
             self.config['bridge.limits.min_puppet_activity_days'],
+            self.config['bridge.limits.puppet_inactivity_days'],
         )
 
         block_on_limit_reached = self.config['bridge.limits.block_on_limit_reached']
