@@ -17,6 +17,7 @@
 from typing import Optional, Iterable
 
 from sqlalchemy import Column, Integer, BigInteger
+from sqlalchemy.ext.hybrid import hybrid_property
 
 from mautrix.util.db import Base
 from mautrix.util.logging import TraceLogger
@@ -67,14 +68,15 @@ class UserActivity(Base):
             )
             obj.insert()
 
+    @hybrid_property
+    def activity_days(self):
+        return (self.last_activity_ts - self.first_activity_ts / 1000) / ONE_DAY_MS
+
     @classmethod
     def get_active_count(cls, min_activity_days: int, max_activity_days: Optional[int]) -> int:
         current_ms = time.time() * 1000
-        active_count = 0
-        for user in cls._select_all():
-            activity_days = (user.last_activity_ts - user.first_activity_ts / 1000) / ONE_DAY_MS
-            # If maxActivityTime is not set, they are always active
-            is_active = max_activity_days is None or (current_ms - user.last_activity_ts) <= (max_activity_days * ONE_DAY_MS) 
-            if is_active and activity_days > min_activity_days:
-                active_count += 1
-        return active_count
+
+        query = cls.t.select().where(cls.activity_days > min_activity_days)
+        if max_activity_days is not None:
+            query = query.where((current_ms - cls.last_activity_ts) <= (max_activity_days * ONE_DAY_MS))
+        return cls.db.execute(query.count()).scalar()
