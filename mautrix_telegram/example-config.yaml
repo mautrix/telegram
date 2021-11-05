@@ -454,6 +454,10 @@ bridge:
         # Should the bridge block traffic when a limit has been reached
         block_on_limit_reached: false
 
+    # Process puppet presence events ie UpdateUserStatus
+    # Disabling this means we don't try to set presence for puppets
+    handle_update_user_status: true
+
 
 # Telegram config
 telegram:
