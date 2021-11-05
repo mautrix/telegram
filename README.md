@@ -3,6 +3,7 @@
 The Element fork includes the following changes:
  - Add config limits for portal rooms https://github.com/mautrix/telegram/pull/469
  - Make max_initial_member_sync work for Chats as well as Channels https://github.com/mautrix/telegram/pull/680
+ - Allow disabling user status updates from Telegram side https://github.com/vector-im/mautrix-telegram/pull/9
 
 Some changes that appear here may get upstreamed to https://github.com/mautrix/telegram, and will be removed from
 the list when they appear in both versions.

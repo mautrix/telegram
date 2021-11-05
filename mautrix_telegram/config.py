@@ -200,6 +200,8 @@ class Config(BaseBridgeConfig):
             copy("bridge.relaybot.whitelist")
             copy("bridge.relaybot.ignore_own_incoming_events")
 
+        copy("bridge.handle_update_user_status")
+
         copy("telegram.api_id")
         copy("telegram.api_hash")
         copy("telegram.bot_token")
