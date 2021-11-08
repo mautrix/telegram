@@ -27,7 +27,7 @@ from telethon.tl.types import (
     PhotoEmpty, InputChannel, InputUser, ChatPhotoEmpty, PeerUser, Photo, TypeChat, TypeInputPeer,
     TypeUser, User, InputPeerPhotoFileLocation, ChatParticipantAdmin, ChannelParticipantAdmin,
     ChatParticipantCreator, ChannelParticipantCreator, UserProfilePhoto, UserProfilePhotoEmpty,
-    InputPeerUser)
+    InputPeerUser, ChannelParticipantBanned)
 
 from mautrix.errors import MForbidden
 from mautrix.types import (RoomID, UserID, RoomCreatePreset, EventType, Membership,
@@ -509,14 +509,15 @@ class PortalMetadata(BasePortal, ABC):
             levels.users[self.main_intent.mxid] = 100
         return levels
 
-    @staticmethod
-    def _get_level_from_participant(participant: TypeParticipant) -> int:
+    @classmethod
+    def _get_level_from_participant(cls, participant: TypeParticipant,
+                                    levels: PowerLevelStateEventContent) -> int:
         # TODO use the power level requirements to get better precision in channels
         if isinstance(participant, (ChatParticipantAdmin, ChannelParticipantAdmin)):
-            return 50
+            return levels.state_default or 50
         elif isinstance(participant, (ChatParticipantCreator, ChannelParticipantCreator)):
-            return 95
-        return 0
+            return levels.get_user_level(cls.az.bot_mxid) - 5
+        return levels.users_default or 0
 
     @staticmethod
     def _participant_to_power_levels(levels: PowerLevelStateEventContent,
@@ -547,7 +548,7 @@ class PortalMetadata(BasePortal, ABC):
 
             puppet = p.Puppet.get(TelegramID(participant.user_id))
             user = u.User.get_by_tgid(TelegramID(participant.user_id))
-            new_level = self._get_level_from_participant(participant)
+            new_level = self._get_level_from_participant(participant, levels)
 
             if user:
                 await user.register_portal(self)
@@ -802,7 +803,8 @@ class PortalMetadata(BasePortal, ABC):
     @staticmethod
     def _filter_participants(users: List[TypeUser], participants: List[TypeParticipant]
                              ) -> Iterable[TypeUser]:
-        participant_map = {part.user_id: part for part in participants}
+        participant_map = {part.user_id: part for part in participants
+                           if not isinstance(part, ChannelParticipantBanned)}
         for user in users:
             try:
                 user.participant = participant_map[user.id]

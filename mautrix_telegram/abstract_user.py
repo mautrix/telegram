@@ -50,6 +50,7 @@ if TYPE_CHECKING:
     from .context import Context
     from .config import Config
     from .bot import Bot
+    from .__main__ import TelegramBridge
 
 config: Optional['Config'] = None
 # Value updated from config in init()
@@ -71,6 +72,7 @@ class AbstractUser(ABC):
     loop: asyncio.AbstractEventLoop = None
     log: TraceLogger
     az: AppService
+    bridge: 'TelegramBridge'
     relaybot: Optional['Bot']
     ignore_incoming_bot_events: bool = True
 
@@ -196,7 +198,7 @@ class AbstractUser(ABC):
             if not await self.update(update):
                 await self._update(update)
         except Exception:
-            self.log.exception(f"Failed to handle Telegram update {update}")
+            self.log.exception("Failed to handle Telegram update")
             UPDATE_ERRORS.labels(update_type=update_type).inc()
         UPDATE_TIME.labels(update_type=update_type).observe(time.time() - start_time)
 
@@ -515,6 +517,7 @@ class AbstractUser(ABC):
 def init(context: 'Context') -> None:
     global config, MAX_DELETIONS
     AbstractUser.az, config, AbstractUser.loop, AbstractUser.relaybot = context.core
+    AbstractUser.bridge = context.bridge
     AbstractUser.ignore_incoming_bot_events = config["bridge.relaybot.ignore_own_incoming_events"]
     AbstractUser.session_container = context.session_container
     MAX_DELETIONS = config.get("bridge.max_telegram_delete", 10)

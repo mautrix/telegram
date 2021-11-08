@@ -426,7 +426,8 @@ class PortalMatrix(BasePortal, ABC):
             await self._handle_matrix_file(sender_id, event_id, space, client, content, reply_to,
                                            caption_content)
         else:
-            self.log.trace("Unhandled Matrix event: %s", content)
+            self.log.debug("Didn't handle Matrix event {event_id} due to unknown msgtype {content.msgtype}")
+            self.log.trace("Unhandled Matrix event content: %s", content)
 
     async def handle_matrix_unpin_all(self, sender: 'u.User', pin_event_id: EventID) -> None:
         await sender.client(UnpinAllMessagesRequest(peer=self.peer))

@@ -22,12 +22,14 @@ import asyncio
 from telethon.tl.types import (TypeUpdate, UpdateNewMessage, UpdateNewChannelMessage,
                                UpdateShortChatMessage, UpdateShortMessage, User as TLUser, Chat,
                                ChatForbidden, UpdateFolderPeers, UpdatePinnedDialogs,
-                               UpdateNotifySettings, NotifyPeer)
+                               UpdateNotifySettings, NotifyPeer, InputUserSelf)
 from telethon.tl.custom import Dialog
 from telethon.tl.types.contacts import ContactsNotModified
 from telethon.tl.functions.contacts import GetContactsRequest, SearchRequest
 from telethon.tl.functions.account import UpdateStatusRequest
-from telethon.errors import AuthKeyDuplicatedError
+from telethon.tl.functions.users import GetUsersRequest
+from telethon.errors import (AuthKeyDuplicatedError, UserDeactivatedError, UserDeactivatedBanError,
+                             SessionRevokedError, UnauthorizedError)
 
 from mautrix.client import Client
 from mautrix.errors import MatrixRequestError, MNotFound
@@ -56,6 +58,7 @@ METRIC_CONNECTED = Gauge('bridge_connected', 'Users connected to Telegram')
 BridgeState.human_readable_errors.update({
     "tg-not-connected": "Your Telegram connection failed",
     "tg-auth-key-duplicated": "The bridge accidentally logged you out",
+    "tg-not-authenticated": "The stored auth token did not work",
 })
 
 
@@ -226,6 +229,9 @@ class User(AbstractUser, BaseUser):
         elif delete_unless_authenticated:
             self.log.debug(f"Unauthenticated user {self.name} start()ed, deleting session...")
             await self.client.disconnect()
+            if self.tgid:
+                await self.push_bridge_state(BridgeStateEvent.BAD_CREDENTIALS,
+                                             error="tg-not-authenticated")
             self.client.session.delete()
         return self
 
@@ -333,8 +339,22 @@ class User(AbstractUser, BaseUser):
         if not self.is_bot:
             await self.client(UpdateStatusRequest(offline=not online))
 
+    async def get_me(self) -> Optional[TLUser]:
+        try:
+            return (await self.client(GetUsersRequest([InputUserSelf()])))[0]
+        except UnauthorizedError as e:
+            self.log.error(f"Authorization error in get_me(): {e}")
+            await self.push_bridge_state(BridgeStateEvent.BAD_CREDENTIALS, error="tg-auth-error",
+                                         message=str(e), ttl=3600)
+            await self.stop()
+            return None
+
     async def update_info(self, info: TLUser = None) -> None:
-        info = info or await self.client.get_me()
+        if not info:
+            info = await self.get_me()
+            if not info:
+                self.log.warning("get_me() returned None, aborting update_info()")
+                return
         changed = False
         if self.is_bot != info.bot:
             self.is_bot = info.bot
@@ -378,12 +398,11 @@ class User(AbstractUser, BaseUser):
             self.tgid = None
             await self.save()
         ok = await self.client.log_out()
-        if not ok:
-            return False
+        self.client.session.delete()
         self.delete()
         await self.stop()
         self._track_metric(METRIC_LOGGED_IN, False)
-        return True
+        return ok
 
     def _search_local(self, query: str, max_results: int = 5, min_similarity: int = 45
                       ) -> List[SearchResult]:
