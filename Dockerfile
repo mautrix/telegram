@@ -59,8 +59,9 @@ RUN apk add --virtual .build-deps \
  && apk del .build-deps
 
 COPY . /opt/mautrix-telegram
-RUN apk add git && pip3 install .[speedups,hq_thumbnails,metrics,e2be] && apk del git \
-  # This doesn't make the image smaller, but it's needed so that the `version` command works properly
+RUN apk add git && pip3 install .[speedups,hq_thumbnails,metrics,e2be] \
+  && pip3 install 'git+https://github.com/vector-im/mautrix-python@bump-conn-pool-limit#egg=mautrix' \
+  && apk del git \
   && cp mautrix_telegram/example-config.yaml . && rm -rf mautrix_telegram
 
 VOLUME /data
