@@ -16,7 +16,7 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from typing import Optional, Iterable
 
-from sqlalchemy import Column, Integer, BigInteger
+from sqlalchemy import Column, Integer, BigInteger, func, select
 from sqlalchemy.ext.hybrid import hybrid_property
 
 from mautrix.util.db import Base
@@ -76,7 +76,7 @@ class UserActivity(Base):
     def get_active_count(cls, min_activity_days: int, max_activity_days: Optional[int]) -> int:
         current_ms = time.time() * 1000
 
-        query = cls.t.select().where(cls.activity_days > min_activity_days)
+        query = select([func.count(UserActivity.puppet_id)]).where(cls.activity_days > min_activity_days)
         if max_activity_days is not None:
             query = query.where((current_ms - cls.last_activity_ts) <= (max_activity_days * ONE_DAY_MS))
-        return cls.db.execute(query.count()).scalar()
+        return cls.db.execute(query).scalar()
