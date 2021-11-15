@@ -44,7 +44,10 @@ RUN apk add --no-cache \
       bash \
       curl \
       jq \
-      yq
+      yq \
+	  # pillow
+	  libjpeg-turbo-dev \
+	  zlib-dev
 
 COPY requirements.txt /opt/mautrix-telegram/requirements.txt
 COPY optional-requirements.txt /opt/mautrix-telegram/optional-requirements.txt
@@ -54,8 +57,7 @@ RUN apk add --virtual .build-deps \
       libffi-dev \
       build-base \
  && sed -Ei 's/psycopg2-binary.+//' optional-requirements.txt \
- # TODO: unpin Pillow here after it's updated in Alpine
- && pip3 install -r requirements.txt -r optional-requirements.txt 'pillow==8.2' \
+ && pip3 install -r requirements.txt -r optional-requirements.txt \
  && apk del .build-deps
 
 COPY . /opt/mautrix-telegram
