@@ -18,9 +18,9 @@ from typing import Dict, Set, Tuple, Union, Iterable, TYPE_CHECKING
 from mautrix.bridge import BaseMatrixHandler
 from mautrix.types import (Event, EventType, RoomID, UserID, EventID, ReceiptEvent, ReceiptType,
                            ReceiptEventContent, PresenceEvent, PresenceState, TypingEvent,
-                           MessageEvent, StateEvent, RedactionEvent, RoomNameStateEventContent,
+                           StateEvent, RedactionEvent, RoomNameStateEventContent,
                            RoomAvatarStateEventContent, RoomTopicStateEventContent,
-                           MemberStateEventContent, EncryptedEvent, TextMessageEventContent,
+                           MemberStateEventContent, TextMessageEventContent,
                            MessageType)
 from mautrix.errors import MatrixError
 
@@ -337,19 +337,6 @@ class MatrixHandler(BaseMatrixHandler):
                 await portal.set_typing(user, is_typing)
 
         self.previously_typing[room_id] = now_typing
-
-    def filter_matrix_event(self, evt: Event) -> bool:
-        if isinstance(evt, (TypingEvent, ReceiptEvent, PresenceEvent)):
-            return False
-        elif not isinstance(evt, (RedactionEvent, MessageEvent, StateEvent, EncryptedEvent)):
-            return True
-        if evt.content.get(self.az.real_user_content_key, False):
-            puppet = pu.Puppet.deprecated_sync_get_by_custom_mxid(evt.sender)
-            if puppet:
-                self.log.debug("Ignoring puppet-sent event %s", evt.event_id)
-                return True
-        return evt.sender and (evt.sender == self.az.bot_mxid
-                               or pu.Puppet.get_id_from_mxid(evt.sender) is not None)
 
     async def handle_ephemeral_event(self, evt: Union[ReceiptEvent, PresenceEvent, TypingEvent]
                                      ) -> None:
