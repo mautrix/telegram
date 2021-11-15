@@ -227,16 +227,13 @@ bridge:
         # webm - converts to webm video, requires ffmpeg executable with vp9 codec and webm container support
         target: gif
         # Arguments for converter. All converters take width and height.
-        # GIF converter takes background as a hex color.
         args:
             width: 256
             height: 256
-            fps: 25               # only for webm and gif (2, 5, 10, 20, 25 and 50 recommended)
-    # End-to-bridge encryption support options. These require matrix-nio to be installed with pip
-    # and login_shared_secret to be configured in order to get a device for the bridge bot.
+            fps: 25 # only for webm and gif (2, 5, 10, 20 or 25 recommended)
+    # End-to-bridge encryption support options.
     #
-    # Additionally, https://github.com/matrix-org/synapse/pull/5758 is required if using a normal
-    # application service.
+    # See https://docs.mau.fi/bridges/general/end-to-bridge-encryption.html for more info.
     encryption:
         # Allow encryption, work in group chat rooms with e2ee enabled
         allow: false
