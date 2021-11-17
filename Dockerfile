@@ -60,7 +60,7 @@ RUN apk add --virtual .build-deps \
 
 COPY . /opt/mautrix-telegram
 RUN apk add git && pip3 install .[speedups,hq_thumbnails,metrics,e2be] \
-  && pip3 install 'git+https://github.com/vector-im/mautrix-python@master#egg=mautrix' \
+  && pip3 install 'git+https://github.com/vector-im/mautrix-python@v0.11.4-mod1#egg=mautrix' \
   && apk del git \
   && cp mautrix_telegram/example-config.yaml . && rm -rf mautrix_telegram
 
