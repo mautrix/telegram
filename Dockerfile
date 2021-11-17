@@ -55,7 +55,7 @@ RUN apk add git \
   && pip3 install .[speedups,hq_thumbnails,metrics,e2be] \
   # TODO: unpin Pillow here after it's updated in Alpine
   && pip3 install -r requirements.txt 'pillow==8.2' \
-  && pip3 install 'git+https://github.com/vector-im/mautrix-python@v0.11.4-mod1#egg=mautrix' \
+  && pip3 install 'git+https://github.com/vector-im/mautrix-python@v0.11.4-mod-2#egg=mautrix' \
   && apk del git \
   && apk del .build-deps \
   && cp mautrix_telegram/example-config.yaml . && rm -rf mautrix_telegram
