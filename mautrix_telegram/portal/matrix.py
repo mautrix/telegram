@@ -279,8 +279,8 @@ class PortalMatrix(BasePortal, ABC):
         else:
             if content.file:
                 if not decrypt_attachment:
-                    raise Exception(f"Can't bridge encrypted media event {event_id}: matrix-nio "
-                                    "is not installed")
+                    raise Exception(f"Can't bridge encrypted media event {event_id}: "
+                                    "encryption dependencies not installed")
                 file = await self.main_intent.download_media(content.file.url)
                 file = decrypt_attachment(file, content.file.key.key,
                                           content.file.hashes.get("sha256"), content.file.iv)
@@ -512,6 +512,7 @@ class PortalMatrix(BasePortal, ABC):
         try:
             await self._handle_matrix_deletion(deleter, event_id, redaction_event_id)
         except Exception as e:
+            self.log.debug(str(e))
             await self._send_bridge_error(deleter, e, event_id, EventType.ROOM_REDACTION)
         else:
             deleter.send_remote_checkpoint(
