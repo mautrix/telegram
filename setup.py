@@ -6,19 +6,6 @@ from mautrix_telegram.get_version import git_tag, git_revision, version, linkifi
 with open("requirements.txt") as reqs:
     install_requires = reqs.read().splitlines()
 
-with open("optional-requirements.txt") as reqs:
-    extras_require = {}
-    current = []
-    for line in reqs.read().splitlines():
-        if line.startswith("#/"):
-            extras_require[line[2:]] = current = []
-        elif not line or line.startswith("#"):
-            continue
-        else:
-            current.append(line)
-
-extras_require["all"] = list({dep for deps in extras_require.values() for dep in deps})
-
 try:
     long_desc = open("README.md").read()
 except IOError:
@@ -48,7 +35,6 @@ setuptools.setup(
     packages=setuptools.find_packages(),
 
     install_requires=install_requires + ['psycopg2', 'uvloop'],
-    extras_require=extras_require,
     python_requires="~=3.7",
 
     setup_requires=["pytest-runner"],
