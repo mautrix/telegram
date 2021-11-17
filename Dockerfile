@@ -48,19 +48,17 @@ RUN apk add --no-cache \
 
 COPY requirements.txt /opt/mautrix-telegram/requirements.txt
 WORKDIR /opt/mautrix-telegram
-RUN apk add --virtual .build-deps \
-      python3-dev \
-      libffi-dev \
-      build-base \
- # TODO: unpin Pillow here after it's updated in Alpine
- && pip3 install -r requirements.txt 'pillow==8.2'
 
 COPY . /opt/mautrix-telegram
-RUN apk add git && pip3 install .[speedups,hq_thumbnails,metrics,e2be] \
+RUN apk add git \
+  && apk add --virtual .build-deps python3-dev libffi-dev build-base \
+  && pip3 install .[speedups,hq_thumbnails,metrics,e2be] \
+  # TODO: unpin Pillow here after it's updated in Alpine
+  && pip3 install -r requirements.txt 'pillow==8.2' \
   && pip3 install 'git+https://github.com/vector-im/mautrix-python@v0.11.4-mod1#egg=mautrix' \
   && apk del git \
-  && cp mautrix_telegram/example-config.yaml . && rm -rf mautrix_telegram \
-  && apk del .build-deps
+  && apk del .build-deps \
+  && cp mautrix_telegram/example-config.yaml . && rm -rf mautrix_telegram
 
 VOLUME /data
 ENV UID=1337 GID=1337 \
