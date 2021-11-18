@@ -460,6 +460,8 @@ bridge:
 
     # Limit usage of the bridge
     limits:
+        # Enable tracking of active puppets. Disable if this causes performance issues.
+        enable_activity_tracking: true
         # The maximum number of bridge puppets that can be "active" before the limit is reached
         max_puppet_limit: 0
         # The minimum amount of days a puppet must be active for before they are considered "active".

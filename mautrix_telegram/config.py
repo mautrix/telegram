@@ -169,6 +169,7 @@ class Config(BaseBridgeConfig):
 
         copy("bridge.command_prefix")
 
+        copy("bridge.limits.enable_activity_tracking")
         copy("bridge.limits.max_puppet_limit")
         copy("bridge.limits.min_puppet_activity_days")
         copy("bridge.limits.puppet_inactivity_days")
