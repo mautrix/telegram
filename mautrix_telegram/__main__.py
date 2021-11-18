@@ -105,7 +105,8 @@ class TelegramBridge(Bridge):
             self.add_startup_actions(self.resend_bridge_info())
 
         # Explicitly not a startup_action, as startup_actions block startup
-        self.periodic_sync_task = self.loop.create_task(self._loop_active_puppet_metric())
+        if self.config['bridge.limits.enable_activity_tracking'] is not False:
+            self.periodic_sync_task = self.loop.create_task(self._loop_active_puppet_metric())
         
 
     async def resend_bridge_info(self) -> None:
@@ -117,7 +118,8 @@ class TelegramBridge(Bridge):
         self.log.info("Finished re-sending bridge info state events")
 
     def prepare_stop(self) -> None:
-        self.periodic_sync_task.cancel()
+        if self.periodic_sync_task:
+            self.periodic_sync_task.cancel()
         for puppet in Puppet.by_custom_mxid.values():
             puppet.stop()
         self.shutdown_actions = (user.stop() for user in User.by_tgid.values())
