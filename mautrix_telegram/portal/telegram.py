@@ -707,8 +707,8 @@ class PortalTelegram(BasePortal, ABC):
                            "the likely duplicate message now.")
             await intent.redact(self.mxid, event_id)
             return
-
-        UserActivity.update_for_puppet(sender, evt.date)
+        if sender:
+            UserActivity.update_for_puppet(sender, evt.date)
         self.log.debug("Handled telegram message %d -> %s", evt.id, event_id)
         try:
             DBMessage(tgid=TelegramID(evt.id), mx_room=self.mxid, mxid=event_id,
