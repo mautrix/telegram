@@ -679,11 +679,23 @@ class User(AbstractUser, BaseUser):
         return None
     # endregion
 
-
 def init(context: 'Context') -> Iterable[Awaitable['User']]:
     global config
     config = context.config
     User.bridge = context.bridge
+    concurrency = config['telegram.connection.concurrent_connections_startup']
+    semaphore = None
+    if concurrency > 0:
+        semaphore = asyncio.Semaphore(concurrency)
 
-    return (User.from_db(db_user).try_ensure_started()
+    async def sem_task(task):
+        async with semaphore:
+            return await task
+
+    tasks = (User.from_db(db_user).try_ensure_started()
             for db_user in DBUser.all_with_tgid())
+
+    if semaphore:
+        return asyncio.gather(*(sem_task(task) for task in tasks))
+
+    return asyncio.gather(*tasks)

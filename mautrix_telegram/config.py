@@ -213,6 +213,7 @@ class Config(BaseBridgeConfig):
         copy("telegram.connection.flood_sleep_threshold")
         copy("telegram.connection.request_retries")
         copy("telegram.connection.block_startup")
+        copy("telegram.connection.concurrent_connections_startup")
 
         copy("telegram.device_info.device_model")
         copy("telegram.device_info.system_version")
