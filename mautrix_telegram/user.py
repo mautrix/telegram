@@ -13,6 +13,7 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
+from asyncio.futures import Future
 from typing import (Awaitable, Dict, List, Iterable, NamedTuple, Optional, Tuple, Any, cast,
                     TYPE_CHECKING)
 from datetime import datetime, timezone
@@ -679,23 +680,31 @@ class User(AbstractUser, BaseUser):
         return None
     # endregion
 
-def init(context: 'Context') -> Iterable[Awaitable['User']]:
+def init(context: 'Context') -> Future:
     global config
     config = context.config
     User.bridge = context.bridge
-    concurrency = config['telegram.connection.concurrent_connections_startup']
+    concurrency = config["telegram.connection.concurrent_connections_startup"]
     semaphore = None
+    block_startup = config["telegram.connection.block_startup"]
+
     if concurrency > 0:
         semaphore = asyncio.Semaphore(concurrency)
 
-    async def sem_task(task):
+    async def sem_task(task, index):
         async with semaphore:
+            print(f"sem_task: ${index}")
             return await task
 
     tasks = (User.from_db(db_user).try_ensure_started()
             for db_user in DBUser.all_with_tgid())
-
+    future = None
     if semaphore:
-        return asyncio.gather(*(sem_task(task) for task in tasks))
-
-    return asyncio.gather(*tasks)
+        future = asyncio.gather(*(sem_task(tasks[i], i) for i in range(0, len(tasks))))
+    else:
+        future = asyncio.gather(*tasks)
+    
+    if block_startup:
+        return future
+    else:
+        asyncio.create_task(future)
