@@ -684,11 +684,11 @@ def init(context: 'Context') -> Future:
     global config
     config = context.config
     User.bridge = context.bridge
-    concurrency = config["telegram.connection.concurrent_connections_startup"]
+    concurrency = config.get("telegram.connection.concurrent_connections_startup", 0)
     semaphore = None
-    block_startup = config["telegram.connection.block_startup"]
+    block_startup = config.get("telegram.connection.block_startup", True)
 
-    if concurrency > 0:
+    if concurrency:
         semaphore = asyncio.Semaphore(concurrency)
 
     async def sem_task(task, index):
