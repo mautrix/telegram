@@ -54,6 +54,7 @@ SearchResult = NamedTuple('SearchResult', puppet='pu.Puppet', similarity=int)
 
 METRIC_LOGGED_IN = Gauge('bridge_logged_in', 'Users logged into bridge')
 METRIC_CONNECTED = Gauge('bridge_connected', 'Users connected to Telegram')
+METRIC_CONNECTING = Gauge('bridge_connecting', 'Users connecting to Telegram')
 
 BridgeState.human_readable_errors.update({
     "tg-not-connected": "Your Telegram connection failed",
@@ -204,7 +205,11 @@ class User(AbstractUser, BaseUser):
         if not self.puppet_whitelisted or self.connected:
             return self
         async with self._ensure_started_lock:
-            return cast(User, await super().ensure_started(even_if_no_session))
+            try:
+                METRIC_CONNECTING.inc()
+                return cast(User, await super().ensure_started(even_if_no_session))
+            finally:
+                METRIC_CONNECTING.dec()
 
     async def start(self, delete_unless_authenticated: bool = False) -> 'User':
         try:
@@ -674,8 +679,7 @@ class User(AbstractUser, BaseUser):
         return None
     # endregion
 
-
-def init(context: 'Context') -> Iterable[Awaitable['User']]:
+def init(context: 'Context') -> Future:
     global config
     config = context.config
     User.bridge = context.bridge

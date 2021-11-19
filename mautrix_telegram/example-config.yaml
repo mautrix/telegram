@@ -505,6 +505,9 @@ telegram:
         # is not recommended, since some requests can always trigger a call fail (such as searching
         # for messages).
         request_retries: 5
+        # How many concurrent connections should be handled on startup. Set to 0 to allow unlimited connections
+        # Defualts to 0
+        concurrent_connections_startup: 0
 
     # Device info sent to Telegram.
     device_info:
