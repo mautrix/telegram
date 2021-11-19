@@ -98,14 +98,7 @@ class TelegramBridge(Bridge):
         init_formatter(context)
         init_portal(context)
         self.add_startup_actions(init_puppet(context))
-        init_users_task = init_user(context)
-
-        if self.config["telegram.connection.block_startup"] is not False:
-            self.log.info("Connecting users to Telegram before starting up")
-            self.add_startup_actions(init_users_task)
-        else:
-            self.log.info("Connecting users to Telegram in the background")
-            self.loop.create_task(init_users_task)
+        self.add_startup_actions(init_user(context))
 
         if self.bot:
             self.add_startup_actions(self.bot.start())
