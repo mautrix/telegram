@@ -679,7 +679,7 @@ class User(AbstractUser, BaseUser):
         return None
     # endregion
 
-def init(context: 'Context') -> Future:
+def init(context: 'Context') -> Iterable[Awaitable['User']]:
     global config
     config = context.config
     User.bridge = context.bridge
