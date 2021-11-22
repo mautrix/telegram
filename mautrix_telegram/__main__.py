@@ -101,7 +101,6 @@ class TelegramBridge(Bridge):
         concurrency = self.config['telegram.connection.concurrent_connections_startup']
         if concurrency:
             semaphore = asyncio.Semaphore(concurrency)
-            await semaphore.acquire()
 
         async def sem_task(task):
             if not semaphore:
