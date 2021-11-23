@@ -47,6 +47,7 @@ except ImportError:
 ACTIVE_USER_METRICS_INTERVAL_S = 15 * 60 # 15 minutes
 METRIC_ACTIVE_PUPPETS = Gauge('bridge_active_puppets_total', 'Number of active Telegram users bridged into Matrix')
 METRIC_BLOCKING = Gauge('bridge_blocked', 'Is the bridge currently blocking messages')
+METRIC_AS_CONNECTIONS = Gauge('bridge_as_connections', 'Number of active/available TCP connections in Appservice\'s pool', ['status'])
 
 class TelegramBridge(Bridge):
     module = "mautrix_telegram"
@@ -108,6 +109,9 @@ class TelegramBridge(Bridge):
         # Explicitly not a startup_action, as startup_actions block startup
         if self.config['bridge.limits.enable_activity_tracking'] is not False:
             self.periodic_sync_task = self.loop.create_task(self._loop_active_puppet_metric())
+
+        if self.config['metrics.enabled']:
+            self.as_connection_metric_task = self.loop.create_task(self._loop_check_as_connection_pool())
         
     async def start(self) -> None:
         await super().start()
@@ -189,6 +193,23 @@ class TelegramBridge(Bridge):
                 return
             except Exception as e:
                 self.log.exception(f"Error while checking: {e}")
+
+    async def _loop_check_as_connection_pool(self) -> None:
+        while True:
+            try:
+                # a horrible reach into Appservice's internal API
+                connector = self.az._http_session.connector
+                limit = connector.limit
+                # a horrible, horrible reach into asyncio.TCPConnector's internal API
+                # inspired by its (also private) _available_connections()
+                active = len(connector._acquired)
+
+                METRIC_AS_CONNECTIONS.labels('active').set(active)
+                METRIC_AS_CONNECTIONS.labels('limit').set(limit)
+            except Exception as e:
+                self.log.exception(f"Error while checking AS connection pool stats: {e}")
+
+            await asyncio.sleep(1)
     
     async def manhole_global_namespace(self, user_id: UserID) -> Dict[str, Any]:
         return {
