@@ -34,8 +34,8 @@ from telethon.errors import (AuthKeyDuplicatedError, UserDeactivatedError, UserD
 from mautrix.client import Client
 from mautrix.errors import MatrixRequestError, MNotFound
 from mautrix.types import UserID, RoomID, PushRuleScope, PushRuleKind, PushActionType, RoomTagInfo
-from mautrix.bridge import BaseUser, BridgeState
-from mautrix.util.bridge_state import BridgeStateEvent
+from mautrix.bridge import BaseUser
+from mautrix.util.bridge_state import BridgeState, BridgeStateEvent
 from mautrix.util.logging import TraceLogger
 from mautrix.util.opt_prometheus import Gauge
 
