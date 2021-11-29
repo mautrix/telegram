@@ -616,7 +616,7 @@ class PortalTelegram(BasePortal, ABC):
 
     async def handle_telegram_message(self, source: 'AbstractUser', sender: p.Puppet,
                                       evt: Message) -> None:
-        latest_event_timestamp = time()
+        self.latest_event_timestamp = time()
 
         if self.bridge.is_blocked:
             self.log.debug(f"Bridge is blocked, dropping telegram message {evt.id}")
