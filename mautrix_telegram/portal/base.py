@@ -68,7 +68,7 @@ class BasePortal(MautrixBasePortal, ABC):
 
     # Config cache
     filter_mode: str = None
-    filter_list: List[str] = None
+    filter_list: List[int] = None
 
     max_initial_member_sync: int = -1
     sync_channel_members: bool = True
