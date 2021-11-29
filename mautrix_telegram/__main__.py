@@ -168,9 +168,9 @@ class TelegramBridge(Bridge):
     def update_bridge_readiness(self):
         for portal in Portal.all():
             if portal.latest_event_timestamp and portal.latest_event_timestamp < time() - PORTAL_INACTIVE_THRESHOLD:
-                self.az.ready = False
+                self.az.live = False
                 return
-        self.az.ready = True
+        self.az.live = True
 
     async def _update_active_puppet_metric(self) -> None:
         active_users = UserActivity.get_active_count(
