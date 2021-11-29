@@ -15,6 +15,7 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from typing import Dict, Any
 import asyncio
+from time import time
 
 from telethon import __version__ as __telethon_version__
 from alchemysession import AlchemySessionContainer
@@ -43,6 +44,8 @@ try:
     import prometheus_client as prometheus
 except ImportError:
     prometheus = None
+
+PORTAL_INACTIVE_THRESHOLD = 2 * 60 # 2 minutes
 
 ACTIVE_USER_METRICS_INTERVAL_S = 15 * 60 # 15 minutes
 METRIC_ACTIVE_PUPPETS = Gauge('bridge_active_puppets_total', 'Number of active Telegram users bridged into Matrix')
@@ -108,7 +111,7 @@ class TelegramBridge(Bridge):
         # Explicitly not a startup_action, as startup_actions block startup
         if self.config['bridge.limits.enable_activity_tracking'] is not False:
             self.periodic_sync_task = self.loop.create_task(self._loop_active_puppet_metric())
-        
+
     async def start(self) -> None:
         await super().start()
 
@@ -162,6 +165,13 @@ class TelegramBridge(Bridge):
     async def count_logged_in_users(self) -> int:
         return len([user for user in User.by_tgid.values() if user.tgid])
 
+    def update_bridge_readiness(self):
+        for portal in Portal.all():
+            if portal.latest_event_timestamp and portal.latest_event_timestamp < time() - PORTAL_INACTIVE_THRESHOLD:
+                self.az.ready = False
+                return
+        self.az.ready = True
+
     async def _update_active_puppet_metric(self) -> None:
         active_users = UserActivity.get_active_count(
             self.config['bridge.limits.min_puppet_activity_days'],
@@ -189,7 +199,7 @@ class TelegramBridge(Bridge):
                 return
             except Exception as e:
                 self.log.exception(f"Error while checking: {e}")
-    
+
     async def manhole_global_namespace(self, user_id: UserID) -> Dict[str, Any]:
         return {
             **await super().manhole_global_namespace(user_id),

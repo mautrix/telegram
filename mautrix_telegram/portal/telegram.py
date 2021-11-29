@@ -15,6 +15,7 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from typing import Awaitable, Dict, List, Optional, Tuple, Union, NamedTuple, TYPE_CHECKING
 from abc import ABC
+from time import time
 import random
 import mimetypes
 import codecs
@@ -65,6 +66,8 @@ config: Optional['Config'] = None
 
 
 class PortalTelegram(BasePortal, ABC):
+    latest_event_timestamp: float = time()
+
     async def handle_telegram_typing(self, user: p.Puppet, update: UpdateTyping) -> None:
         if user.is_real_user:
             # Ignore typing notifications from double puppeted users to avoid echoing
@@ -613,6 +616,8 @@ class PortalTelegram(BasePortal, ABC):
 
     async def handle_telegram_message(self, source: 'AbstractUser', sender: p.Puppet,
                                       evt: Message) -> None:
+        latest_event_timestamp = time()
+
         if self.bridge.is_blocked:
             self.log.debug(f"Bridge is blocked, dropping telegram message {evt.id}")
             return
