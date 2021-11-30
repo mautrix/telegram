@@ -510,21 +510,20 @@ class PortalMatrix(BasePortal, ABC):
     async def handle_matrix_deletion(self, deleter: 'u.User', event_id: EventID,
                                      redaction_event_id: EventID) -> None:
         try:
-            await self._handle_matrix_deletion(deleter, event_id, redaction_event_id)
+            await self._handle_matrix_deletion(deleter, event_id)
         except Exception as e:
             self.log.debug(str(e))
-            await self._send_bridge_error(deleter, e, event_id, EventType.ROOM_REDACTION)
+            await self._send_bridge_error(deleter, e, redaction_event_id, EventType.ROOM_REDACTION)
         else:
             deleter.send_remote_checkpoint(
                 MessageSendCheckpointStatus.SUCCESS,
-                event_id,
+                redaction_event_id,
                 self.mxid,
                 EventType.ROOM_REDACTION,
             )
             await self._send_delivery_receipt(redaction_event_id)
 
-    async def _handle_matrix_deletion(self, deleter: 'u.User', event_id: EventID,
-                                     redaction_event_id: EventID) -> None:
+    async def _handle_matrix_deletion(self, deleter: 'u.User', event_id: EventID) -> None:
         real_deleter = deleter if not await deleter.needs_relaybot(self) else self.bot
         space = self.tgid if self.peer_type == "channel" else real_deleter.tgid
         message = DBMessage.get_by_mxid(event_id, self.mxid, space)
