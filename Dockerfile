@@ -1,4 +1,4 @@
-FROM dock.mau.dev/tulir/lottieconverter:alpine-3.14
+FROM dock.mau.dev/tulir/lottieconverter:alpine-3.15
 
 ARG TARGETARCH=amd64
 
@@ -54,8 +54,7 @@ RUN apk add --virtual .build-deps \
       libffi-dev \
       build-base \
  && sed -Ei 's/psycopg2-binary.+//' optional-requirements.txt \
- # TODO: unpin Pillow here after it's updated in Alpine
- && pip3 install -r requirements.txt -r optional-requirements.txt 'pillow==8.2' \
+ && pip3 install -r requirements.txt -r optional-requirements.txt \
  && apk del .build-deps
 
 COPY . /opt/mautrix-telegram
