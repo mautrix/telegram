@@ -209,7 +209,7 @@ class TelegramBridge(Bridge):
             except Exception as e:
                 self.log.exception(f"Error while checking AS connection pool stats: {e}")
 
-            await asyncio.sleep(1)
+            await asyncio.sleep(15)
     
     async def manhole_global_namespace(self, user_id: UserID) -> Dict[str, Any]:
         return {
