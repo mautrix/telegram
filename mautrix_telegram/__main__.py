@@ -100,8 +100,6 @@ class TelegramBridge(Bridge):
         init_portal(self.context)
         self.add_startup_actions(init_puppet(self.context))
 
-        if self.bot:
-            self.add_startup_actions(self.bot.start())
         if self.config["bridge.resend_bridge_info"]:
             self.add_startup_actions(self.resend_bridge_info())
 
@@ -111,6 +109,12 @@ class TelegramBridge(Bridge):
         
     async def start(self) -> None:
         await super().start()
+
+        if self.bot:
+            try:
+                await self.bot.start()
+            except Exception as e:
+                self.log.error(f"Failed to start bot: {e}")
 
         semaphore = None
         concurrency = self.config['telegram.connection.concurrent_connections_startup']
