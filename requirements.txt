@@ -6,9 +6,7 @@ commonmark>=0.8,<0.10
 aiohttp>=3,<4
 yarl>=1,<2
 mautrix>=0.11.4,<0.13
-#telethon>=1.22,<1.24
-# Temporary patch for 64-bit IDs until upstream telethon 2.0 is ready
-tulir-telethon==1.24.0a2
+telethon>=1.24,<1.25
 telethon-session-sqlalchemy>=0.2.14,<0.3
 # Temporarily always depend on aiosqlite to prevent breaking old installs
 # Will be removed in v0.12 (after which you need to choose the [sqlite] optional dependency)
