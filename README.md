@@ -6,6 +6,9 @@ The Element fork includes the following changes:
  - Allow disabling user status updates from Telegram side https://github.com/vector-im/mautrix-telegram/pull/9
  - Add `psycopg2`, `uvloop` to requirements.txt, install_requires https://github.com/vector-im/mautrix-telegram/pull/10/files
  - Add metrics about Matrix API calls https://github.com/mautrix/python/pull/68
+ - Don't block connections on startup https://github.com/vector-im/mautrix-telegram/pull/20
+ - Add metrics for Appservice's Connection Pool stats https://github.com/vector-im/mautrix-telegram/pull/22
+ - Don't require bot startup for bridge startup https://github.com/vector-im/mautrix-telegram/pull/24
 
 Some changes that appear here may get upstreamed to https://github.com/mautrix/telegram, and will be removed from
 the list when they appear in both versions.
