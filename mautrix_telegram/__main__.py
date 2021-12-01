@@ -16,6 +16,7 @@
 from typing import Dict, Any
 import asyncio
 
+import telethon
 from telethon import __version__ as __telethon_version__
 from alchemysession import AlchemySessionContainer
 
@@ -117,7 +118,7 @@ class TelegramBridge(Bridge):
         if self.bot:
             try:
                 await self.bot.start()
-            except Exception as e:
+            except telethon.errors.RPCError as e:
                 self.log.error(f"Failed to start bot: {e}")
 
         semaphore = None
