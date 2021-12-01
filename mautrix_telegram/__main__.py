@@ -16,6 +16,7 @@
 from typing import Dict, Any
 import asyncio
 
+import telethon
 from telethon import __version__ as __telethon_version__
 from alchemysession import AlchemySessionContainer
 
@@ -48,6 +49,7 @@ ACTIVE_USER_METRICS_INTERVAL_S = 15 * 60 # 15 minutes
 METRIC_ACTIVE_PUPPETS = Gauge('bridge_active_puppets_total', 'Number of active Telegram users bridged into Matrix')
 METRIC_BLOCKING = Gauge('bridge_blocked', 'Is the bridge currently blocking messages')
 METRIC_AS_CONNECTIONS = Gauge('bridge_as_connections', 'Number of active/available TCP connections in Appservice\'s pool', ['status'])
+METRIC_BOT_STARTUP_OK = Gauge('bridge_bot_startup_ok', 'Whether or not the configured Telegram started up correctly')
 
 class TelegramBridge(Bridge):
     module = "mautrix_telegram"
@@ -117,8 +119,10 @@ class TelegramBridge(Bridge):
         if self.bot:
             try:
                 await self.bot.start()
-            except Exception as e:
+                METRIC_BOT_STARTUP_OK.set(1)
+            except telethon.errors.RPCError as e:
                 self.log.error(f"Failed to start bot: {e}")
+                METRIC_BOT_STARTUP_OK.set(0)
 
         semaphore = None
         concurrency = self.config['telegram.connection.concurrent_connections_startup']
