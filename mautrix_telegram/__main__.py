@@ -249,9 +249,6 @@ class TelegramBridge(Bridge):
             "Puppet": Puppet,
         }
 
-    def update_bridge_readiness(self):
-        time()
-
     @property
     def manhole_banner_program_version(self) -> str:
         return f"{super().manhole_banner_program_version} and Telethon {__telethon_version__}"
