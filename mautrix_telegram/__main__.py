@@ -73,6 +73,7 @@ class TelegramBridge(Bridge):
     is_blocked: bool = False
 
     periodic_sync_task: asyncio.Task = None
+    as_bridge_liveness_task: asyncio.Task = None
 
     latest_telegram_update_timestamp: float
 
