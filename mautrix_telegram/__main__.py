@@ -46,8 +46,6 @@ try:
 except ImportError:
     prometheus = None
 
-PORTAL_INACTIVE_THRESHOLD = 2 * 60 # 2 minutes
-
 ACTIVE_USER_METRICS_INTERVAL_S = 15 * 60 # 15 minutes
 METRIC_ACTIVE_PUPPETS = Gauge('bridge_active_puppets_total', 'Number of active Telegram users bridged into Matrix')
 METRIC_BLOCKING = Gauge('bridge_blocked', 'Is the bridge currently blocking messages')
