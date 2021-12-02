@@ -73,6 +73,8 @@ class TelegramBridge(Bridge):
 
     periodic_sync_task: asyncio.Task = None
 
+    latest_telegram_update_timestamp: float
+
     def prepare_db(self) -> None:
         super().prepare_db()
         init_db(self.db)
@@ -165,12 +167,13 @@ class TelegramBridge(Bridge):
     async def count_logged_in_users(self) -> int:
         return len([user for user in User.by_tgid.values() if user.tgid])
 
-    def update_bridge_readiness(self):
-        for portal in Portal.all():
-            if portal.latest_event_timestamp and portal.latest_event_timestamp < time() - PORTAL_INACTIVE_THRESHOLD:
-                self.az.live = False
-                return
+    def update_bridge_liveness(self):
+        self.latest_telegram_update_timestamp = time()
         self.az.live = True
+
+    def check_bridge_liveness(self):
+        if self.latest_telegram_update_timestamp and self.latest_telegram_update_timestamp < time() - PORTAL_INACTIVE_THRESHOLD:
+            self.az.live = False
 
     async def _update_active_puppet_metric(self) -> None:
         active_users = UserActivity.get_active_count(
@@ -207,6 +210,9 @@ class TelegramBridge(Bridge):
             "Portal": Portal,
             "Puppet": Puppet,
         }
+
+    def update_bridge_readiness(self):
+        time()
 
     @property
     def manhole_banner_program_version(self) -> str:
