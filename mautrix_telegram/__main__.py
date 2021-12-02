@@ -118,7 +118,7 @@ class TelegramBridge(Bridge):
         if self.config['metrics.enabled']:
             self.as_connection_metric_task = self.loop.create_task(self._loop_check_as_connection_pool())
 
-        if self.config['telegram.liveness_timeout']:
+        if self.config['telegram.liveness_timeout'] and self.config['telegram.liveness_timeout'] >= 1:
             self.loop.create_task(self._loop_check_bridge_liveness())
 
     async def start(self) -> None:
@@ -235,7 +235,7 @@ class TelegramBridge(Bridge):
 
     async def _loop_check_bridge_liveness(self) -> None:
         while True:
-            if self.latest_telegram_update_timestamp and self.latest_telegram_update_timestamp < time() - PORTAL_INACTIVE_THRESHOLD:
+            if self.latest_telegram_update_timestamp and self.latest_telegram_update_timestamp < time() - self.config['telegram.liveness_timeout']:
                 self.az.live = False
 
             await asyncio.sleep(15)
