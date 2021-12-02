@@ -119,7 +119,7 @@ class TelegramBridge(Bridge):
             self.as_connection_metric_task = self.loop.create_task(self._loop_check_as_connection_pool())
 
         if self.config['telegram.liveness_timeout'] and self.config['telegram.liveness_timeout'] >= 1:
-            self.loop.create_task(self._loop_check_bridge_liveness())
+            self.as_bridge_liveness_task = self.loop.create_task(self._loop_check_bridge_liveness())
 
     async def start(self) -> None:
         await super().start()
@@ -157,6 +157,8 @@ class TelegramBridge(Bridge):
     def prepare_stop(self) -> None:
         if self.periodic_sync_task:
             self.periodic_sync_task.cancel()
+        if self.as_bridge_liveness_task:
+            self.as_bridge_liveness_task.cancel()
         for puppet in Puppet.by_custom_mxid.values():
             puppet.stop()
         self.shutdown_actions = (user.stop() for user in User.by_tgid.values())
