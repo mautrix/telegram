@@ -17,6 +17,7 @@ from typing import Dict, Any
 import asyncio
 from time import time
 
+import telethon
 from telethon import __version__ as __telethon_version__
 from alchemysession import AlchemySessionContainer
 
@@ -50,6 +51,8 @@ PORTAL_INACTIVE_THRESHOLD = 2 * 60 # 2 minutes
 ACTIVE_USER_METRICS_INTERVAL_S = 15 * 60 # 15 minutes
 METRIC_ACTIVE_PUPPETS = Gauge('bridge_active_puppets_total', 'Number of active Telegram users bridged into Matrix')
 METRIC_BLOCKING = Gauge('bridge_blocked', 'Is the bridge currently blocking messages')
+METRIC_AS_CONNECTIONS = Gauge('bridge_as_connections', 'Number of active/available TCP connections in Appservice\'s pool', ['status'])
+METRIC_BOT_STARTUP_OK = Gauge('bridge_bot_startup_ok', 'Whether or not the configured Telegram started up correctly')
 
 class TelegramBridge(Bridge):
     module = "mautrix_telegram"
@@ -105,8 +108,6 @@ class TelegramBridge(Bridge):
         init_portal(self.context)
         self.add_startup_actions(init_puppet(self.context))
 
-        if self.bot:
-            self.add_startup_actions(self.bot.start())
         if self.config["bridge.resend_bridge_info"]:
             self.add_startup_actions(self.resend_bridge_info())
 
@@ -114,8 +115,19 @@ class TelegramBridge(Bridge):
         if self.config['bridge.limits.enable_activity_tracking'] is not False:
             self.periodic_sync_task = self.loop.create_task(self._loop_active_puppet_metric())
 
+        if self.config['metrics.enabled']:
+            self.as_connection_metric_task = self.loop.create_task(self._loop_check_as_connection_pool())
+
     async def start(self) -> None:
         await super().start()
+
+        if self.bot:
+            try:
+                await self.bot.start()
+                METRIC_BOT_STARTUP_OK.set(1)
+            except telethon.errors.RPCError as e:
+                self.log.error(f"Failed to start bot: {e}")
+                METRIC_BOT_STARTUP_OK.set(0)
 
         semaphore = None
         concurrency = self.config['telegram.connection.concurrent_connections_startup']
@@ -202,6 +214,23 @@ class TelegramBridge(Bridge):
                 return
             except Exception as e:
                 self.log.exception(f"Error while checking: {e}")
+
+    async def _loop_check_as_connection_pool(self) -> None:
+        while True:
+            try:
+                # a horrible reach into Appservice's internal API
+                connector = self.az._http_session.connector
+                limit = connector.limit
+                # a horrible, horrible reach into asyncio.TCPConnector's internal API
+                # inspired by its (also private) _available_connections()
+                active = len(connector._acquired)
+
+                METRIC_AS_CONNECTIONS.labels('active').set(active)
+                METRIC_AS_CONNECTIONS.labels('limit').set(limit)
+            except Exception as e:
+                self.log.exception(f"Error while checking AS connection pool stats: {e}")
+
+            await asyncio.sleep(15)
 
     async def manhole_global_namespace(self, user_id: UserID) -> Dict[str, Any]:
         return {
