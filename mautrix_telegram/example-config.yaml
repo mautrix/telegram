@@ -546,6 +546,12 @@ telegram:
         username: ""
         password: ""
 
+    # The timeout in seconds after which the bridge reports an error on the /_matrix/mau/live endpoint.
+    # If no events are being received from Telegram this enables a management tool like Kubernetes to
+    # automatically restart the bridge.
+    # Negative values, 0 and no value will make the endpoint always report HTTP 200 after startup.
+    liveness_timeout: 0
+
 # Python logging configuration.
 #
 # See section 16.7.2 of the Python documentation for more info:

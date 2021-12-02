@@ -118,6 +118,9 @@ class TelegramBridge(Bridge):
         if self.config['metrics.enabled']:
             self.as_connection_metric_task = self.loop.create_task(self._loop_check_as_connection_pool())
 
+        if self.config['telegram.liveness_timeout']:
+            self.loop.create_task(self._loop_check_bridge_liveness())
+
     async def start(self) -> None:
         await super().start()
 
@@ -179,13 +182,11 @@ class TelegramBridge(Bridge):
     async def count_logged_in_users(self) -> int:
         return len([user for user in User.by_tgid.values() if user.tgid])
 
-    def update_bridge_liveness(self):
+    # The caller confirms that at the time of calling this, the bridge is receiving updates from Telegram.
+    # If this function is not called regularly, the bridge may be configured to report this on the /live metric endpoint.
+    def confirm_bridge_liveness(self):
         self.latest_telegram_update_timestamp = time()
         self.az.live = True
-
-    def check_bridge_liveness(self):
-        if self.latest_telegram_update_timestamp and self.latest_telegram_update_timestamp < time() - PORTAL_INACTIVE_THRESHOLD:
-            self.az.live = False
 
     async def _update_active_puppet_metric(self) -> None:
         active_users = UserActivity.get_active_count(
@@ -229,6 +230,13 @@ class TelegramBridge(Bridge):
                 METRIC_AS_CONNECTIONS.labels('limit').set(limit)
             except Exception as e:
                 self.log.exception(f"Error while checking AS connection pool stats: {e}")
+
+            await asyncio.sleep(15)
+
+    async def _loop_check_bridge_liveness(self) -> None:
+        while True:
+            if self.latest_telegram_update_timestamp and self.latest_telegram_update_timestamp < time() - PORTAL_INACTIVE_THRESHOLD:
+                self.az.live = False
 
             await asyncio.sleep(15)
 
