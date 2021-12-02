@@ -73,6 +73,8 @@ class TelegramBridge(Bridge):
 
     periodic_sync_task: asyncio.Task = None
 
+    as_connection_metric_task: asyncio.Task = None
+
     def prepare_db(self) -> None:
         super().prepare_db()
         init_db(self.db)
