@@ -201,7 +201,7 @@ class AbstractUser(ABC):
             self.log.exception("Failed to handle Telegram update")
             UPDATE_ERRORS.labels(update_type=update_type).inc()
         UPDATE_TIME.labels(update_type=update_type).observe(time.time() - start_time)
-        self.brige.confirm_bridge_liveness()
+        self.bridge.confirm_bridge_liveness()
 
     @property
     @abstractmethod
