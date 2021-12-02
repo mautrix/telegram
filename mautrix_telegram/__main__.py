@@ -13,8 +13,8 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
+import asyncio
 from typing import Dict, Any
-
 from telethon import __version__ as __telethon_version__
 from alchemysession import AlchemySessionContainer
 
@@ -55,6 +55,7 @@ class TelegramBridge(Bridge):
     matrix_class = MatrixHandler
 
     config: Config
+    context: Context
     session_container: AlchemySessionContainer
     bot: Bot
 
@@ -65,33 +66,49 @@ class TelegramBridge(Bridge):
             engine=self.db, table_base=Base, session=False,
             table_prefix="telethon_", manage_tables=False)
 
-    def _prepare_website(self, context: Context) -> None:
+    def _prepare_website(self) -> None:
         if self.config["appservice.public.enabled"]:
             public_website = PublicBridgeWebsite(self.loop)
             self.az.app.add_subapp(self.config["appservice.public.prefix"], public_website.app)
-            context.public_website = public_website
+            self.context.public_website = public_website
 
         if self.config["appservice.provisioning.enabled"]:
-            provisioning_api = ProvisioningAPI(context)
+            provisioning_api = ProvisioningAPI(self.context)
             self.az.app.add_subapp(self.config["appservice.provisioning.prefix"],
                                    provisioning_api.app)
-            context.provisioning_api = provisioning_api
+            self.context.provisioning_api = provisioning_api
 
     def prepare_bridge(self) -> None:
         self.bot = init_bot(self.config)
-        context = Context(self.az, self.config, self.loop, self.session_container, self, self.bot)
-        self._prepare_website(context)
-        self.matrix = context.mx = MatrixHandler(context)
+        self.context = Context(self.az, self.config, self.loop, self.session_container, self, self.bot)
+        self._prepare_website()
+        self.matrix = self.context.mx = MatrixHandler(self.context)
 
-        init_abstract_user(context)
-        init_formatter(context)
-        init_portal(context)
-        self.add_startup_actions(init_puppet(context))
-        self.add_startup_actions(init_user(context))
+        init_abstract_user(self.context)
+        init_formatter(self.context)
+        init_portal(self.context)
+        self.add_startup_actions(init_puppet(self.context))
+
         if self.bot:
             self.add_startup_actions(self.bot.start())
         if self.config["bridge.resend_bridge_info"]:
             self.add_startup_actions(self.resend_bridge_info())
+        
+    async def start(self) -> None:
+        await super().start()
+
+        semaphore = None
+        concurrency = self.config['telegram.connection.concurrent_connections_startup']
+        if concurrency:
+            semaphore = asyncio.Semaphore(concurrency)
+
+        async def sem_task(task):
+            if not semaphore:
+                return await task
+            async with semaphore:
+                return await task
+
+        await asyncio.gather(*(sem_task(task) for task in init_user(self.context)))
 
     async def resend_bridge_info(self) -> None:
         self.config["bridge.resend_bridge_info"] = False
