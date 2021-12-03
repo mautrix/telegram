@@ -116,14 +116,14 @@ class TelegramBridge(Bridge):
         if self.config['bridge.limits.enable_activity_tracking'] is not False:
             self.periodic_sync_task = self.loop.create_task(self._loop_active_puppet_metric())
 
-        if self.config['metrics.enabled']:
-            self.as_connection_metric_task = self.loop.create_task(self._loop_check_as_connection_pool())
-
         if self.config.get('telegram.liveness_timeout', 0) >= 1:
             self.as_bridge_liveness_task = self.loop.create_task(self._loop_check_bridge_liveness())
 
     async def start(self) -> None:
         await super().start()
+
+        if self.config['metrics.enabled']:
+            self.as_connection_metric_task = self.loop.create_task(self._loop_check_as_connection_pool())
 
         if self.bot:
             try:
@@ -225,7 +225,7 @@ class TelegramBridge(Bridge):
         while True:
             try:
                 # a horrible reach into Appservice's internal API
-                connector = self.az._http_session.connector
+                connector = self.az.http_session().connector
                 limit = connector.limit
                 # a horrible, horrible reach into asyncio.TCPConnector's internal API
                 # inspired by its (also private) _available_connections()
