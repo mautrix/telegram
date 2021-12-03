@@ -77,6 +77,8 @@ class TelegramBridge(Bridge):
 
     latest_telegram_update_timestamp: float
 
+    as_connection_metric_task: asyncio.Task = None
+
     def prepare_db(self) -> None:
         super().prepare_db()
         init_db(self.db)
@@ -156,6 +158,8 @@ class TelegramBridge(Bridge):
     def prepare_stop(self) -> None:
         if self.periodic_sync_task:
             self.periodic_sync_task.cancel()
+        if self.as_connection_metric_task:
+            self.as_connection_metric_task.cancel()
         if self.as_bridge_liveness_task:
             self.as_bridge_liveness_task.cancel()
         for puppet in Puppet.by_custom_mxid.values():
