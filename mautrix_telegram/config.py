@@ -232,6 +232,8 @@ class Config(BaseBridgeConfig):
         copy("telegram.proxy.username")
         copy("telegram.proxy.password")
 
+        copy("telegram.liveness_timeout")
+
     def _get_permissions(self, key: str) -> Permissions:
         level = self["bridge.permissions"].get(key, "")
         admin = level == "admin"
