@@ -224,7 +224,6 @@ class TelegramBridge(Bridge):
     async def _loop_check_as_connection_pool(self) -> None:
         while True:
             try:
-                # a horrible reach into Appservice's internal API
                 connector = self.az.http_session().connector
                 limit = connector.limit
                 # a horrible, horrible reach into asyncio.TCPConnector's internal API
