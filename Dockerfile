@@ -1,3 +1,4 @@
+# Upstream uses 3.15, but that breaks our build.
 FROM dock.mau.dev/tulir/lottieconverter:alpine-3.14
 
 ARG TARGETARCH=amd64

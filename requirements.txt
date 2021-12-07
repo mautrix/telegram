@@ -17,7 +17,6 @@ commonmark==0.9.1
 constantly==15.1.0
 contextlib2==0.6.0
 cryptg==0.2.post4
-cryptography==3.3.2
 decorator==4.4.2
 distlib==0.3.1
 distro==1.5.0
@@ -39,11 +38,10 @@ olefile==0.46
 ordered-set==4.0.2
 packaging==20.9
 pep517==0.10.0
-Pillow==8.2.0
 proglog==0.1.9
 progress==1.5
 prometheus-client==0.11.0
-psycopg2==2.8.6
+# psycopg2==2.8.6
 pyaes==1.6.1
 pyasn1-modules==0.2.8
 pyasn1==0.4.8
@@ -66,7 +64,7 @@ service-identity==18.1.0
 six==1.15.0
 SQLAlchemy==1.3.21
 telethon-session-sqlalchemy==0.2.16
-Telethon==1.23.0
+Telethon==1.24.0
 toml==0.10.2
 tqdm==4.61.1
 Twisted==21.2.0

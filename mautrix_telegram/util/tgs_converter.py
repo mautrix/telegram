@@ -64,10 +64,10 @@ if lottieconverter:
             return ConvertedSticker("application/gzip", file)
 
 
-    async def tgs_to_gif(file: bytes, width: int, height: int, background: str = "202020",
+    async def tgs_to_gif(file: bytes, width: int, height: int, fps: int = 25,
                          **_: Any) -> ConvertedSticker:
         proc = await asyncio.create_subprocess_exec(lottieconverter, "-", "-", "gif",
-                                                    f"{width}x{height}", f"0x{background}",
+                                                    f"{width}x{height}", str(fps),
                                                     stdout=asyncio.subprocess.PIPE,
                                                     stdin=asyncio.subprocess.PIPE)
         stdout, stderr = await proc.communicate(file)

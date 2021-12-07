@@ -18,9 +18,9 @@ from typing import Dict, Set, Tuple, Union, Iterable, TYPE_CHECKING
 from mautrix.bridge import BaseMatrixHandler
 from mautrix.types import (Event, EventType, RoomID, UserID, EventID, ReceiptEvent, ReceiptType,
                            ReceiptEventContent, PresenceEvent, PresenceState, TypingEvent,
-                           MessageEvent, StateEvent, RedactionEvent, RoomNameStateEventContent,
+                           StateEvent, RedactionEvent, RoomNameStateEventContent,
                            RoomAvatarStateEventContent, RoomTopicStateEventContent,
-                           MemberStateEventContent, EncryptedEvent, TextMessageEventContent,
+                           MemberStateEventContent, TextMessageEventContent,
                            MessageType)
 from mautrix.errors import MatrixError
 
@@ -122,14 +122,15 @@ class MatrixHandler(BaseMatrixHandler):
             return
         await user.ensure_started()
         portal = po.Portal.get_by_mxid(room_id)
-        if user and await user.has_full_access(allow_bot=True) and portal:
-            await portal.invite_telegram(inviter, user)
+        if user and await user.has_full_access(allow_bot=True):
+            if portal and portal.allow_bridging:
+                await portal.invite_telegram(inviter, user)
 
     async def handle_join(self, room_id: RoomID, user_id: UserID, event_id: EventID) -> None:
         user = await u.User.get_by_mxid(user_id).ensure_started()
 
         portal = po.Portal.get_by_mxid(room_id)
-        if not portal:
+        if not portal or not portal.allow_bridging:
             return
 
         if not user.relaybot_whitelisted:
@@ -152,7 +153,7 @@ class MatrixHandler(BaseMatrixHandler):
     async def handle_leave(self, room_id: RoomID, user_id: UserID, event_id: EventID) -> None:
         self.log.debug(f"{user_id} left {room_id}")
         portal = po.Portal.get_by_mxid(room_id)
-        if not portal:
+        if not portal or not portal.allow_bridging:
             return
 
         user = u.User.get_by_mxid(user_id, create=False)
@@ -166,7 +167,7 @@ class MatrixHandler(BaseMatrixHandler):
         action = "banned" if ban else "kicked"
         self.log.debug(f"{user_id} was {action} from {room_id} by {sender} for {reason}")
         portal = po.Portal.get_by_mxid(room_id)
-        if not portal:
+        if not portal or not portal.allow_bridging:
             return
 
         if user_id == self.az.bot_mxid:
@@ -229,7 +230,7 @@ class MatrixHandler(BaseMatrixHandler):
             return
 
         portal = po.Portal.get_by_mxid(evt.room_id)
-        if not portal:
+        if not portal or not portal.allow_bridging:
             return
 
         await portal.handle_matrix_deletion(sender, evt.redacts, evt.event_id)
@@ -238,7 +239,7 @@ class MatrixHandler(BaseMatrixHandler):
     async def handle_power_levels(evt: StateEvent) -> None:
         portal = po.Portal.get_by_mxid(evt.room_id)
         sender = await u.User.get_by_mxid(evt.sender).ensure_started()
-        if await sender.has_full_access(allow_bot=True) and portal:
+        if await sender.has_full_access(allow_bot=True) and portal and portal.allow_bridging:
             await portal.handle_matrix_power_levels(sender, evt.content.users,
                                                     evt.unsigned.prev_content.users,
                                                     evt.event_id)
@@ -248,7 +249,7 @@ class MatrixHandler(BaseMatrixHandler):
                                content: RoomMetaStateEventContent, event_id: EventID) -> None:
         portal = po.Portal.get_by_mxid(room_id)
         sender = await u.User.get_by_mxid(sender_mxid).ensure_started()
-        if await sender.has_full_access(allow_bot=True) and portal:
+        if await sender.has_full_access(allow_bot=True) and portal and portal.allow_bridging:
             handler, content_type, content_key = {
                 EventType.ROOM_NAME: (portal.handle_matrix_title, RoomNameStateEventContent, "name"),
                 EventType.ROOM_TOPIC: (portal.handle_matrix_about, RoomTopicStateEventContent, "topic"),
@@ -264,7 +265,7 @@ class MatrixHandler(BaseMatrixHandler):
                               event_id: EventID) -> None:
         portal = po.Portal.get_by_mxid(room_id)
         sender = await u.User.get_by_mxid(sender_mxid).ensure_started()
-        if await sender.has_full_access(allow_bot=True) and portal:
+        if await sender.has_full_access(allow_bot=True) and portal and portal.allow_bridging:
             if not new_events:
                 await portal.handle_matrix_unpin_all(sender, event_id)
             else:
@@ -276,7 +277,7 @@ class MatrixHandler(BaseMatrixHandler):
     async def handle_room_upgrade(room_id: RoomID, sender: UserID, new_room_id: RoomID,
                                   event_id: EventID) -> None:
         portal = po.Portal.get_by_mxid(room_id)
-        if portal:
+        if portal and portal.allow_bridging:
             await portal.handle_matrix_upgrade(sender, new_room_id, event_id)
 
     async def handle_member_info_change(self, room_id: RoomID, user_id: UserID,
@@ -287,7 +288,7 @@ class MatrixHandler(BaseMatrixHandler):
             return
 
         portal = po.Portal.get_by_mxid(room_id)
-        if not portal or not portal.has_bot:
+        if not portal or not portal.has_bot or not portal.allow_bridging:
             return
 
         user = await u.User.get_by_mxid(user_id).ensure_started()
@@ -305,7 +306,7 @@ class MatrixHandler(BaseMatrixHandler):
     async def handle_read_receipts(room_id: RoomID, receipts: Iterable[Tuple[UserID, EventID]]
                                    ) -> None:
         portal = po.Portal.get_by_mxid(room_id)
-        if not portal:
+        if not portal or not portal.allow_bridging:
             return
 
         for user_id, event_id in receipts:
@@ -321,7 +322,7 @@ class MatrixHandler(BaseMatrixHandler):
 
     async def handle_typing(self, room_id: RoomID, now_typing: Set[UserID]) -> None:
         portal = po.Portal.get_by_mxid(room_id)
-        if not portal:
+        if not portal or not portal.allow_bridging:
             return
 
         previously_typing = self.previously_typing.get(room_id, set())
@@ -337,19 +338,6 @@ class MatrixHandler(BaseMatrixHandler):
                 await portal.set_typing(user, is_typing)
 
         self.previously_typing[room_id] = now_typing
-
-    def filter_matrix_event(self, evt: Event) -> bool:
-        if isinstance(evt, (TypingEvent, ReceiptEvent, PresenceEvent)):
-            return False
-        elif not isinstance(evt, (RedactionEvent, MessageEvent, StateEvent, EncryptedEvent)):
-            return True
-        if evt.content.get(self.az.real_user_content_key, False):
-            puppet = pu.Puppet.deprecated_sync_get_by_custom_mxid(evt.sender)
-            if puppet:
-                self.log.debug("Ignoring puppet-sent event %s", evt.event_id)
-                return True
-        return evt.sender and (evt.sender == self.az.bot_mxid
-                               or pu.Puppet.get_id_from_mxid(evt.sender) is not None)
 
     async def handle_ephemeral_event(self, evt: Union[ReceiptEvent, PresenceEvent, TypingEvent]
                                      ) -> None:
