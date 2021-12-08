@@ -1,5 +1,5 @@
 # mautrix-telegram - A Matrix-Telegram puppeting bridge
-# Copyright (C) 2019 Tulir Asokan
+# Copyright (C) 2021 Tulir Asokan
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as published by
@@ -16,6 +16,7 @@
 from typing import Dict, Any
 import asyncio
 from time import time
+import sys
 
 import telethon
 from telethon import __version__ as __telethon_version__
@@ -25,6 +26,7 @@ from mautrix.types import UserID, RoomID
 from mautrix.bridge import Bridge
 from mautrix.util.db import Base
 from mautrix.util.opt_prometheus import Gauge
+from mautrix.bridge.state_store.sqlalchemy import SQLBridgeStateStore
 
 from .web.provisioning import ProvisioningAPI
 from .web.public import PublicBridgeWebsite
@@ -40,6 +42,9 @@ from .portal import Portal, init as init_portal
 from .puppet import Puppet, init as init_puppet
 from .user import User, init as init_user
 from .version import version, linkified_version
+
+import sqlalchemy as sql
+from sqlalchemy.engine.base import Engine
 
 try:
     import prometheus_client as prometheus
@@ -63,7 +68,9 @@ class TelegramBridge(Bridge):
     markdown_version = linkified_version
     config_class = Config
     matrix_class = MatrixHandler
+    state_store_class = SQLBridgeStateStore
 
+    db: 'Engine'
     config: Config
     context: Context
     session_container: AlchemySessionContainer
@@ -80,11 +87,23 @@ class TelegramBridge(Bridge):
     as_connection_metric_task: asyncio.Task = None
 
     def prepare_db(self) -> None:
-        super().prepare_db()
+        if not sql:
+            raise RuntimeError("SQLAlchemy is not installed")
+        self.db = sql.create_engine(self.config["appservice.database"],
+                                    **self.config["appservice.database_opts"])
+        Base.metadata.bind = self.db
+        if not self.db.has_table("alembic_version"):
+            self.log.critical("alembic_version table not found. "
+                              "Did you forget to `alembic upgrade head`?")
+            sys.exit(10)
+
         init_db(self.db)
         self.session_container = AlchemySessionContainer(
             engine=self.db, table_base=Base, session=False,
             table_prefix="telethon_", manage_tables=False)
+
+    def make_state_store(self) -> None:
+        self.state_store = self.state_store_class(self.get_puppet, self.get_double_puppet)
 
     def _prepare_website(self) -> None:
         if self.config["appservice.public.enabled"]:
