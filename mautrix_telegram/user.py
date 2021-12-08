@@ -28,8 +28,8 @@ from telethon.tl.types.contacts import ContactsNotModified
 from telethon.tl.functions.contacts import GetContactsRequest, SearchRequest
 from telethon.tl.functions.account import UpdateStatusRequest
 from telethon.tl.functions.users import GetUsersRequest
-from telethon.errors import (AuthKeyDuplicatedError, UserDeactivatedError, UserDeactivatedBanError,
-                             SessionRevokedError, UnauthorizedError)
+from telethon.tl.functions.updates import GetStateRequest
+from telethon.errors import AuthKeyDuplicatedError, RPCError, UnauthorizedError
 
 from mautrix.client import Client
 from mautrix.errors import MatrixRequestError, MNotFound
@@ -60,6 +60,7 @@ BridgeState.human_readable_errors.update({
     "tg-not-connected": "Your Telegram connection failed",
     "tg-auth-key-duplicated": "The bridge accidentally logged you out",
     "tg-not-authenticated": "The stored auth token did not work",
+    "tg-no-auth": "You're not logged in",
 })
 
 
@@ -200,6 +201,12 @@ class User(AbstractUser, BaseUser):
             await self.ensure_started()
         except Exception:
             self.log.exception("Exception in ensure_started")
+        else:
+            if not self.client and not self.session_container.has_session(self.mxid):
+                self.log.warning("Didn't start user: no session stored")
+                if self.tgid:
+                    await self.push_bridge_state(BridgeStateEvent.BAD_CREDENTIALS,
+                                                 error="tg-no-auth")
 
     async def ensure_started(self, even_if_no_session=False) -> 'User':
         if not self.puppet_whitelisted or self.connected:
@@ -228,15 +235,32 @@ class User(AbstractUser, BaseUser):
         except Exception:
             await self.push_bridge_state(BridgeStateEvent.UNKNOWN_ERROR)
             raise
-        if await self.is_logged_in():
-            self.log.debug(f"Ensuring post_login() for {self.name}")
-            self.loop.create_task(self.post_login())
-        elif delete_unless_authenticated:
-            self.log.debug(f"Unauthenticated user {self.name} start()ed, deleting session...")
-            await self.client.disconnect()
+        try:
+            assert self.client, "client is undefined"
+            assert self.client.is_connected(), "client is not connected"
+            await self.client(GetStateRequest())
+        except AssertionError as e:
+            self.log.error(f"Client in bad state after start(): {e}")
+            if self.tgid:
+                await self.push_bridge_state(BridgeStateEvent.UNKNOWN_ERROR, message=str(e))
+        except UnauthorizedError as e:
+            self.log.error(f"Authorization error in start(): {type(e)}: {e}")
             if self.tgid:
                 await self.push_bridge_state(BridgeStateEvent.BAD_CREDENTIALS,
-                                             error="tg-not-authenticated")
+                                             error="tg-auth-error", message=str(e), ttl=3600)
+        except RPCError as e:
+            self.log.error(f"Unknown RPC error in start(): {type(e)}: {e}")
+            if self.tgid:
+                await self.push_bridge_state(BridgeStateEvent.UNKNOWN_ERROR, message=str(e))
+        else:
+            # Authenticated, run post login
+            self.log.debug(f"Ensuring post_login() for {self.name}")
+            self.loop.create_task(self.post_login())
+            return self
+        # Not authenticated, delete data if necessary
+        if delete_unless_authenticated:
+            self.log.debug(f"Unauthenticated user {self.name} start()ed, deleting session...")
+            await self.client.disconnect()
             self.client.session.delete()
         return self
 
@@ -348,7 +372,7 @@ class User(AbstractUser, BaseUser):
         try:
             return (await self.client(GetUsersRequest([InputUserSelf()])))[0]
         except UnauthorizedError as e:
-            self.log.error(f"Authorization error in get_me(): {e}")
+            self.log.error(f"Authorization error in get_me(): {type(e)}: {e}")
             await self.push_bridge_state(BridgeStateEvent.BAD_CREDENTIALS, error="tg-auth-error",
                                          message=str(e), ttl=3600)
             await self.stop()
