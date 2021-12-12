@@ -27,4 +27,4 @@ aiosqlite>=0.17,<0.18
 #/e2be
 python-olm>=3,<4
 pycryptodome>=3,<4
-unpaddedbase64>=1,<2
+unpaddedbase64>=1,<3
