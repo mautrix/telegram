@@ -27,11 +27,11 @@ from telethon.tl.types import User
 
 from mautrix.types import (EventID, UserID, MediaMessageEventContent, ImageInfo, MessageType,
                            TextMessageEventContent)
+from mautrix.util.format_duration import format_duration as fmt_duration
 
 from ... import user as u
 from ...types import TelegramID
 from ...commands import command_handler, CommandEvent, SECTION_AUTH
-from ...util import format_duration as fmt_duration
 
 try:
     import qrcode
