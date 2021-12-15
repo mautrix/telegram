@@ -34,6 +34,7 @@ from telethon.errors import AuthKeyDuplicatedError, RPCError, UnauthorizedError
 from mautrix.client import Client
 from mautrix.errors import MatrixRequestError, MNotFound
 from mautrix.types import UserID, RoomID, PushRuleScope, PushRuleKind, PushActionType, RoomTagInfo
+from mautrix.appservice import DOUBLE_PUPPET_SOURCE_KEY
 from mautrix.bridge import BaseUser
 from mautrix.util.bridge_state import BridgeState, BridgeStateEvent
 from mautrix.util.logging import TraceLogger
@@ -475,9 +476,9 @@ class User(AbstractUser, BaseUser):
         tag_info = await puppet.intent.get_room_tag(portal.mxid, tag)
         if active and tag_info is None:
             tag_info = RoomTagInfo(order=0.5)
-            tag_info[self.bridge.real_user_content_key] = True
+            tag_info[DOUBLE_PUPPET_SOURCE_KEY] = self.bridge.name
             await puppet.intent.set_room_tag(portal.mxid, tag, tag_info)
-        elif not active and tag_info and tag_info.get(self.bridge.real_user_content_key, False):
+        elif not active and tag_info and tag_info.get(DOUBLE_PUPPET_SOURCE_KEY) == self.bridge.name:
             await puppet.intent.remove_room_tag(portal.mxid, tag)
 
     @staticmethod

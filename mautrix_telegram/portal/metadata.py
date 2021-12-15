@@ -33,7 +33,8 @@ from mautrix.errors import MForbidden
 from mautrix.types import (RoomID, UserID, RoomCreatePreset, EventType, Membership,
                            PowerLevelStateEventContent, RoomTopicStateEventContent,
                            RoomNameStateEventContent, RoomAvatarStateEventContent,
-                           StateEventContent, EventID)
+                           StateEventContent, EventID, JoinRule)
+from mautrix.appservice import DOUBLE_PUPPET_SOURCE_KEY
 
 from ..types import TelegramID
 from ..context import Context
@@ -710,9 +711,9 @@ class PortalMetadata(BasePortal, ABC):
         if self.username:
             await self.main_intent.add_room_alias(self.mxid, self.alias_localpart, override=True)
             if self.public_portals:
-                await self.main_intent.set_join_rule(self.mxid, "public")
+                await self.main_intent.set_join_rule(self.mxid, JoinRule.PUBLIC)
         else:
-            await self.main_intent.set_join_rule(self.mxid, "invite")
+            await self.main_intent.set_join_rule(self.mxid, JoinRule.INVITE)
 
         if save:
             await self.save()
@@ -724,7 +725,7 @@ class PortalMetadata(BasePortal, ABC):
             try:
                 intent = sender.intent_for(self)
                 if sender.is_real_user:
-                    content[self.az.real_user_content_key] = True
+                    content[DOUBLE_PUPPET_SOURCE_KEY] = self.bridge.name
                 await intent.send_state_event(self.mxid, evt_type, content)
             except MForbidden:
                 await self.main_intent.send_state_event(self.mxid, evt_type, content)

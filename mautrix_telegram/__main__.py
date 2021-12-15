@@ -53,7 +53,6 @@ class TelegramBridge(Bridge):
     command = "python -m mautrix-telegram"
     description = "A Matrix-Telegram puppeting bridge."
     repo_url = "https://github.com/mautrix/telegram"
-    real_user_content_key = "net.maunium.telegram.puppet"
     version = version
     markdown_version = linkified_version
     config_class = Config
