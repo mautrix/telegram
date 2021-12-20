@@ -1,5 +1,5 @@
 # mautrix-telegram - A Matrix-Telegram puppeting bridge
-# Copyright (C) 2019 Tulir Asokan
+# Copyright (C) 2021 Tulir Asokan
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as published by
@@ -13,7 +13,7 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import Tuple, Optional
+from __future__ import annotations
 
 from mautrix.errors import MatrixRequestError
 from mautrix.appservice import IntentAPI
@@ -22,16 +22,14 @@ from .. import CommandEvent
 
 from ... import user as u
 
-OptStr = Optional[str]
-
 
 async def get_initial_state(
     intent: IntentAPI, room_id: RoomID
-) -> Tuple[OptStr, OptStr, Optional[PowerLevelStateEventContent], bool]:
+) -> tuple[str | None, str | None, PowerLevelStateEventContent | None, bool]:
     state = await intent.get_state(room_id)
-    title: OptStr = None
-    about: OptStr = None
-    levels: Optional[PowerLevelStateEventContent] = None
+    title: str | None = None
+    about: str | None = None
+    levels: PowerLevelStateEventContent | None = None
     encrypted: bool = False
     for event in state:
         try:

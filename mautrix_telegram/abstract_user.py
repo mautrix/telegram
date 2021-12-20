@@ -13,7 +13,9 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import Tuple, Optional, Union, Dict, Type, Any, TYPE_CHECKING
+from __future__ import annotations
+
+from typing import Type, Any, Union, TYPE_CHECKING
 from abc import ABC, abstractmethod
 import platform
 import asyncio
@@ -39,48 +41,50 @@ from mautrix.errors import MatrixError
 from mautrix.appservice import AppService
 from mautrix.util.logging import TraceLogger
 from mautrix.util.opt_prometheus import Histogram, Counter
-from alchemysession import AlchemySessionContainer
 
 from . import portal as po, puppet as pu, __version__
-from .db import Message as DBMessage
+from .db import Message as DBMessage, PgSession
 from .types import TelegramID
 from .tgclient import MautrixTelegramClient
+from .config import Config
 
 if TYPE_CHECKING:
-    from .context import Context
-    from .config import Config
     from .bot import Bot
     from .__main__ import TelegramBridge
 
-config: Optional['Config'] = None
-# Value updated from config in init()
-MAX_DELETIONS: int = 10
-
 UpdateMessage = Union[UpdateShortChatMessage, UpdateShortMessage, UpdateNewChannelMessage,
                       UpdateNewMessage, UpdateEditMessage, UpdateEditChannelMessage]
-UpdateMessageContent = Union[UpdateShortMessage, UpdateShortChatMessage, Message, MessageService]
-UpdateTyping = Union[UpdateUserTyping, UpdateChatUserTyping, UpdateChannelUserTyping]
+UpdateMessageContent = Union[
+    UpdateShortMessage, UpdateShortChatMessage, Message, MessageService, MessageEmpty
+]
 
-UPDATE_TIME = Histogram("bridge_telegram_update", "Time spent processing Telegram updates",
-                        ("update_type",))
-UPDATE_ERRORS = Counter("bridge_telegram_update_error",
-                        "Number of fatal errors while handling Telegram updates", ("update_type",))
+UPDATE_TIME = Histogram(
+    name="bridge_telegram_update",
+    documentation="Time spent processing Telegram updates",
+    labelnames=("update_type",),
+)
+UPDATE_ERRORS = Counter(
+    name="bridge_telegram_update_error",
+    documentation="Number of fatal errors while handling Telegram updates",
+    labelnames=("update_type",),
+)
 
 
 class AbstractUser(ABC):
-    session_container: AlchemySessionContainer = None
     loop: asyncio.AbstractEventLoop = None
     log: TraceLogger
     az: AppService
     bridge: 'TelegramBridge'
-    relaybot: Optional['Bot']
+    config: Config
+    relaybot: 'Bot'
     ignore_incoming_bot_events: bool = True
+    max_deletions: int = 10
 
-    client: Optional[MautrixTelegramClient]
-    mxid: Optional[UserID]
+    client: MautrixTelegramClient | None
+    mxid: UserID | None
 
-    tgid: Optional[TelegramID]
-    username: Optional['str']
+    tgid: TelegramID | None
+    username: str | None
     is_bot: bool
 
     is_relaybot: bool
@@ -106,14 +110,14 @@ class AbstractUser(ABC):
         return self.client and self.client.is_connected()
 
     @property
-    def _proxy_settings(self) -> Tuple[Type[Connection], Optional[Tuple[Any, ...]]]:
-        proxy_type = config["telegram.proxy.type"].lower()
+    def _proxy_settings(self) -> tuple[Type[Connection], tuple[Any, ...] | None]:
+        proxy_type = self.config["telegram.proxy.type"].lower()
         connection = ConnectionTcpFull
-        connection_data = (config["telegram.proxy.address"],
-                           config["telegram.proxy.port"],
-                           config["telegram.proxy.rdns"],
-                           config["telegram.proxy.username"],
-                           config["telegram.proxy.password"])
+        connection_data = (self.config["telegram.proxy.address"],
+                           self.config["telegram.proxy.port"],
+                           self.config["telegram.proxy.rdns"],
+                           self.config["telegram.proxy.username"],
+                           self.config["telegram.proxy.password"])
         if proxy_type == "disabled":
             connection_data = None
         elif proxy_type == "socks4":
@@ -128,23 +132,32 @@ class AbstractUser(ABC):
 
         return connection, connection_data
 
-    def _init_client(self) -> None:
+    @classmethod
+    def init_cls(cls, bridge: 'TelegramBridge') -> None:
+        cls.bridge = bridge
+        cls.config = bridge.config
+        cls.loop = bridge.loop
+        cls.az = bridge.az
+        cls.ignore_incoming_bot_events = cls.config["bridge.relaybot.ignore_own_incoming_events"]
+        cls.max_deletions = cls.config["bridge.max_telegram_delete"]
+
+    async def _init_client(self) -> None:
         self.log.debug(f"Initializing client for {self.name}")
 
-        session = self.session_container.new_session(self.name)
-        if config["telegram.server.enabled"]:
-            session.set_dc(config["telegram.server.dc"],
-                                config["telegram.server.ip"],
-                                config["telegram.server.port"])
+        session = await PgSession.get(self.name)
+        if self.config["telegram.server.enabled"]:
+            session.set_dc(self.config["telegram.server.dc"],
+                           self.config["telegram.server.ip"],
+                           self.config["telegram.server.port"])
 
         if self.is_relaybot:
             base_logger = logging.getLogger("telethon.relaybot")
         else:
             base_logger = logging.getLogger(f"telethon.{self.tgid or -hash(self.mxid)}")
 
-        device = config["telegram.device_info.device_model"]
-        sysversion = config["telegram.device_info.system_version"]
-        appversion = config["telegram.device_info.app_version"]
+        device = self.config["telegram.device_info.device_model"]
+        sysversion = self.config["telegram.device_info.system_version"]
+        appversion = self.config["telegram.device_info.app_version"]
         connection, proxy = self._proxy_settings
 
         assert isinstance(session, Session)
@@ -152,8 +165,8 @@ class AbstractUser(ABC):
         self.client = MautrixTelegramClient(
             session=session,
 
-            api_id=config["telegram.api_id"],
-            api_hash=config["telegram.api_hash"],
+            api_id=self.config["telegram.api_id"],
+            api_hash=self.config["telegram.api_hash"],
 
             app_version=__version__ if appversion == "auto" else appversion,
             system_version=(MautrixTelegramClient.__version__
@@ -161,11 +174,11 @@ class AbstractUser(ABC):
             device_model=(f"{platform.system()} {platform.release()}"
                           if device == "auto" else device),
 
-            timeout=config["telegram.connection.timeout"],
-            connection_retries=config["telegram.connection.retries"],
-            retry_delay=config["telegram.connection.retry_delay"],
-            flood_sleep_threshold=config["telegram.connection.flood_sleep_threshold"],
-            request_retries=config["telegram.connection.request_retries"],
+            timeout=self.config["telegram.connection.timeout"],
+            connection_retries=self.config["telegram.connection.retries"],
+            retry_delay=self.config["telegram.connection.retry_delay"],
+            flood_sleep_threshold=self.config["telegram.connection.flood_sleep_threshold"],
+            request_retries=self.config["telegram.connection.request_retries"],
             connection=connection,
             proxy=proxy,
             raise_last_call_error=True,
@@ -198,7 +211,7 @@ class AbstractUser(ABC):
             if not await self.update(update):
                 await self._update(update)
         except Exception:
-            self.log.exception("Failed to handle Telegram update")
+            self.log.exception(f"Failed to handle Telegram update {update}")
             UPDATE_ERRORS.labels(update_type=update_type).inc()
         UPDATE_TIME.labels(update_type=update_type).observe(time.time() - start_time)
         self.bridge.confirm_bridge_liveness()
@@ -217,17 +230,17 @@ class AbstractUser(ABC):
                 and (not self.is_bot or allow_bot)
                 and await self.is_logged_in())
 
-    async def start(self, delete_unless_authenticated: bool = False) -> 'AbstractUser':
+    async def start(self, delete_unless_authenticated: bool = False) -> AbstractUser:
         if not self.client:
-            self._init_client()
+            await self._init_client()
         await self.client.connect()
         self.log.debug(f"{'Bot' if self.is_relaybot else self.mxid} connected: {self.connected}")
         return self
 
-    async def ensure_started(self, even_if_no_session=False) -> 'AbstractUser':
+    async def ensure_started(self, even_if_no_session=False) -> AbstractUser:
         if self.connected:
             return self
-        if even_if_no_session or self.session_container.has_session(self.mxid):
+        if even_if_no_session or await PgSession.has(self.mxid):
             self.log.debug("Starting client due to ensure_started"
                            f"(even_if_no_session={even_if_no_session})")
             await self.start(delete_unless_authenticated=not even_if_no_session)
@@ -282,19 +295,20 @@ class AbstractUser(ABC):
     async def update_notify_settings(self, update: UpdateNotifySettings) -> None:
         pass
 
-    async def update_pinned_messages(self, update: Union[UpdatePinnedMessages,
-                                                         UpdatePinnedChannelMessages]) -> None:
+    async def update_pinned_messages(
+        self, update: UpdatePinnedMessages | UpdatePinnedChannelMessages
+    ) -> None:
         if isinstance(update, UpdatePinnedMessages):
-            portal = po.Portal.get_by_entity(update.peer, receiver_id=self.tgid)
+            portal = await po.Portal.get_by_entity(update.peer, tg_receiver=self.tgid)
         else:
-            portal = po.Portal.get_by_tgid(TelegramID(update.channel_id))
+            portal = await po.Portal.get_by_tgid(TelegramID(update.channel_id))
         if portal and portal.mxid:
             await portal.receive_telegram_pin_ids(update.messages, self.tgid,
                                                   remove=not update.pinned)
 
     @staticmethod
     async def update_participants(update: UpdateChatParticipants) -> None:
-        portal = po.Portal.get_by_tgid(TelegramID(update.participants.chat_id))
+        portal = await po.Portal.get_by_tgid(TelegramID(update.participants.chat_id))
         if portal and portal.mxid:
             await portal.update_power_levels(update.participants.participants)
 
@@ -303,30 +317,36 @@ class AbstractUser(ABC):
             self.log.debug("Unexpected read receipt peer: %s", update.peer)
             return
 
-        portal = po.Portal.get_by_tgid(TelegramID(update.peer.user_id), self.tgid)
+        portal = await po.Portal.get_by_tgid(
+            TelegramID(update.peer.user_id), tg_receiver=self.tgid
+        )
         if not portal or not portal.mxid:
             return
 
         # We check that these are user read receipts, so tg_space is always the user ID.
-        message = DBMessage.get_one_by_tgid(TelegramID(update.max_id), self.tgid, edit_index=-1)
+        message = await DBMessage.get_one_by_tgid(TelegramID(update.max_id), self.tgid,
+                                                  edit_index=-1)
         if not message:
             return
 
-        puppet = pu.Puppet.get(TelegramID(update.peer.user_id))
+        puppet = await pu.Puppet.get_by_tgid(TelegramID(update.peer.user_id))
         await puppet.intent.mark_read(portal.mxid, message.mxid)
 
-    async def update_own_read_receipt(self, update: Union[UpdateReadHistoryInbox,
-                                                          UpdateReadChannelInbox]) -> None:
-        puppet = pu.Puppet.get(self.tgid)
+    async def update_own_read_receipt(
+        self, update: UpdateReadHistoryInbox | UpdateReadChannelInbox
+    ) -> None:
+        puppet = await pu.Puppet.get_by_tgid(self.tgid)
         if not puppet.is_real_user:
             return
 
         if isinstance(update, UpdateReadChannelInbox):
-            portal = po.Portal.get_by_tgid(TelegramID(update.channel_id))
+            portal = await po.Portal.get_by_tgid(TelegramID(update.channel_id))
         elif isinstance(update.peer, PeerChat):
-            portal = po.Portal.get_by_tgid(TelegramID(update.peer.chat_id))
+            portal = await po.Portal.get_by_tgid(TelegramID(update.peer.chat_id))
         elif isinstance(update.peer, PeerUser):
-            portal = po.Portal.get_by_tgid(TelegramID(update.peer.user_id), self.tgid)
+            portal = await po.Portal.get_by_tgid(
+                TelegramID(update.peer.user_id), tg_receiver=self.tgid
+            )
         else:
             self.log.debug("Unexpected own read receipt peer: %s", update.peer)
             return
@@ -335,7 +355,8 @@ class AbstractUser(ABC):
             return
 
         tg_space = portal.tgid if portal.peer_type == "channel" else self.tgid
-        message = DBMessage.get_one_by_tgid(TelegramID(update.max_id), tg_space, edit_index=-1)
+        message = await DBMessage.get_one_by_tgid(TelegramID(update.max_id), tg_space,
+                                                  edit_index=-1)
         if not message:
             return
 
@@ -343,21 +364,25 @@ class AbstractUser(ABC):
 
     async def update_admin(self, update: UpdateChatParticipantAdmin) -> None:
         # TODO duplication not checked
-        portal = po.Portal.get_by_tgid(TelegramID(update.chat_id))
+        portal = await po.Portal.get_by_tgid(TelegramID(update.chat_id))
         if not portal or not portal.mxid:
             return
 
         await portal.set_telegram_admin(TelegramID(update.user_id))
 
-    async def update_typing(self, update: UpdateTyping) -> None:
+    async def update_typing(
+        self, update: UpdateUserTyping | UpdateChatUserTyping | UpdateChannelUserTyping
+    ) -> None:
         sender = None
         if isinstance(update, UpdateUserTyping):
-            portal = po.Portal.get_by_tgid(TelegramID(update.user_id), self.tgid, "user")
-            sender = pu.Puppet.get(TelegramID(update.user_id))
+            portal = await po.Portal.get_by_tgid(
+                TelegramID(update.user_id), tg_receiver=self.tgid, peer_type="user"
+            )
+            sender = await pu.Puppet.get_by_tgid(TelegramID(update.user_id))
         elif isinstance(update, UpdateChannelUserTyping):
-            portal = po.Portal.get_by_tgid(TelegramID(update.channel_id))
+            portal = await po.Portal.get_by_tgid(TelegramID(update.channel_id))
         elif isinstance(update, UpdateChatUserTyping):
-            portal = po.Portal.get_by_tgid(TelegramID(update.chat_id))
+            portal = await po.Portal.get_by_tgid(TelegramID(update.chat_id))
         else:
             return
 
@@ -365,26 +390,25 @@ class AbstractUser(ABC):
             # Can typing notifications come from non-user peers?
             if not update.from_id.user_id:
                 return
-            sender = pu.Puppet.get(TelegramID(update.from_id.user_id))
+            sender = await pu.Puppet.get_by_tgid(TelegramID(update.from_id.user_id))
 
         if not sender or not portal or not portal.mxid:
             return
 
         await portal.handle_telegram_typing(sender, update)
 
-    async def _handle_entity_updates(self, entities: Dict[int, Union[User, Chat, Channel]]
-                                     ) -> None:
+    async def _handle_entity_updates(self, entities: dict[int, User | Chat | Channel]) -> None:
         try:
             users = (entity for entity in entities.values() if isinstance(entity, User))
-            puppets = ((pu.Puppet.get(TelegramID(user.id)), user) for user in users)
+            puppets = ((await pu.Puppet.get_by_tgid(TelegramID(user.id)), user) for user in users)
             await asyncio.gather(*[puppet.try_update_info(self, info)
-                                   for puppet, info in puppets if puppet])
+                                   async for puppet, info in puppets if puppet])
         except Exception:
             self.log.exception("Failed to handle entity updates")
 
-    async def update_others_info(self, update: Union[UpdateUserName, UpdateUserPhoto]) -> None:
+    async def update_others_info(self, update: UpdateUserName | UpdateUserPhoto) -> None:
         # TODO duplication not checked
-        puppet = pu.Puppet.get(TelegramID(update.user_id))
+        puppet = await pu.Puppet.get_by_tgid(TelegramID(update.user_id))
         if isinstance(update, UpdateUserName):
             puppet.username = update.username
             if await puppet.update_displayname(self, update):
@@ -398,7 +422,7 @@ class AbstractUser(ABC):
     async def update_status(self, update: UpdateUserStatus) -> None:
         if not config.get("bridge.handle_update_user_status", True):
             return
-        puppet = pu.Puppet.get(TelegramID(update.user_id))
+        puppet = await pu.Puppet.get_by_tgid(TelegramID(update.user_id))
         if isinstance(update.status, UserStatusOnline):
             await puppet.default_mxid_intent.set_presence(PresenceState.ONLINE)
         elif isinstance(update.status, UserStatusOffline):
@@ -407,27 +431,29 @@ class AbstractUser(ABC):
             self.log.warning(f"Unexpected user status update: type({update})")
         return
 
-    def get_message_details(self, update: UpdateMessage) -> Tuple[UpdateMessageContent,
-                                                                  Optional[pu.Puppet],
-                                                                  Optional[po.Portal]]:
+    async def get_message_details(
+        self, update: UpdateMessage
+    ) -> tuple[UpdateMessageContent, pu.Puppet | None, po.Portal | None]:
         if isinstance(update, UpdateShortChatMessage):
             portal = po.Portal.get_by_tgid(TelegramID(update.chat_id))
             if not portal:
                 self.log.warning(f"Received message in chat with unknown type {update.chat_id}")
-            sender = pu.Puppet.get(TelegramID(update.from_id))
+            sender = await pu.Puppet.get_by_tgid(TelegramID(update.from_id))
         elif isinstance(update, UpdateShortMessage):
-            portal = po.Portal.get_by_tgid(TelegramID(update.user_id), self.tgid, "user")
-            sender = pu.Puppet.get(self.tgid if update.out else update.user_id)
+            portal = await po.Portal.get_by_tgid(
+                TelegramID(update.user_id), tg_receiver=self.tgid, peer_type="user"
+            )
+            sender = await pu.Puppet.get_by_tgid(self.tgid if update.out else update.user_id)
         elif isinstance(update, (UpdateNewMessage, UpdateNewChannelMessage,
                                  UpdateEditMessage, UpdateEditChannelMessage)):
             update = update.message
             if isinstance(update, MessageEmpty):
                 return update, None, None
-            portal = po.Portal.get_by_entity(update.peer_id, receiver_id=self.tgid)
+            portal = await po.Portal.get_by_entity(update.peer_id, tg_receiver=self.tgid)
             if update.out:
-                sender = pu.Puppet.get(self.tgid)
+                sender = await pu.Puppet.get_by_tgid(self.tgid)
             elif isinstance(update.from_id, PeerUser):
-                sender = pu.Puppet.get(TelegramID(update.from_id.user_id))
+                sender = await pu.Puppet.get_by_tgid(TelegramID(update.from_id.user_id))
             else:
                 sender = None
         else:
@@ -438,7 +464,7 @@ class AbstractUser(ABC):
 
     @staticmethod
     async def _try_redact(message: DBMessage) -> None:
-        portal = po.Portal.get_by_mxid(message.mx_room)
+        portal = await po.Portal.get_by_mxid(message.mx_room)
         if not portal:
             return
         try:
@@ -447,33 +473,33 @@ class AbstractUser(ABC):
             pass
 
     async def delete_message(self, update: UpdateDeleteMessages) -> None:
-        if len(update.messages) > MAX_DELETIONS:
+        if len(update.messages) > self.max_deletions:
             return
 
         for message_id in update.messages:
-            for message in DBMessage.get_all_by_tgid(TelegramID(message_id), self.tgid):
+            for message in await DBMessage.get_all_by_tgid(TelegramID(message_id), self.tgid):
                 if message.redacted:
                     continue
-                message.delete()
-                number_left = DBMessage.count_spaces_by_mxid(message.mxid, message.mx_room)
+                await message.delete()
+                number_left = await DBMessage.count_spaces_by_mxid(message.mxid, message.mx_room)
                 if number_left == 0:
                     await self._try_redact(message)
 
     async def delete_channel_message(self, update: UpdateDeleteChannelMessages) -> None:
-        if len(update.messages) > MAX_DELETIONS:
+        if len(update.messages) > self.max_deletions:
             return
 
         channel_id = TelegramID(update.channel_id)
 
         for message_id in update.messages:
-            for message in DBMessage.get_all_by_tgid(TelegramID(message_id), channel_id):
+            for message in await DBMessage.get_all_by_tgid(TelegramID(message_id), channel_id):
                 if message.redacted:
                     continue
-                message.delete()
+                await message.delete()
                 await self._try_redact(message)
 
     async def update_message(self, original_update: UpdateMessage) -> None:
-        update, sender, portal = self.get_message_details(original_update)
+        update, sender, portal = await self.get_message_details(original_update)
         if not portal:
             return
         elif portal and not portal.allow_bridging:
@@ -482,10 +508,10 @@ class AbstractUser(ABC):
 
         if self.is_relaybot:
             if update.is_private:
-                if not config["bridge.relaybot.private_chat.invite"]:
+                if not self.config["bridge.relaybot.private_chat.invite"]:
                     self.log.debug(f"Ignoring private message to bot from {sender.id}")
                     return
-            elif not portal.mxid and config["bridge.relaybot.ignore_unbridged_group_chat"]:
+            elif not portal.mxid and self.config["bridge.relaybot.ignore_unbridged_group_chat"]:
                 self.log.debug("Ignoring message received by bot"
                                f" in unbridged chat {portal.tgid_log}")
                 return
@@ -495,7 +521,7 @@ class AbstractUser(ABC):
             self.log.debug(f"Ignoring relaybot-sent message %s to %s", update.id, portal.tgid_log)
             return
 
-        await portal.backfill_lock.wait(update.id)
+        await portal.backfill_lock.wait(f"update {update.id}")
 
         if isinstance(update, MessageService):
             if isinstance(update.action, MessageActionChannelMigrateFrom):
@@ -513,12 +539,3 @@ class AbstractUser(ABC):
         return await portal.handle_telegram_message(self, sender, update)
 
     # endregion
-
-
-def init(context: 'Context') -> None:
-    global config, MAX_DELETIONS
-    AbstractUser.az, config, AbstractUser.loop, AbstractUser.relaybot = context.core
-    AbstractUser.bridge = context.bridge
-    AbstractUser.ignore_incoming_bot_events = config["bridge.relaybot.ignore_own_incoming_events"]
-    AbstractUser.session_container = context.session_container
-    MAX_DELETIONS = config.get("bridge.max_telegram_delete", 10)

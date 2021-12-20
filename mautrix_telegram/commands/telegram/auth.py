@@ -1,5 +1,5 @@
 # mautrix-telegram - A Matrix-Telegram puppeting bridge
-# Copyright (C) 2019 Tulir Asokan
+# Copyright (C) 2021 Tulir Asokan
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as published by
@@ -13,11 +13,13 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import Any, Dict, Optional
+from __future__ import annotations
+
+from typing import Any
 import asyncio
 import io
 
-from telethon.errors import (  # isort: skip
+from telethon.errors import (
     AccessTokenExpiredError, AccessTokenInvalidError, FirstNameInvalidError, FloodWaitError,
     PasswordHashInvalidError, PhoneCodeExpiredError, PhoneCodeInvalidError,
     PhoneNumberAppSignupForbiddenError, PhoneNumberBannedError, PhoneNumberFloodError,
@@ -125,7 +127,7 @@ async def enter_code_register(evt: CommandEvent) -> EventID:
 async def login_qr(evt: CommandEvent) -> EventID:
     login_as = evt.sender
     if len(evt.args) > 0 and evt.sender.is_admin:
-        login_as = u.User.get_by_mxid(UserID(evt.args[0]))
+        login_as = await u.User.get_by_mxid(UserID(evt.args[0]))
     if not qrcode or not QRLogin:
         return await evt.reply("This bridge instance does not support logging in with a QR code.")
     if await login_as.is_logged_in():
@@ -133,7 +135,7 @@ async def login_qr(evt: CommandEvent) -> EventID:
 
     await login_as.ensure_started(even_if_no_session=True)
     qr_login = QRLogin(login_as.client, ignored_ids=[])
-    qr_event_id: Optional[EventID] = None
+    qr_event_id: EventID | None = None
 
     async def upload_qr() -> None:
         nonlocal qr_event_id
@@ -184,7 +186,7 @@ async def login_qr(evt: CommandEvent) -> EventID:
 async def login(evt: CommandEvent) -> EventID:
     override_sender = False
     if len(evt.args) > 0 and evt.sender.is_admin:
-        evt.sender = await u.User.get_by_mxid(UserID(evt.args[0])).ensure_started()
+        evt.sender = await u.User.get_and_start_by_mxid(UserID(evt.args[0]))
         override_sender = True
     if await evt.sender.is_logged_in():
         return await evt.reply(f"You are already logged in as {evt.sender.human_tg_id}.")
@@ -217,7 +219,7 @@ async def login(evt: CommandEvent) -> EventID:
     return await evt.reply("This bridge instance has been configured to not allow logging in.")
 
 
-async def _request_code(evt: CommandEvent, phone_number: str, next_status: Dict[str, Any]
+async def _request_code(evt: CommandEvent, phone_number: str, next_status: dict[str, Any]
                         ) -> EventID:
     ok = False
     try:
@@ -249,7 +251,7 @@ async def _request_code(evt: CommandEvent, phone_number: str, next_status: Dict[
 
 
 @command_handler(needs_auth=False)
-async def enter_phone_or_token(evt: CommandEvent) -> Optional[EventID]:
+async def enter_phone_or_token(evt: CommandEvent) -> EventID | None:
     if len(evt.args) == 0:
         return await evt.reply("**Usage:** `$cmdprefix+sp enter-phone-or-token <phone-or-token>`")
     elif not evt.config.get("bridge.allow_matrix_login", True):
@@ -273,7 +275,7 @@ async def enter_phone_or_token(evt: CommandEvent) -> Optional[EventID]:
 
 
 @command_handler(needs_auth=False)
-async def enter_code(evt: CommandEvent) -> Optional[EventID]:
+async def enter_code(evt: CommandEvent) -> EventID | None:
     if len(evt.args) == 0:
         return await evt.reply("**Usage:** `$cmdprefix+sp enter-code <code>`")
     elif not evt.config.get("bridge.allow_matrix_login", True):
@@ -289,7 +291,7 @@ async def enter_code(evt: CommandEvent) -> Optional[EventID]:
 
 
 @command_handler(needs_auth=False)
-async def enter_password(evt: CommandEvent) -> Optional[EventID]:
+async def enter_password(evt: CommandEvent) -> EventID | None:
     if len(evt.args) == 0:
         return await evt.reply("**Usage:** `$cmdprefix+sp enter-password <password>`")
     elif not evt.config.get("bridge.allow_matrix_login", True):
@@ -309,7 +311,7 @@ async def enter_password(evt: CommandEvent) -> Optional[EventID]:
     return None
 
 
-async def _sign_in(evt: CommandEvent, login_as: 'u.User' = None, **sign_in_info) -> EventID:
+async def _sign_in(evt: CommandEvent, login_as: u.User = None, **sign_in_info) -> EventID:
     login_as = login_as or evt.sender
     try:
         await login_as.ensure_started(even_if_no_session=True)
@@ -330,9 +332,9 @@ async def _sign_in(evt: CommandEvent, login_as: 'u.User' = None, **sign_in_info)
                                "Please send your password here.")
 
 
-async def _finish_sign_in(evt: CommandEvent, user: User, login_as: 'u.User' = None) -> EventID:
+async def _finish_sign_in(evt: CommandEvent, user: User, login_as: u.User = None) -> EventID:
     login_as = login_as or evt.sender
-    existing_user = u.User.get_by_tgid(TelegramID(user.id))
+    existing_user = await u.User.get_by_tgid(TelegramID(user.id))
     if existing_user and existing_user != login_as:
         await existing_user.log_out()
         await evt.reply(f"[{existing_user.displayname}]"

@@ -37,7 +37,7 @@ async def config(evt: CommandEvent) -> None:
         await config_defaults(evt)
         return
 
-    portal = po.Portal.get_by_mxid(evt.room_id)
+    portal = await po.Portal.get_by_mxid(evt.room_id)
     if not portal:
         await evt.reply("This is not a portal room.")
         return

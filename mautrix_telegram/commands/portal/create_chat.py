@@ -32,7 +32,7 @@ async def create(evt: CommandEvent) -> EventID:
         return await evt.reply(
             "**Usage:** `$cmdprefix+sp create ['group'/'supergroup'/'channel']`")
 
-    if po.Portal.get_by_mxid(evt.room_id):
+    if await po.Portal.get_by_mxid(evt.room_id):
         return await evt.reply("This is already a portal room.")
 
     if not await user_has_power_level(evt.room_id, evt.az.intent, evt.sender, "bridge"):
@@ -50,8 +50,8 @@ async def create(evt: CommandEvent) -> EventID:
         "group": "chat",
     }[type]
 
-    portal = po.Portal(tgid=TelegramID(0), peer_type=type, mxid=evt.room_id,
-                       title=title, about=about, encrypted=encrypted)
+    portal = po.Portal(tgid=TelegramID(0), tg_receiver=TelegramID(0), peer_type=type,
+                       mxid=evt.room_id, title=title, about=about, encrypted=encrypted)
     invites, errors = await portal.get_telegram_users_in_matrix_room(evt.sender)
     if len(errors) > 0:
         error_list = "\n".join(f"* [{mxid}](https://matrix.to/#/{mxid})" for mxid in errors)

@@ -9,10 +9,6 @@ RUN apk add --no-cache \
       py3-pillow \
       py3-aiohttp \
       py3-magic \
-      py3-sqlalchemy \
-      py3-telethon-session-sqlalchemy \
-      py3-alembic \
-      py3-psycopg2 \
       py3-ruamel.yaml \
       py3-commonmark \
       py3-prometheus-client \

@@ -1,5 +1,5 @@
 # mautrix-telegram - A Matrix-Telegram puppeting bridge
-# Copyright (C) 2020 Tulir Asokan
+# Copyright (C) 2021 Tulir Asokan
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as published by
@@ -13,7 +13,9 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import List, Optional, Tuple, cast
+from __future__ import annotations
+
+from typing import cast
 import codecs
 import base64
 import re
@@ -81,7 +83,7 @@ async def search(evt: CommandEvent) -> EventID:
                                    "Minimum length of remote query is 5 characters.")
         return await evt.reply("No results 3:")
 
-    reply: List[str] = []
+    reply: list[str] = []
     if remote:
         reply += ["**Results from Telegram server:**", ""]
     else:
@@ -114,14 +116,14 @@ async def pm(evt: CommandEvent) -> EventID:
         return await evt.reply("User not found.")
     elif not isinstance(user, TLUser):
         return await evt.reply("That doesn't seem to be a user.")
-    portal = po.Portal.get_by_entity(user, evt.sender.tgid)
+    portal = await po.Portal.get_by_entity(user, tg_receiver=evt.sender.tgid)
     await portal.create_matrix_room(evt.sender, user, [evt.sender.mxid])
     displayname, _ = pu.Puppet.get_displayname(user, False)
     return await evt.reply(f"Created private chat room with {displayname}")
 
 
 async def _join(evt: CommandEvent, identifier: str, link_type: str
-                ) -> Tuple[Optional[TypeUpdates], Optional[EventID]]:
+                ) -> tuple[TypeUpdates | None, EventID | None]:
     if link_type == "joinchat":
         try:
             await evt.sender.client(CheckChatInviteRequest(identifier))
@@ -143,7 +145,7 @@ async def _join(evt: CommandEvent, identifier: str, link_type: str
 @command_handler(help_section=SECTION_CREATING_PORTALS,
                  help_args="<_link_>",
                  help_text="Join a chat with an invite link.")
-async def join(evt: CommandEvent) -> Optional[EventID]:
+async def join(evt: CommandEvent) -> EventID | None:
     if len(evt.args) == 0:
         return await evt.reply("**Usage:** `$cmdprefix+sp join <invite link>`")
 
@@ -171,7 +173,7 @@ async def join(evt: CommandEvent) -> Optional[EventID]:
         return None
 
     for chat in updates.chats:
-        portal = po.Portal.get_by_entity(chat)
+        portal = await po.Portal.get_by_entity(chat)
         if portal.mxid:
             await portal.invite_to_matrix([evt.sender.mxid])
             return await evt.reply(f"Invited you to portal of {portal.title}")
@@ -219,7 +221,7 @@ class MessageIDError(ValueError):
 
 
 async def _parse_encoded_msgid(user: AbstractUser, enc_id: str, type_name: str
-                               ) -> Tuple[TypeInputPeer, Message]:
+                               ) -> tuple[TypeInputPeer, Message]:
     try:
         enc_id += (4 - len(enc_id) % 4) * "="
         enc_id = base64.b64decode(enc_id)
@@ -233,10 +235,10 @@ async def _parse_encoded_msgid(user: AbstractUser, enc_id: str, type_name: str
         raise MessageIDError(f"Invalid {type_name} ID (format)") from e
 
     if peer_type == PEER_TYPE_CHAT:
-        orig_msg = DBMessage.get_one_by_tgid(msg_id, space)
+        orig_msg = await DBMessage.get_one_by_tgid(msg_id, space)
         if not orig_msg:
             raise MessageIDError(f"Invalid {type_name} ID (original message not found in db)")
-        new_msg = DBMessage.get_by_mxid(orig_msg.mxid, orig_msg.mx_room, user.tgid)
+        new_msg = await DBMessage.get_by_mxid(orig_msg.mxid, orig_msg.mx_room, user.tgid)
         if not new_msg:
             raise MessageIDError(f"Invalid {type_name} ID (your copy of message not found in db)")
         msg_id = new_msg.tgid
@@ -282,7 +284,7 @@ async def play(evt: CommandEvent) -> EventID:
 @command_handler(help_section=SECTION_MISC,
                  help_args="<_poll ID_> <_choice number_>",
                  help_text="Vote in a Telegram poll.")
-async def vote(evt: CommandEvent) -> EventID:
+async def vote(evt: CommandEvent) -> EventID | None:
     if len(evt.args) < 1:
         return await evt.reply("**Usage:** `$cmdprefix+sp vote <poll ID> <choice number>`")
     elif not await evt.sender.is_logged_in():
@@ -319,7 +321,7 @@ async def vote(evt: CommandEvent) -> EventID:
     options = [msg.media.poll.answers[int(option) - 1].option
                for option in evt.args[1:]]
     try:
-        resp = await evt.sender.client(SendVoteRequest(peer=peer, msg_id=msg.id, options=options))
+        await evt.sender.client(SendVoteRequest(peer=peer, msg_id=msg.id, options=options))
     except OptionsTooMuchError:
         return await evt.reply("You passed too many options.")
     # TODO use response
@@ -332,7 +334,7 @@ async def vote(evt: CommandEvent) -> EventID:
 async def random(evt: CommandEvent) -> EventID:
     if not evt.is_portal:
         return await evt.reply("You can only randomize values in portal rooms")
-    portal = po.Portal.get_by_mxid(evt.room_id)
+    portal = await po.Portal.get_by_mxid(evt.room_id)
     arg = evt.args[0] if len(evt.args) > 0 else "dice"
     emoticon = {
         "dart": "\U0001F3AF",
@@ -359,7 +361,7 @@ async def backfill(evt: CommandEvent) -> None:
         limit = int(evt.args[0])
     except (ValueError, IndexError):
         limit = -1
-    portal = po.Portal.get_by_mxid(evt.room_id)
+    portal = await po.Portal.get_by_mxid(evt.room_id)
     if not evt.config["bridge.backfill.normal_groups"] and portal.peer_type == "chat":
         await evt.reply("Backfilling normal groups is disabled in the bridge config")
         return

@@ -1,5 +1,5 @@
 # mautrix-telegram - A Matrix-Telegram puppeting bridge
-# Copyright (C) 2019 Tulir Asokan
+# Copyright (C) 2021 Tulir Asokan
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as published by
@@ -13,7 +13,9 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import Optional, Union, Any, List, Type, Dict
+from __future__ import annotations
+
+from typing import Any, Type
 from enum import Enum
 
 from telethon.tl.types import (MessageEntityMention as Mention, MessageEntityBotCommand as Command,
@@ -41,7 +43,7 @@ class TelegramEntityType(Enum):
     INLINE_CODE = Code
     BLOCKQUOTE = Blockquote
     MENTION = Mention
-    MENTION_NAME = MentionName
+    MENTION_NAME = InputMentionName
     COMMAND = Command
 
     USER_MENTION = 1
@@ -52,15 +54,15 @@ class TelegramEntityType(Enum):
 class TelegramEntity(SemiAbstractEntity):
     internal: TypeMessageEntity
 
-    def __init__(self, type: Union[TelegramEntityType, Type[TypeMessageEntity]],
-                 offset: int, length: int, extra_info: Dict[str, Any]) -> None:
+    def __init__(self, type: TelegramEntityType | Type[TypeMessageEntity],
+                 offset: int, length: int, extra_info: dict[str, Any]) -> None:
         if isinstance(type, TelegramEntityType):
             if isinstance(type.value, int):
                 raise ValueError(f"Can't create Entity with non-Telegram EntityType {type}")
             type = type.value
         self.internal = type(offset=offset, length=length, **extra_info)
 
-    def copy(self) -> Optional['TelegramEntity']:
+    def copy(self) -> TelegramEntity:
         extra_info = {}
         if isinstance(self.internal, Pre):
             extra_info["language"] = self.internal.language
@@ -95,5 +97,5 @@ class TelegramMessage(EntityString[TelegramEntity, TelegramEntityType]):
     entity_class = TelegramEntity
 
     @property
-    def telegram_entities(self) -> List[TypeMessageEntity]:
+    def telegram_entities(self) -> list[TypeMessageEntity]:
         return [entity.internal for entity in self.entities]

@@ -13,8 +13,9 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-"""This module contains classes handling commands issued by Matrix users."""
-from typing import Awaitable, Callable, List, Optional, NamedTuple, Any
+from __future__ import annotations
+
+from typing import Awaitable, Callable, NamedTuple, Any, TYPE_CHECKING
 
 from telethon.errors import FloodWaitError
 
@@ -26,6 +27,9 @@ from mautrix.bridge.commands import (HelpSection, CommandEvent as BaseCommandEve
 
 from ..util import format_duration
 from .. import user as u, context as c, portal as po
+
+if TYPE_CHECKING:
+    from ..__main__ import TelegramBridge
 
 
 class HelpCacheKey(NamedTuple):
@@ -48,9 +52,9 @@ class CommandEvent(BaseCommandEvent):
     sender: u.User
     portal: po.Portal
 
-    def __init__(self, processor: 'CommandProcessor', room_id: RoomID, event_id: EventID,
-                 sender: u.User, command: str, args: List[str], content: MessageEventContent,
-                 portal: Optional['po.Portal'], is_management: bool, has_bridge_bot: bool) -> None:
+    def __init__(self, processor: CommandProcessor, room_id: RoomID, event_id: EventID,
+                 sender: u.User, command: str, args: list[str], content: MessageEventContent,
+                 portal: po.Portal | None, is_management: bool, has_bridge_bot: bool) -> None:
         super().__init__(processor, room_id, event_id, sender, command, args, content,
                          portal, is_management, has_bridge_bot)
         self.bridge = processor.bridge
@@ -82,7 +86,7 @@ class CommandHandler(BaseCommandHandler):
                          needs_auth=needs_auth, needs_puppeting=needs_puppeting,
                          needs_matrix_puppeting=needs_matrix_puppeting, needs_admin=needs_admin)
 
-    async def get_permission_error(self, evt: CommandEvent) -> Optional[str]:
+    async def get_permission_error(self, evt: CommandEvent) -> str | None:
         if self.needs_puppeting and not evt.sender.puppet_whitelisted:
             return "This command requires puppeting privileges."
         elif self.needs_matrix_puppeting and not evt.sender.matrix_puppet_whitelisted:
@@ -95,10 +99,10 @@ class CommandHandler(BaseCommandHandler):
                 (not self.needs_matrix_puppeting or key.matrix_puppet_whitelisted))
 
 
-def command_handler(_func: Optional[CommandHandlerFunc] = None, *, needs_auth: bool = True,
+def command_handler(_func: CommandHandlerFunc | None = None, *, needs_auth: bool = True,
                     needs_puppeting: bool = True, needs_matrix_puppeting: bool = False,
                     needs_admin: bool = False, management_only: bool = False,
-                    name: Optional[str] = None, help_text: str = "", help_args: str = "",
+                    name: str | None = None, help_text: str = "", help_args: str = "",
                     help_section: HelpSection = None) -> Callable[[CommandHandlerFunc],
                                                                   CommandHandler]:
     return base_command_handler(
@@ -109,10 +113,10 @@ def command_handler(_func: Optional[CommandHandlerFunc] = None, *, needs_auth: b
 
 
 class CommandProcessor(BaseCommandProcessor):
-    def __init__(self, context: c.Context) -> None:
-        super().__init__(event_class=CommandEvent, bridge=context.bridge)
-        self.tgbot = context.bot
-        self.public_website = context.public_website
+    def __init__(self, bridge: 'TelegramBridge') -> None:
+        super().__init__(event_class=CommandEvent, bridge=bridge)
+        self.tgbot = bridge.bot
+        self.public_website = bridge.public_website
 
     @staticmethod
     async def _run_handler(handler: Callable[[CommandEvent], Awaitable[Any]], evt: CommandEvent

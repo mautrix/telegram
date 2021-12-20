@@ -4,7 +4,7 @@ The Element fork includes the following changes:
  - Add config limits for portal rooms https://github.com/mautrix/telegram/pull/469
  - Make max_initial_member_sync work for Chats as well as Channels https://github.com/mautrix/telegram/pull/680
  - Allow disabling user status updates from Telegram side https://github.com/vector-im/mautrix-telegram/pull/9
- - Add `psycopg2`, `uvloop` to requirements.txt, install_requires https://github.com/vector-im/mautrix-telegram/pull/10/files
+ - Add `uvloop` to requirements.txt, install_requires https://github.com/vector-im/mautrix-telegram/pull/10/files
  - Add metrics about Matrix API calls https://github.com/mautrix/python/pull/68
  - Don't block connections on startup https://github.com/vector-im/mautrix-telegram/pull/20
  - Add metrics for Appservice's Connection Pool stats https://github.com/vector-im/mautrix-telegram/pull/22, https://github.com/vector-im/mautrix-telegram/pull/27, https://github.com/vector-im/mautrix-telegram/pull/29

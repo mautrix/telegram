@@ -21,10 +21,7 @@ import json
 from aiohttp import web
 
 from telethon.utils import get_peer_id, resolve_id
-from telethon.tl.types import ChatForbidden, ChannelForbidden, TypeChat, InputUserSelf
-from telethon.tl.functions.users import GetUsersRequest
-from telethon.errors import (UserDeactivatedError, UserDeactivatedBanError, SessionRevokedError,
-                             UnauthorizedError)
+from telethon.tl.types import ChatForbidden, ChannelForbidden, TypeChat
 
 from mautrix.appservice import AppService
 from mautrix.errors import MatrixRequestError, IntentError
@@ -37,23 +34,23 @@ from ...commands.portal.util import user_has_power_level, get_initial_state
 from ..common import AuthAPI
 
 if TYPE_CHECKING:
-    from ...context import Context
+    from ...__main__ import TelegramBridge
 
 
 class ProvisioningAPI(AuthAPI):
     log: logging.Logger = logging.getLogger("mau.web.provisioning")
     secret: str
     az: AppService
-    context: 'Context'
+    bridge: 'TelegramBridge'
     app: web.Application
 
-    def __init__(self, context: "Context") -> None:
-        super().__init__(context.loop)
-        self.secret = context.config["appservice.provisioning.shared_secret"]
-        self.az = context.az
-        self.context = context
+    def __init__(self, bridge: "TelegramBridge") -> None:
+        super().__init__(bridge.loop)
+        self.secret = bridge.config["appservice.provisioning.shared_secret"]
+        self.az = bridge.az
+        self.bridge = bridge
 
-        self.app = web.Application(loop=context.loop, middlewares=[self.error_middleware])
+        self.app = web.Application(loop=bridge.loop, middlewares=[self.error_middleware])
 
         portal_prefix = "/portal/{mxid:![^/]+}"
         self.app.router.add_route("GET", f"{portal_prefix}", self.get_portal_by_mxid)
@@ -81,7 +78,7 @@ class ProvisioningAPI(AuthAPI):
             return err
 
         mxid = request.match_info["mxid"]
-        portal = Portal.get_by_mxid(mxid)
+        portal = await Portal.get_by_mxid(mxid)
         if not portal:
             return self.get_error_response(404, "portal_not_found",
                                            "Portal with given Matrix ID not found.")
@@ -97,7 +94,7 @@ class ProvisioningAPI(AuthAPI):
         except ValueError:
             return self.get_error_response(400, "tgid_invalid",
                                            "Given chat ID is not valid.")
-        portal = Portal.get_by_tgid(tgid)
+        portal = await Portal.get_by_tgid(tgid)
         if not portal:
             return self.get_error_response(404, "portal_not_found",
                                            "Portal to given Telegram chat not found.")
@@ -122,7 +119,7 @@ class ProvisioningAPI(AuthAPI):
             return err
 
         room_id = request.match_info["mxid"]
-        if Portal.get_by_mxid(room_id):
+        if await Portal.get_by_mxid(room_id):
             return self.get_error_response(409, "room_already_bridged",
                                            "Room is already bridged to another Telegram chat.")
 
@@ -145,12 +142,12 @@ class ProvisioningAPI(AuthAPI):
                                            "You do not have the permissions to bridge that room.")
 
         is_logged_in = user is not None and await user.is_logged_in()
-        acting_user = user if is_logged_in else self.context.bot
+        acting_user = user if is_logged_in else self.bridge.bot
         if not acting_user:
             return self.get_login_response(status=403, errcode="not_logged_in",
                                            error="You are not logged in and there is no relay bot.")
 
-        portal = Portal.get_by_tgid(tgid, peer_type=peer_type)
+        portal = await Portal.get_by_tgid(tgid, peer_type=peer_type)
         if portal.mxid == room_id:
             return self.get_error_response(200, "bridge_exists",
                                            "Telegram chat is already bridged to that Matrix room.")
@@ -204,7 +201,7 @@ class ProvisioningAPI(AuthAPI):
             return self.get_error_response(400, "json_invalid", "Invalid JSON.")
 
         room_id = request.match_info["mxid"]
-        if Portal.get_by_mxid(room_id):
+        if await Portal.get_by_mxid(room_id):
             return self.get_error_response(409, "room_already_bridged",
                                            "Room is already bridged to another Telegram chat.")
 
@@ -245,7 +242,7 @@ class ProvisioningAPI(AuthAPI):
         }[type]
 
         portal = Portal(tgid=TelegramID(0), mxid=room_id, title=title, about=about, peer_type=type,
-                        encrypted=encrypted)
+                        encrypted=encrypted, tg_receiver=TelegramID(0))
         try:
             await portal.create_telegram_chat(user, supergroup=supergroup)
         except ValueError as e:
@@ -261,7 +258,7 @@ class ProvisioningAPI(AuthAPI):
         if err is not None:
             return err
 
-        portal = Portal.get_by_mxid(request.match_info["mxid"])
+        portal = await Portal.get_by_mxid(request.match_info["mxid"])
         if not portal or not portal.tgid:
             return self.get_error_response(404, "portal_not_found",
                                            "Room is not a portal.")
@@ -302,10 +299,10 @@ class ProvisioningAPI(AuthAPI):
                 await user.update_info(me)
                 user_data = {
                     "id": user.tgid,
-                    "username": user.username,
+                    "username": user.tg_username,
                     "first_name": me.first_name,
                     "last_name": me.last_name,
-                    "phone": me.phone,
+                    "phone": user.tg_phone,
                     "is_bot": user.is_bot,
                 }
         return web.json_response({
@@ -328,7 +325,7 @@ class ProvisioningAPI(AuthAPI):
             return web.json_response([{
                 "id": get_peer_id(chat.peer),
                 "title": chat.title,
-            } for chat in user.portals.values() if chat.tgid])
+            } for chat in (await user.get_cached_portals()).values() if chat.tgid])
 
     async def send_bot_token(self, request: web.Request) -> web.Response:
         data, user, err = await self.get_user_request_info(request)
@@ -365,8 +362,8 @@ class ProvisioningAPI(AuthAPI):
 
     async def bridge_info(self, request: web.Request) -> web.Response:
         return web.json_response({
-            "relaybot_username": (self.context.bot.username
-                                  if self.context.bot is not None else None),
+            "relaybot_username": (self.bridge.bot.tg_username
+                                  if self.bridge.bot is not None else None),
         }, status=200)
 
     @staticmethod
@@ -441,14 +438,14 @@ class ProvisioningAPI(AuthAPI):
             return None, self.get_login_response(error="User ID not given.",
                                                  errcode="mxid_empty", status=400)
 
-        user = await User.get_by_mxid(mxid).ensure_started(even_if_no_session=True)
+        user = await User.get_and_start_by_mxid(mxid, even_if_no_session=True)
         if require_puppeting and not user.puppet_whitelisted:
             return user, self.get_login_response(error="You are not whitelisted.",
                                                  errcode="mxid_not_whitelisted", status=403)
         if expect_logged_in is not None:
             logged_in = await user.is_logged_in()
             if not expect_logged_in and logged_in:
-                return user, self.get_login_response(username=user.username, phone=user.phone,
+                return user, self.get_login_response(username=user.tg_username, phone=user.tg_phone,
                                                      status=409,
                                                      error="You are already logged in.",
                                                      errcode="already_logged_in")

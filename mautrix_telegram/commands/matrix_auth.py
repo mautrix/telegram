@@ -24,7 +24,7 @@ from .. import puppet as pu
                  help_section=SECTION_AUTH, help_text="Revert your Telegram account's Matrix "
                                                       "puppet to use the default Matrix account.")
 async def logout_matrix(evt: CommandEvent) -> EventID:
-    puppet = pu.Puppet.get(evt.sender.tgid)
+    puppet = await pu.Puppet.get_by_tgid(evt.sender.tgid)
     if not puppet.is_real_user:
         return await evt.reply("You are not logged in with your Matrix account.")
     await puppet.switch_mxid(None, None)
@@ -36,7 +36,7 @@ async def logout_matrix(evt: CommandEvent) -> EventID:
                  help_text="Replace your Telegram account's Matrix puppet with your own Matrix "
                            "account.")
 async def login_matrix(evt: CommandEvent) -> EventID:
-    puppet = pu.Puppet.get(evt.sender.tgid)
+    puppet = await pu.Puppet.get_by_tgid(evt.sender.tgid)
     if puppet.is_real_user:
         return await evt.reply("You have already logged in with your Matrix account. "
                                "Log out with `$cmdprefix+sp logout-matrix` first.")
@@ -71,7 +71,7 @@ async def login_matrix(evt: CommandEvent) -> EventID:
                  help_section=SECTION_AUTH,
                  help_text="Pings the server with the stored matrix authentication.")
 async def ping_matrix(evt: CommandEvent) -> EventID:
-    puppet = pu.Puppet.get(evt.sender.tgid)
+    puppet = await pu.Puppet.get_by_tgid(evt.sender.tgid)
     if not puppet.is_real_user:
         return await evt.reply("You are not logged in with your Matrix account.")
     try:
@@ -84,7 +84,7 @@ async def ping_matrix(evt: CommandEvent) -> EventID:
 @command_handler(needs_auth=True, needs_matrix_puppeting=True, help_section=SECTION_AUTH,
                  help_text="Clear the Matrix sync token stored for your custom puppet.")
 async def clear_cache_matrix(evt: CommandEvent) -> EventID:
-    puppet = pu.Puppet.get(evt.sender.tgid)
+    puppet = await pu.Puppet.get_by_tgid(evt.sender.tgid)
     if not puppet.is_real_user:
         return await evt.reply("You are not logged in with your Matrix account.")
     try:
@@ -99,7 +99,7 @@ async def clear_cache_matrix(evt: CommandEvent) -> EventID:
 async def enter_matrix_token(evt: CommandEvent) -> EventID:
     evt.sender.command_status = None
 
-    puppet = pu.Puppet.get(evt.sender.tgid)
+    puppet = await pu.Puppet.get_by_tgid(evt.sender.tgid)
     if puppet.is_real_user:
         return await evt.reply("You have already logged in with your Matrix account. "
                                "Log out with `$cmdprefix+sp logout-matrix` first.")

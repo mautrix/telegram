@@ -4,7 +4,6 @@ alembic==1.6.5
 appdirs==1.4.4
 asn1crypto==1.4.0
 async-timeout==3.0.1
-asyncpg==0.24.0
 attrs==20.3.0
 Automat==20.2.0
 Brotli==1.0.9
@@ -41,7 +40,6 @@ pep517==0.10.0
 proglog==0.1.9
 progress==1.5
 prometheus-client==0.11.0
-# psycopg2==2.8.6
 pyaes==1.6.1
 pyasn1-modules==0.2.8
 pyasn1==0.4.8

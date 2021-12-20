@@ -1,5 +1,5 @@
 # mautrix-telegram - A Matrix-Telegram puppeting bridge
-# Copyright (C) 2019 Tulir Asokan
+# Copyright (C) 2021 Tulir Asokan
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as published by
@@ -24,11 +24,10 @@ from telethon.tl.types import (MessageMediaContact, MessageMediaDocument, Messag
 
 from mautrix.types import EventID
 
-from ..context import Context
 from ..types import TelegramID
 
 if TYPE_CHECKING:
-    from .base import BasePortal
+    from ..portal import Portal
 
 DedupMXID = Tuple[EventID, TelegramID]
 
@@ -40,9 +39,9 @@ class PortalDedup:
     _dedup: Deque[str]
     _dedup_mxid: Dict[str, DedupMXID]
     _dedup_action: Deque[str]
-    _portal: 'BasePortal'
+    _portal: 'Portal'
 
-    def __init__(self, portal: 'BasePortal') -> None:
+    def __init__(self, portal: 'Portal') -> None:
         self._dedup = deque()
         self._dedup_mxid = {}
         self._dedup_action = deque()
@@ -125,9 +124,3 @@ class PortalDedup:
                            and isinstance(update.message, MessageService))
             if check_dedup:
                 self.check(update.message)
-
-
-def init(context: Context) -> None:
-    cfg = context.config
-    PortalDedup.dedup_pre_db_check = cfg["bridge.deduplication.pre_db_check"]
-    PortalDedup.dedup_cache_queue_length = cfg["bridge.deduplication.cache_queue_length"]
