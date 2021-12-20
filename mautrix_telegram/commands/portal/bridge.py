@@ -13,7 +13,9 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import Optional, Tuple, Awaitable
+from __future__ import annotations
+
+from typing import Awaitable
 import asyncio
 
 from telethon.tl.types import ChatForbidden, ChannelForbidden
@@ -43,7 +45,7 @@ async def bridge(evt: CommandEvent) -> EventID:
     room_id = RoomID(evt.args[1]) if len(evt.args) > 1 else evt.room_id
     that_this = "This" if room_id == evt.room_id else "That"
 
-    portal = po.Portal.get_by_mxid(room_id)
+    portal = await po.Portal.get_by_mxid(room_id)
     if portal:
         return await evt.reply(f"{that_this} room is already a portal room.")
 
@@ -64,7 +66,7 @@ async def bridge(evt: CommandEvent) -> EventID:
                                "prefix channel IDs with `-100` and normal group IDs with `-`.\n\n"
                                "Bridging private chats to existing rooms is not allowed.")
 
-    portal = po.Portal.get_by_tgid(tgid, peer_type=peer_type)
+    portal = await po.Portal.get_by_tgid(tgid, peer_type=peer_type)
     if not portal.allow_bridging:
         return await evt.reply("This bridge doesn't allow bridging that Telegram chat.\n"
                                "If you're the bridge admin, try "
@@ -105,7 +107,7 @@ async def bridge(evt: CommandEvent) -> EventID:
 
 
 async def cleanup_old_portal_while_bridging(evt: CommandEvent, portal: "po.Portal"
-                                            ) -> Tuple[bool, Optional[Awaitable[None]]]:
+                                            ) -> tuple[bool, Awaitable[None] | None]:
     if not portal.mxid:
         await evt.reply("The portal seems to have lost its Matrix room between you"
                         "calling `$cmdprefix+sp bridge` and this command.\n\n"
@@ -126,10 +128,10 @@ async def cleanup_old_portal_while_bridging(evt: CommandEvent, portal: "po.Porta
         return False, None
 
 
-async def confirm_bridge(evt: CommandEvent) -> Optional[EventID]:
+async def confirm_bridge(evt: CommandEvent) -> EventID | None:
     status = evt.sender.command_status
     try:
-        portal = po.Portal.get_by_tgid(status["tgid"], peer_type=status["peer_type"])
+        portal = await po.Portal.get_by_tgid(status["tgid"], peer_type=status["peer_type"])
         bridge_to_mxid = status["bridge_to_mxid"]
     except KeyError:
         evt.sender.command_status = None
@@ -162,7 +164,7 @@ async def confirm_bridge(evt: CommandEvent) -> Optional[EventID]:
 
 
 async def _locked_confirm_bridge(evt: CommandEvent, portal: 'po.Portal', room_id: RoomID,
-                                 is_logged_in: bool) -> Optional[EventID]:
+                                 is_logged_in: bool) -> EventID | None:
     user = evt.sender if is_logged_in else evt.tgbot
     try:
         entity = await user.client.get_entity(portal.peer)

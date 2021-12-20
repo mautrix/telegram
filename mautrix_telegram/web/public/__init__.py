@@ -77,7 +77,7 @@ class PublicBridgeWebsite(AuthAPI):
         mxid = self.verify_token(request.rel_url.query.get("token", None), endpoint="/login")
         if not mxid:
             return self.get_login_response(status=401, state="invalid-token")
-        user = User.get_by_mxid(mxid, create=False) if mxid else None
+        user = await User.get_by_mxid(mxid, create=False) if mxid else None
 
         if not user:
             return self.get_login_response(mxid=mxid, state=state)
@@ -95,7 +95,7 @@ class PublicBridgeWebsite(AuthAPI):
                                  endpoint="/matrix-login")
         if not mxid:
             return self.get_mx_login_response(status=401, state="invalid-token")
-        user = User.get_by_mxid(mxid, create=False) if mxid else None
+        user = await User.get_by_mxid(mxid, create=False) if mxid else None
 
         if not user:
             return self.get_mx_login_response(mxid=mxid)
@@ -107,7 +107,7 @@ class PublicBridgeWebsite(AuthAPI):
             return self.get_mx_login_response(mxid=user.mxid, status=403,
                                               error="You are not logged in to Telegram.")
 
-        puppet = Puppet.get(user.tgid)
+        puppet = await Puppet.get_by_tgid(user.tgid)
         if puppet.is_real_user:
             return self.get_mx_login_response(state="already-logged-in", status=409)
 
@@ -136,7 +136,7 @@ class PublicBridgeWebsite(AuthAPI):
 
         data = await request.post()
 
-        user = await User.get_by_mxid(mxid).ensure_started()
+        user = await User.get_and_start_by_mxid(mxid)
         if not user.puppet_whitelisted:
             return self.get_mx_login_response(mxid=user.mxid, error="You are not whitelisted.",
                                               status=403)

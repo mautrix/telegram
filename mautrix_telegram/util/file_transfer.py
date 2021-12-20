@@ -21,7 +21,8 @@ import asyncio
 import tempfile
 
 import magic
-from sqlalchemy.exc import IntegrityError, InvalidRequestError
+from asyncpg import UniqueViolationError
+from sqlite3 import IntegrityError
 
 from telethon.tl.types import (Document, InputFileLocation, InputDocumentFileLocation,
                                TypePhotoSize, PhotoSize, PhotoCachedSize, InputPhotoFileLocation,
@@ -123,7 +124,7 @@ async def transfer_thumbnail_to_matrix(client: MautrixTelegramClient, intent: In
     if custom_data:
         loc_id += "-mau_custom_thumbnail"
 
-    db_file = DBTelegramFile.get(loc_id)
+    db_file = await DBTelegramFile.get(loc_id)
     if db_file:
         return db_file
 
@@ -154,8 +155,8 @@ async def transfer_thumbnail_to_matrix(client: MautrixTelegramClient, intent: In
                              was_converted=False, timestamp=int(time.time()), size=len(file),
                              width=width, height=height, decryption_info=decryption_info)
     try:
-        db_file.insert()
-    except (IntegrityError, InvalidRequestError) as e:
+        await db_file.insert()
+    except (UniqueViolationError, IntegrityError) as e:
         log.exception(f"{e.__class__.__name__} while saving transferred file thumbnail data. "
                       "This was probably caused by two simultaneous transfers of the same file, "
                       "and might (but probably won't) cause problems with thumbnails or something.")
@@ -176,7 +177,7 @@ async def transfer_file_to_matrix(client: MautrixTelegramClient, intent: IntentA
     if not location_id:
         return None
 
-    db_file = DBTelegramFile.get(location_id)
+    db_file = await DBTelegramFile.get(location_id)
     if db_file:
         return db_file
 
@@ -197,7 +198,7 @@ async def _unlocked_transfer_file_to_matrix(client: MautrixTelegramClient, inten
                                             tgs_convert: Optional[dict], filename: Optional[str],
                                             encrypt: bool, parallel_id: Optional[int]
                                             ) -> Optional[DBTelegramFile]:
-    db_file = DBTelegramFile.get(loc_id)
+    db_file = await DBTelegramFile.get(loc_id)
     if db_file:
         return db_file
 
@@ -263,8 +264,8 @@ async def _unlocked_transfer_file_to_matrix(client: MautrixTelegramClient, inten
             width=converted_anim.width, height=converted_anim.height)
 
     try:
-        db_file.insert()
-    except (IntegrityError, InvalidRequestError) as e:
+        await db_file.insert()
+    except (UniqueViolationError, IntegrityError) as e:
         log.exception(f"{e.__class__.__name__} while saving transferred file data. "
                       "This was probably caused by two simultaneous transfers of the same file, "
                       "and should not cause any problems.")

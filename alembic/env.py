@@ -8,9 +8,7 @@ from os.path import abspath, dirname
 sys.path.insert(0, dirname(dirname(abspath(__file__))))
 
 from mautrix.util.db import Base
-import mautrix_telegram.db
 from mautrix_telegram.config import Config
-from alchemysession import AlchemySessionContainer
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -20,8 +18,6 @@ mxtg_config_path = context.get_x_argument(as_dictionary=True).get("config", "con
 mxtg_config = Config(mxtg_config_path, None, None)
 mxtg_config.load()
 config.set_main_option("sqlalchemy.url", mxtg_config["appservice.database"].replace("%", "%%"))
-
-AlchemySessionContainer.create_table_classes(None, "telethon_", Base)
 
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.

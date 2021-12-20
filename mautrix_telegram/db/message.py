@@ -1,5 +1,5 @@
 # mautrix-telegram - A Matrix-Telegram puppeting bridge
-# Copyright (C) 2019 Tulir Asokan
+# Copyright (C) 2021 Tulir Asokan
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as published by
@@ -13,96 +13,146 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import Optional, Iterator, List
+from __future__ import annotations
 
-from sqlalchemy import (Column, UniqueConstraint, BigInteger, Integer, String, Boolean, and_, func,
-                        desc, select, false)
+from typing import ClassVar, TYPE_CHECKING
+
+from asyncpg import Record
+from attr import dataclass
 
 from mautrix.types import RoomID, EventID
-from mautrix.util.db import Base
+from mautrix.util.async_db import Database
 
 from ..types import TelegramID
 
+fake_db = Database.create("") if TYPE_CHECKING else None
 
-class Message(Base):
-    __tablename__ = "message"
 
-    mxid: EventID = Column(String)
-    mx_room: RoomID = Column(String)
-    tgid: TelegramID = Column(BigInteger, primary_key=True)
-    tg_space: TelegramID = Column(BigInteger, primary_key=True)
-    edit_index: int = Column(Integer, primary_key=True)
-    redacted: bool = Column(Boolean, server_default=false())
+@dataclass
+class Message:
+    db: ClassVar[Database] = fake_db
 
-    __table_args__ = (UniqueConstraint("mxid", "mx_room", "tg_space", name="_mx_id_room_2"),)
-
-    @classmethod
-    def get_all_by_tgid(cls, tgid: TelegramID, tg_space: TelegramID) -> Iterator['Message']:
-        return cls._select_all(cls.c.tgid == tgid, cls.c.tg_space == tg_space)
+    mxid: EventID
+    mx_room: RoomID
+    tgid: TelegramID
+    tg_space: TelegramID
+    edit_index: int
+    redacted: bool = False
 
     @classmethod
-    def get_one_by_tgid(cls, tgid: TelegramID, tg_space: TelegramID, edit_index: int = 0
-                        ) -> Optional['Message']:
+    def _from_row(cls, row: Record | None) -> Message | None:
+        if row is None:
+            return None
+        return cls(**row)
+
+    columns: ClassVar[str] = "mxid, mx_room, tgid, tg_space, edit_index, redacted"
+
+    @classmethod
+    async def get_all_by_tgid(cls, tgid: TelegramID, tg_space: TelegramID) -> list[Message]:
+        q = f"SELECT {cls.columns} FROM message WHERE tgid=$1 AND tg_space=$2"
+        rows = await cls.db.fetch(q, tgid, tg_space)
+        return [cls._from_row(row) for row in rows]
+
+    @classmethod
+    async def get_one_by_tgid(
+        cls, tgid: TelegramID, tg_space: TelegramID, edit_index: int = 0
+    ) -> Message | None:
         if edit_index < 0:
-            return cls._one_or_none(cls.db.execute(
-                cls.t.select()
-                    .where(and_(cls.c.tgid == tgid, cls.c.tg_space == tg_space))
-                    .order_by(desc(cls.c.edit_index))
-                    .limit(1).offset(-edit_index - 1)))
+            q = (
+                f"SELECT {cls.columns} FROM message WHERE tgid=$1 AND tg_space=$2 "
+                f"ORDER BY edit_index DESC LIMIT 1 OFFSET {-edit_index - 1}"
+            )
+            row = await cls.db.fetchrow(q, tgid, tg_space)
         else:
-            return cls._select_one_or_none(cls.c.tgid == tgid, cls.c.tg_space == tg_space,
-                                           cls.c.edit_index == edit_index)
+            q = (
+                f"SELECT {cls.columns} FROM message"
+                " WHERE tgid=$1 AND tg_space=$2 AND edit_index=$3"
+            )
+            row = await cls.db.fetchrow(q, tgid, tg_space, edit_index)
+        return cls._from_row(row)
 
     @classmethod
-    def get_first_by_tgids(cls, tgids: List[TelegramID], tg_space: TelegramID
-                           ) -> Iterator['Message']:
-        return cls._select_all(cls.c.tgid.in_(tgids), cls.c.tg_space == tg_space,
-                               cls.c.edit_index == 0)
+    async def get_first_by_tgids(
+        cls, tgids: list[TelegramID], tg_space: TelegramID
+    ) -> list[Message]:
+        if cls.db.scheme == "postgres":
+            q = (
+                f"SELECT {cls.columns} FROM message"
+                " WHERE tgid=ANY($1) AND tg_space=$2 AND edit_index=0"
+            )
+            rows = await cls.db.fetch(q, tgids, tg_space)
+        else:
+            tgid_placeholders = ("?," * len(tgids)).rstrip(",")
+            q = (
+                f"SELECT {cls.columns} FROM message "
+                f"WHERE tg_space=? AND edit_index=0 AND tgid IN ({tgid_placeholders})"
+            )
+            rows = await cls.db.fetch(q, tg_space, *tgids)
+        return [cls._from_row(row) for row in rows]
 
     @classmethod
-    def count_spaces_by_mxid(cls, mxid: EventID, mx_room: RoomID) -> int:
-        rows = cls.db.execute(select([func.count(cls.c.tg_space)])
-                              .where(and_(cls.c.mxid == mxid, cls.c.mx_room == mx_room)))
-        try:
-            count, = next(rows)
-            return count
-        except StopIteration:
-            return 0
+    async def count_spaces_by_mxid(cls, mxid: EventID, mx_room: RoomID) -> int:
+        return await cls.db.fetchval(
+            "SELECT COUNT(tg_space) FROM message WHERE mxid=$1 AND mx_room=$2", mxid, mx_room
+        ) or 0
 
     @classmethod
-    def find_last(cls, mx_room: RoomID, tg_space: TelegramID) -> Optional['Message']:
-        return cls._one_or_none(cls.db.execute(
-            cls._make_simple_select(cls.c.mx_room == mx_room, cls.c.tg_space == tg_space)
-                .order_by(desc(cls.c.tgid)).limit(1)))
+    async def find_last(cls, mx_room: RoomID, tg_space: TelegramID) -> Message | None:
+        q = (
+            f"SELECT {cls.columns} FROM message WHERE mx_room=$1 AND tg_space=$2 "
+            f"ORDER BY tgid DESC LIMIT 1"
+        )
+        return cls._from_row(await cls.db.fetchrow(q, mx_room, tg_space))
 
     @classmethod
-    def delete_all(cls, mx_room: RoomID) -> None:
-        cls.db.execute(cls.t.delete().where(cls.c.mx_room == mx_room))
+    async def delete_all(cls, mx_room: RoomID) -> None:
+        await cls.db.execute("DELETE FROM message WHERE mx_room=$1", mx_room)
 
     @classmethod
-    def get_by_mxid(cls, mxid: EventID, mx_room: RoomID, tg_space: TelegramID
-                    ) -> Optional['Message']:
-        return cls._select_one_or_none(cls.c.mxid == mxid, cls.c.mx_room == mx_room,
-                                       cls.c.tg_space == tg_space)
+    async def get_by_mxid(
+        cls, mxid: EventID, mx_room: RoomID, tg_space: TelegramID
+    ) -> Message | None:
+        q = f"SELECT {cls.columns} FROM message WHERE mxid=$1 AND mx_room=$2 AND tg_space=$3"
+        return cls._from_row(await cls.db.fetchrow(q, mxid, mx_room, tg_space))
 
     @classmethod
-    def get_by_mxids(cls, mxids: List[EventID], mx_room: RoomID, tg_space: TelegramID
-                     ) -> Iterator['Message']:
-        return cls._select_all(cls.c.mxid.in_(mxids), cls.c.mx_room == mx_room,
-                               cls.c.tg_space == tg_space)
+    async def get_by_mxids(
+        cls, mxids: list[EventID], mx_room: RoomID, tg_space: TelegramID
+    ) -> list[Message]:
+        if cls.db.scheme == "postgres":
+            q = (
+                f"SELECT {cls.columns} FROM message"
+                " WHERE mxid=ANY($1) AND mx_room=$2 AND tg_space=$3"
+            )
+            rows = await cls.db.fetch(q, mxids, mx_room, tg_space)
+        else:
+            mxid_placeholders = ("?," * len(mxids)).rstrip(",")
+            q = (
+                f"SELECT {cls.columns} FROM message "
+                f"WHERE mx_room=? AND tg_space=? AND mxid IN ({mxid_placeholders})"
+            )
+            rows = await cls.db.fetch(q, mx_room, tg_space, *mxids)
+        return [cls._from_row(row) for row in rows]
 
     @classmethod
-    def update_by_tgid(cls, s_tgid: TelegramID, s_tg_space: TelegramID, s_edit_index: int,
-                       **values) -> None:
-        with cls.db.begin() as conn:
-            conn.execute(cls.t.update()
-                         .where(and_(cls.c.tgid == s_tgid, cls.c.tg_space == s_tg_space,
-                                     cls.c.edit_index == s_edit_index))
-                         .values(**values))
+    async def replace_temp_mxid(cls, temp_mxid: str, mx_room: RoomID, real_mxid: EventID) -> None:
+        q = "UPDATE message SET mxid=$1 WHERE mxid=$2 AND mx_room=$3"
+        await cls.db.execute(q, real_mxid, temp_mxid, mx_room)
 
-    @classmethod
-    def update_by_mxid(cls, s_mxid: EventID, s_mx_room: RoomID, **values) -> None:
-        with cls.db.begin() as conn:
-            conn.execute(cls.t.update()
-                         .where(and_(cls.c.mxid == s_mxid, cls.c.mx_room == s_mx_room))
-                         .values(**values))
+    async def insert(self) -> None:
+        q = (
+            "INSERT INTO message (mxid, mx_room, tgid, tg_space, edit_index, redacted) "
+            "VALUES ($1, $2, $3, $4, $5, $6)"
+        )
+        await self.db.execute(
+            q, self.mxid, self.mx_room, self.tgid, self.tg_space, self.edit_index, self.redacted
+        )
+
+    async def delete(self) -> None:
+        q = "DELETE FROM message WHERE mxid=$1 AND mx_room=$2 AND tg_space=$3"
+        await self.db.execute(q, self.mxid, self.mx_room, self.tg_space)
+
+    async def mark_redacted(self) -> None:
+        self.redacted = True
+        q = "UPDATE message SET redacted=true WHERE mxid=$1 AND mx_room=$2"
+        await self.db.execute(q, self.mxid, self.mx_room)

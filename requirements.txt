@@ -1,13 +1,11 @@
-SQLAlchemy>=1.2,<1.4
-alembic>=1,<2
 ruamel.yaml>=0.15.35,<0.18
 python-magic>=0.4,<0.5
 commonmark>=0.8,<0.10
 aiohttp>=3,<4
 yarl>=1,<2
-mautrix>=0.13.3,<0.14
-telethon>=1.24,<1.25
-telethon-session-sqlalchemy>=0.2.14,<0.3
-# Temporarily always depend on aiosqlite to prevent breaking old installs
-# Will be removed in v0.12 (after which you need to choose the [sqlite] optional dependency)
+mautrix==0.14.0rc1
+#telethon>=1.24,<1.25
+# Fork to make session storage async
+tulir-telethon==1.25.0a1
+asyncpg>=0.20,<0.26
 aiosqlite>=0.17,<0.18

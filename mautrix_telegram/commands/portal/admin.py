@@ -1,5 +1,5 @@
 # mautrix-telegram - A Matrix-Telegram puppeting bridge
-# Copyright (C) 2019 Tulir Asokan
+# Copyright (C) 2021 Tulir Asokan
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as published by
@@ -35,12 +35,13 @@ async def clear_db_cache(evt: CommandEvent) -> EventID:
         po.Portal.by_mxid = {}
         await evt.reply("Cleared portal cache")
     elif section == "puppet":
-        pu.Puppet.cache = {}
+        pu.Puppet.by_tgid = {}
         for puppet in pu.Puppet.by_custom_mxid.values():
-            puppet.sync_task.cancel()
+            puppet.stop()
         pu.Puppet.by_custom_mxid = {}
-        await asyncio.gather(*[puppet.try_start() for puppet in pu.Puppet.all_with_custom_mxid()],
-                             loop=evt.loop)
+        await asyncio.gather(
+            *[puppet.try_start() async for puppet in pu.Puppet.all_with_custom_mxid()]
+        )
         await evt.reply("Cleared puppet cache and restarted custom puppet syncers")
     elif section == "user":
         u.User.by_mxid = {
@@ -61,15 +62,16 @@ async def reload_user(evt: CommandEvent) -> EventID:
         mxid = evt.args[0]
     else:
         mxid = evt.sender.mxid
-    user = u.User.get_by_mxid(mxid, create=False)
+    user = await u.User.get_by_mxid(mxid, create=False)
     if not user:
         return await evt.reply("User not found")
     puppet = await pu.Puppet.get_by_custom_mxid(mxid)
     if puppet:
-        puppet.sync_task.cancel()
+        puppet.stop()
     await user.stop()
-    user.delete(delete_db=False)
-    user = u.User.get_by_mxid(mxid)
+    del u.User.by_tgid[user.tgid]
+    del u.User.by_mxid[user.mxid]
+    user = await u.User.get_by_mxid(mxid)
     await user.ensure_started()
     if puppet:
         await puppet.start()

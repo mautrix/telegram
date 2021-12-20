@@ -13,10 +13,9 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import Optional
-
 from telethon.errors import (UsernameInvalidError, UsernameNotModifiedError, UsernameOccupiedError,
-                             HashInvalidError, AuthKeyError, FirstNameInvalidError, AboutTooLongError)
+                             HashInvalidError, AuthKeyError, FirstNameInvalidError,
+                             AboutTooLongError)
 from telethon.tl.types import Authorization
 from telethon.tl.functions.account import (UpdateUsernameRequest, GetAuthorizationsRequest,
                                            ResetAuthorizationRequest, UpdateProfileRequest)
@@ -48,10 +47,11 @@ async def username(evt: CommandEvent) -> EventID:
     except UsernameOccupiedError:
         return await evt.reply("That username is already in use.")
     await evt.sender.update_info()
-    if not evt.sender.username:
+    if not evt.sender.tg_username:
         await evt.reply("Username removed")
     else:
-        await evt.reply(f"Username changed to {evt.sender.username}")
+        await evt.reply(f"Username changed to {evt.sender.tg_username}")
+
 
 @command_handler(needs_auth=True,
                  help_section=SECTION_AUTH,
@@ -70,6 +70,7 @@ async def about(evt: CommandEvent) -> EventID:
     except AboutTooLongError:
         return await evt.reply("The provided about section is too long")
     return await evt.reply("About section updated")
+
 
 @command_handler(needs_auth=True, help_section=SECTION_AUTH, help_args="<_new displayname_>",
                  help_text="Change your Telegram displayname.")

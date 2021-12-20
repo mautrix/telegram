@@ -17,13 +17,6 @@ moviepy>=1,<2
 #/metrics
 prometheus_client>=0.6,<0.13
 
-#/postgres
-psycopg2-binary>=2,<3
-asyncpg>=0.20,<0.26
-
-#/sqlite
-aiosqlite>=0.17,<0.18
-
 #/e2be
 python-olm>=3,<4
 pycryptodome>=3,<4

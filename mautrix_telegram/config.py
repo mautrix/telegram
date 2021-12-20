@@ -1,5 +1,5 @@
 # mautrix-telegram - A Matrix-Telegram puppeting bridge
-# Copyright (C) 2020 Tulir Asokan
+# Copyright (C) 2021 Tulir Asokan
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as published by
@@ -132,6 +132,8 @@ class Config(BaseBridgeConfig):
         copy("bridge.pinned_tag")
         copy("bridge.archive_tag")
         copy("bridge.tag_only_on_create")
+        copy("bridge.bridge_matrix_leave")
+        copy("bridge.kick_on_logout")
         copy("bridge.backfill.invite_own_puppet")
         copy("bridge.backfill.takeout_limit")
         copy("bridge.backfill.initial_limit")

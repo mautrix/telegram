@@ -52,7 +52,7 @@ class AuthAPI(abc.ABC):
         raise NotImplementedError()
 
     async def post_matrix_token(self, user: User, token: str) -> web.Response:
-        puppet = Puppet.get(user.tgid)
+        puppet = await Puppet.get_by_tgid(user.tgid)
         if puppet.is_real_user:
             return self.get_mx_login_response(state="already-logged-in", status=409,
                                               error="You have already logged in with your Matrix "
@@ -116,7 +116,7 @@ class AuthAPI(abc.ABC):
                                            error="Internal server error while requesting code.")
 
     async def postprocess_login(self, user: User, user_info) -> None:
-        existing_user = User.get_by_tgid(user_info.id)
+        existing_user = await User.get_by_tgid(user_info.id)
         if existing_user and existing_user != user:
             await existing_user.log_out()
         asyncio.ensure_future(user.post_login(user_info, first_login=True), loop=self.loop)
