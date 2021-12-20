@@ -4,3 +4,4 @@ from .recursive_dict import recursive_del, recursive_set, recursive_get
 from .color_log import ColorFormatter
 from .send_lock import PortalSendLock
 from .deduplication import PortalDedup
+from .media_fallback import make_dice_event_content, make_contact_event_content

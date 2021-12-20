@@ -14,6 +14,9 @@ qrcode>=6,<7
 #/hq_thumbnails
 moviepy>=1,<2
 
+#/formatted_phonenumbers
+phonenumbers>=8,<9
+
 #/metrics
 prometheus_client>=0.6,<0.13
 
