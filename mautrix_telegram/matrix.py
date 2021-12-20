@@ -15,20 +15,33 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from __future__ import annotations
 
-from typing import Iterable, TYPE_CHECKING
+from typing import TYPE_CHECKING, Iterable
 
 from mautrix.bridge import BaseMatrixHandler
-from mautrix.types import (Event, EventType, RoomID, UserID, EventID, ReceiptEvent, ReceiptType,
-                           ReceiptEventContent, PresenceEvent, PresenceState, TypingEvent,
-                           StateEvent, RedactionEvent,
-                           RoomNameStateEventContent as NameContent,
-                           RoomAvatarStateEventContent as AvatarContent,
-                           RoomTopicStateEventContent as TopicContent,
-                           MemberStateEventContent, TextMessageEventContent,
-                           MessageType)
 from mautrix.errors import MatrixError
+from mautrix.types import (
+    Event,
+    EventID,
+    EventType,
+    MemberStateEventContent,
+    MessageType,
+    PresenceEvent,
+    PresenceState,
+    ReceiptEvent,
+    ReceiptEventContent,
+    ReceiptType,
+    RedactionEvent,
+    RoomAvatarStateEventContent as AvatarContent,
+    RoomID,
+    RoomNameStateEventContent as NameContent,
+    RoomTopicStateEventContent as TopicContent,
+    StateEvent,
+    TextMessageEventContent,
+    TypingEvent,
+    UserID,
+)
 
-from . import user as u, portal as po, puppet as pu, commands as com
+from . import commands as com, portal as po, puppet as pu, user as u
 
 if TYPE_CHECKING:
     from .__main__ import TelegramBridge
@@ -38,7 +51,7 @@ class MatrixHandler(BaseMatrixHandler):
     commands: com.CommandProcessor
     _previously_typing: dict[RoomID, set[UserID]]
 
-    def __init__(self, bridge: 'TelegramBridge') -> None:
+    def __init__(self, bridge: "TelegramBridge") -> None:
         prefix, suffix = bridge.config["bridge.username_template"].format(userid=":").split(":")
         homeserver = bridge.config["homeserver.domain"]
         self.user_id_prefix = f"@{prefix}"
@@ -48,19 +61,22 @@ class MatrixHandler(BaseMatrixHandler):
 
         self._previously_typing = {}
 
-    async def handle_puppet_invite(self, room_id: RoomID, puppet: pu.Puppet, inviter: u.User,
-                                   event_id: EventID) -> None:
+    async def handle_puppet_invite(
+        self, room_id: RoomID, puppet: pu.Puppet, inviter: u.User, event_id: EventID
+    ) -> None:
         intent = puppet.default_mxid_intent
         self.log.debug(f"{inviter.mxid} invited puppet for {puppet.tgid} to {room_id}")
         if not await inviter.is_logged_in():
             await intent.error_and_leave(
-                room_id, text="Please log in before inviting Telegram puppets.")
+                room_id, text="Please log in before inviting Telegram puppets."
+            )
             return
         portal = await po.Portal.get_by_mxid(room_id)
         if portal:
             if portal.peer_type == "user":
                 await intent.error_and_leave(
-                    room_id, text="You can not invite additional users to private chats.")
+                    room_id, text="You can not invite additional users to private chats."
+                )
                 return
             await portal.invite_telegram(inviter, puppet)
             await intent.join_room(room_id)
@@ -72,10 +88,15 @@ class MatrixHandler(BaseMatrixHandler):
             return
         if self.az.bot_mxid not in members:
             if len(members) > 2:
-                await intent.error_and_leave(room_id, text=None, html=(
-                    f"Please invite "
-                    f"<a href='https://matrix.to/#/{self.az.bot_mxid}'>the bridge bot</a> "
-                    f"first if you want to create a Telegram chat."))
+                await intent.error_and_leave(
+                    room_id,
+                    text=None,
+                    html=(
+                        f"Please invite "
+                        f"<a href='https://matrix.to/#/{self.az.bot_mxid}'>the bridge bot</a> "
+                        f"first if you want to create a Telegram chat."
+                    ),
+                )
                 return
 
             await intent.join_room(room_id)
@@ -86,9 +107,13 @@ class MatrixHandler(BaseMatrixHandler):
                 try:
                     await portal.invite_to_matrix(inviter.mxid)
                     await intent.send_notice(
-                        room_id, text=f"You already have a private chat with me: {portal.mxid}",
-                        html=("You already have a private chat with me: "
-                              f"<a href='https://matrix.to/#/{portal.mxid}'>Link to room</a>"))
+                        room_id,
+                        text=f"You already have a private chat with me: {portal.mxid}",
+                        html=(
+                            "You already have a private chat with me: "
+                            f"<a href='https://matrix.to/#/{portal.mxid}'>Link to room</a>"
+                        ),
+                    )
                     await intent.leave_room(room_id)
                     return
                 except MatrixError:
@@ -99,10 +124,14 @@ class MatrixHandler(BaseMatrixHandler):
             await inviter.register_portal(portal)
             if e2be_ok is True:
                 evt_type, content = await self.e2ee.encrypt(
-                    room_id, EventType.ROOM_MESSAGE,
-                    TextMessageEventContent(msgtype=MessageType.NOTICE,
-                                            body="Portal to private chat created and end-to-bridge"
-                                                 " encryption enabled."))
+                    room_id,
+                    EventType.ROOM_MESSAGE,
+                    TextMessageEventContent(
+                        msgtype=MessageType.NOTICE,
+                        body="Portal to private chat created and end-to-bridge"
+                        " encryption enabled.",
+                    ),
+                )
                 await intent.send_message_event(room_id, evt_type, content)
             else:
                 message = "Portal to private chat created."
@@ -112,11 +141,14 @@ class MatrixHandler(BaseMatrixHandler):
             await portal.update_bridge_info()
         else:
             await intent.join_room(room_id)
-            await intent.send_notice(room_id, "This puppet will remain inactive until a "
-                                              "Telegram chat is created for this room.")
+            await intent.send_notice(
+                room_id,
+                "This puppet will remain inactive until a Telegram chat is created for this room.",
+            )
 
-    async def handle_invite(self, room_id: RoomID, user_id: UserID, inviter: u.User,
-                            event_id: EventID) -> None:
+    async def handle_invite(
+        self, room_id: RoomID, user_id: UserID, inviter: u.User, event_id: EventID
+    ) -> None:
         user = await u.User.get_by_mxid(user_id, create=False)
         if not user:
             return
@@ -134,13 +166,16 @@ class MatrixHandler(BaseMatrixHandler):
             return
 
         if not user.relaybot_whitelisted:
-            await portal.main_intent.kick_user(room_id, user.mxid,
-                                               "You are not whitelisted on this Telegram bridge.")
+            await portal.main_intent.kick_user(
+                room_id, user.mxid, "You are not whitelisted on this Telegram bridge."
+            )
             return
         elif not await user.is_logged_in() and not portal.has_bot:
-            await portal.main_intent.kick_user(room_id, user.mxid,
-                                               "This chat does not have a bot relaying "
-                                               "messages for unauthenticated users.")
+            await portal.main_intent.kick_user(
+                room_id,
+                user.mxid,
+                "This chat does not have a bot relaying messages for unauthenticated users.",
+            )
             return
 
         self.log.debug(f"{user.mxid} joined {room_id}")
@@ -159,8 +194,15 @@ class MatrixHandler(BaseMatrixHandler):
         await user.ensure_started()
         await portal.leave_matrix(user, event_id)
 
-    async def handle_kick_ban(self, ban: bool, room_id: RoomID, user_id: UserID, sender: UserID,
-                              reason: str, event_id: EventID) -> None:
+    async def handle_kick_ban(
+        self,
+        ban: bool,
+        room_id: RoomID,
+        user_id: UserID,
+        sender: UserID,
+        reason: str,
+        event_id: EventID,
+    ) -> None:
         action = "banned" if ban else "kicked"
         self.log.debug(f"{user_id} was {action} from {room_id} by {sender} for {reason}")
         portal = await po.Portal.get_by_mxid(room_id)
@@ -195,17 +237,20 @@ class MatrixHandler(BaseMatrixHandler):
         else:
             await portal.kick_matrix(user, sender)
 
-    async def handle_kick(self, room_id: RoomID, user_id: UserID, kicked_by: UserID, reason: str,
-                          event_id: EventID) -> None:
+    async def handle_kick(
+        self, room_id: RoomID, user_id: UserID, kicked_by: UserID, reason: str, event_id: EventID
+    ) -> None:
         await self.handle_kick_ban(False, room_id, user_id, kicked_by, reason, event_id)
 
-    async def handle_unban(self, room_id: RoomID, user_id: UserID, unbanned_by: UserID,
-                           reason: str, event_id: EventID) -> None:
+    async def handle_unban(
+        self, room_id: RoomID, user_id: UserID, unbanned_by: UserID, reason: str, event_id: EventID
+    ) -> None:
         # TODO handle unbans properly instead of handling it as a kick
         await self.handle_kick_ban(False, room_id, user_id, unbanned_by, reason, event_id)
 
-    async def handle_ban(self, room_id: RoomID, user_id: UserID, banned_by: UserID, reason: str,
-                         event_id: EventID) -> None:
+    async def handle_ban(
+        self, room_id: RoomID, user_id: UserID, banned_by: UserID, reason: str, event_id: EventID
+    ) -> None:
         await self.handle_kick_ban(True, room_id, user_id, banned_by, reason, event_id)
 
     async def allow_message(self, user: u.User) -> bool:
@@ -235,9 +280,9 @@ class MatrixHandler(BaseMatrixHandler):
         portal = await po.Portal.get_by_mxid(evt.room_id)
         sender = await u.User.get_and_start_by_mxid(evt.sender)
         if await sender.has_full_access(allow_bot=True) and portal and portal.allow_bridging:
-            await portal.handle_matrix_power_levels(sender, evt.content.users,
-                                                    evt.unsigned.prev_content.users,
-                                                    evt.event_id)
+            await portal.handle_matrix_power_levels(
+                sender, evt.content.users, evt.unsigned.prev_content.users, evt.event_id
+            )
 
     @staticmethod
     async def handle_room_meta(
@@ -245,7 +290,7 @@ class MatrixHandler(BaseMatrixHandler):
         room_id: RoomID,
         sender_mxid: UserID,
         content: NameContent | AvatarContent | TopicContent,
-        event_id: EventID
+        event_id: EventID,
     ) -> None:
         portal = await po.Portal.get_by_mxid(room_id)
         sender = await u.User.get_and_start_by_mxid(sender_mxid)
@@ -260,30 +305,40 @@ class MatrixHandler(BaseMatrixHandler):
             await handler(sender, content[content_key], event_id)
 
     @staticmethod
-    async def handle_room_pin(room_id: RoomID, sender_mxid: UserID,
-                              new_events: set[str], old_events: set[str],
-                              event_id: EventID) -> None:
+    async def handle_room_pin(
+        room_id: RoomID,
+        sender_mxid: UserID,
+        new_events: set[str],
+        old_events: set[str],
+        event_id: EventID,
+    ) -> None:
         portal = await po.Portal.get_by_mxid(room_id)
         sender = await u.User.get_and_start_by_mxid(sender_mxid)
         if await sender.has_full_access(allow_bot=True) and portal and portal.allow_bridging:
             if not new_events:
                 await portal.handle_matrix_unpin_all(sender, event_id)
             else:
-                changes = {event_id: event_id in new_events
-                           for event_id in new_events ^ old_events}
+                changes = {
+                    event_id: event_id in new_events for event_id in new_events ^ old_events
+                }
                 await portal.handle_matrix_pin(sender, changes, event_id)
 
     @staticmethod
-    async def handle_room_upgrade(room_id: RoomID, sender: UserID, new_room_id: RoomID,
-                                  event_id: EventID) -> None:
+    async def handle_room_upgrade(
+        room_id: RoomID, sender: UserID, new_room_id: RoomID, event_id: EventID
+    ) -> None:
         portal = await po.Portal.get_by_mxid(room_id)
         if portal and portal.allow_bridging:
             await portal.handle_matrix_upgrade(sender, new_room_id, event_id)
 
-    async def handle_member_info_change(self, room_id: RoomID, user_id: UserID,
-                                        profile: MemberStateEventContent,
-                                        prev_profile: MemberStateEventContent,
-                                        event_id: EventID) -> None:
+    async def handle_member_info_change(
+        self,
+        room_id: RoomID,
+        user_id: UserID,
+        profile: MemberStateEventContent,
+        prev_profile: MemberStateEventContent,
+        event_id: EventID,
+    ) -> None:
         if profile.displayname == prev_profile.displayname:
             return
 
@@ -293,18 +348,22 @@ class MatrixHandler(BaseMatrixHandler):
 
         user = await u.User.get_and_start_by_mxid(user_id)
         if await user.needs_relaybot(portal):
-            await portal.name_change_matrix(user, profile.displayname, prev_profile.displayname,
-                                            event_id)
+            await portal.name_change_matrix(
+                user, profile.displayname, prev_profile.displayname, event_id
+            )
 
     @staticmethod
     def parse_read_receipts(content: ReceiptEventContent) -> Iterable[tuple[UserID, EventID]]:
-        return ((user_id, event_id)
-                for event_id, receipts in content.items()
-                for user_id in receipts.get(ReceiptType.READ, {}))
+        return (
+            (user_id, event_id)
+            for event_id, receipts in content.items()
+            for user_id in receipts.get(ReceiptType.READ, {})
+        )
 
     @staticmethod
-    async def handle_read_receipts(room_id: RoomID, receipts: Iterable[tuple[UserID, EventID]]
-                                   ) -> None:
+    async def handle_read_receipts(
+        room_id: RoomID, receipts: Iterable[tuple[UserID, EventID]]
+    ) -> None:
         portal = await po.Portal.get_by_mxid(room_id)
         if not portal or not portal.allow_bridging:
             return
@@ -357,16 +416,19 @@ class MatrixHandler(BaseMatrixHandler):
         if evt.type == EventType.ROOM_POWER_LEVELS:
             await self.handle_power_levels(evt)
         elif evt.type in (EventType.ROOM_NAME, EventType.ROOM_AVATAR, EventType.ROOM_TOPIC):
-            await self.handle_room_meta(evt.type, evt.room_id, evt.sender, evt.content,
-                                        evt.event_id)
+            await self.handle_room_meta(
+                evt.type, evt.room_id, evt.sender, evt.content, evt.event_id
+            )
         elif evt.type == EventType.ROOM_PINNED_EVENTS:
             new_events = set(evt.content.pinned)
             try:
                 old_events = set(evt.unsigned.prev_content.pinned)
             except (KeyError, ValueError, TypeError, AttributeError):
                 old_events = set()
-            await self.handle_room_pin(evt.room_id, evt.sender, new_events, old_events,
-                                       evt.event_id)
+            await self.handle_room_pin(
+                evt.room_id, evt.sender, new_events, old_events, evt.event_id
+            )
         elif evt.type == EventType.ROOM_TOMBSTONE:
-            await self.handle_room_upgrade(evt.room_id, evt.sender, evt.content.replacement_room,
-                                           evt.event_id)
+            await self.handle_room_upgrade(
+                evt.room_id, evt.sender, evt.content.replacement_room, evt.event_id
+            )

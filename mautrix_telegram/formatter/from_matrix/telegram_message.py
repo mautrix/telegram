@@ -18,20 +18,30 @@ from __future__ import annotations
 from typing import Any, Type
 from enum import Enum
 
-from telethon.tl.types import (MessageEntityMention as Mention, MessageEntityBotCommand as Command,
-                               MessageEntityMentionName as MentionName, MessageEntityUrl as URL,
-                               MessageEntityEmail as Email, MessageEntityTextUrl as TextURL,
-                               MessageEntityBold as Bold, MessageEntityItalic as Italic,
-                               MessageEntityCode as Code, MessageEntityPre as Pre,
-                               MessageEntityStrike as Strike, MessageEntityUnderline as Underline,
-                               MessageEntityBlockquote as Blockquote, TypeMessageEntity,
-                               InputMessageEntityMentionName as InputMentionName)
+from telethon.tl.types import (
+    InputMessageEntityMentionName as InputMentionName,
+    MessageEntityBlockquote as Blockquote,
+    MessageEntityBold as Bold,
+    MessageEntityBotCommand as Command,
+    MessageEntityCode as Code,
+    MessageEntityEmail as Email,
+    MessageEntityItalic as Italic,
+    MessageEntityMention as Mention,
+    MessageEntityMentionName as MentionName,
+    MessageEntityPre as Pre,
+    MessageEntityStrike as Strike,
+    MessageEntityTextUrl as TextURL,
+    MessageEntityUnderline as Underline,
+    MessageEntityUrl as URL,
+    TypeMessageEntity,
+)
 
 from mautrix.util.formatter import EntityString, SemiAbstractEntity
 
 
 class TelegramEntityType(Enum):
     """EntityType is a Matrix formatting entity type."""
+
     BOLD = Bold
     ITALIC = Italic
     STRIKETHROUGH = Strike
@@ -54,8 +64,13 @@ class TelegramEntityType(Enum):
 class TelegramEntity(SemiAbstractEntity):
     internal: TypeMessageEntity
 
-    def __init__(self, type: TelegramEntityType | Type[TypeMessageEntity],
-                 offset: int, length: int, extra_info: dict[str, Any]) -> None:
+    def __init__(
+        self,
+        type: TelegramEntityType | Type[TypeMessageEntity],
+        offset: int,
+        length: int,
+        extra_info: dict[str, Any],
+    ) -> None:
         if isinstance(type, TelegramEntityType):
             if isinstance(type.value, int):
                 raise ValueError(f"Can't create Entity with non-Telegram EntityType {type}")
@@ -70,8 +85,12 @@ class TelegramEntity(SemiAbstractEntity):
             extra_info["url"] = self.internal.url
         elif isinstance(self.internal, (MentionName, InputMentionName)):
             extra_info["user_id"] = self.internal.user_id
-        return TelegramEntity(type(self.internal), offset=self.internal.offset,
-                              length=self.internal.length, extra_info=extra_info)
+        return TelegramEntity(
+            type(self.internal),
+            offset=self.internal.offset,
+            length=self.internal.length,
+            extra_info=extra_info,
+        )
 
     def __repr__(self) -> str:
         return str(self.internal)

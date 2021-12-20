@@ -17,14 +17,14 @@ from __future__ import annotations
 
 import re
 
-from telethon.tl.types import MessageEntityItalic, TypeMessageEntity
-from telethon.helpers import add_surrogate, del_surrogate
 from telethon import TelegramClient
+from telethon.helpers import add_surrogate, del_surrogate
+from telethon.tl.types import MessageEntityItalic, TypeMessageEntity
 
-from mautrix.types import RoomID, MessageEventContent
+from mautrix.types import MessageEventContent, RoomID
 
-from ...types import TelegramID
 from ...db import Message as DBMessage
+from ...types import TelegramID
 from .parser import MatrixParser
 
 command_regex = re.compile(r"^!([A-Za-z0-9@]+)")

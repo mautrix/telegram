@@ -13,26 +13,40 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import Awaitable, Callable, Dict, List, Optional, Tuple, TYPE_CHECKING
+from typing import Awaitable, Callable, Dict, List, Optional, Tuple
 import logging
 
+from telethon.errors import ChannelInvalidError, ChannelPrivateError
+from telethon.tl.functions.channels import GetChannelsRequest, GetParticipantRequest
+from telethon.tl.functions.messages import GetChatsRequest, GetFullChatRequest
 from telethon.tl.patched import Message, MessageService
 from telethon.tl.types import (
-    ChannelParticipantAdmin, ChannelParticipantCreator, ChatForbidden, ChatParticipantAdmin,
-    ChatParticipantCreator, InputChannel, InputUser, MessageActionChatAddUser, PeerUser,
-    MessageActionChatDeleteUser, MessageEntityBotCommand, PeerChannel, PeerChat, TypePeer,
-    UpdateNewChannelMessage, UpdateNewMessage, MessageActionChatMigrateTo, User)
-from telethon.tl.functions.messages import GetChatsRequest, GetFullChatRequest
-from telethon.tl.functions.channels import GetChannelsRequest, GetParticipantRequest
-from telethon.errors import ChannelInvalidError, ChannelPrivateError
+    ChannelParticipantAdmin,
+    ChannelParticipantCreator,
+    ChatForbidden,
+    ChatParticipantAdmin,
+    ChatParticipantCreator,
+    InputChannel,
+    InputUser,
+    MessageActionChatAddUser,
+    MessageActionChatDeleteUser,
+    MessageActionChatMigrateTo,
+    MessageEntityBotCommand,
+    PeerChannel,
+    PeerChat,
+    PeerUser,
+    TypePeer,
+    UpdateNewChannelMessage,
+    UpdateNewMessage,
+    User,
+)
 
 from mautrix.types import UserID
 
+from . import portal as po, puppet as pu, user as u
 from .abstract_user import AbstractUser
 from .db import BotChat
 from .types import TelegramID
-from . import puppet as pu, portal as po, user as u
-
 
 ReplyFunc = Callable[[str], Awaitable[Message]]
 
@@ -60,8 +74,9 @@ class Bot(AbstractUser):
         self.is_bot = True
         self.chats = {}
         self.tg_whitelist = []
-        self.whitelist_group_admins = (self.config["bridge.relaybot.whitelist_group_admins"]
-                                       or False)
+        self.whitelist_group_admins = (
+            self.config["bridge.relaybot.whitelist_group_admins"] or False
+        )
         self._me_info = None
         self._me_mxid = None
 
@@ -83,7 +98,7 @@ class Bot(AbstractUser):
             if isinstance(user_id, int):
                 self.tg_whitelist.append(user_id)
 
-    async def start(self, delete_unless_authenticated: bool = False) -> 'Bot':
+    async def start(self, delete_unless_authenticated: bool = False) -> "Bot":
         self.chats = {chat.id: chat.type for chat in await BotChat.all()}
         await super().start(delete_unless_authenticated)
         if not await self.is_logged_in():
@@ -104,9 +119,11 @@ class Bot(AbstractUser):
             if isinstance(chat, ChatForbidden) or chat.left or chat.deactivated:
                 await self.remove_chat(TelegramID(chat.id))
 
-        channel_ids = [InputChannel(chat_id, 0)
-                       for chat_id, chat_type in self.chats.items()
-                       if chat_type == "channel"]
+        channel_ids = [
+            InputChannel(chat_id, 0)
+            for chat_id, chat_type in self.chats.items()
+            if chat_type == "channel"
+        ]
         for channel_id in channel_ids:
             try:
                 await self.client(GetChannelsRequest([channel_id]))
@@ -143,7 +160,9 @@ class Bot(AbstractUser):
         if self.whitelist_group_admins:
             if isinstance(chat, PeerChannel):
                 p = await self.client(GetParticipantRequest(chat, tgid))
-                return isinstance(p.participant, (ChannelParticipantCreator, ChannelParticipantAdmin))
+                return isinstance(
+                    p.participant, (ChannelParticipantCreator, ChannelParticipantAdmin)
+                )
             elif isinstance(chat, PeerChat):
                 chat = await self.client(GetFullChatRequest(chat.chat_id))
                 participants = chat.full_chat.participants.participants
@@ -170,27 +189,29 @@ class Bot(AbstractUser):
         if portal.mxid:
             if portal.username:
                 return await reply(
-                    f"Portal is public: [{portal.alias}](https://matrix.to/#/{portal.alias})")
+                    f"Portal is public: [{portal.alias}](https://matrix.to/#/{portal.alias})"
+                )
             else:
-                return await reply(
-                    "Portal is not public. Use `/invite <mxid>` to get an invite.")
+                return await reply("Portal is not public. Use `/invite <mxid>` to get an invite.")
 
-    async def handle_command_invite(self, portal: po.Portal, reply: ReplyFunc,
-                                    mxid_input: UserID) -> Message:
+    async def handle_command_invite(
+        self, portal: po.Portal, reply: ReplyFunc, mxid_input: UserID
+    ) -> Message:
         if len(mxid_input) == 0:
             return await reply("Usage: `/invite <mxid>`")
         elif not portal.mxid:
-            return await reply("Portal does not have Matrix room. "
-                               "Create one with /portal first.")
-        if mxid_input[0] != '@' or mxid_input.find(':') < 2:
+            return await reply("Portal does not have Matrix room. Create one with /portal first.")
+        if mxid_input[0] != "@" or mxid_input.find(":") < 2:
             return await reply("That doesn't look like a Matrix ID.")
         user = await u.User.get_and_start_by_mxid(mxid_input)
         if not user.relaybot_whitelisted:
             return await reply("That user is not whitelisted to use the bridge.")
         elif await user.is_logged_in():
             displayname = f"@{user.tg_username}" if user.tg_username else user.displayname
-            return await reply("That user seems to be logged in. "
-                               f"Just invite [{displayname}](tg://user?id={user.tgid})")
+            return await reply(
+                "That user seems to be logged in. "
+                f"Just invite [{displayname}](tg://user?id={user.tgid})"
+            )
         else:
             await portal.invite_to_matrix(user.mxid)
             return await reply(f"Invited `{user.mxid}` to the portal.")
@@ -251,7 +272,7 @@ class Bot(AbstractUser):
                 await self.handle_command_portal(portal, reply)
             elif is_invite_cmd:
                 try:
-                    mxid = text[text.index(" ") + 1:]
+                    mxid = text[text.index(" ") + 1 :]
                 except ValueError:
                     mxid = ""
                 await self.handle_command_invite(portal, reply, mxid_input=UserID(mxid))
@@ -283,10 +304,13 @@ class Bot(AbstractUser):
             await self.handle_service_message(update.message)
             return False
 
-        is_command = (isinstance(update.message, Message)
-                      and update.message.entities and len(update.message.entities) > 0
-                      and isinstance(update.message.entities[0], MessageEntityBotCommand)
-                      and update.message.entities[0].offset == 0)
+        is_command = (
+            isinstance(update.message, Message)
+            and update.message.entities
+            and len(update.message.entities) > 0
+            and isinstance(update.message.entities[0], MessageEntityBotCommand)
+            and update.message.entities[0].offset == 0
+        )
         if is_command:
             await self.handle_command(update.message)
         return False

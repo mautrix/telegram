@@ -15,14 +15,14 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from __future__ import annotations
 
-from typing import ClassVar, Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, ClassVar
 import json
 
 from asyncpg import Record
 from attr import dataclass
 import attr
 
-from mautrix.types import RoomID, ContentURI
+from mautrix.types import ContentURI, RoomID
 from mautrix.util.async_db import Database
 
 from ..types import TelegramID
@@ -93,9 +93,20 @@ class Portal:
 
     @property
     def _values(self):
-        return (self.tgid, self.tg_receiver, self.peer_type, self.mxid, self.avatar_url,
-                self.encrypted, self.username, self.title, self.about, self.photo_id,
-                self.megagroup, json.dumps(self.local_config) if self.local_config else None)
+        return (
+            self.tgid,
+            self.tg_receiver,
+            self.peer_type,
+            self.mxid,
+            self.avatar_url,
+            self.encrypted,
+            self.username,
+            self.title,
+            self.about,
+            self.photo_id,
+            self.megagroup,
+            json.dumps(self.local_config) if self.local_config else None,
+        )
 
     async def save(self) -> None:
         q = (

@@ -13,21 +13,28 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import Optional, Deque, Dict, Tuple, TYPE_CHECKING
+from __future__ import annotations
+
+from typing import Tuple
 from collections import deque
 import hashlib
 
 from telethon.tl.patched import Message, MessageService
-from telethon.tl.types import (MessageMediaContact, MessageMediaDocument, MessageMediaGeo,
-                               MessageMediaPhoto, TypeMessage, TypeUpdates, UpdateNewMessage,
-                               UpdateNewChannelMessage)
+from telethon.tl.types import (
+    MessageMediaContact,
+    MessageMediaDocument,
+    MessageMediaGeo,
+    MessageMediaPhoto,
+    TypeMessage,
+    TypeUpdates,
+    UpdateNewChannelMessage,
+    UpdateNewMessage,
+)
 
 from mautrix.types import EventID
 
+from .. import portal as po
 from ..types import TelegramID
-
-if TYPE_CHECKING:
-    from ..portal import Portal
 
 DedupMXID = Tuple[EventID, TelegramID]
 
@@ -36,12 +43,12 @@ class PortalDedup:
     pre_db_check: bool = False
     cache_queue_length: int = 20
 
-    _dedup: Deque[str]
-    _dedup_mxid: Dict[str, DedupMXID]
-    _dedup_action: Deque[str]
-    _portal: 'Portal'
+    _dedup: deque[str]
+    _dedup_mxid: dict[str, DedupMXID]
+    _dedup_action: deque[str]
+    _portal: po.Portal
 
-    def __init__(self, portal: 'Portal') -> None:
+    def __init__(self, portal: po.Portal) -> None:
         self._dedup = deque()
         self._dedup_mxid = {}
         self._dedup_action = deque()
@@ -49,7 +56,7 @@ class PortalDedup:
 
     @property
     def _always_force_hash(self) -> bool:
-        return self._portal.peer_type == 'chat'
+        return self._portal.peer_type == "chat"
 
     @staticmethod
     def _hash_event(event: TypeMessage) -> str:
@@ -73,10 +80,7 @@ class PortalDedup:
                     }[type(event.media)](event.media)
                 except KeyError:
                     pass
-        return hashlib.md5("-"
-                           .join(str(a) for a in hash_content)
-                           .encode("utf-8")
-                           ).hexdigest()
+        return hashlib.md5("-".join(str(a) for a in hash_content).encode("utf-8")).hexdigest()
 
     def check_action(self, event: TypeMessage) -> bool:
         evt_hash = self._hash_event(event) if self._always_force_hash else event.id
@@ -89,9 +93,13 @@ class PortalDedup:
             self._dedup_action.popleft()
         return False
 
-    def update(self, event: TypeMessage, mxid: DedupMXID = None,
-               expected_mxid: Optional[DedupMXID] = None, force_hash: bool = False
-               ) -> Optional[DedupMXID]:
+    def update(
+        self,
+        event: TypeMessage,
+        mxid: DedupMXID = None,
+        expected_mxid: DedupMXID | None = None,
+        force_hash: bool = False,
+    ) -> DedupMXID | None:
         evt_hash = self._hash_event(event) if self._always_force_hash or force_hash else event.id
         try:
             found_mxid = self._dedup_mxid[evt_hash]
@@ -103,11 +111,10 @@ class PortalDedup:
         self._dedup_mxid[evt_hash] = mxid
         return None
 
-    def check(self, event: TypeMessage, mxid: DedupMXID = None, force_hash: bool = False
-              ) -> Optional[DedupMXID]:
-        evt_hash = (self._hash_event(event)
-                    if self._always_force_hash or force_hash
-                    else event.id)
+    def check(
+        self, event: TypeMessage, mxid: DedupMXID = None, force_hash: bool = False
+    ) -> DedupMXID | None:
+        evt_hash = self._hash_event(event) if self._always_force_hash or force_hash else event.id
         if evt_hash in self._dedup:
             return self._dedup_mxid[evt_hash]
 
@@ -120,7 +127,8 @@ class PortalDedup:
 
     def register_outgoing_actions(self, response: TypeUpdates) -> None:
         for update in response.updates:
-            check_dedup = (isinstance(update, (UpdateNewMessage, UpdateNewChannelMessage))
-                           and isinstance(update.message, MessageService))
+            check_dedup = isinstance(
+                update, (UpdateNewMessage, UpdateNewChannelMessage)
+            ) and isinstance(update.message, MessageService)
             if check_dedup:
                 self.check(update.message)

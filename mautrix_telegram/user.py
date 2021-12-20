@@ -15,49 +15,62 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from __future__ import annotations
 
-from typing import Awaitable, AsyncIterable, NamedTuple, AsyncGenerator, TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, AsyncGenerator, AsyncIterable, Awaitable, NamedTuple, cast
 from datetime import datetime, timezone
 import asyncio
 
-from telethon.tl.types import (TypeUpdate, UpdateNewMessage, UpdateNewChannelMessage,
-                               UpdateShortChatMessage, UpdateShortMessage, User as TLUser, Chat,
-                               ChatForbidden, UpdateFolderPeers, UpdatePinnedDialogs,
-                               UpdateNotifySettings, NotifyPeer, InputUserSelf)
-from telethon.tl.custom import Dialog
-from telethon.tl.types.contacts import ContactsNotModified
-from telethon.tl.functions.contacts import GetContactsRequest, SearchRequest
-from telethon.tl.functions.account import UpdateStatusRequest
-from telethon.tl.functions.users import GetUsersRequest
-from telethon.tl.functions.updates import GetStateRequest
 from telethon.errors import AuthKeyDuplicatedError, RPCError, UnauthorizedError
+from telethon.tl.custom import Dialog
+from telethon.tl.functions.account import UpdateStatusRequest
+from telethon.tl.functions.contacts import GetContactsRequest, SearchRequest
+from telethon.tl.functions.updates import GetStateRequest
+from telethon.tl.functions.users import GetUsersRequest
+from telethon.tl.types import (
+    Chat,
+    ChatForbidden,
+    InputUserSelf,
+    NotifyPeer,
+    TypeUpdate,
+    UpdateFolderPeers,
+    UpdateNewChannelMessage,
+    UpdateNewMessage,
+    UpdateNotifySettings,
+    UpdatePinnedDialogs,
+    UpdateShortChatMessage,
+    UpdateShortMessage,
+    User as TLUser,
+)
+from telethon.tl.types.contacts import ContactsNotModified
 
-from mautrix.client import Client
-from mautrix.errors import MatrixRequestError, MNotFound
-from mautrix.types import UserID, RoomID, PushRuleScope, PushRuleKind, PushActionType, RoomTagInfo
 from mautrix.appservice import DOUBLE_PUPPET_SOURCE_KEY
 from mautrix.bridge import BaseUser, async_getter_lock
+from mautrix.client import Client
+from mautrix.errors import MatrixRequestError, MNotFound
+from mautrix.types import PushActionType, PushRuleKind, PushRuleScope, RoomID, RoomTagInfo, UserID
 from mautrix.util.bridge_state import BridgeState, BridgeStateEvent
 from mautrix.util.opt_prometheus import Gauge
 
-from .types import TelegramID
-from .db import User as DBUser, Message as DBMessage, PgSession
-from .abstract_user import AbstractUser
 from . import portal as po, puppet as pu
+from .abstract_user import AbstractUser
+from .db import Message as DBMessage, PgSession, User as DBUser
+from .types import TelegramID
 
 if TYPE_CHECKING:
     from .__main__ import TelegramBridge
 
-SearchResult = NamedTuple('SearchResult', puppet='pu.Puppet', similarity=int)
+SearchResult = NamedTuple("SearchResult", puppet="pu.Puppet", similarity=int)
 
-METRIC_LOGGED_IN = Gauge('bridge_logged_in', 'Users logged into bridge')
-METRIC_CONNECTED = Gauge('bridge_connected', 'Users connected to Telegram')
+METRIC_LOGGED_IN = Gauge("bridge_logged_in", "Users logged into bridge")
+METRIC_CONNECTED = Gauge("bridge_connected", "Users connected to Telegram")
 
-BridgeState.human_readable_errors.update({
-    "tg-not-connected": "Your Telegram connection failed",
-    "tg-auth-key-duplicated": "The bridge accidentally logged you out",
-    "tg-not-authenticated": "The stored auth token did not work",
-    "tg-no-auth": "You're not logged in",
-})
+BridgeState.human_readable_errors.update(
+    {
+        "tg-not-connected": "Your Telegram connection failed",
+        "tg-auth-key-duplicated": "The bridge accidentally logged you out",
+        "tg-not-authenticated": "The stored auth token did not work",
+        "tg-no-auth": "You're not logged in",
+    }
+)
 
 
 class User(DBUser, AbstractUser, BaseUser):
@@ -94,12 +107,14 @@ class User(DBUser, AbstractUser, BaseUser):
         self._is_backfilling = False
         self._portals_cache = None
 
-        (self.relaybot_whitelisted,
-         self.whitelisted,
-         self.puppet_whitelisted,
-         self.matrix_puppet_whitelisted,
-         self.is_admin,
-         self.permissions) = self.config.get_permissions(self.mxid)
+        (
+            self.relaybot_whitelisted,
+            self.whitelisted,
+            self.puppet_whitelisted,
+            self.matrix_puppet_whitelisted,
+            self.is_admin,
+            self.permissions,
+        ) = self.config.get_permissions(self.mxid)
 
     @property
     def name(self) -> str:
@@ -124,7 +139,7 @@ class User(DBUser, AbstractUser, BaseUser):
         return self.displayname
 
     @classmethod
-    def init_cls(cls, bridge: 'TelegramBridge') -> AsyncIterable[Awaitable[User]]:
+    def init_cls(cls, bridge: "TelegramBridge") -> AsyncIterable[Awaitable[User]]:
         cls.config = bridge.config
         cls.bridge = bridge
         cls.az = bridge.az
@@ -143,8 +158,9 @@ class User(DBUser, AbstractUser, BaseUser):
             if not self.client and not await PgSession.has(self.mxid):
                 self.log.warning("Didn't start user: no session stored")
                 if self.tgid:
-                    await self.push_bridge_state(BridgeStateEvent.BAD_CREDENTIALS,
-                                                 error="tg-no-auth")
+                    await self.push_bridge_state(
+                        BridgeStateEvent.BAD_CREDENTIALS, error="tg-no-auth"
+                    )
 
     async def ensure_started(self, even_if_no_session=False) -> User:
         if not self.puppet_whitelisted or self.connected:
@@ -157,8 +173,9 @@ class User(DBUser, AbstractUser, BaseUser):
             await super().start()
         except AuthKeyDuplicatedError:
             self.log.warning("Got AuthKeyDuplicatedError in start()")
-            await self.push_bridge_state(BridgeStateEvent.BAD_CREDENTIALS,
-                                         error="tg-auth-key-duplicated")
+            await self.push_bridge_state(
+                BridgeStateEvent.BAD_CREDENTIALS, error="tg-auth-key-duplicated"
+            )
             await self.client.disconnect()
             await self.client.session.delete()
             self.client = None
@@ -180,8 +197,12 @@ class User(DBUser, AbstractUser, BaseUser):
         except UnauthorizedError as e:
             self.log.error(f"Authorization error in start(): {type(e)}: {e}")
             if self.tgid:
-                await self.push_bridge_state(BridgeStateEvent.BAD_CREDENTIALS,
-                                             error="tg-auth-error", message=str(e), ttl=3600)
+                await self.push_bridge_state(
+                    BridgeStateEvent.BAD_CREDENTIALS,
+                    error="tg-auth-error",
+                    message=str(e),
+                    ttl=3600,
+                )
         except RPCError as e:
             self.log.error(f"Unknown RPC error in start(): {type(e)}: {e}")
             if self.tgid:
@@ -200,8 +221,9 @@ class User(DBUser, AbstractUser, BaseUser):
 
     @property
     def _is_connected(self) -> bool:
-        return bool(self.client and self.client._sender
-                    and self.client._sender._transport_connected())
+        return bool(
+            self.client and self.client._sender and self.client._sender._transport_connected()
+        )
 
     async def _track_connection(self) -> None:
         self.log.debug("Starting loop to track connection state")
@@ -210,11 +232,16 @@ class User(DBUser, AbstractUser, BaseUser):
             connected = self._is_connected
             self._track_metric(METRIC_CONNECTED, connected)
             if connected:
-                await self.push_bridge_state(BridgeStateEvent.BACKFILLING if self._is_backfilling
-                                             else BridgeStateEvent.CONNECTED, ttl=3600)
+                await self.push_bridge_state(
+                    BridgeStateEvent.BACKFILLING
+                    if self._is_backfilling
+                    else BridgeStateEvent.CONNECTED,
+                    ttl=3600,
+                )
             else:
-                await self.push_bridge_state(BridgeStateEvent.UNKNOWN_ERROR, ttl=240,
-                                             error="tg-not-connected")
+                await self.push_bridge_state(
+                    BridgeStateEvent.UNKNOWN_ERROR, ttl=240, error="tg-not-connected"
+                )
 
     async def fill_bridge_state(self, state: BridgeState) -> None:
         await super().fill_bridge_state(state)
@@ -225,8 +252,11 @@ class User(DBUser, AbstractUser, BaseUser):
         if not self.tgid:
             return []
         if self._is_connected and await self.is_logged_in():
-            state_event = (BridgeStateEvent.BACKFILLING if self._is_backfilling
-                           else BridgeStateEvent.CONNECTED)
+            state_event = (
+                BridgeStateEvent.BACKFILLING
+                if self._is_backfilling
+                else BridgeStateEvent.CONNECTED
+            )
             ttl = 3600
         else:
             state_event = BridgeStateEvent.UNKNOWN_ERROR
@@ -309,8 +339,9 @@ class User(DBUser, AbstractUser, BaseUser):
             return (await self.client(GetUsersRequest([InputUserSelf()])))[0]
         except UnauthorizedError as e:
             self.log.error(f"Authorization error in get_me(): {type(e)}: {e}")
-            await self.push_bridge_state(BridgeStateEvent.BAD_CREDENTIALS, error="tg-auth-error",
-                                         message=str(e), ttl=3600)
+            await self.push_bridge_state(
+                BridgeStateEvent.BAD_CREDENTIALS, error="tg-auth-error", message=str(e), ttl=3600
+            )
             await self.stop()
             return None
 
@@ -347,8 +378,9 @@ class User(DBUser, AbstractUser, BaseUser):
                 await portal.cleanup_portal("Logged out of Telegram")
             else:
                 try:
-                    await portal.main_intent.kick_user(portal.mxid, self.mxid,
-                                                       "Logged out of Telegram.")
+                    await portal.main_intent.kick_user(
+                        portal.mxid, self.mxid, "Logged out of Telegram."
+                    )
                 except MatrixRequestError:
                     pass
 
@@ -375,8 +407,9 @@ class User(DBUser, AbstractUser, BaseUser):
         self._track_metric(METRIC_LOGGED_IN, False)
         return ok
 
-    async def _search_local(self, query: str, max_results: int = 5, min_similarity: int = 45
-                            ) -> list[SearchResult]:
+    async def _search_local(
+        self, query: str, max_results: int = 5, min_similarity: int = 45
+    ) -> list[SearchResult]:
         results: list[SearchResult] = []
         for contact_id in await self.get_contacts():
             contact = await pu.Puppet.get_by_tgid(contact_id, create=False)
@@ -400,8 +433,9 @@ class User(DBUser, AbstractUser, BaseUser):
         results.sort(key=lambda tup: tup[1], reverse=True)
         return results[0:max_results]
 
-    async def search(self, query: str, force_remote: bool = False
-                     ) -> tuple[list[SearchResult], bool]:
+    async def search(
+        self, query: str, force_remote: bool = False
+    ) -> tuple[list[SearchResult], bool]:
         if force_remote:
             return await self._search_remote(query), True
 
@@ -418,8 +452,9 @@ class User(DBUser, AbstractUser, BaseUser):
             if portal.mxid
         }
 
-    async def _tag_room(self, puppet: pu.Puppet, portal: po.Portal, tag: str, active: bool
-                        ) -> None:
+    async def _tag_room(
+        self, puppet: pu.Puppet, portal: po.Portal, tag: str, active: bool
+    ) -> None:
         if not tag or not portal or not portal.mxid:
             return
         tag_info = await puppet.intent.get_room_tag(portal.mxid, tag)
@@ -428,8 +463,7 @@ class User(DBUser, AbstractUser, BaseUser):
             tag_info[DOUBLE_PUPPET_SOURCE_KEY] = self.bridge.name
             await puppet.intent.set_room_tag(portal.mxid, tag, tag_info)
         elif (
-            not active and tag_info
-            and tag_info.get(DOUBLE_PUPPET_SOURCE_KEY) == self.bridge.name
+            not active and tag_info and tag_info.get(DOUBLE_PUPPET_SOURCE_KEY) == self.bridge.name
         ):
             await puppet.intent.remove_room_tag(portal.mxid, tag)
 
@@ -438,12 +472,17 @@ class User(DBUser, AbstractUser, BaseUser):
             return
         now = datetime.utcnow().replace(tzinfo=timezone.utc)
         if mute_until is not None and mute_until > now:
-            await puppet.intent.set_push_rule(PushRuleScope.GLOBAL, PushRuleKind.ROOM, portal.mxid,
-                                              actions=[PushActionType.DONT_NOTIFY])
+            await puppet.intent.set_push_rule(
+                PushRuleScope.GLOBAL,
+                PushRuleKind.ROOM,
+                portal.mxid,
+                actions=[PushActionType.DONT_NOTIFY],
+            )
         else:
             try:
-                await puppet.intent.remove_push_rule(PushRuleScope.GLOBAL, PushRuleKind.ROOM,
-                                                     portal.mxid)
+                await puppet.intent.remove_push_rule(
+                    PushRuleScope.GLOBAL, PushRuleKind.ROOM, portal.mxid
+                )
             except MNotFound:
                 pass
 
@@ -455,8 +494,9 @@ class User(DBUser, AbstractUser, BaseUser):
             return
         for peer in update.folder_peers:
             portal = await po.Portal.get_by_entity(peer.peer, tg_receiver=self.tgid, create=False)
-            await self._tag_room(puppet, portal, self.config["bridge.archive_tag"],
-                                 peer.folder_id == 1)
+            await self._tag_room(
+                puppet, portal, self.config["bridge.archive_tag"], peer.folder_id == 1
+            )
 
     async def update_pinned_dialogs(self, update: UpdatePinnedDialogs) -> None:
         if self.config["bridge.tag_only_on_create"]:
@@ -485,8 +525,9 @@ class User(DBUser, AbstractUser, BaseUser):
         )
         await self._mute_room(puppet, portal, update.notify_settings.mute_until)
 
-    async def _sync_dialog(self, portal: po.Portal, dialog: Dialog, should_create: bool,
-                           puppet: pu.Puppet | None) -> None:
+    async def _sync_dialog(
+        self, portal: po.Portal, dialog: Dialog, should_create: bool, puppet: pu.Puppet | None
+    ) -> None:
         was_created = False
         if portal.mxid:
             try:
@@ -510,16 +551,19 @@ class User(DBUser, AbstractUser, BaseUser):
                 # e.g. if the last read message is a service message that isn't in the message db
                 last_read = await DBMessage.find_last(portal.mxid, tg_space)
             else:
-                last_read = await DBMessage.get_one_by_tgid(portal.tgid, tg_space,
-                                                            dialog.dialog.read_inbox_max_id)
+                last_read = await DBMessage.get_one_by_tgid(
+                    portal.tgid, tg_space, dialog.dialog.read_inbox_max_id
+                )
             if last_read:
                 await puppet.intent.mark_read(last_read.mx_room, last_read.mxid)
             if was_created or not self.config["bridge.tag_only_on_create"]:
                 await self._mute_room(puppet, portal, dialog.dialog.notify_settings.mute_until)
-                await self._tag_room(puppet, portal, self.config["bridge.pinned_tag"],
-                                     dialog.pinned)
-                await self._tag_room(puppet, portal, self.config["bridge.archive_tag"],
-                                     dialog.archived)
+                await self._tag_room(
+                    puppet, portal, self.config["bridge.pinned_tag"], dialog.pinned
+                )
+                await self._tag_room(
+                    puppet, portal, self.config["bridge.archive_tag"], dialog.archived
+                )
 
     async def get_cached_portals(self) -> dict[tuple[TelegramID, TelegramID], po.Portal]:
         if self._portals_cache is None:
@@ -536,15 +580,17 @@ class User(DBUser, AbstractUser, BaseUser):
         update_limit = self.config["bridge.sync_update_limit"] or None
         create_limit = self.config["bridge.sync_create_limit"]
         index = 0
-        self.log.debug(f"Syncing dialogs (update_limit={update_limit}, "
-                       f"create_limit={create_limit})")
+        self.log.debug(
+            f"Syncing dialogs (update_limit={update_limit}, create_limit={create_limit})"
+        )
         await self.push_bridge_state(BridgeStateEvent.BACKFILLING)
         puppet = await pu.Puppet.get_by_custom_mxid(self.mxid)
         dialog: Dialog
         old_portal_cache = await self.get_cached_portals()
         new_portal_cache = old_portal_cache.copy()
-        async for dialog in self.client.iter_dialogs(limit=update_limit, ignore_migrated=True,
-                                                     archived=False):
+        async for dialog in self.client.iter_dialogs(
+            limit=update_limit, ignore_migrated=True, archived=False
+        ):
             entity = dialog.entity
             if isinstance(entity, ChatForbidden):
                 self.log.warning(f"Ignoring forbidden chat {entity} while syncing")
@@ -557,8 +603,12 @@ class User(DBUser, AbstractUser, BaseUser):
                 continue
             portal = await po.Portal.get_by_entity(entity, tg_receiver=self.tgid)
             new_portal_cache[portal.tgid_full] = portal
-            coro = self._sync_dialog(portal=portal, dialog=dialog, puppet=puppet,
-                                     should_create=not create_limit or index < create_limit)
+            coro = self._sync_dialog(
+                portal=portal,
+                dialog=dialog,
+                puppet=puppet,
+                should_create=not create_limit or index < create_limit,
+            )
             creators.append(self.loop.create_task(coro))
             index += 1
         if new_portal_cache.keys() != old_portal_cache.keys():
@@ -592,8 +642,8 @@ class User(DBUser, AbstractUser, BaseUser):
     def _hash_contacts(count: int, ids: list[TelegramID]) -> int:
         acc = 0
         for contact in sorted([count] + ids):
-            acc = (acc * 20261 + contact) & 0xffffffff
-        return acc & 0x7fffffff
+            acc = (acc * 20261 + contact) & 0xFFFFFFFF
+        return acc & 0x7FFFFFFF
 
     async def sync_contacts(self) -> None:
         existing_contacts = await self.get_contacts()

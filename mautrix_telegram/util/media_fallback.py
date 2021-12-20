@@ -17,11 +17,11 @@ from __future__ import annotations
 
 import html
 
-from telethon.tl.types import MessageMediaDice, MessageMediaContact, PeerUser
+from telethon.tl.types import MessageMediaContact, MessageMediaDice, PeerUser
 
-from mautrix.types import TextMessageEventContent, MessageType, Format
+from mautrix.types import Format, MessageType, TextMessageEventContent
 
-from .. import puppet as pu, abstract_user as au
+from .. import abstract_user as au, puppet as pu
 from ..types import TelegramID
 
 try:
@@ -36,7 +36,7 @@ def _format_dice(roll: MessageMediaDice) -> str:
             0: "\U0001F36B",  # "🍫",
             1: "\U0001F352",  # "🍒",
             2: "\U0001F34B",  # "🍋",
-            3: "7\ufe0f\u20e3"  # "7️⃣",
+            3: "7\ufe0f\u20e3",  # "7️⃣",
         }
         res = roll.value - 1
         slot1, slot2, slot3 = emojis[res % 4], emojis[res // 4 % 4], emojis[res // 16]
@@ -82,11 +82,12 @@ def make_dice_event_content(roll: MessageMediaDice) -> TextMessageEventContent:
         "\U0001F3C0": " Basketball throw",
         "\U0001F3B0": " Slot machine",
         "\U0001F3B3": " Bowling",
-        "\u26BD": " Football kick"
+        "\u26BD": " Football kick",
     }
     text = f"{roll.emoticon}{emoji_text.get(roll.emoticon, '')} result: {_format_dice(roll)}"
-    content = TextMessageEventContent(msgtype=MessageType.TEXT, format=Format.HTML, body=text,
-                                      formatted_body=f"<h4>{text}</h4>")
+    content = TextMessageEventContent(
+        msgtype=MessageType.TEXT, format=Format.HTML, body=text, formatted_body=f"<h4>{text}</h4>"
+    )
     content["net.maunium.telegram.dice"] = {"emoticon": roll.emoticon, "value": roll.value}
     return content
 

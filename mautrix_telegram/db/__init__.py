@@ -15,15 +15,14 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from mautrix.util.async_db import Database
 
-from .upgrade import upgrade_table
-
 from .bot_chat import BotChat
 from .message import Message
 from .portal import Portal
 from .puppet import Puppet
 from .telegram_file import TelegramFile
-from .user import User
 from .telethon_session import PgSession
+from .upgrade import upgrade_table
+from .user import User
 
 
 def init(db: Database) -> None:
@@ -31,5 +30,14 @@ def init(db: Database) -> None:
         table.db = db
 
 
-__all__ = ["upgrade_table", "init", "Portal", "Message", "User", "Puppet", "TelegramFile",
-           "BotChat", "PgSession"]
+__all__ = [
+    "upgrade_table",
+    "init",
+    "Portal",
+    "Message",
+    "User",
+    "Puppet",
+    "TelegramFile",
+    "BotChat",
+    "PgSession",
+]

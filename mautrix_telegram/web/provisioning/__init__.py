@@ -1,5 +1,5 @@
 # mautrix-telegram - A Matrix-Telegram puppeting bridge
-# Copyright (C) 2019 Tulir Asokan
+# Copyright (C) 2021 Tulir Asokan
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as published by
@@ -13,24 +13,25 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import Awaitable, Callable, Dict, Optional, Tuple, TYPE_CHECKING
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Awaitable, Callable
 import asyncio
-import logging
 import json
+import logging
 
 from aiohttp import web
-
+from telethon.tl.types import ChannelForbidden, ChatForbidden, TypeChat
 from telethon.utils import get_peer_id, resolve_id
-from telethon.tl.types import ChatForbidden, ChannelForbidden, TypeChat
 
 from mautrix.appservice import AppService
-from mautrix.errors import MatrixRequestError, IntentError
+from mautrix.errors import IntentError, MatrixRequestError
 from mautrix.types import UserID
 
+from ...commands.portal.util import get_initial_state, user_has_power_level
+from ...portal import Portal
 from ...types import TelegramID
 from ...user import User
-from ...portal import Portal
-from ...commands.portal.util import user_has_power_level, get_initial_state
 from ..common import AuthAPI
 
 if TYPE_CHECKING:
@@ -41,7 +42,7 @@ class ProvisioningAPI(AuthAPI):
     log: logging.Logger = logging.getLogger("mau.web.provisioning")
     secret: str
     az: AppService
-    bridge: 'TelegramBridge'
+    bridge: "TelegramBridge"
     app: web.Application
 
     def __init__(self, bridge: "TelegramBridge") -> None:
@@ -55,8 +56,9 @@ class ProvisioningAPI(AuthAPI):
         portal_prefix = "/portal/{mxid:![^/]+}"
         self.app.router.add_route("GET", f"{portal_prefix}", self.get_portal_by_mxid)
         self.app.router.add_route("GET", "/portal/{tgid:-[0-9]+}", self.get_portal_by_tgid)
-        self.app.router.add_route("POST", portal_prefix + "/connect/{chat_id:-[0-9]+}",
-                                  self.connect_chat)
+        self.app.router.add_route(
+            "POST", portal_prefix + "/connect/{chat_id:-[0-9]+}", self.connect_chat
+        )
         self.app.router.add_route("POST", f"{portal_prefix}/create", self.create_chat)
         self.app.router.add_route("POST", f"{portal_prefix}/disconnect", self.disconnect_chat)
 
@@ -80,8 +82,9 @@ class ProvisioningAPI(AuthAPI):
         mxid = request.match_info["mxid"]
         portal = await Portal.get_by_mxid(mxid)
         if not portal:
-            return self.get_error_response(404, "portal_not_found",
-                                           "Portal with given Matrix ID not found.")
+            return self.get_error_response(
+                404, "portal_not_found", "Portal with given Matrix ID not found."
+            )
         return await self._get_portal_response(UserID(request.query.get("user_id", "")), portal)
 
     async def get_portal_by_tgid(self, request: web.Request) -> web.Response:
@@ -92,26 +95,30 @@ class ProvisioningAPI(AuthAPI):
         try:
             tgid, _ = resolve_id(int(request.match_info["tgid"]))
         except ValueError:
-            return self.get_error_response(400, "tgid_invalid",
-                                           "Given chat ID is not valid.")
+            return self.get_error_response(400, "tgid_invalid", "Given chat ID is not valid.")
         portal = await Portal.get_by_tgid(tgid)
         if not portal:
-            return self.get_error_response(404, "portal_not_found",
-                                           "Portal to given Telegram chat not found.")
+            return self.get_error_response(
+                404, "portal_not_found", "Portal to given Telegram chat not found."
+            )
         return await self._get_portal_response(UserID(request.query.get("user_id", "")), portal)
 
     async def _get_portal_response(self, user_id: UserID, portal: Portal) -> web.Response:
         user, _ = await self.get_user(user_id, expect_logged_in=None, require_puppeting=False)
-        return web.json_response({
-            "mxid": portal.mxid,
-            "chat_id": get_peer_id(portal.peer),
-            "peer_type": portal.peer_type,
-            "title": portal.title,
-            "about": portal.about,
-            "username": portal.username,
-            "megagroup": portal.megagroup,
-            "can_unbridge": (await portal.can_user_perform(user, "unbridge")) if user else False,
-        })
+        return web.json_response(
+            {
+                "mxid": portal.mxid,
+                "chat_id": get_peer_id(portal.peer),
+                "peer_type": portal.peer_type,
+                "title": portal.title,
+                "about": portal.about,
+                "username": portal.username,
+                "megagroup": portal.megagroup,
+                "can_unbridge": (await portal.can_user_perform(user, "unbridge"))
+                if user
+                else False,
+            }
+        )
 
     async def connect_chat(self, request: web.Request) -> web.Response:
         err = self.check_authorization(request)
@@ -120,8 +127,9 @@ class ProvisioningAPI(AuthAPI):
 
         room_id = request.match_info["mxid"]
         if await Portal.get_by_mxid(room_id):
-            return self.get_error_response(409, "room_already_bridged",
-                                           "Room is already bridged to another Telegram chat.")
+            return self.get_error_response(
+                409, "room_already_bridged", "Room is already bridged to another Telegram chat."
+            )
 
         chat_id = request.match_info["chat_id"]
         if chat_id.startswith("-100"):
@@ -133,38 +141,51 @@ class ProvisioningAPI(AuthAPI):
         else:
             return self.get_error_response(400, "tgid_invalid", "Invalid Telegram chat ID.")
 
-        user, err = await self.get_user(request.query.get("user_id", None), expect_logged_in=None,
-                                        require_puppeting=False)
+        user, err = await self.get_user(
+            request.query.get("user_id", None), expect_logged_in=None, require_puppeting=False
+        )
         if err is not None:
             return err
         elif user and not await user_has_power_level(room_id, self.az.intent, user, "bridge"):
-            return self.get_error_response(403, "not_enough_permissions",
-                                           "You do not have the permissions to bridge that room.")
+            return self.get_error_response(
+                403,
+                "not_enough_permissions",
+                "You do not have the permissions to bridge that room.",
+            )
 
         is_logged_in = user is not None and await user.is_logged_in()
         acting_user = user if is_logged_in else self.bridge.bot
         if not acting_user:
-            return self.get_login_response(status=403, errcode="not_logged_in",
-                                           error="You are not logged in and there is no relay bot.")
+            return self.get_login_response(
+                status=403,
+                errcode="not_logged_in",
+                error="You are not logged in and there is no relay bot.",
+            )
 
         portal = await Portal.get_by_tgid(tgid, peer_type=peer_type)
         if portal.mxid == room_id:
-            return self.get_error_response(200, "bridge_exists",
-                                           "Telegram chat is already bridged to that Matrix room.")
+            return self.get_error_response(
+                200, "bridge_exists", "Telegram chat is already bridged to that Matrix room."
+            )
         elif portal.mxid:
             force = request.query.get("force", None)
             if force in ("delete", "unbridge"):
                 delete = force == "delete"
-                await portal.cleanup_portal("Portal deleted (moving to another room)" if delete
-                                            else "Room unbridged (portal moving to another room)",
-                                            puppets_only=not delete)
+                await portal.cleanup_portal(
+                    "Portal deleted (moving to another room)"
+                    if delete
+                    else "Room unbridged (portal moving to another room)",
+                    puppets_only=not delete,
+                )
             else:
-                return self.get_error_response(409, "chat_already_bridged",
-                                               "Telegram chat is already bridged to another "
-                                               "Matrix room.")
+                return self.get_error_response(
+                    409,
+                    "chat_already_bridged",
+                    "Telegram chat is already bridged to another Matrix room.",
+                )
 
         async with portal._room_create_lock:
-            entity: Optional[TypeChat] = None
+            entity: TypeChat | None = None
             try:
                 entity = await acting_user.client.get_entity(portal.peer)
             except Exception:
@@ -172,22 +193,28 @@ class ProvisioningAPI(AuthAPI):
 
             if not entity or isinstance(entity, (ChatForbidden, ChannelForbidden)):
                 if is_logged_in:
-                    return self.get_error_response(403, "user_not_in_chat",
-                                                   "Failed to get info of Telegram chat. "
-                                                   "Are you in the chat?")
-                return self.get_error_response(403, "bot_not_in_chat",
-                                               "Failed to get info of Telegram chat. "
-                                               "Is the relay bot in the chat?")
+                    return self.get_error_response(
+                        403,
+                        "user_not_in_chat",
+                        "Failed to get info of Telegram chat. Are you in the chat?",
+                    )
+                return self.get_error_response(
+                    403,
+                    "bot_not_in_chat",
+                    "Failed to get info of Telegram chat. Is the relay bot in the chat?",
+                )
 
             portal.mxid = room_id
             portal.by_mxid[portal.mxid] = portal
-            (portal.title, portal.about, levels,
-             portal.encrypted) = await get_initial_state(self.az.intent, room_id)
+            (portal.title, portal.about, levels, portal.encrypted) = await get_initial_state(
+                self.az.intent, room_id
+            )
             portal.photo_id = ""
             await portal.save()
 
-        asyncio.ensure_future(portal.update_matrix_room(user, entity, direct=False, levels=levels),
-                              loop=self.loop)
+        asyncio.ensure_future(
+            portal.update_matrix_room(user, entity, direct=False, levels=levels), loop=self.loop
+        )
 
         return web.Response(status=202, body="{}")
 
@@ -202,25 +229,32 @@ class ProvisioningAPI(AuthAPI):
 
         room_id = request.match_info["mxid"]
         if await Portal.get_by_mxid(room_id):
-            return self.get_error_response(409, "room_already_bridged",
-                                           "Room is already bridged to another Telegram chat.")
+            return self.get_error_response(
+                409, "room_already_bridged", "Room is already bridged to another Telegram chat."
+            )
 
-        user, err = await self.get_user(request.query.get("user_id", None), expect_logged_in=None,
-                                        require_puppeting=False)
+        user, err = await self.get_user(
+            request.query.get("user_id", None), expect_logged_in=None, require_puppeting=False
+        )
         if err is not None:
             return err
         elif not await user.is_logged_in() or user.is_bot:
-            return self.get_error_response(403, "not_logged_in_real_account",
-                                           "You are not logged in with a real account.")
+            return self.get_error_response(
+                403, "not_logged_in_real_account", "You are not logged in with a real account."
+            )
         elif not await user_has_power_level(room_id, self.az.intent, user, "bridge"):
-            return self.get_error_response(403, "not_enough_permissions",
-                                           "You do not have the permissions to bridge that room.")
+            return self.get_error_response(
+                403,
+                "not_enough_permissions",
+                "You do not have the permissions to bridge that room.",
+            )
 
         try:
             title, about, _, encrypted = await get_initial_state(self.az.intent, room_id)
         except (MatrixRequestError, IntentError):
-            return self.get_error_response(403, "bot_not_in_room",
-                                           "The bridge bot is not in the given room.")
+            return self.get_error_response(
+                403, "bot_not_in_room", "The bridge bot is not in the given room."
+            )
 
         about = data.get("about", about)
 
@@ -230,8 +264,9 @@ class ProvisioningAPI(AuthAPI):
 
         type = data.get("type", "")
         if type not in ("group", "chat", "supergroup", "channel"):
-            return self.get_error_response(400, "body_value_invalid",
-                                           "Given chat type is not valid.")
+            return self.get_error_response(
+                400, "body_value_invalid", "Given chat type is not valid."
+            )
 
         supergroup = type == "supergroup"
         type = {
@@ -241,17 +276,27 @@ class ProvisioningAPI(AuthAPI):
             "group": "chat",
         }[type]
 
-        portal = Portal(tgid=TelegramID(0), mxid=room_id, title=title, about=about, peer_type=type,
-                        encrypted=encrypted, tg_receiver=TelegramID(0))
+        portal = Portal(
+            tgid=TelegramID(0),
+            mxid=room_id,
+            title=title,
+            about=about,
+            peer_type=type,
+            encrypted=encrypted,
+            tg_receiver=TelegramID(0),
+        )
         try:
             await portal.create_telegram_chat(user, supergroup=supergroup)
         except ValueError as e:
             await portal.delete()
             return self.get_error_response(500, "unknown_error", e.args[0])
 
-        return web.json_response({
-            "chat_id": portal.tgid,
-        }, status=201)
+        return web.json_response(
+            {
+                "chat_id": portal.tgid,
+            },
+            status=201,
+        )
 
     async def disconnect_chat(self, request: web.Request) -> web.Response:
         err = self.check_authorization(request)
@@ -260,17 +305,24 @@ class ProvisioningAPI(AuthAPI):
 
         portal = await Portal.get_by_mxid(request.match_info["mxid"])
         if not portal or not portal.tgid:
-            return self.get_error_response(404, "portal_not_found",
-                                           "Room is not a portal.")
+            return self.get_error_response(404, "portal_not_found", "Room is not a portal.")
 
-        user, err = await self.get_user(request.query.get("user_id", None), expect_logged_in=None,
-                                        require_puppeting=False, require_user=False)
+        user, err = await self.get_user(
+            request.query.get("user_id", None),
+            expect_logged_in=None,
+            require_puppeting=False,
+            require_user=False,
+        )
         if err is not None:
             return err
-        elif user and not await user_has_power_level(portal.mxid, self.az.intent, user,
-                                                     "unbridge"):
-            return self.get_error_response(403, "not_enough_permissions",
-                                           "You do not have the permissions to unbridge that room.")
+        elif user and not await user_has_power_level(
+            portal.mxid, self.az.intent, user, "unbridge"
+        ):
+            return self.get_error_response(
+                403,
+                "not_enough_permissions",
+                "You do not have the permissions to unbridge that room.",
+            )
 
         delete = request.query.get("delete", "").lower() in ("true", "t", "1", "yes", "y")
         sync = request.query.get("delete", "").lower() in ("true", "t", "1", "yes", "y")
@@ -287,8 +339,9 @@ class ProvisioningAPI(AuthAPI):
         return web.json_response({}, status=200 if sync else 202)
 
     async def get_user_info(self, request: web.Request) -> web.Response:
-        data, user, err = await self.get_user_request_info(request, expect_logged_in=None,
-                                                           require_puppeting=False)
+        data, user, err = await self.get_user_request_info(
+            request, expect_logged_in=None, require_puppeting=False
+        )
         if err is not None:
             return err
 
@@ -305,11 +358,13 @@ class ProvisioningAPI(AuthAPI):
                     "phone": user.tg_phone,
                     "is_bot": user.is_bot,
                 }
-        return web.json_response({
-            "telegram": user_data,
-            "mxid": user.mxid,
-            "permissions": user.permissions,
-        })
+        return web.json_response(
+            {
+                "telegram": user_data,
+                "mxid": user.mxid,
+                "permissions": user.permissions,
+            }
+        )
 
     async def get_chats(self, request: web.Request) -> web.Response:
         data, user, err = await self.get_user_request_info(request, expect_logged_in=True)
@@ -317,15 +372,28 @@ class ProvisioningAPI(AuthAPI):
             return err
 
         if not user.is_bot:
-            return web.json_response([{
-                "id": chat.id,
-                "title": chat.title,
-            } async for chat in user.client.iter_dialogs(ignore_migrated=True, archived=False)])
+            return web.json_response(
+                [
+                    {
+                        "id": chat.id,
+                        "title": chat.title,
+                    }
+                    async for chat in user.client.iter_dialogs(
+                        ignore_migrated=True, archived=False
+                    )
+                ]
+            )
         else:
-            return web.json_response([{
-                "id": get_peer_id(chat.peer),
-                "title": chat.title,
-            } for chat in (await user.get_cached_portals()).values() if chat.tgid])
+            return web.json_response(
+                [
+                    {
+                        "id": get_peer_id(chat.peer),
+                        "title": chat.title,
+                    }
+                    for chat in (await user.get_cached_portals()).values()
+                    if chat.tgid
+                ]
+            )
 
     async def send_bot_token(self, request: web.Request) -> web.Response:
         data, user, err = await self.get_user_request_info(request)
@@ -352,48 +420,78 @@ class ProvisioningAPI(AuthAPI):
         return await self.post_login_password(user, data.get("password", ""))
 
     async def logout(self, request: web.Request) -> web.Response:
-        _, user, err = await self.get_user_request_info(request, expect_logged_in=None,
-                                                        require_puppeting=False,
-                                                        want_data=False)
+        _, user, err = await self.get_user_request_info(
+            request, expect_logged_in=None, require_puppeting=False, want_data=False
+        )
         if err is not None:
             return err
         await user.log_out()
         return web.json_response({}, status=200)
 
     async def bridge_info(self, request: web.Request) -> web.Response:
-        return web.json_response({
-            "relaybot_username": (self.bridge.bot.tg_username
-                                  if self.bridge.bot is not None else None),
-        }, status=200)
+        return web.json_response(
+            {
+                "relaybot_username": (
+                    self.bridge.bot.tg_username if self.bridge.bot is not None else None
+                ),
+            },
+            status=200,
+        )
 
     @staticmethod
-    async def error_middleware(_, handler: Callable[[web.Request], Awaitable[web.Response]]
-                               ) -> Callable[[web.Request], Awaitable[web.Response]]:
+    async def error_middleware(
+        _, handler: Callable[[web.Request], Awaitable[web.Response]]
+    ) -> Callable[[web.Request], Awaitable[web.Response]]:
         async def middleware_handler(request: web.Request) -> web.Response:
             try:
                 return await handler(request)
             except web.HTTPException as ex:
-                return web.json_response({
-                    "error": f"Unhandled HTTP {ex.status}",
-                    "errcode": f"unhandled_http_{ex.status}",
-                }, status=ex.status)
+                return web.json_response(
+                    {
+                        "error": f"Unhandled HTTP {ex.status}",
+                        "errcode": f"unhandled_http_{ex.status}",
+                    },
+                    status=ex.status,
+                )
 
         return middleware_handler
 
     @staticmethod
     def get_error_response(status=200, errcode="", error="") -> web.Response:
-        return web.json_response({
-            "error": error,
-            "errcode": errcode,
-        }, status=status)
+        return web.json_response(
+            {
+                "error": error,
+                "errcode": errcode,
+            },
+            status=status,
+        )
 
-    def get_mx_login_response(self, status=200, state="", username="", phone="", human_tg_id="",
-                              mxid="", message="", error="", errcode=""):
+    def get_mx_login_response(
+        self,
+        status=200,
+        state="",
+        username="",
+        phone="",
+        human_tg_id="",
+        mxid="",
+        message="",
+        error="",
+        errcode="",
+    ):
         raise NotImplementedError()
 
-    def get_login_response(self, status=200, state="", username="", phone: str = "",
-                           human_tg_id: str = "", mxid="", message="", error="", errcode=""
-                           ) -> web.Response:
+    def get_login_response(
+        self,
+        status=200,
+        state="",
+        username="",
+        phone: str = "",
+        human_tg_id: str = "",
+        mxid="",
+        message="",
+        error="",
+        errcode="",
+    ) -> web.Response:
         if username or phone:
             resp = {
                 "state": "logged-in",
@@ -414,52 +512,63 @@ class ProvisioningAPI(AuthAPI):
                 resp["state"] = state
         return web.json_response(resp, status=status)
 
-    def check_authorization(self, request: web.Request) -> Optional[web.Response]:
+    def check_authorization(self, request: web.Request) -> web.Response | None:
         auth = request.headers.get("Authorization", "")
         if auth != f"Bearer {self.secret}":
-            return self.get_error_response(error="Shared secret is not valid.",
-                                           errcode="shared_secret_invalid",
-                                           status=401)
+            return self.get_error_response(
+                error="Shared secret is not valid.", errcode="shared_secret_invalid", status=401
+            )
         return None
 
     @staticmethod
-    async def get_data(request: web.Request) -> Optional[dict]:
+    async def get_data(request: web.Request) -> dict | None:
         try:
             return await request.json()
         except json.JSONDecodeError:
             return None
 
-    async def get_user(self, mxid: Optional[UserID], expect_logged_in: Optional[bool] = False,
-                       require_puppeting: bool = True, require_user: bool = True
-                       ) -> Tuple[Optional[User], Optional[web.Response]]:
+    async def get_user(
+        self,
+        mxid: UserID | None,
+        expect_logged_in: bool | None = False,
+        require_puppeting: bool = True,
+        require_user: bool = True,
+    ) -> tuple[User | None, web.Response | None]:
         if not mxid:
             if not require_user:
                 return None, None
-            return None, self.get_login_response(error="User ID not given.",
-                                                 errcode="mxid_empty", status=400)
+            return None, self.get_login_response(
+                error="User ID not given.", errcode="mxid_empty", status=400
+            )
 
         user = await User.get_and_start_by_mxid(mxid, even_if_no_session=True)
         if require_puppeting and not user.puppet_whitelisted:
-            return user, self.get_login_response(error="You are not whitelisted.",
-                                                 errcode="mxid_not_whitelisted", status=403)
+            return user, self.get_login_response(
+                error="You are not whitelisted.", errcode="mxid_not_whitelisted", status=403
+            )
         if expect_logged_in is not None:
             logged_in = await user.is_logged_in()
             if not expect_logged_in and logged_in:
-                return user, self.get_login_response(username=user.tg_username, phone=user.tg_phone,
-                                                     status=409,
-                                                     error="You are already logged in.",
-                                                     errcode="already_logged_in")
+                return user, self.get_login_response(
+                    username=user.tg_username,
+                    phone=user.tg_phone,
+                    status=409,
+                    error="You are already logged in.",
+                    errcode="already_logged_in",
+                )
             elif expect_logged_in and not logged_in:
-                return user, self.get_login_response(status=403, error="You are not logged in.",
-                                                     errcode="not_logged_in")
+                return user, self.get_login_response(
+                    status=403, error="You are not logged in.", errcode="not_logged_in"
+                )
         return user, None
 
-    async def get_user_request_info(self, request: web.Request,
-                                    expect_logged_in: Optional[bool] = False,
-                                    require_puppeting: bool = False,
-                                    want_data: bool = True,
-                                    ) -> (Tuple[Optional[Dict], Optional[User],
-                                                Optional[web.Response]]):
+    async def get_user_request_info(
+        self,
+        request: web.Request,
+        expect_logged_in: bool | None = False,
+        require_puppeting: bool = False,
+        want_data: bool = True,
+    ) -> tuple[dict | None, User | None, web.Response | None]:
         err = self.check_authorization(request)
         if err is not None:
             return None, None, err
@@ -468,8 +577,13 @@ class ProvisioningAPI(AuthAPI):
         if want_data and (request.method == "POST" or request.method == "PUT"):
             data = await self.get_data(request)
             if not data:
-                return None, None, self.get_login_response(error="Invalid JSON.",
-                                                           errcode="json_invalid", status=400)
+                return (
+                    None,
+                    None,
+                    self.get_login_response(
+                        error="Invalid JSON.", errcode="json_invalid", status=400
+                    ),
+                )
 
         mxid = request.match_info["mxid"]
         user, err = await self.get_user(mxid, expect_logged_in, require_puppeting)

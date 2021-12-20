@@ -19,12 +19,9 @@ from typing import Any
 
 from telethon import __version__ as __telethon_version__
 
-from mautrix.types import UserID, RoomID
 from mautrix.bridge import Bridge
+from mautrix.types import RoomID, UserID
 
-from .web.provisioning import ProvisioningAPI
-from .web.public import PublicBridgeWebsite
-from .abstract_user import AbstractUser
 from .bot import Bot
 from .config import Config
 from .db import init as init_db, upgrade_table
@@ -32,7 +29,11 @@ from .matrix import MatrixHandler
 from .portal import Portal
 from .puppet import Puppet
 from .user import User
-from .version import version, linkified_version
+from .version import linkified_version, version
+from .web.provisioning import ProvisioningAPI
+from .web.public import PublicBridgeWebsite
+
+from .abstract_user import AbstractUser  # isort: skip
 
 
 class TelegramBridge(Bridge):

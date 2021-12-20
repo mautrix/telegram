@@ -15,7 +15,7 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from __future__ import annotations
 
-from typing import Iterable, ClassVar, TYPE_CHECKING
+from typing import TYPE_CHECKING, ClassVar, Iterable
 
 from asyncpg import Record
 from attr import dataclass
@@ -73,20 +73,25 @@ class User:
     @property
     def _values(self):
         return (
-            self.mxid, self.tgid, self.tg_username, self.tg_phone, self.is_bot, self.saved_contacts
+            self.mxid,
+            self.tgid,
+            self.tg_username,
+            self.tg_phone,
+            self.is_bot,
+            self.saved_contacts,
         )
 
     async def save(self) -> None:
         q = (
             'UPDATE "user" SET tgid=$2, tg_username=$3, tg_phone=$4, is_bot=$5, saved_contacts=$6 '
-            'WHERE mxid=$1'
+            "WHERE mxid=$1"
         )
         await self.db.execute(q, *self._values)
 
     async def insert(self) -> None:
         q = (
             'INSERT INTO "user" (mxid, tgid, tg_username, tg_phone, is_bot, saved_contacts) '
-            'VALUES ($1, $2, $3, $4, $5, $6)'
+            "VALUES ($1, $2, $3, $4, $5, $6)"
         )
         await self.db.execute(q, *self._values)
 
@@ -122,8 +127,10 @@ class User:
                 await conn.executemany(q, records)
 
     async def register_portal(self, tgid: TelegramID, tg_receiver: TelegramID) -> None:
-        q = ('INSERT INTO user_portal ("user", portal, portal_receiver) VALUES ($1, $2, $3) '
-             'ON CONFLICT ("user", portal, portal_receiver) DO NOTHING')
+        q = (
+            'INSERT INTO user_portal ("user", portal, portal_receiver) VALUES ($1, $2, $3) '
+            'ON CONFLICT ("user", portal, portal_receiver) DO NOTHING'
+        )
         await self.db.execute(q, self.tgid, tgid, tg_receiver)
 
     async def unregister_portal(self, tgid: TelegramID, tg_receiver: TelegramID) -> None:

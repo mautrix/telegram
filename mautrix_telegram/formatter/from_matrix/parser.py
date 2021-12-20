@@ -19,13 +19,13 @@ import logging
 
 from telethon import TelegramClient
 
-from mautrix.types import UserID, RoomID
+from mautrix.types import RoomID, UserID
 from mautrix.util.formatter import MatrixParser as BaseMatrixParser, RecursionContext
-from mautrix.util.formatter.html_reader_htmlparser import read_html, HTMLNode
+from mautrix.util.formatter.html_reader_htmlparser import HTMLNode, read_html
 from mautrix.util.logging import TraceLogger
 
-from ... import user as u, puppet as pu, portal as po
-from .telegram_message import TelegramMessage, TelegramEntityType
+from ... import portal as po, puppet as pu, user as u
+from .telegram_message import TelegramEntityType, TelegramMessage
 
 log: TraceLogger = logging.getLogger("mau.fmt.mx")
 
@@ -48,8 +48,9 @@ class MatrixParser(BaseMatrixParser[TelegramMessage]):
         return None
 
     async def user_pill_to_fstring(self, msg: TelegramMessage, user_id: UserID) -> TelegramMessage:
-        user = (await pu.Puppet.get_by_mxid(user_id)
-                or await u.User.get_by_mxid(user_id, create=False))
+        user = await pu.Puppet.get_by_mxid(user_id) or await u.User.get_by_mxid(
+            user_id, create=False
+        )
         if not user:
             return msg
         if user.tg_username:

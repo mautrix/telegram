@@ -14,16 +14,24 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from typing import Any, List, NamedTuple
-from ruamel.yaml.comments import CommentedMap
 import os
 
-from mautrix.types import UserID
-from mautrix.client import Client
-from mautrix.bridge.config import BaseBridgeConfig
-from mautrix.util.config import ForbiddenKey, ForbiddenDefault, ConfigUpdateHelper
+from ruamel.yaml.comments import CommentedMap
 
-Permissions = NamedTuple("Permissions", relaybot=bool, user=bool, puppeting=bool,
-                         matrix_puppeting=bool, admin=bool, level=str)
+from mautrix.bridge.config import BaseBridgeConfig
+from mautrix.client import Client
+from mautrix.types import UserID
+from mautrix.util.config import ConfigUpdateHelper, ForbiddenDefault, ForbiddenKey
+
+Permissions = NamedTuple(
+    "Permissions",
+    relaybot=bool,
+    user=bool,
+    puppeting=bool,
+    matrix_puppeting=bool,
+    admin=bool,
+    level=str,
+)
 
 
 class Config(BaseBridgeConfig):
@@ -37,8 +45,11 @@ class Config(BaseBridgeConfig):
     def forbidden_defaults(self) -> List[ForbiddenDefault]:
         return [
             *super().forbidden_defaults,
-            ForbiddenDefault("appservice.public.external", "https://example.com/public",
-                             condition="appservice.public.enabled"),
+            ForbiddenDefault(
+                "appservice.public.external",
+                "https://example.com/public",
+                condition="appservice.public.enabled",
+            ),
             ForbiddenDefault("bridge.permissions", ForbiddenKey("example.com")),
             ForbiddenDefault("telegram.api_id", 12345),
             ForbiddenDefault("telegram.api_hash", "tjyd5yge35lbodk1xwzw2jstp90k55qz"),
@@ -51,8 +62,11 @@ class Config(BaseBridgeConfig):
         copy("homeserver.asmux")
 
         if "appservice.protocol" in self and "appservice.address" not in self:
-            protocol, hostname, port = (self["appservice.protocol"], self["appservice.hostname"],
-                                        self["appservice.port"])
+            protocol, hostname, port = (
+                self["appservice.protocol"],
+                self["appservice.hostname"],
+                self["appservice.port"],
+            )
             base["appservice.address"] = f"{protocol}://{hostname}:{port}"
         if "appservice.debug" in self and "logging" not in self:
             level = "DEBUG" if self["appservice.debug"] else "INFO"
@@ -170,9 +184,11 @@ class Config(BaseBridgeConfig):
 
         copy("bridge.command_prefix")
 
-        migrate_permissions = ("bridge.permissions" not in self
-                               or "bridge.whitelist" in self
-                               or "bridge.admins" in self)
+        migrate_permissions = (
+            "bridge.permissions" not in self
+            or "bridge.whitelist" in self
+            or "bridge.admins" in self
+        )
         if migrate_permissions:
             permissions = self["bridge.permissions"] or CommentedMap()
             for entry in self["bridge.whitelist"] or []:
