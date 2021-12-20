@@ -36,6 +36,7 @@ numpy==1.20.3
 olefile==0.46
 ordered-set==4.0.2
 packaging==20.9
+phonenumbers==8.12.40
 pep517==0.10.0
 proglog==0.1.9
 progress==1.5

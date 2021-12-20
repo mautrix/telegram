@@ -63,6 +63,7 @@ from telethon.tl.types import (
     DocumentAttributeImageSize, GeoPoint, InputChatUploadedPhoto, MessageActionChatEditPhoto,
     MessageMediaGeo, SendMessageCancelAction, SendMessageTypingAction, TypeInputPeer,
     UpdateNewMessage, InputMediaUploadedDocument, InputMediaUploadedPhoto, TypeMessage,
+    MessageMediaContact,
 )
 
 from mautrix.errors import MatrixRequestError, IntentError, MForbidden
@@ -1612,7 +1613,7 @@ class Portal(DBPortal, BasePortal):
     async def handle_matrix_power_levels(
         self, sender: u.User, new_users: dict[UserID, int],
         old_users: dict[UserID, int], event_id: EventID | None
-                                         ) -> None:
+    ) -> None:
         # TODO handle all power level changes and bridge exact admin rights to supergroups/channels
         for user, level in new_users.items():
             if not user or user == self.main_intent.mxid or user == sender.mxid:
@@ -2030,68 +2031,12 @@ class Portal(DBPortal, BasePortal):
         await intent.set_typing(self.mxid, is_typing=False)
         return await self._send_message(intent, content, timestamp=evt.date)
 
-    @staticmethod
-    def _format_dice(roll: MessageMediaDice) -> str:
-        if roll.emoticon == "\U0001F3B0":
-            emojis = {
-                0: "\U0001F36B",  # "🍫",
-                1: "\U0001F352",  # "🍒",
-                2: "\U0001F34B",  # "🍋",
-                3: "7\ufe0f\u20e3"  # "7️⃣",
-            }
-            res = roll.value - 1
-            slot1, slot2, slot3 = emojis[res % 4], emojis[res // 4 % 4], emojis[res // 16]
-            return f"{slot1} {slot2} {slot3} ({roll.value})"
-        elif roll.emoticon == "\u26BD":
-            results = {
-                1: "miss",
-                2: "hit the woodwork",
-                3: "goal",  # seems to go in through the center
-                4: "goal",
-                5: "goal 🎉",  # seems to go in through the top right corner, includes confetti
-            }
-        elif roll.emoticon == "\U0001F3B3":
-            results = {
-                1: "miss",
-                2: "1 pin down",
-                3: "3 pins down, split",
-                4: "4 pins down, split",
-                5: "5 pins down",
-                6: "strike 🎉",
-            }
-        # elif roll.emoticon == "\U0001F3C0":
-        #     results = {
-        #         2: "rolled off",
-        #         3: "stuck",
-        #     }
-        # elif roll.emoticon == "\U0001F3AF":
-        #     results = {
-        #         1: "bounced off",
-        #         2: "outer rim",
-        #
-        #         6: "bullseye",
-        #     }
-        else:
-            return str(roll.value)
-        return f"{results[roll.value]} ({roll.value})"
-
     async def _handle_telegram_dice(
         self, _: au.AbstractUser, intent: IntentAPI, evt: Message, relates_to: RelatesTo
     ) -> EventID:
-        emoji_text = {
-            "\U0001F3AF": " Dart throw",
-            "\U0001F3B2": " Dice roll",
-            "\U0001F3C0": " Basketball throw",
-            "\U0001F3B0": " Slot machine",
-            "\U0001F3B3": " Bowling",
-            "\u26BD": " Football kick"
-        }
-        roll: MessageMediaDice = evt.media
-        text = f"{roll.emoticon}{emoji_text.get(roll.emoticon, '')} result: {self._format_dice(roll)}"
-        content = TextMessageEventContent(msgtype=MessageType.TEXT, format=Format.HTML, body=text,
-                                          formatted_body=f"<h4>{text}</h4>", relates_to=relates_to,
-                                          external_url=self._get_external_url(evt))
-        content["net.maunium.telegram.dice"] = {"emoticon": roll.emoticon, "value": roll.value}
+        content = util.make_dice_event_content(evt.media)
+        content.relates_to = relates_to
+        content.external_url = self._get_external_url(evt)
         await intent.set_typing(self.mxid, is_typing=False)
         return await self._send_message(intent, content, timestamp=evt.date)
 
@@ -2133,14 +2078,25 @@ class Portal(DBPortal, BasePortal):
             override_text=override_text, override_entities=override_entities)
         content.msgtype = MessageType.NOTICE
         content.external_url = self._get_external_url(evt)
+        content.relates_to = relates_to
         content["net.maunium.telegram.game"] = play_id
+
+        await intent.set_typing(self.mxid, is_typing=False)
+        return await self._send_message(intent, content, timestamp=evt.date)
+
+    async def _handle_telegram_contact(
+        self, source: au.AbstractUser, intent: IntentAPI, evt: Message, relates_to: RelatesTo
+    ) -> EventID:
+        content = await util.make_contact_event_content(source, evt.media)
+        content.relates_to = relates_to
+        content.external_url = self._get_external_url(evt)
 
         await intent.set_typing(self.mxid, is_typing=False)
         return await self._send_message(intent, content, timestamp=evt.date)
 
     async def handle_telegram_edit(
         self, source: au.AbstractUser, sender: p.Puppet, evt: Message
-                                   ) -> None:
+    ) -> None:
         if not self.mxid:
             self.log.trace("Ignoring edit to %d as chat has no Matrix room", evt.id)
             return
@@ -2361,7 +2317,7 @@ class Portal(DBPortal, BasePortal):
                                f" updating with data {entity!s}")
 
         allowed_media = (MessageMediaPhoto, MessageMediaDocument, MessageMediaGeo,
-                         MessageMediaGame, MessageMediaDice, MessageMediaPoll,
+                         MessageMediaGame, MessageMediaDice, MessageMediaPoll, MessageMediaContact,
                          MessageMediaUnsupported)
         if sender:
             intent = sender.intent_for(self)
@@ -2380,6 +2336,7 @@ class Portal(DBPortal, BasePortal):
                 MessageMediaDice: self._handle_telegram_dice,
                 MessageMediaUnsupported: self._handle_telegram_unsupported,
                 MessageMediaGame: self._handle_telegram_game,
+                MessageMediaContact: self._handle_telegram_contact,
             }[type(evt.media)]
             relates_to = await formatter.telegram_reply_to_matrix(evt, source)
             event_id = await handler(source, intent, evt, relates_to)
