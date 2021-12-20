@@ -1,8 +1,7 @@
-from .file_transfer import transfer_file_to_matrix, convert_image
-from .parallel_file_transfer import parallel_transfer_to_telegram
-from .format_duration import format_duration
-from .recursive_dict import recursive_del, recursive_set, recursive_get
 from .color_log import ColorFormatter
-from .send_lock import PortalSendLock
 from .deduplication import PortalDedup
-from .media_fallback import make_dice_event_content, make_contact_event_content
+from .file_transfer import convert_image, transfer_file_to_matrix
+from .media_fallback import make_contact_event_content, make_dice_event_content
+from .parallel_file_transfer import parallel_transfer_to_telegram
+from .recursive_dict import recursive_del, recursive_get, recursive_set
+from .send_lock import PortalSendLock

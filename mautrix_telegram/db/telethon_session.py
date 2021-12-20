@@ -15,14 +15,14 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from __future__ import annotations
 
-from typing import ClassVar, TYPE_CHECKING
-import datetime
+from typing import TYPE_CHECKING, ClassVar
 import asyncio
+import datetime
 
-from telethon.sessions import MemorySession
-from telethon.tl.types import updates, PeerUser, PeerChat, PeerChannel
-from telethon.crypto import AuthKey
 from telethon import utils
+from telethon.crypto import AuthKey
+from telethon.sessions import MemorySession
+from telethon.tl.types import PeerChannel, PeerChat, PeerUser, updates
 
 from mautrix.util.async_db import Database
 
@@ -97,7 +97,10 @@ class PgSession(MemorySession):
         )
 
     _tables: ClassVar[tuple[str, ...]] = (
-        "telethon_sessions", "telethon_entities", "telethon_sent_files", "telethon_update_state"
+        "telethon_sessions",
+        "telethon_entities",
+        "telethon_sent_files",
+        "telethon_update_state",
     )
 
     async def delete(self) -> None:
@@ -196,7 +199,7 @@ class PgSession(MemorySession):
         ids = (
             utils.get_peer_id(PeerUser(key)),
             utils.get_peer_id(PeerChat(key)),
-            utils.get_peer_id(PeerChannel(key))
+            utils.get_peer_id(PeerChannel(key)),
         )
         if self.db.scheme == "postgres":
             return await self._select_entity("id=ANY($1)", ids)

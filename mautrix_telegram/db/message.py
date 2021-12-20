@@ -15,12 +15,12 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from __future__ import annotations
 
-from typing import ClassVar, TYPE_CHECKING
+from typing import TYPE_CHECKING, ClassVar
 
 from asyncpg import Record
 from attr import dataclass
 
-from mautrix.types import RoomID, EventID
+from mautrix.types import EventID, RoomID
 from mautrix.util.async_db import Database
 
 from ..types import TelegramID
@@ -92,9 +92,12 @@ class Message:
 
     @classmethod
     async def count_spaces_by_mxid(cls, mxid: EventID, mx_room: RoomID) -> int:
-        return await cls.db.fetchval(
-            "SELECT COUNT(tg_space) FROM message WHERE mxid=$1 AND mx_room=$2", mxid, mx_room
-        ) or 0
+        return (
+            await cls.db.fetchval(
+                "SELECT COUNT(tg_space) FROM message WHERE mxid=$1 AND mx_room=$2", mxid, mx_room
+            )
+            or 0
+        )
 
     @classmethod
     async def find_last(cls, mx_room: RoomID, tg_space: TelegramID) -> Message | None:

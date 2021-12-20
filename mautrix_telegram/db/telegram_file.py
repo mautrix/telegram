@@ -15,7 +15,7 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from __future__ import annotations
 
-from typing import ClassVar, TYPE_CHECKING
+from typing import TYPE_CHECKING, ClassVar
 
 from attr import dataclass
 
@@ -68,7 +68,15 @@ class TelegramFile:
             "                           thumbnail, decryption_info) "
             "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)"
         )
-        await self.db.execute(q, self.id, self.mxc, self.mime_type, self.was_converted, self.size,
-                              self.width, self.height,
-                              self.thumbnail.id if self.thumbnail else None,
-                              self.decryption_info.json() if self.decryption_info else None)
+        await self.db.execute(
+            q,
+            self.id,
+            self.mxc,
+            self.mime_type,
+            self.was_converted,
+            self.size,
+            self.width,
+            self.height,
+            self.thumbnail.id if self.thumbnail else None,
+            self.decryption_info.json() if self.decryption_info else None,
+        )

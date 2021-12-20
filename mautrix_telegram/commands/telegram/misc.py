@@ -16,36 +16,59 @@
 from __future__ import annotations
 
 from typing import cast
-import codecs
 import base64
+import codecs
 import re
 
 from aiohttp import ClientSession, InvalidURL
-
-from telethon.errors import (InviteHashInvalidError, InviteHashExpiredError, OptionsTooMuchError,
-                             UserAlreadyParticipantError, ChatIdInvalidError,
-                             TakeoutInitDelayError, EmoticonInvalidError)
-from telethon.tl.patched import Message
-from telethon.tl.types import (User as TLUser, TypeUpdates, MessageMediaGame, MessageMediaPoll,
-                               TypeInputPeer, InputMediaDice)
-from telethon.tl.types.messages import BotCallbackAnswer
-from telethon.tl.functions.messages import (ImportChatInviteRequest, CheckChatInviteRequest,
-                                            GetBotCallbackAnswerRequest, SendVoteRequest)
+from telethon.errors import (
+    ChatIdInvalidError,
+    EmoticonInvalidError,
+    InviteHashExpiredError,
+    InviteHashInvalidError,
+    OptionsTooMuchError,
+    TakeoutInitDelayError,
+    UserAlreadyParticipantError,
+)
 from telethon.tl.functions.channels import JoinChannelRequest
+from telethon.tl.functions.messages import (
+    CheckChatInviteRequest,
+    GetBotCallbackAnswerRequest,
+    ImportChatInviteRequest,
+    SendVoteRequest,
+)
+from telethon.tl.patched import Message
+from telethon.tl.types import (
+    InputMediaDice,
+    MessageMediaGame,
+    MessageMediaPoll,
+    TypeInputPeer,
+    TypeUpdates,
+    User as TLUser,
+)
+from telethon.tl.types.messages import BotCallbackAnswer
 
 from mautrix.types import EventID, Format
 
-from ... import puppet as pu, portal as po
+from ... import portal as po, puppet as pu
 from ...abstract_user import AbstractUser
+from ...commands import (
+    SECTION_CREATING_PORTALS,
+    SECTION_MISC,
+    SECTION_PORTAL_MANAGEMENT,
+    CommandEvent,
+    command_handler,
+)
 from ...db import Message as DBMessage
 from ...types import TelegramID
-from ...commands import (command_handler, CommandEvent, SECTION_MISC, SECTION_CREATING_PORTALS,
-                         SECTION_PORTAL_MANAGEMENT)
 
 
-@command_handler(needs_auth=False,
-                 help_section=SECTION_MISC, help_args="<_caption_>",
-                 help_text="Set a caption for the next image you send")
+@command_handler(
+    needs_auth=False,
+    help_section=SECTION_MISC,
+    help_args="<_caption_>",
+    help_text="Set a caption for the next image you send",
+)
 async def caption(evt: CommandEvent) -> EventID:
     if len(evt.args) == 0:
         return await evt.reply("**Usage:** `$cmdprefix+sp caption <caption>`")
@@ -55,13 +78,17 @@ async def caption(evt: CommandEvent) -> EventID:
         evt.content.formatted_body = evt.content.formatted_body.replace(prefix, "", 1)
     evt.content.body = evt.content.body.replace(prefix, "", 1)
     evt.sender.command_status = {"caption": evt.content, "action": "Caption"}
-    return await evt.reply("Your next image or file will be sent with that caption. "
-                           "Use `$cmdprefix+sp cancel` to cancel the caption.")
+    return await evt.reply(
+        "Your next image or file will be sent with that caption. "
+        "Use `$cmdprefix+sp cancel` to cancel the caption."
+    )
 
 
-@command_handler(help_section=SECTION_MISC,
-                 help_args="[_-r|--remote_] <_query_>",
-                 help_text="Search your contacts or the Telegram servers for users.")
+@command_handler(
+    help_section=SECTION_MISC,
+    help_args="[_-r|--remote_] <_query_>",
+    help_text="Search your contacts or the Telegram servers for users.",
+)
 async def search(evt: CommandEvent) -> EventID:
     if len(evt.args) == 0:
         return await evt.reply("**Usage:** `$cmdprefix+sp search [-r|--remote] <query>`")
@@ -79,8 +106,9 @@ async def search(evt: CommandEvent) -> EventID:
 
     if not results:
         if len(query) < 5 and remote:
-            return await evt.reply("No local results. "
-                                   "Minimum length of remote query is 5 characters.")
+            return await evt.reply(
+                "No local results. Minimum length of remote query is 5 characters."
+            )
         return await evt.reply("No results 3:")
 
     reply: list[str] = []
@@ -88,20 +116,27 @@ async def search(evt: CommandEvent) -> EventID:
         reply += ["**Results from Telegram server:**", ""]
     else:
         reply += ["**Results in contacts:**", ""]
-    reply += [(f"* [{puppet.displayname}](https://matrix.to/#/{puppet.mxid}): "
-               f"{puppet.id} ({similarity}% match)")
-              for puppet, similarity in results]
+    reply += [
+        (
+            f"* [{puppet.displayname}](https://matrix.to/#/{puppet.mxid}): "
+            f"{puppet.id} ({similarity}% match)"
+        )
+        for puppet, similarity in results
+    ]
 
     # TODO somehow show remote channel results when joining by alias is possible?
 
     return await evt.reply("\n".join(reply))
 
 
-@command_handler(help_section=SECTION_CREATING_PORTALS, help_args="<_identifier_>",
-                 help_text="Open a private chat with the given Telegram user. The identifier is "
-                           "either the internal user ID, the username or the phone number. "
-                           "**N.B.** The phone numbers you start chats with must already be in "
-                           "your contacts.")
+@command_handler(
+    help_section=SECTION_CREATING_PORTALS,
+    help_args="<_identifier_>",
+    help_text="Open a private chat with the given Telegram user. The identifier is "
+    "either the internal user ID, the username or the phone number. "
+    "**N.B.** The phone numbers you start chats with must already be in "
+    "your contacts.",
+)
 async def pm(evt: CommandEvent) -> EventID:
     if len(evt.args) == 0:
         return await evt.reply("**Usage:** `$cmdprefix+sp pm <user identifier>`")
@@ -122,8 +157,9 @@ async def pm(evt: CommandEvent) -> EventID:
     return await evt.reply(f"Created private chat room with {displayname}")
 
 
-async def _join(evt: CommandEvent, identifier: str, link_type: str
-                ) -> tuple[TypeUpdates | None, EventID | None]:
+async def _join(
+    evt: CommandEvent, identifier: str, link_type: str
+) -> tuple[TypeUpdates | None, EventID | None]:
     if link_type == "joinchat":
         try:
             await evt.sender.client(CheckChatInviteRequest(identifier))
@@ -142,9 +178,11 @@ async def _join(evt: CommandEvent, identifier: str, link_type: str
         return await evt.sender.client(JoinChannelRequest(channel)), None
 
 
-@command_handler(help_section=SECTION_CREATING_PORTALS,
-                 help_args="<_link_>",
-                 help_text="Join a chat with an invite link.")
+@command_handler(
+    help_section=SECTION_CREATING_PORTALS,
+    help_args="<_link_>",
+    help_text="Join a chat with an invite link.",
+)
 async def join(evt: CommandEvent) -> EventID | None:
     if len(evt.args) == 0:
         return await evt.reply("**Usage:** `$cmdprefix+sp join <invite link>`")
@@ -157,8 +195,10 @@ async def join(evt: CommandEvent) -> EventID | None:
         except InvalidURL:
             return await evt.reply("That doesn't look like a Telegram invite link.")
 
-    regex = re.compile(r"(?:https?://)?t(?:elegram)?\.(?:dog|me)"
-                       r"(?:/(?P<type>joinchat|s))?/(?P<id>[^/]+)/?", flags=re.IGNORECASE)
+    regex = re.compile(
+        r"(?:https?://)?t(?:elegram)?\.(?:dog|me)(?:/(?P<type>joinchat|s))?/(?P<id>[^/]+)/?",
+        flags=re.IGNORECASE,
+    )
     arg = regex.match(url)
     if not arg:
         return await evt.reply("That doesn't look like a Telegram invite link.")
@@ -182,16 +222,20 @@ async def join(evt: CommandEvent) -> EventID | None:
             try:
                 await portal.create_matrix_room(evt.sender, chat, [evt.sender.mxid])
             except ChatIdInvalidError as e:
-                evt.log.trace("ChatIdInvalidError while creating portal from !tg join command: %s",
-                              updates.stringify())
+                evt.log.trace(
+                    "ChatIdInvalidError while creating portal from !tg join command: %s",
+                    updates.stringify(),
+                )
                 raise e
             return await evt.reply(f"Created room for {portal.title}")
     return None
 
 
-@command_handler(help_section=SECTION_MISC,
-                 help_args="[`chats`|`contacts`|`me`]",
-                 help_text="Synchronize your chat portals, contacts and/or own info.")
+@command_handler(
+    help_section=SECTION_MISC,
+    help_args="[`chats`|`contacts`|`me`]",
+    help_text="Synchronize your chat portals, contacts and/or own info.",
+)
 async def sync(evt: CommandEvent) -> EventID:
     if len(evt.args) > 0:
         sync_only = evt.args[0]
@@ -220,8 +264,9 @@ class MessageIDError(ValueError):
         self.message = message
 
 
-async def _parse_encoded_msgid(user: AbstractUser, enc_id: str, type_name: str
-                               ) -> tuple[TypeInputPeer, Message]:
+async def _parse_encoded_msgid(
+    user: AbstractUser, enc_id: str, type_name: str
+) -> tuple[TypeInputPeer, Message]:
     try:
         enc_id += (4 - len(enc_id) % 4) * "="
         enc_id = base64.b64decode(enc_id)
@@ -253,9 +298,9 @@ async def _parse_encoded_msgid(user: AbstractUser, enc_id: str, type_name: str
     return peer, cast(Message, msg)
 
 
-@command_handler(help_section=SECTION_MISC,
-                 help_args="<_play ID_>",
-                 help_text="Play a Telegram game.")
+@command_handler(
+    help_section=SECTION_MISC, help_args="<_play ID_>", help_text="Play a Telegram game."
+)
 async def play(evt: CommandEvent) -> EventID:
     if len(evt.args) < 1:
         return await evt.reply("**Usage:** `$cmdprefix+sp play <play ID>`")
@@ -273,17 +318,22 @@ async def play(evt: CommandEvent) -> EventID:
         return await evt.reply("Invalid play ID (message doesn't look like a game)")
 
     game = await evt.sender.client(
-        GetBotCallbackAnswerRequest(peer=peer, msg_id=msg.id, game=True))
+        GetBotCallbackAnswerRequest(peer=peer, msg_id=msg.id, game=True)
+    )
     if not isinstance(game, BotCallbackAnswer):
         return await evt.reply("Game request response invalid")
 
-    return await evt.reply(f"Click [here]({game.url}) to play {msg.media.game.title}:\n\n"
-                           f"{msg.media.game.description}")
+    return await evt.reply(
+        f"Click [here]({game.url}) to play {msg.media.game.title}:\n\n"
+        f"{msg.media.game.description}"
+    )
 
 
-@command_handler(help_section=SECTION_MISC,
-                 help_args="<_poll ID_> <_choice number_>",
-                 help_text="Vote in a Telegram poll.")
+@command_handler(
+    help_section=SECTION_MISC,
+    help_args="<_poll ID_> <_choice number_>",
+    help_text="Vote in a Telegram poll.",
+)
 async def vote(evt: CommandEvent) -> EventID | None:
     if len(evt.args) < 1:
         return await evt.reply("**Usage:** `$cmdprefix+sp vote <poll ID> <choice number>`")
@@ -309,17 +359,20 @@ async def vote(evt: CommandEvent) -> EventID | None:
         except ValueError:
             option_index = None
         if option_index is None:
-            return await evt.reply(f"Invalid option number \"{option}\"",
-                                   render_markdown=False, allow_html=False)
+            return await evt.reply(
+                f'Invalid option number "{option}"', render_markdown=False, allow_html=False
+            )
         elif option_index < 0:
-            return await evt.reply(f"Invalid option number {option}. "
-                                   f"Option numbers must be positive.")
+            return await evt.reply(
+                f"Invalid option number {option}. Option numbers must be positive."
+            )
         elif option_index >= len(msg.media.poll.answers):
-            return await evt.reply(f"Invalid option number {option}. "
-                                   f"The poll only has {len(msg.media.poll.answers)} options.")
+            return await evt.reply(
+                f"Invalid option number {option}. "
+                f"The poll only has {len(msg.media.poll.answers)} options."
+            )
         options.append(msg.media.poll.answers[option_index].option)
-    options = [msg.media.poll.answers[int(option) - 1].option
-               for option in evt.args[1:]]
+    options = [msg.media.poll.answers[int(option) - 1].option for option in evt.args[1:]]
     try:
         await evt.sender.client(SendVoteRequest(peer=peer, msg_id=msg.id, options=options))
     except OptionsTooMuchError:
@@ -328,9 +381,12 @@ async def vote(evt: CommandEvent) -> EventID | None:
     return await evt.mark_read()
 
 
-@command_handler(help_section=SECTION_MISC, help_args="<_emoji_>",
-                 help_text="Roll a dice (\U0001F3B2), kick a football (\u26BD\uFE0F) or throw a "
-                           "dart (\U0001F3AF) or basketball (\U0001F3C0) on the Telegram servers.")
+@command_handler(
+    help_section=SECTION_MISC,
+    help_args="<_emoji_>",
+    help_text="Roll a dice (\U0001F3B2), kick a football (\u26BD\uFE0F) or throw a "
+    "dart (\U0001F3AF) or basketball (\U0001F3C0) on the Telegram servers.",
+)
 async def random(evt: CommandEvent) -> EventID:
     if not evt.is_portal:
         return await evt.reply("You can only randomize values in portal rooms")
@@ -345,14 +401,18 @@ async def random(evt: CommandEvent) -> EventID:
         "soccer": "\u26BD",
     }.get(arg, arg)
     try:
-        await evt.sender.client.send_media(await portal.get_input_entity(evt.sender),
-                                           InputMediaDice(emoticon))
+        await evt.sender.client.send_media(
+            await portal.get_input_entity(evt.sender), InputMediaDice(emoticon)
+        )
     except EmoticonInvalidError:
         return await evt.reply("Invalid emoji for randomization")
 
 
-@command_handler(help_section=SECTION_PORTAL_MANAGEMENT, help_args="[_limit_]",
-                 help_text="Backfill messages from Telegram history.")
+@command_handler(
+    help_section=SECTION_PORTAL_MANAGEMENT,
+    help_args="[_limit_]",
+    help_text="Backfill messages from Telegram history.",
+)
 async def backfill(evt: CommandEvent) -> None:
     if not evt.is_portal:
         await evt.reply("You can only use backfill in portal rooms")
@@ -368,10 +428,13 @@ async def backfill(evt: CommandEvent) -> None:
     try:
         await portal.backfill(evt.sender, limit=limit)
     except TakeoutInitDelayError:
-        msg = ("Please accept the data export request from a mobile device, "
-               "then re-run the backfill command.")
+        msg = (
+            "Please accept the data export request from a mobile device, "
+            "then re-run the backfill command."
+        )
         if portal.peer_type == "user":
             from mautrix.appservice import IntentAPI
+
             await portal.main_intent.send_notice(evt.room_id, msg)
         else:
             await evt.reply(msg)

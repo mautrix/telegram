@@ -15,13 +15,13 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from __future__ import annotations
 
-from typing import ClassVar, TYPE_CHECKING
+from typing import TYPE_CHECKING, ClassVar
 
 from asyncpg import Record
 from attr import dataclass
 from yarl import URL
 
-from mautrix.types import UserID, SyncToken
+from mautrix.types import SyncToken, UserID
 from mautrix.util.async_db import Database
 
 from ..types import TelegramID
@@ -92,10 +92,22 @@ class Puppet:
 
     @property
     def _values(self):
-        return (self.id, self.is_registered, self.displayname, self.displayname_source,
-                self.displayname_contact, self.displayname_quality, self.disable_updates,
-                self.username, self.photo_id, self.is_bot, self.custom_mxid, self.access_token,
-                self.next_batch, str(self.base_url) if self.base_url else None)
+        return (
+            self.id,
+            self.is_registered,
+            self.displayname,
+            self.displayname_source,
+            self.displayname_contact,
+            self.displayname_quality,
+            self.disable_updates,
+            self.username,
+            self.photo_id,
+            self.is_bot,
+            self.custom_mxid,
+            self.access_token,
+            self.next_batch,
+            str(self.base_url) if self.base_url else None,
+        )
 
     async def save(self) -> None:
         q = (

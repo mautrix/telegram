@@ -18,13 +18,16 @@ import asyncio
 from mautrix.types import EventID
 
 from ... import portal as po, puppet as pu, user as u
-from .. import command_handler, CommandEvent, SECTION_ADMIN
+from .. import SECTION_ADMIN, CommandEvent, command_handler
 
 
-@command_handler(needs_admin=True, needs_auth=False,
-                 help_section=SECTION_ADMIN,
-                 help_args="<`portal`|`puppet`|`user`>",
-                 help_text="Clear internal bridge caches")
+@command_handler(
+    needs_admin=True,
+    needs_auth=False,
+    help_section=SECTION_ADMIN,
+    help_args="<`portal`|`puppet`|`user`>",
+    help_text="Clear internal bridge caches",
+)
 async def clear_db_cache(evt: CommandEvent) -> EventID:
     try:
         section = evt.args[0].lower()
@@ -44,19 +47,19 @@ async def clear_db_cache(evt: CommandEvent) -> EventID:
         )
         await evt.reply("Cleared puppet cache and restarted custom puppet syncers")
     elif section == "user":
-        u.User.by_mxid = {
-            user.mxid: user
-            for user in u.User.by_tgid.values()
-        }
+        u.User.by_mxid = {user.mxid: user for user in u.User.by_tgid.values()}
         await evt.reply("Cleared non-logged-in user cache")
     else:
         return await evt.reply("**Usage:** `$cmdprefix+sp clear-db-cache <section>`")
 
 
-@command_handler(needs_admin=True, needs_auth=False,
-                 help_section=SECTION_ADMIN,
-                 help_args="[_mxid_]",
-                 help_text="Reload and reconnect a user")
+@command_handler(
+    needs_admin=True,
+    needs_auth=False,
+    help_section=SECTION_ADMIN,
+    help_args="[_mxid_]",
+    help_text="Reload and reconnect a user",
+)
 async def reload_user(evt: CommandEvent) -> EventID:
     if len(evt.args) > 0:
         mxid = evt.args[0]

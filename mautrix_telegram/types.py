@@ -1,3 +1,3 @@
 from typing import NewType
 
-TelegramID = NewType('TelegramID', int)
+TelegramID = NewType("TelegramID", int)

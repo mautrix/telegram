@@ -23,6 +23,8 @@ E.g. The third modification release to 1.0 of the upstream bridge would be `v1.0
 [![License](https://img.shields.io/github/license/mautrix/telegram.svg)](LICENSE)
 [![Release](https://img.shields.io/github/release/mautrix/telegram/all.svg)](https://github.com/mautrix/telegram/releases)
 [![GitLab CI](https://mau.dev/mautrix/telegram/badges/master/pipeline.svg)](https://mau.dev/mautrix/telegram/container_registry)
+[![Code style](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
+[![Imports](https://img.shields.io/badge/%20imports-isort-%231674b1?style=flat&labelColor=ef8336)](https://pycqa.github.io/isort/)
 
 A Matrix-Telegram hybrid puppeting/relaybot bridge.
 ## Sponsors

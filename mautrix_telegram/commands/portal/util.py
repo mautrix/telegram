@@ -15,12 +15,12 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from __future__ import annotations
 
-from mautrix.errors import MatrixRequestError
 from mautrix.appservice import IntentAPI
-from mautrix.types import RoomID, EventType, PowerLevelStateEventContent
-from .. import CommandEvent
+from mautrix.errors import MatrixRequestError
+from mautrix.types import EventType, PowerLevelStateEventContent, RoomID
 
 from ... import user as u
+from .. import CommandEvent
 
 
 async def get_initial_state(
@@ -51,14 +51,16 @@ async def get_initial_state(
 
 async def warn_missing_power(levels: PowerLevelStateEventContent, evt: CommandEvent) -> None:
     if levels.get_user_level(evt.az.bot_mxid) < levels.redact:
-        await evt.reply("Warning: The bot does not have privileges to redact messages on Matrix. "
-                        "Message deletions from Telegram will not be bridged unless you give "
-                        "redaction permissions to "
-                        f"[{evt.az.bot_mxid}](https://matrix.to/#/{evt.az.bot_mxid})")
+        await evt.reply(
+            "Warning: The bot does not have privileges to redact messages on Matrix. "
+            "Message deletions from Telegram will not be bridged unless you give "
+            f"redaction permissions to [{evt.az.bot_mxid}](https://matrix.to/#/{evt.az.bot_mxid})"
+        )
 
 
-async def user_has_power_level(room_id: RoomID, intent: IntentAPI, sender: u.User,
-                               event: str) -> bool:
+async def user_has_power_level(
+    room_id: RoomID, intent: IntentAPI, sender: u.User, event: str
+) -> bool:
     if sender.is_admin:
         return True
     # Make sure the state store contains the power levels.

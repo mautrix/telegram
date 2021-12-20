@@ -13,7 +13,8 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import Dict
+from __future__ import annotations
+
 from asyncio import Lock
 
 from ..types import TelegramID
@@ -28,7 +29,7 @@ class FakeLock:
 
 
 class PortalSendLock:
-    _send_locks: Dict[int, Lock]
+    _send_locks: dict[int, Lock]
     _noop_lock: Lock = FakeLock()
 
     def __init__(self) -> None:
@@ -40,5 +41,4 @@ class PortalSendLock:
         try:
             return self._send_locks[user_id]
         except KeyError:
-            return (self._send_locks.setdefault(user_id, Lock())
-                    if required else self._noop_lock)
+            return self._send_locks.setdefault(user_id, Lock()) if required else self._noop_lock

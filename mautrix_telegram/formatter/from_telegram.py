@@ -1,5 +1,5 @@
 # mautrix-telegram - A Matrix-Telegram puppeting bridge
-# Copyright (C) 2019 Tulir Asokan
+# Copyright (C) 2021 Tulir Asokan
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as published by
@@ -19,41 +19,66 @@ from html import escape
 import logging
 import re
 
-from telethon.tl.types import (MessageEntityMention, MessageEntityMentionName, MessageEntityUrl,
-                               MessageEntityEmail, MessageEntityTextUrl, MessageEntityBold,
-                               MessageEntityItalic, MessageEntityCode, MessageEntityPre,
-                               MessageEntityBotCommand, MessageEntityHashtag, MessageEntityCashtag,
-                               MessageEntityPhone, TypeMessageEntity, PeerChannel, PeerChat,
-                               MessageEntityBlockquote, MessageEntityStrike, MessageFwdHeader,
-                               MessageEntityUnderline, PeerUser)
-from telethon.tl.custom import Message
 from telethon.errors import RPCError
 from telethon.helpers import add_surrogate, del_surrogate
+from telethon.tl.custom import Message
+from telethon.tl.types import (
+    MessageEntityBlockquote,
+    MessageEntityBold,
+    MessageEntityBotCommand,
+    MessageEntityCashtag,
+    MessageEntityCode,
+    MessageEntityEmail,
+    MessageEntityHashtag,
+    MessageEntityItalic,
+    MessageEntityMention,
+    MessageEntityMentionName,
+    MessageEntityPhone,
+    MessageEntityPre,
+    MessageEntityStrike,
+    MessageEntityTextUrl,
+    MessageEntityUnderline,
+    MessageEntityUrl,
+    MessageFwdHeader,
+    PeerChannel,
+    PeerChat,
+    PeerUser,
+    TypeMessageEntity,
+)
 
 from mautrix.appservice import IntentAPI
-from mautrix.types import (TextMessageEventContent, RelatesTo, RelationType, Format, MessageType,
-                           EventType)
+from mautrix.types import (
+    EventType,
+    Format,
+    MessageType,
+    RelatesTo,
+    RelationType,
+    TextMessageEventContent,
+)
 
-from .. import user as u, puppet as pu, portal as po, abstract_user as au
-from ..types import TelegramID
+from .. import abstract_user as au, portal as po, puppet as pu, user as u
 from ..db import Message as DBMessage
+from ..types import TelegramID
 
 log: logging.Logger = logging.getLogger("mau.fmt.tg")
 
 
 async def telegram_reply_to_matrix(evt: Message, source: au.AbstractUser) -> RelatesTo | None:
     if evt.reply_to:
-        space = (evt.peer_id.channel_id
-                 if isinstance(evt, Message) and isinstance(evt.peer_id, PeerChannel)
-                 else source.tgid)
+        space = (
+            evt.peer_id.channel_id
+            if isinstance(evt, Message) and isinstance(evt.peer_id, PeerChannel)
+            else source.tgid
+        )
         msg = await DBMessage.get_one_by_tgid(TelegramID(evt.reply_to.reply_to_msg_id), space)
         if msg:
             return RelatesTo(rel_type=RelationType.REPLY, event_id=msg.mxid)
     return None
 
 
-async def _add_forward_header(source: au.AbstractUser, content: TextMessageEventContent,
-                              fwd_from: MessageFwdHeader) -> None:
+async def _add_forward_header(
+    source: au.AbstractUser, content: TextMessageEventContent, fwd_from: MessageFwdHeader
+) -> None:
     if not content.formatted_body or content.format != Format.HTML:
         content.format = Format.HTML
         content.formatted_body = escape(content.body)
@@ -62,8 +87,9 @@ async def _add_forward_header(source: au.AbstractUser, content: TextMessageEvent
         user = await u.User.get_by_tgid(TelegramID(fwd_from.from_id.user_id))
         if user:
             fwd_from_text = user.displayname or user.mxid
-            fwd_from_html = (f"<a href='https://matrix.to/#/{user.mxid}'>"
-                             f"{escape(fwd_from_text)}</a>")
+            fwd_from_html = (
+                f"<a href='https://matrix.to/#/{user.mxid}'>{escape(fwd_from_text)}</a>"
+            )
 
         if not fwd_from_text:
             puppet = await pu.Puppet.get_by_tgid(
@@ -71,8 +97,9 @@ async def _add_forward_header(source: au.AbstractUser, content: TextMessageEvent
             )
             if puppet and puppet.displayname:
                 fwd_from_text = puppet.displayname or puppet.mxid
-                fwd_from_html = (f"<a href='https://matrix.to/#/{puppet.mxid}'>"
-                                 f"{escape(fwd_from_text)}</a>")
+                fwd_from_html = (
+                    f"<a href='https://matrix.to/#/{puppet.mxid}'>{escape(fwd_from_text)}</a>"
+                )
 
         if not fwd_from_text:
             try:
@@ -83,14 +110,18 @@ async def _add_forward_header(source: au.AbstractUser, content: TextMessageEvent
             except (ValueError, RPCError):
                 fwd_from_text = fwd_from_html = "unknown user"
     elif isinstance(fwd_from.from_id, (PeerChannel, PeerChat)):
-        from_id = (fwd_from.from_id.chat_id if isinstance(fwd_from.from_id, PeerChat)
-                   else fwd_from.from_id.channel_id)
+        from_id = (
+            fwd_from.from_id.chat_id
+            if isinstance(fwd_from.from_id, PeerChat)
+            else fwd_from.from_id.channel_id
+        )
         portal = await po.Portal.get_by_tgid(TelegramID(from_id))
         if portal and portal.title:
             fwd_from_text = portal.title
             if portal.alias:
-                fwd_from_html = (f"<a href='https://matrix.to/#/{portal.alias}'>"
-                                 f"{escape(fwd_from_text)}</a>")
+                fwd_from_html = (
+                    f"<a href='https://matrix.to/#/{portal.alias}'>{escape(fwd_from_text)}</a>"
+                )
             else:
                 fwd_from_html = f"channel <b>{escape(fwd_from_text)}</b>"
         else:
@@ -112,14 +143,18 @@ async def _add_forward_header(source: au.AbstractUser, content: TextMessageEvent
     content.body = f"Forwarded from {fwd_from_text}:\n{content.body}"
     content.formatted_body = (
         f"Forwarded message from {fwd_from_html}<br/>"
-        f"<tg-forward><blockquote>{content.formatted_body}</blockquote></tg-forward>")
+        f"<tg-forward><blockquote>{content.formatted_body}</blockquote></tg-forward>"
+    )
 
 
-async def _add_reply_header(source: au.AbstractUser, content: TextMessageEventContent,
-                            evt: Message, main_intent: IntentAPI) -> None:
-    space = (evt.peer_id.channel_id
-             if isinstance(evt, Message) and isinstance(evt.peer_id, PeerChannel)
-             else source.tgid)
+async def _add_reply_header(
+    source: au.AbstractUser, content: TextMessageEventContent, evt: Message, main_intent: IntentAPI
+) -> None:
+    space = (
+        evt.peer_id.channel_id
+        if isinstance(evt, Message) and isinstance(evt.peer_id, PeerChannel)
+        else source.tgid
+    )
 
     msg = await DBMessage.get_one_by_tgid(TelegramID(evt.reply_to.reply_to_msg_id), space)
     if not msg:
@@ -139,12 +174,16 @@ async def _add_reply_header(source: au.AbstractUser, content: TextMessageEventCo
         log.exception("Failed to get event to add reply fallback")
 
 
-async def telegram_to_matrix(evt: Message, source: au.AbstractUser,
-                             main_intent: IntentAPI | None = None,
-                             prefix_text: str | None = None, prefix_html: str | None = None,
-                             override_text: str = None,
-                             override_entities: list[TypeMessageEntity] = None,
-                             no_reply_fallback: bool = False) -> TextMessageEventContent:
+async def telegram_to_matrix(
+    evt: Message,
+    source: au.AbstractUser,
+    main_intent: IntentAPI | None = None,
+    prefix_text: str | None = None,
+    prefix_html: str | None = None,
+    override_text: str = None,
+    override_entities: list[TypeMessageEntity] = None,
+    no_reply_fallback: bool = False,
+) -> TextMessageEventContent:
     content = TextMessageEventContent(
         msgtype=MessageType.TEXT,
         body=add_surrogate(override_text or evt.message),
@@ -186,15 +225,15 @@ async def _telegram_entities_to_matrix_catch(text: str, entities: list[TypeMessa
     try:
         return await _telegram_entities_to_matrix(text, entities)
     except Exception:
-        log.exception("Failed to convert Telegram format:\n"
-                      "message=%s\n"
-                      "entities=%s",
-                      text, entities)
+        log.exception(
+            "Failed to convert Telegram format:\nmessage=%s\nentities=%s", text, entities
+        )
     return "[failed conversion in _telegram_entities_to_matrix]"
 
 
-async def _telegram_entities_to_matrix(text: str, entities: list[TypeMessageEntity],
-                                       offset: int = 0, length: int = None) -> str:
+async def _telegram_entities_to_matrix(
+    text: str, entities: list[TypeMessageEntity], offset: int = 0, length: int = None
+) -> str:
     if not entities:
         return escape(text)
     if length is None:
@@ -212,8 +251,11 @@ async def _telegram_entities_to_matrix(text: str, entities: list[TypeMessageEnti
 
         skip_entity = False
         entity_text = await _telegram_entities_to_matrix(
-            text=text[relative_offset:relative_offset + entity.length],
-            entities=entities[i + 1:], offset=entity.offset, length=entity.length)
+            text=text[relative_offset : relative_offset + entity.length],
+            entities=entities[i + 1 :],
+            offset=entity.offset,
+            length=entity.length,
+        )
         entity_type = type(entity)
 
         if entity_type == MessageEntityBold:
@@ -227,9 +269,11 @@ async def _telegram_entities_to_matrix(text: str, entities: list[TypeMessageEnti
         elif entity_type == MessageEntityBlockquote:
             html.append(f"<blockquote>{entity_text}</blockquote>")
         elif entity_type == MessageEntityCode:
-            html.append(f"<pre><code>{entity_text}</code></pre>"
-                        if "\n" in entity_text
-                        else f"<code>{entity_text}</code>")
+            html.append(
+                f"<pre><code>{entity_text}</code></pre>"
+                if "\n" in entity_text
+                else f"<code>{entity_text}</code>"
+            )
         elif entity_type == MessageEntityPre:
             skip_entity = _parse_pre(html, entity_text, entity.language)
         elif entity_type == MessageEntityMention:
@@ -293,8 +337,9 @@ async def _parse_name_mention(html: list[str], entity_text: str, user_id: Telegr
     return False
 
 
-message_link_regex = re.compile(r"https?://t(?:elegram)?\.(?:me|dog)/"
-                                r"([A-Za-z][A-Za-z0-9_]{3,}[A-Za-z0-9])/([0-9]{1,50})")
+message_link_regex = re.compile(
+    r"https?://t(?:elegram)?\.(?:me|dog)/([A-Za-z][A-Za-z0-9_]{3,}[A-Za-z0-9])/([0-9]{1,50})"
+)
 
 
 async def _parse_url(html: list[str], entity_text: str, url: str) -> bool:

@@ -15,24 +15,32 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from __future__ import annotations
 
-from typing import Awaitable, AsyncGenerator, AsyncIterable, TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, AsyncGenerator, AsyncIterable, Awaitable, cast
 from difflib import SequenceMatcher
 import unicodedata
 
-from telethon.tl.types import (UserProfilePhoto, User, UpdateUserName, PeerUser, TypeInputPeer,
-                               InputPeerPhotoFileLocation, UserProfilePhotoEmpty, TypeInputUser)
+from telethon.tl.types import (
+    InputPeerPhotoFileLocation,
+    PeerUser,
+    TypeInputPeer,
+    TypeInputUser,
+    UpdateUserName,
+    User,
+    UserProfilePhoto,
+    UserProfilePhotoEmpty,
+)
 from yarl import URL
 
 from mautrix.appservice import IntentAPI
-from mautrix.errors import MatrixError
 from mautrix.bridge import BasePuppet, async_getter_lock
-from mautrix.types import UserID, SyncToken, RoomID, ContentURI
+from mautrix.errors import MatrixError
+from mautrix.types import ContentURI, RoomID, SyncToken, UserID
 from mautrix.util.simple_template import SimpleTemplate
 
+from . import abstract_user as au, portal as p, util
 from .config import Config
-from .types import TelegramID
 from .db import Puppet as DBPuppet
-from . import util, portal as p, abstract_user as au
+from .types import TelegramID
 
 if TYPE_CHECKING:
     from .__main__ import TelegramBridge
@@ -62,7 +70,7 @@ class Puppet(DBPuppet, BasePuppet):
         custom_mxid: UserID | None = None,
         access_token: str | None = None,
         next_batch: SyncToken | None = None,
-        base_url: str | None = None
+        base_url: str | None = None,
     ) -> None:
         super().__init__(
             id=id,
@@ -116,7 +124,7 @@ class Puppet(DBPuppet, BasePuppet):
         return self.intent
 
     @classmethod
-    def init_cls(cls, bridge: 'TelegramBridge') -> AsyncIterable[Awaitable[None]]:
+    def init_cls(cls, bridge: "TelegramBridge") -> AsyncIterable[Awaitable[None]]:
         cls.config = bridge.config
         cls.loop = bridge.loop
         cls.mx = bridge.matrix
@@ -134,11 +142,15 @@ class Puppet(DBPuppet, BasePuppet):
             cls.config["bridge.displayname_template"], "displayname"
         )
         cls.sync_with_custom_puppets = cls.config["bridge.sync_with_custom_puppets"]
-        cls.homeserver_url_map = {server: URL(url) for server, url
-                                  in cls.config["bridge.double_puppet_server_map"].items()}
+        cls.homeserver_url_map = {
+            server: URL(url)
+            for server, url in cls.config["bridge.double_puppet_server_map"].items()
+        }
         cls.allow_discover_url = cls.config["bridge.double_puppet_allow_discovery"]
-        cls.login_shared_secret_map = {server: secret.encode("utf-8") for server, secret
-                                       in cls.config["bridge.login_shared_secret_map"].items()}
+        cls.login_shared_secret_map = {
+            server: secret.encode("utf-8")
+            for server, secret in cls.config["bridge.login_shared_secret_map"].items()
+        }
         cls.login_device_name = "Telegram Bridge"
 
         return (puppet.try_start() async for puppet in cls.all_with_custom_mxid())
@@ -146,10 +158,12 @@ class Puppet(DBPuppet, BasePuppet):
     # region Info updating
 
     def similarity(self, query: str) -> int:
-        username_similarity = (SequenceMatcher(None, self.username, query).ratio()
-                               if self.username else 0)
-        displayname_similarity = (SequenceMatcher(None, self.plain_displayname, query).ratio()
-                                  if self.displayname else 0)
+        username_similarity = (
+            SequenceMatcher(None, self.username, query).ratio() if self.username else 0
+        )
+        displayname_similarity = (
+            SequenceMatcher(None, self.plain_displayname, query).ratio() if self.displayname else 0
+        )
         similarity = max(username_similarity, displayname_similarity)
         return int(round(similarity * 100))
 
@@ -157,12 +171,17 @@ class Puppet(DBPuppet, BasePuppet):
     def _filter_name(name: str) -> str:
         if not name:
             return ""
-        whitespace = ("\t\n\r\v\f \u00a0\u034f\u180e\u2063\u202f\u205f\u2800\u3000\u3164\ufeff"
-                      "\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200a\u200b"
-                      "\u200c\u200d\u200e\u200f\ufe0f")
+        whitespace = (
+            "\t\n\r\v\f \u00a0\u034f\u180e\u2063\u202f\u205f\u2800\u3000\u3164\ufeff\u2000\u2001"
+            "\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200a\u200b\u200c\u200d\u200e\u200f"
+            "\ufe0f"
+        )
         allowed_other_format = ("\u200d", "\u200c")
-        name = "".join(c for c in name.strip(whitespace) if unicodedata.category(c) != 'Cf'
-                       or c in allowed_other_format)
+        name = "".join(
+            c
+            for c in name.strip(whitespace)
+            if unicodedata.category(c) != "Cf" or c in allowed_other_format
+        )
         return name
 
     @classmethod
@@ -219,8 +238,9 @@ class Puppet(DBPuppet, BasePuppet):
         if changed:
             await self.save()
 
-    async def update_displayname(self, source: au.AbstractUser, info: User | UpdateUserName
-                                 ) -> bool:
+    async def update_displayname(
+        self, source: au.AbstractUser, info: User | UpdateUserName
+    ) -> bool:
         if self.disable_updates:
             return False
         if source.is_relaybot or source.is_bot:
@@ -249,15 +269,18 @@ class Puppet(DBPuppet, BasePuppet):
         displayname, quality = self.get_displayname(info)
         if displayname != self.displayname and quality >= self.displayname_quality:
             allow_because = f"{allow_because} and quality {quality} >= {self.displayname_quality}"
-            self.log.debug(f"Updating displayname of {self.id} (src: {source.tgid}, allowed "
-                           f"because {allow_because}) from {self.displayname} to {displayname}")
+            self.log.debug(
+                f"Updating displayname of {self.id} (src: {source.tgid}, allowed "
+                f"because {allow_because}) from {self.displayname} to {displayname}"
+            )
             self.log.trace("Displayname source data: %s", info)
             self.displayname = displayname
             self.displayname_source = source.tgid
             self.displayname_quality = quality
             try:
                 await self.default_mxid_intent.set_displayname(
-                    displayname[:self.config["bridge.displayname_max_length"]])
+                    displayname[: self.config["bridge.displayname_max_length"]]
+                )
             except MatrixError:
                 self.log.exception("Failed to set displayname")
                 self.displayname = ""
@@ -269,8 +292,9 @@ class Puppet(DBPuppet, BasePuppet):
             return True
         return False
 
-    async def update_avatar(self, source: au.AbstractUser,
-                            photo: UserProfilePhoto | UserProfilePhotoEmpty) -> bool:
+    async def update_avatar(
+        self, source: au.AbstractUser, photo: UserProfilePhoto | UserProfilePhotoEmpty
+    ) -> bool:
         if self.disable_updates:
             return False
 
@@ -294,9 +318,7 @@ class Puppet(DBPuppet, BasePuppet):
                 return True
 
             loc = InputPeerPhotoFileLocation(
-                peer=await self.get_input_entity(source),
-                photo_id=photo.photo_id,
-                big=True
+                peer=await self.get_input_entity(source), photo_id=photo.photo_id, big=True
             )
             file = await util.transfer_file_to_matrix(source.client, self.default_mxid_intent, loc)
             if file:

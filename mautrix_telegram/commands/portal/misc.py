@@ -15,24 +15,33 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from __future__ import annotations
 
-from datetime import timedelta, datetime
+from datetime import datetime, timedelta
 import re
 
+from telethon.errors import (
+    ChatAdminRequiredError,
+    RPCError,
+    UsernameInvalidError,
+    UsernameNotModifiedError,
+    UsernameOccupiedError,
+)
 from telethon.tl.functions.channels import GetFullChannelRequest
 from telethon.tl.functions.messages import GetFullChatRequest
-from telethon.errors import (ChatAdminRequiredError, UsernameInvalidError,
-                             UsernameNotModifiedError, UsernameOccupiedError, RPCError)
 
 from mautrix.types import EventID
 
 from ... import portal as po
-from .. import command_handler, CommandEvent, SECTION_PORTAL_MANAGEMENT, SECTION_MISC
+from .. import SECTION_MISC, SECTION_PORTAL_MANAGEMENT, CommandEvent, command_handler
 from .util import user_has_power_level
 
 
-@command_handler(needs_admin=False, needs_puppeting=False, needs_auth=False,
-                 help_section=SECTION_MISC,
-                 help_text="Fetch Matrix room state to ensure the bridge has up-to-date info.")
+@command_handler(
+    needs_admin=False,
+    needs_puppeting=False,
+    needs_auth=False,
+    help_section=SECTION_MISC,
+    help_text="Fetch Matrix room state to ensure the bridge has up-to-date info.",
+)
 async def sync_state(evt: CommandEvent) -> EventID:
     portal = await po.Portal.get_by_mxid(evt.room_id)
     if not portal:
@@ -44,8 +53,9 @@ async def sync_state(evt: CommandEvent) -> EventID:
     await evt.reply("Synchronization complete")
 
 
-@command_handler(needs_admin=False, needs_puppeting=False, needs_auth=False,
-                 help_section=SECTION_MISC)
+@command_handler(
+    needs_admin=False, needs_puppeting=False, needs_auth=False, help_section=SECTION_MISC
+)
 async def sync_full(evt: CommandEvent) -> EventID:
     portal = await po.Portal.get_by_mxid(evt.room_id)
     if not portal:
@@ -70,9 +80,14 @@ async def sync_full(evt: CommandEvent) -> EventID:
     return await evt.reply("Portal synced successfully.")
 
 
-@command_handler(name="id", needs_admin=False, needs_puppeting=False, needs_auth=False,
-                 help_section=SECTION_MISC,
-                 help_text="Get the ID of the Telegram chat where this room is bridged.")
+@command_handler(
+    name="id",
+    needs_admin=False,
+    needs_puppeting=False,
+    needs_auth=False,
+    help_section=SECTION_MISC,
+    help_text="Get the ID of the Telegram chat where this room is bridged.",
+)
 async def get_id(evt: CommandEvent) -> EventID:
     portal = await po.Portal.get_by_mxid(evt.room_id)
     if not portal:
@@ -85,12 +100,14 @@ async def get_id(evt: CommandEvent) -> EventID:
     await evt.reply(f"This room is bridged to Telegram chat ID `{tgid}`.")
 
 
-invite_link_usage = ("**Usage:** `$cmdprefix+sp invite-link [--uses=<amount>] [--expire=<delta>]`"
-                     "\n\n"
-                     "* `--uses`: the number of times the invite link can be used."
-                     "            Defaults to unlimited.\n"
-                     "* `--expire`: the duration after which the link will expire."
-                     "              A number suffixed with d(ay), h(our), m(inute) or s(econd)")
+invite_link_usage = (
+    "**Usage:** `$cmdprefix+sp invite-link [--uses=<amount>] [--expire=<delta>]`"
+    "\n\n"
+    "* `--uses`: the number of times the invite link can be used."
+    "            Defaults to unlimited.\n"
+    "* `--expire`: the duration after which the link will expire."
+    "              A number suffixed with d(ay), h(our), m(inute) or s(econd)"
+)
 
 
 def _parse_flag(args: list[str]) -> tuple[str, str]:
@@ -99,7 +116,7 @@ def _parse_flag(args: list[str]) -> tuple[str, str]:
         value_start = arg.index("=")
         if value_start:
             flag = arg[2:value_start]
-            value = arg[value_start+1:]
+            value = arg[value_start + 1 :]
         else:
             flag = arg[2:]
             value = args.pop(0).lower()
@@ -114,7 +131,9 @@ def _parse_flag(args: list[str]) -> tuple[str, str]:
     return flag, value
 
 
-delta_regex = re.compile("([0-9]+)(w(?:eek)?|d(?:ay)?|h(?:our)?|m(?:in(?:ute)?)?|s(?:ec(?:ond)?)?)")
+delta_regex = re.compile(
+    "([0-9]+)(w(?:eek)?|d(?:ay)?|h(?:our)?|m(?:in(?:ute)?)?|s(?:ec(?:ond)?)?)"
+)
 
 
 def _parse_delta(value: str) -> timedelta | None:
@@ -137,9 +156,11 @@ def _parse_delta(value: str) -> timedelta | None:
         return None
 
 
-@command_handler(help_section=SECTION_PORTAL_MANAGEMENT,
-                 help_text="Get a Telegram invite link to the current chat.",
-                 help_args="[--uses=<amount>] [--expire=<time delta, e.g. 1d>]")
+@command_handler(
+    help_section=SECTION_PORTAL_MANAGEMENT,
+    help_text="Get a Telegram invite link to the current chat.",
+    help_args="[--uses=<amount>] [--expire=<time delta, e.g. 1d>]",
+)
 async def invite_link(evt: CommandEvent) -> EventID:
     # TODO once we switch to Python 3.9 minimum, use argparse with exit_on_error=False
     uses = None
@@ -176,8 +197,10 @@ async def invite_link(evt: CommandEvent) -> EventID:
         return await evt.reply("You don't have the permission to create an invite link.")
 
 
-@command_handler(help_section=SECTION_PORTAL_MANAGEMENT,
-                 help_text="Upgrade a normal Telegram group to a supergroup.")
+@command_handler(
+    help_section=SECTION_PORTAL_MANAGEMENT,
+    help_text="Upgrade a normal Telegram group to a supergroup.",
+)
 async def upgrade(evt: CommandEvent) -> EventID:
     portal = await po.Portal.get_by_mxid(evt.room_id)
     if not portal:
@@ -196,10 +219,13 @@ async def upgrade(evt: CommandEvent) -> EventID:
         return await evt.reply(e.args[0])
 
 
-@command_handler(help_section=SECTION_PORTAL_MANAGEMENT,
-                 help_args="<_name_|`-`>",
-                 help_text="Change the username of a supergroup/channel. "
-                           "To disable, use a dash (`-`) as the name.")
+@command_handler(
+    help_section=SECTION_PORTAL_MANAGEMENT,
+    help_args="<_name_|`-`>",
+    help_text=(
+        "Change the username of a supergroup/channel. To disable, use a dash (`-`) as the name."
+    ),
+)
 async def group_name(evt: CommandEvent) -> EventID:
     if len(evt.args) == 0:
         return await evt.reply("**Usage:** `$cmdprefix+sp group-name <name/->`")
@@ -211,15 +237,15 @@ async def group_name(evt: CommandEvent) -> EventID:
         return await evt.reply("Only channels and supergroups have usernames.")
 
     try:
-        await portal.set_telegram_username(evt.sender,
-                                           evt.args[0] if evt.args[0] != "-" else "")
+        await portal.set_telegram_username(evt.sender, evt.args[0] if evt.args[0] != "-" else "")
         if portal.username:
             return await evt.reply(f"Username of channel changed to {portal.username}.")
         else:
             return await evt.reply(f"Channel is now private.")
     except ChatAdminRequiredError:
         return await evt.reply(
-            "You don't have the permission to set the username of this channel.")
+            "You don't have the permission to set the username of this channel."
+        )
     except UsernameNotModifiedError:
         if portal.username:
             return await evt.reply("That is already the username of this channel.")

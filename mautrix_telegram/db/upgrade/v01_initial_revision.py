@@ -14,6 +14,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from asyncpg import Connection
+
 from . import upgrade_table
 
 legacy_version_query = "SELECT version_num FROM alembic_version"
@@ -40,8 +41,10 @@ async def upgrade_v1(conn: Connection, scheme: str) -> None:
 async def migrate_legacy_to_v1(conn: Connection, scheme: str) -> None:
     legacy_version = await conn.fetchval(legacy_version_query)
     if legacy_version != last_legacy_version:
-        raise RuntimeError("Legacy database is not on last version. Please upgrade the old "
-                           "database with alembic or drop it completely first.")
+        raise RuntimeError(
+            "Legacy database is not on last version. "
+            "Please upgrade the old database with alembic or drop it completely first."
+        )
     if scheme != "sqlite":
         await conn.execute(
             """
@@ -128,13 +131,24 @@ async def varchar_to_text(conn: Connection) -> None:
     columns_to_adjust = {
         "user": ("mxid", "tg_username", "tg_phone"),
         "portal": (
-            "peer_type", "mxid", "username", "title", "about", "photo_id", "avatar_url", "config"
+            "peer_type",
+            "mxid",
+            "username",
+            "title",
+            "about",
+            "photo_id",
+            "avatar_url",
+            "config",
         ),
         "message": ("mxid", "mx_room"),
         "puppet": (
-            "displayname", "username", "photo_id",
-        ) + (
-            "access_token", "custom_mxid", "next_batch", "base_url"
+            "displayname",
+            "username",
+            "photo_id",
+            "access_token",
+            "custom_mxid",
+            "next_batch",
+            "base_url",
         ),
         "bot_chat": ("type",),
         "telegram_file": ("id", "mxc", "mime_type", "thumbnail"),

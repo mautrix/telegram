@@ -1,0 +1,12 @@
+[tool.isort]
+profile = "black"
+force_to_top = "typing"
+from_first = true
+combine_as_imports = true
+known_first_party = "mautrix"
+line_length = 99
+
+[tool.black]
+line-length = 99
+target-version = ["py38"]
+required-version = "21.12b0"
