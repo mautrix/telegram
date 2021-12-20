@@ -27,7 +27,7 @@ imageio-ffmpeg==0.4.5
 imageio==2.9.0
 incremental==17.5.0
 lockfile==0.12.2
-Mako==1.1.4
+Mako==1.1.6
 MarkupSafe==2.0.1
 moviepy==1.0.3
 msgpack==1.0.2
@@ -60,6 +60,7 @@ rsa==4.7.2
 ruamel.yaml.clib==0.2.2
 ruamel.yaml==0.16.12
 service-identity==18.1.0
+setuptools==60.2.0
 six==1.15.0
 SQLAlchemy==1.3.21
 telethon-session-sqlalchemy==0.2.16
