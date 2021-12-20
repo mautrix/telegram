@@ -45,15 +45,12 @@ RUN apk add --no-cache \
 COPY requirements.txt /opt/mautrix-telegram/requirements.txt
 COPY optional-requirements.txt /opt/mautrix-telegram/optional-requirements.txt
 WORKDIR /opt/mautrix-telegram
-RUN apk add --virtual .build-deps \
-      python3-dev \
-      libffi-dev \
-      build-base \
+RUN apk add --virtual .build-deps python3-dev libffi-dev build-base \
  && pip3 install -r requirements.txt -r optional-requirements.txt \
  && apk del .build-deps
 
 COPY . /opt/mautrix-telegram
-RUN apk add git && pip3 install .[speedups,hq_thumbnails,metrics,e2be] && apk del git \
+RUN apk add git && pip3 install .[all] && apk del git \
   # This doesn't make the image smaller, but it's needed so that the `version` command works properly
   && cp mautrix_telegram/example-config.yaml . && rm -rf mautrix_telegram
 
