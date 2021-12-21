@@ -33,14 +33,18 @@ appservice:
     # Usually 1 is enough, but on high-traffic bridges you might need to increase this to avoid 413s
     max_body_size: 1
 
-    # The full URI to the database. SQLite and Postgres are fully supported.
-    # Other DBMSes supported by SQLAlchemy may or may not work.
+    # The full URI to the database. SQLite and Postgres are supported.
     # Format examples:
     #   SQLite:   sqlite:///filename.db
     #   Postgres: postgres://username:password@hostname/dbname
     database: sqlite:///mautrix-telegram.db
-    # Optional extra arguments for SQLAlchemy's create_engine
-    database_opts: {}
+    # Additional arguments for asyncpg.create_pool() or sqlite3.connect()
+    # https://magicstack.github.io/asyncpg/current/api/index.html#asyncpg.pool.create_pool
+    # https://docs.python.org/3/library/sqlite3.html#sqlite3.connect
+    # For sqlite, min_size is used as the connection thread pool size and max_size is ignored.
+    database_opts:
+        min_size: 1
+        max_size: 10
 
     # Public part of web server for out-of-Matrix interaction with the bridge.
     # Used for things like login if the user wants to make sure the 2FA password isn't stored in
