@@ -570,7 +570,8 @@ class AbstractUser(ABC):
         if self.is_relaybot:
             if update.is_private:
                 if not self.config["bridge.relaybot.private_chat.invite"]:
-                    self.log.debug(f"Ignoring private message to bot from {sender.id}")
+                    if sender:
+                        self.log.debug(f"Ignoring private message to bot from {sender.id}")
                     return
             elif not portal.mxid and self.config["bridge.relaybot.ignore_unbridged_group_chat"]:
                 self.log.debug(

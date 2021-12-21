@@ -225,7 +225,7 @@ class Bot(AbstractUser):
         elif isinstance(message.to_id, PeerChat):
             return reply(str(-message.to_id.chat_id))
         elif isinstance(message.to_id, PeerUser):
-            return reply(f"Your user ID is {message.from_id}.")
+            return reply(f"Your user ID is {message.to_id.user_id}.")
         else:
             return reply("Failed to find chat ID.")
 
