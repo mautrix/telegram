@@ -1225,7 +1225,7 @@ class Portal(DBPortal, BasePortal):
             user, await self.get_input_entity(user)
         )
         self._sponsored_msg_ts = time.monotonic()
-        if self._sponsored_entity is None:
+        if self._sponsored_msg is not None and self._sponsored_entity is None:
             self.log.warning(f"GetSponsoredMessages didn't return entity for {t_id}")
         return self._sponsored_msg, self._sponsored_entity
 
@@ -1274,7 +1274,7 @@ class Portal(DBPortal, BasePortal):
     async def _handle_read_for_sponsored_msg(
         self, user: u.User, event_id: EventID, timestamp: int
     ) -> None:
-        if user.is_bot:
+        if user.is_bot or not self.username:
             return
         if self._sponsored_is_expired:
             self.log.trace("Sponsored message is expired, sending new one")
