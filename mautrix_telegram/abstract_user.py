@@ -488,7 +488,7 @@ class AbstractUser(ABC):
         self, update: UpdateMessage
     ) -> tuple[UpdateMessageContent, pu.Puppet | None, po.Portal | None]:
         if isinstance(update, UpdateShortChatMessage):
-            portal = po.Portal.get_by_tgid(TelegramID(update.chat_id))
+            portal = await po.Portal.get_by_tgid(TelegramID(update.chat_id))
             if not portal:
                 self.log.warning(f"Received message in chat with unknown type {update.chat_id}")
             sender = await pu.Puppet.get_by_tgid(TelegramID(update.from_id))
