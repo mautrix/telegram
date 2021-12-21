@@ -39,7 +39,6 @@ import unicodedata
 
 from asyncpg import UniqueViolationError
 from telethon.errors import (
-    ChatAdminRequiredError,
     ChatNotModifiedError,
     MessageIdInvalidError,
     PhotoExtInvalidError,
@@ -62,7 +61,6 @@ from telethon.tl.functions.messages import (
     EditChatPhotoRequest,
     EditChatTitleRequest,
     ExportChatInviteRequest,
-    GetFullChatRequest,
     MigrateChatRequest,
     SetTypingRequest,
     UnpinAllMessagesRequest,
@@ -849,7 +847,7 @@ class Portal(DBPortal, BasePortal):
     async def update_power_levels(
         self,
         users: list[TypeUser | TypeChatParticipant | TypeChannelParticipant],
-        levels: PowerLevelStateEventContent = None
+        levels: PowerLevelStateEventContent = None,
     ) -> None:
         if not levels:
             levels = await self.main_intent.get_power_levels(self.mxid)
@@ -1833,11 +1831,11 @@ class Portal(DBPortal, BasePortal):
         old_room = self.mxid
         await self.migrate_and_save_matrix(new_room)
         await self.main_intent.join_room(new_room, servers=[server])
-        entity: TypeInputPeer | None = None
+        entity: TypeChat | User | None = None
         user: au.AbstractUser | None = None
         if self.bot and self.has_bot:
             user = self.bot
-            entity = await self.get_input_entity(self.bot)
+            entity = await self.get_entity(self.bot)
         if not entity:
             user_mxids = await self.main_intent.get_room_members(self.mxid)
             for user_str in user_mxids:
@@ -1846,7 +1844,7 @@ class Portal(DBPortal, BasePortal):
                     continue
                 user = await u.User.get_by_mxid(user_id, create=False)
                 if user and user.tgid:
-                    entity = await self.get_input_entity(user)
+                    entity = await self.get_entity(user)
                     if entity:
                         break
         if not entity:
