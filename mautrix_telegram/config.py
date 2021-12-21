@@ -84,6 +84,13 @@ class Config(BaseBridgeConfig):
         if base["appservice.provisioning.shared_secret"] == "generate":
             base["appservice.provisioning.shared_secret"] = self._new_token()
 
+        if "pool_size" in base["appservice.database_opts"]:
+            pool_size = base["appservice.database_opts"].pop("pool_size")
+            base["appservice.database_opts.min_size"] = pool_size
+            base["appservice.database_opts.max_size"] = pool_size
+        if "pool_pre_ping" in base["appservice.database_opts"]:
+            del base["appservice.database_opts.pool_pre_ping"]
+
         copy("appservice.community_id")
 
         copy("metrics.enabled")
