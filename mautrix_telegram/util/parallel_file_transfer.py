@@ -132,7 +132,7 @@ class UploadSender:
     async def next(self, data: bytes) -> None:
         if self.previous:
             await self.previous
-        self.previous = self.loop.create_task(self._next(data))
+        self.previous = asyncio.create_task(self._next(data))
 
     async def _next(self, data: bytes) -> None:
         self.request.bytes = data
@@ -293,7 +293,7 @@ class ParallelTransferrer:
         while part < part_count:
             tasks = []
             for sender in self.senders:
-                tasks.append(self.loop.create_task(sender.next()))
+                tasks.append(asyncio.create_task(sender.next()))
             for task in tasks:
                 data = await task
                 if not data:

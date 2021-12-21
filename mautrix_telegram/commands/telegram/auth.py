@@ -133,7 +133,7 @@ async def enter_code_register(evt: CommandEvent) -> EventID:
         await evt.sender.ensure_started(even_if_no_session=True)
         first_name, last_name = evt.sender.command_status["full_name"]
         user = await evt.sender.client.sign_up(evt.args[0], first_name, last_name)
-        asyncio.ensure_future(evt.sender.post_login(user, first_login=True), loop=evt.loop)
+        asyncio.create_task(evt.sender.post_login(user, first_login=True))
         evt.sender.command_status = None
         return await evt.reply(f"Successfully registered to Telegram.")
     except PhoneNumberOccupiedError:
@@ -411,7 +411,7 @@ async def _finish_sign_in(evt: CommandEvent, user: User, login_as: u.User = None
             f"[{existing_user.displayname}] (https://matrix.to/#/{existing_user.mxid})"
             " was logged out from the account."
         )
-    asyncio.ensure_future(login_as.post_login(user, first_login=True), loop=evt.loop)
+    asyncio.create_task(login_as.post_login(user, first_login=True))
     evt.sender.command_status = None
     name = f"@{user.username}" if user.username else f"+{user.phone}"
     if login_as != evt.sender:

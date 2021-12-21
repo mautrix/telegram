@@ -167,7 +167,7 @@ async def confirm_bridge(evt: CommandEvent) -> EventID | None:
         if not ok:
             return None
         elif coro:
-            asyncio.ensure_future(coro, loop=evt.loop)
+            asyncio.create_task(coro)
             await evt.reply("Cleaning up previous portal room...")
     elif portal.mxid:
         evt.sender.command_status = None

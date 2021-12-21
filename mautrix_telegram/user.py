@@ -210,7 +210,7 @@ class User(DBUser, AbstractUser, BaseUser):
         else:
             # Authenticated, run post login
             self.log.debug(f"Ensuring post_login() for {self.name}")
-            self.loop.create_task(self.post_login())
+            asyncio.create_task(self.post_login())
             return self
         # Not authenticated, delete data if necessary
         if delete_unless_authenticated:
@@ -277,7 +277,7 @@ class User(DBUser, AbstractUser, BaseUser):
 
     async def post_login(self, info: TLUser = None, first_login: bool = False) -> None:
         if self.config["metrics.enabled"] and not self._track_connection_task:
-            self._track_connection_task = self.loop.create_task(self._track_connection())
+            self._track_connection_task = asyncio.create_task(self._track_connection())
 
         try:
             await self.update_info(info)
@@ -609,7 +609,7 @@ class User(DBUser, AbstractUser, BaseUser):
                 puppet=puppet,
                 should_create=not create_limit or index < create_limit,
             )
-            creators.append(self.loop.create_task(coro))
+            creators.append(asyncio.create_task(coro))
             index += 1
         if new_portal_cache.keys() != old_portal_cache.keys():
             await self.set_portals(new_portal_cache.keys())

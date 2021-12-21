@@ -193,7 +193,7 @@ class AuthAPI(abc.ABC):
         existing_user = await User.get_by_tgid(user_info.id)
         if existing_user and existing_user != user:
             await existing_user.log_out()
-        asyncio.ensure_future(user.post_login(user_info, first_login=True), loop=self.loop)
+        asyncio.create_task(user.post_login(user_info, first_login=True))
         if user.command_status and user.command_status["action"] == "Login":
             user.command_status = None
 

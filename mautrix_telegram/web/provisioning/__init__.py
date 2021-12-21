@@ -212,9 +212,7 @@ class ProvisioningAPI(AuthAPI):
             portal.photo_id = ""
             await portal.save()
 
-        asyncio.ensure_future(
-            portal.update_matrix_room(user, entity, direct=False, levels=levels), loop=self.loop
-        )
+        asyncio.create_task(portal.update_matrix_room(user, entity, direct=False, levels=levels))
 
         return web.Response(status=202, body="{}")
 
@@ -335,7 +333,7 @@ class ProvisioningAPI(AuthAPI):
                 self.log.exception("Failed to disconnect chat")
                 return self.get_error_response(500, "exception", "Failed to disconnect chat")
         else:
-            asyncio.ensure_future(coro, loop=self.loop)
+            asyncio.create_task(coro)
         return web.json_response({}, status=200 if sync else 202)
 
     async def get_user_info(self, request: web.Request) -> web.Response:

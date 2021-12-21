@@ -625,7 +625,7 @@ class Portal(DBPortal, BasePortal):
                         self.log.exception(f"Failed to get entity through {user.tgid} for update")
                         return self.mxid
                 update = self.update_matrix_room(user, entity, self.peer_type == "user")
-                self.loop.create_task(update)
+                asyncio.create_task(update)
                 await self.invite_to_matrix(invites or [])
             return self.mxid
         async with self._room_create_lock:
@@ -813,7 +813,7 @@ class Portal(DBPortal, BasePortal):
 
             await self.invite_to_matrix(invites)
 
-            update_room = self.loop.create_task(
+            update_room = asyncio.create_task(
                 self.update_matrix_room(
                     user, entity, direct, puppet, levels=power_levels, users=users
                 )
@@ -1959,7 +1959,7 @@ class Portal(DBPortal, BasePortal):
             content.url = file.mxc
         result = await self._send_message(intent, content, timestamp=evt.date)
         if media.ttl_seconds:
-            self.loop.create_task(self._expire_telegram_photo(intent, result, media.ttl_seconds))
+            asyncio.create_task(self._expire_telegram_photo(intent, result, media.ttl_seconds))
         if evt.message:
             caption_content = await formatter.telegram_to_matrix(
                 evt, source, self.main_intent, no_reply_fallback=True
