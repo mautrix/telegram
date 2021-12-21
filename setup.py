@@ -67,8 +67,6 @@ setuptools.setup(
         "example-config.yaml",
     ]},
     data_files=[
-        (".", ["alembic.ini", "mautrix_telegram/example-config.yaml"]),
-        ("alembic", ["alembic/env.py"]),
-        ("alembic/versions", glob.glob("alembic/versions/*.py"))
+        (".", ["mautrix_telegram/example-config.yaml"]),
     ],
 )
