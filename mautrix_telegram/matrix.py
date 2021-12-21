@@ -17,6 +17,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Iterable
 
+from mautrix.appservice import DOUBLE_PUPPET_SOURCE_KEY
 from mautrix.bridge import BaseMatrixHandler
 from mautrix.errors import MatrixError
 from mautrix.types import (
@@ -35,6 +36,7 @@ from mautrix.types import (
     RoomID,
     RoomNameStateEventContent as NameContent,
     RoomTopicStateEventContent as TopicContent,
+    SingleReceiptEventContent,
     StateEvent,
     TextMessageEventContent,
     TypingEvent,
@@ -128,8 +130,9 @@ class MatrixHandler(BaseMatrixHandler):
                     EventType.ROOM_MESSAGE,
                     TextMessageEventContent(
                         msgtype=MessageType.NOTICE,
-                        body="Portal to private chat created and end-to-bridge"
-                        " encryption enabled.",
+                        body=(
+                            "Portal to private chat created and end-to-bridge encryption enabled."
+                        ),
                     ),
                 )
                 await intent.send_message_event(room_id, evt_type, content)
@@ -352,26 +355,12 @@ class MatrixHandler(BaseMatrixHandler):
                 user, profile.displayname, prev_profile.displayname, event_id
             )
 
-    @staticmethod
-    def parse_read_receipts(content: ReceiptEventContent) -> Iterable[tuple[UserID, EventID]]:
-        return (
-            (user_id, event_id)
-            for event_id, receipts in content.items()
-            for user_id in receipts.get(ReceiptType.READ, {})
-        )
-
-    @staticmethod
-    async def handle_read_receipts(
-        room_id: RoomID, receipts: Iterable[tuple[UserID, EventID]]
+    async def handle_read_receipt(
+        self, user: u.User, portal: po.Portal, event_id: EventID, data: SingleReceiptEventContent
     ) -> None:
-        portal = await po.Portal.get_by_mxid(room_id)
-        if not portal or not portal.allow_bridging:
+        if not portal.allow_bridging:
             return
-
-        for user_id, event_id in receipts:
-            user = await u.User.get_by_mxid(user_id, check_db=False, create=False)
-            if user and await user.is_logged_in():
-                await portal.mark_read(user, event_id)
+        await portal.mark_read(user, event_id, data.get("ts", 0))
 
     @staticmethod
     async def handle_presence(user_id: UserID, presence: PresenceState) -> None:
@@ -402,7 +391,7 @@ class MatrixHandler(BaseMatrixHandler):
         self, evt: ReceiptEvent | PresenceEvent | TypingEvent
     ) -> None:
         if evt.type == EventType.RECEIPT:
-            await self.handle_read_receipts(evt.room_id, self.parse_read_receipts(evt.content))
+            await self.handle_receipt(evt)
         elif evt.type == EventType.PRESENCE:
             await self.handle_presence(evt.sender, evt.content.presence)
         elif evt.type == EventType.TYPING:

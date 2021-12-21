@@ -35,6 +35,7 @@ import base64
 import codecs
 import mimetypes
 import random
+import time
 import unicodedata
 
 from asyncpg import UniqueViolationError
@@ -53,6 +54,7 @@ from telethon.tl.functions.channels import (
     InviteToChannelRequest,
     JoinChannelRequest,
     UpdateUsernameRequest,
+    ViewSponsoredMessageRequest,
 )
 from telethon.tl.functions.messages import (
     AddChatUserRequest,
@@ -122,6 +124,7 @@ from telethon.tl.types import (
     Poll,
     SendMessageCancelAction,
     SendMessageTypingAction,
+    SponsoredMessage,
     TypeChannelParticipant,
     TypeChat,
     TypeChatParticipant,
@@ -250,6 +253,14 @@ class Portal(DBPortal, BasePortal):
     _main_intent: IntentAPI | None
     _room_create_lock: asyncio.Lock
 
+    _sponsored_msg: SponsoredMessage | None
+    _sponsored_entity: User | Channel | None
+    _sponsored_msg_ts: float
+    _sponsored_msg_lock: asyncio.Lock
+    _sponsored_evt_id: EventID | None
+    _sponsored_seen: dict[UserID, bool]
+    _new_messages_after_sponsored: bool
+
     def __init__(
         self,
         tgid: TelegramID,
@@ -259,6 +270,9 @@ class Portal(DBPortal, BasePortal):
         mxid: RoomID | None = None,
         avatar_url: ContentURI | None = None,
         encrypted: bool = False,
+        sponsored_event_id: EventID | None = None,
+        sponsored_event_ts: int | None = None,
+        sponsored_msg_random_id: bytes | None = None,
         username: str | None = None,
         title: str | None = None,
         about: str | None = None,
@@ -273,6 +287,9 @@ class Portal(DBPortal, BasePortal):
             mxid=mxid,
             avatar_url=avatar_url,
             encrypted=encrypted,
+            sponsored_event_id=sponsored_event_id,
+            sponsored_event_ts=sponsored_event_ts,
+            sponsored_msg_random_id=sponsored_msg_random_id,
             username=username,
             title=title,
             about=about,
@@ -292,6 +309,12 @@ class Portal(DBPortal, BasePortal):
         self.send_lock = putil.PortalSendLock()
         self._pin_lock = asyncio.Lock()
         self._room_create_lock = asyncio.Lock()
+
+        self._sponsored_msg = None
+        self._sponsored_msg_ts = 0
+        self._sponsored_msg_lock = asyncio.Lock()
+        self._sponsored_seen = {}
+        self._new_messages_after_sponsored = True
 
     # region Properties
 
@@ -1190,7 +1213,91 @@ class Portal(DBPortal, BasePortal):
             SetTypingRequest(self.peer, action() if typing else SendMessageCancelAction())
         )
 
-    async def mark_read(self, user: u.User, event_id: EventID) -> None:
+    async def _get_sponsored_message(
+        self, user: u.User
+    ) -> tuple[SponsoredMessage | None, Channel | User | None]:
+        if user.is_bot:
+            return None, None
+        elif self._sponsored_msg_ts + 5 * 60 > time.monotonic():
+            return self._sponsored_msg, self._sponsored_entity
+
+        self._sponsored_msg, t_id, self._sponsored_entity = await putil.get_sponsored_message(
+            user, await self.get_input_entity(user)
+        )
+        self._sponsored_msg_ts = time.monotonic()
+        if self._sponsored_entity is None:
+            self.log.warning(f"GetSponsoredMessages didn't return entity for {t_id}")
+        return self._sponsored_msg, self._sponsored_entity
+
+    async def _send_sponsored_msg(self, user: u.User) -> None:
+        self.log.trace(f"Getting a new sponsored message through {user.mxid}")
+        msg, entity = await self._get_sponsored_message(user)
+        if msg is None:
+            self.log.trace("Didn't get a sponsored message")
+            return
+        if self.sponsored_event_id is not None:
+            self.log.debug(
+                f"Redacting old sponsored {self.sponsored_event_id}"
+                " in preparation for sending new one"
+            )
+            await self.main_intent.redact(self.mxid, self.sponsored_event_id)
+        content = await putil.make_sponsored_message_content(user, msg, entity)
+        self.log.trace("Sending sponsored message")
+        self.sponsored_event_id = await self._send_message(self.main_intent, content)
+        self.sponsored_event_ts = int(time.time())
+        self.sponsored_msg_random_id = msg.random_id
+        self._new_messages_after_sponsored = False
+        self._sponsored_seen = {}
+        await self.save()
+        self.log.debug(
+            f"Sent sponsored message {base64.b64encode(self.sponsored_msg_random_id)} "
+            f"to Matrix {self.sponsored_event_id} / {self.sponsored_event_ts}"
+        )
+
+    @property
+    def _sponsored_is_expired(self) -> bool:
+        return (
+            self.sponsored_event_id is None
+            or self.sponsored_event_ts + 24 * 60 * 60 < int(time.time())
+        ) and self._new_messages_after_sponsored
+
+    async def _try_handle_read_for_sponsored_msg(
+        self, user: u.User, event_id: EventID, timestamp: int
+    ) -> None:
+        try:
+            await self._handle_read_for_sponsored_msg(user, event_id, timestamp)
+        except Exception:
+            self.log.warning(
+                "Error handling read receipt for sponsored message processing", exc_info=True
+            )
+
+    async def _handle_read_for_sponsored_msg(
+        self, user: u.User, event_id: EventID, timestamp: int
+    ) -> None:
+        if user.is_bot:
+            return
+        if self._sponsored_is_expired:
+            self.log.trace("Sponsored message is expired, sending new one")
+            async with self._sponsored_msg_lock:
+                if self._sponsored_is_expired:
+                    await self._send_sponsored_msg(user)
+                    return
+
+        if (
+            self.sponsored_event_id == event_id or self.sponsored_event_ts <= timestamp
+        ) and not self._sponsored_seen.get(user.mxid, False):
+            self._sponsored_seen[user.mxid] = True
+            self.log.debug(
+                f"Marking sponsored message {self.sponsored_event_id} as seen by {user.mxid}"
+            )
+            await user.client(
+                ViewSponsoredMessageRequest(
+                    channel=await self.get_input_entity(user),
+                    random_id=self.sponsored_msg_random_id,
+                )
+            )
+
+    async def mark_read(self, user: u.User, event_id: EventID, timestamp: int) -> None:
         if user.is_bot:
             return
         space = self.tgid if self.peer_type == "channel" else user.tgid
@@ -1200,8 +1307,7 @@ class Portal(DBPortal, BasePortal):
             if not message:
                 self.log.debug(
                     f"Dropping Matrix read receipt from {user.mxid}: "
-                    f"target message {event_id} not known and last message"
-                    " in chat not found"
+                    f"target message {event_id} not known and last message in chat not found"
                 )
                 return
             else:
@@ -1218,6 +1324,8 @@ class Portal(DBPortal, BasePortal):
         await user.client.send_read_acknowledge(
             self.peer, max_id=message.tgid, clear_mentions=True
         )
+        if self.peer_type == "channel" and not self.megagroup:
+            asyncio.create_task(self._try_handle_read_for_sponsored_msg(user, event_id, timestamp))
 
     async def _preproc_kick_ban(
         self, user: u.User | p.Puppet, source: u.User
@@ -2195,11 +2303,15 @@ class Portal(DBPortal, BasePortal):
         content = TextMessageEventContent(
             msgtype=MessageType.TEXT,
             format=Format.HTML,
-            body=f"Poll: {poll.question}\n{text_answers}\n"
-            f"Vote with !tg vote {poll_id} <choice number>",
-            formatted_body=f"<strong>Poll</strong>: {poll.question}<br/>\n"
-            f"<ol>{html_answers}</ol>\n"
-            f"Vote with <code>!tg vote {poll_id} &lt;choice number&gt;</code>",
+            body=(
+                f"Poll: {poll.question}\n{text_answers}\n"
+                f"Vote with !tg vote {poll_id} <choice number>"
+            ),
+            formatted_body=(
+                f"<strong>Poll</strong>: {poll.question}<br/>\n"
+                f"<ol>{html_answers}</ol>\n"
+                f"Vote with <code>!tg vote {poll_id} &lt;choice number&gt;</code>"
+            ),
             relates_to=relates_to,
             external_url=self._get_external_url(evt),
         )
@@ -2587,6 +2699,8 @@ class Portal(DBPortal, BasePortal):
 
         if not event_id:
             return
+
+        self._new_messages_after_sponsored = True
 
         prev_id = self.dedup.update(evt, (event_id, tg_space), (temporary_identifier, tg_space))
         if prev_id:

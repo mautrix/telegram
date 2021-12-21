@@ -43,6 +43,7 @@ from telethon.tl.types import (
     PeerChannel,
     PeerChat,
     PeerUser,
+    SponsoredMessage,
     TypeMessageEntity,
 )
 
@@ -175,7 +176,7 @@ async def _add_reply_header(
 
 
 async def telegram_to_matrix(
-    evt: Message,
+    evt: Message | SponsoredMessage,
     source: au.AbstractUser,
     main_intent: IntentAPI | None = None,
     prefix_text: str | None = None,
@@ -183,6 +184,7 @@ async def telegram_to_matrix(
     override_text: str = None,
     override_entities: list[TypeMessageEntity] = None,
     no_reply_fallback: bool = False,
+    require_html: bool = False,
 ) -> TextMessageEventContent:
     content = TextMessageEventContent(
         msgtype=MessageType.TEXT,
@@ -191,32 +193,33 @@ async def telegram_to_matrix(
     entities = override_entities or evt.entities
     if entities:
         content.format = Format.HTML
-        content.formatted_body = await _telegram_entities_to_matrix_catch(content.body, entities)
+        html = await _telegram_entities_to_matrix_catch(add_surrogate(content.body), entities)
+        content.formatted_body = del_surrogate(html).replace("\n", "<br/>")
 
-    if prefix_html:
+    def force_html():
         if not content.formatted_body:
             content.format = Format.HTML
             content.formatted_body = escape(content.body)
+
+    if require_html:
+        force_html()
+
+    if prefix_html:
+        force_html()
         content.formatted_body = prefix_html + content.formatted_body
     if prefix_text:
         content.body = prefix_text + content.body
 
-    if evt.fwd_from:
+    if getattr(evt, "fwd_from", None):
         await _add_forward_header(source, content, evt.fwd_from)
 
-    if evt.reply_to and not no_reply_fallback:
+    if getattr(evt, "reply_to", None) and not no_reply_fallback:
         await _add_reply_header(source, content, evt, main_intent)
 
     if isinstance(evt, Message) and evt.post and evt.post_author:
-        if not content.formatted_body:
-            content.formatted_body = escape(content.body)
+        force_html()
         content.body += f"\n- {evt.post_author}"
         content.formatted_body += f"<br/><i>- <u>{evt.post_author}</u></i>"
-
-    content.body = del_surrogate(content.body)
-
-    if content.formatted_body:
-        content.formatted_body = del_surrogate(content.formatted_body.replace("\n", "<br/>"))
 
     return content
 

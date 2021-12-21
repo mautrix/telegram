@@ -22,7 +22,7 @@ from asyncpg import Record
 from attr import dataclass
 import attr
 
-from mautrix.types import ContentURI, RoomID
+from mautrix.types import ContentURI, EventID, RoomID
 from mautrix.util.async_db import Database
 
 from ..types import TelegramID
@@ -45,6 +45,10 @@ class Portal:
     avatar_url: ContentURI | None
     encrypted: bool
 
+    sponsored_event_id: EventID | None
+    sponsored_event_ts: int | None
+    sponsored_msg_random_id: bytes | None
+
     # Telegram chat metadata
     username: str | None
     title: str | None
@@ -62,8 +66,8 @@ class Portal:
         return cls(**data)
 
     columns: ClassVar[str] = (
-        "tgid, tg_receiver, peer_type, megagroup, mxid, avatar_url, encrypted, config, "
-        "username, title, about, photo_id"
+        "tgid, tg_receiver, peer_type, megagroup, mxid, avatar_url, encrypted, sponsored_event_id,"
+        "sponsored_event_ts, sponsored_msg_random_id, username, title, about, photo_id, config"
     )
 
     @classmethod
@@ -100,6 +104,9 @@ class Portal:
             self.mxid,
             self.avatar_url,
             self.encrypted,
+            self.sponsored_event_id,
+            self.sponsored_event_ts,
+            self.sponsored_msg_random_id,
             self.username,
             self.title,
             self.about,
@@ -110,8 +117,9 @@ class Portal:
 
     async def save(self) -> None:
         q = (
-            "UPDATE portal SET mxid=$4, avatar_url=$5, encrypted=$6, username=$7, title=$8,"
-            "                  about=$9, photo_id=$10, megagroup=$11, config=$12 "
+            "UPDATE portal SET mxid=$4, avatar_url=$5, encrypted=$6, sponsored_event_id=$7,"
+            "                  sponsored_event_ts=$8, sponsored_msg_random_id=$9, username=$10,"
+            "                  title=$11, about=$12, photo_id=$13, megagroup=$14, config=$15 "
             "WHERE tgid=$1 AND tg_receiver=$2 AND (peer_type=$3 OR true)"
         )
         await self.db.execute(q, *self._values)
@@ -129,8 +137,9 @@ class Portal:
     async def insert(self) -> None:
         q = (
             "INSERT INTO portal (tgid, tg_receiver, peer_type, mxid, avatar_url, encrypted,"
+            "                    sponsored_event_id, sponsored_event_ts, sponsored_msg_random_id,"
             "                    username, title, about, photo_id, megagroup, config) "
-            "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)"
+            "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)"
         )
         await self.db.execute(q, *self._values)
 
