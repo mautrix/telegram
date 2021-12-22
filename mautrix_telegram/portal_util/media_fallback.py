@@ -98,9 +98,12 @@ async def make_contact_event_content(
     name = " ".join(x for x in [contact.first_name, contact.last_name] if x)
     formatted_phone = f"+{contact.phone_number}"
     if phonenumbers is not None:
-        parsed = phonenumbers.parse(formatted_phone)
-        fmt = phonenumbers.PhoneNumberFormat.INTERNATIONAL
-        formatted_phone = phonenumbers.format_number(parsed, fmt)
+        try:
+            parsed = phonenumbers.parse(formatted_phone)
+            fmt = phonenumbers.PhoneNumberFormat.INTERNATIONAL
+            formatted_phone = phonenumbers.format_number(parsed, fmt)
+        except phonenumbers.NumberParseException:
+            pass
     content = TextMessageEventContent(
         msgtype=MessageType.TEXT,
         body=f"Shared contact info for {name}: {formatted_phone}",

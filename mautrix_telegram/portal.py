@@ -1221,6 +1221,7 @@ class Portal(DBPortal, BasePortal):
         elif self._sponsored_msg_ts + 5 * 60 > time.monotonic():
             return self._sponsored_msg, self._sponsored_entity
 
+        self.log.trace(f"Fetching a new sponsored message through {user.mxid}")
         self._sponsored_msg, t_id, self._sponsored_entity = await putil.get_sponsored_message(
             user, await self.get_input_entity(user)
         )
@@ -1230,7 +1231,6 @@ class Portal(DBPortal, BasePortal):
         return self._sponsored_msg, self._sponsored_entity
 
     async def _send_sponsored_msg(self, user: u.User) -> None:
-        self.log.trace(f"Getting a new sponsored message through {user.mxid}")
         msg, entity = await self._get_sponsored_message(user)
         if msg is None:
             self.log.trace("Didn't get a sponsored message")
