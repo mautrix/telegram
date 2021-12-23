@@ -33,11 +33,11 @@ log: TraceLogger = logging.getLogger("mau.fmt.mx")
 class MatrixParser(BaseMatrixParser[TelegramMessage]):
     e = TelegramEntityType
     fs = TelegramMessage
+    read_html = staticmethod(read_html)
     client: TelegramClient
 
     def __init__(self, client: TelegramClient) -> None:
         self.client = client
-        self.read_html = read_html
 
     async def custom_node_to_fstring(
         self, node: HTMLNode, ctx: RecursionContext
