@@ -113,6 +113,7 @@ async def update_state_store(conn: Connection, scheme: str) -> None:
     # The Matrix state store already has more or less the correct schema, so set the version
     await conn.execute("CREATE TABLE mx_version (version INTEGER PRIMARY KEY)")
     await conn.execute("INSERT INTO mx_version (version) VALUES (2)")
+    await conn.execute("UPDATE mx_user_profile SET membership='LEAVE' WHERE membership='LEFT'")
     if scheme != "sqlite":
         # Also add the membership type on postgres
         await conn.execute(
