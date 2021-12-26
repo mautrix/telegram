@@ -37,7 +37,7 @@ appservice:
     # Format examples:
     #   SQLite:   sqlite:///filename.db
     #   Postgres: postgres://username:password@hostname/dbname
-    database: sqlite:///mautrix-telegram.db
+    database: postgres://username:password@hostname/dbname
     # Additional arguments for asyncpg.create_pool() or sqlite3.connect()
     # https://magicstack.github.io/asyncpg/current/api/index.html#asyncpg.pool.create_pool
     # https://docs.python.org/3/library/sqlite3.html#sqlite3.connect

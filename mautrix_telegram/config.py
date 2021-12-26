@@ -46,6 +46,10 @@ class Config(BaseBridgeConfig):
         return [
             *super().forbidden_defaults,
             ForbiddenDefault(
+                "appservice.database",
+                "postgres://username:password@hostname/dbname",
+            ),
+            ForbiddenDefault(
                 "appservice.public.external",
                 "https://example.com/public",
                 condition="appservice.public.enabled",

@@ -7,9 +7,6 @@ function fixperms {
 
 cd /opt/mautrix-telegram
 
-# Replace database path in config.
-sed -i "s#sqlite:///mautrix-telegram.db#sqlite:////data/mautrix-telegram.db#" /data/config.yaml
-
 if [ ! -f /data/config.yaml ]; then
 	cp example-config.yaml /data/config.yaml
 	echo "Didn't find a config file."

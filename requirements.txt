@@ -8,6 +8,5 @@ mautrix>=0.14.0rc4,<0.15
 # Fork to make session storage async
 tulir-telethon==1.25.0a1
 asyncpg>=0.20,<0.26
-aiosqlite>=0.17,<0.18
 mako>=1,<2
 setuptools
