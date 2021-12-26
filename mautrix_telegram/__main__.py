@@ -58,14 +58,6 @@ class TelegramBridge(Bridge):
         init_db(self.db)
 
     def _prepare_website(self) -> None:
-        if self.config["appservice.public.enabled"]:
-            self.public_website = PublicBridgeWebsite(self.loop)
-            self.az.app.add_subapp(
-                self.config["appservice.public.prefix"], self.public_website.app
-            )
-        else:
-            self.public_website = None
-
         if self.config["appservice.provisioning.enabled"]:
             self.provisioning_api = ProvisioningAPI(self)
             self.az.app.add_subapp(
@@ -73,6 +65,14 @@ class TelegramBridge(Bridge):
             )
         else:
             self.provisioning_api = None
+
+        if self.config["appservice.public.enabled"]:
+            self.public_website = PublicBridgeWebsite(self.loop)
+            self.az.app.add_subapp(
+                self.config["appservice.public.prefix"], self.public_website.app
+            )
+        else:
+            self.public_website = None
 
     def prepare_bridge(self) -> None:
         self._prepare_website()
