@@ -91,3 +91,9 @@ class MatrixParser(BaseMatrixParser[TelegramMessage]):
         children = msg.trim().split("\n")
         children = [child.prepend("> ") for child in children]
         return TelegramMessage.join(children, "\n")
+
+    async def color_to_fstring(self, msg: TelegramMessage, color: str) -> TelegramMessage:
+        return msg
+
+    async def spoiler_to_fstring(self, msg: TelegramMessage, spoiler: str) -> TelegramMessage:
+        return msg
