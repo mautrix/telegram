@@ -14,7 +14,7 @@ qrcode>=6,<7
 #/hq_thumbnails
 moviepy>=1,<2
 
-#/formatted_phonenumbers
+#/formattednumbers
 phonenumbers>=8,<9
 
 #/metrics
