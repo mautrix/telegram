@@ -44,7 +44,7 @@ class MatrixParser(BaseMatrixParser[TelegramMessage]):
     ) -> TelegramMessage | None:
         msg = await self.tag_aware_parse_node(node, ctx)
         if node.tag == "command":
-            msg.format(TelegramEntityType.COMMAND)
+            return msg.prepend("/").format(TelegramEntityType.COMMAND)
         return None
 
     async def user_pill_to_fstring(self, msg: TelegramMessage, user_id: UserID) -> TelegramMessage:
