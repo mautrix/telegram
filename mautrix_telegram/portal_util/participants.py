@@ -93,9 +93,8 @@ async def get_users(
 ) -> list[TypeUser]:
     if peer_type == "chat":
         chat = await client(GetFullChatRequest(chat_id=tgid))
-        return list(_filter_participants(chat.users, chat.full_chat.participants.participants))[
-            :limit
-        ]
+        users = list(_filter_participants(chat.users, chat.full_chat.participants.participants))
+        return users[:limit] if limit > 0 else users
     elif peer_type == "channel":
         try:
             return await _get_channel_users(client, entity, limit)

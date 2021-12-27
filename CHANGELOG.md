@@ -19,6 +19,8 @@
     (as per <https://t.me/durov/172>).
   * Only applies if you're using puppeting with a normal user account,
     because bots can't get sponsored messages.
+* Fixed non-supergroup member sync incorrectly kicking one user from the Matrix
+  side if there was no limit on the number of members to sync (broke in v0.10.2).
 * Updated animated sticker conversion to support [lottieconverter r0.2]
   (thanks to [@sot-tech] in [#694]).
 * Updated Docker image to Alpine 3.15.
@@ -101,7 +103,7 @@ path.
 * Command to update about section in Telegram profile info
   (thanks to [@MadhuranS] in [#599]).
 * Own read marker/unread status from Telegram is now synced to Matrix after backfilling.
-* Support for showing the individual slots in :slot_machine: dice rolls from Telegram.
+* Support for showing the individual slots in 🎰 dice rolls from Telegram.
 
 ### Improved
 * Improved invite link regex to allow joining with less precise invite links.
