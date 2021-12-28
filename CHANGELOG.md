@@ -3,7 +3,7 @@
 * Added support for message reactions
 * Added support for spoiler text.
 
-# v0.11.0 (unreleased, 2021-12-??)
+# v0.11.0 (2021-12-28)
 
 * Switched from SQLAlchemy to asyncpg/aiosqlite.
   * The default database is now Postgres. If using SQLite, make sure you install
