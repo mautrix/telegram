@@ -37,6 +37,9 @@ setuptools.setup(
     name="mautrix-telegram",
     version=version,
     url="https://github.com/mautrix/telegram",
+    project_urls={
+        "Changelog": "https://github.com/mautrix/telegram/blob/master/CHANGELOG.md",
+    },
 
     author="Tulir Asokan",
     author_email="tulir@maunium.net",
