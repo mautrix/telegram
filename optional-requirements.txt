@@ -9,7 +9,7 @@ brotli
 
 #/qr_login
 pillow>=4,<9
-qrcode>=6,<7
+qrcode>=6,<8
 
 #/hq_thumbnails
 moviepy>=1,<2
