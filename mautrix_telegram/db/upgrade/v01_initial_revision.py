@@ -49,7 +49,7 @@ async def migrate_legacy_to_v1(conn: Connection, scheme: str) -> None:
         await conn.execute(
             """
             ALTER TABLE contact
-              DROP CONSTRAINT IF EXISTS contact_user_fkey,
+              DROP CONSTRAINT contact_user_fkey,
               DROP CONSTRAINT contact_contact_fkey,
               ADD CONSTRAINT contact_user_fkey FOREIGN KEY (contact) REFERENCES puppet(id)
                 ON DELETE CASCADE ON UPDATE CASCADE,
