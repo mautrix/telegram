@@ -49,7 +49,7 @@ async def migrate_legacy_to_v1(conn: Connection, scheme: str) -> None:
         await conn.execute(
             """
             ALTER TABLE contact
-              DROP CONSTRAINT contact_user_fkey,
+              DROP CONSTRAINT IF EXISTS contact_user_fkey,
               DROP CONSTRAINT contact_contact_fkey,
               ADD CONSTRAINT contact_user_fkey FOREIGN KEY (contact) REFERENCES puppet(id)
                 ON DELETE CASCADE ON UPDATE CASCADE,
@@ -60,14 +60,14 @@ async def migrate_legacy_to_v1(conn: Connection, scheme: str) -> None:
         await conn.execute(
             """
             ALTER TABLE telethon_sessions
-              DROP CONSTRAINT telethon_sessions_pkey,
+              DROP CONSTRAINT IF EXISTS telethon_sessions_pkey,
               ADD CONSTRAINT telethon_sessions_pkey PRIMARY KEY (session_id)
             """
         )
         await conn.execute(
             """
             ALTER TABLE telegram_file
-              DROP CONSTRAINT fk_file_thumbnail,
+              DROP CONSTRAINT IF EXISTS fk_file_thumbnail,
               ADD CONSTRAINT fk_file_thumbnail
                 FOREIGN KEY (thumbnail) REFERENCES telegram_file(id)
                 ON UPDATE CASCADE ON DELETE SET NULL
