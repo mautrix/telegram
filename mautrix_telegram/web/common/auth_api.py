@@ -24,9 +24,9 @@ from aiohttp import web
 from telethon.errors import *
 
 from mautrix.bridge import OnlyLoginSelf, InvalidAccessToken
+from mautrix.util.format_duration import format_duration
 
 from ...commands.telegram.auth import enter_password
-from ...util import format_duration
 from ...puppet import Puppet
 from ...user import User
 

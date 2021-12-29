@@ -23,8 +23,8 @@ from mautrix.bridge.commands import (HelpSection, CommandEvent as BaseCommandEve
                                      CommandHandler as BaseCommandHandler,
                                      CommandProcessor as BaseCommandProcessor,
                                      CommandHandlerFunc, command_handler as base_command_handler)
+from mautrix.util.format_duration import format_duration
 
-from ..util import format_duration
 from .. import user as u, context as c, portal as po
 
 
@@ -77,10 +77,11 @@ class CommandHandler(BaseCommandHandler):
     def __init__(self, handler: Callable[[CommandEvent], Awaitable[EventID]],
                  management_only: bool, name: str, help_text: str, help_args: str,
                  help_section: HelpSection, needs_auth: bool, needs_puppeting: bool,
-                 needs_matrix_puppeting: bool, needs_admin: bool) -> None:
+                 needs_matrix_puppeting: bool, needs_admin: bool, **kwargs) -> None:
         super().__init__(handler, management_only, name, help_text, help_args, help_section,
                          needs_auth=needs_auth, needs_puppeting=needs_puppeting,
-                         needs_matrix_puppeting=needs_matrix_puppeting, needs_admin=needs_admin)
+                         needs_matrix_puppeting=needs_matrix_puppeting, needs_admin=needs_admin,
+                         **kwargs)
 
     async def get_permission_error(self, evt: CommandEvent) -> Optional[str]:
         if self.needs_puppeting and not evt.sender.puppet_whitelisted:

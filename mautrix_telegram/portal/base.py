@@ -487,14 +487,13 @@ class BasePortal(MautrixBasePortal, ABC):
     async def update_matrix_room(self, user: 'AbstractUser', entity: Union[TypeChat, User],
                                  direct: bool, puppet: p.Puppet = None,
                                  levels: PowerLevelStateEventContent = None,
-                                 users: List[User] = None,
-                                 participants: List[TypeParticipant] = None) -> None:
+                                 users: List[User] = None) -> None:
         pass
 
     @abstractmethod
     async def create_matrix_room(self, user: 'AbstractUser', entity: TypeChat = None,
-                                 invites: InviteList = None, update_if_exists: bool = True,
-                                 synchronous: bool = False) -> Optional[str]:
+                                 invites: InviteList = None, update_if_exists: bool = True
+                                 ) -> Optional[RoomID]:
         pass
 
     @abstractmethod
