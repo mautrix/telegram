@@ -60,7 +60,7 @@ async def migrate_legacy_to_v1(conn: Connection, scheme: str) -> None:
         await conn.execute(
             """
             ALTER TABLE telethon_sessions
-              DROP CONSTRAINT IF EXISTS telethon_sessions_pkey,
+              DROP CONSTRAINT telethon_sessions_pkey,
               ADD CONSTRAINT telethon_sessions_pkey PRIMARY KEY (session_id)
             """
         )
