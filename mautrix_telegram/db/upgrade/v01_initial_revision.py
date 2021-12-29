@@ -73,7 +73,7 @@ async def migrate_legacy_to_v1(conn: Connection, scheme: str) -> None:
                 ON UPDATE CASCADE ON DELETE SET NULL
             """
         )
-        await conn.execute("ALTER TABLE puppet ALTER COLUMN id DROP DEFAULT")
+        await conn.execute("ALTER TABLE puppet ALTER COLUMN id DROP IDENTITY")
         await conn.execute("DROP SEQUENCE puppet_id_seq")
         await conn.execute("ALTER TABLE bot_chat ALTER COLUMN id DROP DEFAULT")
         await conn.execute("DROP SEQUENCE bot_chat_id_seq")
