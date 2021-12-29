@@ -76,7 +76,7 @@ async def migrate_legacy_to_v1(conn: Connection, scheme: str) -> None:
         await conn.execute("ALTER TABLE puppet ALTER COLUMN id DROP DEFAULT")
         await conn.execute("DROP SEQUENCE IF EXISTS puppet_id_seq")
         await conn.execute("ALTER TABLE bot_chat ALTER COLUMN id DROP DEFAULT")
-        await conn.execute("DROP SEQUENCE bot_chat_id_seq")
+        await conn.execute("DROP SEQUENCE IF EXISTS bot_chat_id_seq")
         await conn.execute("ALTER TABLE portal ALTER COLUMN config TYPE jsonb USING config::jsonb")
         await conn.execute(
             "ALTER TABLE telegram_file ALTER COLUMN decryption_info TYPE jsonb "
