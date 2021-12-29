@@ -29,6 +29,7 @@ from telethon.tl.types import (
     MessageEntityMention as Mention,
     MessageEntityMentionName as MentionName,
     MessageEntityPre as Pre,
+    MessageEntitySpoiler as Spoiler,
     MessageEntityStrike as Strike,
     MessageEntityTextUrl as TextURL,
     MessageEntityUnderline as Underline,
@@ -55,6 +56,7 @@ class TelegramEntityType(Enum):
     MENTION = Mention
     MENTION_NAME = InputMentionName
     COMMAND = Command
+    SPOILER = Spoiler
 
     USER_MENTION = 1
     ROOM_MENTION = 2

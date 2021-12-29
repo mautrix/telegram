@@ -95,5 +95,8 @@ class MatrixParser(BaseMatrixParser[TelegramMessage]):
     async def color_to_fstring(self, msg: TelegramMessage, color: str) -> TelegramMessage:
         return msg
 
-    async def spoiler_to_fstring(self, msg: TelegramMessage, spoiler: str) -> TelegramMessage:
+    async def spoiler_to_fstring(self, msg: TelegramMessage, reason: str) -> TelegramMessage:
+        msg = msg.format(self.e.SPOILER)
+        if reason:
+            msg = msg.prepend(f"{reason}: ")
         return msg

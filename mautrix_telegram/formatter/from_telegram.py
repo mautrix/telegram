@@ -35,6 +35,7 @@ from telethon.tl.types import (
     MessageEntityMentionName,
     MessageEntityPhone,
     MessageEntityPre,
+    MessageEntitySpoiler,
     MessageEntityStrike,
     MessageEntityTextUrl,
     MessageEntityUnderline,
@@ -293,6 +294,8 @@ async def _telegram_entities_to_matrix(
             html.append(f"<font color='blue'>{entity_text}</font>")
         elif entity_type in (MessageEntityHashtag, MessageEntityCashtag, MessageEntityPhone):
             html.append(f"<font color='blue'>{entity_text}</font>")
+        elif entity_type == MessageEntitySpoiler:
+            html.append(f"<span data-mx-spoiler>{entity_text}</span>")
         else:
             skip_entity = True
         last_offset = relative_offset + (0 if skip_entity else entity.length)
