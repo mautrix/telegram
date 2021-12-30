@@ -19,7 +19,7 @@ from . import upgrade_table
 
 
 @upgrade_table.register(description="Add support for reactions")
-async def upgrade_v3(conn: Connection) -> None:
+async def upgrade_v3(conn: Connection, scheme: str) -> None:
     await conn.execute(
         """CREATE TABLE reaction (
             mxid      TEXT NOT NULL,
@@ -32,6 +32,7 @@ async def upgrade_v3(conn: Connection) -> None:
             UNIQUE (mxid, mx_room)
         )"""
     )
-    await conn.execute("ALTER TABLE message ALTER COLUMN mxid SET NOT NULL")
-    await conn.execute("ALTER TABLE message ALTER COLUMN mx_room SET NOT NULL")
+    if scheme != "sqlite":
+        await conn.execute("ALTER TABLE message ALTER COLUMN mxid SET NOT NULL")
+        await conn.execute("ALTER TABLE message ALTER COLUMN mx_room SET NOT NULL")
     await conn.execute("ALTER TABLE message ADD COLUMN content_hash bytea")
