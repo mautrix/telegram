@@ -19,6 +19,7 @@ from .bot_chat import BotChat
 from .message import Message
 from .portal import Portal
 from .puppet import Puppet
+from .reaction import Reaction
 from .telegram_file import TelegramFile
 from .telethon_session import PgSession
 from .upgrade import upgrade_table
@@ -26,7 +27,7 @@ from .user import User
 
 
 def init(db: Database) -> None:
-    for table in (Portal, Message, User, Puppet, TelegramFile, BotChat, PgSession):
+    for table in (Portal, Message, Reaction, User, Puppet, TelegramFile, BotChat, PgSession):
         table.db = db
 
 
@@ -35,6 +36,7 @@ __all__ = [
     "init",
     "Portal",
     "Message",
+    "Reaction",
     "User",
     "Puppet",
     "TelegramFile",

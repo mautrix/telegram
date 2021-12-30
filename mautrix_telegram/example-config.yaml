@@ -331,16 +331,6 @@ bridge:
         exceptions:
         - "@importantbot:example.com"
 
-    # Some config options related to Telegram message deduplication.
-    # The default values are usually fine, but some debug messages/warnings might recommend you
-    # change these.
-    deduplication:
-        # Whether or not to check the database if the message about to be sent is a duplicate.
-        pre_db_check: false
-        # The number of latest events to keep when checking for duplicates.
-        # You might need to increase this on high-traffic bridge instances.
-        cache_queue_length: 20
-
     # The formats to use when sending messages to Telegram via the relay bot.
     # Text msgtypes (m.text, m.notice and m.emote) support HTML, media msgtypes don't.
     #

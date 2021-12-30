@@ -38,6 +38,7 @@ class Message:
     tg_space: TelegramID
     edit_index: int
     redacted: bool = False
+    content_hash: bytes | None = None
 
     @classmethod
     def _from_row(cls, row: Record | None) -> Message | None:
@@ -45,7 +46,7 @@ class Message:
             return None
         return cls(**row)
 
-    columns: ClassVar[str] = "mxid, mx_room, tgid, tg_space, edit_index, redacted"
+    columns: ClassVar[str] = "mxid, mx_room, tgid, tg_space, edit_index, redacted, content_hash"
 
     @classmethod
     async def get_all_by_tgid(cls, tgid: TelegramID, tg_space: TelegramID) -> list[Message]:
@@ -142,14 +143,24 @@ class Message:
         q = "UPDATE message SET mxid=$1 WHERE mxid=$2 AND mx_room=$3"
         await cls.db.execute(q, real_mxid, temp_mxid, mx_room)
 
+    @property
+    def _values(self):
+        return (
+            self.mxid,
+            self.mx_room,
+            self.tgid,
+            self.tg_space,
+            self.edit_index,
+            self.redacted,
+            self.content_hash,
+        )
+
     async def insert(self) -> None:
-        q = (
-            "INSERT INTO message (mxid, mx_room, tgid, tg_space, edit_index, redacted) "
-            "VALUES ($1, $2, $3, $4, $5, $6)"
-        )
-        await self.db.execute(
-            q, self.mxid, self.mx_room, self.tgid, self.tg_space, self.edit_index, self.redacted
-        )
+        q = """
+            INSERT INTO message (mxid, mx_room, tgid, tg_space, edit_index, redacted, content_hash)
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
+        """
+        await self.db.execute(q, *self._values)
 
     async def delete(self) -> None:
         q = "DELETE FROM message WHERE mxid=$1 AND mx_room=$2 AND tg_space=$3"

@@ -15,20 +15,30 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from __future__ import annotations
 
-from typing import Tuple
+from typing import Any, Generator, Tuple, Union
 from collections import deque
 import hashlib
 
 from telethon.tl.patched import Message, MessageService
 from telethon.tl.types import (
+    Message,
     MessageMediaContact,
+    MessageMediaDice,
     MessageMediaDocument,
+    MessageMediaGame,
     MessageMediaGeo,
     MessageMediaPhoto,
-    TypeMessage,
+    MessageMediaPoll,
+    MessageMediaUnsupported,
+    MessageService,
+    PeerChannel,
+    PeerChat,
+    PeerUser,
     TypeUpdates,
     UpdateNewChannelMessage,
     UpdateNewMessage,
+    UpdateShortChatMessage,
+    UpdateShortMessage,
 )
 
 from mautrix.types import EventID
@@ -37,60 +47,67 @@ from .. import portal as po
 from ..types import TelegramID
 
 DedupMXID = Tuple[EventID, TelegramID]
+TypeMessage = Union[Message, MessageService, UpdateShortMessage, UpdateShortChatMessage]
+
+media_content_table = {
+    MessageMediaContact: lambda media: [media.user_id],
+    MessageMediaDocument: lambda media: [media.document.id],
+    MessageMediaPhoto: lambda media: [media.photo.id if media.photo else 0],
+    MessageMediaGeo: lambda media: [media.geo.long, media.geo.lat],
+    MessageMediaGame: lambda media: [media.id],
+    MessageMediaPoll: lambda media: [media.id],
+    MessageMediaDice: lambda media: [media.emoticon],
+    MessageMediaUnsupported: lambda media: ["unsupported media"],
+}
 
 
 class PortalDedup:
     pre_db_check: bool = False
-    cache_queue_length: int = 20
+    cache_queue_length: int = 256
 
-    _dedup: deque[str]
-    _dedup_mxid: dict[str, DedupMXID]
-    _dedup_action: deque[str]
+    _dedup: deque[bytes | int]
+    _dedup_mxid: dict[bytes | int, DedupMXID]
+    _dedup_action: deque[bytes | int]
     _portal: po.Portal
 
     def __init__(self, portal: po.Portal) -> None:
         self._dedup = deque()
         self._dedup_mxid = {}
-        self._dedup_action = deque()
+        self._dedup_action = deque(maxlen=self.cache_queue_length)
         self._portal = portal
 
     @property
     def _always_force_hash(self) -> bool:
         return self._portal.peer_type == "chat"
 
-    @staticmethod
-    def _hash_event(event: TypeMessage) -> str:
-        # Non-channel messages are unique per-user (wtf telegram), so we have no other choice than
-        # to deduplicate based on a hash of the message content.
-
-        # The timestamp is only accurate to the second, so we can't rely solely on that either.
+    def _hash_content(self, event: TypeMessage) -> Generator[Any, None, None]:
+        if not self._always_force_hash:
+            yield event.id
+        yield int(event.date.timestamp())
         if isinstance(event, MessageService):
-            hash_content = [event.date.timestamp(), event.from_id, event.action]
+            yield event.from_id
+            yield event.action
         else:
-            hash_content = [event.date.timestamp(), event.message.strip()]
+            yield event.message.strip()
             if event.fwd_from:
-                hash_content += [event.fwd_from.from_id]
-            elif isinstance(event, Message) and event.media:
-                try:
-                    hash_content += {
-                        MessageMediaContact: lambda media: [media.user_id],
-                        MessageMediaDocument: lambda media: [media.document.id],
-                        MessageMediaPhoto: lambda media: [media.photo.id if media.photo else 0],
-                        MessageMediaGeo: lambda media: [media.geo.long, media.geo.lat],
-                    }[type(event.media)](event.media)
-                except KeyError:
-                    pass
-        return hashlib.md5("-".join(str(a) for a in hash_content).encode("utf-8")).hexdigest()
+                yield event.fwd_from.from_id
+            if isinstance(event, Message) and event.media:
+                media_hash_func = media_content_table.get(type(event.media)) or (
+                    lambda media: ["unknown media"]
+                )
+                yield media_hash_func(event.media)
+
+    def _hash_event(self, event: TypeMessage) -> bytes:
+        return hashlib.sha256(
+            "-".join(str(a) for a in self._hash_content(event)).encode("utf-8")
+        ).digest()
 
     def check_action(self, event: TypeMessage) -> bool:
-        evt_hash = self._hash_event(event) if self._always_force_hash else event.id
-        if evt_hash in self._dedup_action:
+        dedup_id = self._hash_event(event) if self._always_force_hash else event.id
+        if dedup_id in self._dedup_action:
             return True
 
-        self._dedup_action.append(evt_hash)
-
-        if len(self._dedup_action) > self.cache_queue_length:
-            self._dedup_action.popleft()
+        self._dedup_action.appendleft(dedup_id)
         return False
 
     def update(
@@ -99,31 +116,38 @@ class PortalDedup:
         mxid: DedupMXID = None,
         expected_mxid: DedupMXID | None = None,
         force_hash: bool = False,
-    ) -> DedupMXID | None:
-        evt_hash = self._hash_event(event) if self._always_force_hash or force_hash else event.id
+    ) -> tuple[bytes, DedupMXID | None]:
+        evt_hash = self._hash_event(event)
+        dedup_id = evt_hash if self._always_force_hash or force_hash else event.id
         try:
-            found_mxid = self._dedup_mxid[evt_hash]
+            found_mxid = self._dedup_mxid[dedup_id]
         except KeyError:
-            return EventID("None"), TelegramID(0)
+            return evt_hash, None
 
         if found_mxid != expected_mxid:
-            return found_mxid
-        self._dedup_mxid[evt_hash] = mxid
-        return None
+            return evt_hash, found_mxid
+        self._dedup_mxid[dedup_id] = mxid
+        if evt_hash != dedup_id:
+            self._dedup_mxid[evt_hash] = mxid
+        return evt_hash, None
 
     def check(
         self, event: TypeMessage, mxid: DedupMXID = None, force_hash: bool = False
-    ) -> DedupMXID | None:
-        evt_hash = self._hash_event(event) if self._always_force_hash or force_hash else event.id
-        if evt_hash in self._dedup:
-            return self._dedup_mxid[evt_hash]
+    ) -> tuple[bytes, DedupMXID | None]:
+        evt_hash = self._hash_event(event)
+        dedup_id = evt_hash if self._always_force_hash or force_hash else event.id
+        if dedup_id in self._dedup:
+            return evt_hash, self._dedup_mxid[dedup_id]
 
-        self._dedup_mxid[evt_hash] = mxid
-        self._dedup.append(evt_hash)
+        self._dedup_mxid[dedup_id] = mxid
+        self._dedup.appendleft(dedup_id)
+        if evt_hash != dedup_id:
+            self._dedup_mxid[evt_hash] = mxid
+            self._dedup.appendleft(evt_hash)
 
-        if len(self._dedup) > self.cache_queue_length:
-            del self._dedup_mxid[self._dedup.popleft()]
-        return None
+        while len(self._dedup) > self.cache_queue_length:
+            del self._dedup_mxid[self._dedup.pop()]
+        return evt_hash, None
 
     def register_outgoing_actions(self, response: TypeUpdates) -> None:
         for update in response.updates:

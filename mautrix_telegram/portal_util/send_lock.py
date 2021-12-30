@@ -16,6 +16,9 @@
 from __future__ import annotations
 
 from asyncio import Lock
+from collections import defaultdict
+
+from mautrix.types import EventID
 
 from ..types import TelegramID
 
@@ -42,3 +45,13 @@ class PortalSendLock:
             return self._send_locks[user_id]
         except KeyError:
             return self._send_locks.setdefault(user_id, Lock()) if required else self._noop_lock
+
+
+class PortalReactionLock:
+    _reaction_locks: dict[EventID, Lock]
+
+    def __init__(self) -> None:
+        self._reaction_locks = defaultdict(lambda: Lock())
+
+    def __call__(self, mxid: EventID) -> Lock:
+        return self._reaction_locks[mxid]

@@ -46,6 +46,7 @@ from telethon.tl.types import (
     UpdateEditChannelMessage,
     UpdateEditMessage,
     UpdateFolderPeers,
+    UpdateMessageReactions,
     UpdateNewChannelMessage,
     UpdateNewMessage,
     UpdateNotifySettings,
@@ -312,6 +313,8 @@ class AbstractUser(ABC):
             await self.delete_message(update)
         elif isinstance(update, UpdateDeleteChannelMessages):
             await self.delete_channel_message(update)
+        elif isinstance(update, UpdateMessageReactions):
+            await self.update_reactions(update)
         elif isinstance(update, (UpdateChatUserTyping, UpdateChannelUserTyping, UpdateUserTyping)):
             await self.update_typing(update)
         elif isinstance(update, UpdateUserStatus):
@@ -558,6 +561,12 @@ class AbstractUser(ABC):
                     continue
                 await message.delete()
                 await self._try_redact(message)
+
+    async def update_reactions(self, update: UpdateMessageReactions) -> None:
+        portal = await po.Portal.get_by_entity(update.peer, tg_receiver=self.tgid)
+        if not portal or not portal.mxid or not portal.allow_bridging:
+            return
+        await portal.handle_telegram_reactions(self, TelegramID(update.msg_id), update.reactions)
 
     async def update_message(self, original_update: UpdateMessage) -> None:
         update, sender, portal = await self.get_message_details(original_update)

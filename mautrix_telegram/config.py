@@ -178,9 +178,6 @@ class Config(BaseBridgeConfig):
         else:
             copy("bridge.bridge_notices")
 
-        copy("bridge.deduplication.pre_db_check")
-        copy("bridge.deduplication.cache_queue_length")
-
         if "bridge.message_formats.m_text" in self:
             del self["bridge.message_formats"]
         copy_dict("bridge.message_formats", override_existing_map=False)

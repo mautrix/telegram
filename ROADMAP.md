@@ -3,6 +3,7 @@
 * Matrix → Telegram
   * [x] Message content (text, formatting, files, etc..)
   * [x] Message redactions
+  * [ ] Message reactions
   * [x] Message edits
   * [ ] ‡ Message history
   * [x] Presence
@@ -12,8 +13,8 @@
   * [x] Power level
     * [x] Normal chats
       * [ ] Non-hardcoded PL requirements
-	* [x] Supergroups/channels
-	  * [ ] Precise bridging (non-hardcoded PL requirements, bridge specific permissions, etc..)
+    * [x] Supergroups/channels
+      * [ ] Precise bridging (non-hardcoded PL requirements, bridge specific permissions, etc..)
   * [x] Membership actions (invite/kick/join/leave)
   * [x] Room metadata changes (name, topic, avatar)
   * [x] Initial room metadata
@@ -27,6 +28,7 @@
 	* [x] Games
 	* [ ] Buttons
   * [x] Message deletions
+  * [x] Message reactions
   * [x] Message edits
   * [x] Message history
     * [x] Manually (`!tg backfill`)

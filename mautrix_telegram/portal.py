@@ -63,6 +63,7 @@ from telethon.tl.functions.messages import (
     EditChatPhotoRequest,
     EditChatTitleRequest,
     ExportChatInviteRequest,
+    GetMessageReactionsListRequest,
     MigrateChatRequest,
     SetTypingRequest,
     UnpinAllMessagesRequest,
@@ -112,6 +113,8 @@ from telethon.tl.types import (
     MessageMediaPhoto,
     MessageMediaPoll,
     MessageMediaUnsupported,
+    MessageReactions,
+    MessageUserReaction,
     PeerChannel,
     PeerChat,
     PeerUser,
@@ -122,6 +125,7 @@ from telethon.tl.types import (
     PhotoSizeEmpty,
     PhotoSizeProgressive,
     Poll,
+    ReactionCount,
     SendMessageCancelAction,
     SendMessageTypingAction,
     SponsoredMessage,
@@ -177,13 +181,19 @@ from mautrix.types import (
     UserID,
     VideoInfo,
 )
+from mautrix.util import variation_selector
 from mautrix.util.message_send_checkpoint import MessageSendCheckpointStatus
 from mautrix.util.simple_lock import SimpleLock
 from mautrix.util.simple_template import SimpleTemplate
 
 from . import abstract_user as au, formatter, portal_util as putil, puppet as p, user as u, util
 from .config import Config
-from .db import Message as DBMessage, Portal as DBPortal, TelegramFile as DBTelegramFile
+from .db import (
+    Message as DBMessage,
+    Portal as DBPortal,
+    Reaction as DBReaction,
+    TelegramFile as DBTelegramFile,
+)
 from .tgclient import MautrixTelegramClient
 from .types import TelegramID
 from .util import sane_mimetypes
@@ -248,6 +258,7 @@ class Portal(DBPortal, BasePortal):
 
     dedup: putil.PortalDedup
     send_lock: putil.PortalSendLock
+    reaction_lock: putil.PortalReactionLock
     _pin_lock: asyncio.Lock
 
     _main_intent: IntentAPI | None
@@ -307,6 +318,7 @@ class Portal(DBPortal, BasePortal):
 
         self.dedup = putil.PortalDedup(self)
         self.send_lock = putil.PortalSendLock()
+        self.reaction_lock = putil.PortalReactionLock()
         self._pin_lock = asyncio.Lock()
         self._room_create_lock = asyncio.Lock()
 
@@ -405,10 +417,6 @@ class Portal(DBPortal, BasePortal):
         )
         NotificationDisabler.puppet_cls = p.Puppet
         NotificationDisabler.config_enabled = cls.config["bridge.backfill.disable_notifications"]
-        putil.PortalDedup.dedup_pre_db_check = cls.config["bridge.deduplication.pre_db_check"]
-        putil.PortalDedup.dedup_cache_queue_length = cls.config[
-            "bridge.deduplication.cache_queue_length"
-        ]
 
     # endregion
     # region Matrix -> Telegram metadata
@@ -1648,7 +1656,7 @@ class Portal(DBPortal, BasePortal):
         self, event_id: EventID, space: TelegramID, edit_index: int, response: TypeMessage
     ) -> None:
         self.log.trace("Handled Matrix message: %s", response)
-        self.dedup.check(response, (event_id, space), force_hash=edit_index != 0)
+        event_hash, _ = self.dedup.check(response, (event_id, space), force_hash=edit_index != 0)
         if edit_index < 0:
             prev_edit = await DBMessage.get_one_by_tgid(TelegramID(response.id), space, -1)
             edit_index = prev_edit.edit_index + 1
@@ -1658,6 +1666,7 @@ class Portal(DBPortal, BasePortal):
             mx_room=self.mxid,
             mxid=event_id,
             edit_index=edit_index,
+            content_hash=event_hash,
         ).insert()
 
     async def _send_bridge_error(
@@ -2395,13 +2404,18 @@ class Portal(DBPortal, BasePortal):
             self.log.debug("Ignoring game message edit event")
             return
 
+        if self.peer_type != "channel" and isinstance(evt, Message) and evt.reactions is not None:
+            asyncio.create_task(
+                self.try_handle_telegram_reactions(source, TelegramID(evt.id), evt.reactions)
+            )
+
         async with self.send_lock(sender.tgid if sender else None, required=False):
             tg_space = self.tgid if self.peer_type == "channel" else source.tgid
 
             temporary_identifier = EventID(
                 f"${random.randint(1000000000000, 9999999999999)}TGBRIDGEDITEMP"
             )
-            duplicate_found = self.dedup.check(
+            event_hash, duplicate_found = self.dedup.check(
                 evt, (temporary_identifier, tg_space), force_hash=True
             )
             if duplicate_found:
@@ -2418,6 +2432,7 @@ class Portal(DBPortal, BasePortal):
                         tg_space=tg_space,
                         tgid=TelegramID(evt.id),
                         edit_index=prev_edit_msg.edit_index + 1,
+                        content_hash=event_hash,
                     ).insert()
                 return
 
@@ -2429,6 +2444,15 @@ class Portal(DBPortal, BasePortal):
             self.log.info(
                 f"Didn't find edited message {evt.id}@{tg_space} (src {source.tgid}) "
                 "in database."
+            )
+            return
+        prev_edit_msg = (
+            await DBMessage.get_one_by_tgid(TelegramID(evt.id), tg_space, -1) or editing_msg
+        )
+        if prev_edit_msg.content_hash == event_hash:
+            self.log.debug(
+                f"Ignoring edit of message {evt.id}@{tg_space} (src {source.tgid}):"
+                " content hash didn't change"
             )
             return
 
@@ -2444,15 +2468,13 @@ class Portal(DBPortal, BasePortal):
         await intent.set_typing(self.mxid, is_typing=False)
         event_id = await self._send_message(intent, content)
 
-        prev_edit_msg = (
-            await DBMessage.get_one_by_tgid(TelegramID(evt.id), tg_space, -1) or editing_msg
-        )
         await DBMessage(
             mxid=event_id,
             mx_room=self.mxid,
             tg_space=tg_space,
             tgid=TelegramID(evt.id),
             edit_index=prev_edit_msg.edit_index + 1,
+            content_hash=event_hash,
         ).insert()
         await DBMessage.replace_temp_mxid(temporary_identifier, self.mxid, event_id)
 
@@ -2587,6 +2609,139 @@ class Portal(DBPortal, BasePortal):
                 count += 1
         return count
 
+    def _split_dm_reaction_counts(self, counts: list[ReactionCount]) -> list[MessageUserReaction]:
+        if len(counts) == 1:
+            item = counts[0]
+            if item.count == 2:
+                return [
+                    MessageUserReaction(reaction=item.reaction, user_id=self.tgid),
+                    MessageUserReaction(reaction=item.reaction, user_id=self.tg_receiver),
+                ]
+            elif item.count == 1:
+                return [
+                    MessageUserReaction(
+                        reaction=item.reaction,
+                        user_id=self.tg_receiver if item.chosen else self.tgid,
+                    ),
+                ]
+        elif len(counts) == 2:
+            item1, item2 = counts
+            return [
+                MessageUserReaction(
+                    reaction=item1.reaction,
+                    user_id=self.tg_receiver if item1.chosen else self.tgid,
+                ),
+                MessageUserReaction(
+                    reaction=item2.reaction,
+                    user_id=self.tg_receiver if item2.chosen else self.tgid,
+                ),
+            ]
+        return []
+
+    async def try_handle_telegram_reactions(
+        self,
+        source: au.AbstractUser,
+        msg_id: TelegramID,
+        data: MessageReactions,
+        dbm: DBMessage | None = None,
+    ) -> None:
+        try:
+            await self.handle_telegram_reactions(source, msg_id, data, dbm)
+        except Exception:
+            self.log.exception(f"Error handling reactions in message {msg_id}")
+
+    async def handle_telegram_reactions(
+        self,
+        source: au.AbstractUser,
+        msg_id: TelegramID,
+        data: MessageReactions,
+        dbm: DBMessage | None = None,
+    ) -> None:
+        if self.peer_type == "channel" and not self.megagroup:
+            # We don't know who reacted in a channel, so we can't bridge it properly either
+            return
+
+        tg_space = self.tgid if self.peer_type == "channel" else source.tgid
+        if dbm is None:
+            dbm = await DBMessage.get_one_by_tgid(msg_id, tg_space)
+            if dbm is None:
+                return
+
+        total_count = sum(item.count for item in data.results)
+        recent_reactions = data.recent_reactons or []
+        if not recent_reactions and total_count > 0:
+            if self.peer_type == "user":
+                recent_reactions = self._split_dm_reaction_counts(data.results)
+            elif source.is_bot:
+                # Can't fetch exact reaction senders as a bot
+                return
+            else:
+                # TODO this doesn't work for some reason
+                return
+                # resp = await source.client(
+                #     GetMessageReactionsListRequest(peer=self.peer, id=dbm.tgid, limit=20)
+                # )
+                # recent_reactions = resp.reactions
+
+        async with self.reaction_lock(dbm.mxid):
+            await self._handle_telegram_reactions_locked(dbm, recent_reactions, total_count)
+
+    async def _handle_telegram_reactions_locked(
+        self, msg: DBMessage, reaction_list: list[MessageUserReaction], total_count: int
+    ) -> None:
+        reactions = {reaction.user_id: reaction.reaction for reaction in reaction_list}
+        is_full = len(reactions) == total_count
+
+        existing_reactions = await DBReaction.get_all_by_message(msg.mxid, msg.mx_room)
+
+        removed: list[DBReaction] = []
+        changed: list[tuple[DBReaction, str]] = []
+        for existing_reaction in existing_reactions:
+            new_reaction = reactions.get(existing_reaction.tg_sender)
+            if new_reaction is None:
+                if is_full:
+                    removed.append(existing_reaction)
+                # else: assume the reaction is still there, too much effort to fetch it
+            elif new_reaction == existing_reaction.reaction:
+                reactions.pop(existing_reaction.tg_sender)
+            else:
+                changed.append((existing_reaction, new_reaction))
+
+        for sender, new_emoji in reactions.items():
+            self.log.debug(f"Bridging reaction {new_emoji} by {sender} to {msg.tgid}")
+            puppet: p.Puppet = await p.Puppet.get_by_tgid(sender)
+            mxid = await puppet.intent_for(self).react(
+                msg.mx_room, msg.mxid, variation_selector.add(new_emoji)
+            )
+            await DBReaction(
+                mxid=mxid,
+                mx_room=msg.mx_room,
+                msg_mxid=msg.mxid,
+                tg_sender=sender,
+                reaction=new_emoji,
+            ).save()
+        for removed_reaction in removed:
+            self.log.debug(
+                f"Removing reaction {removed_reaction.reaction} by {removed_reaction.tg_sender} "
+                f"to {msg.tgid}"
+            )
+            puppet = await p.Puppet.get_by_tgid(removed_reaction.tg_sender)
+            await puppet.intent_for(self).redact(removed_reaction.mx_room, removed_reaction.mxid)
+            await removed_reaction.delete()
+        for changed_reaction, new_emoji in changed:
+            self.log.debug(
+                f"Updating reaction {changed_reaction.reaction} -> {new_emoji} "
+                f"by {changed_reaction.tg_sender} to {msg.tgid}"
+            )
+            puppet = await p.Puppet.get_by_tgid(changed_reaction.tg_sender)
+            intent = puppet.intent_for(self)
+            await intent.redact(changed_reaction.mx_room, changed_reaction.mxid)
+            changed_reaction.mxid = await intent.react(
+                msg.mx_room, msg.mxid, variation_selector.add(new_emoji)
+            )
+            changed_reaction.reaction = new_emoji
+            await changed_reaction.save()
+
     async def handle_telegram_message(
         self, source: au.AbstractUser, sender: p.Puppet, evt: Message
     ) -> None:
@@ -2613,7 +2768,7 @@ class Portal(DBPortal, BasePortal):
             temporary_identifier = EventID(
                 f"${random.randint(1000000000000, 9999999999999)}TGBRIDGETEMP"
             )
-            duplicate_found = self.dedup.check(evt, (temporary_identifier, tg_space))
+            event_hash, duplicate_found = self.dedup.check(evt, (temporary_identifier, tg_space))
             if duplicate_found:
                 mxid, other_tg_space = duplicate_found
                 self.log.debug(
@@ -2627,17 +2782,16 @@ class Portal(DBPortal, BasePortal):
                         mxid=mxid,
                         tg_space=tg_space,
                         edit_index=0,
+                        content_hash=event_hash,
                     ).insert()
                 return
 
-        if self.backfill_lock.locked or (self.dedup.pre_db_check and self.peer_type == "channel"):
+        if self.backfill_lock.locked or self.peer_type == "channel":
             msg = await DBMessage.get_one_by_tgid(TelegramID(evt.id), tg_space)
             if msg:
                 self.log.debug(
                     f"Ignoring message {evt.id} (src {source.tgid}) as it was already "
-                    f"handled into {msg.mxid}. This duplicate was catched in the db "
-                    "check. If you get this message often, consider increasing "
-                    "bridge.deduplication.cache_queue_length in the config."
+                    f"handled into {msg.mxid}."
                 )
                 return
 
@@ -2702,7 +2856,10 @@ class Portal(DBPortal, BasePortal):
 
         self._new_messages_after_sponsored = True
 
-        prev_id = self.dedup.update(evt, (event_id, tg_space), (temporary_identifier, tg_space))
+        another_event_hash, prev_id = self.dedup.update(
+            evt, (event_id, tg_space), (temporary_identifier, tg_space)
+        )
+        assert another_event_hash == event_hash
         if prev_id:
             self.log.debug(
                 f"Sent message {evt.id}@{tg_space} to Matrix as {event_id}. "
@@ -2717,13 +2874,15 @@ class Portal(DBPortal, BasePortal):
 
         self.log.debug("Handled telegram message %d -> %s", evt.id, event_id)
         try:
-            await DBMessage(
+            dbm = DBMessage(
                 tgid=TelegramID(evt.id),
                 mx_room=self.mxid,
                 mxid=event_id,
                 tg_space=tg_space,
                 edit_index=0,
-            ).insert()
+                content_hash=event_hash,
+            )
+            await dbm.insert()
             await DBMessage.replace_temp_mxid(temporary_identifier, self.mxid, event_id)
         except (IntegrityError, UniqueViolationError) as e:
             self.log.exception(
@@ -2733,6 +2892,11 @@ class Portal(DBPortal, BasePortal):
                 "pre_db_check in the config."
             )
             await intent.redact(self.mxid, event_id)
+            return
+        if isinstance(evt, Message) and evt.reactions:
+            asyncio.create_task(
+                self.try_handle_telegram_reactions(source, dbm.tgid, evt.reactions, dbm=dbm)
+            )
         await self._send_delivery_receipt(event_id)
 
     async def _create_room_on_action(
@@ -2956,6 +3120,7 @@ class Portal(DBPortal, BasePortal):
             pass
         await super().delete()
         await DBMessage.delete_all(self.mxid)
+        await DBReaction.delete_all(self.mxid)
         self.deleted = True
 
     # endregion
