@@ -54,9 +54,9 @@ media_content_table = {
     MessageMediaDocument: lambda media: [media.document.id],
     MessageMediaPhoto: lambda media: [media.photo.id if media.photo else 0],
     MessageMediaGeo: lambda media: [media.geo.long, media.geo.lat],
-    MessageMediaGame: lambda media: [media.id],
-    MessageMediaPoll: lambda media: [media.id],
-    MessageMediaDice: lambda media: [media.emoticon],
+    MessageMediaGame: lambda media: [media.game.id],
+    MessageMediaPoll: lambda media: [media.poll.id],
+    MessageMediaDice: lambda media: [media.value, media.emoticon],
     MessageMediaUnsupported: lambda media: ["unsupported media"],
 }
 
