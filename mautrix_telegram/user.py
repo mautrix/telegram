@@ -655,10 +655,10 @@ class User(DBUser, AbstractUser, BaseUser):
         if self.saved_contacts != response.saved_count:
             self.saved_contacts = response.saved_count
             await self.save()
-        await self.set_contacts(user.id for user in response.users)
         for user in response.users:
             puppet = await pu.Puppet.get_by_tgid(user.id)
             await puppet.update_info(self, user)
+        await self.set_contacts(user.id for user in response.users)
 
     # endregion
     # region Class instance lookup

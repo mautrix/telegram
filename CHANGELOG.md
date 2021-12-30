@@ -1,7 +1,8 @@
-# (unreleased)
+# v0.11.1 (2021-0?-??, unreleased)
 
 * Added support for message reactions
 * Added support for spoiler text.
+* Fixed syncing contacts throwing an error for new accounts.
 
 # v0.11.0 (2021-12-28)
 
