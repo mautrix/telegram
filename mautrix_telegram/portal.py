@@ -1881,7 +1881,11 @@ class Portal(DBPortal, BasePortal):
             self.log.debug(str(e))
             await self._send_bridge_error(user, e, reaction_event_id, EventType.REACTION)
         except ReactionInvalidError as e:
-            await self.main_intent.redact(self.mxid, reaction_event_id, reason="Emoji not allowed")
+            # Don't redact reactions in relaybot chats, there are usually other Matrix users too.
+            if not self.has_bot:
+                await self.main_intent.redact(
+                    self.mxid, reaction_event_id, reason="Emoji not allowed"
+                )
             self.log.debug(f"Failed to bridge reaction by {user.mxid}: emoji not allowed")
             await self._send_bridge_error(user, e, reaction_event_id, EventType.REACTION)
         except Exception as e:
