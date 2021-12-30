@@ -56,6 +56,13 @@ class Reaction:
         return cls._from_row(await cls.db.fetchrow(q, mxid, mx_room))
 
     @classmethod
+    async def get_by_sender(
+        cls, mxid: EventID, mx_room: RoomID, tg_sender: TelegramID
+    ) -> Reaction | None:
+        q = f"SELECT {cls.columns} FROM reaction WHERE msg_mxid=$1 AND mx_room=$2 AND tg_sender=$3"
+        return cls._from_row(await cls.db.fetchrow(q, mxid, mx_room, tg_sender))
+
+    @classmethod
     async def get_all_by_message(cls, mxid: EventID, mx_room: RoomID) -> list[Reaction]:
         q = f"SELECT {cls.columns} FROM reaction WHERE msg_mxid=$1 AND mx_room=$2"
         rows = await cls.db.fetch(q, mxid, mx_room)

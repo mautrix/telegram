@@ -15,9 +15,8 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Iterable
+from typing import TYPE_CHECKING
 
-from mautrix.appservice import DOUBLE_PUPPET_SOURCE_KEY
 from mautrix.bridge import BaseMatrixHandler
 from mautrix.errors import MatrixError
 from mautrix.types import (
@@ -28,9 +27,8 @@ from mautrix.types import (
     MessageType,
     PresenceEvent,
     PresenceState,
+    ReactionEvent,
     ReceiptEvent,
-    ReceiptEventContent,
-    ReceiptType,
     RedactionEvent,
     RoomAvatarStateEventContent as AvatarContent,
     RoomID,
@@ -279,6 +277,20 @@ class MatrixHandler(BaseMatrixHandler):
         await portal.handle_matrix_deletion(sender, evt.redacts, evt.event_id)
 
     @staticmethod
+    async def handle_reaction(evt: ReactionEvent) -> None:
+        sender = await u.User.get_and_start_by_mxid(evt.sender)
+        if not await sender.has_full_access():
+            return
+
+        portal = await po.Portal.get_by_mxid(evt.room_id)
+        if not portal or not portal.allow_bridging:
+            return
+
+        await portal.handle_matrix_reaction(
+            sender, evt.content.relates_to.event_id, evt.content.relates_to.key, evt.event_id
+        )
+
+    @staticmethod
     async def handle_power_levels(evt: StateEvent) -> None:
         portal = await po.Portal.get_by_mxid(evt.room_id)
         sender = await u.User.get_and_start_by_mxid(evt.sender)
@@ -400,6 +412,8 @@ class MatrixHandler(BaseMatrixHandler):
     async def handle_event(self, evt: Event) -> None:
         if evt.type == EventType.ROOM_REDACTION:
             await self.handle_redaction(evt)
+        elif evt.type == EventType.REACTION:
+            await self.handle_reaction(evt)
 
     async def handle_state_event(self, evt: StateEvent) -> None:
         if evt.type == EventType.ROOM_POWER_LEVELS:

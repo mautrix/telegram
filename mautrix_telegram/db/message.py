@@ -143,6 +143,11 @@ class Message:
         q = "UPDATE message SET mxid=$1 WHERE mxid=$2 AND mx_room=$3"
         await cls.db.execute(q, real_mxid, temp_mxid, mx_room)
 
+    @classmethod
+    async def delete_temp_mxid(cls, temp_mxid: str, mx_room: RoomID) -> None:
+        q = "DELETE FROM message WHERE mxid=$1 AND mx_room=$2"
+        await cls.db.execute(q, temp_mxid, mx_room)
+
     @property
     def _values(self):
         return (

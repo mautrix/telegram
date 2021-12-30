@@ -45,6 +45,7 @@ from telethon.errors import (
     PhotoExtInvalidError,
     PhotoInvalidDimensionsError,
     PhotoSaveFileInvalidError,
+    ReactionInvalidError,
     RPCError,
 )
 from telethon.tl.functions.channels import (
@@ -65,6 +66,7 @@ from telethon.tl.functions.messages import (
     ExportChatInviteRequest,
     GetMessageReactionsListRequest,
     MigrateChatRequest,
+    SendReactionRequest,
     SetTypingRequest,
     UnpinAllMessagesRequest,
     UpdatePinnedMessageRequest,
@@ -214,6 +216,10 @@ InviteList = Union[UserID, List[UserID]]
 UpdateTyping = Union[UpdateUserTyping, UpdateChatUserTyping, UpdateChannelUserTyping]
 TypeChatPhoto = Union[ChatPhoto, ChatPhotoEmpty, Photo, PhotoEmpty]
 MediaHandler = Callable[["au.AbstractUser", IntentAPI, Message, RelatesTo], Awaitable[EventID]]
+
+
+class BridgingError(Exception):
+    pass
 
 
 class DocAttrs(NamedTuple):
@@ -1516,7 +1522,7 @@ class Portal(DBPortal, BasePortal):
         else:
             if content.file:
                 if not decrypt_attachment:
-                    raise Exception(
+                    raise BridgingError(
                         f"Can't bridge encrypted media event {event_id}: "
                         "encryption dependencies not installed"
                     )
@@ -1746,7 +1752,7 @@ class Portal(DBPortal, BasePortal):
             bridge_notices = self.get_config("bridge_notices.default")
             excepted = sender.mxid in self.get_config("bridge_notices.exceptions")
             if not bridge_notices and not excepted:
-                raise Exception("Notices are not configured to be bridged.")
+                raise BridgingError("Notices are not configured to be bridged.")
 
         if content.msgtype in (MessageType.TEXT, MessageType.EMOTE, MessageType.NOTICE):
             await self._pre_process_matrix_message(sender, not logged_in, content)
@@ -1779,7 +1785,7 @@ class Portal(DBPortal, BasePortal):
                 f"Didn't handle Matrix event {event_id} due to unknown msgtype {content.msgtype}"
             )
             self.log.trace("Unhandled Matrix event content: %s", content)
-            raise Exception(f"Unhandled msgtype {content.msgtype}")
+            raise BridgingError(f"Unhandled msgtype {content.msgtype}")
 
     async def handle_matrix_unpin_all(self, sender: u.User, pin_event_id: EventID) -> None:
         await sender.client(UnpinAllMessagesRequest(peer=self.peer))
@@ -1809,8 +1815,11 @@ class Portal(DBPortal, BasePortal):
     ) -> None:
         try:
             await self._handle_matrix_deletion(deleter, event_id)
-        except Exception as e:
+        except BridgingError as e:
             self.log.debug(str(e))
+            await self._send_bridge_error(deleter, e, redaction_event_id, EventType.ROOM_REDACTION)
+        except Exception as e:
+            self.log.exception(f"Failed to bridge redaction by {deleter.mxid}")
             await self._send_bridge_error(deleter, e, redaction_event_id, EventType.ROOM_REDACTION)
         else:
             deleter.send_remote_checkpoint(
@@ -1821,25 +1830,101 @@ class Portal(DBPortal, BasePortal):
             )
             await self._send_delivery_receipt(redaction_event_id)
 
+    async def _handle_matrix_reaction_deletion(
+        self, deleter: u.User, event_id: EventID, tg_space: TelegramID
+    ) -> None:
+        reaction = await DBReaction.get_by_mxid(event_id, self.mxid)
+        if not reaction:
+            raise BridgingError(f"Ignoring Matrix redaction of unknown event {event_id}")
+        elif reaction.tg_sender != deleter.tgid:
+            raise BridgingError(f"Ignoring Matrix redaction of reaction by another user")
+        reaction_target = await DBMessage.get_by_mxid(
+            reaction.msg_mxid, reaction.mx_room, tg_space
+        )
+        if not reaction_target or reaction_target.redacted:
+            raise BridgingError(
+                f"Ignoring Matrix redaction of reaction to unknown event {reaction.msg_mxid}"
+            )
+        async with self.reaction_lock(reaction_target.mxid):
+            await reaction.delete()
+            await deleter.client(SendReactionRequest(peer=self.peer, msg_id=reaction_target.tgid))
+
     async def _handle_matrix_deletion(self, deleter: u.User, event_id: EventID) -> None:
         real_deleter = deleter if not await deleter.needs_relaybot(self) else self.bot
-        space = self.tgid if self.peer_type == "channel" else real_deleter.tgid
-        message = await DBMessage.get_by_mxid(event_id, self.mxid, space)
+        tg_space = self.tgid if self.peer_type == "channel" else real_deleter.tgid
+        message = await DBMessage.get_by_mxid(event_id, self.mxid, tg_space)
         if not message:
-            raise Exception(f"Ignoring Matrix redaction of unknown event {event_id}")
+            await self._handle_matrix_reaction_deletion(real_deleter, event_id, tg_space)
         elif message.redacted:
-            raise Exception(
+            raise BridgingError(
                 "Ignoring Matrix redaction of already redacted event "
                 f"{message.mxid} in {message.mx_room}"
             )
         elif message.edit_index != 0:
             await message.mark_redacted()
-            raise Exception(
+            raise BridgingError(
                 f"Ignoring Matrix redaction of edit event {message.mxid} in {message.mx_room}"
             )
         else:
             await message.mark_redacted()
             await real_deleter.client.delete_messages(self.peer, [message.tgid])
+
+    async def handle_matrix_reaction(
+        self, user: u.User, target_event_id: EventID, reaction: str, reaction_event_id: EventID
+    ) -> None:
+        try:
+            async with self.reaction_lock(target_event_id):
+                await self._handle_matrix_reaction(
+                    user, target_event_id, reaction, reaction_event_id
+                )
+        except BridgingError as e:
+            self.log.debug(str(e))
+            await self._send_bridge_error(user, e, reaction_event_id, EventType.REACTION)
+        except ReactionInvalidError as e:
+            await self.main_intent.redact(self.mxid, reaction_event_id, reason="Emoji not allowed")
+            self.log.debug(f"Failed to bridge reaction by {user.mxid}: emoji not allowed")
+            await self._send_bridge_error(user, e, reaction_event_id, EventType.REACTION)
+        except Exception as e:
+            self.log.exception(f"Failed to bridge reaction by {user.mxid}")
+            await self._send_bridge_error(user, e, reaction_event_id, EventType.REACTION)
+        else:
+            user.send_remote_checkpoint(
+                MessageSendCheckpointStatus.SUCCESS,
+                reaction_event_id,
+                self.mxid,
+                EventType.REACTION,
+            )
+            await self._send_delivery_receipt(reaction_event_id)
+
+    async def _handle_matrix_reaction(
+        self, user: u.User, target_event_id: EventID, emoji: str, reaction_event_id: EventID
+    ) -> None:
+        tg_space = self.tgid if self.peer_type == "channel" else user.tgid
+        msg = await DBMessage.get_by_mxid(target_event_id, self.mxid, tg_space)
+        if not msg:
+            raise BridgingError(f"Ignoring Matrix reaction to unknown event {target_event_id}")
+        elif msg.redacted:
+            raise BridgingError(f"Ignoring Matrix reaction to redacted event {target_event_id}")
+        elif msg.edit_index != 0:
+            raise BridgingError(f"Ignoring Matrix reaction to edit event {target_event_id}")
+
+        emoji = variation_selector.remove(emoji)
+        existing_react = await DBReaction.get_by_sender(msg.mxid, msg.mx_room, user.tgid)
+        await user.client(SendReactionRequest(peer=self.peer, msg_id=msg.tgid, reaction=emoji))
+        if existing_react:
+            puppet = await user.get_puppet()
+            await puppet.intent_for(self).redact(existing_react.mx_room, existing_react.mxid)
+            existing_react.mxid = reaction_event_id
+            existing_react.reaction = emoji
+            await existing_react.save()
+        else:
+            await DBReaction(
+                mxid=reaction_event_id,
+                mx_room=self.mxid,
+                msg_mxid=msg.mxid,
+                tg_sender=user.tgid,
+                reaction=emoji,
+            ).save()
 
     async def _update_telegram_power_level(
         self, sender: u.User, user_id: TelegramID, level: int
@@ -2424,7 +2509,11 @@ class Portal(DBPortal, BasePortal):
                     prev_edit_msg = await DBMessage.get_one_by_tgid(
                         TelegramID(evt.id), tg_space, edit_index=-1
                     )
-                    if not prev_edit_msg:
+                    if (
+                        not prev_edit_msg
+                        or prev_edit_msg.mxid == mxid
+                        or prev_edit_msg.content_hash == event_hash
+                    ):
                         return
                     await DBMessage(
                         mxid=mxid,
@@ -2454,6 +2543,7 @@ class Portal(DBPortal, BasePortal):
                 f"Ignoring edit of message {evt.id}@{tg_space} (src {source.tgid}):"
                 " content hash didn't change"
             )
+            await DBMessage.delete_temp_mxid(temporary_identifier, self.mxid)
             return
 
         content.msgtype = (
