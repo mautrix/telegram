@@ -59,7 +59,7 @@ class MatrixParser(BaseMatrixParser[TelegramMessage]):
             displayname = user.plain_displayname or msg.text
             msg = TelegramMessage(displayname)
             try:
-                input_entity = self.client.get_input_entity(user.tgid)
+                input_entity = await self.client.get_input_entity(user.tgid)
             except (ValueError, TypeError) as e:
                 log.trace(f"Dropping mention of {user.tgid}: {e}")
             else:
