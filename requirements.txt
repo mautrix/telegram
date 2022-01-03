@@ -9,4 +9,5 @@ mautrix>=0.14.1,<0.15
 tulir-telethon==1.25.0a3
 asyncpg>=0.20,<0.26
 mako>=1,<2
+aiopath
 setuptools
