@@ -23,6 +23,7 @@ import os.path
 import shutil
 import tempfile
 
+from aiopath import AsyncPath
 from attr import dataclass
 
 log: logging.Logger = logging.getLogger("mau.util.tgs")
@@ -127,41 +128,50 @@ if lottieconverter and ffmpeg:
             )
             _, stderr = await proc.communicate(file)
             if proc.returncode == 0:
-                with open(f"{file_template}00.png", "rb") as first_frame_file:
-                    first_frame_data = first_frame_file.read()
-                proc = await asyncio.create_subprocess_exec(
-                    ffmpeg,
-                    "-hide_banner",
-                    "-loglevel",
-                    "error",
-                    "-framerate",
-                    str(fps),
-                    "-pattern_type",
-                    "glob",
-                    "-i",
-                    file_template + "*.png",
-                    "-c:v",
-                    "libvpx-vp9",
-                    "-pix_fmt",
-                    "yuva420p",
-                    "-f",
-                    "webm",
-                    "-",
-                    stdout=asyncio.subprocess.PIPE,
-                    stdin=asyncio.subprocess.PIPE,
-                )
-                stdout, stderr = await proc.communicate()
-                if proc.returncode == 0:
-                    return ConvertedSticker("video/webm", stdout, "image/png", first_frame_data)
-                else:
-                    log.error(
-                        "ffmpeg error: "
-                        + (
-                            stderr.decode("utf-8")
-                            if stderr is not None
-                            else f"unknown ({proc.returncode})"
-                        )
+                first_frame = None
+                # not sure if AsyncPath.glob sorts paths,
+                # but both glob.glob and Path.glob (pathlib) don't
+                async for f in AsyncPath(tmpdir).glob("out_*0.png"):
+                    if first_frame is None or first_frame.stem > f.stem:
+                        first_frame = f
+
+                if first_frame is not None:
+                    proc = await asyncio.create_subprocess_exec(
+                        ffmpeg,
+                        "-hide_banner",
+                        "-loglevel",
+                        "error",
+                        "-framerate",
+                        str(fps),
+                        "-pattern_type",
+                        "glob",
+                        "-i",
+                        file_template + "*.png",
+                        "-c:v",
+                        "libvpx-vp9",
+                        "-pix_fmt",
+                        "yuva420p",
+                        "-f",
+                        "webm",
+                        "-",
+                        stdout=asyncio.subprocess.PIPE,
+                        stdin=asyncio.subprocess.PIPE,
                     )
+                    stdout, stderr = await proc.communicate()
+                    if proc.returncode == 0:
+                        return ConvertedSticker("video/webm", stdout,
+                                                "image/png", await first_frame.read_bytes())
+                    else:
+                        log.error(
+                            "ffmpeg error: "
+                            + (
+                                stderr.decode("utf-8")
+                                if stderr is not None
+                                else f"unknown ({proc.returncode})"
+                            )
+                        )
+                else:
+                    log.error("lottieconverter error: unable to find output frames")
             else:
                 log.error(
                     "lottieconverter error: "
