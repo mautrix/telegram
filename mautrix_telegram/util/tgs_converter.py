@@ -159,8 +159,9 @@ if lottieconverter and ffmpeg:
                     )
                     stdout, stderr = await proc.communicate()
                     if proc.returncode == 0:
-                        return ConvertedSticker("video/webm", stdout,
-                                                "image/png", await first_frame.read_bytes())
+                        return ConvertedSticker(
+                            "video/webm", stdout, "image/png", await first_frame.read_bytes()
+                        )
                     else:
                         log.error(
                             "ffmpeg error: "
