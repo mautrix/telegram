@@ -1465,35 +1465,27 @@ class Portal(DBPortal, BasePortal):
             if content.get_edit():
                 orig_msg = await DBMessage.get_by_mxid(content.get_edit(), self.mxid, space)
                 if orig_msg:
-                    response = await client.edit_message(
+                    resp = await client.edit_message(
                         self.peer,
                         orig_msg.tgid,
                         message,
                         formatting_entities=entities,
                         link_preview=lp,
                     )
-                    await self._add_telegram_message_to_db(event_id, space, -1, response)
+                    await self._mark_matrix_handled(
+                        sender, EventType.ROOM_MESSAGE, event_id, space, -1, resp, content.msgtype
+                    )
                     return
-            try:
-                response = await client.send_message(
-                    self.peer,
-                    message,
-                    reply_to=reply_to,
-                    formatting_entities=entities,
-                    link_preview=lp,
-                )
-            except Exception:
-                raise
-            else:
-                sender.send_remote_checkpoint(
-                    MessageSendCheckpointStatus.SUCCESS,
-                    event_id,
-                    self.mxid,
-                    EventType.ROOM_MESSAGE,
-                    message_type=content.msgtype,
-                )
-                await self._add_telegram_message_to_db(event_id, space, 0, response)
-                await self._send_delivery_receipt(event_id)
+            response = await client.send_message(
+                self.peer,
+                message,
+                reply_to=reply_to,
+                formatting_entities=entities,
+                link_preview=lp,
+            )
+            await self._mark_matrix_handled(
+                sender, EventType.ROOM_MESSAGE, event_id, space, 0, response, content.msgtype
+            )
 
     async def _handle_matrix_file(
         self,
@@ -1569,7 +1561,9 @@ class Portal(DBPortal, BasePortal):
         )
 
         async with self.send_lock(sender_id):
-            if await self._matrix_document_edit(client, content, space, capt, media, event_id):
+            if await self._matrix_document_edit(
+                sender, client, content, space, capt, media, event_id
+            ):
                 return
             try:
                 try:
@@ -1590,18 +1584,13 @@ class Portal(DBPortal, BasePortal):
             except Exception:
                 raise
             else:
-                sender.send_remote_checkpoint(
-                    MessageSendCheckpointStatus.SUCCESS,
-                    event_id,
-                    self.mxid,
-                    EventType.ROOM_MESSAGE,
-                    message_type=content.msgtype,
+                await self._mark_matrix_handled(
+                    sender, EventType.ROOM_MESSAGE, event_id, space, 0, response, content.msgtype
                 )
-                await self._add_telegram_message_to_db(event_id, space, 0, response)
-                await self._send_delivery_receipt(event_id)
 
     async def _matrix_document_edit(
         self,
+        sender: u.User,
         client: MautrixTelegramClient,
         content: MessageEventContent,
         space: TelegramID,
@@ -1613,8 +1602,9 @@ class Portal(DBPortal, BasePortal):
             orig_msg = await DBMessage.get_by_mxid(content.get_edit(), self.mxid, space)
             if orig_msg:
                 response = await client.edit_message(self.peer, orig_msg.tgid, caption, file=media)
-                await self._add_telegram_message_to_db(event_id, space, -1, response)
-                await self._send_delivery_receipt(event_id)
+                await self._mark_matrix_handled(
+                    sender, EventType.ROOM_MESSAGE, event_id, space, -1, response, content.msgtype
+                )
                 return True
         return False
 
@@ -1639,7 +1629,9 @@ class Portal(DBPortal, BasePortal):
         media = MessageMediaGeo(geo=GeoPoint(lat=lat, long=long, access_hash=0))
 
         async with self.send_lock(sender_id):
-            if await self._matrix_document_edit(client, content, space, caption, media, event_id):
+            if await self._matrix_document_edit(
+                sender, client, content, space, caption, media, event_id
+            ):
                 return
             try:
                 response = await client.send_media(
@@ -1648,18 +1640,19 @@ class Portal(DBPortal, BasePortal):
             except Exception:
                 raise
             else:
-                await self._add_telegram_message_to_db(event_id, space, 0, response)
-                sender.send_remote_checkpoint(
-                    MessageSendCheckpointStatus.SUCCESS,
-                    event_id,
-                    self.mxid,
-                    EventType.ROOM_MESSAGE,
-                    message_type=content.msgtype,
+                await self._mark_matrix_handled(
+                    sender, EventType.ROOM_MESSAGE, event_id, space, 0, response, content.msgtype
                 )
-                await self._send_delivery_receipt(event_id)
 
-    async def _add_telegram_message_to_db(
-        self, event_id: EventID, space: TelegramID, edit_index: int, response: TypeMessage
+    async def _mark_matrix_handled(
+        self,
+        sender: u.User,
+        event_type: EventType,
+        event_id: EventID,
+        space: TelegramID,
+        edit_index: int,
+        response: TypeMessage,
+        msgtype: MessageType | None = None,
     ) -> None:
         self.log.trace("Handled Matrix message: %s", response)
         event_hash, _ = self.dedup.check(response, (event_id, space), force_hash=edit_index != 0)
@@ -1674,6 +1667,14 @@ class Portal(DBPortal, BasePortal):
             edit_index=edit_index,
             content_hash=event_hash,
         ).insert()
+        sender.send_remote_checkpoint(
+            MessageSendCheckpointStatus.SUCCESS,
+            event_id,
+            self.mxid,
+            event_type,
+            message_type=msgtype,
+        )
+        await self._send_delivery_receipt(event_id)
 
     async def _send_bridge_error(
         self,
