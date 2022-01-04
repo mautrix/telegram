@@ -43,9 +43,9 @@ async def upgrade_v1(conn: Connection, scheme: str) -> None:
 async def drop_constraints(conn: Connection, table: str, contype: str) -> None:
     q = (
         "SELECT conname FROM pg_constraint con INNER JOIN pg_class rel ON rel.oid=con.conrelid "
-        "WHERE rel.relname=$1 AND contype=$2"
+        f"WHERE rel.relname='{table}' AND contype='{contype}'"
     )
-    names = [row["conname"] for row in await conn.fetch(q, table, contype)]
+    names = [row["conname"] for row in await conn.fetch(q)]
     drops = ", ".join(f"DROP CONSTRAINT {name}" for name in names)
     await conn.execute(f"ALTER TABLE {table} {drops}")
 
