@@ -16,8 +16,8 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Any, Awaitable, Callable
+from pathlib import Path
 import asyncio.subprocess
 import logging
 import os.path
