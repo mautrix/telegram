@@ -16,6 +16,7 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any, Awaitable, Callable
 import asyncio.subprocess
 import logging
@@ -23,7 +24,6 @@ import os.path
 import shutil
 import tempfile
 
-from aiopath import AsyncPath
 from attr import dataclass
 
 log: logging.Logger = logging.getLogger("mau.util.tgs")
@@ -129,9 +129,7 @@ if lottieconverter and ffmpeg:
             _, stderr = await proc.communicate(file)
             if proc.returncode == 0:
                 first_frame = None
-                # not sure if AsyncPath.glob sorts paths,
-                # but both glob.glob and Path.glob (pathlib) don't
-                async for f in AsyncPath(tmpdir).glob("out_*0.png"):
+                for f in Path(tmpdir).glob("out_*0.png"):
                     if first_frame is None or first_frame.stem > f.stem:
                         first_frame = f
 
@@ -160,7 +158,7 @@ if lottieconverter and ffmpeg:
                     stdout, stderr = await proc.communicate()
                     if proc.returncode == 0:
                         return ConvertedSticker(
-                            "video/webm", stdout, "image/png", await first_frame.read_bytes()
+                            "video/webm", stdout, "image/png", first_frame.read_bytes()
                         )
                     else:
                         log.error(
