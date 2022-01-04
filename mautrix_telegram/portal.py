@@ -81,6 +81,7 @@ from telethon.tl.types import (
     ChatPhotoEmpty,
     Document,
     DocumentAttributeAnimated,
+    DocumentAttributeAudio,
     DocumentAttributeFilename,
     DocumentAttributeImageSize,
     DocumentAttributeSticker,
@@ -152,6 +153,7 @@ from telethon.tl.types import (
     UserProfilePhoto,
     UserProfilePhotoEmpty,
 )
+from telethon.utils import decode_waveform
 import magic
 
 from mautrix.appservice import DOUBLE_PUPPET_SOURCE_KEY, IntentAPI
@@ -230,6 +232,10 @@ class DocAttrs(NamedTuple):
     width: int
     height: int
     is_gif: bool
+    is_audio: bool
+    is_voice: bool
+    duration: int
+    waveform: bytes
 
 
 class Portal(DBPortal, BasePortal):
@@ -2175,7 +2181,7 @@ class Portal(DBPortal, BasePortal):
     @staticmethod
     def _parse_telegram_document_attributes(attributes: list[TypeDocumentAttribute]) -> DocAttrs:
         name, mime_type, is_sticker, sticker_alt, width, height = None, None, False, None, 0, 0
-        is_gif = False
+        is_gif, is_audio, is_voice, duration, waveform = False, False, False, 0, bytes()
         for attr in attributes:
             if isinstance(attr, DocumentAttributeFilename):
                 name = name or attr.file_name
@@ -2189,7 +2195,25 @@ class Portal(DBPortal, BasePortal):
                 width, height = attr.w, attr.h
             elif isinstance(attr, DocumentAttributeImageSize):
                 width, height = attr.w, attr.h
-        return DocAttrs(name, mime_type, is_sticker, sticker_alt, width, height, is_gif)
+            elif isinstance(attr, DocumentAttributeAudio):
+                is_audio = True
+                is_voice = attr.voice or False
+                duration = attr.duration
+                waveform = decode_waveform(attr.waveform) if attr.waveform else b""
+
+        return DocAttrs(
+            name,
+            mime_type,
+            is_sticker,
+            sticker_alt,
+            width,
+            height,
+            is_gif,
+            is_audio,
+            is_voice,
+            duration,
+            waveform,
+        )
 
     @staticmethod
     def _parse_telegram_document_meta(
@@ -2318,6 +2342,12 @@ class Portal(DBPortal, BasePortal):
                 "image/": MessageType.IMAGE,
             }.get(info.mimetype[:6], MessageType.FILE),
         )
+        if attrs.is_audio:
+            content["org.matrix.msc1767.audio"] = {"duration": attrs.duration * 1000}
+            if attrs.waveform:
+                content["org.matrix.msc1767.audio"]["waveform"] = [x << 5 for x in attrs.waveform]
+            if attrs.is_voice:
+                content["org.matrix.msc3245.voice"] = {}
         if file.decryption_info:
             content.file = file.decryption_info
         else:
