@@ -60,19 +60,10 @@ if TYPE_CHECKING:
 
 SearchResult = NamedTuple("SearchResult", puppet="pu.Puppet", similarity=int)
 
-METRIC_LOGGED_IN = Gauge("bridge_logged_in", "Users logged into bridge")
-METRIC_CONNECTED = Gauge("bridge_connected", "Users connected to Telegram")
-
 METRIC_LOGGED_IN = Gauge('bridge_logged_in', 'Users logged into bridge')
 METRIC_CONNECTED = Gauge('bridge_connected', 'Users connected to Telegram')
 METRIC_CONNECTING = Gauge('bridge_connecting', 'Users connecting to Telegram')
 
-BridgeState.human_readable_errors.update({
-    "tg-not-connected": "Your Telegram connection failed",
-    "tg-auth-key-duplicated": "The bridge accidentally logged you out",
-    "tg-not-authenticated": "The stored auth token did not work",
-    "tg-no-auth": "You're not logged in",
-})
 BridgeState.human_readable_errors.update(
     {
         "tg-not-connected": "Your Telegram connection failed",
