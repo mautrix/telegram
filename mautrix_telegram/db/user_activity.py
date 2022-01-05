@@ -58,14 +58,14 @@ class UserActivity:
         return cls._from_row(await cls.db.fetchrow(q, tgid, tg_receiver))
 
     @classmethod
-    def update_for_puppet(cls, puppet: 'Puppet', activity_dt: datetime) -> None:
+    async def update_for_puppet(cls, puppet: 'Puppet', activity_dt: datetime) -> None:
         activity_ts = int(activity_dt.timestamp() * 1000)
 
         if (time.time() * 1000) - activity_ts > UPPER_ACTIVITY_LIMIT_MS:
             return
 
         cls.log.debug(f"Updating activity time for {puppet.id} to {activity_ts}")
-        obj = cls.get_by_puppet_id(puppet.id)
+        obj = await cls.get_by_puppet_id(puppet.id)
         if obj:
             obj.update(activity_ts)
         else:

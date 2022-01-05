@@ -479,7 +479,7 @@ class AbstractUser(ABC):
             self.log.warning(f"Unexpected other user info update: {type(update)}")
 
     async def update_status(self, update: UpdateUserStatus) -> None:
-        if not config.get("bridge.handle_update_user_status", True):
+        if not self.config.get("bridge.handle_update_user_status", True):
             return
         puppet = await pu.Puppet.get_by_tgid(TelegramID(update.user_id))
         if isinstance(update.status, UserStatusOnline):
