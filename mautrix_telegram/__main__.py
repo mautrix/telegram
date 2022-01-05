@@ -23,7 +23,7 @@ from telethon import __version__ as __telethon_version__
 from mautrix.bridge import Bridge
 from mautrix.types import RoomID, UserID
 from mautrix.util.opt_prometheus import Gauge
-
+from time import time
 from .bot import Bot
 from .config import Config
 from .db import init as init_db, upgrade_table, UserActivity
@@ -143,10 +143,11 @@ class TelegramBridge(Bridge):
             async with semaphore:
                 return await task
 
+        print("foo")
+        async for user in User.all_with_tgid():
+            print(user)
 
-        return (user.try_ensure_started() async for user in User.all_with_tgid())
-
-        await asyncio.gather(*(sem_task(task) for task in tasks))
+        await asyncio.gather(*[sem_task(user.try_ensure_started()) async for user in User.all_with_tgid()])
 
     async def resend_bridge_info(self) -> None:
         self.config["bridge.resend_bridge_info"] = False
