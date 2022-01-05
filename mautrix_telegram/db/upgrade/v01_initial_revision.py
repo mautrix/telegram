@@ -13,6 +13,8 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
+from __future__ import annotations
+
 from asyncpg import Connection
 
 from . import upgrade_table
@@ -38,6 +40,16 @@ async def upgrade_v1(conn: Connection, scheme: str) -> None:
         await create_v1_tables(conn)
 
 
+async def drop_constraints(conn: Connection, table: str, contype: str) -> None:
+    q = (
+        "SELECT conname FROM pg_constraint con INNER JOIN pg_class rel ON rel.oid=con.conrelid "
+        f"WHERE rel.relname='{table}' AND contype='{contype}'"
+    )
+    names = [row["conname"] for row in await conn.fetch(q)]
+    drops = ", ".join(f"DROP CONSTRAINT {name}" for name in names)
+    await conn.execute(f"ALTER TABLE {table} {drops}")
+
+
 async def migrate_legacy_to_v1(conn: Connection, scheme: str) -> None:
     legacy_version = await conn.fetchval(legacy_version_query)
     if legacy_version != last_legacy_version:
@@ -46,28 +58,27 @@ async def migrate_legacy_to_v1(conn: Connection, scheme: str) -> None:
             "Please upgrade the old database with alembic or drop it completely first."
         )
     if scheme != "sqlite":
+        await drop_constraints(conn, "contact", contype="f")
         await conn.execute(
             """
             ALTER TABLE contact
-              DROP CONSTRAINT contact_user_fkey,
-              DROP CONSTRAINT contact_contact_fkey,
               ADD CONSTRAINT contact_user_fkey FOREIGN KEY (contact) REFERENCES puppet(id)
                 ON DELETE CASCADE ON UPDATE CASCADE,
               ADD CONSTRAINT contact_contact_fkey FOREIGN KEY ("user") REFERENCES "user"(tgid)
                 ON DELETE CASCADE ON UPDATE CASCADE
             """
         )
+        await drop_constraints(conn, "telethon_sessions", contype="p")
         await conn.execute(
             """
             ALTER TABLE telethon_sessions
-              DROP CONSTRAINT telethon_sessions_pkey,
               ADD CONSTRAINT telethon_sessions_pkey PRIMARY KEY (session_id)
             """
         )
+        await drop_constraints(conn, "telegram_file", contype="f")
         await conn.execute(
             """
             ALTER TABLE telegram_file
-              DROP CONSTRAINT fk_file_thumbnail,
               ADD CONSTRAINT fk_file_thumbnail
                 FOREIGN KEY (thumbnail) REFERENCES telegram_file(id)
                 ON UPDATE CASCADE ON DELETE SET NULL
