@@ -6,6 +6,7 @@
 * Fixed syncing contacts throwing an error for new accounts.
 * Fixed migrating from the legacy database if the database schema had been
   corrupted (e.g. by using 3rd party tools for SQLite -> Postgres migration).
+* Fixed converting animated stickers to webm with >33 FPS.
 
 # v0.11.0 (2021-12-28)
 
