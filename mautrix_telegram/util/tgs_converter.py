@@ -111,7 +111,7 @@ if lottieconverter and ffmpeg:
                     args=("-", file_template, "pngs", f"{width}x{height}", str(fps)),
                     input_data=file,
                 )
-                first_frame_name = sorted(os.listdir(tmpdir))[0]
+                first_frame_name = min(os.listdir(tmpdir))
                 with open(f"{tmpdir}/{first_frame_name}", "rb") as first_frame_file:
                     first_frame_data = first_frame_file.read()
                 webm_data = await ffmpeg.convert_path(
