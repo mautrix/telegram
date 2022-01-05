@@ -18,7 +18,7 @@ from asyncpg import Connection
 from . import upgrade_table
 
 legacy_version_query = "SELECT version_num FROM alembic_version"
-last_legacy_version = "bfc0a39bfe02"
+last_legacy_version = "143181919790"
 
 
 def table_exists(scheme: str, name: str) -> str:
