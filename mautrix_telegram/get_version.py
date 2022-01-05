@@ -1,6 +1,6 @@
-import subprocess
-import shutil
 import os
+import shutil
+import subprocess
 
 from . import __version__
 
@@ -14,6 +14,7 @@ cmd_env = {
 
 def run(cmd):
     return subprocess.check_output(cmd, stderr=subprocess.DEVNULL, env=cmd_env)
+
 
 if os.path.exists(".git") and shutil.which("git"):
     try:
@@ -33,8 +34,7 @@ else:
     git_revision_url = None
     git_tag = None
 
-git_tag_url = (f"https://github.com/mautrix/telegram/releases/tag/{git_tag}"
-               if git_tag else None)
+git_tag_url = f"https://github.com/mautrix/telegram/releases/tag/{git_tag}" if git_tag else None
 
 if git_tag and __version__ == git_tag[1:].replace("-", ""):
     version = __version__

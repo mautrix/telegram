@@ -33,14 +33,18 @@ appservice:
     # Usually 1 is enough, but on high-traffic bridges you might need to increase this to avoid 413s
     max_body_size: 1
 
-    # The full URI to the database. SQLite and Postgres are fully supported.
-    # Other DBMSes supported by SQLAlchemy may or may not work.
+    # The full URI to the database. SQLite and Postgres are supported.
     # Format examples:
     #   SQLite:   sqlite:///filename.db
     #   Postgres: postgres://username:password@hostname/dbname
-    database: sqlite:///mautrix-telegram.db
-    # Optional extra arguments for SQLAlchemy's create_engine
-    database_opts: {}
+    database: postgres://username:password@hostname/dbname
+    # Additional arguments for asyncpg.create_pool() or sqlite3.connect()
+    # https://magicstack.github.io/asyncpg/current/api/index.html#asyncpg.pool.create_pool
+    # https://docs.python.org/3/library/sqlite3.html#sqlite3.connect
+    # For sqlite, min_size is used as the connection thread pool size and max_size is ignored.
+    database_opts:
+        min_size: 1
+        max_size: 10
 
     # Public part of web server for out-of-Matrix interaction with the bridge.
     # Used for things like login if the user wants to make sure the 2FA password isn't stored in
@@ -280,6 +284,10 @@ bridge:
     archive_tag: null
     # Whether or not mute status and tags should only be bridged when the portal room is created.
     tag_only_on_create: true
+    # Should leaving the room on Matrix make the user leave on Telegram?
+    bridge_matrix_leave: true
+    # Should the user be kicked out of all portals when logging out of the bridge?
+    kick_on_logout: true
     # Settings for backfilling messages from Telegram.
     backfill:
         # Whether or not the Telegram ghosts of logged in Matrix users should be
@@ -325,16 +333,6 @@ bridge:
         #      notices from users listed here will be bridged.
         exceptions:
         - "@importantbot:example.com"
-
-    # Some config options related to Telegram message deduplication.
-    # The default values are usually fine, but some debug messages/warnings might recommend you
-    # change these.
-    deduplication:
-        # Whether or not to check the database if the message about to be sent is a duplicate.
-        pre_db_check: false
-        # The number of latest events to keep when checking for duplicates.
-        # You might need to increase this on high-traffic bridge instances.
-        cache_queue_length: 20
 
     # The formats to use when sending messages to Telegram via the relay bot.
     # Text msgtypes (m.text, m.notice and m.emote) support HTML, media msgtypes don't.

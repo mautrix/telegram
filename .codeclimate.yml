@@ -1,8 +1,0 @@
-engines:
-  sonar-python:
-    enabled: true
-    checks:
-      python:S107:
-        enabled: false
-exclude_patterns:
-- "alembic/"

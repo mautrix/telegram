@@ -1,5 +1,5 @@
 # mautrix-telegram - A Matrix-Telegram puppeting bridge
-# Copyright (C) 2019 Tulir Asokan
+# Copyright (C) 2021 Tulir Asokan
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as published by
@@ -13,38 +13,56 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import Any, Dict, Optional
+from __future__ import annotations
+
+from typing import Any
 import asyncio
 import io
 
-from telethon.errors import (  # isort: skip
-    AccessTokenExpiredError, AccessTokenInvalidError, FirstNameInvalidError, FloodWaitError,
-    PasswordHashInvalidError, PhoneCodeExpiredError, PhoneCodeInvalidError,
-    PhoneNumberAppSignupForbiddenError, PhoneNumberBannedError, PhoneNumberFloodError,
-    PhoneNumberOccupiedError, PhoneNumberUnoccupiedError, SessionPasswordNeededError,
-    PhoneNumberInvalidError)
+from telethon.errors import (
+    AccessTokenExpiredError,
+    AccessTokenInvalidError,
+    FirstNameInvalidError,
+    FloodWaitError,
+    PasswordHashInvalidError,
+    PhoneCodeExpiredError,
+    PhoneCodeInvalidError,
+    PhoneNumberAppSignupForbiddenError,
+    PhoneNumberBannedError,
+    PhoneNumberFloodError,
+    PhoneNumberInvalidError,
+    PhoneNumberOccupiedError,
+    PhoneNumberUnoccupiedError,
+    SessionPasswordNeededError,
+)
 from telethon.tl.types import User
 
-from mautrix.types import (EventID, UserID, MediaMessageEventContent, ImageInfo, MessageType,
-                           TextMessageEventContent)
+from mautrix.types import (
+    EventID,
+    ImageInfo,
+    MediaMessageEventContent,
+    MessageType,
+    TextMessageEventContent,
+    UserID,
+)
 from mautrix.util.format_duration import format_duration as fmt_duration
 
 from ... import user as u
+from ...commands import SECTION_AUTH, CommandEvent, command_handler
 from ...types import TelegramID
-from ...commands import command_handler, CommandEvent, SECTION_AUTH
 
 try:
-    import qrcode
-    import PIL as _
     from telethon.tl.custom import QRLogin
+    import PIL as _
+    import qrcode
 except ImportError:
     qrcode = None
     QRLogin = None
 
 
-@command_handler(needs_auth=False,
-                 help_section=SECTION_AUTH,
-                 help_text="Check if you're logged into Telegram.")
+@command_handler(
+    needs_auth=False, help_section=SECTION_AUTH, help_text="Check if you're logged into Telegram."
+)
 async def ping(evt: CommandEvent) -> EventID:
     if await evt.sender.is_logged_in():
         me = await evt.sender.get_me()
@@ -57,22 +75,30 @@ async def ping(evt: CommandEvent) -> EventID:
         return await evt.reply("You're not logged in.")
 
 
-@command_handler(needs_auth=False, needs_puppeting=False,
-                 help_section=SECTION_AUTH,
-                 help_text="Get the info of the message relay Telegram bot.")
+@command_handler(
+    needs_auth=False,
+    needs_puppeting=False,
+    help_section=SECTION_AUTH,
+    help_text="Get the info of the message relay Telegram bot.",
+)
 async def ping_bot(evt: CommandEvent) -> EventID:
     if not evt.tgbot:
         return await evt.reply("Telegram message relay bot not configured.")
     info, mxid = await evt.tgbot.get_me(use_cache=False)
-    return await evt.reply("Telegram message relay bot is active: "
-                           f"[{info.first_name}](https://matrix.to/#/{mxid}) (ID {info.id})\n\n"
-                           "To use the bot, simply invite it to a portal room.")
+    return await evt.reply(
+        "Telegram message relay bot is active: "
+        f"[{info.first_name}](https://matrix.to/#/{mxid}) (ID {info.id})\n\n"
+        "To use the bot, simply invite it to a portal room."
+    )
 
 
-@command_handler(needs_auth=False, management_only=True,
-                 help_section=SECTION_AUTH,
-                 help_args="<_phone_> <_full name_>",
-                 help_text="Register to Telegram")
+@command_handler(
+    needs_auth=False,
+    management_only=True,
+    help_section=SECTION_AUTH,
+    help_args="<_phone_> <_full name_>",
+    help_text="Register to Telegram",
+)
 async def register(evt: CommandEvent) -> EventID:
     if await evt.sender.is_logged_in():
         return await evt.reply("You are already logged in.")
@@ -85,13 +111,19 @@ async def register(evt: CommandEvent) -> EventID:
     else:
         full_name = " ".join(evt.args[1:-1]), evt.args[-1]
 
-    await _request_code(evt, phone_number, {
-        "next": enter_code_register,
-        "action": "Register",
-        "full_name": full_name,
-    })
-    return await evt.reply("By signing up for Telegram, you agree to "
-                           "the terms of service: https://telegram.org/tos")
+    await _request_code(
+        evt,
+        phone_number,
+        {
+            "next": enter_code_register,
+            "action": "Register",
+            "full_name": full_name,
+        },
+    )
+    return await evt.reply(
+        "By signing up for Telegram, you agree to "
+        "the terms of service: https://telegram.org/tos"
+    )
 
 
 async def enter_code_register(evt: CommandEvent) -> EventID:
@@ -101,31 +133,39 @@ async def enter_code_register(evt: CommandEvent) -> EventID:
         await evt.sender.ensure_started(even_if_no_session=True)
         first_name, last_name = evt.sender.command_status["full_name"]
         user = await evt.sender.client.sign_up(evt.args[0], first_name, last_name)
-        asyncio.ensure_future(evt.sender.post_login(user, first_login=True), loop=evt.loop)
+        asyncio.create_task(evt.sender.post_login(user, first_login=True))
         evt.sender.command_status = None
         return await evt.reply(f"Successfully registered to Telegram.")
     except PhoneNumberOccupiedError:
-        return await evt.reply("That phone number has already been registered. "
-                               "You can log in with `$cmdprefix+sp login`.")
+        return await evt.reply(
+            "That phone number has already been registered. "
+            "You can log in with `$cmdprefix+sp login`."
+        )
     except FirstNameInvalidError:
         return await evt.reply("Invalid name. Please set a Matrix displayname before registering.")
     except PhoneCodeExpiredError:
         return await evt.reply(
-            "Phone code expired. Try again with `$cmdprefix+sp register <phone>`.")
+            "Phone code expired. Try again with `$cmdprefix+sp register <phone>`."
+        )
     except PhoneCodeInvalidError:
         return await evt.reply("Invalid phone code.")
     except Exception:
         evt.log.exception("Error sending phone code")
-        return await evt.reply("Unhandled exception while sending code. "
-                               "Check console for more details.")
+        return await evt.reply(
+            "Unhandled exception while sending code. Check console for more details."
+        )
 
 
-@command_handler(needs_auth=False, management_only=True, help_section=SECTION_AUTH,
-                 help_text="Log in by scanning a QR code.")
+@command_handler(
+    needs_auth=False,
+    management_only=True,
+    help_section=SECTION_AUTH,
+    help_text="Log in by scanning a QR code.",
+)
 async def login_qr(evt: CommandEvent) -> EventID:
     login_as = evt.sender
     if len(evt.args) > 0 and evt.sender.is_admin:
-        login_as = u.User.get_by_mxid(UserID(evt.args[0]))
+        login_as = await u.User.get_by_mxid(UserID(evt.args[0]))
     if not qrcode or not QRLogin:
         return await evt.reply("This bridge instance does not support logging in with a QR code.")
     if await login_as.is_logged_in():
@@ -133,7 +173,7 @@ async def login_qr(evt: CommandEvent) -> EventID:
 
     await login_as.ensure_started(even_if_no_session=True)
     qr_login = QRLogin(login_as.client, ignored_ids=[])
-    qr_event_id: Optional[EventID] = None
+    qr_event_id: EventID | None = None
 
     async def upload_qr() -> None:
         nonlocal qr_event_id
@@ -143,9 +183,12 @@ async def login_qr(evt: CommandEvent) -> EventID:
         image.save(buffer, "PNG")
         qr = buffer.getvalue()
         mxc = await evt.az.intent.upload_media(qr, "image/png", "login-qr.png", len(qr))
-        content = MediaMessageEventContent(body=qr_login.url, url=mxc, msgtype=MessageType.IMAGE,
-                                           info=ImageInfo(mimetype="image/png", size=len(qr),
-                                                          width=size, height=size))
+        content = MediaMessageEventContent(
+            body=qr_login.url,
+            url=mxc,
+            msgtype=MessageType.IMAGE,
+            info=ImageInfo(mimetype="image/png", size=len(qr), width=size, height=size),
+        )
         if qr_event_id:
             content.set_edit(qr_event_id)
             await evt.az.intent.send_message(evt.room_id, content)
@@ -168,8 +211,9 @@ async def login_qr(evt: CommandEvent) -> EventID:
                 "login_as": login_as if login_as != evt.sender else None,
                 "action": "Login (password entry)",
             }
-            return await evt.reply("Your account has two-factor authentication. "
-                                   "Please send your password here.")
+            return await evt.reply(
+                "Your account has two-factor authentication. Please send your password here."
+            )
     else:
         timeout = TextMessageEventContent(body="Login timed out", msgtype=MessageType.TEXT)
         timeout.set_edit(qr_event_id)
@@ -178,13 +222,16 @@ async def login_qr(evt: CommandEvent) -> EventID:
     return await _finish_sign_in(evt, user, login_as=login_as)
 
 
-@command_handler(needs_auth=False, management_only=True,
-                 help_section=SECTION_AUTH,
-                 help_text="Get instructions on how to log in.")
+@command_handler(
+    needs_auth=False,
+    management_only=True,
+    help_section=SECTION_AUTH,
+    help_text="Get instructions on how to log in.",
+)
 async def login(evt: CommandEvent) -> EventID:
     override_sender = False
     if len(evt.args) > 0 and evt.sender.is_admin:
-        evt.sender = await u.User.get_by_mxid(UserID(evt.args[0])).ensure_started()
+        evt.sender = await u.User.get_and_start_by_mxid(UserID(evt.args[0]))
         override_sender = True
     if await evt.sender.is_logged_in():
         return await evt.reply(f"You are already logged in as {evt.sender.human_tg_id}.")
@@ -201,24 +248,32 @@ async def login(evt: CommandEvent) -> EventID:
         prefix = evt.config["appservice.public.external"]
         url = f"{prefix}/login?token={evt.public_website.make_token(evt.sender.mxid, '/login')}"
         if override_sender:
-            return await evt.reply(f"[Click here to log in]({url}) as "
-                                   f"[{evt.sender.mxid}](https://matrix.to/#/{evt.sender.mxid}).")
+            return await evt.reply(
+                f"[Click here to log in]({url}) as "
+                f"[{evt.sender.mxid}](https://matrix.to/#/{evt.sender.mxid})."
+            )
         elif allow_matrix_login:
-            return await evt.reply(f"[Click here to log in]({url}). Alternatively, send your phone"
-                                   f" number (or bot auth token) here to log in.\n\n{nb}")
+            return await evt.reply(
+                f"[Click here to log in]({url}). Alternatively, send your phone"
+                f" number (or bot auth token) here to log in.\n\n{nb}"
+            )
         return await evt.reply(f"[Click here to log in]({url}).\n\n{nb}")
     elif allow_matrix_login:
         if override_sender:
             return await evt.reply(
                 "This bridge instance does not allow you to log in outside of Matrix. "
-                "Logging in as another user inside Matrix is not currently possible.")
-        return await evt.reply("Please send your phone number (or bot auth token) here to start "
-                               f"the login process.\n\n{nb}")
+                "Logging in as another user inside Matrix is not currently possible."
+            )
+        return await evt.reply(
+            "Please send your phone number (or bot auth token) here to start "
+            f"the login process.\n\n{nb}"
+        )
     return await evt.reply("This bridge instance has been configured to not allow logging in.")
 
 
-async def _request_code(evt: CommandEvent, phone_number: str, next_status: Dict[str, Any]
-                        ) -> EventID:
+async def _request_code(
+    evt: CommandEvent, phone_number: str, next_status: dict[str, Any]
+) -> EventID:
     ok = False
     try:
         await evt.sender.ensure_started(even_if_no_session=True)
@@ -228,33 +283,42 @@ async def _request_code(evt: CommandEvent, phone_number: str, next_status: Dict[
     except PhoneNumberAppSignupForbiddenError:
         return await evt.reply("Your phone number does not allow 3rd party apps to sign in.")
     except PhoneNumberFloodError:
-        return await evt.reply("Your phone number has been temporarily blocked for flooding. "
-                               "The ban is usually applied for around a day.")
+        return await evt.reply(
+            "Your phone number has been temporarily blocked for flooding. "
+            "The ban is usually applied for around a day."
+        )
     except FloodWaitError as e:
-        return await evt.reply("Your phone number has been temporarily blocked for flooding. "
-                               f"Please wait for {fmt_duration(e.seconds)} before trying again.")
+        return await evt.reply(
+            "Your phone number has been temporarily blocked for flooding. "
+            f"Please wait for {fmt_duration(e.seconds)} before trying again."
+        )
     except PhoneNumberBannedError:
         return await evt.reply("Your phone number has been banned from Telegram.")
     except PhoneNumberUnoccupiedError:
-        return await evt.reply("That phone number has not been registered. "
-                               "Please register with `$cmdprefix+sp register <phone>`.")
+        return await evt.reply(
+            "That phone number has not been registered. "
+            "Please register with `$cmdprefix+sp register <phone>`."
+        )
     except PhoneNumberInvalidError:
         return await evt.reply("That phone number is not valid.")
     except Exception:
         evt.log.exception("Error requesting phone code")
-        return await evt.reply("Unhandled exception while requesting code. "
-                               "Check console for more details.")
+        return await evt.reply(
+            "Unhandled exception while requesting code. Check console for more details."
+        )
     finally:
         evt.sender.command_status = next_status if ok else None
 
 
 @command_handler(needs_auth=False)
-async def enter_phone_or_token(evt: CommandEvent) -> Optional[EventID]:
+async def enter_phone_or_token(evt: CommandEvent) -> EventID | None:
     if len(evt.args) == 0:
         return await evt.reply("**Usage:** `$cmdprefix+sp enter-phone-or-token <phone-or-token>`")
     elif not evt.config.get("bridge.allow_matrix_login", True):
-        return await evt.reply("This bridge instance does not allow in-Matrix login. "
-                               "Please use `$cmdprefix+sp login` to get login instructions")
+        return await evt.reply(
+            "This bridge instance does not allow in-Matrix login. "
+            "Please use `$cmdprefix+sp login` to get login instructions"
+        )
 
     # phone numbers don't contain colons but telegram bot auth tokens do
     if evt.args[0].find(":") > 0:
@@ -262,54 +326,61 @@ async def enter_phone_or_token(evt: CommandEvent) -> Optional[EventID]:
             await _sign_in(evt, bot_token=evt.args[0])
         except Exception:
             evt.log.exception("Error sending auth token")
-            return await evt.reply("Unhandled exception while sending auth token. "
-                                   "Check console for more details.")
+            return await evt.reply(
+                "Unhandled exception while sending auth token. Check console for more details."
+            )
     else:
-        await _request_code(evt, evt.args[0], {
-            "next": enter_code,
-            "action": "Login",
-        })
+        await _request_code(evt, evt.args[0], {"next": enter_code, "action": "Login"})
     return None
 
 
 @command_handler(needs_auth=False)
-async def enter_code(evt: CommandEvent) -> Optional[EventID]:
+async def enter_code(evt: CommandEvent) -> EventID | None:
     if len(evt.args) == 0:
         return await evt.reply("**Usage:** `$cmdprefix+sp enter-code <code>`")
     elif not evt.config.get("bridge.allow_matrix_login", True):
-        return await evt.reply("This bridge instance does not allow in-Matrix login. "
-                               "Please use `$cmdprefix+sp login` to get login instructions")
+        return await evt.reply(
+            "This bridge instance does not allow in-Matrix login. "
+            "Please use `$cmdprefix+sp login` to get login instructions"
+        )
     try:
         await _sign_in(evt, code=evt.args[0])
     except Exception:
         evt.log.exception("Error sending phone code")
-        return await evt.reply("Unhandled exception while sending code. "
-                               "Check console for more details.")
+        return await evt.reply(
+            "Unhandled exception while sending code. Check console for more details."
+        )
     return None
 
 
 @command_handler(needs_auth=False)
-async def enter_password(evt: CommandEvent) -> Optional[EventID]:
+async def enter_password(evt: CommandEvent) -> EventID | None:
     if len(evt.args) == 0:
         return await evt.reply("**Usage:** `$cmdprefix+sp enter-password <password>`")
     elif not evt.config.get("bridge.allow_matrix_login", True):
-        return await evt.reply("This bridge instance does not allow in-Matrix login. "
-                               "Please use `$cmdprefix+sp login` to get login instructions")
+        return await evt.reply(
+            "This bridge instance does not allow in-Matrix login. "
+            "Please use `$cmdprefix+sp login` to get login instructions"
+        )
     try:
-        await _sign_in(evt, login_as=evt.sender.command_status.get("login_as", None),
-                       password=" ".join(evt.args))
+        await _sign_in(
+            evt,
+            login_as=evt.sender.command_status.get("login_as", None),
+            password=" ".join(evt.args),
+        )
     except AccessTokenInvalidError:
         return await evt.reply("That bot token is not valid.")
     except AccessTokenExpiredError:
         return await evt.reply("That bot token has expired.")
     except Exception:
         evt.log.exception("Error sending password")
-        return await evt.reply("Unhandled exception while sending password. "
-                               "Check console for more details.")
+        return await evt.reply(
+            "Unhandled exception while sending password. Check console for more details."
+        )
     return None
 
 
-async def _sign_in(evt: CommandEvent, login_as: 'u.User' = None, **sign_in_info) -> EventID:
+async def _sign_in(evt: CommandEvent, login_as: u.User = None, **sign_in_info) -> EventID:
     login_as = login_as or evt.sender
     try:
         await login_as.ensure_started(even_if_no_session=True)
@@ -326,32 +397,34 @@ async def _sign_in(evt: CommandEvent, login_as: 'u.User' = None, **sign_in_info)
             "next": enter_password,
             "action": "Login (password entry)",
         }
-        return await evt.reply("Your account has two-factor authentication. "
-                               "Please send your password here.")
+        return await evt.reply(
+            "Your account has two-factor authentication. Please send your password here."
+        )
 
 
-async def _finish_sign_in(evt: CommandEvent, user: User, login_as: 'u.User' = None) -> EventID:
+async def _finish_sign_in(evt: CommandEvent, user: User, login_as: u.User = None) -> EventID:
     login_as = login_as or evt.sender
-    existing_user = u.User.get_by_tgid(TelegramID(user.id))
+    existing_user = await u.User.get_by_tgid(TelegramID(user.id))
     if existing_user and existing_user != login_as:
         await existing_user.log_out()
-        await evt.reply(f"[{existing_user.displayname}]"
-                        f"(https://matrix.to/#/{existing_user.mxid})"
-                        " was logged out from the account.")
-    asyncio.ensure_future(login_as.post_login(user, first_login=True), loop=evt.loop)
+        await evt.reply(
+            f"[{existing_user.displayname}] (https://matrix.to/#/{existing_user.mxid})"
+            " was logged out from the account."
+        )
+    asyncio.create_task(login_as.post_login(user, first_login=True))
     evt.sender.command_status = None
     name = f"@{user.username}" if user.username else f"+{user.phone}"
     if login_as != evt.sender:
-        msg = (f"Successfully logged in [{login_as.mxid}](https://matrix.to/#/{login_as.mxid})"
-               f" as {name}")
+        msg = (
+            f"Successfully logged in [{login_as.mxid}](https://matrix.to/#/{login_as.mxid})"
+            f" as {name}"
+        )
     else:
         msg = f"Successfully logged in as {name}"
     return await evt.reply(msg)
 
 
-@command_handler(needs_auth=False,
-                 help_section=SECTION_AUTH,
-                 help_text="Log out from Telegram.")
+@command_handler(needs_auth=False, help_section=SECTION_AUTH, help_text="Log out from Telegram.")
 async def logout(evt: CommandEvent) -> EventID:
     if not evt.sender.tgid:
         return await evt.reply("You're not logged in")

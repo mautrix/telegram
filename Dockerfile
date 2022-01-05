@@ -9,10 +9,6 @@ RUN apk add --no-cache \
       py3-pillow \
       py3-aiohttp \
       py3-magic \
-      py3-sqlalchemy \
-      py3-telethon-session-sqlalchemy \
-      py3-alembic \
-      py3-psycopg2 \
       py3-ruamel.yaml \
       py3-commonmark \
       py3-prometheus-client \
@@ -49,16 +45,13 @@ RUN apk add --no-cache \
 
 COPY requirements.txt /opt/mautrix-telegram/requirements.txt
 WORKDIR /opt/mautrix-telegram
+RUN apk add --virtual .build-deps python3-dev libffi-dev build-base \
+ && pip3 install -r requirements.txt -r optional-requirements.txt \
+ && apk del .build-deps
 
 COPY . /opt/mautrix-telegram
-RUN apk add git \
-  && apk add --virtual .build-deps python3-dev libffi-dev build-base \
-  && pip3 install .[speedups,hq_thumbnails,metrics,e2be] \
-  # TODO: unpin Pillow here after it's updated in Alpine
-  && pip3 install -r requirements.txt 'pillow==8.2' \
-  && pip3 install 'git+https://github.com/vector-im/mautrix-python@v0.11.4-mod-2#egg=mautrix' \
-  && apk del git \
-  && apk del .build-deps \
+RUN apk add git && pip3 install .[all] && apk del git \
+  # This doesn't make the image smaller, but it's needed so that the `version` command works properly
   && cp mautrix_telegram/example-config.yaml . && rm -rf mautrix_telegram
 
 VOLUME /data

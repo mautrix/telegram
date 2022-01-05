@@ -1,5 +1,5 @@
 # mautrix-telegram - A Matrix-Telegram puppeting bridge
-# Copyright (C) 2020 Tulir Asokan
+# Copyright (C) 2021 Tulir Asokan
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as published by
@@ -14,16 +14,24 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from typing import Any, List, NamedTuple
-from ruamel.yaml.comments import CommentedMap
 import os
 
-from mautrix.types import UserID
-from mautrix.client import Client
-from mautrix.bridge.config import BaseBridgeConfig
-from mautrix.util.config import ForbiddenKey, ForbiddenDefault, ConfigUpdateHelper
+from ruamel.yaml.comments import CommentedMap
 
-Permissions = NamedTuple("Permissions", relaybot=bool, user=bool, puppeting=bool,
-                         matrix_puppeting=bool, admin=bool, level=str)
+from mautrix.bridge.config import BaseBridgeConfig
+from mautrix.client import Client
+from mautrix.types import UserID
+from mautrix.util.config import ConfigUpdateHelper, ForbiddenDefault, ForbiddenKey
+
+Permissions = NamedTuple(
+    "Permissions",
+    relaybot=bool,
+    user=bool,
+    puppeting=bool,
+    matrix_puppeting=bool,
+    admin=bool,
+    level=str,
+)
 
 
 class Config(BaseBridgeConfig):
@@ -37,8 +45,15 @@ class Config(BaseBridgeConfig):
     def forbidden_defaults(self) -> List[ForbiddenDefault]:
         return [
             *super().forbidden_defaults,
-            ForbiddenDefault("appservice.public.external", "https://example.com/public",
-                             condition="appservice.public.enabled"),
+            ForbiddenDefault(
+                "appservice.database",
+                "postgres://username:password@hostname/dbname",
+            ),
+            ForbiddenDefault(
+                "appservice.public.external",
+                "https://example.com/public",
+                condition="appservice.public.enabled",
+            ),
             ForbiddenDefault("bridge.permissions", ForbiddenKey("example.com")),
             ForbiddenDefault("telegram.api_id", 12345),
             ForbiddenDefault("telegram.api_hash", "tjyd5yge35lbodk1xwzw2jstp90k55qz"),
@@ -51,8 +66,11 @@ class Config(BaseBridgeConfig):
         copy("homeserver.asmux")
 
         if "appservice.protocol" in self and "appservice.address" not in self:
-            protocol, hostname, port = (self["appservice.protocol"], self["appservice.hostname"],
-                                        self["appservice.port"])
+            protocol, hostname, port = (
+                self["appservice.protocol"],
+                self["appservice.hostname"],
+                self["appservice.port"],
+            )
             base["appservice.address"] = f"{protocol}://{hostname}:{port}"
         if "appservice.debug" in self and "logging" not in self:
             level = "DEBUG" if self["appservice.debug"] else "INFO"
@@ -69,6 +87,13 @@ class Config(BaseBridgeConfig):
         copy("appservice.provisioning.shared_secret")
         if base["appservice.provisioning.shared_secret"] == "generate":
             base["appservice.provisioning.shared_secret"] = self._new_token()
+
+        if "pool_size" in base["appservice.database_opts"]:
+            pool_size = base["appservice.database_opts"].pop("pool_size")
+            base["appservice.database_opts.min_size"] = pool_size
+            base["appservice.database_opts.max_size"] = pool_size
+        if "pool_pre_ping" in base["appservice.database_opts"]:
+            del base["appservice.database_opts.pool_pre_ping"]
 
         copy("appservice.community_id")
 
@@ -132,6 +157,8 @@ class Config(BaseBridgeConfig):
         copy("bridge.pinned_tag")
         copy("bridge.archive_tag")
         copy("bridge.tag_only_on_create")
+        copy("bridge.bridge_matrix_leave")
+        copy("bridge.kick_on_logout")
         copy("bridge.backfill.invite_own_puppet")
         copy("bridge.backfill.takeout_limit")
         copy("bridge.backfill.initial_limit")
@@ -151,9 +178,6 @@ class Config(BaseBridgeConfig):
             }
         else:
             copy("bridge.bridge_notices")
-
-        copy("bridge.deduplication.pre_db_check")
-        copy("bridge.deduplication.cache_queue_length")
 
         if "bridge.message_formats.m_text" in self:
             del self["bridge.message_formats"]
@@ -175,9 +199,11 @@ class Config(BaseBridgeConfig):
         copy("bridge.limits.puppet_inactivity_days")
         copy("bridge.limits.block_on_limit_reached")
 
-        migrate_permissions = ("bridge.permissions" not in self
-                               or "bridge.whitelist" in self
-                               or "bridge.admins" in self)
+        migrate_permissions = (
+            "bridge.permissions" not in self
+            or "bridge.whitelist" in self
+            or "bridge.admins" in self
+        )
         if migrate_permissions:
             permissions = self["bridge.permissions"] or CommentedMap()
             for entry in self["bridge.whitelist"] or []:

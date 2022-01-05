@@ -1,5 +1,5 @@
 # mautrix-telegram - A Matrix-Telegram puppeting bridge
-# Copyright (C) 2019 Tulir Asokan
+# Copyright (C) 2021 Tulir Asokan
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as published by
@@ -13,8 +13,12 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from mautrix.util.logging.color import (ColorFormatter as BaseColorFormatter,
-                                        PREFIX, MXID_COLOR, RESET)
+from mautrix.util.logging.color import (
+    MXID_COLOR,
+    PREFIX,
+    RESET,
+    ColorFormatter as BaseColorFormatter,
+)
 
 TELETHON_COLOR = PREFIX + "35;1m"  # magenta
 TELETHON_MODULE_COLOR = PREFIX + "35m"
@@ -24,7 +28,9 @@ class ColorFormatter(BaseColorFormatter):
     def _color_name(self, module: str) -> str:
         if module.startswith("telethon"):
             prefix, user_id, module = module.split(".", 2)
-            return (f"{TELETHON_COLOR}{prefix}{RESET}."
-                    f"{MXID_COLOR}{user_id}{RESET}."
-                    f"{TELETHON_MODULE_COLOR}{module}{RESET}")
+            return (
+                f"{TELETHON_COLOR}{prefix}{RESET}."
+                f"{MXID_COLOR}{user_id}{RESET}."
+                f"{TELETHON_MODULE_COLOR}{module}{RESET}"
+            )
         return super()._color_name(module)

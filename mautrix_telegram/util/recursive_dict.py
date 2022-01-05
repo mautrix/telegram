@@ -1,5 +1,5 @@
 # mautrix-telegram - A Matrix-Telegram puppeting bridge
-# Copyright (C) 2019 Tulir Asokan
+# Copyright (C) 2021 Tulir Asokan
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as published by
@@ -13,12 +13,14 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import Dict, Any
+from __future__ import annotations
+
+from typing import Any
 
 from mautrix.util.config import RecursiveDict
 
 
-def recursive_set(data: Dict[str, Any], key: str, value: Any) -> bool:
+def recursive_set(data: dict[str, Any], key: str, value: Any) -> bool:
     key, next_key = RecursiveDict.parse_key(key)
     if next_key is not None:
         if key not in data:
@@ -31,7 +33,7 @@ def recursive_set(data: Dict[str, Any], key: str, value: Any) -> bool:
     return True
 
 
-def recursive_get(data: Dict[str, Any], key: str) -> Any:
+def recursive_get(data: dict[str, Any], key: str) -> Any:
     key, next_key = RecursiveDict.parse_key(key)
     if next_key is not None:
         next_data = data.get(key, None)
@@ -41,7 +43,7 @@ def recursive_get(data: Dict[str, Any], key: str) -> Any:
     return data.get(key, None)
 
 
-def recursive_del(data: Dict[str, any], key: str) -> bool:
+def recursive_del(data: dict[str, any], key: str) -> bool:
     key, next_key = RecursiveDict.parse_key(key)
     if next_key is not None:
         if key not in data:

@@ -13,43 +13,28 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import Dict, Any
-import asyncio
-from time import time
-import sys
+from __future__ import annotations
 
+from typing import Any
+import asyncio
 import telethon
 from telethon import __version__ as __telethon_version__
-from alchemysession import AlchemySessionContainer
 
-from mautrix.types import UserID, RoomID
 from mautrix.bridge import Bridge
-from mautrix.util.db import Base
-from mautrix.util.opt_prometheus import Gauge
-from mautrix.bridge.state_store.sqlalchemy import SQLBridgeStateStore
+from mautrix.types import RoomID, UserID
 
+from .bot import Bot
+from .config import Config
+from .db import init as init_db, upgrade_table, UserActivity
+from .matrix import MatrixHandler
+from .portal import Portal
+from .puppet import Puppet
+from .user import User
+from .version import linkified_version, version
 from .web.provisioning import ProvisioningAPI
 from .web.public import PublicBridgeWebsite
-from .abstract_user import init as init_abstract_user
-from .bot import Bot, init as init_bot
-from .config import Config
-from .context import Context
-from .db import init as init_db
-from .db.user_activity import UserActivity
-from .formatter import init as init_formatter
-from .matrix import MatrixHandler
-from .portal import Portal, init as init_portal
-from .puppet import Puppet, init as init_puppet
-from .user import User, init as init_user
-from .version import version, linkified_version
 
-import sqlalchemy as sql
-from sqlalchemy.engine.base import Engine
-
-try:
-    import prometheus_client as prometheus
-except ImportError:
-    prometheus = None
+from .abstract_user import AbstractUser  # isort: skip
 
 ACTIVE_USER_METRICS_INTERVAL_S = 15 * 60 # 15 minutes
 METRIC_ACTIVE_PUPPETS = Gauge('bridge_active_puppets_total', 'Number of active Telegram users bridged into Matrix')
@@ -67,13 +52,13 @@ class TelegramBridge(Bridge):
     markdown_version = linkified_version
     config_class = Config
     matrix_class = MatrixHandler
-    state_store_class = SQLBridgeStateStore
+    upgrade_table = upgrade_table
 
     db: 'Engine'
     config: Config
-    context: Context
-    session_container: AlchemySessionContainer
-    bot: Bot
+    bot: Bot | None
+    public_website: PublicBridgeWebsite | None
+    provisioning_api: ProvisioningAPI | None
 
     periodic_active_metrics_task: asyncio.Task
     is_blocked: bool = False
@@ -97,36 +82,38 @@ class TelegramBridge(Bridge):
             sys.exit(10)
 
         init_db(self.db)
-        self.session_container = AlchemySessionContainer(
-            engine=self.db, table_base=Base, session=False,
-            table_prefix="telethon_", manage_tables=False)
-
-    def make_state_store(self) -> None:
-        self.state_store = self.state_store_class(self.get_puppet, self.get_double_puppet)
 
     def _prepare_website(self) -> None:
-        if self.config["appservice.public.enabled"]:
-            public_website = PublicBridgeWebsite(self.loop)
-            self.az.app.add_subapp(self.config["appservice.public.prefix"], public_website.app)
-            self.context.public_website = public_website
-
         if self.config["appservice.provisioning.enabled"]:
-            provisioning_api = ProvisioningAPI(self.context)
-            self.az.app.add_subapp(self.config["appservice.provisioning.prefix"],
-                                   provisioning_api.app)
-            self.context.provisioning_api = provisioning_api
+            self.provisioning_api = ProvisioningAPI(self)
+            self.az.app.add_subapp(
+                self.config["appservice.provisioning.prefix"], self.provisioning_api.app
+            )
+        else:
+            self.provisioning_api = None
+
+        if self.config["appservice.public.enabled"]:
+            self.public_website = PublicBridgeWebsite(self.loop)
+            self.az.app.add_subapp(
+                self.config["appservice.public.prefix"], self.public_website.app
+            )
+        else:
+            self.public_website = None
 
     def prepare_bridge(self) -> None:
-        self.bot = init_bot(self.config)
-        self.context = Context(self.az, self.config, self.loop, self.session_container, self, self.bot)
         self._prepare_website()
-        self.matrix = self.context.mx = MatrixHandler(self.context)
-
-        init_abstract_user(self.context)
-        init_formatter(self.context)
-        init_portal(self.context)
-        self.add_startup_actions(init_puppet(self.context))
-
+        AbstractUser.init_cls(self)
+        bot_token: str = self.config["telegram.bot_token"]
+        if bot_token and not bot_token.lower().startswith("disable"):
+            self.bot = AbstractUser.relaybot = Bot(bot_token)
+        else:
+            self.bot = AbstractUser.relaybot = None
+        self.matrix = MatrixHandler(self)
+        Portal.init_cls(self)
+        self.add_startup_actions(Puppet.init_cls(self))
+        self.add_startup_actions(User.init_cls(self))
+        if self.bot:
+            self.add_startup_actions(self.bot.start())
         if self.config["bridge.resend_bridge_info"]:
             self.add_startup_actions(self.resend_bridge_info())
 
@@ -169,7 +156,7 @@ class TelegramBridge(Bridge):
         self.config["bridge.resend_bridge_info"] = False
         self.config.save()
         self.log.info("Re-sending bridge info state event to all portals")
-        for portal in Portal.all():
+        async for portal in Portal.all():
             await portal.update_bridge_info()
         self.log.info("Finished re-sending bridge info state events")
 
@@ -184,19 +171,19 @@ class TelegramBridge(Bridge):
             puppet.stop()
         self.shutdown_actions = (user.stop() for user in User.by_tgid.values())
 
-    async def get_user(self, user_id: UserID, create: bool = True) -> User:
-        user = User.get_by_mxid(user_id, create=create)
+    async def get_user(self, user_id: UserID, create: bool = True) -> User | None:
+        user = await User.get_by_mxid(user_id, create=create)
         if user:
             await user.ensure_started()
         return user
 
-    async def get_portal(self, room_id: RoomID) -> Portal:
-        return Portal.get_by_mxid(room_id)
+    async def get_portal(self, room_id: RoomID) -> Portal | None:
+        return await Portal.get_by_mxid(room_id)
 
-    async def get_puppet(self, user_id: UserID, create: bool = False) -> Puppet:
+    async def get_puppet(self, user_id: UserID, create: bool = False) -> Puppet | None:
         return await Puppet.get_by_mxid(user_id, create=create)
 
-    async def get_double_puppet(self, user_id: UserID) -> Puppet:
+    async def get_double_puppet(self, user_id: UserID) -> Puppet | None:
         return await Puppet.get_by_custom_mxid(user_id)
 
     def is_bridge_ghost(self, user_id: UserID) -> bool:
@@ -263,6 +250,7 @@ class TelegramBridge(Bridge):
             await asyncio.sleep(15)
 
     async def manhole_global_namespace(self, user_id: UserID) -> Dict[str, Any]:
+    async def manhole_global_namespace(self, user_id: UserID) -> dict[str, Any]:
         return {
             **await super().manhole_global_namespace(user_id),
             "User": User,

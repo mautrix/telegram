@@ -1,1 +1,1 @@
-from .get_version import git_tag, git_revision, version, linkified_version
+from .get_version import git_revision, git_tag, linkified_version, version
