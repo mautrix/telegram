@@ -232,9 +232,9 @@ async def create_v1_tables(conn: Connection) -> None:
     )
     await conn.execute(
         """CREATE TABLE user_activity (
-            puppet_id: BIGINT PRIMARY KEY,
-            first_activity_ts: BIGINT,
-            last_activity_ts: BIGINT
+            puppet_id BIGINT PRIMARY KEY,
+            first_activity_ts BIGINT,
+            last_activity_ts BIGINT
         )"""
     )
     await conn.execute(

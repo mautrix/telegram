@@ -15,43 +15,29 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from __future__ import annotations
-from typing import Optional, Iterable
-
-from sqlalchemy import Column, Integer, BigInteger, func, select
-from sqlalchemy.ext.hybrid import hybrid_property
-
-from mautrix.util.db import Base
-from mautrix.util.logging import TraceLogger
-
-from ..types import TelegramID
+from typing import TYPE_CHECKING, ClassVar
+from asyncpg import Record
+from attr import dataclass
+from yarl import URL
 
 import logging
 import datetime
 import time
 
-UPPER_ACTIVITY_LIMIT_MS = 60 * 1000 * 5 # 5 minutes
-ONE_DAY_MS = 24 * 60 * 60 * 1000
-
-from __future__ import annotations
-
-from typing import TYPE_CHECKING, ClassVar
-
-from asyncpg import Record
-from attr import dataclass
-from yarl import URL
-
 from mautrix.types import SyncToken, UserID
 from mautrix.util.async_db import Database
-
+from mautrix.util.logging import TraceLogger
 from ..types import TelegramID
 
 fake_db = Database.create("") if TYPE_CHECKING else None
 
+UPPER_ACTIVITY_LIMIT_MS = 60 * 1000 * 5 # 5 minutes
+ONE_DAY_MS = 24 * 60 * 60 * 1000
 
 @dataclass
-class UserActivity(Base):
+class UserActivity:
     db: ClassVar[Database] = fake_db
-    log: TraceLogger = logging.getLogger("mau.user_activity")
+    log: ClassVar[TraceLogger] = logging.getLogger("mau.user_activity")
 
     puppet_id: TelegramID
     first_activity_ts: int | None
@@ -90,12 +76,8 @@ class UserActivity(Base):
             )
             obj.insert()
 
-    @hybrid_property
-    def activity_days(self):
-        return (self.last_activity_ts - self.first_activity_ts / 1000) / ONE_DAY_MS
-
     @classmethod
-    def get_active_count(cls, min_activity_days: int, max_activity_days: Optional[int]) -> int:
+    def get_active_count(cls, min_activity_days: int, max_activity_days: int | None) -> int:
         current_ms = time.time() * 1000
 
         query = "SELECT COUNT(*) FROM user_activity WHERE (last_activity_ts - first_activity_ts) > $2"
@@ -109,7 +91,7 @@ class UserActivity(Base):
 
         self.last_activity_ts = activity_ts
 
-        await self.db.execute("UPDATE user_activity SET last_activity_ts = $2 WHERE puppet_id=$1", self.puppet_id self.last_activity_ts)
+        await self.db.execute("UPDATE user_activity SET last_activity_ts = $2 WHERE puppet_id=$1", self.puppet_id, self.last_activity_ts)
 
     async def insert(self) -> None:
         await self.db.execute(

@@ -22,6 +22,7 @@ from telethon import __version__ as __telethon_version__
 
 from mautrix.bridge import Bridge
 from mautrix.types import RoomID, UserID
+from mautrix.util.opt_prometheus import Gauge
 
 from .bot import Bot
 from .config import Config
@@ -71,16 +72,7 @@ class TelegramBridge(Bridge):
     as_connection_metric_task: asyncio.Task = None
 
     def prepare_db(self) -> None:
-        if not sql:
-            raise RuntimeError("SQLAlchemy is not installed")
-        self.db = sql.create_engine(self.config["appservice.database"],
-                                    **self.config["appservice.database_opts"])
-        Base.metadata.bind = self.db
-        if not self.db.has_table("alembic_version"):
-            self.log.critical("alembic_version table not found. "
-                              "Did you forget to `alembic upgrade head`?")
-            sys.exit(10)
-
+        super().prepare_db()
         init_db(self.db)
 
     def _prepare_website(self) -> None:
@@ -111,6 +103,7 @@ class TelegramBridge(Bridge):
         self.matrix = MatrixHandler(self)
         Portal.init_cls(self)
         self.add_startup_actions(Puppet.init_cls(self))
+        # Note: In upstream this would start all the puppets, but in our fork we want to gracefully start the user puppets
         self.add_startup_actions(User.init_cls(self))
         if self.bot:
             self.add_startup_actions(self.bot.start())
@@ -150,7 +143,10 @@ class TelegramBridge(Bridge):
             async with semaphore:
                 return await task
 
-        await asyncio.gather(*(sem_task(task) for task in init_user(self.context)))
+
+        return (user.try_ensure_started() async for user in User.all_with_tgid())
+
+        await asyncio.gather(*(sem_task(task) for task in tasks))
 
     async def resend_bridge_info(self) -> None:
         self.config["bridge.resend_bridge_info"] = False
@@ -249,7 +245,6 @@ class TelegramBridge(Bridge):
 
             await asyncio.sleep(15)
 
-    async def manhole_global_namespace(self, user_id: UserID) -> Dict[str, Any]:
     async def manhole_global_namespace(self, user_id: UserID) -> dict[str, Any]:
         return {
             **await super().manhole_global_namespace(user_id),

@@ -149,13 +149,11 @@ class User(DBUser, AbstractUser, BaseUser):
         return self.displayname
 
     @classmethod
-    def init_cls(cls, bridge: "TelegramBridge") -> AsyncIterable[Awaitable[User]]:
+    async def init_cls(cls, bridge: "TelegramBridge") -> None:
         cls.config = bridge.config
         cls.bridge = bridge
         cls.az = bridge.az
         cls.loop = bridge.loop
-
-        return (user.try_ensure_started() async for user in cls.all_with_tgid())
 
     # region Telegram connection management
 

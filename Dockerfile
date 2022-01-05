@@ -1,5 +1,4 @@
-# Upstream uses 3.15, but that breaks our build.
-FROM dock.mau.dev/tulir/lottieconverter:alpine-3.14
+FROM dock.mau.dev/tulir/lottieconverter:alpine-3.15
 
 ARG TARGETARCH=amd64
 
@@ -43,7 +42,9 @@ RUN apk add --no-cache \
       jq \
       yq
 
+
 COPY requirements.txt /opt/mautrix-telegram/requirements.txt
+COPY optional-requirements.txt /opt/mautrix-telegram/optional-requirements.txt
 WORKDIR /opt/mautrix-telegram
 RUN apk add --virtual .build-deps python3-dev libffi-dev build-base \
  && pip3 install -r requirements.txt -r optional-requirements.txt \
