@@ -95,6 +95,10 @@ class Portal:
         rows = await cls.db.fetch(f"SELECT {cls.columns} FROM portal")
         return [cls._from_row(row) for row in rows]
 
+    @classmethod
+    async def count(cls) -> int:
+        return await cls.db.fetchval(f"SELECT COUNT(*) FROM portal")
+
     @property
     def _values(self):
         return (

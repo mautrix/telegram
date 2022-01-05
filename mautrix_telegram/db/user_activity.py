@@ -101,7 +101,7 @@ class UserActivity(Base):
         query = "SELECT COUNT(*) FROM user_activity WHERE (last_activity_ts - first_activity_ts) > $2"
         if max_activity_days is not None:
             query += " AND ($1 - last_activity_ts) <= $3"
-        return cls.db.execute(query, current_ms, ONE_DAY_MS * min_activity_days, max_activity_days * ONE_DAY_MS).scalar()
+        return cls.db.fetchval(query, current_ms, ONE_DAY_MS * min_activity_days, max_activity_days * ONE_DAY_MS)
 
     async def update(self, activity_ts: int) -> None:
         if self.last_activity_ts > activity_ts:

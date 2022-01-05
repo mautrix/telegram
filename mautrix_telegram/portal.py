@@ -503,6 +503,8 @@ class Portal(DBPortal, BasePortal):
             raise ValueError("Can't create Telegram chat for portal without Matrix room.")
         elif self.tgid:
             raise ValueError("Can't create Telegram chat for portal with existing Telegram chat.")
+        elif await self.reached_portal_limit():
+            raise ValueError("Can't create Telegram chat, reached portal limit.")
 
         if len(invites) < 2:
             if self.bot is not None:
@@ -726,6 +728,9 @@ class Portal(DBPortal, BasePortal):
 
         direct = self.peer_type == "user"
         invites = invites or []
+
+        if await self.reached_portal_limit():
+            raise ValueError("Can't create Telegram chat, reached portal limit.")
 
         if not entity:
             entity = await self.get_entity(user)
@@ -3362,5 +3367,13 @@ class Portal(DBPortal, BasePortal):
             tg_receiver=tg_receiver if type_name == "user" else entity_id,
             peer_type=type_name if create else None,
         )
+
+
+    @classmethod
+    async def reached_portal_limit(cls) -> bool:
+        limit = cls.config.get("bridge.max_portal_rooms", -1)
+        if limit == -1:
+            return False
+        return DBPortal.count() >= limit
 
     # endregion
