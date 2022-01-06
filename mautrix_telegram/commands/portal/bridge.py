@@ -100,8 +100,9 @@ async def bridge(evt: CommandEvent) -> EventID:
             "force_use_bot": force_use_bot,
         }
         if await po.Portal.reached_portal_limit():
-            return await evt.reply("This bridge has reached the maximum number of rooms that "
-                               "can be bridged.")
+            return await evt.reply(
+                "This bridge has reached the maximum number of rooms that " "can be bridged."
+            )
         return await evt.reply(
             f"{has_portal_message}"
             "However, you have the permissions to unbridge that room.\n\n"

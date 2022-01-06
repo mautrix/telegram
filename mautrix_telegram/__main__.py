@@ -37,11 +37,20 @@ from .web.public import PublicBridgeWebsite
 
 from .abstract_user import AbstractUser  # isort: skip
 
-ACTIVE_USER_METRICS_INTERVAL_S = 15 * 60 # 15 minutes
-METRIC_ACTIVE_PUPPETS = Gauge('bridge_active_puppets_total', 'Number of active Telegram users bridged into Matrix')
-METRIC_BLOCKING = Gauge('bridge_blocked', 'Is the bridge currently blocking messages')
-METRIC_AS_CONNECTIONS = Gauge('bridge_as_connections', 'Number of active/available TCP connections in Appservice\'s pool', ['status'])
-METRIC_BOT_STARTUP_OK = Gauge('bridge_bot_startup_ok', 'Whether or not the configured Telegram started up correctly')
+ACTIVE_USER_METRICS_INTERVAL_S = 15 * 60  # 15 minutes
+METRIC_ACTIVE_PUPPETS = Gauge(
+    "bridge_active_puppets_total", "Number of active Telegram users bridged into Matrix"
+)
+METRIC_BLOCKING = Gauge("bridge_blocked", "Is the bridge currently blocking messages")
+METRIC_AS_CONNECTIONS = Gauge(
+    "bridge_as_connections",
+    "Number of active/available TCP connections in Appservice's pool",
+    ["status"],
+)
+METRIC_BOT_STARTUP_OK = Gauge(
+    "bridge_bot_startup_ok", "Whether or not the configured Telegram started up correctly"
+)
+
 
 class TelegramBridge(Bridge):
     module = "mautrix_telegram"
@@ -55,7 +64,7 @@ class TelegramBridge(Bridge):
     matrix_class = MatrixHandler
     upgrade_table = upgrade_table
 
-    db: 'Engine'
+    db: "Engine"
     config: Config
     bot: Bot | None
     public_website: PublicBridgeWebsite | None
@@ -111,17 +120,21 @@ class TelegramBridge(Bridge):
             self.add_startup_actions(self.resend_bridge_info())
 
         # Explicitly not a startup_action, as startup_actions block startup
-        if self.config['bridge.limits.enable_activity_tracking'] is not False:
+        if self.config["bridge.limits.enable_activity_tracking"] is not False:
             self.periodic_sync_task = self.loop.create_task(self._loop_active_puppet_metric())
 
-        if self.config.get('telegram.liveness_timeout', 0) >= 1:
-            self.as_bridge_liveness_task = self.loop.create_task(self._loop_check_bridge_liveness())
+        if self.config.get("telegram.liveness_timeout", 0) >= 1:
+            self.as_bridge_liveness_task = self.loop.create_task(
+                self._loop_check_bridge_liveness()
+            )
 
     async def start(self) -> None:
         await super().start()
 
-        if self.config['metrics.enabled']:
-            self.as_connection_metric_task = self.loop.create_task(self._loop_check_as_connection_pool())
+        if self.config["metrics.enabled"]:
+            self.as_connection_metric_task = self.loop.create_task(
+                self._loop_check_as_connection_pool()
+            )
 
         if self.bot:
             try:
@@ -132,7 +145,7 @@ class TelegramBridge(Bridge):
                 METRIC_BOT_STARTUP_OK.set(0)
 
         semaphore = None
-        concurrency = self.config['telegram.connection.concurrent_connections_startup']
+        concurrency = self.config["telegram.connection.concurrent_connections_startup"]
         if concurrency:
             semaphore = asyncio.Semaphore(concurrency)
             await semaphore.acquire()
@@ -143,11 +156,9 @@ class TelegramBridge(Bridge):
             async with semaphore:
                 return await task
 
-        print("foo")
-        async for user in User.all_with_tgid():
-            print(user)
-
-        await asyncio.gather(*[sem_task(user.try_ensure_started()) async for user in User.all_with_tgid()])
+        await asyncio.gather(
+            *[sem_task(user.try_ensure_started()) async for user in User.all_with_tgid()]
+        )
 
     async def resend_bridge_info(self) -> None:
         self.config["bridge.resend_bridge_info"] = False
@@ -197,12 +208,12 @@ class TelegramBridge(Bridge):
 
     async def _update_active_puppet_metric(self) -> None:
         active_users = UserActivity.get_active_count(
-            self.config['bridge.limits.min_puppet_activity_days'],
-            self.config['bridge.limits.puppet_inactivity_days'],
+            self.config["bridge.limits.min_puppet_activity_days"],
+            self.config["bridge.limits.puppet_inactivity_days"],
         )
 
-        block_on_limit_reached = self.config['bridge.limits.block_on_limit_reached']
-        max_puppet_limit = self.config['bridge.limits.max_puppet_limit']
+        block_on_limit_reached = self.config["bridge.limits.block_on_limit_reached"]
+        max_puppet_limit = self.config["bridge.limits.max_puppet_limit"]
         if block_on_limit_reached and max_puppet_limit is not None:
             self.is_blocked = max_puppet_limit < active_users
             METRIC_BLOCKING.set(int(self.is_blocked))
@@ -232,8 +243,8 @@ class TelegramBridge(Bridge):
                 # inspired by its (also private) _available_connections()
                 active = len(connector._acquired)
 
-                METRIC_AS_CONNECTIONS.labels('active').set(active)
-                METRIC_AS_CONNECTIONS.labels('limit').set(limit)
+                METRIC_AS_CONNECTIONS.labels("active").set(active)
+                METRIC_AS_CONNECTIONS.labels("limit").set(limit)
             except Exception as e:
                 self.log.exception(f"Error while checking AS connection pool stats: {e}")
 
@@ -241,7 +252,11 @@ class TelegramBridge(Bridge):
 
     async def _loop_check_bridge_liveness(self) -> None:
         while True:
-            if self.latest_telegram_update_timestamp and self.latest_telegram_update_timestamp < time() - self.config.get('telegram.liveness_timeout'):
+            if (
+                self.latest_telegram_update_timestamp
+                and self.latest_telegram_update_timestamp
+                < time() - self.config.get("telegram.liveness_timeout")
+            ):
                 self.az.live = False
 
             await asyncio.sleep(15)

@@ -31,8 +31,9 @@ from ..types import TelegramID
 
 fake_db = Database.create("") if TYPE_CHECKING else None
 
-UPPER_ACTIVITY_LIMIT_MS = 60 * 1000 * 5 # 5 minutes
+UPPER_ACTIVITY_LIMIT_MS = 60 * 1000 * 5  # 5 minutes
 ONE_DAY_MS = 24 * 60 * 60 * 1000
+
 
 @dataclass
 class UserActivity:
@@ -58,7 +59,7 @@ class UserActivity:
         return cls._from_row(await cls.db.fetchrow(q, tgid, tg_receiver))
 
     @classmethod
-    async def update_for_puppet(cls, puppet: 'Puppet', activity_dt: datetime) -> None:
+    async def update_for_puppet(cls, puppet: "Puppet", activity_dt: datetime) -> None:
         activity_ts = int(activity_dt.timestamp() * 1000)
 
         if (time.time() * 1000) - activity_ts > UPPER_ACTIVITY_LIMIT_MS:
@@ -80,10 +81,14 @@ class UserActivity:
     def get_active_count(cls, min_activity_days: int, max_activity_days: int | None) -> int:
         current_ms = time.time() * 1000
 
-        query = "SELECT COUNT(*) FROM user_activity WHERE (last_activity_ts - first_activity_ts) > $2"
+        query = (
+            "SELECT COUNT(*) FROM user_activity WHERE (last_activity_ts - first_activity_ts) > $2"
+        )
         if max_activity_days is not None:
             query += " AND ($1 - last_activity_ts) <= $3"
-        return cls.db.fetchval(query, current_ms, ONE_DAY_MS * min_activity_days, max_activity_days * ONE_DAY_MS)
+        return cls.db.fetchval(
+            query, current_ms, ONE_DAY_MS * min_activity_days, max_activity_days * ONE_DAY_MS
+        )
 
     async def update(self, activity_ts: int) -> None:
         if self.last_activity_ts > activity_ts:
@@ -91,12 +96,16 @@ class UserActivity:
 
         self.last_activity_ts = activity_ts
 
-        await self.db.execute("UPDATE user_activity SET last_activity_ts = $2 WHERE puppet_id=$1", self.puppet_id, self.last_activity_ts)
+        await self.db.execute(
+            "UPDATE user_activity SET last_activity_ts = $2 WHERE puppet_id=$1",
+            self.puppet_id,
+            self.last_activity_ts,
+        )
 
     async def insert(self) -> None:
         await self.db.execute(
             f"INSERT INTO user_activity ({cls.columns}) VALUES ($1, $2, $3)",
             self.puppet_id,
             self.first_activity_ts,
-            self.last_activity_ts
+            self.last_activity_ts,
         )

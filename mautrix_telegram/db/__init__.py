@@ -28,7 +28,17 @@ from .user import User
 
 
 def init(db: Database) -> None:
-    for table in (Portal, Message, Reaction, User, Puppet, TelegramFile, BotChat, UserActivity, PgSession):
+    for table in (
+        Portal,
+        Message,
+        Reaction,
+        User,
+        Puppet,
+        TelegramFile,
+        BotChat,
+        UserActivity,
+        PgSession,
+    ):
         table.db = db
 
 

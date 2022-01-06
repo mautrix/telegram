@@ -2985,7 +2985,6 @@ class Portal(DBPortal, BasePortal):
         if not event_id:
             return
 
-
         if sender is not None:
             DBUserActivity.update_for_puppet(sender, evt.date)
 
@@ -3398,7 +3397,6 @@ class Portal(DBPortal, BasePortal):
             tg_receiver=tg_receiver if type_name == "user" else entity_id,
             peer_type=type_name if create else None,
         )
-
 
     @classmethod
     async def reached_portal_limit(cls) -> bool:
