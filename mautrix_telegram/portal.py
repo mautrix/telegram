@@ -81,6 +81,7 @@ from telethon.tl.types import (
     ChatPhotoEmpty,
     Document,
     DocumentAttributeAnimated,
+    DocumentAttributeAudio,
     DocumentAttributeFilename,
     DocumentAttributeImageSize,
     DocumentAttributeSticker,
@@ -152,6 +153,7 @@ from telethon.tl.types import (
     UserProfilePhoto,
     UserProfilePhotoEmpty,
 )
+from telethon.utils import decode_waveform
 import magic
 
 from mautrix.appservice import DOUBLE_PUPPET_SOURCE_KEY, IntentAPI
@@ -231,6 +233,10 @@ class DocAttrs(NamedTuple):
     width: int
     height: int
     is_gif: bool
+    is_audio: bool
+    is_voice: bool
+    duration: int
+    waveform: bytes
 
 
 class Portal(DBPortal, BasePortal):
@@ -1471,35 +1477,27 @@ class Portal(DBPortal, BasePortal):
             if content.get_edit():
                 orig_msg = await DBMessage.get_by_mxid(content.get_edit(), self.mxid, space)
                 if orig_msg:
-                    response = await client.edit_message(
+                    resp = await client.edit_message(
                         self.peer,
                         orig_msg.tgid,
                         message,
                         formatting_entities=entities,
                         link_preview=lp,
                     )
-                    await self._add_telegram_message_to_db(event_id, space, -1, response)
+                    await self._mark_matrix_handled(
+                        sender, EventType.ROOM_MESSAGE, event_id, space, -1, resp, content.msgtype
+                    )
                     return
-            try:
-                response = await client.send_message(
-                    self.peer,
-                    message,
-                    reply_to=reply_to,
-                    formatting_entities=entities,
-                    link_preview=lp,
-                )
-            except Exception:
-                raise
-            else:
-                sender.send_remote_checkpoint(
-                    MessageSendCheckpointStatus.SUCCESS,
-                    event_id,
-                    self.mxid,
-                    EventType.ROOM_MESSAGE,
-                    message_type=content.msgtype,
-                )
-                await self._add_telegram_message_to_db(event_id, space, 0, response)
-                await self._send_delivery_receipt(event_id)
+            response = await client.send_message(
+                self.peer,
+                message,
+                reply_to=reply_to,
+                formatting_entities=entities,
+                link_preview=lp,
+            )
+            await self._mark_matrix_handled(
+                sender, EventType.ROOM_MESSAGE, event_id, space, 0, response, content.msgtype
+            )
 
     async def _handle_matrix_file(
         self,
@@ -1575,7 +1573,9 @@ class Portal(DBPortal, BasePortal):
         )
 
         async with self.send_lock(sender_id):
-            if await self._matrix_document_edit(client, content, space, capt, media, event_id):
+            if await self._matrix_document_edit(
+                sender, client, content, space, capt, media, event_id
+            ):
                 return
             try:
                 try:
@@ -1596,18 +1596,13 @@ class Portal(DBPortal, BasePortal):
             except Exception:
                 raise
             else:
-                sender.send_remote_checkpoint(
-                    MessageSendCheckpointStatus.SUCCESS,
-                    event_id,
-                    self.mxid,
-                    EventType.ROOM_MESSAGE,
-                    message_type=content.msgtype,
+                await self._mark_matrix_handled(
+                    sender, EventType.ROOM_MESSAGE, event_id, space, 0, response, content.msgtype
                 )
-                await self._add_telegram_message_to_db(event_id, space, 0, response)
-                await self._send_delivery_receipt(event_id)
 
     async def _matrix_document_edit(
         self,
+        sender: u.User,
         client: MautrixTelegramClient,
         content: MessageEventContent,
         space: TelegramID,
@@ -1619,8 +1614,9 @@ class Portal(DBPortal, BasePortal):
             orig_msg = await DBMessage.get_by_mxid(content.get_edit(), self.mxid, space)
             if orig_msg:
                 response = await client.edit_message(self.peer, orig_msg.tgid, caption, file=media)
-                await self._add_telegram_message_to_db(event_id, space, -1, response)
-                await self._send_delivery_receipt(event_id)
+                await self._mark_matrix_handled(
+                    sender, EventType.ROOM_MESSAGE, event_id, space, -1, response, content.msgtype
+                )
                 return True
         return False
 
@@ -1645,7 +1641,9 @@ class Portal(DBPortal, BasePortal):
         media = MessageMediaGeo(geo=GeoPoint(lat=lat, long=long, access_hash=0))
 
         async with self.send_lock(sender_id):
-            if await self._matrix_document_edit(client, content, space, caption, media, event_id):
+            if await self._matrix_document_edit(
+                sender, client, content, space, caption, media, event_id
+            ):
                 return
             try:
                 response = await client.send_media(
@@ -1654,18 +1652,19 @@ class Portal(DBPortal, BasePortal):
             except Exception:
                 raise
             else:
-                await self._add_telegram_message_to_db(event_id, space, 0, response)
-                sender.send_remote_checkpoint(
-                    MessageSendCheckpointStatus.SUCCESS,
-                    event_id,
-                    self.mxid,
-                    EventType.ROOM_MESSAGE,
-                    message_type=content.msgtype,
+                await self._mark_matrix_handled(
+                    sender, EventType.ROOM_MESSAGE, event_id, space, 0, response, content.msgtype
                 )
-                await self._send_delivery_receipt(event_id)
 
-    async def _add_telegram_message_to_db(
-        self, event_id: EventID, space: TelegramID, edit_index: int, response: TypeMessage
+    async def _mark_matrix_handled(
+        self,
+        sender: u.User,
+        event_type: EventType,
+        event_id: EventID,
+        space: TelegramID,
+        edit_index: int,
+        response: TypeMessage,
+        msgtype: MessageType | None = None,
     ) -> None:
         self.log.trace("Handled Matrix message: %s", response)
         event_hash, _ = self.dedup.check(response, (event_id, space), force_hash=edit_index != 0)
@@ -1680,6 +1679,14 @@ class Portal(DBPortal, BasePortal):
             edit_index=edit_index,
             content_hash=event_hash,
         ).insert()
+        sender.send_remote_checkpoint(
+            MessageSendCheckpointStatus.SUCCESS,
+            event_id,
+            self.mxid,
+            event_type,
+            message_type=msgtype,
+        )
+        await self._send_delivery_receipt(event_id)
 
     async def _send_bridge_error(
         self,
@@ -2181,7 +2188,7 @@ class Portal(DBPortal, BasePortal):
     @staticmethod
     def _parse_telegram_document_attributes(attributes: list[TypeDocumentAttribute]) -> DocAttrs:
         name, mime_type, is_sticker, sticker_alt, width, height = None, None, False, None, 0, 0
-        is_gif = False
+        is_gif, is_audio, is_voice, duration, waveform = False, False, False, 0, bytes()
         for attr in attributes:
             if isinstance(attr, DocumentAttributeFilename):
                 name = name or attr.file_name
@@ -2195,7 +2202,25 @@ class Portal(DBPortal, BasePortal):
                 width, height = attr.w, attr.h
             elif isinstance(attr, DocumentAttributeImageSize):
                 width, height = attr.w, attr.h
-        return DocAttrs(name, mime_type, is_sticker, sticker_alt, width, height, is_gif)
+            elif isinstance(attr, DocumentAttributeAudio):
+                is_audio = True
+                is_voice = attr.voice or False
+                duration = attr.duration
+                waveform = decode_waveform(attr.waveform) if attr.waveform else b""
+
+        return DocAttrs(
+            name,
+            mime_type,
+            is_sticker,
+            sticker_alt,
+            width,
+            height,
+            is_gif,
+            is_audio,
+            is_voice,
+            duration,
+            waveform,
+        )
 
     @staticmethod
     def _parse_telegram_document_meta(
@@ -2324,6 +2349,12 @@ class Portal(DBPortal, BasePortal):
                 "image/": MessageType.IMAGE,
             }.get(info.mimetype[:6], MessageType.FILE),
         )
+        if attrs.is_audio:
+            content["org.matrix.msc1767.audio"] = {"duration": attrs.duration * 1000}
+            if attrs.waveform:
+                content["org.matrix.msc1767.audio"]["waveform"] = [x << 5 for x in attrs.waveform]
+            if attrs.is_voice:
+                content["org.matrix.msc3245.voice"] = {}
         if file.decryption_info:
             content.file = file.decryption_info
         else:

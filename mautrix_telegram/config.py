@@ -172,12 +172,10 @@ class Config(BaseBridgeConfig):
 
         copy("bridge.bot_messages_as_notices")
         if isinstance(self["bridge.bridge_notices"], bool):
-            base["bridge.bridge_notices"] = {
-                "default": self["bridge.bridge_notices"],
-                "exceptions": ["@importantbot:example.com"],
-            }
+            base["bridge.bridge_notices"]["default"] = self["bridge.bridge_notices"]
         else:
-            copy("bridge.bridge_notices")
+            copy("bridge.bridge_notices.default")
+            copy("bridge.bridge_notices.exceptions")
 
         if "bridge.message_formats.m_text" in self:
             del self["bridge.message_formats"]
@@ -212,7 +210,7 @@ class Config(BaseBridgeConfig):
                 permissions[entry] = "admin"
             base["bridge.permissions"] = permissions
         else:
-            copy_dict("bridge.permissions")
+            copy_dict("bridge.permissions", override_existing_map=True)
 
         if "bridge.relaybot" not in self:
             copy("bridge.authless_relaybot_portals", "bridge.relaybot.authless_portals")

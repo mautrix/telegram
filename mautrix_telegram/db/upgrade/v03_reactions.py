@@ -33,6 +33,7 @@ async def upgrade_v3(conn: Connection, scheme: str) -> None:
         )"""
     )
     if scheme != "sqlite":
+        await conn.execute("DELETE FROM message WHERE mxid IS NULL OR mx_room IS NULL")
         await conn.execute("ALTER TABLE message ALTER COLUMN mxid SET NOT NULL")
         await conn.execute("ALTER TABLE message ALTER COLUMN mx_room SET NOT NULL")
     await conn.execute("ALTER TABLE message ADD COLUMN content_hash bytea")
