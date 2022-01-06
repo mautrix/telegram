@@ -16,17 +16,19 @@
 from __future__ import annotations
 
 from typing import Any
+from time import time
 import asyncio
-import telethon
+
 from telethon import __version__ as __telethon_version__
+import telethon
 
 from mautrix.bridge import Bridge
 from mautrix.types import RoomID, UserID
 from mautrix.util.opt_prometheus import Gauge
-from time import time
+
 from .bot import Bot
 from .config import Config
-from .db import init as init_db, upgrade_table, UserActivity
+from .db import UserActivity, init as init_db, upgrade_table
 from .matrix import MatrixHandler
 from .portal import Portal
 from .puppet import Puppet

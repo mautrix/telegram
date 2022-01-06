@@ -15,18 +15,20 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from __future__ import annotations
+
 from typing import TYPE_CHECKING, ClassVar
+import datetime
+import logging
+import time
+
 from asyncpg import Record
 from attr import dataclass
 from yarl import URL
 
-import logging
-import datetime
-import time
-
 from mautrix.types import SyncToken, UserID
 from mautrix.util.async_db import Database
 from mautrix.util.logging import TraceLogger
+
 from ..types import TelegramID
 
 fake_db = Database.create("") if TYPE_CHECKING else None

@@ -15,7 +15,6 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from mautrix.util.async_db import Database
 
-from .user_activity import UserActivity
 from .bot_chat import BotChat
 from .message import Message
 from .portal import Portal
@@ -25,6 +24,7 @@ from .telegram_file import TelegramFile
 from .telethon_session import PgSession
 from .upgrade import upgrade_table
 from .user import User
+from .user_activity import UserActivity
 
 
 def init(db: Database) -> None:
