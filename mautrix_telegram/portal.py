@@ -3403,6 +3403,7 @@ class Portal(DBPortal, BasePortal):
         limit = cls.config.get("bridge.max_portal_rooms", -1)
         if limit == -1:
             return False
-        return DBPortal.count() >= limit
+        count = await DBPortal.count()
+        return count >= limit
 
     # endregion
