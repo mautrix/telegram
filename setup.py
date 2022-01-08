@@ -1,5 +1,4 @@
 import setuptools
-import glob
 
 from mautrix_telegram.get_version import git_tag, git_revision, version, linkified_version
 

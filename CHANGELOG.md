@@ -5,9 +5,14 @@
 * Improved support for voice messages.
 * Improved color of blue text from Telegram to be more readable on dark themes.
 * Fixed syncing contacts throwing an error for new accounts.
-* Fixed migrating from the legacy database if the database schema had been
+* Fixed migrating pre-v0.11 legacy databases if the database schema had been
   corrupted (e.g. by using 3rd party tools for SQLite -> Postgres migration).
 * Fixed converting animated stickers to webm with >33 FPS.
+* Fixed a bug in v0.11.0 that broke mentioning users in groups
+  (thanks to [@dfuchss] in [#724]).
+
+[@dfuchss]: https://github.com/dfuchss
+[#724]: https://github.com/mautrix/telegram/pull/724
 
 # v0.11.0 (2021-12-28)
 

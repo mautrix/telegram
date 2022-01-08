@@ -42,8 +42,8 @@ class MatrixParser(BaseMatrixParser[TelegramMessage]):
     async def custom_node_to_fstring(
         self, node: HTMLNode, ctx: RecursionContext
     ) -> TelegramMessage | None:
-        msg = await self.tag_aware_parse_node(node, ctx)
         if node.tag == "command":
+            msg = await self.tag_aware_parse_node(node, ctx)
             return msg.prepend("/").format(TelegramEntityType.COMMAND)
         return None
 
