@@ -290,10 +290,13 @@ async def _telegram_entities_to_matrix(
             skip_entity = await _parse_url(
                 html, entity_text, entity.url if entity_type == MessageEntityTextUrl else None
             )
-        elif entity_type == MessageEntityBotCommand:
-            html.append(f"<font color='blue'>{entity_text}</font>")
-        elif entity_type in (MessageEntityHashtag, MessageEntityCashtag, MessageEntityPhone):
-            html.append(f"<font color='blue'>{entity_text}</font>")
+        elif entity_type in (
+            MessageEntityBotCommand,
+            MessageEntityHashtag,
+            MessageEntityCashtag,
+            MessageEntityPhone,
+        ):
+            html.append(f"<font color='#3771bb'>{entity_text}</font>")
         elif entity_type == MessageEntitySpoiler:
             html.append(f"<span data-mx-spoiler>{entity_text}</span>")
         else:

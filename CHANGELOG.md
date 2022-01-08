@@ -3,6 +3,7 @@
 * Added support for message reactions.
 * Added support for spoiler text.
 * Improved support for voice messages.
+* Improved color of blue text from Telegram to be more readable on dark themes.
 * Fixed syncing contacts throwing an error for new accounts.
 * Fixed migrating from the legacy database if the database schema had been
   corrupted (e.g. by using 3rd party tools for SQLite -> Postgres migration).
