@@ -1,4 +1,4 @@
-# v0.11.1 (2021-01-??, unreleased)
+# v0.11.1 (2021-01-10)
 
 * Added support for message reactions.
 * Added support for spoiler text.
