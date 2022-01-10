@@ -208,6 +208,9 @@ async def join(evt: CommandEvent) -> EventID | None:
     link_type = data["type"]
     if link_type:
         link_type = link_type.lower()
+    elif identifier.startswith("+"):
+        link_type = "joinchat"
+        identifier = identifier[1:]
     updates, _ = await _join(evt, identifier, link_type)
     if not updates:
         return None
