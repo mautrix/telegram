@@ -24,6 +24,9 @@ setuptools.setup(
     name="mautrix-telegram",
     version=version,
     url="https://github.com/mautrix/telegram",
+    project_urls={
+        "Changelog": "https://github.com/mautrix/telegram/blob/master/CHANGELOG.md",
+    },
 
     author="Tulir Asokan",
     author_email="tulir@maunium.net",
@@ -37,9 +40,6 @@ setuptools.setup(
     install_requires=install_requires,
     python_requires="~=3.7",
 
-    setup_requires=["pytest-runner"],
-    tests_require=["pytest", "pytest-asyncio", "pytest-mock"],
-
     classifiers=[
         "Development Status :: 4 - Beta",
         "License :: OSI Approved :: GNU Affero General Public License v3 or later (AGPLv3+)",
@@ -47,17 +47,15 @@ setuptools.setup(
         "Framework :: AsyncIO",
         "Programming Language :: Python",
         "Programming Language :: Python :: 3",
-        "Programming Language :: Python :: 3.7",
         "Programming Language :: Python :: 3.8",
         "Programming Language :: Python :: 3.9",
+        "Programming Language :: Python :: 3.10",
     ],
     package_data={"mautrix_telegram": [
         "web/public/*.mako", "web/public/*.png", "web/public/*.css",
         "example-config.yaml",
     ]},
     data_files=[
-        (".", ["alembic.ini", "mautrix_telegram/example-config.yaml"]),
-        ("alembic", ["alembic/env.py"]),
-        ("alembic/versions", glob.glob("alembic/versions/*.py"))
+        (".", ["mautrix_telegram/example-config.yaml"]),
     ],
 )

@@ -1,5 +1,5 @@
 # mautrix-telegram - A Matrix-Telegram puppeting bridge
-# Copyright (C) 2019 Tulir Asokan
+# Copyright (C) 2021 Tulir Asokan
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as published by
@@ -13,69 +13,70 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import Optional, cast, Dict, Any, TYPE_CHECKING
+from __future__ import annotations
 
-from sqlalchemy import (Column, ForeignKey, Integer, BigInteger, String, Boolean, Text,
-                        TypeDecorator)
+from typing import TYPE_CHECKING, ClassVar
+
+from attr import dataclass
 
 from mautrix.types import ContentURI, EncryptedFile
-from mautrix.util.db import Base
+from mautrix.util.async_db import Database
 
-if TYPE_CHECKING:
-    from sqlalchemy.engine.result import RowProxy
-
-
-class DBEncryptedFile(TypeDecorator):
-    impl = Text
-
-    @property
-    def python_type(self):
-        return EncryptedFile
-
-    def process_bind_param(self, value: EncryptedFile, dialect) -> Optional[str]:
-        if value is not None:
-            return value.json()
-        return None
-
-    def process_result_value(self, value: str, dialect) -> Optional[EncryptedFile]:
-        if value is not None:
-            return EncryptedFile.parse_json(value)
-        return None
-
-    def process_literal_param(self, value, dialect):
-        return value
+fake_db = Database.create("") if TYPE_CHECKING else None
 
 
-class TelegramFile(Base):
-    __tablename__ = "telegram_file"
+@dataclass
+class TelegramFile:
+    db: ClassVar[Database] = fake_db
 
-    id: str = Column(String, primary_key=True)
-    mxc: ContentURI = Column(String)
-    mime_type: str = Column(String)
-    was_converted: bool = Column(Boolean)
-    timestamp: int = Column(BigInteger)
-    size: Optional[int] = Column(Integer, nullable=True)
-    width: Optional[int] = Column(Integer, nullable=True)
-    height: Optional[int] = Column(Integer, nullable=True)
-    decryption_info: Optional[Dict[str, Any]] = Column(DBEncryptedFile, nullable=True)
-    thumbnail_id: str = Column("thumbnail", String, ForeignKey("telegram_file.id"), nullable=True)
-    thumbnail: Optional['TelegramFile'] = None
+    id: str
+    mxc: ContentURI
+    mime_type: str
+    was_converted: bool
+    timestamp: int
+    size: int | None
+    width: int | None
+    height: int | None
+    decryption_info: EncryptedFile | None
+    thumbnail: TelegramFile | None = None
 
     @classmethod
-    def scan(cls, row: 'RowProxy') -> 'TelegramFile':
-        telegram_file = cast(TelegramFile, super().scan(row))
-        if isinstance(telegram_file.thumbnail, str):
-            telegram_file.thumbnail = cls.get(telegram_file.thumbnail)
-        return telegram_file
+    async def get(cls, loc_id: str, *, _thumbnail: bool = False) -> TelegramFile | None:
+        q = (
+            "SELECT id, mxc, mime_type, was_converted, timestamp, size, width, height, thumbnail,"
+            "       decryption_info "
+            "FROM telegram_file WHERE id=$1"
+        )
+        row = await cls.db.fetchrow(q, loc_id)
+        if row is None:
+            return None
+        data = {**row}
+        thumbnail_id = data.pop("thumbnail", None)
+        if _thumbnail:
+            # Don't allow more than one level of recursion
+            thumbnail_id = None
+        decryption_info = data.pop("decryption_info", None)
+        return cls(
+            **data,
+            thumbnail=(await cls.get(thumbnail_id, _thumbnail=True)) if thumbnail_id else None,
+            decryption_info=EncryptedFile.parse_json(decryption_info) if decryption_info else None,
+        )
 
-    @classmethod
-    def get(cls, loc_id: str) -> Optional['TelegramFile']:
-        return cls._select_one_or_none(cls.c.id == loc_id)
-
-    def insert(self) -> None:
-        with self.db.begin() as conn:
-            conn.execute(self.t.insert().values(
-                id=self.id, mxc=self.mxc, mime_type=self.mime_type,
-                was_converted=self.was_converted, timestamp=self.timestamp, size=self.size,
-                width=self.width, height=self.height, decryption_info=self.decryption_info,
-                thumbnail=self.thumbnail.id if self.thumbnail else self.thumbnail_id))
+    async def insert(self) -> None:
+        q = (
+            "INSERT INTO telegram_file (id, mxc, mime_type, was_converted, size, width, height, "
+            "                           thumbnail, decryption_info) "
+            "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)"
+        )
+        await self.db.execute(
+            q,
+            self.id,
+            self.mxc,
+            self.mime_type,
+            self.was_converted,
+            self.size,
+            self.width,
+            self.height,
+            self.thumbnail.id if self.thumbnail else None,
+            self.decryption_info.json() if self.decryption_info else None,
+        )

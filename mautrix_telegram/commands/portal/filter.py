@@ -1,5 +1,5 @@
 # mautrix-telegram - A Matrix-Telegram puppeting bridge
-# Copyright (C) 2019 Tulir Asokan
+# Copyright (C) 2021 Tulir Asokan
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as published by
@@ -13,17 +13,20 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
+from __future__ import annotations
+
 from mautrix.types import EventID
 
 from ... import portal as po
-from .. import command_handler, CommandEvent, SECTION_ADMIN
+from .. import SECTION_ADMIN, CommandEvent, command_handler
 
 
-@command_handler(needs_admin=True,
-                 help_section=SECTION_ADMIN,
-                 help_args="<`whitelist`|`blacklist`>",
-                 help_text="Change whether the bridge will allow or disallow bridging rooms by "
-                           "default.")
+@command_handler(
+    needs_admin=True,
+    help_section=SECTION_ADMIN,
+    help_args="<`whitelist`|`blacklist`>",
+    help_text="Change whether the bridge will allow or disallow bridging rooms by default.",
+)
 async def filter_mode(evt: CommandEvent) -> EventID:
     try:
         mode = evt.args[0]
@@ -36,19 +39,26 @@ async def filter_mode(evt: CommandEvent) -> EventID:
     evt.config.save()
     po.Portal.filter_mode = mode
     if mode == "whitelist":
-        return await evt.reply("The bridge will now disallow bridging chats by default.\n"
-                               "To allow bridging a specific chat, use"
-                               "`!filter whitelist <chat ID>`.")
+        return await evt.reply(
+            "The bridge will now disallow bridging chats by default.\n"
+            "To allow bridging a specific chat, use"
+            "`!filter whitelist <chat ID>`."
+        )
     else:
-        return await evt.reply("The bridge will now allow bridging chats by default.\n"
-                               "To disallow bridging a specific chat, use"
-                               "`!filter blacklist <chat ID>`.")
+        return await evt.reply(
+            "The bridge will now allow bridging chats by default.\n"
+            "To disallow bridging a specific chat, use"
+            "`!filter blacklist <chat ID>`."
+        )
 
 
-@command_handler(name="filter", needs_admin=True,
-                 help_section=SECTION_ADMIN,
-                 help_args="<`whitelist`|`blacklist`> <_chat ID_>",
-                 help_text="Allow or disallow bridging a specific chat.")
+@command_handler(
+    name="filter",
+    needs_admin=True,
+    help_section=SECTION_ADMIN,
+    help_args="<`whitelist`|`blacklist`> <_chat ID_>",
+    help_text="Allow or disallow bridging a specific chat.",
+)
 async def edit_filter(evt: CommandEvent) -> EventID:
     try:
         action = evt.args[0]
@@ -67,7 +77,7 @@ async def edit_filter(evt: CommandEvent) -> EventID:
 
     mode = evt.config["bridge.filter.mode"]
     if mode not in ("blacklist", "whitelist"):
-        return await evt.reply(f"Unknown filter mode \"{mode}\". Please fix the bridge config.")
+        return await evt.reply(f'Unknown filter mode "{mode}". Please fix the bridge config.')
 
     filter_id_list = evt.config["bridge.filter.list"]
 
