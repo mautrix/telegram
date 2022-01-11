@@ -113,9 +113,11 @@ from telethon.tl.types import (
     MessageMediaDocument,
     MessageMediaGame,
     MessageMediaGeo,
+    MessageMediaGeoLive,
     MessageMediaPhoto,
     MessageMediaPoll,
     MessageMediaUnsupported,
+    MessageMediaVenue,
     MessageReactions,
     MessageUserReaction,
     PeerChannel,
@@ -2362,9 +2364,9 @@ class Portal(DBPortal, BasePortal):
             res = await self._send_message(intent, caption_content, timestamp=evt.date)
         return res
 
-    def _handle_telegram_location(
-        self, source: au.AbstractUser, intent: IntentAPI, evt: Message, relates_to: RelatesTo
-    ) -> Awaitable[EventID]:
+    def _location_message_to_content(
+        self, evt: Message, relates_to: RelatesTo, note: str
+    ) -> LocationMessageEventContent:
         long = evt.media.geo.long
         lat = evt.media.geo.lat
         long_char = "E" if long > 0 else "W"
@@ -2377,13 +2379,32 @@ class Portal(DBPortal, BasePortal):
         content = LocationMessageEventContent(
             msgtype=MessageType.LOCATION,
             geo_uri=f"geo:{geo}",
-            body=f"Location: {body}\n{url}",
+            body=f"{note} {body}\n{url}",
             relates_to=relates_to,
             external_url=self._get_external_url(evt),
         )
         content["format"] = str(Format.HTML)
-        content["formatted_body"] = f"Location: <a href='{url}'>{body}</a>"
+        content["formatted_body"] = f"{note} <a href='{url}'>{body}</a>"
+        return content
 
+    def _handle_telegram_location(
+        self, source: au.AbstractUser, intent: IntentAPI, evt: Message, relates_to: RelatesTo
+    ) -> Awaitable[EventID]:
+        content = self._location_message_to_content(evt, relates_to, "Location:")
+        return self._send_message(intent, content, timestamp=evt.date)
+
+    def _handle_telegram_live_location(
+        self, source: au.AbstractUser, intent: IntentAPI, evt: Message, relates_to: RelatesTo
+    ) -> Awaitable[EventID]:
+        content = self._location_message_to_content(
+            evt, relates_to, "Live Location (see your Telegram client for live updates):"
+        )
+        return self._send_message(intent, content, timestamp=evt.date)
+
+    def _handle_telegram_venue(
+        self, source: au.AbstractUser, intent: IntentAPI, evt: Message, relates_to: RelatesTo
+    ) -> Awaitable[EventID]:
+        content = self._location_message_to_content(evt, relates_to, f"{evt.media.title}:")
         return self._send_message(intent, content, timestamp=evt.date)
 
     async def _handle_telegram_text(
@@ -2939,6 +2960,8 @@ class Portal(DBPortal, BasePortal):
             MessageMediaPhoto,
             MessageMediaDocument,
             MessageMediaGeo,
+            MessageMediaGeoLive,
+            MessageMediaVenue,
             MessageMediaGame,
             MessageMediaDice,
             MessageMediaPoll,
@@ -2961,6 +2984,8 @@ class Portal(DBPortal, BasePortal):
                 MessageMediaPhoto: self._handle_telegram_photo,
                 MessageMediaDocument: self._handle_telegram_document,
                 MessageMediaGeo: self._handle_telegram_location,
+                MessageMediaGeoLive: self._handle_telegram_live_location,
+                MessageMediaVenue: self._handle_telegram_venue,
                 MessageMediaPoll: self._handle_telegram_poll,
                 MessageMediaDice: self._handle_telegram_dice,
                 MessageMediaUnsupported: self._handle_telegram_unsupported,
