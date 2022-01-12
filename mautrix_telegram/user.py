@@ -240,7 +240,7 @@ class User(DBUser, AbstractUser, BaseUser):
                 )
             else:
                 await self.push_bridge_state(
-                    BridgeStateEvent.UNKNOWN_ERROR, ttl=240, error="tg-not-connected"
+                    BridgeStateEvent.TRANSIENT_DISCONNECT, ttl=240, error="tg-not-connected"
                 )
 
     async def fill_bridge_state(self, state: BridgeState) -> None:
