@@ -436,12 +436,11 @@ class Portal(DBPortal, BasePortal):
     # region Matrix -> Telegram metadata
 
     async def get_telegram_users_in_matrix_room(
-        self, source: u.User
+        self, source: u.User, pre_create: bool = False
     ) -> tuple[list[InputPeerUser], list[UserID]]:
         user_tgids = {}
-        user_mxids = await self.main_intent.get_room_members(
-            self.mxid, (Membership.JOIN, Membership.INVITE)
-        )
+        intent = self.az.intent if pre_create else self.main_intent
+        user_mxids = await intent.get_room_members(self.mxid, (Membership.JOIN, Membership.INVITE))
         for mxid in user_mxids:
             if mxid == self.az.bot_mxid:
                 continue
