@@ -16,3 +16,10 @@ jobs:
     - uses: psf/black@21.12b0
       with:
         src: "./mautrix_telegram"
+    - name: pre-commit
+      run: |
+        pip install pre-commit
+        pre-commit run -av trailing-whitespace
+        pre-commit run -av end-of-file-fixer
+        pre-commit run -av check-yaml
+        pre-commit run -av check-added-large-files

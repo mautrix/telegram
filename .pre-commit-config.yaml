@@ -1,0 +1,23 @@
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.1.0
+    hooks:
+      - id: trailing-whitespace
+        exclude_types: [markdown]
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-added-large-files
+  # TODO convert to use the upstream psf/black when
+  # https://github.com/psf/black/issues/2493 gets fixed
+  - repo: local
+    hooks:
+      - id: black
+        name: black
+        entry: black --check
+        language: system
+        files: ^mautrix_telegram/.*\.py$
+  - repo: https://github.com/PyCQA/isort
+    rev: 5.10.1
+    hooks:
+      - id: isort
+        files: ^mautrix_telegram/.*$
