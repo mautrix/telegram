@@ -2986,7 +2986,12 @@ class Portal(DBPortal, BasePortal):
             return
 
         if sender is not None:
-            DBUserActivity.update_for_puppet(sender, evt.date)
+            try:
+                await DBUserActivity.update_for_puppet(sender, evt.date)
+            except Exception as e:
+                self.log.debug(f"Failed to update puppet activity for {sender.tgid}: {e}")
+                # We don't care about failures here.
+                pass
 
         self._new_messages_after_sponsored = True
 
