@@ -5,7 +5,6 @@ ARG TARGETARCH=amd64
 RUN apk add --no-cache \
       python3 py3-pip py3-setuptools py3-wheel \
       py3-virtualenv \
-      py3-pillow \
       py3-aiohttp \
       py3-magic \
       py3-ruamel.yaml \
@@ -32,6 +31,10 @@ RUN apk add --no-cache \
       ca-certificates \
       su-exec \
       netcat-openbsd \
+      # for pillow
+      zlib-dev \
+      jpeg-dev \
+      libwebp-dev \
       # encryption
       py3-olm \
       py3-pycryptodome \
