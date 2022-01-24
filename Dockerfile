@@ -34,6 +34,7 @@ RUN apk add --no-cache \
       # for pillow
       zlib-dev \
       jpeg-dev \
+      libwebp-dev \
       # encryption
       py3-olm \
       py3-pycryptodome \
