@@ -17,7 +17,7 @@ All setup and usage instructions are located on
 Some quick links:
 
 * [Bridge setup](https://docs.mau.fi/bridges/python/setup/index.html?bridge=telegram)
-  (or [with Docker](https://docs.mau.fi/bridges/python/setup/docker.html?bridge=telegram))
+  (or [with Docker](https://docs.mau.fi/bridges/python/setup/docker.html?bridge=telegram), or [with Yunohost](https://github.com/YunoHost-Apps/mautrix_telegram_ynh))
 * Basic usage: [Authentication](https://docs.mau.fi/bridges/python/telegram/authentication.html),
   [Creating chats](https://docs.mau.fi/bridges/python/telegram/creating-and-managing-chats.html),
   [Relaybot setup](https://docs.mau.fi/bridges/python/telegram/relay-bot.html)
