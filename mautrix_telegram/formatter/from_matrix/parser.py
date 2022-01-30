@@ -20,7 +20,7 @@ import logging
 from telethon import TelegramClient
 
 from mautrix.types import RoomID, UserID
-from mautrix.util.formatter import MatrixParser as BaseMatrixParser, RecursionContext, HTMLNode
+from mautrix.util.formatter import HTMLNode, MatrixParser as BaseMatrixParser, RecursionContext
 from mautrix.util.logging import TraceLogger
 
 from ... import portal as po, puppet as pu, user as u

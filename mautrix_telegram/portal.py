@@ -1512,7 +1512,7 @@ class Portal(DBPortal, BasePortal):
         else:
             w = h = None
         file_name = content["net.maunium.telegram.internal.filename"]
-        max_image_size = self.config["bridge.image_as_file_size"] * 1000 ** 2
+        max_image_size = self.config["bridge.image_as_file_size"] * 1000**2
 
         if self.config["bridge.parallel_file_transfer"] and content.url:
             file_handle, file_size = await util.parallel_transfer_to_telegram(
@@ -2275,7 +2275,7 @@ class Portal(DBPortal, BasePortal):
 
         attrs = self._parse_telegram_document_attributes(document.attributes)
 
-        if document.size > self.config["bridge.max_document_size"] * 1000 ** 2:
+        if document.size > self.config["bridge.max_document_size"] * 1000**2:
             name = attrs.name or ""
             caption = f"\n{evt.message}" if evt.message else ""
             # TODO encrypt

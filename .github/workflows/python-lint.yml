@@ -13,9 +13,10 @@ jobs:
     - uses: isort/isort-action@master
       with:
         sortPaths: "./mautrix_telegram"
-    - uses: psf/black@21.12b0
+    - uses: psf/black@stable
       with:
         src: "./mautrix_telegram"
+        version: "22.1.0"
     - name: pre-commit
       run: |
         pip install pre-commit
