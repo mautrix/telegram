@@ -16,6 +16,7 @@
 from mautrix.util.async_db import Database
 
 from .bot_chat import BotChat
+from .disappearing_message import DisappearingMessage
 from .message import Message
 from .portal import Portal
 from .puppet import Puppet
@@ -27,7 +28,17 @@ from .user import User
 
 
 def init(db: Database) -> None:
-    for table in (Portal, Message, Reaction, User, Puppet, TelegramFile, BotChat, PgSession):
+    for table in (
+        Portal,
+        Message,
+        Reaction,
+        User,
+        Puppet,
+        TelegramFile,
+        BotChat,
+        PgSession,
+        DisappearingMessage,
+    ):
         table.db = db
 
 
@@ -42,4 +53,5 @@ __all__ = [
     "TelegramFile",
     "BotChat",
     "PgSession",
+    "DisappearingMessage",
 ]

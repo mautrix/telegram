@@ -195,6 +195,7 @@ from mautrix.util.simple_template import SimpleTemplate
 from . import abstract_user as au, formatter, portal_util as putil, puppet as p, user as u, util
 from .config import Config
 from .db import (
+    DisappearingMessage,
     Message as DBMessage,
     Portal as DBPortal,
     Reaction as DBReaction,
@@ -243,6 +244,7 @@ class DocAttrs(NamedTuple):
 class Portal(DBPortal, BasePortal):
     bot: "Bot"
     config: Config
+    disappearing_msg_class = DisappearingMessage
 
     # Instance cache
     by_mxid: dict[RoomID, Portal] = {}
@@ -321,6 +323,7 @@ class Portal(DBPortal, BasePortal):
             photo_id=photo_id,
             local_config=local_config or {},
         )
+        BasePortal.__init__(self)
         self.log = self.log.getChild(self.tgid_log if self.tgid else self.mxid)
         self._main_intent = None
         self.deleted = False
@@ -2106,15 +2109,6 @@ class Portal(DBPortal, BasePortal):
             return f"https://t.me/c/{self.tgid}/{evt.id}"
         return None
 
-    async def _expire_telegram_photo(self, intent: IntentAPI, event_id: EventID, ttl: int) -> None:
-        try:
-            content = TextMessageEventContent(msgtype=MessageType.NOTICE, body="Photo has expired")
-            content.set_edit(event_id)
-            await asyncio.sleep(ttl)
-            await self._send_message(intent, content)
-        except Exception:
-            self.log.warning("Failed to expire Telegram photo %s", event_id, exc_info=True)
-
     async def _handle_telegram_photo(
         self, source: au.AbstractUser, intent: IntentAPI, evt: Message, relates_to: RelatesTo
     ) -> EventID | None:
@@ -2171,13 +2165,15 @@ class Portal(DBPortal, BasePortal):
             content.url = file.mxc
         result = await self._send_message(intent, content, timestamp=evt.date)
         if media.ttl_seconds:
-            asyncio.create_task(self._expire_telegram_photo(intent, result, media.ttl_seconds))
+            await DisappearingMessage(self.mxid, result, media.ttl_seconds).insert()
         if evt.message:
             caption_content = await formatter.telegram_to_matrix(
                 evt, source, self.main_intent, no_reply_fallback=True
             )
             caption_content.external_url = content.external_url
             result = await self._send_message(intent, caption_content, timestamp=evt.date)
+            if media.ttl_seconds:
+                await DisappearingMessage(self.mxid, result, media.ttl_seconds).insert()
         return result
 
     @staticmethod
@@ -2355,12 +2351,16 @@ class Portal(DBPortal, BasePortal):
         else:
             content.url = file.mxc
         res = await self._send_message(intent, content, event_type=event_type, timestamp=evt.date)
+        if evt.media.ttl_seconds:
+            await DisappearingMessage(self.mxid, res, evt.media.ttl_seconds).insert()
         if evt.message:
             caption_content = await formatter.telegram_to_matrix(
                 evt, source, self.main_intent, no_reply_fallback=True
             )
             caption_content.external_url = content.external_url
             res = await self._send_message(intent, caption_content, timestamp=evt.date)
+            if evt.media.ttl_seconds:
+                await DisappearingMessage(self.mxid, res, evt.media.ttl_seconds).insert()
         return res
 
     def _location_message_to_content(
