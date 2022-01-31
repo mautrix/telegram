@@ -1516,6 +1516,7 @@ class Portal(DBPortal, BasePortal):
             w = h = None
         file_name = content["net.maunium.telegram.internal.filename"]
         max_image_size = self.config["bridge.image_as_file_size"] * 1000**2
+        max_image_pixels = self.config["bridge.image_as_file_pixels"]
 
         if self.config["bridge.parallel_file_transfer"] and content.url:
             file_handle, file_size = await util.parallel_transfer_to_telegram(
@@ -1548,12 +1549,14 @@ class Portal(DBPortal, BasePortal):
             file_size = len(file)
 
         file_handle.name = file_name
+        force_document = file_size >= max_image_size
 
         attributes = [DocumentAttributeFilename(file_name=file_name)]
         if w and h:
             attributes.append(DocumentAttributeImageSize(w, h))
+            force_document = force_document or w * h >= max_image_pixels
 
-        if (mime == "image/png" or mime == "image/jpeg") and file_size < max_image_size:
+        if (mime == "image/png" or mime == "image/jpeg") and not force_document:
             media = InputMediaUploadedPhoto(file_handle)
         else:
             media = InputMediaUploadedDocument(

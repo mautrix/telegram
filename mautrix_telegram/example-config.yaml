@@ -214,6 +214,8 @@ bridge:
     inline_images: false
     # Maximum size of image in megabytes before sending to Telegram as a document.
     image_as_file_size: 10
+    # Maximum number of pixels in an image before sending to Telegram as a document. Defaults to 1280x1280 = 1638400.
+    image_as_file_pixels: 1638400
     # Maximum size of Telegram documents in megabytes to bridge.
     max_document_size: 100
     # Enable experimental parallel file transfer, which makes uploads/downloads much faster by
