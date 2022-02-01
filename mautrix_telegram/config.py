@@ -183,6 +183,7 @@ class Config(BaseBridgeConfig):
             del self["bridge.message_formats"]
         copy_dict("bridge.message_formats", override_existing_map=False)
         copy("bridge.emote_format")
+        copy("bridge.relay_user_distinguishers")
 
         copy("bridge.state_event_formats.join")
         copy("bridge.state_event_formats.leave")

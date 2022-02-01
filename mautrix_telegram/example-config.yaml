@@ -330,9 +330,12 @@ bridge:
         # List of user IDs for whom the previous flag is flipped.
         # e.g. if bridge_notices.default is false, notices from other users will not be bridged, but
         #      notices from users listed here will be bridged.
-        exceptions:
-        - "@importantbot:example.com"
+        exceptions: []
 
+    # An array of possible values for the $distinguisher variable in message formats.
+    # Each user gets one of the values here, based on a hash of their user ID.
+    # If the array is empty, the $distinguisher variable will also be empty.
+    relay_user_distinguishers: ["🟦", "🟣", "🟩", "⭕️", "🔶", "⬛️", "🔵", "🟢"]
     # The formats to use when sending messages to Telegram via the relay bot.
     # Text msgtypes (m.text, m.notice and m.emote) support HTML, media msgtypes don't.
     #
@@ -340,16 +343,17 @@ bridge:
     #   $sender_displayname - The display name of the sender (e.g. Example User)
     #   $sender_username    - The username (Matrix ID localpart) of the sender (e.g. exampleuser)
     #   $sender_mxid        - The Matrix ID of the sender (e.g. @exampleuser:example.com)
+    #   $distinguisher      - A random string from the options in the relay_user_distinguishers array.
     #   $message            - The message content
     message_formats:
-        m.text: "<b>$sender_displayname</b>: $message"
-        m.notice: "<b>$sender_displayname</b>: $message"
-        m.emote: "* <b>$sender_displayname</b> $message"
-        m.file: "<b>$sender_displayname</b> sent a file: $message"
-        m.image: "<b>$sender_displayname</b> sent an image: $message"
-        m.audio: "<b>$sender_displayname</b> sent an audio file: $message"
-        m.video: "<b>$sender_displayname</b> sent a video: $message"
-        m.location: "<b>$sender_displayname</b> sent a location: $message"
+        m.text: "$distinguisher <b>$sender_displayname</b>: $message"
+        m.notice: "$distinguisher <b>$sender_displayname</b>: $message"
+        m.emote: "* $distinguisher <b>$sender_displayname</b> $message"
+        m.file: "$distinguisher <b>$sender_displayname</b> sent a file: $message"
+        m.image: "$distinguisher <b>$sender_displayname</b> sent an image: $message"
+        m.audio: "$distinguisher <b>$sender_displayname</b> sent an audio file: $message"
+        m.video: "$distinguisher <b>$sender_displayname</b> sent a video: $message"
+        m.location: "$distinguisher <b>$sender_displayname</b> sent a location: $message"
     # Telegram doesn't have built-in emotes, this field specifies how m.emote's from authenticated
     # users are sent to telegram. All fields in message_formats are supported. Additionally, the
     # Telegram user info is available in the following variables:
@@ -365,9 +369,9 @@ bridge:
     #
     # Set format to an empty string to disable the messages for that event.
     state_event_formats:
-        join: "<b>$displayname</b> joined the room."
-        leave: "<b>$displayname</b> left the room."
-        name_change: "<b>$prev_displayname</b> changed their name to <b>$displayname</b>"
+        join: "$distinguisher <b>$displayname</b> joined the room."
+        leave: "$distinguisher <b>$displayname</b> left the room."
+        name_change: "$distinguisher <b>$prev_displayname</b> changed their name to $distinguisher <b>$displayname</b>"
 
     # Filter rooms that can/can't be bridged. Can also be managed using the `filter` and
     # `filter-mode` management commands.
