@@ -2,6 +2,7 @@
 
 * Added simple fallback message for live location and venue messages from Telegram.
 * Added support for `t.me/+code` style invite links in `!tg join`.
+* Added support for showing channel profile when users send messages as a channel.
 * Fixed bug in v0.11.0 that broke `!tg create`.
 
 # v0.11.1 (2021-01-10)

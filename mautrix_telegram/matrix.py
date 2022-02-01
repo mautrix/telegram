@@ -1,5 +1,5 @@
 # mautrix-telegram - A Matrix-Telegram puppeting bridge
-# Copyright (C) 2021 Tulir Asokan
+# Copyright (C) 2022 Tulir Asokan
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as published by
@@ -66,11 +66,19 @@ class MatrixHandler(BaseMatrixHandler):
     ) -> None:
         intent = puppet.default_mxid_intent
         self.log.debug(f"{inviter.mxid} invited puppet for {puppet.tgid} to {room_id}")
+        if puppet.is_channel:
+            self.log.debug(f"Rejecting invite for {puppet.tgid} to {room_id}: puppet is a channel")
+            await intent.leave_room(room_id, reason="Channels can't be invited to chats")
+            return
+
         if not await inviter.is_logged_in():
-            await intent.error_and_leave(
-                room_id, text="Please log in before inviting Telegram puppets."
+            self.log.debug(f"Rejecting invite for {puppet.tgid} to {room_id}: user not logged in")
+            await intent.leave_room(
+                room_id,
+                reason="Only users who are logged into the bridge can invite Telegram ghosts.",
             )
             return
+
         portal = await po.Portal.get_by_mxid(room_id)
         if portal:
             if portal.peer_type == "user":

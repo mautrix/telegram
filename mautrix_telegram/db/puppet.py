@@ -1,5 +1,5 @@
 # mautrix-telegram - A Matrix-Telegram puppeting bridge
-# Copyright (C) 2021 Tulir Asokan
+# Copyright (C) 2022 Tulir Asokan
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as published by
@@ -45,6 +45,7 @@ class Puppet:
     username: str | None
     photo_id: str | None
     is_bot: bool | None
+    is_channel: bool
 
     custom_mxid: UserID | None
     access_token: str | None
@@ -61,7 +62,7 @@ class Puppet:
 
     columns: ClassVar[str] = (
         "id, is_registered, displayname, displayname_source, displayname_contact, "
-        "displayname_quality, disable_updates, username, photo_id, is_bot, "
+        "displayname_quality, disable_updates, username, photo_id, is_bot, is_channel, "
         "custom_mxid, access_token, next_batch, base_url"
     )
 
@@ -103,6 +104,7 @@ class Puppet:
             self.username,
             self.photo_id,
             self.is_bot,
+            self.is_channel,
             self.custom_mxid,
             self.access_token,
             self.next_batch,
@@ -114,7 +116,7 @@ class Puppet:
             "UPDATE puppet "
             "SET is_registered=$2, displayname=$3, displayname_source=$4, displayname_contact=$5,"
             "    displayname_quality=$6, disable_updates=$7, username=$8, photo_id=$9, is_bot=$10,"
-            "    custom_mxid=$11, access_token=$12, next_batch=$13, base_url=$14 "
+            "    is_channel=$11, custom_mxid=$12, access_token=$13, next_batch=$14, base_url=$15 "
             "WHERE id=$1"
         )
         await self.db.execute(q, *self._values)
@@ -123,8 +125,8 @@ class Puppet:
         q = (
             "INSERT INTO puppet ("
             "    id, is_registered, displayname, displayname_source, displayname_contact,"
-            "    displayname_quality, disable_updates, username, photo_id, is_bot,"
+            "    displayname_quality, disable_updates, username, photo_id, is_bot, is_channel,"
             "    custom_mxid, access_token, next_batch, base_url"
-            ") VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)"
+            ") VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)"
         )
         await self.db.execute(q, *self._values)

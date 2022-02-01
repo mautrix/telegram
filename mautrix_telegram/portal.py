@@ -1,5 +1,5 @@
 # mautrix-telegram - A Matrix-Telegram puppeting bridge
-# Copyright (C) 2021 Tulir Asokan
+# Copyright (C) 2022 Tulir Asokan
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as published by
@@ -561,6 +561,8 @@ class Portal(DBPortal, BasePortal):
         await self.update_bridge_info()
 
     async def invite_telegram(self, source: u.User, puppet: p.Puppet | au.AbstractUser) -> None:
+        if puppet.is_channel:
+            raise ValueError("Can't invite channels to chats")
         if self.peer_type == "chat":
             await source.client(
                 AddChatUserRequest(chat_id=self.tgid, user_id=puppet.tgid, fwd_limit=0)
@@ -945,11 +947,12 @@ class Portal(DBPortal, BasePortal):
             if user_mxid == self.az.bot_mxid:
                 continue
 
-            puppet_id = p.Puppet.get_id_from_mxid(user_mxid)
-            if puppet_id:
-                if puppet_id in allowed_tgids:
+            puppet = await p.Puppet.get_by_mxid(user_mxid)
+            if puppet:
+                # TODO figure out when/how to clean up channels from the member list
+                if puppet.id in allowed_tgids or puppet.is_channel:
                     continue
-                if self.bot and puppet_id == self.bot.tgid:
+                if self.bot and puppet.id == self.bot.tgid:
                     await self.bot.remove_chat(self.tgid)
                 try:
                     await self.main_intent.kick_user(
@@ -2737,8 +2740,8 @@ class Portal(DBPortal, BasePortal):
             messages = client.iter_messages(entity, reverse=True, min_id=min_id)
             async for message in messages:
                 sender = (
-                    await p.Puppet.get_by_tgid(TelegramID(message.from_id.user_id))
-                    if isinstance(message.from_id, PeerUser)
+                    await p.Puppet.get_by_peer(message.from_id)
+                    if isinstance(message.from_id, (PeerUser, PeerChannel))
                     else None
                 )
                 # TODO handle service messages?
@@ -2749,8 +2752,8 @@ class Portal(DBPortal, BasePortal):
             messages = await client.get_messages(entity, limit=limit)
             for message in reversed(messages):
                 sender = (
-                    await p.Puppet.get_by_tgid(TelegramID(message.from_id.user_id))
-                    if isinstance(message.from_id, PeerUser)
+                    await p.Puppet.get_by_peer(message.from_id)
+                    if isinstance(message.from_id, (PeerUser, PeerChannel))
                     else None
                 )
                 await self.handle_telegram_message(source, sender, message)
@@ -2840,10 +2843,9 @@ class Portal(DBPortal, BasePortal):
         self, msg: DBMessage, reaction_list: list[MessagePeerReaction], total_count: int
     ) -> None:
         reactions = {
-            reaction.peer_id.user_id: reaction.reaction
+            p.Puppet.get_id_from_peer(reaction.peer_id): reaction.reaction
             for reaction in reaction_list
-            # TODO allow PeerChannel once channel senders are properly supported
-            if isinstance(reaction.peer_id, PeerUser)
+            if isinstance(reaction.peer_id, (PeerUser, PeerChannel))
         }
         is_full = len(reactions) == total_count
 
@@ -2954,10 +2956,10 @@ class Portal(DBPortal, BasePortal):
 
         if sender and not sender.displayname:
             self.log.debug(
-                f"Telegram user {sender.tgid} sent a message, but doesn't have a "
-                "displayname, updating info..."
+                f"Telegram user {sender.tgid} sent a message, but doesn't have a displayname,"
+                " updating info..."
             )
-            entity = await source.client.get_entity(PeerUser(sender.tgid))
+            entity = await source.client.get_entity(sender.peer)
             await sender.update_info(source, entity)
             if not sender.displayname:
                 self.log.debug(

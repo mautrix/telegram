@@ -94,9 +94,7 @@ async def _add_forward_header(
             )
 
         if not fwd_from_text:
-            puppet = await pu.Puppet.get_by_tgid(
-                TelegramID(fwd_from.from_id.user_id), create=False
-            )
+            puppet = await pu.Puppet.get_by_peer(fwd_from.from_id, create=False)
             if puppet and puppet.displayname:
                 fwd_from_text = puppet.displayname or puppet.mxid
                 fwd_from_html = (

@@ -1,5 +1,5 @@
 # mautrix-telegram - A Matrix-Telegram puppeting bridge
-# Copyright (C) 2021 Tulir Asokan
+# Copyright (C) 2022 Tulir Asokan
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as published by
@@ -15,7 +15,7 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Type, Union
+from typing import TYPE_CHECKING, Any, Union
 from abc import ABC, abstractmethod
 import asyncio
 import logging
@@ -34,6 +34,7 @@ from telethon.tl.types import (
     Chat,
     MessageActionChannelMigrateFrom,
     MessageEmpty,
+    PeerChannel,
     PeerChat,
     PeerUser,
     TypeUpdate,
@@ -147,7 +148,7 @@ class AbstractUser(ABC):
         return self.client and self.client.is_connected()
 
     @property
-    def _proxy_settings(self) -> tuple[Type[Connection], tuple[Any, ...] | None]:
+    def _proxy_settings(self) -> tuple[type[Connection], tuple[Any, ...] | None]:
         proxy_type = self.config["telegram.proxy.type"].lower()
         connection = ConnectionTcpFull
         connection_data = (
@@ -385,7 +386,7 @@ class AbstractUser(ABC):
         if not message:
             return
 
-        puppet = await pu.Puppet.get_by_tgid(TelegramID(update.peer.user_id))
+        puppet = await pu.Puppet.get_by_peer(update.peer)
         await puppet.intent.mark_read(portal.mxid, message.mxid)
 
     async def update_own_read_receipt(
@@ -444,10 +445,7 @@ class AbstractUser(ABC):
             return
 
         if isinstance(update, (UpdateChannelUserTyping, UpdateChatUserTyping)):
-            # Can typing notifications come from non-user peers?
-            if not update.from_id.user_id:
-                return
-            sender = await pu.Puppet.get_by_tgid(TelegramID(update.from_id.user_id))
+            sender = await pu.Puppet.get_by_peer(update.from_id)
 
         if not sender or not portal or not portal.mxid:
             return
@@ -456,8 +454,8 @@ class AbstractUser(ABC):
 
     async def _handle_entity_updates(self, entities: dict[int, User | Chat | Channel]) -> None:
         try:
-            users = (entity for entity in entities.values() if isinstance(entity, User))
-            puppets = ((await pu.Puppet.get_by_tgid(TelegramID(user.id)), user) for user in users)
+            users = (entity for entity in entities.values() if isinstance(entity, (User, Channel)))
+            puppets = ((await pu.Puppet.get_by_peer(user), user) for user in users)
             await asyncio.gather(
                 *[puppet.try_update_info(self, info) async for puppet, info in puppets if puppet]
             )
@@ -515,8 +513,8 @@ class AbstractUser(ABC):
             portal = await po.Portal.get_by_entity(update.peer_id, tg_receiver=self.tgid)
             if update.out:
                 sender = await pu.Puppet.get_by_tgid(self.tgid)
-            elif isinstance(update.from_id, PeerUser):
-                sender = await pu.Puppet.get_by_tgid(TelegramID(update.from_id.user_id))
+            elif isinstance(update.from_id, (PeerUser, PeerChannel)):
+                sender = await pu.Puppet.get_by_peer(update.from_id)
             else:
                 sender = None
         else:
