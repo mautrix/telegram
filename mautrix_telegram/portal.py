@@ -106,6 +106,7 @@ from telethon.tl.types import (
     MessageActionChatEditTitle,
     MessageActionChatJoinedByLink,
     MessageActionChatMigrateTo,
+    MessageActionContactSignUp,
     MessageActionGameScore,
     MessageEntityPre,
     MessageMediaContact,
@@ -2771,26 +2772,39 @@ class Portal(DBPortal, BasePortal):
             self.log.debug(f"Iterating all messages starting with {min_id} (approx: {limit})")
             messages = client.iter_messages(entity, reverse=True, min_id=min_id)
             async for message in messages:
-                sender = (
-                    await p.Puppet.get_by_peer(message.from_id)
-                    if isinstance(message.from_id, (PeerUser, PeerChannel))
-                    else None
-                )
-                # TODO handle service messages?
-                await self.handle_telegram_message(source, sender, message)
+                await self._handle_telegram_backfill_message(source, message)
                 count += 1
         else:
             self.log.debug(f"Fetching up to {limit} most recent messages")
             messages = await client.get_messages(entity, limit=limit)
             for message in reversed(messages):
-                sender = (
-                    await p.Puppet.get_by_peer(message.from_id)
-                    if isinstance(message.from_id, (PeerUser, PeerChannel))
-                    else None
-                )
-                await self.handle_telegram_message(source, sender, message)
+                await self._handle_telegram_backfill_message(source, message)
                 count += 1
         return count
+
+    async def _handle_telegram_backfill_message(
+        self, source: au.AbstractUser, msg: Message | MessageService
+    ) -> None:
+        if msg.from_id and isinstance(msg.from_id, (PeerUser, PeerChannel)):
+            sender = await p.Puppet.get_by_peer(msg.from_id)
+        elif isinstance(msg.peer_id, PeerUser):
+            if msg.out:
+                sender = await p.Puppet.get_by_tgid(source.tgid)
+            else:
+                sender = await p.Puppet.get_by_peer(msg.peer_id)
+        else:
+            sender = None
+        if isinstance(msg, MessageService):
+            if isinstance(msg.action, MessageActionContactSignUp):
+                await self.handle_telegram_joined(source, sender, msg)
+            else:
+                self.log.debug(
+                    f"Unhandled service message {type(msg.action).__name__} in backfill"
+                )
+        elif isinstance(msg, Message):
+            await self.handle_telegram_message(source, sender, msg)
+        else:
+            self.log.debug(f"Unhandled message type {type(msg).__name__} in backfill")
 
     def _split_dm_reaction_counts(self, counts: list[ReactionCount]) -> list[MessagePeerReaction]:
         if len(counts) == 1:
@@ -3142,8 +3156,26 @@ class Portal(DBPortal, BasePortal):
         elif isinstance(action, MessageActionGameScore):
             # TODO handle game score
             pass
+        elif isinstance(action, MessageActionContactSignUp):
+            await self.handle_telegram_joined(source, sender, update)
         else:
             self.log.trace("Unhandled Telegram action in %s: %s", self.title, action)
+
+    async def handle_telegram_joined(
+        self, source: au.AbstractUser, sender: p.Puppet, update: MessageService
+    ) -> None:
+        assert isinstance(update.action, MessageActionContactSignUp)
+        content = TextMessageEventContent(msgtype=MessageType.EMOTE, body="joined Telegram")
+        event_id = await self._send_message(
+            sender.intent_for(self), content, timestamp=update.date
+        )
+        await DBMessage(
+            tgid=TelegramID(update.id),
+            mx_room=self.mxid,
+            mxid=event_id,
+            tg_space=source.tgid,
+            edit_index=0,
+        ).insert()
 
     async def set_telegram_admin(self, user_id: TelegramID) -> None:
         puppet = await p.Puppet.get_by_tgid(user_id)
