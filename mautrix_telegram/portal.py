@@ -2797,7 +2797,7 @@ class Portal(DBPortal, BasePortal):
             sender = None
         if isinstance(msg, MessageService):
             if isinstance(msg.action, MessageActionContactSignUp):
-                await self.handle_telegram_joined(source, sender, msg)
+                await self.handle_telegram_joined(source, sender, msg, backfill=True)
             else:
                 self.log.debug(
                     f"Unhandled service message {type(msg.action).__name__} in backfill"
@@ -3163,7 +3163,11 @@ class Portal(DBPortal, BasePortal):
             self.log.trace("Unhandled Telegram action in %s: %s", self.title, action)
 
     async def handle_telegram_joined(
-        self, source: au.AbstractUser, sender: p.Puppet, update: MessageService
+        self,
+        source: au.AbstractUser,
+        sender: p.Puppet,
+        update: MessageService,
+        backfill: bool = False,
     ) -> None:
         assert isinstance(update.action, MessageActionContactSignUp)
         content = TextMessageEventContent(msgtype=MessageType.EMOTE, body="joined Telegram")
@@ -3177,6 +3181,13 @@ class Portal(DBPortal, BasePortal):
             tg_space=source.tgid,
             edit_index=0,
         ).insert()
+        # Automatically mark the notice as read if we're backfilling messages, mostly so that
+        # empty rooms created before the notice was added wouldn't become unread when the notice
+        # is backfilled in.
+        if backfill:
+            double_puppet = await p.Puppet.get_by_tgid(source.tgid)
+            if double_puppet and double_puppet.is_real_user:
+                await double_puppet.intent.mark_read(self.mxid, event_id)
 
     async def set_telegram_admin(self, user_id: TelegramID) -> None:
         puppet = await p.Puppet.get_by_tgid(user_id)
