@@ -2152,6 +2152,7 @@ class Portal(DBPortal, BasePortal):
             return await self._send_message(
                 intent,
                 TextMessageEventContent(msgtype=MessageType.NOTICE, body="Photo has expired"),
+                timestamp=evt.date,
             )
         loc, largest_size = self._get_largest_photo_size(media.photo)
         if loc is None:
