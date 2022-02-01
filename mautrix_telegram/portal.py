@@ -118,8 +118,8 @@ from telethon.tl.types import (
     MessageMediaPoll,
     MessageMediaUnsupported,
     MessageMediaVenue,
+    MessagePeerReaction,
     MessageReactions,
-    MessageUserReaction,
     PeerChannel,
     PeerChat,
     PeerUser,
@@ -2757,31 +2757,33 @@ class Portal(DBPortal, BasePortal):
                 count += 1
         return count
 
-    def _split_dm_reaction_counts(self, counts: list[ReactionCount]) -> list[MessageUserReaction]:
+    def _split_dm_reaction_counts(self, counts: list[ReactionCount]) -> list[MessagePeerReaction]:
         if len(counts) == 1:
             item = counts[0]
             if item.count == 2:
                 return [
-                    MessageUserReaction(reaction=item.reaction, user_id=self.tgid),
-                    MessageUserReaction(reaction=item.reaction, user_id=self.tg_receiver),
+                    MessagePeerReaction(reaction=item.reaction, peer_id=PeerUser(self.tgid)),
+                    MessagePeerReaction(
+                        reaction=item.reaction, peer_id=PeerUser(self.tg_receiver)
+                    ),
                 ]
             elif item.count == 1:
                 return [
-                    MessageUserReaction(
+                    MessagePeerReaction(
                         reaction=item.reaction,
-                        user_id=self.tg_receiver if item.chosen else self.tgid,
+                        peer_id=PeerUser(self.tg_receiver if item.chosen else self.tgid),
                     ),
                 ]
         elif len(counts) == 2:
             item1, item2 = counts
             return [
-                MessageUserReaction(
+                MessagePeerReaction(
                     reaction=item1.reaction,
-                    user_id=self.tg_receiver if item1.chosen else self.tgid,
+                    peer_id=PeerUser(self.tg_receiver if item1.chosen else self.tgid),
                 ),
-                MessageUserReaction(
+                MessagePeerReaction(
                     reaction=item2.reaction,
-                    user_id=self.tg_receiver if item2.chosen else self.tgid,
+                    peer_id=PeerUser(self.tg_receiver if item2.chosen else self.tgid),
                 ),
             ]
         return []
@@ -2816,7 +2818,7 @@ class Portal(DBPortal, BasePortal):
                 return
 
         total_count = sum(item.count for item in data.results)
-        recent_reactions = data.recent_reactons or []
+        recent_reactions = data.recent_reactions or []
         if not recent_reactions and total_count > 0:
             if self.peer_type == "user":
                 recent_reactions = self._split_dm_reaction_counts(data.results)
@@ -2835,9 +2837,14 @@ class Portal(DBPortal, BasePortal):
             await self._handle_telegram_reactions_locked(dbm, recent_reactions, total_count)
 
     async def _handle_telegram_reactions_locked(
-        self, msg: DBMessage, reaction_list: list[MessageUserReaction], total_count: int
+        self, msg: DBMessage, reaction_list: list[MessagePeerReaction], total_count: int
     ) -> None:
-        reactions = {reaction.user_id: reaction.reaction for reaction in reaction_list}
+        reactions = {
+            reaction.peer_id.user_id: reaction.reaction
+            for reaction in reaction_list
+            # TODO allow PeerChannel once channel senders are properly supported
+            if isinstance(reaction.peer_id, PeerUser)
+        }
         is_full = len(reactions) == total_count
 
         existing_reactions = await DBReaction.get_all_by_message(msg.mxid, msg.mx_room)
