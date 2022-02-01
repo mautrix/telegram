@@ -147,6 +147,7 @@ from telethon.tl.types import (
     TypePhotoSize,
     TypeUser,
     TypeUserFull,
+    TypeUserProfilePhoto,
     UpdateChannelUserTyping,
     UpdateChatUserTyping,
     UpdateNewMessage,
@@ -305,6 +306,8 @@ class Portal(DBPortal, BasePortal):
         title: str | None = None,
         about: str | None = None,
         photo_id: str | None = None,
+        name_set: bool = False,
+        avatar_set: bool = False,
         local_config: dict[str, Any] | None = None,
     ) -> None:
         super().__init__(
@@ -322,6 +325,8 @@ class Portal(DBPortal, BasePortal):
             title=title,
             about=about,
             photo_id=photo_id,
+            name_set=name_set,
+            avatar_set=avatar_set,
             local_config=local_config or {},
         )
         BasePortal.__init__(self)
@@ -636,14 +641,7 @@ class Portal(DBPortal, BasePortal):
                 puppet = await p.Puppet.get_by_tgid(self.tgid)
             await puppet.update_info(user, entity)
             await puppet.intent_for(self).join_room(self.mxid)
-            if self.encrypted or self.private_chat_portal_meta:
-                # The bridge bot needs to join for e2ee, but that messes up the default name
-                # generation. If/when canonical DMs happen, this might not be necessary anymore.
-                changed = await self._update_title(puppet.displayname)
-                changed = await self._update_avatar(user, entity.photo) or changed
-                if changed:
-                    await self.save()
-                    await self.update_bridge_info()
+            await self.update_info_from_puppet(puppet, user, entity.photo)
 
             puppet = await p.Puppet.get_by_custom_mxid(user.mxid)
             if puppet:
@@ -656,6 +654,22 @@ class Portal(DBPortal, BasePortal):
 
         if self.sync_matrix_state:
             await self.main_intent.get_joined_members(self.mxid)
+
+    async def update_info_from_puppet(
+        self,
+        puppet: p.Puppet,
+        source: au.AbstractUser | None = None,
+        photo: UserProfilePhoto | None = None,
+    ) -> None:
+        if not self.encrypted and not self.private_chat_portal_meta:
+            return
+        # The bridge bot needs to join for e2ee, but that messes up the default name
+        # generation. If/when canonical DMs happen, this might not be necessary anymore.
+        changed = await self._update_avatar_from_puppet(puppet, source, photo)
+        changed = await self._update_title(puppet.displayname) or changed
+        if changed:
+            await self.save()
+            await self.update_bridge_info()
 
     async def create_matrix_room(
         self,
@@ -802,8 +816,8 @@ class Portal(DBPortal, BasePortal):
                 "state_key": self.bridge_info_state_key,
                 "content": self.bridge_info,
             },
+            # TODO remove this once https://github.com/matrix-org/matrix-doc/pull/2346 is in spec
             {
-                # TODO remove this once https://github.com/matrix-org/matrix-doc/pull/2346 is in spec
                 "type": str(StateHalfShotBridge),
                 "state_key": self.bridge_info_state_key,
                 "content": self.bridge_info,
@@ -814,7 +828,7 @@ class Portal(DBPortal, BasePortal):
             self.encrypted = True
             initial_state.append(
                 {
-                    "type": "m.room.encryption",
+                    "type": str(EventType.ROOM_ENCRYPTION),
                     "content": {"algorithm": "m.megolm.v1.aes-sha2"},
                 }
             )
@@ -822,6 +836,8 @@ class Portal(DBPortal, BasePortal):
                 create_invites.append(self.az.bot_mxid)
         if direct and (self.encrypted or self.private_chat_portal_meta):
             self.title = puppet.displayname
+            self.avatar_url = puppet.avatar_url
+            self.photo_id = puppet.photo_id
         if self.config["appservice.community_id"]:
             initial_state.append(
                 {
@@ -832,6 +848,13 @@ class Portal(DBPortal, BasePortal):
         creation_content = {}
         if not self.config["bridge.federate_rooms"]:
             creation_content["m.federate"] = False
+        if self.avatar_url:
+            initial_state.append(
+                {
+                    "type": str(EventType.ROOM_AVATAR),
+                    "content": {"url": self.avatar_url},
+                }
+            )
 
         with self.backfill_lock:
             room_id = await self.main_intent.create_room(
@@ -846,6 +869,8 @@ class Portal(DBPortal, BasePortal):
             )
             if not room_id:
                 raise Exception(f"Failed to create room")
+            self.name_set = bool(self.title)
+            self.avatar_set = bool(self.avatar_url)
 
             if self.encrypted and self.matrix.e2ee and direct:
                 try:
@@ -1106,21 +1131,48 @@ class Portal(DBPortal, BasePortal):
     async def _update_title(
         self, title: str, sender: p.Puppet | None = None, save: bool = False
     ) -> bool:
-        if self.title == title:
+        if self.title == title and self.name_set:
             return False
 
         self.title = title
-        await self._try_set_state(
-            sender, EventType.ROOM_NAME, RoomNameStateEventContent(name=self.title)
-        )
+        try:
+            await self._try_set_state(
+                sender, EventType.ROOM_NAME, RoomNameStateEventContent(name=self.title)
+            )
+            self.name_set = True
+        except Exception as e:
+            self.log.warning(f"Failed to set room name: {e}")
+            self.name_set = False
         if save:
             await self.save()
         return True
 
+    async def _update_avatar_from_puppet(
+        self, puppet: p.Puppet, user: au.AbstractUser | None, photo: UserProfilePhoto | None
+    ) -> bool:
+        if self.photo_id == puppet.photo_id and self.avatar_set:
+            return False
+        if puppet.avatar_url:
+            self.photo_id = puppet.photo_id
+            self.avatar_url = puppet.avatar_url
+            try:
+                await self._try_set_state(
+                    None, EventType.ROOM_AVATAR, RoomAvatarStateEventContent(url=self.avatar_url)
+                )
+                self.avatar_set = True
+            except Exception as e:
+                self.log.warning(f"Failed to set room avatar: {e}")
+                self.avatar_set = False
+            return True
+        elif photo is not None and user is not None:
+            return await self._update_avatar(user, photo=photo)
+        else:
+            return False
+
     async def _update_avatar(
         self,
         user: au.AbstractUser,
-        photo: TypeChatPhoto,
+        photo: TypeChatPhoto | TypeUserProfilePhoto,
         sender: p.Puppet | None = None,
         save: bool = False,
     ) -> bool:
@@ -1143,26 +1195,27 @@ class Portal(DBPortal, BasePortal):
             and not self.config["bridge.allow_avatar_remove"]
         ):
             return False
-        if self.photo_id != photo_id:
+        if self.photo_id != photo_id or not self.avatar_set:
             if not photo_id:
-                await self._try_set_state(
-                    sender, EventType.ROOM_AVATAR, RoomAvatarStateEventContent(url=None)
-                )
                 self.photo_id = ""
                 self.avatar_url = None
-                if save:
-                    await self.save()
-                return True
-            file = await util.transfer_file_to_matrix(user.client, self.main_intent, loc)
-            if file:
-                await self._try_set_state(
-                    sender, EventType.ROOM_AVATAR, RoomAvatarStateEventContent(url=file.mxc)
-                )
+            elif self.photo_id != photo_id or not self.avatar_url:
+                file = await util.transfer_file_to_matrix(user.client, self.main_intent, loc)
+                if not file:
+                    return False
                 self.photo_id = photo_id
                 self.avatar_url = file.mxc
-                if save:
-                    await self.save()
-                return True
+            try:
+                await self._try_set_state(
+                    sender, EventType.ROOM_AVATAR, RoomAvatarStateEventContent(url=self.avatar_url)
+                )
+                self.avatar_set = True
+            except Exception as e:
+                self.log.warning(f"Failed to set room avatar: {e}")
+                self.avatar_set = False
+            if save:
+                await self.save()
+            return True
         return False
 
     # endregion
@@ -2120,11 +2173,8 @@ class Portal(DBPortal, BasePortal):
     async def enable_dm_encryption(self) -> bool:
         ok = await super().enable_dm_encryption()
         if ok:
-            try:
-                puppet = await p.Puppet.get_by_tgid(self.tgid)
-                await self.main_intent.set_room_name(self.mxid, puppet.displayname)
-            except Exception:
-                self.log.warning(f"Failed to set room name", exc_info=True)
+            puppet = await p.Puppet.get_by_tgid(self.tgid)
+            await self.update_info_from_puppet(puppet)
         return ok
 
     # endregion
@@ -3373,8 +3423,10 @@ class Portal(DBPortal, BasePortal):
             self.by_mxid[self.mxid] = self
 
     @classmethod
-    async def all(cls) -> AsyncGenerator[Portal, None]:
-        portals = await super().all()
+    async def _yield_portals(
+        cls, query: Awaitable[list[DBPortal]]
+    ) -> AsyncGenerator[Portal, None]:
+        portals = await query
         portal: cls
         for portal in portals:
             try:
@@ -3384,15 +3436,16 @@ class Portal(DBPortal, BasePortal):
                 yield portal
 
     @classmethod
-    async def find_private_chats(cls, tg_receiver: TelegramID) -> AsyncGenerator[Portal, None]:
-        portals = await super().find_private_chats(tg_receiver)
-        portal: cls
-        for portal in portals:
-            try:
-                yield cls.by_tgid[portal.tgid_full]
-            except KeyError:
-                await portal.postinit()
-                yield portal
+    def all(cls) -> AsyncGenerator[Portal, None]:
+        return cls._yield_portals(super().all())
+
+    @classmethod
+    def find_private_chats_of(cls, tg_receiver: TelegramID) -> AsyncGenerator[Portal, None]:
+        return cls._yield_portals(super().find_private_chats_of(tg_receiver))
+
+    @classmethod
+    def find_private_chats_with(cls, tgid: TelegramID) -> AsyncGenerator[Portal, None]:
+        return cls._yield_portals(super().find_private_chats_with(tgid))
 
     @classmethod
     @async_getter_lock

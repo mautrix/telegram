@@ -469,9 +469,11 @@ class AbstractUser(ABC):
             puppet.username = update.username
             if await puppet.update_displayname(self, update):
                 await puppet.save()
+                await puppet.update_portals_meta()
         elif isinstance(update, UpdateUserPhoto):
             if await puppet.update_avatar(self, update.photo):
                 await puppet.save()
+                await puppet.update_portals_meta()
         else:
             self.log.warning(f"Unexpected other user info update: {type(update)}")
 

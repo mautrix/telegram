@@ -8,4 +8,5 @@ from . import (
     v03_reactions,
     v04_disappearing_messages,
     v05_channel_ghosts,
+    v06_puppet_avatar_url,
 )

@@ -41,7 +41,6 @@ from yarl import URL
 
 from mautrix.appservice import IntentAPI
 from mautrix.bridge import BasePuppet, async_getter_lock
-from mautrix.errors import MatrixError
 from mautrix.types import ContentURI, RoomID, SyncToken, UserID
 from mautrix.util.simple_template import SimpleTemplate
 
@@ -74,6 +73,9 @@ class Puppet(DBPuppet, BasePuppet):
         disable_updates: bool = False,
         username: str | None = None,
         photo_id: str | None = None,
+        avatar_url: ContentURI | None = None,
+        name_set: bool = False,
+        avatar_set: bool = False,
         is_bot: bool = False,
         is_channel: bool = False,
         custom_mxid: UserID | None = None,
@@ -91,6 +93,9 @@ class Puppet(DBPuppet, BasePuppet):
             disable_updates=disable_updates,
             username=username,
             photo_id=photo_id,
+            avatar_url=avatar_url,
+            name_set=name_set,
+            avatar_set=avatar_set,
             is_bot=is_bot,
             is_channel=is_channel,
             custom_mxid=custom_mxid,
@@ -255,14 +260,28 @@ class Puppet(DBPuppet, BasePuppet):
                 self.log.exception(f"Failed to update info from source {source.tgid}")
 
         if changed:
+            await self.update_portals_meta()
             await self.save()
+
+    async def update_portals_meta(self) -> None:
+        if not p.Portal.private_chat_portal_meta and not self.mx.e2ee:
+            return
+        async for portal in p.Portal.find_private_chats_with(self.tgid):
+            await portal.update_info_from_puppet(self)
 
     async def update_displayname(
         self, source: au.AbstractUser, info: User | Channel | UpdateUserName
     ) -> bool:
         if self.disable_updates:
             return False
-        if source.is_relaybot or source.is_bot:
+        if (
+            self.displayname
+            and self.displayname.startswith("Deleted user ")
+            and not getattr(info, "deleted", False)
+        ):
+            allow_because = "target user was previously deleted"
+            self.displayname_quality = 0
+        elif source.is_relaybot or source.is_bot:
             allow_because = "source user is a bot"
         elif self.displayname_source == source.tgid:
             allow_because = "source user is the primary source"
@@ -288,7 +307,9 @@ class Puppet(DBPuppet, BasePuppet):
                 return False
 
         displayname, quality = self.get_displayname(info)
-        if displayname != self.displayname and quality >= self.displayname_quality:
+        needs_reset = displayname != self.displayname or not self.name_set
+        is_high_quality = quality >= self.displayname_quality
+        if needs_reset and is_high_quality:
             allow_because = f"{allow_because} and quality {quality} >= {self.displayname_quality}"
             self.log.debug(
                 f"Updating displayname of {self.id} (src: {source.tgid}, allowed "
@@ -302,11 +323,10 @@ class Puppet(DBPuppet, BasePuppet):
                 await self.default_mxid_intent.set_displayname(
                     displayname[: self.config["bridge.displayname_max_length"]]
                 )
-            except MatrixError:
-                self.log.exception("Failed to set displayname")
-                self.displayname = ""
-                self.displayname_source = None
-                self.displayname_quality = 0
+                self.name_set = True
+            except Exception as e:
+                self.log.warning(f"Failed to set displayname: {e}")
+                self.name_set = False
             return True
         elif source.is_relaybot or self.displayname_source is None:
             self.displayname_source = source.tgid
@@ -328,28 +348,29 @@ class Puppet(DBPuppet, BasePuppet):
             return False
         if not photo_id and not self.config["bridge.allow_avatar_remove"]:
             return False
-        if self.photo_id != photo_id:
+        if self.photo_id != photo_id or not self.avatar_set:
             if not photo_id:
                 self.photo_id = ""
-                try:
-                    await self.default_mxid_intent.set_avatar_url(ContentURI(""))
-                except MatrixError:
-                    self.log.exception("Failed to set avatar")
-                    self.photo_id = ""
-                return True
-
-            loc = InputPeerPhotoFileLocation(
-                peer=await self.get_input_entity(source), photo_id=photo.photo_id, big=True
-            )
-            file = await util.transfer_file_to_matrix(source.client, self.default_mxid_intent, loc)
-            if file:
+                self.avatar_url = None
+            elif self.photo_id != photo_id or not self.avatar_url:
+                file = await util.transfer_file_to_matrix(
+                    client=source.client,
+                    intent=self.default_mxid_intent,
+                    location=InputPeerPhotoFileLocation(
+                        peer=await self.get_input_entity(source), photo_id=photo.photo_id, big=True
+                    ),
+                )
+                if not file:
+                    return False
                 self.photo_id = photo_id
-                try:
-                    await self.default_mxid_intent.set_avatar_url(file.mxc)
-                except MatrixError:
-                    self.log.exception("Failed to set avatar")
-                    self.photo_id = ""
-                return True
+                self.avatar_url = file.mxc
+            try:
+                await self.default_mxid_intent.set_avatar_url(self.avatar_url or "")
+                self.avatar_set = True
+            except Exception as e:
+                self.log.warning(f"Failed to set avatar: {e}")
+                self.avatar_set = False
+            return True
         return False
 
     async def default_puppet_should_leave_room(self, room_id: RoomID) -> bool:

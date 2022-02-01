@@ -7,6 +7,8 @@
   a new user.
 * Added support for adding an optional random prefix to relayed user displaynames
   to help distinguish them on the Telegram side.
+* Improved syncing profile info to room info when using encryption and/or the
+  `private_chat_profile_meta` config option.
 * Fixed bug in v0.11.0 that broke `!tg create`.
 
 # v0.11.1 (2021-01-10)
