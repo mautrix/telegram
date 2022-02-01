@@ -1641,7 +1641,11 @@ class Portal(DBPortal, BasePortal):
         except (KeyError, ValueError):
             self.log.exception("Failed to parse location")
             return None
-        caption, entities = await formatter.matrix_to_telegram(client, text=content.body)
+        try:
+            caption = content["org.matrix.msc3488.location"]["description"]
+            entities = []
+        except KeyError:
+            caption, entities = await formatter.matrix_to_telegram(client, text=content.body)
         media = MessageMediaGeo(geo=GeoPoint(lat=lat, long=long, access_hash=0))
 
         async with self.send_lock(sender_id):
@@ -2384,32 +2388,36 @@ class Portal(DBPortal, BasePortal):
         content = LocationMessageEventContent(
             msgtype=MessageType.LOCATION,
             geo_uri=f"geo:{geo}",
-            body=f"{note} {body}\n{url}",
+            body=f"{note}: {body}\n{url}",
             relates_to=relates_to,
             external_url=self._get_external_url(evt),
         )
         content["format"] = str(Format.HTML)
-        content["formatted_body"] = f"{note} <a href='{url}'>{body}</a>"
+        content["formatted_body"] = f"{note}: <a href='{url}'>{body}</a>"
+        content["org.matrix.msc3488.location"] = {
+            "uri": content.geo_uri,
+            "description": note,
+        }
         return content
 
     def _handle_telegram_location(
         self, source: au.AbstractUser, intent: IntentAPI, evt: Message, relates_to: RelatesTo
     ) -> Awaitable[EventID]:
-        content = self._location_message_to_content(evt, relates_to, "Location:")
+        content = self._location_message_to_content(evt, relates_to, "Location")
         return self._send_message(intent, content, timestamp=evt.date)
 
     def _handle_telegram_live_location(
         self, source: au.AbstractUser, intent: IntentAPI, evt: Message, relates_to: RelatesTo
     ) -> Awaitable[EventID]:
         content = self._location_message_to_content(
-            evt, relates_to, "Live Location (see your Telegram client for live updates):"
+            evt, relates_to, "Live Location (see your Telegram client for live updates)"
         )
         return self._send_message(intent, content, timestamp=evt.date)
 
     def _handle_telegram_venue(
         self, source: au.AbstractUser, intent: IntentAPI, evt: Message, relates_to: RelatesTo
     ) -> Awaitable[EventID]:
-        content = self._location_message_to_content(evt, relates_to, f"{evt.media.title}:")
+        content = self._location_message_to_content(evt, relates_to, evt.media.title)
         return self._send_message(intent, content, timestamp=evt.date)
 
     async def _handle_telegram_text(
