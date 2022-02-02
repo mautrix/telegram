@@ -217,12 +217,18 @@ class TelegramBridge(Bridge):
         block_on_limit_reached = self.config["bridge.limits.block_on_limit_reached"]
         max_puppet_limit = self.config["bridge.limits.max_puppet_limit"]
         if block_on_limit_reached and max_puppet_limit is not None:
-            self.is_blocked = max_puppet_limit < active_users
+            blocked = max_puppet_limit < active_users
+            if blocked and not self.is_blocked:
+                self.log.info("Bridge is now blocking messages")
+            if not blocked and self.is_blocked:
+                self.log.info("Bridge is no longer blocking messages")
+            self.is_blocked = blocked
             METRIC_BLOCKING.set(int(self.is_blocked))
         self.log.debug(f"Current active puppet count is {active_users}")
         METRIC_ACTIVE_PUPPETS.set(active_users)
 
     async def _loop_active_puppet_metric(self) -> None:
+        await self._update_active_puppet_metric()
         while True:
             try:
                 await asyncio.sleep(ACTIVE_USER_METRICS_INTERVAL_S)
