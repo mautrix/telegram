@@ -23,7 +23,7 @@ from telethon import __version__ as __telethon_version__
 import telethon
 
 from mautrix.bridge import Bridge
-from mautrix.types import RoomID, UserID
+from mautrix.types import MessageType, RoomID, TextMessageEventContent, UserID
 from mautrix.util.opt_prometheus import Gauge
 
 from .bot import Bot
@@ -74,6 +74,7 @@ class TelegramBridge(Bridge):
 
     periodic_active_metrics_task: asyncio.Task
     is_blocked: bool = False
+    _admin_rooms: Dict[RoomID, UserID] = None
 
     periodic_sync_task: asyncio.Task = None
     as_bridge_liveness_task: asyncio.Task = None
@@ -121,10 +122,6 @@ class TelegramBridge(Bridge):
         if self.config["bridge.resend_bridge_info"]:
             self.add_startup_actions(self.resend_bridge_info())
 
-        # Explicitly not a startup_action, as startup_actions block startup
-        if self.config["bridge.limits.enable_activity_tracking"] is not False:
-            self.periodic_sync_task = self.loop.create_task(self._loop_active_puppet_metric())
-
         if self.config.get("telegram.liveness_timeout", 0) >= 1:
             self.as_bridge_liveness_task = self.loop.create_task(
                 self._loop_check_bridge_liveness()
@@ -145,6 +142,10 @@ class TelegramBridge(Bridge):
             except telethon.errors.RPCError as e:
                 self.log.error(f"Failed to start bot: {e}")
                 METRIC_BOT_STARTUP_OK.set(0)
+
+        # Explicitly not a startup_action, as startup_actions block startup
+        if self.config["bridge.limits.enable_activity_tracking"] is not False:
+            self.periodic_sync_task = self.loop.create_task(self._loop_active_puppet_metric())
 
         semaphore = None
         concurrency = self.config["telegram.connection.concurrent_connections_startup"]
@@ -220,15 +221,20 @@ class TelegramBridge(Bridge):
             blocked = max_puppet_limit < active_users
             if blocked and not self.is_blocked:
                 self.log.info("Bridge is now blocking messages")
+                await self._notify_bridge_blocked()
             if not blocked and self.is_blocked:
                 self.log.info("Bridge is no longer blocking messages")
+                await self._notify_bridge_blocked(False)
             self.is_blocked = blocked
             METRIC_BLOCKING.set(int(self.is_blocked))
         self.log.debug(f"Current active puppet count is {active_users}")
         METRIC_ACTIVE_PUPPETS.set(active_users)
 
     async def _loop_active_puppet_metric(self) -> None:
-        await self._update_active_puppet_metric()
+        try:
+            await self._update_active_puppet_metric()
+        except Exception as e:
+            self.log.exception(f"Error while checking puppet activity: {e}")
         while True:
             try:
                 await asyncio.sleep(ACTIVE_USER_METRICS_INTERVAL_S)
@@ -240,7 +246,7 @@ class TelegramBridge(Bridge):
             except asyncio.CancelledError:
                 return
             except Exception as e:
-                self.log.exception(f"Error while checking: {e}")
+                self.log.exception(f"Error while checking puppet activity: {e}")
 
     async def _loop_check_as_connection_pool(self) -> None:
         while True:
@@ -276,6 +282,48 @@ class TelegramBridge(Bridge):
             "Portal": Portal,
             "Puppet": Puppet,
         }
+
+    async def _notify_bridge_blocked(self, is_blocked: bool = True) -> None:
+        admins = list(map(lambda entry: entry[0],
+            filter(lambda entry: entry[1] == 'admin',
+                self.config["bridge.permissions"].items()
+            )
+        ))
+        if len(admins) == 0:
+            self.log.debug('No bridge admins to notify about the bridge being blocked')
+            return
+
+        self.log.debug(f'Notifying bridge admins ({",".join(admins)}) about bridge being blocked')
+
+        if not self._admin_rooms:
+            self.log.debug("Fetching admin rooms from the homeserver")
+            admin_rooms = {}
+            joined_rooms = await self.az.intent.get_joined_rooms()
+            for room_id in joined_rooms:
+                members = await self.az.intent.get_room_members(room_id)
+                if len(members) == 2: # a DM with someone
+                    for admin_mxid in admins:
+                        if admin_mxid in members:
+                            admin_rooms[admin_mxid] = room_id
+                            break
+            self._admin_rooms = admin_rooms
+
+        for admin_mxid in admins:
+            if admin_mxid not in self._admin_rooms:
+                self.log.debug(f"Creating a new admin room for {admin_mxid}")
+                self._admin_rooms[admin_mxid] = await self.az.intent.create_room(
+                    name="Telegram Bridge alerts",
+                    invitees=[admin_mxid],
+                    is_direct=True,
+                )
+
+            msg = 'The bridge is no longer blocking messages'
+            if is_blocked:
+                msg = 'The bridge is currently blocking messages. You may need to increase your usage limits in EMS'
+            await self.az.intent.send_message(self._admin_rooms[admin_mxid], TextMessageEventContent(
+                msgtype=MessageType.NOTICE, body=f"\u26a0 {msg}"
+            ))
+
 
     @property
     def manhole_banner_program_version(self) -> str:

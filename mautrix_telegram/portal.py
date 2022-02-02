@@ -2890,6 +2890,7 @@ class Portal(DBPortal, BasePortal):
     ) -> None:
         if self.bridge.is_blocked:
             self.log.debug(f"Bridge is blocked, dropping telegram message {evt.id}")
+            await self.bridge._notify_bridge_blocked()
             return
 
         if not self.mxid:
