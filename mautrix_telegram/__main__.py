@@ -209,7 +209,7 @@ class TelegramBridge(Bridge):
         self.az.live = True
 
     async def _update_active_puppet_metric(self) -> None:
-        active_users = UserActivity.get_active_count(
+        active_users = await UserActivity.get_active_count(
             self.config["bridge.limits.min_puppet_activity_days"],
             self.config["bridge.limits.puppet_inactivity_days"],
         )
