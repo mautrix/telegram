@@ -198,7 +198,7 @@ async def telegram_to_matrix(
     def force_html():
         if not content.formatted_body:
             content.format = Format.HTML
-            content.formatted_body = escape(content.body)
+            content.formatted_body = escape(content.body).replace("\n", "<br/>")
 
     if require_html:
         force_html()
