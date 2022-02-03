@@ -1,22 +1,33 @@
-# unreleased
+# v0.11.2 (2022-02-??, unreleased)
 
+### Added
 * Added simple fallback message for live location and venue messages from Telegram.
 * Added support for `t.me/+code` style invite links in `!tg join`.
 * Added support for showing channel profile when users send messages as a channel.
 * Added "user joined Telegram" message when Telegram auto-creates a DM chat for
   a new user.
-* Added support for adding an optional random prefix to relayed user displaynames
-  to help distinguish them on the Telegram side.
+
+### Improved
+* Added option for adding a random prefix to relayed user displaynames to help
+  distinguish them on the Telegram side.
 * Improved syncing profile info to room info when using encryption and/or the
   `private_chat_profile_meta` config option.
+
+### Fixed
+* Fixed newlines disappearing when bridging channel messages with signatures.
 * Fixed bug in v0.11.0 that broke `!tg create`.
 
-# v0.11.1 (2021-01-10)
+# v0.11.1 (2022-01-10)
 
+### Added
 * Added support for message reactions.
 * Added support for spoiler text.
-* Improved support for voice messages.
-* Improved color of blue text from Telegram to be more readable on dark themes.
+
+### Improved
+* Support for voice messages.
+* Changed color of blue text from Telegram to be more readable on dark themes.
+
+### Fixed
 * Fixed syncing contacts throwing an error for new accounts.
 * Fixed migrating pre-v0.11 legacy databases if the database schema had been
   corrupted (e.g. by using 3rd party tools for SQLite -> Postgres migration).
