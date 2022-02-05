@@ -119,6 +119,7 @@ from telethon.tl.types import (
     MessageMediaPoll,
     MessageMediaUnsupported,
     MessageMediaVenue,
+    MessageMediaWebPage,
     MessagePeerReaction,
     MessageReactions,
     PeerChannel,
@@ -156,6 +157,7 @@ from telethon.tl.types import (
     UserFull,
     UserProfilePhoto,
     UserProfilePhotoEmpty,
+    WebPage,
 )
 from telethon.utils import decode_waveform
 import magic
@@ -218,6 +220,8 @@ if TYPE_CHECKING:
 
 StateBridge = EventType.find("m.bridge", EventType.Class.STATE)
 StateHalfShotBridge = EventType.find("uk.half-shot.bridge", EventType.Class.STATE)
+BEEPER_LINK_PREVIEWS_KEY = "com.beeper.linkpreviews"
+BEEPER_IMAGE_ENCRYPTION_KEY = "beeper:image:encryption"
 
 InviteList = Union[UserID, List[UserID]]
 UpdateTyping = Union[UpdateUserTyping, UpdateChatUserTyping, UpdateChannelUserTyping]
@@ -2489,6 +2493,34 @@ class Portal(DBPortal, BasePortal):
         content = self._location_message_to_content(evt, relates_to, evt.media.title)
         return self._send_message(intent, content, timestamp=evt.date)
 
+    async def _telegram_webpage_to_beeper_link_preview(
+        self, source: au.AbstractUser, intent: IntentAPI, webpage: WebPage
+    ) -> dict[str, Any]:
+        beeper_link_preview: dict[str, Any] = {
+            "matched_url": webpage.url,
+            "og:title": webpage.title,
+            "og:url": webpage.url,
+            "og:description": webpage.description,
+        }
+
+        # Upload an image corresponding to the link preview if it exists.
+        if webpage.photo:
+            loc, largest_size = self._get_largest_photo_size(webpage.photo)
+            if loc is None:
+                return beeper_link_preview
+            beeper_link_preview["og:image:height"] = largest_size.h
+            beeper_link_preview["og:image:width"] = largest_size.w
+            file = await util.transfer_file_to_matrix(
+                source.client, intent, loc, encrypt=self.encrypted
+            )
+
+            if file.decryption_info:
+                beeper_link_preview[BEEPER_IMAGE_ENCRYPTION_KEY] = file.decryption_info.serialize()
+            else:
+                beeper_link_preview["og:image"] = file.mxc
+
+        return beeper_link_preview
+
     async def _handle_telegram_text(
         self, source: au.AbstractUser, intent: IntentAPI, is_bot: bool, evt: Message
     ) -> EventID:
@@ -2498,6 +2530,18 @@ class Portal(DBPortal, BasePortal):
         if is_bot and self.get_config("bot_messages_as_notices"):
             content.msgtype = MessageType.NOTICE
         await intent.set_typing(self.mxid, is_typing=False)
+
+        if (
+            hasattr(evt, "media")
+            and isinstance(evt.media, MessageMediaWebPage)
+            and isinstance(evt.media.webpage, WebPage)
+        ):
+            content[BEEPER_LINK_PREVIEWS_KEY] = [
+                await self._telegram_webpage_to_beeper_link_preview(
+                    source, intent, evt.media.webpage
+                )
+            ]
+
         return await self._send_message(intent, content, timestamp=evt.date)
 
     async def _handle_telegram_unsupported(
