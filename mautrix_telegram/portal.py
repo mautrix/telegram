@@ -838,13 +838,6 @@ class Portal(DBPortal, BasePortal):
             self.title = puppet.displayname
             self.avatar_url = puppet.avatar_url
             self.photo_id = puppet.photo_id
-        if self.config["appservice.community_id"]:
-            initial_state.append(
-                {
-                    "type": "m.room.related_groups",
-                    "content": {"groups": [self.config["appservice.community_id"]]},
-                }
-            )
         creation_content = {}
         if not self.config["bridge.federate_rooms"]:
             creation_content["m.federate"] = False

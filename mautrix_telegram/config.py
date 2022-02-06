@@ -95,8 +95,6 @@ class Config(BaseBridgeConfig):
         if "pool_pre_ping" in base["appservice.database_opts"]:
             del base["appservice.database_opts.pool_pre_ping"]
 
-        copy("appservice.community_id")
-
         copy("metrics.enabled")
         copy("metrics.listen_port")
 
