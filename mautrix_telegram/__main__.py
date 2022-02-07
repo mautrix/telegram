@@ -75,6 +75,7 @@ class TelegramBridge(Bridge):
     periodic_active_metrics_task: asyncio.Task
     is_blocked: bool = False
     _admin_rooms: Dict[RoomID, UserID] = None
+    _last_blocking_notification: int = 0
 
     periodic_sync_task: asyncio.Task = None
     as_bridge_liveness_task: asyncio.Task = None
@@ -284,6 +285,15 @@ class TelegramBridge(Bridge):
         }
 
     async def _notify_bridge_blocked(self, is_blocked: bool = True) -> None:
+        msg = self.config["bridge.limits.block_ends_notification"]
+        if is_blocked:
+            msg = self.config["bridge.limits.block_begins_notification"]
+            next_notification = self._last_blocking_notification + self.config["bridge.limits.block_notification_interval_seconds"]
+            # We're only checking if the block is active, since the block-end notification will not be resent and we want it ASAP
+            if next_notification > int(time()):
+                return
+            self._last_blocking_notification = int(time())
+
         admins = list(map(lambda entry: entry[0],
             filter(lambda entry: entry[1] == 'admin',
                 self.config["bridge.permissions"].items()
@@ -317,9 +327,6 @@ class TelegramBridge(Bridge):
                     is_direct=True,
                 )
 
-            msg = 'The bridge is no longer blocking messages'
-            if is_blocked:
-                msg = 'The bridge is currently blocking messages. You may need to increase your usage limits in EMS'
             await self.az.intent.send_message(self._admin_rooms[admin_mxid], TextMessageEventContent(
                 msgtype=MessageType.NOTICE, body=f"\u26a0 {msg}"
             ))

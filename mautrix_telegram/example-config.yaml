@@ -459,6 +459,11 @@ bridge:
         puppet_inactivity_days: 30
         # Should the bridge block traffic when a limit has been reached
         block_on_limit_reached: false
+        # The message sent to bridge admins when the bridges starts/stops being blocked
+        block_begins_notification: 'The bridge is currently blocking messages. You may need to increase your usage limits in EMS'
+        block_ends_notification: 'The bridge is no longer blocking messages'
+        # The minimum interval between blocking notification being sent
+        block_notification_interval_seconds: 3600
 
     # Process puppet presence events ie UpdateUserStatus
     # Disabling this means we don't try to set presence for puppets
