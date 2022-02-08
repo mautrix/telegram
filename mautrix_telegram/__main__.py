@@ -328,6 +328,7 @@ class TelegramBridge(Bridge):
                 )
 
             await self.az.intent.send_message(self._admin_rooms[admin_mxid], TextMessageEventContent(
+                # \u26a0 is a warning sign
                 msgtype=MessageType.NOTICE, body=f"\u26a0 {msg}"
             ))
 
