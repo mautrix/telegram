@@ -145,7 +145,7 @@ class TelegramBridge(Bridge):
                 METRIC_BOT_STARTUP_OK.set(0)
 
         # Explicitly not a startup_action, as startup_actions block startup
-        if self.config["bridge.limits.enable_activity_tracking"] is not False:
+        if self.config["bridge.limits.enable_activity_tracking"]:
             self.periodic_sync_task = self.loop.create_task(self._loop_active_puppet_metric())
 
         semaphore = None
