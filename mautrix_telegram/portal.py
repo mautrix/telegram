@@ -1722,7 +1722,8 @@ class Portal(DBPortal, BasePortal):
                 event_id,
                 EventType.ROOM_MESSAGE,
                 message_type=content.msgtype,
-                msg=f"\u26a0 The bridge is blocked due to reaching its user limit"
+                # \u26a0 is a warning sign
+                msg=f"\u26a0 The bridge is blocked due to reaching its user limit."
             )
             return
 
