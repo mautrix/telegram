@@ -286,10 +286,12 @@ class TelegramBridge(Bridge):
 
     async def _notify_bridge_blocked(self, is_blocked: bool = True) -> None:
         msg = self.config["bridge.limits.block_ends_notification"]
+        # We're only checking the time since last notification if blocking is active;
+        # the unblocking notifications need no throttling since they'll only be sent once when the unblock happens,
+        # not on every blocked message.
         if is_blocked:
             msg = self.config["bridge.limits.block_begins_notification"]
             next_notification = self._last_blocking_notification + self.config["bridge.limits.block_notification_interval_seconds"]
-            # We're only checking if the block is active, since the block-end notification will not be resent and we want it ASAP
             if next_notification > int(time()):
                 return
             self._last_blocking_notification = int(time())
