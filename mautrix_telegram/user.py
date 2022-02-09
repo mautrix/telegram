@@ -195,7 +195,8 @@ class User(DBUser, AbstractUser, BaseUser):
             if self.tgid:
                 await self.push_bridge_state(BridgeStateEvent.UNKNOWN_ERROR, message=str(e))
         except UnauthorizedError as e:
-            self.log.error(f"Authorization error in start(): {type(e)}: {e}")
+            if delete_unless_authenticated or self.tgid:
+                self.log.error(f"Authorization error in start(): {type(e)}: {e}")
             if self.tgid:
                 await self.push_bridge_state(
                     BridgeStateEvent.BAD_CREDENTIALS,
