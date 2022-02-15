@@ -23,7 +23,7 @@ from telethon import __version__ as __telethon_version__
 import telethon
 
 from mautrix.bridge import Bridge
-from mautrix.types import MessageType, RoomID, TextMessageEventContent, UserID
+from mautrix.types import Membership, MessageType, RoomID, TextMessageEventContent, UserID
 from mautrix.util.opt_prometheus import Gauge
 
 from .bot import Bot
@@ -312,7 +312,7 @@ class TelegramBridge(Bridge):
             admin_rooms = {}
             joined_rooms = await self.az.intent.get_joined_rooms()
             for room_id in joined_rooms:
-                members = await self.az.intent.get_room_members(room_id)
+                members = await self.az.intent.get_room_members(room_id, (Membership.JOIN, Membership.INVITE))
                 if len(members) == 2: # a DM with someone
                     for admin_mxid in admins:
                         if admin_mxid in members:
