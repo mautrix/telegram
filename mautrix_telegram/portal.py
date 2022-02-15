@@ -1714,6 +1714,19 @@ class Portal(DBPortal, BasePortal):
     async def handle_matrix_message(
         self, sender: u.User, content: MessageEventContent, event_id: EventID
     ) -> None:
+        if self.bridge.is_blocked:
+            self.log.debug(f"Bridge is blocked, dropping matrix event {event_id}")
+            await self._send_bridge_error(
+                sender,
+                Exception("The bridge is blocked due to reaching its user limit"),
+                event_id,
+                EventType.ROOM_MESSAGE,
+                message_type=content.msgtype,
+                # \u26a0 is a warning sign
+                msg=f"\u26a0 The bridge is blocked due to reaching its user limit."
+            )
+            return
+
         try:
             await self._handle_matrix_message(sender, content, event_id)
         except RPCError as e:
@@ -2876,6 +2889,11 @@ class Portal(DBPortal, BasePortal):
     async def handle_telegram_message(
         self, source: au.AbstractUser, sender: p.Puppet, evt: Message
     ) -> None:
+        if self.bridge.is_blocked:
+            self.log.debug(f"Bridge is blocked, dropping telegram message {evt.id}")
+            await self.bridge._notify_bridge_blocked()
+            return
+
         if not self.mxid:
             self.log.trace("Got telegram message %d, but no room exists, creating...", evt.id)
             await self.create_matrix_room(source, invites=[source.mxid], update_if_exists=False)
