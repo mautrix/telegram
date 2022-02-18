@@ -345,7 +345,11 @@ async def _parse_name_mention(html: list[str], entity_text: str, user_id: Telegr
 
 
 message_link_regex = re.compile(
-    r"https?://t(?:elegram)?\.(?:me|dog)/([A-Za-z][A-Za-z0-9_]{3,}[A-Za-z0-9])/([0-9]{1,50})"
+    r"https?://t(?:elegram)?\.(?:me|dog)"
+    # /username or /c/id
+    r"/([A-Za-z][A-Za-z0-9_]{3,31}[A-Za-z0-9]|[Cc]/[0-9]{1,20})"
+    # /messageid
+    r"/([0-9]{1,20})"
 )
 
 
@@ -359,7 +363,10 @@ async def _parse_url(html: list[str], entity_text: str, url: str) -> bool:
         group, msgid_str = message_link_match.groups()
         msgid = int(msgid_str)
 
-        portal = await po.Portal.find_by_username(group)
+        if group.lower().startswith("c/"):
+            portal = await po.Portal.get_by_tgid(TelegramID(int(group[2:])))
+        else:
+            portal = await po.Portal.find_by_username(group)
         if portal:
             message = await DBMessage.get_one_by_tgid(TelegramID(msgid), portal.tgid)
             if message:

@@ -1,3 +1,15 @@
+# unreleased
+
+### Added
+
+### Improved
+* Telegram->Matrix message formatter will now replace `t.me/c/chatid/messageid`
+  style links with a link to the bridged Matrix event (in addition to the
+  previously supported `t.me/username/messageid` links).
+
+### Fixed
+
+
 # v0.11.2 (2022-02-14)
 
 **N.B.** This will be the last release to support Python 3.7. Future versions
