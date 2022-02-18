@@ -21,7 +21,7 @@ from asyncpg import Record
 from attr import dataclass
 
 from mautrix.types import EventID, RoomID
-from mautrix.util.async_db import Database
+from mautrix.util.async_db import Database, Scheme
 
 from ..types import TelegramID
 
@@ -76,7 +76,7 @@ class Message:
     async def get_first_by_tgids(
         cls, tgids: list[TelegramID], tg_space: TelegramID
     ) -> list[Message]:
-        if cls.db.scheme == "postgres":
+        if cls.db.scheme in (Scheme.POSTGRES, Scheme.COCKROACH):
             q = (
                 f"SELECT {cls.columns} FROM message"
                 " WHERE tgid=ANY($1) AND tg_space=$2 AND edit_index=0"
@@ -123,7 +123,7 @@ class Message:
     async def get_by_mxids(
         cls, mxids: list[EventID], mx_room: RoomID, tg_space: TelegramID
     ) -> list[Message]:
-        if cls.db.scheme == "postgres":
+        if cls.db.scheme in (Scheme.POSTGRES, Scheme.COCKROACH):
             q = (
                 f"SELECT {cls.columns} FROM message"
                 " WHERE mxid=ANY($1) AND mx_room=$2 AND tg_space=$3"

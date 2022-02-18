@@ -13,7 +13,7 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from asyncpg import Connection
+from mautrix.util.async_db import Connection, Scheme
 
 from . import upgrade_table
 
@@ -21,5 +21,5 @@ from . import upgrade_table
 @upgrade_table.register(description="Add separate ghost users for channel senders")
 async def upgrade_v5(conn: Connection, scheme: str) -> None:
     await conn.execute("ALTER TABLE puppet ADD COLUMN is_channel BOOLEAN NOT NULL DEFAULT false")
-    if scheme == "postgres":
+    if scheme == Scheme.POSTGRES:
         await conn.execute("ALTER TABLE puppet ALTER COLUMN is_channel DROP DEFAULT")

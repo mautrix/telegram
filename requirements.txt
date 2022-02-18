@@ -3,7 +3,7 @@ python-magic>=0.4,<0.5
 commonmark>=0.8,<0.10
 aiohttp>=3,<4
 yarl>=1,<2
-mautrix>=0.14.9,<0.15
+mautrix>=0.14.11,<0.15
 #telethon>=1.24,<1.25
 # Fork to make session storage async and update to layer 138
 tulir-telethon==1.25.0a5

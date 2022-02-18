@@ -15,29 +15,38 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from __future__ import annotations
 
-from asyncpg import Connection
+from mautrix.util.async_db import Connection, Scheme
 
 from . import upgrade_table
+from .v00_latest_revision import create_v6_tables
 
 legacy_version_query = "SELECT version_num FROM alembic_version"
 last_legacy_version = "bfc0a39bfe02"
 
 
 def table_exists(scheme: str, name: str) -> str:
-    if scheme == "sqlite":
+    if scheme == Scheme.SQLITE:
         return f"SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type='table' AND name='{name}')"
-    elif scheme == "postgres":
-        return f"SELECT EXISTS(SELECT FROM information_schema.tables WHERE table_name='{name}')"
+    elif scheme in (Scheme.POSTGRES, Scheme.COCKROACH):
+        return f"SELECT EXISTS(SELECT 1 FROM information_schema.tables WHERE table_name='{name}')"
     raise RuntimeError("unsupported database scheme")
 
 
-@upgrade_table.register(description="Initial asyncpg revision")
-async def upgrade_v1(conn: Connection, scheme: str) -> None:
+async def first_upgrade_target(conn: Connection, scheme: str) -> int:
+    is_legacy = await conn.fetchval(table_exists(scheme, "alembic_version"))
+    # If it's a legacy db, the upgrade process will go to v1 and run each migration up to v6.
+    # If it's a new db, we'll create the v6 tables directly (see the create_v6_tables call).
+    return 1 if is_legacy else 6
+
+
+@upgrade_table.register(description="Initial asyncpg revision", upgrades_to=first_upgrade_target)
+async def upgrade_v1(conn: Connection, scheme: str) -> int:
     is_legacy = await conn.fetchval(table_exists(scheme, "alembic_version"))
     if is_legacy:
         await migrate_legacy_to_v1(conn, scheme)
+        return 1
     else:
-        await create_v1_tables(conn)
+        return await create_v6_tables(conn)
 
 
 async def drop_constraints(conn: Connection, table: str, contype: str) -> None:
@@ -178,151 +187,3 @@ async def varchar_to_text(conn: Connection) -> None:
     for table, columns in columns_to_adjust.items():
         for column in columns:
             await conn.execute(f'ALTER TABLE "{table}" ALTER COLUMN {column} TYPE TEXT')
-
-
-async def create_v1_tables(conn: Connection) -> None:
-    await conn.execute(
-        """CREATE TABLE "user" (
-            mxid TEXT   PRIMARY KEY,
-            tgid BIGINT UNIQUE,
-            tg_username    TEXT,
-            tg_phone       TEXT,
-            is_bot         BOOLEAN NOT NULL DEFAULT false,
-            saved_contacts INTEGER NOT NULL DEFAULT 0
-        )"""
-    )
-    await conn.execute(
-        """CREATE TABLE portal (
-            tgid        BIGINT,
-            tg_receiver BIGINT,
-            peer_type   TEXT NOT NULL,
-            mxid        TEXT UNIQUE,
-            avatar_url  TEXT,
-            encrypted   BOOLEAN NOT NULL DEFAULT false,
-            username    TEXT,
-            title       TEXT,
-            about       TEXT,
-            photo_id    TEXT,
-            megagroup   BOOLEAN,
-            config      jsonb,
-            PRIMARY KEY (tgid, tg_receiver)
-        )"""
-    )
-    await conn.execute(
-        """CREATE TABLE message (
-            mxid       TEXT,
-            mx_room    TEXT,
-            tgid       BIGINT NOT NULL,
-            tg_space   BIGINT NOT NULL,
-            edit_index INTEGER NOT NULL,
-            redacted   BOOLEAN NOT NULL DEFAULT false,
-            PRIMARY KEY (tgid, tg_space, edit_index),
-            UNIQUE (mxid, mx_room, tg_space)
-        )"""
-    )
-    await conn.execute(
-        """CREATE TABLE puppet (
-            id BIGINT PRIMARY KEY,
-
-            is_registered BOOLEAN NOT NULL DEFAULT false,
-
-            displayname         TEXT,
-            displayname_source  BIGINT,
-            displayname_contact BOOLEAN NOT NULL DEFAULT true,
-            displayname_quality INTEGER NOT NULL DEFAULT 0,
-            disable_updates     BOOLEAN NOT NULL DEFAULT false,
-            username            TEXT,
-            photo_id            TEXT,
-            is_bot              BOOLEAN,
-
-            access_token TEXT,
-            custom_mxid  TEXT,
-            next_batch   TEXT,
-            base_url     TEXT
-        )"""
-    )
-    await conn.execute(
-        """CREATE TABLE telegram_file (
-            id              TEXT PRIMARY KEY,
-            mxc             TEXT NOT NULL,
-            mime_type       TEXT,
-            was_converted   BOOLEAN NOT NULL DEFAULT false,
-            timestamp       BIGINT  NOT NULL DEFAULT 0,
-            size            BIGINT,
-            width           INTEGER,
-            height          INTEGER,
-            thumbnail       TEXT,
-            decryption_info jsonb,
-            FOREIGN KEY (thumbnail) REFERENCES telegram_file(id)
-                ON UPDATE CASCADE ON DELETE SET NULL
-        )"""
-    )
-    await conn.execute(
-        """CREATE TABLE bot_chat (
-            id   BIGINT PRIMARY KEY,
-            type TEXT NOT NULL
-        )"""
-    )
-    await conn.execute(
-        """CREATE TABLE user_portal (
-            "user"          BIGINT,
-            portal          BIGINT,
-            portal_receiver BIGINT,
-            PRIMARY KEY ("user", portal, portal_receiver),
-            FOREIGN KEY ("user") REFERENCES "user"(tgid) ON DELETE CASCADE ON UPDATE CASCADE,
-            FOREIGN KEY (portal, portal_receiver) REFERENCES portal(tgid, tg_receiver)
-                 ON DELETE CASCADE ON UPDATE CASCADE
-        )"""
-    )
-    await conn.execute(
-        """CREATE TABLE contact (
-            "user"  BIGINT,
-            contact BIGINT,
-            PRIMARY KEY ("user", contact),
-            FOREIGN KEY ("user")  REFERENCES "user"(tgid) ON DELETE CASCADE ON UPDATE CASCADE,
-            FOREIGN KEY (contact) REFERENCES puppet(id)   ON DELETE CASCADE ON UPDATE CASCADE
-        )"""
-    )
-    await conn.execute(
-        """CREATE TABLE telethon_sessions (
-            session_id     TEXT PRIMARY KEY,
-            dc_id          INTEGER,
-            server_address TEXT,
-            port           INTEGER,
-            auth_key       bytea
-        )"""
-    )
-    await conn.execute(
-        """CREATE TABLE telethon_entities (
-            session_id TEXT,
-            id         BIGINT,
-            hash       BIGINT NOT NULL,
-            username   TEXT,
-            phone      TEXT,
-            name       TEXT,
-            PRIMARY KEY (session_id, id)
-        )"""
-    )
-    await conn.execute(
-        """CREATE TABLE telethon_sent_files (
-            session_id TEXT,
-            md5_digest bytea,
-            file_size  INTEGER,
-            type       INTEGER,
-            id         BIGINT,
-            hash       BIGINT,
-            PRIMARY KEY (session_id, md5_digest, file_size, type)
-        )"""
-    )
-    await conn.execute(
-        """CREATE TABLE telethon_update_state (
-            session_id   TEXT,
-            entity_id    BIGINT,
-            pts          BIGINT,
-            qts          BIGINT,
-            date         BIGINT,
-            seq          BIGINT,
-            unread_count INTEGER,
-            PRIMARY KEY (session_id, entity_id)
-        )"""
-    )
