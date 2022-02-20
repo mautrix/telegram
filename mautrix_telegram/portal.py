@@ -2354,7 +2354,7 @@ class Portal(DBPortal, BasePortal):
 
         attrs = self._parse_telegram_document_attributes(document.attributes)
 
-        if document.size > self.config["bridge.max_document_size"] * 1000**2:
+        if document.size > self.matrix.media_config.upload_size:
             name = attrs.name or ""
             caption = f"\n{evt.message}" if evt.message else ""
             # TODO encrypt
@@ -2758,7 +2758,7 @@ class Portal(DBPortal, BasePortal):
             "chats": self.peer_type == "chat",
             "users": self.peer_type == "user",
             "channels": (self.peer_type == "channel" and not self.megagroup),
-            "max_file_size": min(self.config["bridge.max_document_size"], 2000) * 1024 * 1024,
+            "max_file_size": min(self.matrix.media_config.upload_size, 2000 * 1024 * 1024),
         }
 
     async def backfill(
