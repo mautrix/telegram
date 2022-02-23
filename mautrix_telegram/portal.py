@@ -1118,9 +1118,10 @@ class Portal(DBPortal, BasePortal):
             return False
 
         self.about = about
-        await self._try_set_state(
-            sender, EventType.ROOM_TOPIC, RoomTopicStateEventContent(topic=self.about)
-        )
+        if self.mxid:
+            await self._try_set_state(
+                sender, EventType.ROOM_TOPIC, RoomTopicStateEventContent(topic=self.about)
+            )
         if save:
             await self.save()
         return True
@@ -1132,14 +1133,15 @@ class Portal(DBPortal, BasePortal):
             return False
 
         self.title = title
-        try:
-            await self._try_set_state(
-                sender, EventType.ROOM_NAME, RoomNameStateEventContent(name=self.title)
-            )
-            self.name_set = True
-        except Exception as e:
-            self.log.warning(f"Failed to set room name: {e}")
-            self.name_set = False
+        if self.mxid:
+            try:
+                await self._try_set_state(
+                    sender, EventType.ROOM_NAME, RoomNameStateEventContent(name=self.title)
+                )
+                self.name_set = True
+            except Exception as e:
+                self.log.warning(f"Failed to set room name: {e}")
+                self.name_set = False
         if save:
             await self.save()
         return True
@@ -1152,14 +1154,17 @@ class Portal(DBPortal, BasePortal):
         if puppet.avatar_url:
             self.photo_id = puppet.photo_id
             self.avatar_url = puppet.avatar_url
-            try:
-                await self._try_set_state(
-                    None, EventType.ROOM_AVATAR, RoomAvatarStateEventContent(url=self.avatar_url)
-                )
-                self.avatar_set = True
-            except Exception as e:
-                self.log.warning(f"Failed to set room avatar: {e}")
-                self.avatar_set = False
+            if self.mxid:
+                try:
+                    await self._try_set_state(
+                        None,
+                        EventType.ROOM_AVATAR,
+                        RoomAvatarStateEventContent(url=self.avatar_url),
+                    )
+                    self.avatar_set = True
+                except Exception as e:
+                    self.log.warning(f"Failed to set room avatar: {e}")
+                    self.avatar_set = False
             return True
         elif photo is not None and user is not None:
             return await self._update_avatar(user, photo=photo)
@@ -1202,14 +1207,17 @@ class Portal(DBPortal, BasePortal):
                     return False
                 self.photo_id = photo_id
                 self.avatar_url = file.mxc
-            try:
-                await self._try_set_state(
-                    sender, EventType.ROOM_AVATAR, RoomAvatarStateEventContent(url=self.avatar_url)
-                )
-                self.avatar_set = True
-            except Exception as e:
-                self.log.warning(f"Failed to set room avatar: {e}")
-                self.avatar_set = False
+            if self.mxid:
+                try:
+                    await self._try_set_state(
+                        sender,
+                        EventType.ROOM_AVATAR,
+                        RoomAvatarStateEventContent(url=self.avatar_url),
+                    )
+                    self.avatar_set = True
+                except Exception as e:
+                    self.log.warning(f"Failed to set room avatar: {e}")
+                    self.avatar_set = False
             if save:
                 await self.save()
             return True
