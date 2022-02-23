@@ -80,7 +80,7 @@ class TelegramBridge(Bridge):
     periodic_sync_task: asyncio.Task = None
     as_bridge_liveness_task: asyncio.Task = None
 
-    latest_telegram_update_timestamp: float
+    latest_telegram_update_timestamp: float | None = None
 
     as_connection_metric_task: asyncio.Task = None
 
@@ -266,15 +266,20 @@ class TelegramBridge(Bridge):
             await asyncio.sleep(15)
 
     async def _loop_check_bridge_liveness(self) -> None:
-        while True:
-            if (
-                self.latest_telegram_update_timestamp
-                and self.latest_telegram_update_timestamp
-                < time() - self.config.get("telegram.liveness_timeout")
-            ):
-                self.az.live = False
+        try:
+            while True:
+                self.log.debug(f'Last Telegram update: {self.latest_telegram_update_timestamp}')
+                if (
+                    self.latest_telegram_update_timestamp
+                    and self.latest_telegram_update_timestamp
+                    < time() - self.config.get("telegram.liveness_timeout", 0)
+                ):
+                    self.log.debug('Liveness check has failed: bridge has not seen Telegram updates in a while')
+                    self.az.live = False
 
-            await asyncio.sleep(15)
+                await asyncio.sleep(15)
+        except Exception as e:
+            self.log.error(f'Failed to check bridge liveness: {e}')
 
     async def manhole_global_namespace(self, user_id: UserID) -> dict[str, Any]:
         return {
