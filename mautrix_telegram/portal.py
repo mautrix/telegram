@@ -2431,6 +2431,8 @@ class Portal(DBPortal, BasePortal):
                 "image/": MessageType.IMAGE,
             }.get(info.mimetype[:6], MessageType.FILE),
         )
+        if event_type == EventType.STICKER:
+            content.msgtype = None
         if attrs.is_audio:
             content["org.matrix.msc1767.audio"] = {"duration": attrs.duration * 1000}
             if attrs.waveform:
