@@ -193,7 +193,7 @@ async def telegram_to_matrix(
     if entities:
         content.format = Format.HTML
         html = await _telegram_entities_to_matrix_catch(add_surrogate(content.body), entities)
-        content.formatted_body = del_surrogate(html).replace("\n", "<br/>")
+        content.formatted_body = del_surrogate(html)
 
     def force_html():
         if not content.formatted_body:
@@ -234,10 +234,23 @@ async def _telegram_entities_to_matrix_catch(text: str, entities: list[TypeMessa
 
 
 async def _telegram_entities_to_matrix(
-    text: str, entities: list[TypeMessageEntity], offset: int = 0, length: int = None
+    text: str,
+    entities: list[TypeMessageEntity],
+    offset: int = 0,
+    length: int = None,
+    in_codeblock: bool = False,
 ) -> str:
+    def text_to_html(
+        val: str, _in_codeblock: bool = in_codeblock, escape_html: bool = True
+    ) -> str:
+        if escape_html:
+            val = escape(val)
+        if _in_codeblock:
+            val = val.replace("\n", "<br/>")
+        return val
+
     if not entities:
-        return escape(text)
+        return text_to_html(text)
     if length is None:
         length = len(text)
     html = []
@@ -247,17 +260,20 @@ async def _telegram_entities_to_matrix(
             break
         relative_offset = entity.offset - offset
         if relative_offset > last_offset:
-            html.append(escape(text[last_offset:relative_offset]))
+            html.append(text_to_html(text[last_offset:relative_offset]))
         elif relative_offset < last_offset:
             continue
 
         skip_entity = False
+        is_code_entity = isinstance(entity, (MessageEntityCode, MessageEntityPre))
         entity_text = await _telegram_entities_to_matrix(
             text=text[relative_offset : relative_offset + entity.length],
             entities=entities[i + 1 :],
             offset=entity.offset,
             length=entity.length,
+            in_codeblock=is_code_entity,
         )
+        entity_text = text_to_html(entity_text, is_code_entity, escape_html=False)
         entity_type = type(entity)
 
         if entity_type == MessageEntityBold:
@@ -300,7 +316,7 @@ async def _telegram_entities_to_matrix(
         else:
             skip_entity = True
         last_offset = relative_offset + (0 if skip_entity else entity.length)
-    html.append(escape(text[last_offset:]))
+    html.append(text_to_html(text[last_offset:]))
 
     return "".join(html)
 
