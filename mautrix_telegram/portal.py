@@ -1642,6 +1642,9 @@ class Portal(DBPortal, BasePortal):
             attributes.append(DocumentAttributeImageSize(w, h))
             force_document = force_document or w * h >= max_image_pixels
 
+        if "fi.mau.telegram.force_document" in content:
+            force_document = bool(content["fi.mau.telegram.force_document"])
+
         if (mime == "image/png" or mime == "image/jpeg") and not force_document:
             media = InputMediaUploadedPhoto(file_handle)
         else:
