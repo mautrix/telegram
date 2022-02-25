@@ -462,10 +462,12 @@ class User(DBUser, AbstractUser, BaseUser):
         if active and tag_info is None:
             tag_info = RoomTagInfo(order=0.5)
             tag_info[DOUBLE_PUPPET_SOURCE_KEY] = self.bridge.name
+            self.log.debug("Adding tag {tag} to {portal.mxid}/{portal.tgid}")
             await puppet.intent.set_room_tag(portal.mxid, tag, tag_info)
         elif (
             not active and tag_info and tag_info.get(DOUBLE_PUPPET_SOURCE_KEY) == self.bridge.name
         ):
+            self.log.debug("Removing tag {tag} from {portal.mxid}/{portal.tgid}")
             await puppet.intent.remove_room_tag(portal.mxid, tag)
 
     async def _mute_room(cls, puppet: pu.Puppet, portal: po.Portal, mute_until: datetime) -> None:
@@ -473,6 +475,9 @@ class User(DBUser, AbstractUser, BaseUser):
             return
         now = datetime.utcnow().replace(tzinfo=timezone.utc)
         if mute_until is not None and mute_until > now:
+            self.log.debug(
+                f"Muting {portal.mxid}/{portal.tgid} (muted until {mute_until} on Telegram)"
+            )
             await puppet.intent.set_push_rule(
                 PushRuleScope.GLOBAL,
                 PushRuleKind.ROOM,
@@ -484,6 +489,7 @@ class User(DBUser, AbstractUser, BaseUser):
                 await puppet.intent.remove_push_rule(
                     PushRuleScope.GLOBAL, PushRuleKind.ROOM, portal.mxid
                 )
+                self.log.debug(f"Unmuted {portal.mxid}/{portal.tgid}")
             except MNotFound:
                 pass
 
