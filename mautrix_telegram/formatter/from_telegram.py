@@ -245,7 +245,7 @@ async def _telegram_entities_to_matrix(
     ) -> str:
         if escape_html:
             val = escape(val)
-        if _in_codeblock:
+        if not _in_codeblock:
             val = val.replace("\n", "<br/>")
         return val
 
