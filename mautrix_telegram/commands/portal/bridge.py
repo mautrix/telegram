@@ -80,7 +80,7 @@ async def bridge(evt: CommandEvent) -> EventID:
             "If you're the bridge admin, try "
             "`$cmdprefix+sp filter whitelist <Telegram chat ID>` first."
         )
-    if portal.mxid:
+    elif portal.mxid:
         has_portal_message = (
             "That Telegram chat already has a portal at "
             f"[{portal.alias or portal.mxid}](https://matrix.to/#/{portal.mxid}). "
@@ -96,7 +96,7 @@ async def bridge(evt: CommandEvent) -> EventID:
             "mxid": portal.mxid,
             "bridge_to_mxid": room_id,
             "tgid": portal.tgid,
-            "peer_type": portal.peer_type,
+            "peer_type": peer_type,
             "force_use_bot": force_use_bot,
         }
         return await evt.reply(
@@ -112,7 +112,7 @@ async def bridge(evt: CommandEvent) -> EventID:
         "action": "Room bridging",
         "bridge_to_mxid": room_id,
         "tgid": portal.tgid,
-        "peer_type": portal.peer_type,
+        "peer_type": peer_type,
         "force_use_bot": force_use_bot,
     }
     return await evt.reply(
@@ -163,6 +163,18 @@ async def confirm_bridge(evt: CommandEvent) -> EventID | None:
     is_logged_in = await evt.sender.is_logged_in() and not status["force_use_bot"]
 
     if "mxid" in status:
+        if portal.peer_type != status["peer_type"]:
+            evt.log.warning(
+                "Portal %d in database has mismatching peer type %s (expected %s),"
+                " trusting database as a room already existed",
+                portal.tgid,
+                portal.peer_type,
+                status["peer_type"],
+            )
+            await evt.reply(
+                "Mismatching peer type in command and portal table, "
+                "trusting portal as room already existed"
+            )
         ok, coro = await cleanup_old_portal_while_bridging(evt, portal)
         if not ok:
             return None
@@ -181,6 +193,19 @@ async def confirm_bridge(evt: CommandEvent) -> EventID | None:
             "Please use `$cmdprefix+sp continue` to confirm the bridging or "
             "`$cmdprefix+sp cancel` to cancel."
         )
+    elif portal.peer_type != status["peer_type"]:
+        evt.log.warning(
+            "Portal %d in database has mismatching peer type %s (expected %s),"
+            " trusting new peer type as there's no existing room",
+            portal.tgid,
+            portal.peer_type,
+            status["peer_type"],
+        )
+        await evt.reply(
+            "Mismatching peer type in command and portal table, "
+            "trusting you as portal room doesn't exist"
+        )
+        portal.peer_type = status["peer_type"]
 
     evt.sender.command_status = None
     async with portal._room_create_lock:
