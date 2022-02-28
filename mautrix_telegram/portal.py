@@ -2815,20 +2815,21 @@ class Portal(DBPortal, BasePortal):
             return
         if limit < 0:
             limit = last_tgid - min_id
-            self.log.debug(
-                f"Backfilling approximately {last_tgid - min_id} messages through {source.mxid}"
-            )
+            limit_type = "unlimited"
         elif self.peer_type == "channel":
             min_id = max(last_tgid - limit, min_id)
-            self.log.debug(
-                f"Backfilling messages after ID {min_id} (last message: {last_tgid}) "
-                f"through {source.mxid}"
-            )
+            # This is now just an approximate message count, not the actual limit.
+            limit = last_tgid - min_id
+            limit_type = "channel"
         else:
             # This limit will be higher than the actual message count if there are any messages
             # in other DMs or normal groups, but that's not too bad.
             limit = min(last_tgid - min_id, limit)
-            self.log.debug(f"Backfilling up to {limit} messages through {source.mxid}")
+            limit_type = "dm/minigroup"
+        self.log.debug(
+            f"Backfilling up to {limit} messages after ID {min_id} through {source.mxid} "
+            f"(last message: {last_tgid}, limit type: {limit_type})"
+        )
         with self.backfill_lock:
             await self._backfill(source, min_id, limit)
 
