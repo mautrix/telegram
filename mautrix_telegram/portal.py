@@ -3270,6 +3270,15 @@ class Portal(DBPortal, BasePortal):
         backfill: bool = False,
     ) -> None:
         assert isinstance(update.action, MessageActionContactSignUp)
+
+        msg = await DBMessage.get_one_by_tgid(TelegramID(update.id), source.tgid)
+        if msg:
+            self.log.debug(
+                f"Ignoring new user message {update.id} (src {source.tgid}) as it was already "
+                f"handled into {msg.mxid}."
+            )
+            return
+
         content = TextMessageEventContent(msgtype=MessageType.EMOTE, body="joined Telegram")
         event_id = await self._send_message(
             sender.intent_for(self), content, timestamp=update.date
