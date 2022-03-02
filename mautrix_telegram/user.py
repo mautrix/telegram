@@ -470,8 +470,8 @@ class User(DBUser, AbstractUser, BaseUser):
             self.log.debug("Removing tag {tag} from {portal.mxid}/{portal.tgid}")
             await puppet.intent.remove_room_tag(portal.mxid, tag)
 
-    async def _mute_room(cls, puppet: pu.Puppet, portal: po.Portal, mute_until: datetime) -> None:
-        if not cls.config["bridge.mute_bridging"] or not portal or not portal.mxid:
+    async def _mute_room(self, puppet: pu.Puppet, portal: po.Portal, mute_until: datetime) -> None:
+        if not self.config["bridge.mute_bridging"] or not portal or not portal.mxid:
             return
         now = datetime.utcnow().replace(tzinfo=timezone.utc)
         if mute_until is not None and mute_until > now:
