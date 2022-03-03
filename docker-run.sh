@@ -2,7 +2,7 @@
 
 # Define functions.
 function fixperms {
-	chown -R $UID:$GID /data /opt/mautrix-telegram
+	chown -R $UID:$GID /data
 }
 
 cd /opt/mautrix-telegram
