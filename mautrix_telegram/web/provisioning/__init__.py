@@ -212,7 +212,7 @@ class ProvisioningAPI(AuthAPI):
             portal.photo_id = ""
             await portal.save()
 
-        asyncio.create_task(portal.update_matrix_room(user, entity, direct=False, levels=levels))
+        asyncio.create_task(portal.update_matrix_room(user, entity, levels=levels))
 
         return web.Response(status=202, body="{}")
 

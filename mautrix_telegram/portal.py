@@ -163,7 +163,7 @@ from telethon.utils import decode_waveform
 import magic
 
 from mautrix.appservice import DOUBLE_PUPPET_SOURCE_KEY, IntentAPI
-from mautrix.bridge import BasePortal, NotificationDisabler, async_getter_lock
+from mautrix.bridge import BasePortal, NotificationDisabler, RejectMatrixInvite, async_getter_lock
 from mautrix.errors import IntentError, MatrixRequestError, MForbidden
 from mautrix.types import (
     ContentURI,
@@ -448,6 +448,14 @@ class Portal(DBPortal, BasePortal):
     # endregion
     # region Matrix -> Telegram metadata
 
+    async def save(self) -> None:
+        if self.deleted:
+            await super().insert()
+            await self.postinit()
+            self.deleted = False
+        else:
+            await super().save()
+
     async def get_telegram_users_in_matrix_room(
         self, source: u.User, pre_create: bool = False
     ) -> tuple[list[InputPeerUser], list[UserID]]:
@@ -570,18 +578,25 @@ class Portal(DBPortal, BasePortal):
         await self.handle_matrix_power_levels(source, levels.users, {}, None)
         await self.update_bridge_info()
 
-    async def invite_telegram(self, source: u.User, puppet: p.Puppet | au.AbstractUser) -> None:
+    async def handle_matrix_invite(
+        self, invited_by: u.User, puppet: p.Puppet | au.AbstractUser
+    ) -> None:
         if puppet.is_channel:
             raise ValueError("Can't invite channels to chats")
-        if self.peer_type == "chat":
-            await source.client(
-                AddChatUserRequest(chat_id=self.tgid, user_id=puppet.tgid, fwd_limit=0)
-            )
-        elif self.peer_type == "channel":
-            await source.client(InviteToChannelRequest(channel=self.peer, users=[puppet.tgid]))
-        # We don't care if there are invites for private chat portals with the relaybot.
-        elif not self.bot or self.tg_receiver != self.bot.tgid:
-            raise ValueError("Invalid peer type for Telegram user invite")
+        try:
+            if self.peer_type == "chat":
+                await invited_by.client(
+                    AddChatUserRequest(chat_id=self.tgid, user_id=puppet.tgid, fwd_limit=0)
+                )
+            elif self.peer_type == "channel":
+                await invited_by.client(
+                    InviteToChannelRequest(channel=self.peer, users=[puppet.tgid])
+                )
+            # We don't care if there are invites for private chat portals with the relaybot.
+            elif not self.bot or self.tg_receiver != self.bot.tgid:
+                raise RejectMatrixInvite("You can't invite additional users to private chats.")
+        except RPCError as e:
+            raise RejectMatrixInvite(e.message) from e
 
     # endregion
     # region Telegram -> Matrix metadata
@@ -613,15 +628,12 @@ class Portal(DBPortal, BasePortal):
         self,
         user: au.AbstractUser,
         entity: TypeChat | User,
-        direct: bool = None,
         puppet: p.Puppet = None,
         levels: PowerLevelStateEventContent = None,
         users: list[User] = None,
     ) -> None:
-        if direct is None:
-            direct = self.peer_type == "user"
         try:
-            await self._update_matrix_room(user, entity, direct, puppet, levels, users)
+            await self._update_matrix_room(user, entity, puppet, levels, users)
         except Exception:
             self.log.exception("Fatal error updating Matrix room")
 
@@ -629,12 +641,11 @@ class Portal(DBPortal, BasePortal):
         self,
         user: au.AbstractUser,
         entity: TypeChat | User,
-        direct: bool,
         puppet: p.Puppet = None,
         levels: PowerLevelStateEventContent = None,
         users: list[User] = None,
     ) -> None:
-        if not direct:
+        if not self.is_direct:
             await self.update_info(user, entity)
             if not users:
                 users = await self._get_users(user, entity)
@@ -642,7 +653,7 @@ class Portal(DBPortal, BasePortal):
             await self.update_power_levels(users, levels)
         else:
             if not puppet:
-                puppet = await p.Puppet.get_by_tgid(self.tgid)
+                puppet = await self.get_dm_puppet()
             await puppet.update_info(user, entity)
             await puppet.intent_for(self).join_room(self.mxid)
             await self.update_info_from_puppet(puppet, user, entity.photo)
@@ -661,12 +672,14 @@ class Portal(DBPortal, BasePortal):
 
     async def update_info_from_puppet(
         self,
-        puppet: p.Puppet,
+        puppet: p.Puppet | None = None,
         source: au.AbstractUser | None = None,
         photo: UserProfilePhoto | None = None,
     ) -> None:
         if not self.encrypted and not self.private_chat_portal_meta:
             return
+        if puppet is None:
+            puppet = await self.get_dm_puppet()
         # The bridge bot needs to join for e2ee, but that messes up the default name
         # generation. If/when canonical DMs happen, this might not be necessary anymore.
         changed = await self._update_avatar_from_puppet(puppet, source, photo)
@@ -690,7 +703,7 @@ class Portal(DBPortal, BasePortal):
                     except Exception:
                         self.log.exception(f"Failed to get entity through {user.tgid} for update")
                         return self.mxid
-                update = self.update_matrix_room(user, entity, self.peer_type == "user")
+                update = self.update_matrix_room(user, entity)
                 asyncio.create_task(update)
                 await self.invite_to_matrix(invites or [])
             return self.mxid
@@ -754,7 +767,6 @@ class Portal(DBPortal, BasePortal):
         elif not self.allow_bridging:
             return None
 
-        direct = self.peer_type == "user"
         invites = invites or []
 
         if not entity:
@@ -768,14 +780,14 @@ class Portal(DBPortal, BasePortal):
         except AttributeError:
             self.title = None
 
-        if direct and self.tgid == user.tgid:
+        if self.is_direct and self.tgid == user.tgid:
             self.title = "Telegram Saved Messages"
             self.about = "Your Telegram cloud storage chat"
 
-        puppet = await p.Puppet.get_by_tgid(self.tgid) if direct else None
+        puppet = await self.get_dm_puppet()
         if puppet:
             await puppet.update_info(user, entity)
-        self._main_intent = puppet.intent_for(self) if direct else self.az.intent
+        self._main_intent = puppet.intent_for(self) if self.is_direct else self.az.intent
 
         if self.peer_type == "channel":
             self.megagroup = entity.megagroup
@@ -796,7 +808,7 @@ class Portal(DBPortal, BasePortal):
 
         power_levels = putil.get_base_power_levels(self, entity=entity)
         users = None
-        if not direct:
+        if not self.is_direct:
             users = await self._get_users(user, entity)
             if self.has_bot:
                 extra_invites = self.config["bridge.relaybot.group_chat_invite"]
@@ -836,9 +848,9 @@ class Portal(DBPortal, BasePortal):
                     "content": {"algorithm": "m.megolm.v1.aes-sha2"},
                 }
             )
-            if direct:
+            if self.is_direct:
                 create_invites.append(self.az.bot_mxid)
-        if direct and (self.encrypted or self.private_chat_portal_meta):
+        if self.is_direct and (self.encrypted or self.private_chat_portal_meta):
             self.title = puppet.displayname
             self.avatar_url = puppet.avatar_url
             self.photo_id = puppet.photo_id
@@ -857,7 +869,7 @@ class Portal(DBPortal, BasePortal):
             room_id = await self.main_intent.create_room(
                 alias_localpart=alias,
                 preset=preset,
-                is_direct=direct,
+                is_direct=self.is_direct,
                 invitees=create_invites,
                 name=self.title,
                 topic=self.about,
@@ -869,7 +881,7 @@ class Portal(DBPortal, BasePortal):
             self.name_set = bool(self.title)
             self.avatar_set = bool(self.avatar_url)
 
-            if self.encrypted and self.matrix.e2ee and direct:
+            if self.encrypted and self.matrix.e2ee and self.is_direct:
                 try:
                     await self.az.intent.ensure_joined(room_id)
                 except Exception:
@@ -885,7 +897,7 @@ class Portal(DBPortal, BasePortal):
 
             update_room = asyncio.create_task(
                 self.update_matrix_room(
-                    user, entity, direct, puppet, levels=power_levels, users=users
+                    user, entity, self.is_direct, puppet, levels=power_levels, users=users
                 )
             )
 
@@ -2165,7 +2177,7 @@ class Portal(DBPortal, BasePortal):
                 "Failed to fully migrate to upgraded Matrix room: no Telegram user found."
             )
             return
-        await self.update_matrix_room(user, entity, direct=self.peer_type == "user")
+        await self.update_matrix_room(user, entity)
         self.log.info(f"{sender} upgraded room from {old_room} to {self.mxid}")
         await self._send_delivery_receipt(event_id, room_id=old_room)
 
@@ -2177,13 +2189,6 @@ class Portal(DBPortal, BasePortal):
         self.mxid = new_id
         self.by_mxid[self.mxid] = self
         await self.save()
-
-    async def enable_dm_encryption(self) -> bool:
-        ok = await super().enable_dm_encryption()
-        if ok:
-            puppet = await p.Puppet.get_by_tgid(self.tgid)
-            await self.update_info_from_puppet(puppet)
-        return ok
 
     # endregion
     # region Telegram -> Matrix bridging
@@ -3481,6 +3486,12 @@ class Portal(DBPortal, BasePortal):
             del self.by_mxid[self.mxid]
         except KeyError:
             pass
+        self.name_set = False
+        self.avatar_set = False
+        self.about = None
+        self.sponsored_event_id = None
+        self.sponsored_event_ts = None
+        self.sponsored_msg_random_id = None
         await super().delete()
         await DBMessage.delete_all(self.mxid)
         await DBReaction.delete_all(self.mxid)
@@ -3489,8 +3500,13 @@ class Portal(DBPortal, BasePortal):
     # endregion
     # region Class instance lookup
 
+    async def get_dm_puppet(self) -> p.Puppet | None:
+        if not self.is_direct:
+            return None
+        return await p.Puppet.get_by_tgid(self.tgid)
+
     async def postinit(self) -> None:
-        puppet = await p.Puppet.get_by_tgid(self.tgid) if self.is_direct else None
+        puppet = await self.get_dm_puppet()
         self._main_intent = puppet.intent_for(self) if self.is_direct else self.az.intent
 
         if self.tgid:

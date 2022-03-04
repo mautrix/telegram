@@ -246,7 +246,7 @@ async def _locked_confirm_bridge(
     await portal.save()
     await portal.update_bridge_info()
 
-    asyncio.create_task(portal.update_matrix_room(user, entity, direct=False, levels=levels))
+    asyncio.create_task(portal.update_matrix_room(user, entity, levels=levels))
 
     await warn_missing_power(levels, evt)
 

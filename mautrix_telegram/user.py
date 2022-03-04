@@ -269,6 +269,13 @@ class User(DBUser, AbstractUser, BaseUser):
             return None
         return await pu.Puppet.get_by_tgid(self.tgid)
 
+    async def get_portal_with(self, puppet: pu.Puppet, create: bool = True) -> po.Portal | None:
+        if not self.tgid:
+            return None
+        return await po.Portal.get_by_tgid(
+            puppet.tgid, tg_receiver=self.tgid, peer_type="user" if create else None
+        )
+
     async def stop(self) -> None:
         if self._track_connection_task:
             self._track_connection_task.cancel()
