@@ -3,6 +3,12 @@
 # Define functions.
 function fixperms {
 	chown -R $UID:$GID /data
+
+	# /opt/mautrix-telegram is read-only, so disable file logging if it's pointing there.
+	if [[ "$(yq e '.logging.handlers.file.filename' /data/config.yaml)" == "./mautrix-telegram.log" ]]; then
+		yq -I4 e -i 'del(.logging.root.handlers[] | select(. == "file"))' /data/config.yaml
+		yq -I4 e -i 'del(.logging.handlers.file)' /data/config.yaml
+	fi
 }
 
 cd /opt/mautrix-telegram
@@ -19,6 +25,9 @@ fi
 
 if [ ! -f /data/registration.yaml ]; then
 	python3 -m mautrix_telegram -g -c /data/config.yaml -r /data/registration.yaml
+	echo "Didn't find a registration file."
+	echo "Generated one for you."
+	echo "See https://docs.mau.fi/bridges/general/registering-appservices.html on how to use it."
 	fixperms
 	exit
 fi
