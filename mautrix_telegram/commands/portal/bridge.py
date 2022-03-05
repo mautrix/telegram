@@ -59,13 +59,18 @@ async def bridge(evt: CommandEvent) -> EventID:
 
     # The /id bot command provides the prefixed ID, so we assume
     tgid_str = evt.args[0]
-    if tgid_str.startswith("-100"):
-        tgid = TelegramID(int(tgid_str[4:]))
-        peer_type = "channel"
-    elif tgid_str.startswith("-"):
-        tgid = TelegramID(-int(tgid_str))
-        peer_type = "chat"
-    else:
+    tgid = None
+    try:
+        if tgid_str.startswith("-100"):
+            tgid = TelegramID(int(tgid_str[4:]))
+            peer_type = "channel"
+        elif tgid_str.startswith("-"):
+            tgid = TelegramID(-int(tgid_str))
+            peer_type = "chat"
+    except ValueError:
+        # Invalid integer
+        pass
+    if not tgid:
         return await evt.reply(
             "That doesn't seem like a prefixed Telegram chat ID.\n\n"
             "If you did not get the ID using the `/id` bot command, please "
