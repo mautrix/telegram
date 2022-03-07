@@ -6,9 +6,20 @@
 * Telegram->Matrix message formatter will now replace `t.me/c/chatid/messageid`
   style links with a link to the bridged Matrix event (in addition to the
   previously supported `t.me/username/messageid` links).
+* Updated formatting converter to keep newlines in code blocks as `\n` instead
+  of converting them to `<br/>`.
+* Removed `max_document_size` option. The bridge will now fetch the max size
+  automatically using the media repo config endpoint.
+* Removed redundant `msgtype` field in sticker events sent to Matrix.
+* Disabled file logging in Docker image by default.
+  * If you want to enable it, set the `filename` in the file log handler to a
+    path that is writable, then add `"file"` back to `logging.root.handlers`.
 
 ### Fixed
-
+* Fixed `!tg bridge` throwing error if the parameter is not an integer
+* Fixed `!tg bridge` failing if the command had been previously run with an
+  incorrectly prefixed chat ID (e.g. `!tg bridge -1234567` followed by
+  `!tg bridge -1001234567`).
 
 # v0.11.2 (2022-02-14)
 
