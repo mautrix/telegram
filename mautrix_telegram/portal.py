@@ -896,9 +896,7 @@ class Portal(DBPortal, BasePortal):
             await self.invite_to_matrix(invites)
 
             update_room = asyncio.create_task(
-                self.update_matrix_room(
-                    user, entity, self.is_direct, puppet, levels=power_levels, users=users
-                )
+                self.update_matrix_room(user, entity, puppet, levels=power_levels, users=users)
             )
 
             if self.config["bridge.backfill.initial_limit"] > 0:
