@@ -1466,7 +1466,7 @@ class Portal(DBPortal, BasePortal):
                 del self.by_mxid[self.mxid]
             except KeyError:
                 pass
-        elif self.config["bridge.kick_on_logout"]:
+        elif self.config["bridge.bridge_matrix_leave"]:
             await user.client.delete_dialog(self.peer)
 
     async def join_matrix(self, user: u.User, event_id: EventID) -> None:
