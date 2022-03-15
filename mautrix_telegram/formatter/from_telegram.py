@@ -332,12 +332,24 @@ def _parse_pre(html: list[str], entity_text: str, language: str) -> bool:
 async def _parse_mention(html: list[str], entity_text: str) -> bool:
     username = entity_text[1:]
 
+    mxid = None
+    portal = None
+    # This is a bit complicated because public channels have both Puppet and Portal instances.
+    # Basically the currently intended output is:
+    # User/bot mention (bridge user)          -> real user mention
+    # User/bot mention (normal Telegram user) -> ghost user mention
+    # Public channel with existing portal     -> room mention
+    # Public channel without portal           -> ghost user mention
+    # Other chat                              -> room mention
     user = await u.User.find_by_username(username) or await pu.Puppet.find_by_username(username)
     if user:
+        if isinstance(user, pu.Puppet) and user.is_channel:
+            portal = await po.Portal.get_by_tgid(user.tgid)
         mxid = user.mxid
     else:
         portal = await po.Portal.find_by_username(username)
-        mxid = portal.alias or portal.mxid if portal else None
+    if portal and (portal.mxid or not user):
+        mxid = portal.alias or portal.mxid
 
     if mxid:
         html.append(f"<a href='https://matrix.to/#/{mxid}'>{entity_text}</a>")
