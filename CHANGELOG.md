@@ -1,6 +1,4 @@
-# unreleased
-
-### Added
+# v0.11.3 (unreleased)
 
 ### Improved
 * Telegram->Matrix message formatter will now replace `t.me/c/chatid/messageid`
@@ -20,6 +18,11 @@
 * Fixed `!tg bridge` failing if the command had been previously run with an
   incorrectly prefixed chat ID (e.g. `!tg bridge -1234567` followed by
   `!tg bridge -1001234567`).
+* Fixed `bridge_matrix_leave` config option not actually being used correctly.
+* Fixed public channel mentions always bridging into a user mention on Matrix
+  rather than a room mention.
+  * The bridge will now make room mentions if the portal exists and fall back
+    to user mentions otherwise.
 
 # v0.11.2 (2022-02-14)
 
