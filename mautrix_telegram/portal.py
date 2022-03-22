@@ -2964,9 +2964,10 @@ class Portal(DBPortal, BasePortal):
         msg_id: TelegramID,
         data: MessageReactions,
         dbm: DBMessage | None = None,
+        timestamp: datetime | None = None,
     ) -> None:
         try:
-            await self.handle_telegram_reactions(source, msg_id, data, dbm)
+            await self.handle_telegram_reactions(source, msg_id, data, dbm, timestamp)
         except Exception:
             self.log.exception(f"Error handling reactions in message {msg_id}")
 
@@ -2976,6 +2977,7 @@ class Portal(DBPortal, BasePortal):
         msg_id: TelegramID,
         data: MessageReactions,
         dbm: DBMessage | None = None,
+        timestamp: datetime | None = None,
     ) -> None:
         if self.peer_type == "channel" and not self.megagroup:
             # We don't know who reacted in a channel, so we can't bridge it properly either
@@ -3004,10 +3006,16 @@ class Portal(DBPortal, BasePortal):
                 # recent_reactions = resp.reactions
 
         async with self.reaction_lock(dbm.mxid):
-            await self._handle_telegram_reactions_locked(dbm, recent_reactions, total_count)
+            await self._handle_telegram_reactions_locked(
+                dbm, recent_reactions, total_count, timestamp=timestamp
+            )
 
     async def _handle_telegram_reactions_locked(
-        self, msg: DBMessage, reaction_list: list[MessagePeerReaction], total_count: int
+        self,
+        msg: DBMessage,
+        reaction_list: list[MessagePeerReaction],
+        total_count: int,
+        timestamp: datetime | None = None,
     ) -> None:
         reactions = {
             p.Puppet.get_id_from_peer(reaction.peer_id): reaction.reaction
@@ -3035,7 +3043,7 @@ class Portal(DBPortal, BasePortal):
             self.log.debug(f"Bridging reaction {new_emoji} by {sender} to {msg.tgid}")
             puppet: p.Puppet = await p.Puppet.get_by_tgid(sender)
             mxid = await puppet.intent_for(self).react(
-                msg.mx_room, msg.mxid, variation_selector.add(new_emoji)
+                msg.mx_room, msg.mxid, variation_selector.add(new_emoji), timestamp=timestamp
             )
             await DBReaction(
                 mxid=mxid,
@@ -3061,7 +3069,7 @@ class Portal(DBPortal, BasePortal):
             intent = puppet.intent_for(self)
             await intent.redact(changed_reaction.mx_room, changed_reaction.mxid)
             changed_reaction.mxid = await intent.react(
-                msg.mx_room, msg.mxid, variation_selector.add(new_emoji)
+                msg.mx_room, msg.mxid, variation_selector.add(new_emoji), timestamp=timestamp
             )
             changed_reaction.reaction = new_emoji
             await changed_reaction.save()
@@ -3223,7 +3231,9 @@ class Portal(DBPortal, BasePortal):
             return
         if isinstance(evt, Message) and evt.reactions:
             asyncio.create_task(
-                self.try_handle_telegram_reactions(source, dbm.tgid, evt.reactions, dbm=dbm)
+                self.try_handle_telegram_reactions(
+                    source, dbm.tgid, evt.reactions, dbm=dbm, timestamp=evt.date
+                )
             )
         await self._send_delivery_receipt(event_id)
 
