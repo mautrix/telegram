@@ -379,7 +379,7 @@ class User(DBUser, AbstractUser, BaseUser):
         if not self.config["bridge.kick_on_logout"]:
             return
         portals = await self.get_cached_portals()
-        for _, portal in portals.values():
+        for portal in portals.values():
             if not portal or portal.deleted or not portal.mxid or portal.has_bot:
                 continue
             if portal.peer_type == "user":
