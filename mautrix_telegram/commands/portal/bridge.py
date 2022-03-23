@@ -73,8 +73,8 @@ async def bridge(evt: CommandEvent) -> EventID:
     if not tgid:
         return await evt.reply(
             "That doesn't seem like a prefixed Telegram chat ID.\n\n"
-            "If you did not get the ID using the `/id` bot command, please "
-            "prefix channel IDs with `-100` and normal group IDs with `-`.\n\n"
+            "If you did not get the ID using the `/id` bot command, please prefix"
+            "channel/supergroup IDs with `-100` and non-super group IDs with `-`.\n\n"
             "Bridging private chats to existing rooms is not allowed."
         )
 
