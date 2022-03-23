@@ -1503,7 +1503,9 @@ class Portal(DBPortal, BasePortal):
         return ruds[self.hash_user_id(user_id) % len(ruds)] if ruds else ""
 
     async def _apply_msg_format(self, sender: u.User, content: MessageEventContent) -> None:
-        if not isinstance(content, TextMessageEventContent) or content.format != Format.HTML:
+        if isinstance(content, TextMessageEventContent):
+            content.ensure_has_html()
+        else:
             content.format = Format.HTML
             content.formatted_body = escape_html(content.body).replace("\n", "<br/>")
 
@@ -1524,9 +1526,7 @@ class Portal(DBPortal, BasePortal):
         content.formatted_body = Template(tpl).safe_substitute(tpl_args)
 
     async def _apply_emote_format(self, sender: u.User, content: TextMessageEventContent) -> None:
-        if content.format != Format.HTML:
-            content.format = Format.HTML
-            content.formatted_body = escape_html(content.body).replace("\n", "<br/>")
+        content.ensure_has_html()
 
         tpl = self.get_config("emote_format")
         puppet = await p.Puppet.get_by_tgid(sender.tgid)

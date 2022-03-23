@@ -81,9 +81,6 @@ async def telegram_reply_to_matrix(evt: Message, source: au.AbstractUser) -> Rel
 async def _add_forward_header(
     source: au.AbstractUser, content: TextMessageEventContent, fwd_from: MessageFwdHeader
 ) -> None:
-    if not content.formatted_body or content.format != Format.HTML:
-        content.format = Format.HTML
-        content.formatted_body = escape(content.body)
     fwd_from_html, fwd_from_text = None, None
     if isinstance(fwd_from.from_id, PeerUser):
         user = await u.User.get_by_tgid(TelegramID(fwd_from.from_id.user_id))
@@ -139,6 +136,7 @@ async def _add_forward_header(
         fwd_from_text = "unknown source"
         fwd_from_html = f"unknown source"
 
+    content.ensure_has_html()
     content.body = "\n".join([f"> {line}" for line in content.body.split("\n")])
     content.body = f"Forwarded from {fwd_from_text}:\n{content.body}"
     content.formatted_body = (
@@ -195,16 +193,11 @@ async def telegram_to_matrix(
         html = await _telegram_entities_to_matrix_catch(add_surrogate(content.body), entities)
         content.formatted_body = del_surrogate(html)
 
-    def force_html():
-        if not content.formatted_body:
-            content.format = Format.HTML
-            content.formatted_body = escape(content.body).replace("\n", "<br/>")
-
     if require_html:
-        force_html()
+        content.ensure_has_html()
 
     if prefix_html:
-        force_html()
+        content.ensure_has_html()
         content.formatted_body = prefix_html + content.formatted_body
     if prefix_text:
         content.body = prefix_text + content.body
@@ -216,7 +209,7 @@ async def telegram_to_matrix(
         await _add_reply_header(source, content, evt, main_intent)
 
     if isinstance(evt, Message) and evt.post and evt.post_author:
-        force_html()
+        content.ensure_has_html()
         content.body += f"\n- {evt.post_author}"
         content.formatted_body += f"<br/><i>- <u>{evt.post_author}</u></i>"
 
