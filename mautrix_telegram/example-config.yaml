@@ -16,6 +16,9 @@ homeserver:
     status_endpoint: null
     # Endpoint for reporting per-message status.
     message_send_checkpoint_endpoint: null
+    # Whether asynchronous uploads via MSC2246 should be enabled for media.
+    # Requires a media repo that supports MSC2246.
+    async_media: false
 
 # Application service host/registration related details
 # Changing these values requires regeneration of the registration.
