@@ -273,7 +273,7 @@ async def _unlocked_transfer_file_to_matrix(
 
     if parallel_id and isinstance(location, Document) and (not is_sticker or not tgs_convert):
         db_file = await parallel_transfer_to_matrix(
-            client, intent, loc_id, location, filename, encrypt, parallel_id, async_upload
+            client, intent, loc_id, location, filename, encrypt, parallel_id
         )
         mime_type = location.mime_type
         file = None

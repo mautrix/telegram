@@ -317,7 +317,6 @@ async def parallel_transfer_to_matrix(
     filename: str,
     encrypt: bool,
     parallel_id: int,
-    async_upload: bool = False,
 ) -> DBTelegramFile:
     size = location.size
     mime_type = location.mime_type
@@ -341,11 +340,7 @@ async def parallel_transfer_to_matrix(
             data = encrypted(data)
             up_mime_type = "application/octet-stream"
         content_uri = await intent.upload_media(
-            data,
-            mime_type=up_mime_type,
-            filename=filename,
-            size=size if not encrypt else None,
-            async_upload=async_upload and not encrypt,
+            data, mime_type=up_mime_type, filename=filename, size=size if not encrypt else None
         )
         if decryption_info:
             decryption_info.url = content_uri
