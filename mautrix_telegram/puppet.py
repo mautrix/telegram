@@ -359,6 +359,7 @@ class Puppet(DBPuppet, BasePuppet):
                     location=InputPeerPhotoFileLocation(
                         peer=await self.get_input_entity(source), photo_id=photo.photo_id, big=True
                     ),
+                    async_upload=self.config["homeserver.async_media"],
                 )
                 if not file:
                     return False

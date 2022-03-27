@@ -1212,7 +1212,12 @@ class Portal(DBPortal, BasePortal):
                 self.photo_id = ""
                 self.avatar_url = None
             elif self.photo_id != photo_id or not self.avatar_url:
-                file = await util.transfer_file_to_matrix(user.client, self.main_intent, loc)
+                file = await util.transfer_file_to_matrix(
+                    user.client,
+                    self.main_intent,
+                    loc,
+                    async_upload=self.config["homeserver.async_media"],
+                )
                 if not file:
                     return False
                 self.photo_id = photo_id
@@ -2224,7 +2229,11 @@ class Portal(DBPortal, BasePortal):
             )
             return await self._send_message(intent, content, timestamp=evt.date)
         file = await util.transfer_file_to_matrix(
-            source.client, intent, loc, encrypt=self.encrypted
+            source.client,
+            intent,
+            loc,
+            encrypt=self.encrypted,
+            async_upload=self.config["homeserver.async_media"],
         )
         if not file:
             return None
@@ -2390,6 +2399,7 @@ class Portal(DBPortal, BasePortal):
             filename=attrs.name,
             parallel_id=parallel_id,
             encrypt=self.encrypted,
+            async_upload=self.config["homeserver.async_media"],
         )
         if not file:
             return None
@@ -2527,7 +2537,11 @@ class Portal(DBPortal, BasePortal):
             beeper_link_preview["og:image:height"] = largest_size.h
             beeper_link_preview["og:image:width"] = largest_size.w
             file = await util.transfer_file_to_matrix(
-                source.client, intent, loc, encrypt=self.encrypted
+                source.client,
+                intent,
+                loc,
+                encrypt=self.encrypted,
+                async_upload=self.config["homeserver.async_media"],
             )
 
             if file.decryption_info:
