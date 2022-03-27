@@ -24,6 +24,7 @@
   rather than a room mention.
   * The bridge will now make room mentions if the portal exists and fall back
     to user mentions otherwise.
+* Fixed newlines being lost in unformatted forwarded messages.
 
 # v0.11.2 (2022-02-14)
 
