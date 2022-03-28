@@ -159,12 +159,13 @@ def _parse_delta(value: str) -> timedelta | None:
 @command_handler(
     help_section=SECTION_PORTAL_MANAGEMENT,
     help_text="Get a Telegram invite link to the current chat.",
-    help_args="[--uses=<amount>] [--expire=<time delta, e.g. 1d>]",
+    help_args="[--uses=<amount>] [--expire=<time delta, e.g. 1d>] [--request-needed] [title]",
 )
 async def invite_link(evt: CommandEvent) -> EventID:
     # TODO once we switch to Python 3.9 minimum, use argparse with exit_on_error=False
     uses = None
     expire = None
+    request_needed = False
     while evt.args:
         try:
             flag, value = _parse_flag(evt.args)
@@ -180,6 +181,9 @@ async def invite_link(evt: CommandEvent) -> EventID:
             if not expire_delta:
                 await evt.reply("Invalid format for expiry time delta")
             expire = datetime.now() + expire_delta
+        elif flag in ("request", "request-needed", "r"):
+            request_needed = True
+    title = " ".join(evt.args)
 
     portal = await po.Portal.get_by_mxid(evt.room_id)
     if not portal:
@@ -189,7 +193,9 @@ async def invite_link(evt: CommandEvent) -> EventID:
         return await evt.reply("You can't invite users to private chats.")
 
     try:
-        link = await portal.get_invite_link(evt.sender, uses=uses, expire=expire)
+        link = await portal.get_invite_link(
+            evt.sender, uses=uses, expire=expire, request_needed=request_needed, title=title
+        )
         return await evt.reply(f"Invite link to {portal.title}: {link}")
     except ValueError as e:
         return await evt.reply(e.args[0])

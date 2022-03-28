@@ -3455,7 +3455,12 @@ class Portal(DBPortal, BasePortal):
             raise
 
     async def get_invite_link(
-        self, user: u.User, uses: int | None = None, expire: datetime | None = None
+        self,
+        user: u.User,
+        uses: int | None = None,
+        expire: datetime | None = None,
+        request_needed: bool = False,
+        title: str | None = None,
     ) -> str:
         if self.peer_type == "user":
             raise ValueError("You can't invite users to private chats.")
@@ -3463,7 +3468,11 @@ class Portal(DBPortal, BasePortal):
             return f"https://t.me/{self.username}"
         link = await user.client(
             ExportChatInviteRequest(
-                peer=await self.get_input_entity(user), expire_date=expire, usage_limit=uses
+                peer=await self.get_input_entity(user),
+                expire_date=expire,
+                usage_limit=uses,
+                request_needed=request_needed,
+                title=title,
             )
         )
         return link.link
