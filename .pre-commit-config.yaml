@@ -7,17 +7,14 @@ repos:
       - id: end-of-file-fixer
       - id: check-yaml
       - id: check-added-large-files
-  # TODO convert to use the upstream psf/black when
-  # https://github.com/psf/black/issues/2493 gets fixed
-  - repo: local
+  - repo: https://github.com/psf/black
+    rev: 22.3.0
     hooks:
       - id: black
-        name: black
-        entry: black --check
-        language: system
-        files: ^mautrix_telegram/.*\.py$
+        language_version: python3
+        files: ^mautrix_telegram/.*\.pyi?$
   - repo: https://github.com/PyCQA/isort
     rev: 5.10.1
     hooks:
       - id: isort
-        files: ^mautrix_telegram/.*$
+        files: ^mautrix_telegram/.*\.pyi?$
