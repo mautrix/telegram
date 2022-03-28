@@ -105,6 +105,7 @@ from telethon.tl.types import (
     MessageActionChatEditPhoto,
     MessageActionChatEditTitle,
     MessageActionChatJoinedByLink,
+    MessageActionChatJoinedByRequest,
     MessageActionChatMigrateTo,
     MessageActionContactSignUp,
     MessageActionGameScore,
@@ -3257,7 +3258,11 @@ class Portal(DBPortal, BasePortal):
         if source.is_relaybot and self.config["bridge.ignore_unbridged_group_chat"]:
             return False
         create_and_exit = (MessageActionChatCreate, MessageActionChannelCreate)
-        create_and_continue = (MessageActionChatAddUser, MessageActionChatJoinedByLink)
+        create_and_continue = (
+            MessageActionChatAddUser,
+            MessageActionChatJoinedByLink,
+            MessageActionChatJoinedByRequest,
+        )
         if isinstance(action, create_and_exit) or isinstance(action, create_and_continue):
             await self.create_matrix_room(
                 source, invites=[source.mxid], update_if_exists=isinstance(action, create_and_exit)
@@ -3287,7 +3292,7 @@ class Portal(DBPortal, BasePortal):
         elif isinstance(action, MessageActionChatAddUser):
             for user_id in action.users:
                 await self._add_telegram_user(TelegramID(user_id), source)
-        elif isinstance(action, MessageActionChatJoinedByLink):
+        elif isinstance(action, (MessageActionChatJoinedByLink, MessageActionChatJoinedByRequest)):
             await self._add_telegram_user(sender.id, source)
         elif isinstance(action, MessageActionChatDeleteUser):
             await self._delete_telegram_user(TelegramID(action.user_id), sender)
