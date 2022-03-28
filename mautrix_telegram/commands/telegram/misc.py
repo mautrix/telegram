@@ -26,6 +26,7 @@ from telethon.errors import (
     EmoticonInvalidError,
     InviteHashExpiredError,
     InviteHashInvalidError,
+    InviteRequestSentError,
     OptionsTooMuchError,
     TakeoutInitDelayError,
     UserAlreadyParticipantError,
@@ -171,6 +172,8 @@ async def _join(
             return (await evt.sender.client(ImportChatInviteRequest(identifier))), None
         except UserAlreadyParticipantError:
             return None, await evt.reply("You are already in that chat.")
+        except InviteRequestSentError:
+            return None, await evt.reply("Invite request sent successfully.")
     else:
         channel = await evt.sender.client.get_entity(identifier)
         if not channel:

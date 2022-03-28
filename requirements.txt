@@ -6,7 +6,7 @@ yarl>=1,<2
 mautrix>=0.15.4,<0.16
 #telethon>=1.24,<1.25
 # Fork to make session storage async and update to layer 138
-tulir-telethon==1.25.0a5
+tulir-telethon==1.25.0a6
 asyncpg>=0.20,<0.26
 mako>=1,<2
 setuptools
