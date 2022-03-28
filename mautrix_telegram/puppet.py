@@ -24,6 +24,7 @@ from telethon.tl.types import (
     ChatPhoto,
     ChatPhotoEmpty,
     InputPeerPhotoFileLocation,
+    InputPeerUser,
     PeerChannel,
     PeerChat,
     PeerUser,
@@ -414,7 +415,7 @@ class Puppet(DBPuppet, BasePuppet):
 
     @staticmethod
     def get_id_from_peer(peer: TypePeer | User | Channel) -> TelegramID:
-        if isinstance(peer, PeerUser):
+        if isinstance(peer, (PeerUser, InputPeerUser)):
             return TelegramID(peer.user_id)
         elif isinstance(peer, PeerChannel):
             return TelegramID(peer.channel_id)

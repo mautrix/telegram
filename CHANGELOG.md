@@ -1,5 +1,8 @@
 # v0.11.3 (unreleased)
 
+### Added
+* Added `list-invite-links` command to list invite links in a chat.
+
 ### Improved
 * Dropped Python 3.7 support.
 * Telegram->Matrix message formatter will now replace `t.me/c/chatid/messageid`
