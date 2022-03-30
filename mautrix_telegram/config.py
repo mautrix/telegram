@@ -159,6 +159,7 @@ class Config(BaseBridgeConfig):
         copy("bridge.tag_only_on_create")
         copy("bridge.bridge_matrix_leave")
         copy("bridge.kick_on_logout")
+        copy("bridge.always_read_joined_telegram_notice")
         copy("bridge.backfill.invite_own_puppet")
         copy("bridge.backfill.takeout_limit")
         copy("bridge.backfill.initial_limit")

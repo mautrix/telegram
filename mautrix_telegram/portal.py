@@ -3339,10 +3339,7 @@ class Portal(DBPortal, BasePortal):
             tg_space=source.tgid,
             edit_index=0,
         ).insert()
-        # Automatically mark the notice as read if we're backfilling messages, mostly so that
-        # empty rooms created before the notice was added wouldn't become unread when the notice
-        # is backfilled in.
-        if backfill:
+        if self.config["bridge.always_read_joined_telegram_notice"]:
             double_puppet = await p.Puppet.get_by_tgid(source.tgid)
             if double_puppet and double_puppet.is_real_user:
                 await double_puppet.intent.mark_read(self.mxid, event_id)

@@ -282,6 +282,8 @@ bridge:
     bridge_matrix_leave: true
     # Should the user be kicked out of all portals when logging out of the bridge?
     kick_on_logout: true
+    # Should the "* user joined Telegram" notice always be marked as read automatically?
+    always_read_joined_telegram_notice: true
     # Settings for backfilling messages from Telegram.
     backfill:
         # Whether or not the Telegram ghosts of logged in Matrix users should be
