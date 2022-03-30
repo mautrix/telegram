@@ -20,7 +20,7 @@ import logging
 import re
 
 from telethon.errors import RPCError
-from telethon.helpers import add_surrogate, del_surrogate
+from telethon.helpers import add_surrogate, del_surrogate, within_surrogate
 from telethon.tl.custom import Message
 from telethon.tl.types import (
     MessageEntityBlockquote,
@@ -249,13 +249,18 @@ async def _telegram_entities_to_matrix(
     html = []
     last_offset = 0
     for i, entity in enumerate(entities):
-        if entity.offset > offset + length:
+        if entity.offset >= offset + length:
             break
         relative_offset = entity.offset - offset
         if relative_offset > last_offset:
             html.append(text_to_html(text[last_offset:relative_offset]))
         elif relative_offset < last_offset:
             continue
+
+        while within_surrogate(text, relative_offset, length=length):
+            relative_offset += 1
+        while within_surrogate(text, relative_offset + length, length=length):
+            entity.length += 1
 
         skip_entity = False
         is_code_entity = isinstance(entity, (MessageEntityCode, MessageEntityPre))
@@ -294,7 +299,7 @@ async def _telegram_entities_to_matrix(
         elif entity_type == MessageEntityEmail:
             html.append(f"<a href='mailto:{entity_text}'>{entity_text}</a>")
         elif entity_type in (MessageEntityTextUrl, MessageEntityUrl):
-            skip_entity = await _parse_url(
+            await _parse_url(
                 html, entity_text, entity.url if entity_type == MessageEntityTextUrl else None
             )
         elif entity_type in (
@@ -374,7 +379,7 @@ message_link_regex = re.compile(
 )
 
 
-async def _parse_url(html: list[str], entity_text: str, url: str) -> bool:
+async def _parse_url(html: list[str], entity_text: str, url: str):
     url = escape(url) if url else entity_text
     if not url.startswith(("https://", "http://", "ftp://", "magnet://")):
         url = "http://" + url
@@ -394,4 +399,3 @@ async def _parse_url(html: list[str], entity_text: str, url: str) -> bool:
                 url = f"https://matrix.to/#/{portal.mxid}/{message.mxid}"
 
     html.append(f"<a href='{url}'>{entity_text}</a>")
-    return False
