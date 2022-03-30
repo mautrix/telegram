@@ -259,7 +259,7 @@ async def _telegram_entities_to_matrix(
 
         while within_surrogate(text, relative_offset, length=length):
             relative_offset += 1
-        while within_surrogate(text, relative_offset + length, length=length):
+        while within_surrogate(text, relative_offset + entity.length, length=length):
             entity.length += 1
 
         skip_entity = False
