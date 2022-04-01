@@ -16,6 +16,7 @@
 * Disabled file logging in Docker image by default.
   * If you want to enable it, set the `filename` in the file log handler to a
     path that is writable, then add `"file"` back to `logging.root.handlers`.
+* Reactions are now marked as read when bridging read receipts from Matrix.
 
 ### Fixed
 * Fixed `!tg bridge` throwing error if the parameter is not an integer

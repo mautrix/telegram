@@ -4,6 +4,7 @@ force_to_top = "typing"
 from_first = true
 combine_as_imports = true
 known_first_party = "mautrix"
+known_third_party = "telethon"
 line_length = 99
 
 [tool.black]

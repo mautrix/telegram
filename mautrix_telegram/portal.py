@@ -1425,7 +1425,7 @@ class Portal(DBPortal, BasePortal):
                 f"{message.mxid}/{message.tgid} as read by {user.mxid}/{user.tgid}"
             )
         await user.client.send_read_acknowledge(
-            self.peer, max_id=message.tgid, clear_mentions=True
+            self.peer, max_id=message.tgid, clear_mentions=True, clear_reactions=True
         )
         if self.peer_type == "channel" and not self.megagroup:
             asyncio.create_task(self._try_handle_read_for_sponsored_msg(user, event_id, timestamp))
