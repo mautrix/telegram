@@ -17,5 +17,5 @@ max_line_length = 99
 [*.{yaml,yml,py}]
 indent_style = space
 
-[{.gitlab-ci.yml,.pre-commit-config.yaml}]
+[{.gitlab-ci.yml,.pre-commit-config.yaml,mautrix_telegram/web/provisioning/spec.yaml}]
 indent_size = 2
