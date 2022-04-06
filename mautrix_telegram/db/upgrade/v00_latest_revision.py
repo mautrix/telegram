@@ -197,4 +197,4 @@ async def create_v7_tables(conn: Connection) -> int:
             PRIMARY KEY (session_id, entity_id)
         )"""
     )
-    return 6
+    return 7
