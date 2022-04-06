@@ -130,6 +130,14 @@ class Puppet(DBPuppet, BasePuppet):
         )
 
     @property
+    def contact_info(self) -> dict:
+        return {
+            "name": self.displayname,
+            "username": self.username,
+            "is_bot": self.is_bot,
+        }
+
+    @property
     def plain_displayname(self) -> str:
         return self.displayname_template.parse(self.displayname) or self.displayname
 

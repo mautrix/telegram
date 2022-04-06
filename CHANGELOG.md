@@ -2,6 +2,8 @@
 
 ### Added
 * Added `list-invite-links` command to list invite links in a chat.
+* Added option to use [MSC2246] async media uploads.
+* Provisioning API for listing contacts and starting private chats.
 
 ### Improved
 * Dropped Python 3.7 support.
@@ -29,6 +31,8 @@
   * The bridge will now make room mentions if the portal exists and fall back
     to user mentions otherwise.
 * Fixed newlines being lost in unformatted forwarded messages.
+
+[MSC2246]: https://github.com/matrix-org/matrix-spec-proposals/pull/2246
 
 # v0.11.2 (2022-02-14)
 
@@ -261,8 +265,8 @@ path.
 * Bridging events of a user whose power level is malformed (i.e. a string
   instead of an integer) now works.
 
-[MSC2409]: https://github.com/matrix-org/matrix-doc/pull/2409
-[MSC2778]: https://github.com/matrix-org/matrix-doc/pull/2778
+[MSC2409]: https://github.com/matrix-org/matrix-spec-proposals/pull/2409
+[MSC2778]: https://github.com/matrix-org/matrix-spec-proposals/pull/2778
 
 # v0.8.2 (2020-07-27)
 
@@ -310,7 +314,7 @@ update (v0.5.8) and a fix to the Docker image.
 * Fixed `sync_direct_chats` option creating non-working portals.
 * Fixed video thumbnailing sometimes leaving behind downloaded videos in `/tmp`.
 
-[MSC2346]: https://github.com/matrix-org/matrix-doc/pull/2346
+[MSC2346]: https://github.com/matrix-org/matrix-spec-proposals/pull/2346
 
 ## rc1 (2020-04-25)
 

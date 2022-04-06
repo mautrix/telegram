@@ -659,20 +659,28 @@ class User(DBUser, AbstractUser, BaseUser):
             acc = (acc * 20261 + contact) & 0xFFFFFFFF
         return acc & 0x7FFFFFFF
 
-    async def sync_contacts(self) -> None:
+    async def sync_contacts(self, get_info: bool = False) -> dict[TelegramID, dict]:
         existing_contacts = await self.get_contacts()
         contact_hash = self._hash_contacts(self.saved_contacts, existing_contacts)
         response = await self.client(GetContactsRequest(hash=contact_hash))
         if isinstance(response, ContactsNotModified):
-            return
+            if get_info:
+                return {
+                    tgid: (await pu.Puppet.get_by_tgid(tgid)).contact_info
+                    for tgid in existing_contacts
+                }
+            return {}
         self.log.debug(f"Updating contacts of {self.name}...")
         if self.saved_contacts != response.saved_count:
             self.saved_contacts = response.saved_count
             await self.save()
+        contacts = {}
         for user in response.users:
-            puppet = await pu.Puppet.get_by_tgid(user.id)
+            puppet: pu.Puppet = await pu.Puppet.get_by_tgid(user.id)
             await puppet.update_info(self, user)
-        await self.set_contacts(user.id for user in response.users)
+            contacts[user.id] = puppet.contact_info
+        await self.set_contacts(contacts.keys())
+        return contacts
 
     # endregion
     # region Class instance lookup
