@@ -53,16 +53,16 @@ class ProvisioningAPI(AuthAPI):
 
         self.app = web.Application(loop=bridge.loop, middlewares=[self.error_middleware])
 
-        portal_prefix = "/portal/{mxid:![^/]+}"
+        portal_prefix = "/v1/portal/{mxid:![^/]+}"
         self.app.router.add_route("GET", f"{portal_prefix}", self.get_portal_by_mxid)
-        self.app.router.add_route("GET", "/portal/{tgid:-[0-9]+}", self.get_portal_by_tgid)
+        self.app.router.add_route("GET", "/v1/portal/{tgid:-[0-9]+}", self.get_portal_by_tgid)
         self.app.router.add_route(
             "POST", portal_prefix + "/connect/{chat_id:-[0-9]+}", self.connect_chat
         )
         self.app.router.add_route("POST", f"{portal_prefix}/create", self.create_chat)
         self.app.router.add_route("POST", f"{portal_prefix}/disconnect", self.disconnect_chat)
 
-        user_prefix = "/user/{mxid:@[^:]*:[^/]+}"
+        user_prefix = "/v1/user/{mxid:@[^:]*:[^/]+}"
         self.app.router.add_route("GET", f"{user_prefix}", self.get_user_info)
         self.app.router.add_route("GET", f"{user_prefix}/chats", self.get_chats)
         self.app.router.add_route("GET", f"{user_prefix}/contacts", self.get_contacts)

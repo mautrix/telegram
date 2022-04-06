@@ -84,6 +84,10 @@ class Config(BaseBridgeConfig):
 
         copy("appservice.provisioning.enabled")
         copy("appservice.provisioning.prefix")
+        if base["appservice.provisioning.prefix"].endswith("/v1"):
+            base["appservice.provisioning.prefix"] = base["appservice.provisioning.prefix"][
+                : -len("/v1")
+            ]
         copy("appservice.provisioning.shared_secret")
         if base["appservice.provisioning.shared_secret"] == "generate":
             base["appservice.provisioning.shared_secret"] = self._new_token()

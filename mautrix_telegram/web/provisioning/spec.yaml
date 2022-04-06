@@ -18,7 +18,7 @@ tags:
 - name: Misc
 
 paths:
-  /bridge:
+  /v1/bridge:
     get:
       operationId: get_bridge
       summary: Get the bridge's information
@@ -34,7 +34,7 @@ paths:
                   relaybot_username:
                     type: string
                     description: The relay bot's username on Telegram
-  /portal/{room_id}:
+  /v1/portal/{room_id}:
     get:
       operationId: get_portal
       summary: Get the bridging status and info of the connected Telegram chat
@@ -78,7 +78,7 @@ paths:
           required: false
           schema:
             type: string
-  /portal/{chat_id}:
+  /v1/portal/{chat_id}:
     get:
       operationId: get_portal_by_tgid
       summary: Get the bridging status and info of the connected Telegram chat
@@ -136,7 +136,7 @@ paths:
           required: false
           schema:
             type: string
-  /portal/{room_id}/connect/{chat_id}:
+  /v1/portal/{room_id}/connect/{chat_id}:
     post:
       operationId: connect_portal
       summary: Connect an existing Telegram chat to the given room
@@ -214,7 +214,7 @@ paths:
                       - chat_already_bridged
                   error:
                     $ref: "#/components/schemas/HumanReadableError"
-  /portal/{room_id}/create:
+  /v1/portal/{room_id}/create:
     post:
       operationId: create_portal
       summary: Create a new Telegram chat for the given room
@@ -302,7 +302,7 @@ paths:
                   type: string
                   example: Discussion about mautrix-telegram
         required: true
-  /portal/{room_id}/disconnect:
+  /v1/portal/{room_id}/disconnect:
     post:
       operationId: disconnect_portal
       summary: Disconnect the Telegram chat from the room
@@ -357,7 +357,7 @@ paths:
           schema:
             type: boolean
             default: false
-  /user/{user_id}:
+  /v1/user/{user_id}:
     get:
       operationId: get_me
       summary: Get the info of the Telegram user the given Matrix user is logged in as
@@ -382,7 +382,7 @@ paths:
           required: true
           schema:
             type: string
-  /user/{user_id}/chats:
+  /v1/user/{user_id}/chats:
     get:
       operationId: get_chats
       summary: Get the list of Telegram chats the given Matrix user has access to
@@ -422,7 +422,7 @@ paths:
           required: true
           schema:
             type: string
-  /user/{user_id}/contacts:
+  /v1/user/{user_id}/contacts:
     get:
       operationId: get_contacts
       summary: Get the user's Telegram contacts
@@ -460,7 +460,7 @@ paths:
           required: true
           schema:
             type: string
-  /user/{user_id}/pm/{identifier}:
+  /v1/user/{user_id}/pm/{identifier}:
     post:
       operationId: start_dm
       summary: Start a direct chat with a Telegram user.
@@ -516,7 +516,7 @@ paths:
               - type: integer
                 description: Internal Telegram user ID
                 example: 987654321
-  /user/{user_id}/login/bot_token:
+  /v1/user/{user_id}/login/bot_token:
     post:
       operationId: post_bot_token
       summary: Log in with a bot token
@@ -573,7 +573,7 @@ paths:
                   description: The access token of the bot to log in as
                   example: 297900271:IXjeGEcAN61zHnjPgkWnYWyvVp9K4ulHBEv
         required: true
-  /user/{user_id}/login/request_code:
+  /v1/user/{user_id}/login/request_code:
     post:
       operationId: post_login_phone
       summary: Request a phone code from Telegram
@@ -693,7 +693,7 @@ paths:
                   description: The phone number to log in as.
                   example: "+123456789"
         required: true
-  /user/{user_id}/login/send_code:
+  /v1/user/{user_id}/login/send_code:
     post:
       operationId: post_login_code
       summary: Send the login code
@@ -771,7 +771,7 @@ paths:
                   format: int32
                   example: 123456
         required: true
-  /user/{user_id}/login/send_password:
+  /v1/user/{user_id}/login/send_password:
     post:
       operationId: post_login_password
       summary: Send the two-factor auth password
@@ -843,7 +843,7 @@ paths:
                   format: password
                   example: hunter2
         required: true
-  /user/{user_id}/logout:
+  /v1/user/{user_id}/logout:
     post:
       operationId: logout
       summary: Log out
@@ -880,7 +880,7 @@ paths:
 security:
   - Bearer: []
 servers:
-  - url: /_matrix/provision/v1
+  - url: /_matrix/provision
 components:
   responses:
     NotWhitelistedError:
