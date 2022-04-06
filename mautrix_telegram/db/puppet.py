@@ -43,6 +43,7 @@ class Puppet:
     displayname_quality: int
     disable_updates: bool
     username: str | None
+    phone: str | None
     photo_id: str | None
     avatar_url: ContentURI | None
     name_set: bool
@@ -65,7 +66,7 @@ class Puppet:
 
     columns: ClassVar[str] = (
         "id, is_registered, displayname, displayname_source, displayname_contact, "
-        "displayname_quality, disable_updates, username, photo_id, avatar_url, "
+        "displayname_quality, disable_updates, username, phone, photo_id, avatar_url, "
         "name_set, avatar_set, is_bot, is_channel, custom_mxid, access_token, next_batch, base_url"
     )
 
@@ -105,6 +106,7 @@ class Puppet:
             self.displayname_quality,
             self.disable_updates,
             self.username,
+            self.phone,
             self.photo_id,
             self.avatar_url,
             self.name_set,
@@ -121,9 +123,9 @@ class Puppet:
         q = """
         UPDATE puppet
         SET is_registered=$2, displayname=$3, displayname_source=$4, displayname_contact=$5,
-            displayname_quality=$6, disable_updates=$7, username=$8, photo_id=$9,
-            avatar_url=$10, name_set=$11, avatar_set=$12, is_bot=$13, is_channel=$14,
-            custom_mxid=$15, access_token=$16, next_batch=$17, base_url=$18
+            displayname_quality=$6, disable_updates=$7, username=$8, phone=$9, photo_id=$10,
+            avatar_url=$11, name_set=$12, avatar_set=$13, is_bot=$14, is_channel=$15,
+            custom_mxid=$16, access_token=$17, next_batch=$18, base_url=$19
         WHERE id=$1
         """
         await self.db.execute(q, *self._values)
@@ -132,8 +134,9 @@ class Puppet:
         q = """
         INSERT INTO puppet (
             id, is_registered, displayname, displayname_source, displayname_contact,
-            displayname_quality, disable_updates, username, photo_id, avatar_url, name_set,
+            displayname_quality, disable_updates, username, phone, photo_id, avatar_url, name_set,
             avatar_set, is_bot, is_channel, custom_mxid, access_token, next_batch, base_url
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18,
+                  $19)
         """
         await self.db.execute(q, *self._values)

@@ -73,6 +73,7 @@ class Puppet(DBPuppet, BasePuppet):
         displayname_quality: int = 0,
         disable_updates: bool = False,
         username: str | None = None,
+        phone: str | None = None,
         photo_id: str | None = None,
         avatar_url: ContentURI | None = None,
         name_set: bool = False,
@@ -93,6 +94,7 @@ class Puppet(DBPuppet, BasePuppet):
             displayname_quality=displayname_quality,
             disable_updates=disable_updates,
             username=username,
+            phone=phone,
             photo_id=photo_id,
             avatar_url=avatar_url,
             name_set=name_set,
@@ -134,7 +136,9 @@ class Puppet(DBPuppet, BasePuppet):
         return {
             "name": self.displayname,
             "username": self.username,
+            "phone": f"+{self.phone.lstrip('+')}" if self.phone else None,
             "is_bot": self.is_bot,
+            "avatar_url": self.avatar_url,
         }
 
     @property
@@ -259,6 +263,10 @@ class Puppet(DBPuppet, BasePuppet):
 
         if self.username != info.username:
             self.username = info.username
+            changed = True
+
+        if getattr(info, "phone", None) and self.phone != info.phone:
+            self.phone = info.phone
             changed = True
 
         if not self.disable_updates:

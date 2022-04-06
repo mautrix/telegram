@@ -16,7 +16,7 @@
 from mautrix.util.async_db import Connection
 
 
-async def create_v6_tables(conn: Connection) -> int:
+async def create_v7_tables(conn: Connection) -> int:
     await conn.execute(
         """CREATE TABLE "user" (
             mxid TEXT   PRIMARY KEY,
@@ -98,6 +98,7 @@ async def create_v6_tables(conn: Connection) -> int:
             displayname_quality INTEGER NOT NULL DEFAULT 0,
             disable_updates     BOOLEAN NOT NULL DEFAULT false,
             username            TEXT,
+            phone               TEXT,
             photo_id            TEXT,
             avatar_url          TEXT,
             name_set            BOOLEAN NOT NULL DEFAULT false,

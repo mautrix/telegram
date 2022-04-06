@@ -18,7 +18,7 @@ from __future__ import annotations
 from mautrix.util.async_db import Connection, Scheme
 
 from . import upgrade_table
-from .v00_latest_revision import create_v6_tables
+from .v00_latest_revision import create_v7_tables
 
 legacy_version_query = "SELECT version_num FROM alembic_version"
 last_legacy_version = "bfc0a39bfe02"
@@ -34,9 +34,9 @@ def table_exists(scheme: str, name: str) -> str:
 
 async def first_upgrade_target(conn: Connection, scheme: str) -> int:
     is_legacy = await conn.fetchval(table_exists(scheme, "alembic_version"))
-    # If it's a legacy db, the upgrade process will go to v1 and run each migration up to v6.
-    # If it's a new db, we'll create the v6 tables directly (see the create_v6_tables call).
-    return 1 if is_legacy else 6
+    # If it's a legacy db, the upgrade process will go to v1 and run each migration up to v7.
+    # If it's a new db, we'll create the v7 tables directly (see the create_v7_tables call).
+    return 1 if is_legacy else 7
 
 
 @upgrade_table.register(description="Initial asyncpg revision", upgrades_to=first_upgrade_target)
@@ -46,7 +46,7 @@ async def upgrade_v1(conn: Connection, scheme: str) -> int:
         await migrate_legacy_to_v1(conn, scheme)
         return 1
     else:
-        return await create_v6_tables(conn)
+        return await create_v7_tables(conn)
 
 
 async def drop_constraints(conn: Connection, table: str, contype: str) -> None:
