@@ -1,4 +1,4 @@
-openapi: 3.1.0
+openapi: 3.0.0
 info:
   title: Mautrix-Telegram provisioning
   version: 0.11.3
@@ -422,6 +422,100 @@ paths:
           required: true
           schema:
             type: string
+  /user/{user_id}/contacts:
+    get:
+      operationId: get_contacts
+      summary: Get the user's Telegram contacts
+      tags: [User info]
+      responses:
+        200:
+          description: Found contact list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserContacts"
+        403:
+          description: User is not logged in or not whitelisted
+          content:
+            application/json:
+              schema:
+                type: object
+                title: Error
+                properties:
+                  errcode:
+                    type: string
+                    title: Error code
+                    description: A machine-readable error code
+                    enum:
+                      - not_logged_in
+                      - mxid_not_whitelisted
+                  error:
+                    $ref: "#/components/schemas/HumanReadableError"
+        500:
+          $ref: "#/components/responses/UnknownError"
+      parameters:
+        - name: user_id
+          in: path
+          description: The Matrix ID of the user who to log in as
+          required: true
+          schema:
+            type: string
+  /user/{user_id}/pm/{identifier}:
+    post:
+      operationId: start_dm
+      summary: Start a direct chat with a Telegram user.
+      tags: [Bridging]
+      responses:
+        200:
+          description: A portal already existed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StartedChat"
+        201:
+          description: A portal was created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StartedChat"
+        403:
+          description: User is not logged in or not whitelisted
+          content:
+            application/json:
+              schema:
+                type: object
+                title: Error
+                properties:
+                  errcode:
+                    type: string
+                    title: Error code
+                    description: A machine-readable error code
+                    enum:
+                      - not_logged_in
+                      - mxid_not_whitelisted
+                  error:
+                    $ref: "#/components/schemas/HumanReadableError"
+        500:
+          $ref: "#/components/responses/UnknownError"
+      parameters:
+        - name: user_id
+          in: path
+          description: The Matrix ID of the user who to log in as
+          required: true
+          schema:
+            type: string
+        - name: identifier
+          in: path
+          description: The Telegram identifier of the user to start a private chat with. Username, phone number or internal ID.
+          required: true
+          schema:
+            anyOf:
+              - type: string
+                description: Telegram username (no prefix) or international phone number (starting with +)
+                example: tguser
+              - type: integer
+                description: Internal Telegram user ID
+                example: 987654321
   /user/{user_id}/login/bot_token:
     post:
       operationId: post_bot_token
@@ -932,6 +1026,55 @@ components:
             description: A bot API style chat ID.
           title:
             type: string
+    UserContactInfo:
+      type: object
+      properties:
+        name:
+          type: string
+          description: The displayname of the Telegram user.
+          example: Telegram User
+        username:
+          type: string
+          description: The username of the Telegram user.
+          example: tguser
+        phone:
+          type: string
+          description: The phone number of the Telegram user.
+          example: +123456789
+        is_bot:
+          type: boolean
+          description: Whether the Telegram user is a bot or a normal user.
+          example: false
+        avatar_url:
+          type: string
+          description: The Matrix avatar URL for the Telegram user's ghost.
+          example: mxc://example.com/abcdef123456
+    UserContacts:
+      type: object
+      properties:
+        "<phone>":
+          $ref: "#/components/schemas/UserContactInfo"
+      # TODO use this when SwaggerUI supports OpenAPI 3.1
+      #patternProperties:
+      #  "^[0-9]+$":
+      #    $ref: "#/components/schemas/UserContactInfo"
+    StartedChat:
+      type: object
+      properties:
+        room_id:
+          type: string
+          description: The Matrix room ID.
+          example: "!foo:example.com"
+        just_created:
+          type: boolean
+          description: True if the portal was just created for this request.
+          example: false
+        id:
+          type: integer
+          description: The Telegram user ID.
+          example: 987654321
+        contact_info:
+          $ref: "#/components/schemas/UserContactInfo"
     PortalInfo:
       type: object
       properties:
