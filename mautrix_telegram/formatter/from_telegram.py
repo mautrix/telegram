@@ -52,9 +52,9 @@ from mautrix.appservice import IntentAPI
 from mautrix.types import (
     EventType,
     Format,
+    InReplyTo,
     MessageType,
     RelatesTo,
-    RelationType,
     TextMessageEventContent,
 )
 
@@ -74,7 +74,7 @@ async def telegram_reply_to_matrix(evt: Message, source: au.AbstractUser) -> Rel
         )
         msg = await DBMessage.get_one_by_tgid(TelegramID(evt.reply_to.reply_to_msg_id), space)
         if msg:
-            return RelatesTo(rel_type=RelationType.REPLY, event_id=msg.mxid)
+            return RelatesTo(in_reply_to=InReplyTo(event_id=msg.mxid))
     return None
 
 
@@ -158,8 +158,6 @@ async def _add_reply_header(
     if not msg:
         return
 
-    content.relates_to = RelatesTo(rel_type=RelationType.REPLY, event_id=msg.mxid)
-
     try:
         event = await main_intent.get_event(msg.mx_room, msg.mxid)
         if event.type == EventType.ROOM_ENCRYPTED and source.bridge.matrix.e2ee:
@@ -170,6 +168,7 @@ async def _add_reply_header(
         content.set_reply(event, displayname=puppet.displayname if puppet else event.sender)
     except Exception:
         log.exception("Failed to get event to add reply fallback")
+        content.set_reply(msg.mxid)
 
 
 async def telegram_to_matrix(
