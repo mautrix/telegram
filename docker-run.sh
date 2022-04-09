@@ -24,7 +24,7 @@ if [ ! -f /data/config.yaml ]; then
 fi
 
 if [ ! -f /data/registration.yaml ]; then
-	python3 -m mautrix_telegram -g -c /data/config.yaml -r /data/registration.yaml
+	python3 -m mautrix_telegram -g -c /data/config.yaml -r /data/registration.yaml || exit $?
 	echo "Didn't find a registration file."
 	echo "Generated one for you."
 	echo "See https://docs.mau.fi/bridges/general/registering-appservices.html on how to use it."
