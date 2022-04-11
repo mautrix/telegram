@@ -65,7 +65,7 @@ async def create(evt: CommandEvent) -> EventID:
         about=about,
         encrypted=encrypted,
     )
-    invites, errors = await portal.get_telegram_users_in_matrix_room(evt.sender)
+    invites, errors = await portal.get_telegram_users_in_matrix_room(evt.sender, pre_create=True)
     if len(errors) > 0:
         error_list = "\n".join(f"* [{mxid}](https://matrix.to/#/{mxid})" for mxid in errors)
         await evt.reply(

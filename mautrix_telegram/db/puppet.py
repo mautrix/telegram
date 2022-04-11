@@ -1,5 +1,5 @@
 # mautrix-telegram - A Matrix-Telegram puppeting bridge
-# Copyright (C) 2021 Tulir Asokan
+# Copyright (C) 2022 Tulir Asokan
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as published by
@@ -21,7 +21,7 @@ from asyncpg import Record
 from attr import dataclass
 from yarl import URL
 
-from mautrix.types import SyncToken, UserID
+from mautrix.types import ContentURI, SyncToken, UserID
 from mautrix.util.async_db import Database
 
 from ..types import TelegramID
@@ -43,8 +43,13 @@ class Puppet:
     displayname_quality: int
     disable_updates: bool
     username: str | None
+    phone: str | None
     photo_id: str | None
+    avatar_url: ContentURI | None
+    name_set: bool
+    avatar_set: bool
     is_bot: bool | None
+    is_channel: bool
 
     custom_mxid: UserID | None
     access_token: str | None
@@ -61,8 +66,8 @@ class Puppet:
 
     columns: ClassVar[str] = (
         "id, is_registered, displayname, displayname_source, displayname_contact, "
-        "displayname_quality, disable_updates, username, photo_id, is_bot, "
-        "custom_mxid, access_token, next_batch, base_url"
+        "displayname_quality, disable_updates, username, phone, photo_id, avatar_url, "
+        "name_set, avatar_set, is_bot, is_channel, custom_mxid, access_token, next_batch, base_url"
     )
 
     @classmethod
@@ -101,8 +106,13 @@ class Puppet:
             self.displayname_quality,
             self.disable_updates,
             self.username,
+            self.phone,
             self.photo_id,
+            self.avatar_url,
+            self.name_set,
+            self.avatar_set,
             self.is_bot,
+            self.is_channel,
             self.custom_mxid,
             self.access_token,
             self.next_batch,
@@ -110,21 +120,23 @@ class Puppet:
         )
 
     async def save(self) -> None:
-        q = (
-            "UPDATE puppet "
-            "SET is_registered=$2, displayname=$3, displayname_source=$4, displayname_contact=$5,"
-            "    displayname_quality=$6, disable_updates=$7, username=$8, photo_id=$9, is_bot=$10,"
-            "    custom_mxid=$11, access_token=$12, next_batch=$13, base_url=$14 "
-            "WHERE id=$1"
-        )
+        q = """
+        UPDATE puppet
+        SET is_registered=$2, displayname=$3, displayname_source=$4, displayname_contact=$5,
+            displayname_quality=$6, disable_updates=$7, username=$8, phone=$9, photo_id=$10,
+            avatar_url=$11, name_set=$12, avatar_set=$13, is_bot=$14, is_channel=$15,
+            custom_mxid=$16, access_token=$17, next_batch=$18, base_url=$19
+        WHERE id=$1
+        """
         await self.db.execute(q, *self._values)
 
     async def insert(self) -> None:
-        q = (
-            "INSERT INTO puppet ("
-            "    id, is_registered, displayname, displayname_source, displayname_contact,"
-            "    displayname_quality, disable_updates, username, photo_id, is_bot,"
-            "    custom_mxid, access_token, next_batch, base_url"
-            ") VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)"
-        )
+        q = """
+        INSERT INTO puppet (
+            id, is_registered, displayname, displayname_source, displayname_contact,
+            displayname_quality, disable_updates, username, phone, photo_id, avatar_url, name_set,
+            avatar_set, is_bot, is_channel, custom_mxid, access_token, next_batch, base_url
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18,
+                  $19)
+        """
         await self.db.execute(q, *self._values)

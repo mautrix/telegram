@@ -8,11 +8,14 @@ charset = utf-8
 trim_trailing_whitespace = true
 insert_final_newline = true
 
+[*.md]
+trim_trailing_whitespace = false
+
 [*.py]
 max_line_length = 99
 
 [*.{yaml,yml,py}]
 indent_style = space
 
-[.gitlab-ci.yml]
+[{.gitlab-ci.yml,.pre-commit-config.yaml,mautrix_telegram/web/provisioning/spec.yaml}]
 indent_size = 2

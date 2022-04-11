@@ -81,5 +81,5 @@ async def enter_matrix_token(evt: CommandEvent) -> EventID:
     except InvalidAccessToken:
         return await evt.reply("Failed to verify access token.")
     return await evt.reply(
-        "Replaced your Telegram account's Matrix puppet with {puppet.custom_mxid}."
+        f"Replaced your Telegram account's Matrix puppet with {puppet.custom_mxid}."
     )

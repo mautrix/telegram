@@ -1,5 +1,5 @@
 # mautrix-telegram - A Matrix-Telegram puppeting bridge
-# Copyright (C) 2021 Tulir Asokan
+# Copyright (C) 2022 Tulir Asokan
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as published by
@@ -18,8 +18,15 @@ from mautrix.util.async_db import Connection
 from . import upgrade_table
 
 
-@upgrade_table.register(description="Add column to store sponsored message event ID in channels")
-async def upgrade_v2(conn: Connection) -> None:
-    await conn.execute("ALTER TABLE portal ADD COLUMN sponsored_event_id TEXT")
-    await conn.execute("ALTER TABLE portal ADD COLUMN sponsored_event_ts BIGINT")
-    await conn.execute("ALTER TABLE portal ADD COLUMN sponsored_msg_random_id bytea")
+@upgrade_table.register(description="Add support for disappearing messages")
+async def upgrade_v4(conn: Connection) -> None:
+    await conn.execute(
+        """CREATE TABLE disappearing_message (
+            room_id             TEXT,
+            event_id            TEXT,
+            expiration_seconds  BIGINT,
+            expiration_ts       BIGINT,
+
+            PRIMARY KEY (room_id, event_id)
+        )"""
+    )

@@ -118,6 +118,7 @@ class TelegramBridge(Bridge):
         self.add_startup_actions(Puppet.init_cls(self))
         # Note: In upstream this would start all the puppets, but in our fork we want to gracefully start the user puppets
         self.add_startup_actions(User.init_cls(self))
+        self.add_startup_actions(Portal.restart_scheduled_disappearing())
         if self.bot:
             self.add_startup_actions(self.bot.start())
         if self.config["bridge.resend_bridge_info"]:

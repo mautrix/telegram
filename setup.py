@@ -1,5 +1,4 @@
 import setuptools
-import glob
 
 from mautrix_telegram.get_version import git_tag, git_revision, version, linkified_version
 
@@ -38,7 +37,7 @@ setuptools.setup(
     packages=setuptools.find_packages(),
 
     install_requires=install_requires,
-    python_requires="~=3.7",
+    python_requires="~=3.8",
 
     classifiers=[
         "Development Status :: 4 - Beta",

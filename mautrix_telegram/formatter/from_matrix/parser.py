@@ -20,8 +20,7 @@ import logging
 from telethon import TelegramClient
 
 from mautrix.types import RoomID, UserID
-from mautrix.util.formatter import MatrixParser as BaseMatrixParser, RecursionContext
-from mautrix.util.formatter.html_reader_htmlparser import HTMLNode, read_html
+from mautrix.util.formatter import HTMLNode, MatrixParser as BaseMatrixParser, RecursionContext
 from mautrix.util.logging import TraceLogger
 
 from ... import portal as po, puppet as pu, user as u
@@ -33,7 +32,6 @@ log: TraceLogger = logging.getLogger("mau.fmt.mx")
 class MatrixParser(BaseMatrixParser[TelegramMessage]):
     e = TelegramEntityType
     fs = TelegramMessage
-    read_html = staticmethod(read_html)
     client: TelegramClient
 
     def __init__(self, client: TelegramClient) -> None:
@@ -42,8 +40,8 @@ class MatrixParser(BaseMatrixParser[TelegramMessage]):
     async def custom_node_to_fstring(
         self, node: HTMLNode, ctx: RecursionContext
     ) -> TelegramMessage | None:
-        msg = await self.tag_aware_parse_node(node, ctx)
         if node.tag == "command":
+            msg = await self.tag_aware_parse_node(node, ctx)
             return msg.prepend("/").format(TelegramEntityType.COMMAND)
         return None
 

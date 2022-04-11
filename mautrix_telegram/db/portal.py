@@ -54,6 +54,8 @@ class Portal:
     title: str | None
     about: str | None
     photo_id: str | None
+    name_set: bool
+    avatar_set: bool
 
     local_config: dict[str, Any] = attr.ib(factory=lambda: {})
 
@@ -67,7 +69,8 @@ class Portal:
 
     columns: ClassVar[str] = (
         "tgid, tg_receiver, peer_type, megagroup, mxid, avatar_url, encrypted, sponsored_event_id,"
-        "sponsored_event_ts, sponsored_msg_random_id, username, title, about, photo_id, config"
+        "sponsored_event_ts, sponsored_msg_random_id, username, title, about, photo_id, "
+        "name_set, avatar_set, config"
     )
 
     @classmethod
@@ -86,9 +89,14 @@ class Portal:
         return cls._from_row(await cls.db.fetchrow(q, username.lower()))
 
     @classmethod
-    async def find_private_chats(cls, tg_receiver: TelegramID) -> list[Portal]:
+    async def find_private_chats_of(cls, tg_receiver: TelegramID) -> list[Portal]:
         q = f"SELECT {cls.columns} FROM portal WHERE tg_receiver=$1 AND peer_type='user'"
         return [cls._from_row(row) for row in await cls.db.fetch(q, tg_receiver)]
+
+    @classmethod
+    async def find_private_chats_with(cls, tgid: TelegramID) -> list[Portal]:
+        q = f"SELECT {cls.columns} FROM portal WHERE tgid=$1 AND peer_type='user'"
+        return [cls._from_row(row) for row in await cls.db.fetch(q, tgid)]
 
     @classmethod
     async def all(cls) -> list[Portal]:
@@ -115,17 +123,20 @@ class Portal:
             self.title,
             self.about,
             self.photo_id,
+            self.name_set,
+            self.avatar_set,
             self.megagroup,
             json.dumps(self.local_config) if self.local_config else None,
         )
 
     async def save(self) -> None:
-        q = (
-            "UPDATE portal SET mxid=$4, avatar_url=$5, encrypted=$6, sponsored_event_id=$7,"
-            "                  sponsored_event_ts=$8, sponsored_msg_random_id=$9, username=$10,"
-            "                  title=$11, about=$12, photo_id=$13, megagroup=$14, config=$15 "
-            "WHERE tgid=$1 AND tg_receiver=$2 AND (peer_type=$3 OR true)"
-        )
+        q = """
+        UPDATE portal
+        SET mxid=$4, avatar_url=$5, encrypted=$6, sponsored_event_id=$7, sponsored_event_ts=$8,
+            sponsored_msg_random_id=$9, username=$10, title=$11, about=$12, photo_id=$13,
+            name_set=$14, avatar_set=$15, megagroup=$16, config=$17
+        WHERE tgid=$1 AND tg_receiver=$2 AND (peer_type=$3 OR true)
+        """
         await self.db.execute(q, *self._values)
 
     async def update_id(self, id: TelegramID, peer_type: str) -> None:
@@ -139,12 +150,13 @@ class Portal:
         self.peer_type = peer_type
 
     async def insert(self) -> None:
-        q = (
-            "INSERT INTO portal (tgid, tg_receiver, peer_type, mxid, avatar_url, encrypted,"
-            "                    sponsored_event_id, sponsored_event_ts, sponsored_msg_random_id,"
-            "                    username, title, about, photo_id, megagroup, config) "
-            "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)"
-        )
+        q = """
+        INSERT INTO portal (
+            tgid, tg_receiver, peer_type, mxid, avatar_url, encrypted,
+            sponsored_event_id, sponsored_event_ts, sponsored_msg_random_id,
+            username, title, about, photo_id, name_set, avatar_set, megagroup, config
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+        """
         await self.db.execute(q, *self._values)
 
     async def delete(self) -> None:
