@@ -144,6 +144,7 @@ async def transfer_thumbnail_to_matrix(
     custom_data: bytes | None = None,
     width: int | None = None,
     height: int | None = None,
+    async_upload: bool = False,
 ) -> DBTelegramFile | None:
     if not Image or not VideoFileClip:
         return None
@@ -178,7 +179,7 @@ async def transfer_thumbnail_to_matrix(
     if encrypt:
         file, decryption_info = encrypt_attachment(file)
         upload_mime_type = "application/octet-stream"
-    content_uri = await intent.upload_media(file, upload_mime_type)
+    content_uri = await intent.upload_media(file, upload_mime_type, async_upload=async_upload)
     if decryption_info:
         decryption_info.url = content_uri
 
@@ -220,6 +221,7 @@ async def transfer_file_to_matrix(
     filename: str | None = None,
     encrypt: bool = False,
     parallel_id: int | None = None,
+    async_upload: bool = False,
 ) -> DBTelegramFile | None:
     location_id = _location_to_id(location)
     if not location_id:
@@ -246,6 +248,7 @@ async def transfer_file_to_matrix(
             filename,
             encrypt,
             parallel_id,
+            async_upload=async_upload,
         )
 
 
@@ -260,6 +263,7 @@ async def _unlocked_transfer_file_to_matrix(
     filename: str | None,
     encrypt: bool,
     parallel_id: int | None,
+    async_upload: bool = False,
 ) -> DBTelegramFile | None:
     db_file = await DBTelegramFile.get(loc_id)
     if db_file:
@@ -305,7 +309,7 @@ async def _unlocked_transfer_file_to_matrix(
         if encrypt and encrypt_attachment:
             file, decryption_info = encrypt_attachment(file)
             upload_mime_type = "application/octet-stream"
-        content_uri = await intent.upload_media(file, upload_mime_type)
+        content_uri = await intent.upload_media(file, upload_mime_type, async_upload=async_upload)
         if decryption_info:
             decryption_info.url = content_uri
 
@@ -325,7 +329,13 @@ async def _unlocked_transfer_file_to_matrix(
             thumbnail = thumbnail.location
         try:
             db_file.thumbnail = await transfer_thumbnail_to_matrix(
-                client, intent, thumbnail, video=file, mime_type=mime_type, encrypt=encrypt
+                client,
+                intent,
+                thumbnail,
+                video=file,
+                mime_type=mime_type,
+                encrypt=encrypt,
+                async_upload=async_upload,
             )
         except FileIdInvalidError:
             log.warning(f"Failed to transfer thumbnail for {thumbnail!s}", exc_info=True)
@@ -340,6 +350,7 @@ async def _unlocked_transfer_file_to_matrix(
             mime_type=converted_anim.thumbnail_mime,
             width=converted_anim.width,
             height=converted_anim.height,
+            async_upload=async_upload,
         )
 
     try:

@@ -21,7 +21,7 @@ from asyncpg import Record
 from attr import dataclass
 
 from mautrix.types import UserID
-from mautrix.util.async_db import Database
+from mautrix.util.async_db import Database, Scheme
 
 from ..types import TelegramID
 
@@ -104,7 +104,7 @@ class User:
         records = [(self.tgid, puppet_id) for puppet_id in puppets]
         async with self.db.acquire() as conn, conn.transaction():
             await conn.execute('DELETE FROM contact WHERE "user"=$1', self.tgid)
-            if self.db.scheme == "postgres":
+            if self.db.scheme == Scheme.POSTGRES:
                 await conn.copy_records_to_table("contact", records=records, columns=columns)
             else:
                 q = 'INSERT INTO contact ("user", contact) VALUES ($1, $2)'
@@ -120,7 +120,7 @@ class User:
         records = [(self.tgid, tgid, tg_receiver) for tgid, tg_receiver in portals]
         async with self.db.acquire() as conn, conn.transaction():
             await conn.execute('DELETE FROM user_portal WHERE "user"=$1', self.tgid)
-            if self.db.scheme == "postgres":
+            if self.db.scheme == Scheme.POSTGRES:
                 await conn.copy_records_to_table("user_portal", records=records, columns=columns)
             else:
                 q = 'INSERT INTO user_portal ("user", portal, portal_receiver) VALUES ($1, $2, $3)'

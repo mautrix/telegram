@@ -24,7 +24,7 @@ from telethon.crypto import AuthKey
 from telethon.sessions import MemorySession
 from telethon.tl.types import PeerChannel, PeerChat, PeerUser, updates
 
-from mautrix.util.async_db import Database
+from mautrix.util.async_db import Database, Scheme
 
 fake_db = Database.create("") if TYPE_CHECKING else None
 
@@ -153,7 +153,7 @@ class PgSession(MemorySession):
         ] = self._entities_to_rows(tlo)
         if not rows:
             return
-        if self.db.scheme == "postgres":
+        if self.db.scheme == Scheme.POSTGRES:
             q = (
                 "INSERT INTO telethon_entities (session_id, id, hash, username, phone, name) "
                 "VALUES ($1, unnest($2::bigint[]), unnest($3::bigint[]), "
@@ -201,7 +201,7 @@ class PgSession(MemorySession):
             utils.get_peer_id(PeerChat(key)),
             utils.get_peer_id(PeerChannel(key)),
         )
-        if self.db.scheme == "postgres":
+        if self.db.scheme in (Scheme.POSTGRES, Scheme.COCKROACH):
             return await self._select_entity("id=ANY($1)", ids)
         else:
             return await self._select_entity(f"id IN ($1, $2, $3)", *ids)

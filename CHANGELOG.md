@@ -1,12 +1,84 @@
-# v0.11.1 (2021-01-??, unreleased)
+# v0.11.3 (unreleased)
 
+### Added
+* Added `list-invite-links` command to list invite links in a chat.
+* Added option to use [MSC2246] async media uploads.
+* Provisioning API for listing contacts and starting private chats.
+
+### Improved
+* Dropped Python 3.7 support.
+* Telegram->Matrix message formatter will now replace `t.me/c/chatid/messageid`
+  style links with a link to the bridged Matrix event (in addition to the
+  previously supported `t.me/username/messageid` links).
+* Updated formatting converter to keep newlines in code blocks as `\n` instead
+  of converting them to `<br/>`.
+* Removed `max_document_size` option. The bridge will now fetch the max size
+  automatically using the media repo config endpoint.
+* Removed redundant `msgtype` field in sticker events sent to Matrix.
+* Disabled file logging in Docker image by default.
+  * If you want to enable it, set the `filename` in the file log handler to a
+    path that is writable, then add `"file"` back to `logging.root.handlers`.
+* Reactions are now marked as read when bridging read receipts from Matrix.
+
+### Fixed
+* Fixed `!tg bridge` throwing error if the parameter is not an integer
+* Fixed `!tg bridge` failing if the command had been previously run with an
+  incorrectly prefixed chat ID (e.g. `!tg bridge -1234567` followed by
+  `!tg bridge -1001234567`).
+* Fixed `bridge_matrix_leave` config option not actually being used correctly.
+* Fixed public channel mentions always bridging into a user mention on Matrix
+  rather than a room mention.
+  * The bridge will now make room mentions if the portal exists and fall back
+    to user mentions otherwise.
+* Fixed newlines being lost in unformatted forwarded messages.
+
+[MSC2246]: https://github.com/matrix-org/matrix-spec-proposals/pull/2246
+
+# v0.11.2 (2022-02-14)
+
+**N.B.** This will be the last release to support Python 3.7. Future versions
+will require Python 3.8 or higher. In general, the mautrix bridges will only
+support the lowest Python version in the latest Debian or Ubuntu LTS.
+
+### Added
+* Added simple fallback message for live location and venue messages from Telegram.
+* Added support for `t.me/+code` style invite links in `!tg join`.
+* Added support for showing channel profile when users send messages as a channel.
+* Added "user joined Telegram" message when Telegram auto-creates a DM chat for
+  a new user.
+
+### Improved
+* Added option for adding a random prefix to relayed user displaynames to help
+  distinguish them on the Telegram side.
+* Improved syncing profile info to room info when using encryption and/or the
+  `private_chat_profile_meta` config option.
+* Removed legacy `community_id` config option.
+
+### Fixed
+* Fixed newlines disappearing when bridging channel messages with signatures.
+* Fixed login throwing an error if a previous login code expired.
+* Fixed bug in v0.11.0 that broke `!tg create`.
+
+# v0.11.1 (2022-01-10)
+
+### Added
 * Added support for message reactions.
 * Added support for spoiler text.
-* Improved support for voice messages.
+
+### Improved
+* Support for voice messages.
+* Changed color of blue text from Telegram to be more readable on dark themes.
+
+### Fixed
 * Fixed syncing contacts throwing an error for new accounts.
-* Fixed migrating from the legacy database if the database schema had been
+* Fixed migrating pre-v0.11 legacy databases if the database schema had been
   corrupted (e.g. by using 3rd party tools for SQLite -> Postgres migration).
 * Fixed converting animated stickers to webm with >33 FPS.
+* Fixed a bug in v0.11.0 that broke mentioning users in groups
+  (thanks to [@dfuchss] in [#724]).
+
+[@dfuchss]: https://github.com/dfuchss
+[#724]: https://github.com/mautrix/telegram/pull/724
 
 # v0.11.0 (2021-12-28)
 
@@ -193,8 +265,8 @@ path.
 * Bridging events of a user whose power level is malformed (i.e. a string
   instead of an integer) now works.
 
-[MSC2409]: https://github.com/matrix-org/matrix-doc/pull/2409
-[MSC2778]: https://github.com/matrix-org/matrix-doc/pull/2778
+[MSC2409]: https://github.com/matrix-org/matrix-spec-proposals/pull/2409
+[MSC2778]: https://github.com/matrix-org/matrix-spec-proposals/pull/2778
 
 # v0.8.2 (2020-07-27)
 
@@ -242,7 +314,7 @@ update (v0.5.8) and a fix to the Docker image.
 * Fixed `sync_direct_chats` option creating non-working portals.
 * Fixed video thumbnailing sometimes leaving behind downloaded videos in `/tmp`.
 
-[MSC2346]: https://github.com/matrix-org/matrix-doc/pull/2346
+[MSC2346]: https://github.com/matrix-org/matrix-spec-proposals/pull/2346
 
 ## rc1 (2020-04-25)
 

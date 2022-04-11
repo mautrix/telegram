@@ -137,9 +137,9 @@ class CommandHandler(BaseCommandHandler):
 
     async def get_permission_error(self, evt: CommandEvent) -> str | None:
         if self.needs_puppeting and not evt.sender.puppet_whitelisted:
-            return "This command requires puppeting privileges."
+            return "That command is limited to users with puppeting privileges."
         elif self.needs_matrix_puppeting and not evt.sender.matrix_puppet_whitelisted:
-            return "This command requires Matrix puppeting privileges."
+            return "That command is limited to users with full puppeting privileges."
         return await super().get_permission_error(evt)
 
     def has_permission(self, key: HelpCacheKey) -> bool:

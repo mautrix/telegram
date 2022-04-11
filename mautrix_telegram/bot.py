@@ -225,7 +225,11 @@ class Bot(AbstractUser):
         elif isinstance(message.to_id, PeerChat):
             return reply(str(-message.to_id.chat_id))
         elif isinstance(message.to_id, PeerUser):
-            return reply(f"Your user ID is {message.to_id.user_id}.")
+            return reply(
+                f"Your user ID is {message.to_id.user_id}.\n\n"
+                f"If you're trying to bridge a group chat to Matrix, you must run the command in "
+                f"the group, not here. **The ID above will not work** with `!tg bridge`."
+            )
         else:
             return reply("Failed to find chat ID.")
 

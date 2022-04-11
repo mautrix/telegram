@@ -198,7 +198,8 @@ class User(DBUser, AbstractUser, BaseUser):
             if self.tgid:
                 await self.push_bridge_state(BridgeStateEvent.UNKNOWN_ERROR, message=str(e))
         except UnauthorizedError as e:
-            self.log.error(f"Authorization error in start(): {type(e)}: {e}")
+            if delete_unless_authenticated or self.tgid:
+                self.log.error(f"Authorization error in start(): {type(e)}: {e}")
             if self.tgid:
                 await self.push_bridge_state(
                     BridgeStateEvent.BAD_CREDENTIALS,
@@ -243,7 +244,7 @@ class User(DBUser, AbstractUser, BaseUser):
                 )
             else:
                 await self.push_bridge_state(
-                    BridgeStateEvent.UNKNOWN_ERROR, ttl=240, error="tg-not-connected"
+                    BridgeStateEvent.TRANSIENT_DISCONNECT, ttl=240, error="tg-not-connected"
                 )
 
     async def fill_bridge_state(self, state: BridgeState) -> None:
@@ -270,6 +271,13 @@ class User(DBUser, AbstractUser, BaseUser):
         if not self.tgid:
             return None
         return await pu.Puppet.get_by_tgid(self.tgid)
+
+    async def get_portal_with(self, puppet: pu.Puppet, create: bool = True) -> po.Portal | None:
+        if not self.tgid:
+            return None
+        return await po.Portal.get_by_tgid(
+            puppet.tgid, tg_receiver=self.tgid, peer_type="user" if create else None
+        )
 
     async def stop(self) -> None:
         if self._track_connection_task:
@@ -374,7 +382,7 @@ class User(DBUser, AbstractUser, BaseUser):
         if not self.config["bridge.kick_on_logout"]:
             return
         portals = await self.get_cached_portals()
-        for _, portal in portals.values():
+        for portal in portals.values():
             if not portal or portal.deleted or not portal.mxid or portal.has_bot:
                 continue
             if portal.peer_type == "user":
@@ -451,7 +459,7 @@ class User(DBUser, AbstractUser, BaseUser):
     async def get_direct_chats(self) -> dict[UserID, list[RoomID]]:
         return {
             pu.Puppet.get_mxid_from_id(portal.tgid): [portal.mxid]
-            async for portal in po.Portal.find_private_chats(self.tgid)
+            async for portal in po.Portal.find_private_chats_of(self.tgid)
             if portal.mxid
         }
 
@@ -464,17 +472,22 @@ class User(DBUser, AbstractUser, BaseUser):
         if active and tag_info is None:
             tag_info = RoomTagInfo(order=0.5)
             tag_info[DOUBLE_PUPPET_SOURCE_KEY] = self.bridge.name
+            self.log.debug("Adding tag {tag} to {portal.mxid}/{portal.tgid}")
             await puppet.intent.set_room_tag(portal.mxid, tag, tag_info)
         elif (
             not active and tag_info and tag_info.get(DOUBLE_PUPPET_SOURCE_KEY) == self.bridge.name
         ):
+            self.log.debug("Removing tag {tag} from {portal.mxid}/{portal.tgid}")
             await puppet.intent.remove_room_tag(portal.mxid, tag)
 
-    async def _mute_room(cls, puppet: pu.Puppet, portal: po.Portal, mute_until: datetime) -> None:
-        if not cls.config["bridge.mute_bridging"] or not portal or not portal.mxid:
+    async def _mute_room(self, puppet: pu.Puppet, portal: po.Portal, mute_until: datetime) -> None:
+        if not self.config["bridge.mute_bridging"] or not portal or not portal.mxid:
             return
         now = datetime.utcnow().replace(tzinfo=timezone.utc)
         if mute_until is not None and mute_until > now:
+            self.log.debug(
+                f"Muting {portal.mxid}/{portal.tgid} (muted until {mute_until} on Telegram)"
+            )
             await puppet.intent.set_push_rule(
                 PushRuleScope.GLOBAL,
                 PushRuleKind.ROOM,
@@ -486,6 +499,7 @@ class User(DBUser, AbstractUser, BaseUser):
                 await puppet.intent.remove_push_rule(
                     PushRuleScope.GLOBAL, PushRuleKind.ROOM, portal.mxid
                 )
+                self.log.debug(f"Unmuted {portal.mxid}/{portal.tgid}")
             except MNotFound:
                 pass
 
@@ -648,20 +662,28 @@ class User(DBUser, AbstractUser, BaseUser):
             acc = (acc * 20261 + contact) & 0xFFFFFFFF
         return acc & 0x7FFFFFFF
 
-    async def sync_contacts(self) -> None:
+    async def sync_contacts(self, get_info: bool = False) -> dict[TelegramID, dict]:
         existing_contacts = await self.get_contacts()
         contact_hash = self._hash_contacts(self.saved_contacts, existing_contacts)
         response = await self.client(GetContactsRequest(hash=contact_hash))
         if isinstance(response, ContactsNotModified):
-            return
+            if get_info:
+                return {
+                    tgid: (await pu.Puppet.get_by_tgid(tgid)).contact_info
+                    for tgid in existing_contacts
+                }
+            return {}
         self.log.debug(f"Updating contacts of {self.name}...")
         if self.saved_contacts != response.saved_count:
             self.saved_contacts = response.saved_count
             await self.save()
+        contacts = {}
         for user in response.users:
-            puppet = await pu.Puppet.get_by_tgid(user.id)
+            puppet: pu.Puppet = await pu.Puppet.get_by_tgid(user.id)
             await puppet.update_info(self, user)
-        await self.set_contacts(user.id for user in response.users)
+            contacts[user.id] = puppet.contact_info
+        await self.set_contacts(contacts.keys())
+        return contacts
 
     # endregion
     # region Class instance lookup

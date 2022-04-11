@@ -40,7 +40,7 @@ class MautrixTelegramClient(TelegramClient):
         mime_type: str = None,
         attributes: List[TypeDocumentAttribute] = None,
         file_name: str = None,
-        max_image_size: float = 10 * 1000 ** 2,
+        max_image_size: float = 10 * 1000**2,
     ) -> Union[InputMediaUploadedDocument, InputMediaUploadedPhoto]:
         file_handle = await super().upload_file(file, file_name=file_name)
 

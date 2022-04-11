@@ -1,5 +1,5 @@
 # mautrix-telegram - A Matrix-Telegram puppeting bridge
-# Copyright (C) 2021 Tulir Asokan
+# Copyright (C) 2022 Tulir Asokan
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as published by
@@ -61,90 +61,22 @@ class MatrixHandler(BaseMatrixHandler):
 
         self._previously_typing = {}
 
-    async def handle_puppet_invite(
-        self, room_id: RoomID, puppet: pu.Puppet, inviter: u.User, event_id: EventID
+    async def handle_puppet_group_invite(
+        self,
+        room_id: RoomID,
+        puppet: pu.Puppet,
+        invited_by: u.User,
+        evt: StateEvent,
+        members: list[UserID],
     ) -> None:
-        intent = puppet.default_mxid_intent
-        self.log.debug(f"{inviter.mxid} invited puppet for {puppet.tgid} to {room_id}")
-        if not await inviter.is_logged_in():
-            await intent.error_and_leave(
-                room_id, text="Please log in before inviting Telegram puppets."
-            )
-            return
-        portal = await po.Portal.get_by_mxid(room_id)
-        if portal:
-            if portal.peer_type == "user":
-                await intent.error_and_leave(
-                    room_id, text="You can not invite additional users to private chats."
-                )
-                return
-            await portal.invite_telegram(inviter, puppet)
-            await intent.join_room(room_id)
-            return
-        try:
-            members = await intent.get_room_members(room_id)
-        except MatrixError:
-            self.log.exception(f"Failed to get members after joining {room_id} as {intent.mxid}")
-            return
         if self.az.bot_mxid not in members:
-            if len(members) > 2:
-                await intent.error_and_leave(
-                    room_id,
-                    text=None,
-                    html=(
-                        f"Please invite "
-                        f"<a href='https://matrix.to/#/{self.az.bot_mxid}'>the bridge bot</a> "
-                        f"first if you want to create a Telegram chat."
-                    ),
-                )
-                return
-
-            await intent.join_room(room_id)
-            portal = await po.Portal.get_by_tgid(
-                puppet.tgid, tg_receiver=inviter.tgid, peer_type="user"
+            await puppet.default_mxid_intent.leave_room(
+                room_id, reason="This ghost does not join multi-user rooms without the bridge bot."
             )
-            if portal.mxid:
-                try:
-                    await portal.invite_to_matrix(inviter.mxid)
-                    await intent.send_notice(
-                        room_id,
-                        text=f"You already have a private chat with me: {portal.mxid}",
-                        html=(
-                            "You already have a private chat with me: "
-                            f"<a href='https://matrix.to/#/{portal.mxid}'>Link to room</a>"
-                        ),
-                    )
-                    await intent.leave_room(room_id)
-                    return
-                except MatrixError:
-                    pass
-            portal.mxid = room_id
-            e2be_ok = await portal.check_dm_encryption()
-            await portal.save()
-            await inviter.register_portal(portal)
-            if e2be_ok is True:
-                evt_type, content = await self.e2ee.encrypt(
-                    room_id,
-                    EventType.ROOM_MESSAGE,
-                    TextMessageEventContent(
-                        msgtype=MessageType.NOTICE,
-                        body=(
-                            "Portal to private chat created and end-to-bridge encryption enabled."
-                        ),
-                    ),
-                )
-                await intent.send_message_event(room_id, evt_type, content)
-            else:
-                message = "Portal to private chat created."
-                if e2be_ok is False:
-                    message += "\n\nWarning: Failed to enable end-to-bridge encryption"
-                await intent.send_notice(room_id, message)
-            await portal.update_bridge_info()
         else:
-            await intent.join_room(room_id)
-            await intent.send_notice(
+            await puppet.default_mxid_intent.send_notice(
                 room_id,
-                "This puppet will remain inactive until a Telegram chat is created for this room.",
+                "This ghost will remain inactive until a Telegram chat is created for this room.",
             )
 
     async def handle_invite(
@@ -155,9 +87,13 @@ class MatrixHandler(BaseMatrixHandler):
             return
         await user.ensure_started()
         portal = await po.Portal.get_by_mxid(room_id)
-        if user and await user.has_full_access(allow_bot=True):
-            if portal and portal.allow_bridging:
-                await portal.invite_telegram(inviter, user)
+        if (
+            user
+            and portal
+            and await user.has_full_access(allow_bot=True)
+            and portal.allow_bridging
+        ):
+            await portal.handle_matrix_invite(inviter, user)
 
     async def handle_join(self, room_id: RoomID, user_id: UserID, event_id: EventID) -> None:
         user = await u.User.get_and_start_by_mxid(user_id)

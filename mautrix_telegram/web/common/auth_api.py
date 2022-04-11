@@ -126,8 +126,10 @@ class AuthAPI(abc.ABC):
                 mxid=user.mxid,
                 state="code",
                 status=200,
-                message="Code requested successfully. Check your SMS "
-                "or Telegram client and enter the code below.",
+                message=(
+                    "Code requested successfully. Check your SMS "
+                    "or Telegram client and enter the code below."
+                ),
             )
         except PhoneNumberInvalidError:
             return self.get_login_response(
@@ -167,8 +169,10 @@ class AuthAPI(abc.ABC):
                 state="request",
                 status=429,
                 errcode="phone_number_flood",
-                error="Your phone number has been temporarily blocked for flooding. "
-                "The ban is usually applied for around a day.",
+                error=(
+                    "Your phone number has been temporarily blocked for flooding. "
+                    "The ban is usually applied for around a day."
+                ),
             )
         except FloodWaitError as e:
             return self.get_login_response(
@@ -176,8 +180,10 @@ class AuthAPI(abc.ABC):
                 state="request",
                 status=429,
                 errcode="flood_wait",
-                error="Your phone number has been temporarily blocked for flooding. "
-                f"Please wait for {format_duration(e.seconds)} before trying again.",
+                error=(
+                    "Your phone number has been temporarily blocked for flooding. "
+                    f"Please wait for {format_duration(e.seconds)} before trying again."
+                ),
             )
         except Exception:
             self.log.exception("Error requesting phone code")
@@ -237,6 +243,14 @@ class AuthAPI(abc.ABC):
     async def post_login_code(
         self, user: User, code: int, password_in_data: bool
     ) -> web.Response | None:
+        if not code:
+            return self.get_login_response(
+                mxid=user.mxid,
+                state="code",
+                status=400,
+                errcode="phone_code_missing",
+                error="You must provide the code from your phone.",
+            )
         try:
             user_info = await user.client.sign_in(code=code)
             await self.postprocess_login(user, user_info)

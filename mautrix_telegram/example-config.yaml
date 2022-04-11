@@ -16,6 +16,9 @@ homeserver:
     status_endpoint: null
     # Endpoint for reporting per-message status.
     message_send_checkpoint_endpoint: null
+    # Whether asynchronous uploads via MSC2246 should be enabled for media.
+    # Requires a media repo that supports MSC2246.
+    async_media: false
 
 # Application service host/registration related details
 # Changing these values requires regeneration of the registration.
@@ -64,7 +67,7 @@ appservice:
         # Whether or not the provisioning API should be enabled.
         enabled: true
         # The prefix to use in the provisioning API endpoints.
-        prefix: /_matrix/provision/v1
+        prefix: /_matrix/provision
         # The shared secret to authorize users of the API.
         # Set to "generate" to generate and save a new token.
         shared_secret: generate
@@ -77,12 +80,6 @@ appservice:
     # to leave display name/avatar as-is.
     bot_displayname: Telegram bridge bot
     bot_avatar: mxc://maunium.net/tJCRmUyJDsgRNgqhOgoiHWbX
-
-    # Community ID for bridged users (changes registration file) and rooms.
-    # Must be created manually.
-    #
-    # Example: "+telegram:example.com". Set to false to disable.
-    community_id: false
 
     # Whether or not to receive ephemeral events via appservice transactions.
     # Requires MSC2409 support (i.e. Synapse 1.22+).
@@ -214,8 +211,8 @@ bridge:
     inline_images: false
     # Maximum size of image in megabytes before sending to Telegram as a document.
     image_as_file_size: 10
-    # Maximum size of Telegram documents in megabytes to bridge.
-    max_document_size: 100
+    # Maximum number of pixels in an image before sending to Telegram as a document. Defaults to 1280x1280 = 1638400.
+    image_as_file_pixels: 1638400
     # Enable experimental parallel file transfer, which makes uploads/downloads much faster by
     # streaming from/to Matrix and using many connections for Telegram.
     # Note that generating HQ thumbnails for videos is not possible with streamed transfers.
@@ -288,6 +285,8 @@ bridge:
     bridge_matrix_leave: true
     # Should the user be kicked out of all portals when logging out of the bridge?
     kick_on_logout: true
+    # Should the "* user joined Telegram" notice always be marked as read automatically?
+    always_read_joined_telegram_notice: true
     # Settings for backfilling messages from Telegram.
     backfill:
         # Whether or not the Telegram ghosts of logged in Matrix users should be
@@ -331,9 +330,12 @@ bridge:
         # List of user IDs for whom the previous flag is flipped.
         # e.g. if bridge_notices.default is false, notices from other users will not be bridged, but
         #      notices from users listed here will be bridged.
-        exceptions:
-        - "@importantbot:example.com"
+        exceptions: []
 
+    # An array of possible values for the $distinguisher variable in message formats.
+    # Each user gets one of the values here, based on a hash of their user ID.
+    # If the array is empty, the $distinguisher variable will also be empty.
+    relay_user_distinguishers: ["🟦", "🟣", "🟩", "⭕️", "🔶", "⬛️", "🔵", "🟢"]
     # The formats to use when sending messages to Telegram via the relay bot.
     # Text msgtypes (m.text, m.notice and m.emote) support HTML, media msgtypes don't.
     #
@@ -341,16 +343,17 @@ bridge:
     #   $sender_displayname - The display name of the sender (e.g. Example User)
     #   $sender_username    - The username (Matrix ID localpart) of the sender (e.g. exampleuser)
     #   $sender_mxid        - The Matrix ID of the sender (e.g. @exampleuser:example.com)
+    #   $distinguisher      - A random string from the options in the relay_user_distinguishers array.
     #   $message            - The message content
     message_formats:
-        m.text: "<b>$sender_displayname</b>: $message"
-        m.notice: "<b>$sender_displayname</b>: $message"
-        m.emote: "* <b>$sender_displayname</b> $message"
-        m.file: "<b>$sender_displayname</b> sent a file: $message"
-        m.image: "<b>$sender_displayname</b> sent an image: $message"
-        m.audio: "<b>$sender_displayname</b> sent an audio file: $message"
-        m.video: "<b>$sender_displayname</b> sent a video: $message"
-        m.location: "<b>$sender_displayname</b> sent a location: $message"
+        m.text: "$distinguisher <b>$sender_displayname</b>: $message"
+        m.notice: "$distinguisher <b>$sender_displayname</b>: $message"
+        m.emote: "* $distinguisher <b>$sender_displayname</b> $message"
+        m.file: "$distinguisher <b>$sender_displayname</b> sent a file: $message"
+        m.image: "$distinguisher <b>$sender_displayname</b> sent an image: $message"
+        m.audio: "$distinguisher <b>$sender_displayname</b> sent an audio file: $message"
+        m.video: "$distinguisher <b>$sender_displayname</b> sent a video: $message"
+        m.location: "$distinguisher <b>$sender_displayname</b> sent a location: $message"
     # Telegram doesn't have built-in emotes, this field specifies how m.emote's from authenticated
     # users are sent to telegram. All fields in message_formats are supported. Additionally, the
     # Telegram user info is available in the following variables:
@@ -366,9 +369,9 @@ bridge:
     #
     # Set format to an empty string to disable the messages for that event.
     state_event_formats:
-        join: "<b>$displayname</b> joined the room."
-        leave: "<b>$displayname</b> left the room."
-        name_change: "<b>$prev_displayname</b> changed their name to <b>$displayname</b>"
+        join: "$distinguisher <b>$displayname</b> joined the room."
+        leave: "$distinguisher <b>$displayname</b> left the room."
+        name_change: "$distinguisher <b>$prev_displayname</b> changed their name to $distinguisher <b>$displayname</b>"
 
     # Filter rooms that can/can't be bridged. Can also be managed using the `filter` and
     # `filter-mode` management commands.

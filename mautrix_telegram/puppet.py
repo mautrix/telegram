@@ -1,5 +1,5 @@
 # mautrix-telegram - A Matrix-Telegram puppeting bridge
-# Copyright (C) 2021 Tulir Asokan
+# Copyright (C) 2022 Tulir Asokan
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as published by
@@ -20,10 +20,19 @@ from difflib import SequenceMatcher
 import unicodedata
 
 from telethon.tl.types import (
+    Channel,
+    ChatPhoto,
+    ChatPhotoEmpty,
     InputPeerPhotoFileLocation,
+    InputPeerUser,
+    PeerChannel,
+    PeerChat,
     PeerUser,
+    TypeChatPhoto,
     TypeInputPeer,
     TypeInputUser,
+    TypePeer,
+    TypeUserProfilePhoto,
     UpdateUserName,
     User,
     UserProfilePhoto,
@@ -33,7 +42,6 @@ from yarl import URL
 
 from mautrix.appservice import IntentAPI
 from mautrix.bridge import BasePuppet, async_getter_lock
-from mautrix.errors import MatrixError
 from mautrix.types import ContentURI, RoomID, SyncToken, UserID
 from mautrix.util.simple_template import SimpleTemplate
 
@@ -65,8 +73,13 @@ class Puppet(DBPuppet, BasePuppet):
         displayname_quality: int = 0,
         disable_updates: bool = False,
         username: str | None = None,
+        phone: str | None = None,
         photo_id: str | None = None,
+        avatar_url: ContentURI | None = None,
+        name_set: bool = False,
+        avatar_set: bool = False,
         is_bot: bool = False,
+        is_channel: bool = False,
         custom_mxid: UserID | None = None,
         access_token: str | None = None,
         next_batch: SyncToken | None = None,
@@ -81,8 +94,13 @@ class Puppet(DBPuppet, BasePuppet):
             displayname_quality=displayname_quality,
             disable_updates=disable_updates,
             username=username,
+            phone=phone,
             photo_id=photo_id,
+            avatar_url=avatar_url,
+            name_set=name_set,
+            avatar_set=avatar_set,
             is_bot=is_bot,
+            is_channel=is_channel,
             custom_mxid=custom_mxid,
             access_token=access_token,
             next_batch=next_batch,
@@ -109,7 +127,19 @@ class Puppet(DBPuppet, BasePuppet):
 
     @property
     def peer(self) -> PeerUser:
-        return PeerUser(user_id=self.tgid)
+        return (
+            PeerChannel(channel_id=self.tgid) if self.is_channel else PeerUser(user_id=self.tgid)
+        )
+
+    @property
+    def contact_info(self) -> dict:
+        return {
+            "name": self.displayname,
+            "username": self.username,
+            "phone": f"+{self.phone.lstrip('+')}" if self.phone else None,
+            "is_bot": self.is_bot,
+            "avatar_url": self.avatar_url,
+        }
 
     @property
     def plain_displayname(self) -> str:
@@ -185,9 +215,12 @@ class Puppet(DBPuppet, BasePuppet):
         return name
 
     @classmethod
-    def get_displayname(cls, info: User, enable_format: bool = True) -> tuple[str, int]:
-        fn = cls._filter_name(info.first_name)
-        ln = cls._filter_name(info.last_name)
+    def get_displayname(cls, info: User | Channel, enable_format: bool = True) -> tuple[str, int]:
+        if isinstance(info, Channel):
+            fn, ln = cls._filter_name(info.title), ""
+        else:
+            fn = cls._filter_name(info.first_name)
+            ln = cls._filter_name(info.last_name)
         data = {
             "phone number": info.phone if hasattr(info, "phone") else None,
             "username": info.username,
@@ -214,16 +247,26 @@ class Puppet(DBPuppet, BasePuppet):
 
         return (cls.displayname_template.format_full(name) if enable_format else name), quality
 
-    async def try_update_info(self, source: au.AbstractUser, info: User) -> None:
+    async def try_update_info(self, source: au.AbstractUser, info: User | Channel) -> None:
         try:
             await self.update_info(source, info)
         except Exception:
             source.log.exception(f"Failed to update info of {self.tgid}")
 
-    async def update_info(self, source: au.AbstractUser, info: User) -> None:
-        changed = False
+    async def update_info(self, source: au.AbstractUser, info: User | Channel) -> None:
+        is_bot = False if isinstance(info, Channel) else info.bot
+        is_channel = isinstance(info, Channel)
+        changed = is_bot != self.is_bot or is_channel != self.is_channel
+
+        self.is_bot = is_bot
+        self.is_channel = is_channel
+
         if self.username != info.username:
             self.username = info.username
+            changed = True
+
+        if getattr(info, "phone", None) and self.phone != info.phone:
+            self.phone = info.phone
             changed = True
 
         if not self.disable_updates:
@@ -233,32 +276,46 @@ class Puppet(DBPuppet, BasePuppet):
             except Exception:
                 self.log.exception(f"Failed to update info from source {source.tgid}")
 
-        self.is_bot = info.bot
-
         if changed:
+            await self.update_portals_meta()
             await self.save()
 
+    async def update_portals_meta(self) -> None:
+        if not p.Portal.private_chat_portal_meta and not self.mx.e2ee:
+            return
+        async for portal in p.Portal.find_private_chats_with(self.tgid):
+            await portal.update_info_from_puppet(self)
+
     async def update_displayname(
-        self, source: au.AbstractUser, info: User | UpdateUserName
+        self, source: au.AbstractUser, info: User | Channel | UpdateUserName
     ) -> bool:
         if self.disable_updates:
             return False
-        if source.is_relaybot or source.is_bot:
-            allow_because = "user is bot"
+        if (
+            self.displayname
+            and self.displayname.startswith("Deleted user ")
+            and not getattr(info, "deleted", False)
+        ):
+            allow_because = "target user was previously deleted"
+            self.displayname_quality = 0
+        elif source.is_relaybot or source.is_bot:
+            allow_because = "source user is a bot"
         elif self.displayname_source == source.tgid:
-            allow_because = "user is the primary source"
+            allow_because = "source user is the primary source"
+        elif isinstance(info, Channel):
+            allow_because = "target user is a channel"
         elif not isinstance(info, UpdateUserName) and not info.contact:
-            allow_because = "user is not a contact"
+            allow_because = "target user is not a contact"
         elif not self.displayname_source:
             allow_because = "no primary source set"
         elif not self.displayname:
-            allow_because = "user has no name"
+            allow_because = "target user has no name"
         else:
             return False
 
         if isinstance(info, UpdateUserName):
-            info = await source.client.get_entity(PeerUser(self.tgid))
-        if not info.contact:
+            info = await source.client.get_entity(self.peer)
+        if isinstance(info, Channel) or not info.contact:
             self.displayname_contact = False
         elif not self.displayname_contact:
             if not self.displayname:
@@ -267,7 +324,9 @@ class Puppet(DBPuppet, BasePuppet):
                 return False
 
         displayname, quality = self.get_displayname(info)
-        if displayname != self.displayname and quality >= self.displayname_quality:
+        needs_reset = displayname != self.displayname or not self.name_set
+        is_high_quality = quality >= self.displayname_quality
+        if needs_reset and is_high_quality:
             allow_because = f"{allow_because} and quality {quality} >= {self.displayname_quality}"
             self.log.debug(
                 f"Updating displayname of {self.id} (src: {source.tgid}, allowed "
@@ -281,11 +340,10 @@ class Puppet(DBPuppet, BasePuppet):
                 await self.default_mxid_intent.set_displayname(
                     displayname[: self.config["bridge.displayname_max_length"]]
                 )
-            except MatrixError:
-                self.log.exception("Failed to set displayname")
-                self.displayname = ""
-                self.displayname_source = None
-                self.displayname_quality = 0
+                self.name_set = True
+            except Exception as e:
+                self.log.warning(f"Failed to set displayname: {e}")
+                self.name_set = False
             return True
         elif source.is_relaybot or self.displayname_source is None:
             self.displayname_source = source.tgid
@@ -293,42 +351,44 @@ class Puppet(DBPuppet, BasePuppet):
         return False
 
     async def update_avatar(
-        self, source: au.AbstractUser, photo: UserProfilePhoto | UserProfilePhotoEmpty
+        self, source: au.AbstractUser, photo: TypeUserProfilePhoto | TypeChatPhoto
     ) -> bool:
         if self.disable_updates:
             return False
 
-        if photo is None or isinstance(photo, UserProfilePhotoEmpty):
+        if photo is None or isinstance(photo, (UserProfilePhotoEmpty, ChatPhotoEmpty)):
             photo_id = ""
-        elif isinstance(photo, UserProfilePhoto):
+        elif isinstance(photo, (UserProfilePhoto, ChatPhoto)):
             photo_id = str(photo.photo_id)
         else:
             self.log.warning(f"Unknown user profile photo type: {type(photo)}")
             return False
         if not photo_id and not self.config["bridge.allow_avatar_remove"]:
             return False
-        if self.photo_id != photo_id:
+        if self.photo_id != photo_id or not self.avatar_set:
             if not photo_id:
                 self.photo_id = ""
-                try:
-                    await self.default_mxid_intent.set_avatar_url(ContentURI(""))
-                except MatrixError:
-                    self.log.exception("Failed to set avatar")
-                    self.photo_id = ""
-                return True
-
-            loc = InputPeerPhotoFileLocation(
-                peer=await self.get_input_entity(source), photo_id=photo.photo_id, big=True
-            )
-            file = await util.transfer_file_to_matrix(source.client, self.default_mxid_intent, loc)
-            if file:
+                self.avatar_url = None
+            elif self.photo_id != photo_id or not self.avatar_url:
+                file = await util.transfer_file_to_matrix(
+                    client=source.client,
+                    intent=self.default_mxid_intent,
+                    location=InputPeerPhotoFileLocation(
+                        peer=await self.get_input_entity(source), photo_id=photo.photo_id, big=True
+                    ),
+                    async_upload=self.config["homeserver.async_media"],
+                )
+                if not file:
+                    return False
                 self.photo_id = photo_id
-                try:
-                    await self.default_mxid_intent.set_avatar_url(file.mxc)
-                except MatrixError:
-                    self.log.exception("Failed to set avatar")
-                    self.photo_id = ""
-                return True
+                self.avatar_url = file.mxc
+            try:
+                await self.default_mxid_intent.set_avatar_url(self.avatar_url or "")
+                self.avatar_set = True
+            except Exception as e:
+                self.log.warning(f"Failed to set avatar: {e}")
+                self.avatar_set = False
+            return True
         return False
 
     async def default_puppet_should_leave_room(self, room_id: RoomID) -> bool:
@@ -345,7 +405,9 @@ class Puppet(DBPuppet, BasePuppet):
 
     @classmethod
     @async_getter_lock
-    async def get_by_tgid(cls, tgid: TelegramID, *, create: bool = True) -> Puppet | None:
+    async def get_by_tgid(
+        cls, tgid: TelegramID, *, create: bool = True, is_channel: bool = False
+    ) -> Puppet | None:
         if tgid is None:
             return None
 
@@ -360,12 +422,36 @@ class Puppet(DBPuppet, BasePuppet):
             return puppet
 
         if create:
-            puppet = cls(tgid)
+            puppet = cls(tgid, is_channel=is_channel)
             await puppet.insert()
             puppet._add_to_cache()
             return puppet
 
         return None
+
+    @staticmethod
+    def get_id_from_peer(peer: TypePeer | User | Channel) -> TelegramID:
+        if isinstance(peer, (PeerUser, InputPeerUser)):
+            return TelegramID(peer.user_id)
+        elif isinstance(peer, PeerChannel):
+            return TelegramID(peer.channel_id)
+        elif isinstance(peer, PeerChat):
+            return TelegramID(peer.chat_id)
+        elif isinstance(peer, (User, Channel)):
+            return TelegramID(peer.id)
+        raise TypeError(f"invalid type {type(peer).__name__!r} in _id_from_peer()")
+
+    @classmethod
+    async def get_by_peer(
+        cls, peer: TypePeer | User | Channel, *, create: bool = True
+    ) -> Puppet | None:
+        if isinstance(peer, PeerChat):
+            return None
+        return await cls.get_by_tgid(
+            cls.get_id_from_peer(peer),
+            create=create,
+            is_channel=isinstance(peer, (PeerChannel, Channel)),
+        )
 
     @classmethod
     def get_by_mxid(cls, mxid: UserID, create: bool = True) -> Awaitable[Puppet | None]:

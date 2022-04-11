@@ -37,6 +37,7 @@ from telethon.errors import (
 )
 from telethon.tl.types import User
 
+from mautrix.client import Client
 from mautrix.types import (
     EventID,
     ImageInfo,
@@ -230,9 +231,23 @@ async def login_qr(evt: CommandEvent) -> EventID:
 )
 async def login(evt: CommandEvent) -> EventID:
     override_sender = False
-    if len(evt.args) > 0 and evt.sender.is_admin:
-        evt.sender = await u.User.get_and_start_by_mxid(UserID(evt.args[0]))
+    if len(evt.args) > 0 and evt.sender.is_admin and evt.args[0]:
+        override_user_id = UserID(evt.args[0])
+        try:
+            Client.parse_user_id(override_user_id)
+        except ValueError:
+            return await evt.reply(
+                f"**Usage:** `$cmdprefix+sp login [override user ID]`\n\n"
+                f"{override_user_id!r} is not a valid Matrix user ID"
+            )
+        orig_user_id = evt.sender.mxid
+        evt.sender = await u.User.get_and_start_by_mxid(override_user_id)
         override_sender = True
+        if orig_user_id != evt.sender:
+            await evt.reply(
+                f"Admin override: logging in as {evt.sender.mxid} instead of {orig_user_id}"
+            )
+
     if await evt.sender.is_logged_in():
         return await evt.reply(f"You are already logged in as {evt.sender.human_tg_id}.")
 
