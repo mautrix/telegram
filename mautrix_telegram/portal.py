@@ -3236,12 +3236,7 @@ class Portal(DBPortal, BasePortal):
             await dbm.insert()
             await DBMessage.replace_temp_mxid(temporary_identifier, self.mxid, event_id)
         except (IntegrityError, UniqueViolationError) as e:
-            self.log.exception(
-                f"{e.__class__.__name__} while saving message mapping. "
-                "This might mean that an update was handled after it left the "
-                "dedup cache queue. You can try enabling bridge.deduplication."
-                "pre_db_check in the config."
-            )
+            self.log.exception(f"{type(e).__name__} while saving message mapping")
             await intent.redact(self.mxid, event_id)
             return
         if isinstance(evt, Message) and evt.reactions:

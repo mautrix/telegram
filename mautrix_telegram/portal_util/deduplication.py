@@ -62,7 +62,6 @@ media_content_table = {
 
 
 class PortalDedup:
-    pre_db_check: bool = False
     cache_queue_length: int = 256
 
     _dedup: deque[bytes | int]
