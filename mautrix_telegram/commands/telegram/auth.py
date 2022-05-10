@@ -38,6 +38,7 @@ from telethon.errors import (
 from telethon.tl.types import User
 
 from mautrix.client import Client
+from mautrix.errors import MForbidden
 from mautrix.types import (
     EventID,
     ImageInfo,
@@ -377,6 +378,10 @@ async def enter_password(evt: CommandEvent) -> EventID | None:
             "This bridge instance does not allow in-Matrix login. "
             "Please use `$cmdprefix+sp login` to get login instructions"
         )
+    try:
+        await evt.az.intent.redact(evt.room_id, evt.event_id)
+    except MForbidden as e:
+        evt.log.warning(f"Failed to redact password command: {e}")
     try:
         await _sign_in(
             evt,
