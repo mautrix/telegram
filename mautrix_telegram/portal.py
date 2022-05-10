@@ -160,7 +160,7 @@ from telethon.tl.types import (
     UserProfilePhotoEmpty,
     WebPage,
 )
-from telethon.utils import decode_waveform
+from telethon.utils import decode_waveform, encode_waveform
 import magic
 
 from mautrix.appservice import DOUBLE_PUPPET_SOURCE_KEY, IntentAPI
@@ -1654,7 +1654,27 @@ class Portal(DBPortal, BasePortal):
         force_document = file_size >= max_image_size
 
         attributes = [DocumentAttributeFilename(file_name=file_name)]
-        if w and h:
+        if content.msgtype == MessageType.VIDEO:
+            attributes.append(
+                DocumentAttributeVideo(
+                    duration=content.info.duration // 1000 if content.info.duration else 0,
+                    w=w or 0,
+                    h=h or 0,
+                )
+            )
+        elif content.msgtype == MessageType.AUDIO:
+            waveform = content.get("org.matrix.msc1767.audio", {}).get("waveform", [])
+            if waveform:
+                waveform_max = max(waveform)
+                waveform = [round(part / max(waveform_max / 32, 1)) for part in waveform]
+            attributes.append(
+                DocumentAttributeAudio(
+                    duration=content.info.duration // 1000 if content.info.duration else 0,
+                    voice="org.matrix.msc3245.voice" in content,
+                    waveform=encode_waveform(waveform) if waveform else None,
+                )
+            )
+        elif w and h:
             attributes.append(DocumentAttributeImageSize(w, h))
             force_document = force_document or w * h >= max_image_pixels
 
