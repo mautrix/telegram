@@ -378,10 +378,7 @@ async def enter_password(evt: CommandEvent) -> EventID | None:
             "This bridge instance does not allow in-Matrix login. "
             "Please use `$cmdprefix+sp login` to get login instructions"
         )
-    try:
-        await evt.az.intent.redact(evt.room_id, evt.event_id)
-    except MForbidden as e:
-        evt.log.warning(f"Failed to redact password command: {e}")
+    await evt.redact()
     try:
         await _sign_in(
             evt,
