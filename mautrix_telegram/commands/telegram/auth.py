@@ -216,6 +216,10 @@ async def login_qr(evt: CommandEvent) -> EventID:
             return await evt.reply(
                 "Your account has two-factor authentication. Please send your password here."
             )
+        try:
+            await evt.main_intent.redact(evt.room_id, qr_event_id, reason="QR code scanned")
+        except Exception:
+            pass
     else:
         timeout = TextMessageEventContent(body="Login timed out", msgtype=MessageType.TEXT)
         timeout.set_edit(qr_event_id)
