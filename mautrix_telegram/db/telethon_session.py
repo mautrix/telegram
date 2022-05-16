@@ -136,6 +136,26 @@ class PgSession(MemorySession):
             q, self.session_id, entity_id, row.pts, row.qts, ts, row.seq, row.unread_count
         )
 
+    async def get_update_states(self):
+        q = (
+            "SELECT entity_id, pts, qts, date, seq, unread_count FROM telethon_update_state "
+            "WHERE session_id=$1"
+        )
+        rows = await self.db.fetch(q, self.session_id)
+        return (
+            (
+                row["entity_id"],
+                updates.State(
+                    row["pts"],
+                    row["qts"],
+                    datetime.datetime.utcfromtimestamp(row["date"]),
+                    row["seq"],
+                    row["unread_count"],
+                ),
+            )
+            for row in rows
+        )
+
     def _entity_values_to_row(
         self, id: int, hash: int, username: str | None, phone: str | int | None, name: str | None
     ) -> tuple[str, int, int, str | None, str | None, str | None]:
