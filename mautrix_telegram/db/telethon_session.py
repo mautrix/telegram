@@ -136,7 +136,7 @@ class PgSession(MemorySession):
             q, self.session_id, entity_id, row.pts, row.qts, ts, row.seq, row.unread_count
         )
 
-    async def get_update_states(self):
+    async def get_update_states(self) -> tuple[tuple[int, updates.State], ...]:
         q = (
             "SELECT entity_id, pts, qts, date, seq, unread_count FROM telethon_update_state "
             "WHERE session_id=$1"
