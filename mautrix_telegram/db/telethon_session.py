@@ -15,7 +15,7 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, ClassVar
+from typing import TYPE_CHECKING, ClassVar, Iterable
 import asyncio
 import datetime
 
@@ -124,19 +124,19 @@ class PgSession(MemorySession):
         return updates.State(row["pts"], row["qts"], date, row["seq"], row["unread_count"])
 
     async def set_update_state(self, entity_id: int, row: updates.State) -> None:
-        q = (
-            "INSERT INTO telethon_update_state"
-            "    (session_id, entity_id, pts, qts, date, seq, unread_count) "
-            "VALUES ($1, $2, $3, $4, $5, $6, $7)"
-            "ON CONFLICT (session_id, entity_id) DO UPDATE"
-            "    SET pts=$3, qts=$4, date=$5, seq=$6, unread_count=$7"
-        )
+        q = """
+        INSERT INTO telethon_update_state(session_id, entity_id, pts, qts, date, seq, unread_count)
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        ON CONFLICT (session_id, entity_id) DO UPDATE SET
+            pts=excluded.pts, qts=excluded.qts, date=excluded.date, seq=excluded.seq,
+            unread_count=excluded.unread_count
+        """
         ts = row.date.timestamp()
         await self.db.execute(
             q, self.session_id, entity_id, row.pts, row.qts, ts, row.seq, row.unread_count
         )
 
-    async def get_update_states(self) -> tuple[tuple[int, updates.State], ...]:
+    async def get_update_states(self) -> Iterable[tuple[int, updates.State], ...]:
         q = (
             "SELECT entity_id, pts, qts, date, seq, unread_count FROM telethon_update_state "
             "WHERE session_id=$1"

@@ -57,6 +57,7 @@ from telethon.tl.types import (
     UpdateReadChannelInbox,
     UpdateReadHistoryInbox,
     UpdateReadHistoryOutbox,
+    UpdateShort,
     UpdateShortChatMessage,
     UpdateShortMessage,
     UpdateUserName,
@@ -297,6 +298,8 @@ class AbstractUser(ABC):
     # region Telegram update handling
 
     async def _update(self, update: TypeUpdate) -> None:
+        if isinstance(update, UpdateShort):
+            update = update.update
         asyncio.create_task(self._handle_entity_updates(getattr(update, "_entities", {})))
         if isinstance(
             update,
