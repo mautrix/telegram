@@ -66,6 +66,9 @@ class ProvisioningAPI(AuthAPI):
         self.app.router.add_route("GET", f"{user_prefix}", self.get_user_info)
         self.app.router.add_route("GET", f"{user_prefix}/chats", self.get_chats)
         self.app.router.add_route("GET", f"{user_prefix}/contacts", self.get_contacts)
+        self.app.router.add_route(
+            "POST", f"{user_prefix}/resolve_identifier/{{identifier}}", self.resolve_identifier
+        )
         self.app.router.add_route("POST", f"{user_prefix}/pm/{{identifier}}", self.start_dm)
 
         self.app.router.add_route("POST", f"{user_prefix}/logout", self.logout)
@@ -401,40 +404,80 @@ class ProvisioningAPI(AuthAPI):
             return err
         return web.json_response(data=await user.sync_contacts())
 
-    async def start_dm(self, request: web.Request) -> web.Response:
+    async def _resolve_id(
+        self, request: web.Request
+    ) -> tuple[Portal | None, User | None, TLUser | None, web.Response | None]:
         data, user, err = await self.get_user_request_info(request, expect_logged_in=True)
         if err is not None:
-            return err
+            return None, user, None, err
         try:
             identifier: str | int = request.match_info["identifier"]
             if isinstance(identifier, str) and identifier.isdecimal():
                 identifier = int(identifier)
             target = await user.client.get_entity(identifier)
         except ValueError:
-            return web.json_response(
-                {
-                    "error": "Invalid user identifier or user not found.",
-                    "errcode": "M_NOT_FOUND",
-                },
-                status=404,
+            return (
+                None,
+                user,
+                None,
+                web.json_response(
+                    {
+                        "error": "Invalid user identifier or user not found.",
+                        "errcode": "M_NOT_FOUND",
+                    },
+                    status=404,
+                ),
             )
 
         if not target:
-            return web.json_response(
-                {
-                    "error": "User not found.",
-                    "errcode": "M_NOT_FOUND",
-                },
-                status=404,
+            return (
+                None,
+                user,
+                None,
+                web.json_response(
+                    {
+                        "error": "User not found.",
+                        "errcode": "M_NOT_FOUND",
+                    },
+                    status=404,
+                ),
             )
         elif not isinstance(target, TLUser):
-            return web.json_response(
-                {
-                    "error": "Identifier is not a user.",
-                },
-                status=400,
+            return (
+                None,
+                user,
+                None,
+                web.json_response(
+                    {
+                        "error": "Identifier is not a user.",
+                        "errcode": "FI.MAU.TELEGRAM_ID_NOT_USER",
+                    },
+                    status=400,
+                ),
             )
         portal = await Portal.get_by_entity(target, tg_receiver=user.tgid)
+        return portal, user, target, None
+
+    async def resolve_identifier(self, request: web.Request) -> web.Response:
+        portal, user, target, err = await self._resolve_id(request)
+        if err is not None:
+            return err
+        puppet = await portal.get_dm_puppet()
+        await puppet.update_info(user, target)
+        return web.json_response(
+            {
+                "room_id": portal.mxid,
+                "just_created": False,
+                "id": portal.tgid,
+                "contact_info": puppet.contact_info,
+            },
+            status=200,
+        )
+
+    async def start_dm(self, request: web.Request) -> web.Response:
+        portal, user, target, err = await self._resolve_id(request)
+        if err is not None:
+            return err
         puppet = await portal.get_dm_puppet()
         if portal.mxid:
             just_created = False
