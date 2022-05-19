@@ -67,7 +67,7 @@ class ProvisioningAPI(AuthAPI):
         self.app.router.add_route("GET", f"{user_prefix}/chats", self.get_chats)
         self.app.router.add_route("GET", f"{user_prefix}/contacts", self.get_contacts)
         self.app.router.add_route(
-            "POST", f"{user_prefix}/resolve_identifier/{{identifier}}", self.resolve_identifier
+            "GET", f"{user_prefix}/resolve_identifier/{{identifier}}", self.resolve_identifier
         )
         self.app.router.add_route("POST", f"{user_prefix}/pm/{{identifier}}", self.start_dm)
 
