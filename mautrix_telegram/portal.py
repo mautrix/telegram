@@ -3161,9 +3161,7 @@ class Portal(DBPortal, BasePortal):
             )
             return
 
-        self.log.debug(
-            "Handling Telegram message %s from %s (space: %s)", evt.id, sender.tgid, tg_space
-        )
+        self.log.debug("Handling Telegram message %d@%d from %s", evt.id, tg_space, sender.tgid)
         self.log.trace("Message content: %s", evt)
 
         if sender and not sender.displayname:
@@ -3245,7 +3243,7 @@ class Portal(DBPortal, BasePortal):
             await intent.redact(self.mxid, event_id)
             return
 
-        self.log.debug("Handled telegram message %d -> %s", evt.id, event_id)
+        self.log.debug("Handled Telegram message %d@%d -> %s", evt.id, tg_space, event_id)
         try:
             dbm = DBMessage(
                 tgid=TelegramID(evt.id),
@@ -3258,7 +3256,10 @@ class Portal(DBPortal, BasePortal):
             await dbm.insert()
             await DBMessage.replace_temp_mxid(temporary_identifier, self.mxid, event_id)
         except (IntegrityError, UniqueViolationError) as e:
-            self.log.exception(f"{type(e).__name__} while saving message mapping")
+            self.log.error(
+                f"{type(e).__name__} while saving message mapping {evt.id}@{tg_space} "
+                f"-> {event_id}: {e}"
+            )
             await intent.redact(self.mxid, event_id)
             return
         if isinstance(evt, Message) and evt.reactions:
