@@ -3153,16 +3153,18 @@ class Portal(DBPortal, BasePortal):
                     ).insert()
                 return
 
-        if self.backfill_lock.locked or self.peer_type == "channel":
-            msg = await DBMessage.get_one_by_tgid(TelegramID(evt.id), tg_space)
-            if msg:
-                self.log.debug(
-                    f"Ignoring message {evt.id} (src {source.tgid}) as it was already "
-                    f"handled into {msg.mxid}."
-                )
-                return
+        msg = await DBMessage.get_one_by_tgid(TelegramID(evt.id), tg_space)
+        if msg:
+            self.log.debug(
+                f"Ignoring message {evt.id} (src {source.tgid}) as it was already "
+                f"handled into {msg.mxid}."
+            )
+            return
 
-        self.log.trace("Handling Telegram message %s", evt)
+        self.log.debug(
+            "Handling Telegram message %s from %s (space: %s)", evt.id, sender.tgid, tg_space
+        )
+        self.log.trace("Message content: %s", evt)
 
         if sender and not sender.displayname:
             self.log.debug(
