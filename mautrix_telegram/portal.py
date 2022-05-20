@@ -3161,7 +3161,13 @@ class Portal(DBPortal, BasePortal):
             )
             return
 
-        self.log.debug("Handling Telegram message %d@%d from %s", evt.id, tg_space, sender.tgid)
+        self.log.debug(
+            "Handling Telegram message %d@%d from %s (ts: %s)",
+            evt.id,
+            tg_space,
+            sender.tgid if sender else None,
+            evt.date,
+        )
         self.log.trace("Message content: %s", evt)
 
         if sender and not sender.displayname:

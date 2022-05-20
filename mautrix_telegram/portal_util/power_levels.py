@@ -80,11 +80,7 @@ def get_base_power_levels(
         levels.events_default = overrides.get(
             "events_default",
             50
-            if (
-                portal.peer_type == "channel"
-                and not entity.megagroup
-                or entity.default_banned_rights.send_messages
-            )
+            if portal.peer_type == "channel" and not entity.megagroup or dbr.send_messages
             else 0,
         )
     for evt_type, value in overrides.get("events", {}).items():
