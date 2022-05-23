@@ -104,7 +104,8 @@ class TelegramBridge(Bridge):
         for puppet in Puppet.by_custom_mxid.values():
             puppet.stop()
         self.add_shutdown_actions(user.stop() for user in User.by_tgid.values())
-        self.add_shutdown_actions(self.bot.stop())
+        if self.bot:
+            self.add_shutdown_actions(self.bot.stop())
 
     async def get_user(self, user_id: UserID, create: bool = True) -> User | None:
         user = await User.get_by_mxid(user_id, create=create)
