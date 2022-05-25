@@ -22,7 +22,7 @@ from asyncpg import Record
 from attr import dataclass
 import attr
 
-from mautrix.types import ContentURI, EventID, RoomID
+from mautrix.types import BatchID, ContentURI, EventID, RoomID
 from mautrix.util.async_db import Database
 
 from ..types import TelegramID
@@ -44,6 +44,8 @@ class Portal:
     mxid: RoomID | None
     avatar_url: ContentURI | None
     encrypted: bool
+    first_event_id: EventID | None
+    next_batch_id: BatchID | None
 
     sponsored_event_id: EventID | None
     sponsored_event_ts: int | None
@@ -67,10 +69,28 @@ class Portal:
         data["local_config"] = json.loads(data.pop("config", None) or "{}")
         return cls(**data)
 
-    columns: ClassVar[str] = (
-        "tgid, tg_receiver, peer_type, megagroup, mxid, avatar_url, encrypted, sponsored_event_id,"
-        "sponsored_event_ts, sponsored_msg_random_id, username, title, about, photo_id, "
-        "name_set, avatar_set, config"
+    columns: ClassVar[str] = ", ".join(
+        (
+            "tgid",
+            "tg_receiver",
+            "peer_type",
+            "megagroup",
+            "mxid",
+            "avatar_url",
+            "encrypted",
+            "first_event_id",
+            "next_batch_id",
+            "sponsored_event_id",
+            "sponsored_event_ts",
+            "sponsored_msg_random_id",
+            "username",
+            "title",
+            "about",
+            "photo_id",
+            "name_set",
+            "avatar_set",
+            "config",
+        )
     )
 
     @classmethod
@@ -112,6 +132,8 @@ class Portal:
             self.mxid,
             self.avatar_url,
             self.encrypted,
+            self.first_event_id,
+            self.next_batch_id,
             self.sponsored_event_id,
             self.sponsored_event_ts,
             self.sponsored_msg_random_id,
@@ -128,9 +150,10 @@ class Portal:
     async def save(self) -> None:
         q = """
         UPDATE portal
-        SET mxid=$4, avatar_url=$5, encrypted=$6, sponsored_event_id=$7, sponsored_event_ts=$8,
-            sponsored_msg_random_id=$9, username=$10, title=$11, about=$12, photo_id=$13,
-            name_set=$14, avatar_set=$15, megagroup=$16, config=$17
+        SET mxid=$4, avatar_url=$5, encrypted=$6, first_event_id=$7, next_batch_id=$8,
+            sponsored_event_id=$9, sponsored_event_ts=$10, sponsored_msg_random_id=$11,
+            username=$12, title=$13, about=$14, photo_id=$15, name_set=$16, avatar_set=$17,
+            megagroup=$18, config=$19
         WHERE tgid=$1 AND tg_receiver=$2 AND (peer_type=$3 OR true)
         """
         await self.db.execute(q, *self._values)
@@ -148,10 +171,11 @@ class Portal:
     async def insert(self) -> None:
         q = """
         INSERT INTO portal (
-            tgid, tg_receiver, peer_type, mxid, avatar_url, encrypted,
-            sponsored_event_id, sponsored_event_ts, sponsored_msg_random_id,
+            tgid, tg_receiver, peer_type, mxid, avatar_url, encrypted, first_event_id,
+            next_batch_id, sponsored_event_id, sponsored_event_ts, sponsored_msg_random_id,
             username, title, about, photo_id, name_set, avatar_set, megagroup, config
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18,
+                  $19)
         """
         await self.db.execute(q, *self._values)
 

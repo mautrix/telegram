@@ -167,6 +167,7 @@ from mautrix.appservice import DOUBLE_PUPPET_SOURCE_KEY, IntentAPI
 from mautrix.bridge import BasePortal, NotificationDisabler, RejectMatrixInvite, async_getter_lock
 from mautrix.errors import IntentError, MatrixRequestError, MForbidden
 from mautrix.types import (
+    BatchID,
     ContentURI,
     EventID,
     EventType,
@@ -221,6 +222,7 @@ if TYPE_CHECKING:
 
 StateBridge = EventType.find("m.bridge", EventType.Class.STATE)
 StateHalfShotBridge = EventType.find("uk.half-shot.bridge", EventType.Class.STATE)
+DummyPortalCreated = EventType.find("fi.mau.dummy.portal_created", EventType.Class.MESSAGE)
 BEEPER_LINK_PREVIEWS_KEY = "com.beeper.linkpreviews"
 BEEPER_IMAGE_ENCRYPTION_KEY = "beeper:image:encryption"
 
@@ -304,6 +306,8 @@ class Portal(DBPortal, BasePortal):
         mxid: RoomID | None = None,
         avatar_url: ContentURI | None = None,
         encrypted: bool = False,
+        first_event_id: EventID | None = None,
+        next_batch_id: BatchID | None = None,
         sponsored_event_id: EventID | None = None,
         sponsored_event_ts: int | None = None,
         sponsored_msg_random_id: bytes | None = None,
@@ -323,6 +327,8 @@ class Portal(DBPortal, BasePortal):
             mxid=mxid,
             avatar_url=avatar_url,
             encrypted=encrypted,
+            first_event_id=first_event_id,
+            next_batch_id=next_batch_id,
             sponsored_event_id=sponsored_event_id,
             sponsored_event_ts=sponsored_event_ts,
             sponsored_msg_random_id=sponsored_msg_random_id,
@@ -890,7 +896,11 @@ class Portal(DBPortal, BasePortal):
 
             self.mxid = room_id
             self.by_mxid[self.mxid] = self
+            self.first_event_id = await self.main_intent.send_message_event(
+                self.mxid, DummyPortalCreated, {}
+            )
             await self.save()
+            self.log.debug(f"Matrix room created: {self.mxid}")
             await self.az.state_store.set_power_levels(self.mxid, power_levels)
             await user.register_portal(self)
 
@@ -2211,6 +2221,8 @@ class Portal(DBPortal, BasePortal):
         except KeyError:
             pass
         self.mxid = new_id
+        self.next_batch_id = None
+        self.first_event_id = None
         self.by_mxid[self.mxid] = self
         await self.save()
 
@@ -3546,6 +3558,8 @@ class Portal(DBPortal, BasePortal):
         self.name_set = False
         self.avatar_set = False
         self.about = None
+        self.next_batch_id = None
+        self.first_event_id = None
         self.sponsored_event_id = None
         self.sponsored_event_ts = None
         self.sponsored_msg_random_id = None
