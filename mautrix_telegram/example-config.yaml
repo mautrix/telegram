@@ -156,7 +156,7 @@ bridge:
     skip_deleted_members: true
     # Whether or not to automatically synchronize contacts and chats of Matrix users logged into
     # their Telegram account at startup.
-    startup_sync: true
+    startup_sync: false
     # Number of most recently active dialogs to check when syncing chats.
     # Set to 0 to remove limit.
     sync_update_limit: 0
@@ -455,6 +455,11 @@ telegram:
     # (Optional) Create your own bot at https://t.me/BotFather
     bot_token: disabled
 
+    # Should the bridge request missed updates from Telegram when restarting?
+    catch_up: true
+    # Should incoming updates be handled sequentially to make sure order is preserved on Matrix?
+    sequential_updates: true
+
     # Telethon connection options.
     connection:
         # The timeout in seconds to be used when connecting.
@@ -480,7 +485,7 @@ telegram:
     # Device info sent to Telegram.
     device_info:
         # "auto" = OS name+version.
-        device_model: auto
+        device_model: mautrix-telegram
         # "auto" = Telethon version.
         system_version: auto
         # "auto" = mautrix-telegram version.

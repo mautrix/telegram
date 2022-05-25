@@ -228,6 +228,9 @@ class Config(BaseBridgeConfig):
         copy("telegram.api_hash")
         copy("telegram.bot_token")
 
+        copy("telegram.catch_up")
+        copy("telegram.sequential_updates")
+
         copy("telegram.connection.timeout")
         copy("telegram.connection.retries")
         copy("telegram.connection.retry_delay")

@@ -224,6 +224,8 @@ class AbstractUser(ABC):
             connection=connection,
             proxy=proxy,
             raise_last_call_error=True,
+            catch_up=self.config["telegram.catch_up"],
+            sequential_updates=self.config["telegram.sequential_updates"],
             loop=self.loop,
             base_logger=base_logger,
         )
