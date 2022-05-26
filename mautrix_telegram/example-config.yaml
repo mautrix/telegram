@@ -459,6 +459,7 @@ telegram:
     catch_up: true
     # Should incoming updates be handled sequentially to make sure order is preserved on Matrix?
     sequential_updates: true
+    exit_on_update_error: false
 
     # Telethon connection options.
     connection:

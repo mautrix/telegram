@@ -228,8 +228,19 @@ class AbstractUser(ABC):
             sequential_updates=self.config["telegram.sequential_updates"],
             loop=self.loop,
             base_logger=base_logger,
+            update_error_callback=self._telethon_update_error_callback,
         )
         self.client.add_event_handler(self._update_catch)
+
+    async def _telethon_update_error_callback(self, err: Exception) -> None:
+        if self.config["telegram.exit_on_update_error"]:
+            self.log.critical(f"Stopping due to update handling error {type(err).__name__}")
+            self.bridge.manual_stop(50)
+        else:
+            self.log.info("Recreating Telethon update loop in 60 seconds")
+            await asyncio.sleep(60)
+            self.log.debug("Now recreating Telethon update loop")
+            self.client._updates_handle = self.loop.create_task(self.client._update_loop())
 
     @abstractmethod
     async def update(self, update: TypeUpdate) -> bool:
