@@ -10,5 +10,5 @@ from . import (
     v05_channel_ghosts,
     v06_puppet_avatar_url,
     v07_puppet_phone_number,
-    v08_infinite_backfill,
+    v08_portal_first_event,
 )

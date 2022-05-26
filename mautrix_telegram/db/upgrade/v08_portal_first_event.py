@@ -18,7 +18,7 @@ from mautrix.util.async_db import Connection
 from . import upgrade_table
 
 
-@upgrade_table.register(description="Switch to infinite backfill with MSC2716")
+@upgrade_table.register(description="Track first event ID in portals for infinite backfilling")
 async def upgrade_v8(conn: Connection) -> None:
     await conn.execute("ALTER TABLE portal ADD COLUMN first_event_id TEXT")
     await conn.execute("ALTER TABLE portal ADD COLUMN next_batch_id TEXT")
