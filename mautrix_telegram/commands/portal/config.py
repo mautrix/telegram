@@ -98,7 +98,7 @@ def config_defaults(evt: CommandEvent) -> Awaitable[EventID]:
                 "exceptions": evt.config["bridge.bridge_notices.exceptions"],
             },
             "bot_messages_as_notices": evt.config["bridge.bot_messages_as_notices"],
-            "inline_images": evt.config["bridge.inline_images"],
+            "caption_in_message": evt.config["bridge.caption_in_message"],
             "message_formats": evt.config["bridge.message_formats"],
             "emote_format": evt.config["bridge.emote_format"],
             "state_event_formats": evt.config["bridge.state_event_formats"],

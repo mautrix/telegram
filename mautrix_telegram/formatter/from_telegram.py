@@ -48,34 +48,13 @@ from telethon.tl.types import (
     TypeMessageEntity,
 )
 
-from mautrix.appservice import IntentAPI
-from mautrix.types import (
-    EventType,
-    Format,
-    InReplyTo,
-    MessageType,
-    RelatesTo,
-    TextMessageEventContent,
-)
+from mautrix.types import Format, MessageType, TextMessageEventContent
 
 from .. import abstract_user as au, portal as po, puppet as pu, user as u
 from ..db import Message as DBMessage
 from ..types import TelegramID
 
 log: logging.Logger = logging.getLogger("mau.fmt.tg")
-
-
-async def telegram_reply_to_matrix(evt: Message, source: au.AbstractUser) -> RelatesTo | None:
-    if evt.reply_to:
-        space = (
-            evt.peer_id.channel_id
-            if isinstance(evt, Message) and isinstance(evt.peer_id, PeerChannel)
-            else source.tgid
-        )
-        msg = await DBMessage.get_one_by_tgid(TelegramID(evt.reply_to.reply_to_msg_id), space)
-        if msg:
-            return RelatesTo(in_reply_to=InReplyTo(event_id=msg.mxid))
-    return None
 
 
 async def _add_forward_header(
@@ -145,41 +124,11 @@ async def _add_forward_header(
     )
 
 
-async def _add_reply_header(
-    source: au.AbstractUser, content: TextMessageEventContent, evt: Message, main_intent: IntentAPI
-) -> None:
-    space = (
-        evt.peer_id.channel_id
-        if isinstance(evt, Message) and isinstance(evt.peer_id, PeerChannel)
-        else source.tgid
-    )
-
-    msg = await DBMessage.get_one_by_tgid(TelegramID(evt.reply_to.reply_to_msg_id), space)
-    if not msg:
-        return
-
-    try:
-        event = await main_intent.get_event(msg.mx_room, msg.mxid)
-        if event.type == EventType.ROOM_ENCRYPTED and source.bridge.matrix.e2ee:
-            event = await source.bridge.matrix.e2ee.decrypt(event)
-        if isinstance(event.content, TextMessageEventContent):
-            event.content.trim_reply_fallback()
-        puppet = await pu.Puppet.get_by_mxid(event.sender, create=False)
-        content.set_reply(event, displayname=puppet.displayname if puppet else event.sender)
-    except Exception:
-        log.exception("Failed to get event to add reply fallback")
-        content.set_reply(msg.mxid)
-
-
 async def telegram_to_matrix(
     evt: Message | SponsoredMessage,
     source: au.AbstractUser,
-    main_intent: IntentAPI | None = None,
-    prefix_text: str | None = None,
-    prefix_html: str | None = None,
     override_text: str = None,
     override_entities: list[TypeMessageEntity] = None,
-    no_reply_fallback: bool = False,
     require_html: bool = False,
 ) -> TextMessageEventContent:
     content = TextMessageEventContent(
@@ -195,17 +144,8 @@ async def telegram_to_matrix(
     if require_html:
         content.ensure_has_html()
 
-    if prefix_html:
-        content.ensure_has_html()
-        content.formatted_body = prefix_html + content.formatted_body
-    if prefix_text:
-        content.body = prefix_text + content.body
-
     if getattr(evt, "fwd_from", None):
         await _add_forward_header(source, content, evt.fwd_from)
-
-    if getattr(evt, "reply_to", None) and not no_reply_fallback:
-        await _add_reply_header(source, content, evt, main_intent)
 
     if isinstance(evt, Message) and evt.post and evt.post_author:
         content.ensure_has_html()

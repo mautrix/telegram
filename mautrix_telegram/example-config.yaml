@@ -206,9 +206,9 @@ bridge:
     # Whether or not the !tg join command should do a HTTP request
     # to resolve redirects in invite links.
     invite_link_resolve: false
-    # Use inline images instead of a separate message for the caption.
-    # N.B. Inline images are not supported on all clients (e.g. Element iOS/Android).
-    inline_images: false
+    # Send captions in the same message as images. This will send data compatible with both MSC2530 and MSC3552.
+    # This is currently not supported in most clients.
+    caption_in_message: false
     # Maximum size of image in megabytes before sending to Telegram as a document.
     image_as_file_size: 10
     # Maximum number of pixels in an image before sending to Telegram as a document. Defaults to 1280x1280 = 1638400.

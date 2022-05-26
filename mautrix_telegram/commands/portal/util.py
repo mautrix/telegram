@@ -68,5 +68,5 @@ async def user_has_power_level(
         await intent.get_power_levels(room_id)
     except MatrixRequestError:
         return False
-    event_type = EventType.find(f"net.maunium.telegram.{event}", t_class=EventType.Class.STATE)
+    event_type = EventType.find(f"fi.mau.telegram.{event}", t_class=EventType.Class.STATE)
     return await intent.state_store.has_power_level(room_id, sender.mxid, event_type)

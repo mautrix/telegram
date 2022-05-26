@@ -83,7 +83,7 @@ async def make_sponsored_message_content(
     else:
         sponsor_name = sponsor_name_html = "unknown entity"
 
-    content["net.maunium.telegram.sponsored"] = sponsored_meta
+    content["fi.mau.telegram.sponsored"] = sponsored_meta
     content.formatted_body += (
         f"<br/><br/>Sponsored message from {sponsor_name_html} "
         f"- <a href='{content.external_url}'>{action}</a>"
