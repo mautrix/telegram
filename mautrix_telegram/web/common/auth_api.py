@@ -279,6 +279,14 @@ class AuthAPI(abc.ABC):
                 errcode="phone_code_expired",
                 error="Phone code expired.",
             )
+        except PhoneNumberUnoccupiedError:
+            return self.get_login_response(
+                mxid=user.mxid,
+                state="code",
+                status=403,
+                errcode="phone_number_unoccupied",
+                error="That phone number has not been registered.",
+            )
         except SessionPasswordNeededError:
             if not password_in_data:
                 if user.command_status and user.command_status["action"] == "Login":
