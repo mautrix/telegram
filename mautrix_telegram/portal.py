@@ -133,6 +133,7 @@ from mautrix.bridge import BasePortal, NotificationDisabler, RejectMatrixInvite,
 from mautrix.errors import IntentError, MatrixRequestError, MForbidden
 from mautrix.types import (
     BatchID,
+    BeeperMessageStatusEventContent,
     ContentURI,
     EventID,
     EventType,
@@ -143,9 +144,11 @@ from mautrix.types import (
     MediaMessageEventContent,
     Membership,
     MessageEventContent,
+    MessageStatusReason,
     MessageType,
     PowerLevelStateEventContent,
     RelatesTo,
+    RelationType,
     RoomAlias,
     RoomAvatarStateEventContent,
     RoomCreatePreset,
@@ -202,6 +205,10 @@ MediaHandler = Callable[["au.AbstractUser", IntentAPI, Message, RelatesTo], Awai
 
 
 class BridgingError(Exception):
+    pass
+
+
+class IgnoredMessageError(Exception):
     pass
 
 
@@ -1787,6 +1794,31 @@ class Portal(DBPortal, BasePortal):
             message_type=msgtype,
         )
         await self._send_delivery_receipt(event_id)
+        asyncio.create_task(self._send_message_status(event_id, err=None))
+
+    async def _send_message_status(self, event_id: EventID, err: Exception | None) -> None:
+        if not self.config["bridge.message_status_events"]:
+            return
+        intent = self.az.intent if self.encrypted else self.main_intent
+        status = BeeperMessageStatusEventContent(
+            network=self.bridge_info_state_key,
+            relates_to=RelatesTo(
+                rel_type=RelationType.REFERENCE,
+                event_id=event_id,
+            ),
+            success=err is None,
+        )
+        if err:
+            status.reason = MessageStatusReason.GENERIC_ERROR
+            status.error = str(err)
+            status.is_certain = True
+            status.can_retry = not isinstance(err, IgnoredMessageError)
+
+        await intent.send_message_event(
+            room_id=self.mxid,
+            event_type=EventType.BEEPER_MESSAGE_STATUS,
+            content=status,
+        )
 
     async def _send_bridge_error(
         self,
@@ -1810,6 +1842,7 @@ class Portal(DBPortal, BasePortal):
             await self._send_message(
                 self.main_intent, TextMessageEventContent(msgtype=MessageType.NOTICE, body=msg)
             )
+        await self._send_message_status(event_id, err)
 
     async def handle_matrix_message(
         self, sender: u.User, content: MessageEventContent, event_id: EventID
@@ -1840,9 +1873,10 @@ class Portal(DBPortal, BasePortal):
     async def _handle_matrix_message(
         self, sender: u.User, content: MessageEventContent, event_id: EventID
     ) -> None:
-        if not content.body or not content.msgtype:
-            self.log.debug(f"Ignoring message {event_id} in {self.mxid} without body or msgtype")
-            return
+        if not content.msgtype:
+            raise IgnoredMessageError("Message doesn't have a msgtype")
+        elif not content.body:
+            raise IgnoredMessageError("Message doesn't have a body")
 
         logged_in = not await sender.needs_relaybot(self)
         client = sender.client if logged_in else self.bot.client
@@ -1865,7 +1899,7 @@ class Portal(DBPortal, BasePortal):
             bridge_notices = self.get_config("bridge_notices.default")
             excepted = sender.mxid in self.get_config("bridge_notices.exceptions")
             if not bridge_notices and not excepted:
-                raise BridgingError("Notices are not configured to be bridged.")
+                raise IgnoredMessageError("Notices are not configured to be bridged.")
 
         if content.msgtype in (MessageType.TEXT, MessageType.EMOTE, MessageType.NOTICE):
             await self._pre_process_matrix_message(sender, not logged_in, content)
@@ -1898,7 +1932,7 @@ class Portal(DBPortal, BasePortal):
                 f"Didn't handle Matrix event {event_id} due to unknown msgtype {content.msgtype}"
             )
             self.log.trace("Unhandled Matrix event content: %s", content)
-            raise BridgingError(f"Unhandled msgtype {content.msgtype}")
+            raise IgnoredMessageError(f"Unhandled msgtype {content.msgtype}")
 
     async def handle_matrix_unpin_all(self, sender: u.User, pin_event_id: EventID) -> None:
         await sender.client(UnpinAllMessagesRequest(peer=self.peer))
@@ -1928,7 +1962,7 @@ class Portal(DBPortal, BasePortal):
     ) -> None:
         try:
             await self._handle_matrix_deletion(deleter, event_id)
-        except BridgingError as e:
+        except IgnoredMessageError as e:
             self.log.debug(str(e))
             await self._send_bridge_error(deleter, e, redaction_event_id, EventType.ROOM_REDACTION)
         except Exception as e:
@@ -1942,20 +1976,21 @@ class Portal(DBPortal, BasePortal):
                 EventType.ROOM_REDACTION,
             )
             await self._send_delivery_receipt(redaction_event_id)
+            asyncio.create_task(self._send_message_status(redaction_event_id, err=None))
 
     async def _handle_matrix_reaction_deletion(
         self, deleter: u.User, event_id: EventID, tg_space: TelegramID
     ) -> None:
         reaction = await DBReaction.get_by_mxid(event_id, self.mxid)
         if not reaction:
-            raise BridgingError(f"Ignoring Matrix redaction of unknown event {event_id}")
+            raise IgnoredMessageError(f"Ignoring Matrix redaction of unknown event {event_id}")
         elif reaction.tg_sender != deleter.tgid:
-            raise BridgingError(f"Ignoring Matrix redaction of reaction by another user")
+            raise IgnoredMessageError(f"Ignoring Matrix redaction of reaction by another user")
         reaction_target = await DBMessage.get_by_mxid(
             reaction.msg_mxid, reaction.mx_room, tg_space
         )
         if not reaction_target or reaction_target.redacted:
-            raise BridgingError(
+            raise IgnoredMessageError(
                 f"Ignoring Matrix redaction of reaction to unknown event {reaction.msg_mxid}"
             )
         async with self.reaction_lock(reaction_target.mxid):
@@ -1969,13 +2004,13 @@ class Portal(DBPortal, BasePortal):
         if not message:
             await self._handle_matrix_reaction_deletion(real_deleter, event_id, tg_space)
         elif message.redacted:
-            raise BridgingError(
+            raise IgnoredMessageError(
                 "Ignoring Matrix redaction of already redacted event "
                 f"{message.mxid} in {message.mx_room}"
             )
         elif message.edit_index != 0:
             await message.mark_redacted()
-            raise BridgingError(
+            raise IgnoredMessageError(
                 f"Ignoring Matrix redaction of edit event {message.mxid} in {message.mx_room}"
             )
         else:
@@ -1990,7 +2025,7 @@ class Portal(DBPortal, BasePortal):
                 await self._handle_matrix_reaction(
                     user, target_event_id, reaction, reaction_event_id
                 )
-        except BridgingError as e:
+        except IgnoredMessageError as e:
             self.log.debug(str(e))
             await self._send_bridge_error(user, e, reaction_event_id, EventType.REACTION)
         except ReactionInvalidError as e:
@@ -2012,6 +2047,7 @@ class Portal(DBPortal, BasePortal):
                 EventType.REACTION,
             )
             await self._send_delivery_receipt(reaction_event_id)
+            asyncio.create_task(self._send_message_status(reaction_event_id, err=None))
 
     async def _handle_matrix_reaction(
         self, user: u.User, target_event_id: EventID, emoji: str, reaction_event_id: EventID
@@ -2019,11 +2055,15 @@ class Portal(DBPortal, BasePortal):
         tg_space = self.tgid if self.peer_type == "channel" else user.tgid
         msg = await DBMessage.get_by_mxid(target_event_id, self.mxid, tg_space)
         if not msg:
-            raise BridgingError(f"Ignoring Matrix reaction to unknown event {target_event_id}")
+            raise IgnoredMessageError(
+                f"Ignoring Matrix reaction to unknown event {target_event_id}"
+            )
         elif msg.redacted:
-            raise BridgingError(f"Ignoring Matrix reaction to redacted event {target_event_id}")
+            raise IgnoredMessageError(
+                f"Ignoring Matrix reaction to redacted event {target_event_id}"
+            )
         elif msg.edit_index != 0:
-            raise BridgingError(f"Ignoring Matrix reaction to edit event {target_event_id}")
+            raise IgnoredMessageError(f"Ignoring Matrix reaction to edit event {target_event_id}")
 
         emoji = variation_selector.remove(emoji)
         existing_react = await DBReaction.get_by_sender(msg.mxid, msg.mx_room, user.tgid)
