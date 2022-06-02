@@ -521,7 +521,7 @@ class TelegramMessageConverter:
         content["fi.mau.telegram.unsupported"] = True
         return ConvertedMessage(content=content)
 
-    async def _convert_poll(self, source: au.AbstractUser, evt: Message) -> ConvertedMessage:
+    async def _convert_poll(self, source: au.AbstractUser, evt: Message, **_) -> ConvertedMessage:
         poll: Poll = evt.media.poll
         poll_id = self._encode_msgid(source, evt)
 
