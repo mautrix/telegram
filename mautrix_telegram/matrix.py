@@ -42,6 +42,8 @@ from mautrix.types import (
 )
 
 from . import commands as com, portal as po, puppet as pu, user as u
+from .commands.portal.util import get_initial_state, user_has_power_level, warn_missing_power
+from .types import TelegramID
 
 if TYPE_CHECKING:
     from .__main__ import TelegramBridge
@@ -69,15 +71,70 @@ class MatrixHandler(BaseMatrixHandler):
         evt: StateEvent,
         members: list[UserID],
     ) -> None:
-        if self.az.bot_mxid not in members:
+        double_puppet = await pu.Puppet.get_by_custom_mxid(invited_by.mxid)
+        if not double_puppet or self.az.bot_mxid in members:
+            if self.az.bot_mxid not in members:
+                await puppet.default_mxid_intent.leave_room(
+                    room_id,
+                    reason="This ghost does not join multi-user rooms without the bridge bot.",
+                )
+            else:
+                await puppet.default_mxid_intent.send_notice(
+                    room_id,
+                    "This ghost will remain inactive until a Telegram chat is created for this room.",
+                )
+            return
+
+        elif not await user_has_power_level(
+            evt.room_id, double_puppet.intent, invited_by, "bridge"
+        ):
             await puppet.default_mxid_intent.leave_room(
-                room_id, reason="This ghost does not join multi-user rooms without the bridge bot."
+                room_id, reason="You do not have the permissions to bridge this room."
             )
-        else:
-            await puppet.default_mxid_intent.send_notice(
+            return
+
+        await double_puppet.intent.invite_user(room_id, self.az.bot_mxid)
+
+        title, about, levels, encrypted = await get_initial_state(double_puppet.intent, room_id)
+        if not title:
+            await puppet.default_mxid_intent.leave_room(
+                room_id, reason="Please set a title before inviting Telegram puppets."
+            )
+            return
+
+        portal = po.Portal(
+            tgid=TelegramID(0),
+            tg_receiver=TelegramID(0),
+            peer_type="channel",
+            mxid=evt.room_id,
+            title=title,
+            about=about,
+            encrypted=encrypted,
+        )
+        await portal.az.intent.ensure_joined(room_id)
+        levels = await portal.az.intent.get_power_levels(room_id)
+        invited_by_level = levels.get_user_level(invited_by.mxid)
+        if invited_by_level > levels.get_user_level(self.az.bot_mxid):
+            levels.users[self.az.bot_mxid] = 100 if invited_by_level >= 100 else invited_by_level
+            await double_puppet.intent.set_power_levels(room_id, levels)
+
+        invites, errors = await portal.get_telegram_users_in_matrix_room(
+            invited_by, pre_create=True
+        )
+        if len(errors) > 0:
+            error_list = "\n".join(f"* [{mxid}](https://matrix.to/#/{mxid})" for mxid in errors)
+            await portal.az.intent.send_notice(
                 room_id,
-                "This ghost will remain inactive until a Telegram chat is created for this room.",
+                f"Failed to add the following users to the chat:\n\n{error_list}\n\n"
+                "You can try `$cmdprefix+sp search -r <username>` to help the bridge find "
+                "those users.",
             )
+
+        try:
+            await portal.create_telegram_chat(invited_by, invites=invites, supergroup=True)
+        except ValueError as e:
+            await portal.delete()
+            return await portal.az.intent.send_notice(room_id, e.args[0])
 
     async def handle_invite(
         self, room_id: RoomID, user_id: UserID, inviter: u.User, event_id: EventID
