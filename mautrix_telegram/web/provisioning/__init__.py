@@ -77,7 +77,7 @@ class ProvisioningAPI(AuthAPI):
         self.app.router.add_route("POST", f"{user_prefix}/login/send_code", self.send_code)
         self.app.router.add_route("POST", f"{user_prefix}/login/send_password", self.send_password)
 
-        self.app.router.add_route("GET", "/bridge", self.bridge_info)
+        self.app.router.add_route("GET", "/v1/bridge", self.bridge_info)
 
     async def get_portal_by_mxid(self, request: web.Request) -> web.Response:
         err = self.check_authorization(request)
