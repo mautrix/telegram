@@ -29,6 +29,7 @@ from .. import SECTION_PORTAL_MANAGEMENT, CommandEvent, command_handler
 
 @command_handler(
     needs_auth=False,
+    needs_puppeting=False,
     help_section=SECTION_PORTAL_MANAGEMENT,
     help_text="View or change per-portal settings.",
     help_args="<`help`|_subcommand_> [...]",

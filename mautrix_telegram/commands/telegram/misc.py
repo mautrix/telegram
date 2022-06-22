@@ -66,6 +66,7 @@ from ...types import TelegramID
 
 @command_handler(
     needs_auth=False,
+    needs_puppeting=False,
     help_section=SECTION_MISC,
     help_args="<_caption_>",
     help_text="Set a caption for the next image you send",
