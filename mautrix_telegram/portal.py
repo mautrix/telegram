@@ -2189,7 +2189,7 @@ class Portal(DBPortal, BasePortal):
                 and isinstance(update.message.action, MessageActionChatEditPhoto)
             )
             if is_photo_update:
-                loc, size = self._get_largest_photo_size(update.message.action.photo)
+                loc, size = self._msg_conv.get_largest_photo_size(update.message.action.photo)
                 self.photo_id = str(loc.id)
                 await self.save()
                 break
