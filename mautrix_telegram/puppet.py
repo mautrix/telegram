@@ -512,23 +512,4 @@ class Puppet(DBPuppet, BasePuppet):
 
         return None
 
-    @classmethod
-    async def find_by_displayname(cls, displayname: str) -> Puppet | None:
-        if not displayname:
-            return None
-
-        for _, puppet in cls.by_tgid.items():
-            if puppet.displayname and puppet.displayname == displayname:
-                return puppet
-
-        puppet = cast(cls, await super().find_by_displayname(displayname))
-        if puppet:
-            try:
-                return cls.by_tgid[puppet.tgid]
-            except KeyError:
-                puppet._add_to_cache()
-                return puppet
-
-        return None
-
     # endregion

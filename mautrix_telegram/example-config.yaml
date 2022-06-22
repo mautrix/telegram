@@ -178,10 +178,6 @@ bridge:
     # Allow logging in within Matrix. If false, users can only log in using login-qr or the
     # out-of-Matrix login website (see appservice.public config section)
     allow_matrix_login: true
-    # Whether or not to bridge plaintext highlights.
-    # Only enable this if your displayname_template has some static part that the bridge can use to
-    # reliably identify what is a plaintext highlight.
-    plaintext_highlights: false
     # Whether or not to make portals of publicly joinable channels/supergroups publicly joinable on Matrix.
     public_portals: true
     # Whether or not to use /sync to get presence, read receipts and typing notifications

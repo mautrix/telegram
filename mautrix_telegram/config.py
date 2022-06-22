@@ -125,7 +125,6 @@ class Config(BaseBridgeConfig):
         copy("bridge.max_telegram_delete")
         copy("bridge.sync_matrix_state")
         copy("bridge.allow_matrix_login")
-        copy("bridge.plaintext_highlights")
         copy("bridge.public_portals")
         copy("bridge.sync_with_custom_puppets")
         copy("bridge.sync_direct_chat_list")

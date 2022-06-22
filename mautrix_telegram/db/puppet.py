@@ -90,11 +90,6 @@ class Puppet:
         q = f"SELECT {cls.columns} FROM puppet WHERE lower(username)=$1"
         return cls._from_row(await cls.db.fetchrow(q, username.lower()))
 
-    @classmethod
-    async def find_by_displayname(cls, displayname: str) -> Puppet | None:
-        q = f"SELECT {cls.columns} FROM puppet WHERE displayname=$1"
-        return cls._from_row(await cls.db.fetchrow(q, displayname))
-
     @property
     def _values(self):
         return (
