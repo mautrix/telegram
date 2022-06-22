@@ -193,6 +193,8 @@ class Bot(AbstractUser):
                 )
             else:
                 return await reply("Portal is not public. Use `/invite <mxid>` to get an invite.")
+        else:
+            return await reply("Couldn't create portal room")
 
     async def handle_command_invite(
         self, portal: po.Portal, reply: ReplyFunc, mxid_input: UserID

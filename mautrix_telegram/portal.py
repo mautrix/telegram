@@ -326,6 +326,7 @@ class Portal(DBPortal, BasePortal):
         self._sponsored_msg_lock = asyncio.Lock()
         self._sponsored_seen = {}
         self._new_messages_after_sponsored = True
+        self._bridging_blocked_at_runtime = False
 
         self._msg_conv = putil.TelegramMessageConverter(self)
 
@@ -385,7 +386,9 @@ class Portal(DBPortal, BasePortal):
 
     @property
     def allow_bridging(self) -> bool:
-        if self.peer_type == "user":
+        if self._bridging_blocked_at_runtime:
+            return False
+        elif self.peer_type == "user":
             return True
         elif self.filter_mode == "whitelist":
             return self.tgid in self.filter_list
@@ -746,6 +749,16 @@ class Portal(DBPortal, BasePortal):
         if not entity:
             entity = await self.get_entity(user)
             self.log.trace("Fetched data: %s", entity)
+
+        participants_count = 2
+        if isinstance(entity, Chat):
+            participants_count = entity.participants_count
+        elif isinstance(entity, Channel) and not entity.broadcast:
+            participants_count = entity.participants_count
+        if 0 < self.config["bridge.max_member_count"] < participants_count:
+            self.log.warning(f"Not bridging chat, too many participants (%d)", participants_count)
+            self._bridging_blocked_at_runtime = True
+            return None
 
         self.log.debug("Creating room")
 
@@ -2636,6 +2649,9 @@ class Portal(DBPortal, BasePortal):
         if not self.mxid:
             self.log.trace("Got telegram message %d, but no room exists, creating...", evt.id)
             await self.create_matrix_room(source, invites=[source.mxid], update_if_exists=False)
+            if not self.mxid:
+                self.log.warning("Room doesn't exist even after creating, dropping %d", evt.id)
+                return
 
         if (
             self.peer_type == "user"

@@ -26,6 +26,7 @@ from telethon.tl.functions.contacts import GetContactsRequest, SearchRequest
 from telethon.tl.functions.updates import GetStateRequest
 from telethon.tl.functions.users import GetUsersRequest
 from telethon.tl.types import (
+    Channel,
     Chat,
     ChatForbidden,
     InputUserSelf,

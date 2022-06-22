@@ -233,7 +233,10 @@ async def join(evt: CommandEvent) -> EventID | None:
                     updates.stringify(),
                 )
                 raise e
-            return await evt.reply(f"Created room for {portal.title}")
+            if portal.mxid:
+                return await evt.reply(f"Created room for {portal.title}")
+            else:
+                return await evt.reply(f"Couldn't create room for {portal.title}")
     return None
 
 

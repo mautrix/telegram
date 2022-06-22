@@ -111,6 +111,7 @@ class Config(BaseBridgeConfig):
         copy("bridge.allow_avatar_remove")
 
         copy("bridge.max_initial_member_sync")
+        copy("bridge.max_member_count")
         copy("bridge.sync_channel_members")
         copy("bridge.skip_deleted_members")
         copy("bridge.startup_sync")
