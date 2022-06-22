@@ -117,12 +117,14 @@ class TelegramMessageConverter:
     portal: po.Portal
     matrix: m.MatrixHandler
     config: Config
+    command_prefix: str
     log: TraceLogger
 
     def __init__(self, portal: po.Portal) -> None:
         self.portal = portal
         self.matrix = portal.matrix
         self.config = portal.config
+        self.command_prefix = self.config["bridge.command_prefix"]
         self.log = portal.log.getChild("msg_conv")
 
         self._media_converters = {
@@ -534,17 +536,18 @@ class TelegramMessageConverter:
 
         text_answers = "\n".join(f"{n()}. {answer.text}" for answer in poll.answers)
         html_answers = "\n".join(f"<li>{answer.text}</li>" for answer in poll.answers)
+        vote_command = f"{self.command_prefix} vote {poll_id}"
         content = TextMessageEventContent(
             msgtype=MessageType.TEXT,
             format=Format.HTML,
             body=(
                 f"Poll: {poll.question}\n{text_answers}\n"
-                f"Vote with !tg vote {poll_id} <choice number>"
+                f"Vote with {vote_command} <choice number>"
             ),
             formatted_body=(
                 f"<strong>Poll</strong>: {poll.question}<br/>\n"
                 f"<ol>{html_answers}</ol>\n"
-                f"Vote with <code>!tg vote {poll_id} &lt;choice number&gt;</code>"
+                f"Vote with <code>{vote_command} &lt;choice number&gt;</code>"
             ),
         )
 
@@ -574,7 +577,7 @@ class TelegramMessageConverter:
     async def _convert_game(self, source: au.AbstractUser, evt: Message, **_) -> ConvertedMessage:
         game: Game = evt.media.game
         play_id = self._encode_msgid(source, evt)
-        command = f"!tg play {play_id}"
+        command = f"{self.command_prefix} play {play_id}"
         override_text = f"Run {command} in your bridge management room to play {game.title}"
         override_entities = [
             MessageEntityPre(offset=len("Run "), length=len(command), language="")
