@@ -1,3 +1,29 @@
+# unreleased
+
+### Added
+* Added provisioning API for resolving Telegram identifiers (like usernames).
+* Added option to not bridge chats with lots of members.
+* Added option to include captions in the same message as the media to
+  implement [MSC2530].
+
+### Improved
+* Audio and video metadata is now bridged properly to Telegram.
+* Added database index on Telegram usernames (used when bridging username
+  @-mentions in messages).
+* Changed `/login/send_code` provisioning API to return a proper error when the
+  phone number is not registered on Telegram.
+  * The same login code can be used for registering an account, but registering
+    is not currently supported in the provisioning API.
+* Removed `plaintext_highlights` config option (the code using it was already
+  removed in v0.11.0).
+
+### Fixed
+* Fixed command prefix in game and poll messages (thanks to [@cynhr] in [#804]).
+
+[MSC2530]: https://github.com/matrix-org/matrix-spec-proposals/pull/2530
+[@cynhr]: https://github.com/cynhr
+[#804]: https://github.com/mautrix/telegram/pull/804
+
 # v0.11.3 (2022-04-17)
 
 **N.B.** This release drops support for old homeservers which don't support the
