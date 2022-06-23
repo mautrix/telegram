@@ -755,7 +755,10 @@ class Portal(DBPortal, BasePortal):
             participants_count = entity.participants_count
         elif isinstance(entity, Channel) and not entity.broadcast:
             participants_count = entity.participants_count
-        if 0 < self.config["bridge.max_member_count"] < participants_count:
+        if participants_count is None and self.config["bridge.max_member_count"] > 0:
+            self.log.warning(f"Participant count not found in entity, fetching manually")
+            participants_count = (await user.client.get_participants(entity, limit=0)).total
+        if participants_count and 0 < self.config["bridge.max_member_count"] < participants_count:
             self.log.warning(f"Not bridging chat, too many participants (%d)", participants_count)
             self._bridging_blocked_at_runtime = True
             return None
