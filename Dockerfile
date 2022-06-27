@@ -1,4 +1,4 @@
-FROM dock.mau.dev/tulir/lottieconverter:alpine-3.15
+FROM dock.mau.dev/tulir/lottieconverter:alpine-3.16
 
 ARG TARGETARCH=amd64
 
