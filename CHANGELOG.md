@@ -1,4 +1,4 @@
-# unreleased
+# v0.12.0 (unreleased)
 
 ### Added
 * Added provisioning API for resolving Telegram identifiers (like usernames).
@@ -7,6 +7,8 @@
   implement [MSC2530].
 
 ### Improved
+* Improved handling the bridge user leaving chats on Telegram, and new users
+  being added on Telegram.
 * Audio and video metadata is now bridged properly to Telegram.
 * Added database index on Telegram usernames (used when bridging username
   @-mentions in messages).
@@ -16,6 +18,9 @@
     is not currently supported in the provisioning API.
 * Removed `plaintext_highlights` config option (the code using it was already
   removed in v0.11.0).
+* Updated to API layer 143 so that Telegram would send new message types like
+  premium stickers to the bridge.
+* Updated Docker image to Alpine 3.16.
 
 ### Fixed
 * Fixed command prefix in game and poll messages (thanks to [@cynhr] in [#804]).
