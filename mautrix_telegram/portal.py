@@ -1008,7 +1008,13 @@ class Portal(DBPortal, BasePortal):
     ) -> None:
         puppet = await p.Puppet.get_by_tgid(user_id)
         if source:
-            entity: User = await source.client.get_entity(PeerUser(user_id))
+            try:
+                entity: User = await source.client.get_entity(PeerUser(user_id))
+            except ValueError:
+                self.log.warning(
+                    f"Couldn't get info of {user_id} through {source.tgid} to add them to the room"
+                )
+                return
             await puppet.update_info(source, entity)
             await puppet.intent_for(self).ensure_joined(self.mxid)
 
@@ -1017,8 +1023,10 @@ class Portal(DBPortal, BasePortal):
             await user.register_portal(self)
             await self.invite_to_matrix(user.mxid)
 
-    async def _delete_telegram_user(self, user_id: TelegramID, sender: p.Puppet) -> None:
+    async def delete_telegram_user(self, user_id: TelegramID, sender: p.Puppet | None) -> None:
         puppet = await p.Puppet.get_by_tgid(user_id)
+        if sender is None:
+            sender = puppet
         user = await u.User.get_by_tgid(user_id)
         kick_message = (
             f"Kicked by {sender.displayname}"
@@ -1034,8 +1042,11 @@ class Portal(DBPortal, BasePortal):
                     self.mxid, puppet.mxid, extra_content=puppet_extra_content
                 )
             except MForbidden:
-                await self.main_intent.kick_user(self.mxid, puppet.mxid, kick_message)
-        else:
+                try:
+                    await self.main_intent.kick_user(self.mxid, puppet.mxid, kick_message)
+                except MForbidden as e:
+                    self.log.warning(f"Failed to kick {puppet.mxid}: {e}")
+        elif not await self.az.state_store.is_joined(self.mxid, puppet.intent_for(self).mxid):
             await puppet.intent_for(self).leave_room(self.mxid, extra_content=puppet_extra_content)
         if user:
             await user.unregister_portal(*self.tgid_full)
@@ -2827,7 +2838,7 @@ class Portal(DBPortal, BasePortal):
         elif isinstance(action, (MessageActionChatJoinedByLink, MessageActionChatJoinedByRequest)):
             await self._add_telegram_user(sender.id, source)
         elif isinstance(action, MessageActionChatDeleteUser):
-            await self._delete_telegram_user(TelegramID(action.user_id), sender)
+            await self.delete_telegram_user(TelegramID(action.user_id), sender)
         elif isinstance(action, MessageActionChatMigrateTo):
             await self._migrate_and_save_telegram(TelegramID(action.channel_id))
             # TODO encrypt

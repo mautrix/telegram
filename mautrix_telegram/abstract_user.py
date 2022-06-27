@@ -38,6 +38,7 @@ from telethon.tl.types import (
     PeerChat,
     PeerUser,
     TypeUpdate,
+    UpdateChannel,
     UpdateChannelUserTyping,
     UpdateChatParticipantAdmin,
     UpdateChatParticipants,
@@ -354,6 +355,8 @@ class AbstractUser(ABC):
             await self.update_pinned_dialogs(update)
         elif isinstance(update, UpdateNotifySettings):
             await self.update_notify_settings(update)
+        elif isinstance(update, UpdateChannel):
+            await self.update_channel(update)
         else:
             self.log.trace("Unhandled update: %s", update)
 
@@ -583,6 +586,18 @@ class AbstractUser(ABC):
         if not portal or not portal.mxid or not portal.allow_bridging:
             return
         await portal.handle_telegram_reactions(self, TelegramID(update.msg_id), update.reactions)
+
+    async def update_channel(self, update: UpdateChannel) -> None:
+        portal = await po.Portal.get_by_tgid(TelegramID(update.channel_id))
+        if not portal:
+            return
+        if getattr(update, "mau_telethon_is_leave", False):
+            self.log.debug("UpdateChannel has mau_telethon_is_leave, leaving portal")
+            await portal.delete_telegram_user(self.tgid, sender=None)
+        elif chan := getattr(update, "mau_channel", None):
+            self.log.debug("Updating channel info with data fetched by Telethon")
+            await portal.update_info(self, chan)
+            await portal.invite_to_matrix(self.mxid)
 
     async def update_message(self, original_update: UpdateMessage) -> None:
         update, sender, portal = await self.get_message_details(original_update)
