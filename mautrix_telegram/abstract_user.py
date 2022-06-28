@@ -598,6 +598,7 @@ class AbstractUser(ABC):
             self.log.debug("Updating channel info with data fetched by Telethon")
             await portal.update_info(self, chan)
             await portal.invite_to_matrix(self.mxid)
+            # TODO create portal?
 
     async def update_message(self, original_update: UpdateMessage) -> None:
         update, sender, portal = await self.get_message_details(original_update)

@@ -1046,7 +1046,7 @@ class Portal(DBPortal, BasePortal):
                     await self.main_intent.kick_user(self.mxid, puppet.mxid, kick_message)
                 except MForbidden as e:
                     self.log.warning(f"Failed to kick {puppet.mxid}: {e}")
-        elif not await self.az.state_store.is_joined(self.mxid, puppet.intent_for(self).mxid):
+        elif await self.az.state_store.is_joined(self.mxid, puppet.intent_for(self).mxid):
             await puppet.intent_for(self).leave_room(self.mxid, extra_content=puppet_extra_content)
         if user:
             await user.unregister_portal(*self.tgid_full)
