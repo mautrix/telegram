@@ -595,10 +595,15 @@ class AbstractUser(ABC):
             self.log.debug("UpdateChannel has mau_telethon_is_leave, leaving portal")
             await portal.delete_telegram_user(self.tgid, sender=None)
         elif chan := getattr(update, "mau_channel", None):
-            self.log.debug("Updating channel info with data fetched by Telethon")
-            await portal.update_info(self, chan)
-            await portal.invite_to_matrix(self.mxid)
-            # TODO create portal?
+            if not portal.mxid:
+                self.log.info(
+                    "Creating Matrix room with data fetched by Telethon due to UpdateChannel"
+                )
+                await portal.create_matrix_room(self, chan)
+            else:
+                self.log.debug("Updating channel info with data fetched by Telethon")
+                await portal.update_info(self, chan)
+                await portal.invite_to_matrix(self.mxid)
 
     async def update_message(self, original_update: UpdateMessage) -> None:
         update, sender, portal = await self.get_message_details(original_update)
