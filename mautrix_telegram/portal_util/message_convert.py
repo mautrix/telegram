@@ -481,7 +481,7 @@ class TelegramMessageConverter:
         )
 
     @staticmethod
-    def _convert_location(evt: Message, **_) -> ConvertedMessage:
+    async def _convert_location(evt: Message, **_) -> ConvertedMessage:
         long = evt.media.geo.long
         lat = evt.media.geo.lat
         long_char = "E" if long > 0 else "W"
