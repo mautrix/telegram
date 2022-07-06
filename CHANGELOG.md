@@ -5,6 +5,15 @@
 * Added option to not bridge chats with lots of members.
 * Added option to include captions in the same message as the media to
   implement [MSC2530].
+* Added options to make encryption more secure.
+  * The `encryption` -> `verification_levels` config options can be used to
+    make the bridge require encrypted messages to come from cross-signed
+    devices, with trust-on-first-use validation of the cross-signing master
+    key.
+  * The `encryption` -> `require` option can be used to make the bridge ignore
+    any unencrypted messages.
+  * Key rotation settings can be configured with the `encryption` -> `rotation`
+    config.
 
 ### Improved
 * Improved handling the bridge user leaving chats on Telegram, and new users
@@ -20,7 +29,7 @@
   removed in v0.11.0).
 * Updated to API layer 143 so that Telegram would send new message types like
   premium stickers to the bridge.
-* Updated Docker image to Alpine 3.16.
+* Updated Docker image to Alpine 3.16 and made it smaller.
 
 ### Fixed
 * Fixed command prefix in game and poll messages (thanks to [@cynhr] in [#804]).
