@@ -1897,6 +1897,68 @@ class Portal(DBPortal, BasePortal):
                 message_type=content.msgtype,
             )
 
+    async def _find_source_msg(
+        self, sender: u.User, content: MessageEventContent
+    ) -> DBMessage | None:
+        try:
+            source = content["fi.mau.telegram.source"]
+        except KeyError:
+            return None
+        if not isinstance(source, dict):
+            return None
+        try:
+            msg_id = source["id"]
+            space = source["space"]
+            chat_id = source["chat_id"]
+            peer_type = source["peer_type"]
+        except KeyError:
+            return None
+        if (
+            not isinstance(msg_id, int)
+            or not isinstance(chat_id, int)
+            or not isinstance(space, int)
+            or not isinstance(peer_type, str)
+        ):
+            return None
+        elif await sender.needs_relaybot(self):
+            return None
+        if peer_type == "user" and space != sender.tgid:
+            return
+        dbm = await DBMessage.get_one_by_tgid(TelegramID(msg_id), TelegramID(space))
+        if dbm and peer_type == "chat" and space != sender.tgid:
+            dbm = DBMessage.get_by_mxid(dbm.mxid, dbm.mx_room, sender.tgid)
+        return dbm
+
+    async def _handle_matrix_forward(
+        self,
+        sender: u.User,
+        msg: DBMessage,
+        event_id: EventID,
+        space: TelegramID,
+        msgtype: MessageType,
+    ) -> bool:
+        source_portal = await Portal.get_by_mxid(msg.mx_room)
+        if not source_portal:
+            return False
+        async with self.send_lock(sender.tgid):
+            try:
+                response = await sender.client.forward_messages(
+                    self.peer,
+                    messages=[msg.tgid],
+                    from_peer=source_portal.peer,
+                )
+            except Exception as e:
+                self.log.warning(
+                    f"Failed to send {event_id} from {sender.mxid} as forward of {msg.tgid} "
+                    f"from {source_portal.tgid}: {e}, falling back to normal message handling"
+                )
+                return False
+            else:
+                await self._mark_matrix_handled(
+                    sender, EventType.ROOM_MESSAGE, event_id, space, 0, response[0], msgtype
+                )
+                return True
+
     async def _handle_matrix_message(
         self, sender: u.User, content: MessageEventContent, event_id: EventID
     ) -> None:
@@ -1912,6 +1974,11 @@ class Portal(DBPortal, BasePortal):
             if self.peer_type == "channel"  # Channels have their own ID space
             else (sender.tgid if logged_in else self.bot.tgid)
         )
+        source_msg = await self._find_source_msg(sender, content)
+        if source_msg and await self._handle_matrix_forward(
+            sender, source_msg, event_id, space, content.msgtype
+        ):
+            return
         reply_to = await formatter.matrix_reply_to_telegram(content, space, room_id=self.mxid)
 
         media = (

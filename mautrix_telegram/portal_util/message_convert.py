@@ -159,7 +159,16 @@ class TelegramMessageConverter:
             return
         if converted:
             converted.content.external_url = self._get_external_url(evt)
+            converted.content["fi.mau.telegram.source"] = {
+                "space": self.portal.tgid if self.portal.peer_type == "channel" else source.tgid,
+                "chat_id": self.portal.tgid,
+                "peer_type": self.portal.peer_type,
+                "id": evt.id,
+            }
             if converted.caption:
+                converted.caption["fi.mau.telegram.source"] = converted.content[
+                    "fi.mau.telegram.source"
+                ]
                 converted.caption.external_url = converted.content.external_url
                 if self.portal.get_config("caption_in_message"):
                     self._caption_to_message(converted)
