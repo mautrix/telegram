@@ -1888,7 +1888,10 @@ class Portal(DBPortal, BasePortal):
             )
             raise
         except Exception as e:
-            self.log.exception(f"Failed to bridge {event_id}: {e}")
+            if isinstance(e, IgnoredMessageError):
+                self.log.debug(f"Ignored {event_id}: {e}")
+            else:
+                self.log.exception(f"Failed to bridge {event_id}")
             await self._send_bridge_error(
                 sender,
                 e,
