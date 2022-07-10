@@ -6,6 +6,6 @@ yarl>=1,<2
 mautrix>=0.17.2,<0.18
 #telethon>=1.24,<1.25
 tulir-telethon==1.25.0a19
-asyncpg>=0.20,<0.26
+asyncpg>=0.20,<0.27
 mako>=1,<2
 setuptools
