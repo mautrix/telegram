@@ -1612,6 +1612,7 @@ class Portal(DBPortal, BasePortal):
         client: MautrixTelegramClient,
         content: MediaMessageEventContent,
         reply_to: TelegramID,
+        file_name: str,
         caption: TextMessageEventContent = None,
     ) -> None:
         sender_id = sender.tgid if logged_in else self.bot.tgid
@@ -1620,7 +1621,6 @@ class Portal(DBPortal, BasePortal):
             w, h = content.info.width, content.info.height
         else:
             w = h = None
-        file_name = content["fi.mau.telegram.internal.filename"]
         max_image_size = self.config["bridge.image_as_file_size"] * 1000**2
         max_image_pixels = self.config["bridge.image_as_file_pixels"]
 
@@ -1704,7 +1704,7 @@ class Portal(DBPortal, BasePortal):
 
         async with self.send_lock(sender_id):
             if await self._matrix_document_edit(
-                sender, client, content, space, capt, media, event_id
+                sender, client, content, space, capt, entities, media, event_id
             ):
                 return
             try:
@@ -1737,13 +1737,20 @@ class Portal(DBPortal, BasePortal):
         content: MessageEventContent,
         space: TelegramID,
         caption: str,
+        caption_entities,
         media: Any,
         event_id: EventID,
     ) -> bool:
         if content.get_edit():
             orig_msg = await DBMessage.get_by_mxid(content.get_edit(), self.mxid, space)
             if orig_msg:
-                response = await client.edit_message(self.peer, orig_msg.tgid, caption, file=media)
+                response = await client.edit_message(
+                    self.peer,
+                    orig_msg.tgid,
+                    caption,
+                    formatting_entities=caption_entities,
+                    file=media,
+                )
                 await self._mark_matrix_handled(
                     sender, EventType.ROOM_MESSAGE, event_id, space, -1, response, content.msgtype
                 )
@@ -2009,20 +2016,44 @@ class Portal(DBPortal, BasePortal):
                 sender, logged_in, event_id, space, client, content, reply_to
             )
         elif content.msgtype in media:
-            content["fi.mau.telegram.internal.filename"] = content.body
+            file_name = content.body
             try:
-                caption_content: MessageEventContent = sender.command_status["caption"]
+                caption_content: TextMessageEventContent | None = sender.command_status["caption"]
                 reply_to = reply_to or await formatter.matrix_reply_to_telegram(
                     caption_content, space, room_id=self.mxid
                 )
                 sender.command_status = None
             except (KeyError, TypeError):
-                caption_content = None if logged_in else TextMessageEventContent(body=content.body)
+                if not logged_in or (
+                    "filename" in content and content["filename"] != content.body
+                ):
+                    if "filename" in content:
+                        file_name = content["filename"]
+                    caption_content = TextMessageEventContent(
+                        msgtype=MessageType.TEXT,
+                        body=content.body,
+                    )
+                    if (
+                        "formatted_body" in content
+                        and str(content.get("format")) == Format.HTML.value
+                    ):
+                        caption_content["formatted_body"] = content["formatted_body"]
+                        caption_content["format"] = Format.HTML
+                else:
+                    caption_content = None
             if caption_content:
                 caption_content.msgtype = content.msgtype
                 await self._pre_process_matrix_message(sender, not logged_in, caption_content)
             await self._handle_matrix_file(
-                sender, logged_in, event_id, space, client, content, reply_to, caption_content
+                sender,
+                logged_in,
+                event_id,
+                space,
+                client,
+                content,
+                reply_to,
+                file_name,
+                caption_content,
             )
         else:
             self.log.debug(
