@@ -71,6 +71,11 @@ class MatrixHandler(BaseMatrixHandler):
         evt: StateEvent,
         members: list[UserID],
     ) -> None:
+        if not invited_by.is_logged_in:
+            await puppet.default_mxid_intent.leave_room(
+                room_id, reason="You are not logged into this Telegram bridge"
+            )
+            return
         double_puppet = await pu.Puppet.get_by_custom_mxid(invited_by.mxid)
         if not double_puppet or self.az.bot_mxid in members:
             if self.az.bot_mxid not in members:
@@ -91,6 +96,8 @@ class MatrixHandler(BaseMatrixHandler):
             await puppet.default_mxid_intent.leave_room(
                 room_id, reason="You do not have the permissions to bridge this room."
             )
+            return
+        elif not self.config["bridge.create_group_on_invite"]:
             return
 
         await double_puppet.intent.invite_user(room_id, self.az.bot_mxid)
