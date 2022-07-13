@@ -15,8 +15,10 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from mautrix.util.async_db import Connection
 
+latest_version = 10
 
-async def create_v7_tables(conn: Connection) -> int:
+
+async def create_latest_tables(conn: Connection) -> int:
     await conn.execute(
         """CREATE TABLE "user" (
             mxid TEXT   PRIMARY KEY,
@@ -43,6 +45,10 @@ async def create_v7_tables(conn: Connection) -> int:
             avatar_set  BOOLEAN NOT NULL DEFAULT false,
             megagroup   BOOLEAN,
             config      jsonb,
+
+            first_event_id    TEXT,
+            next_batch_id     TEXT,
+            base_insertion_id TEXT,
 
             sponsored_event_id     TEXT,
             sponsored_event_ts     BIGINT,
@@ -112,6 +118,7 @@ async def create_v7_tables(conn: Connection) -> int:
             base_url     TEXT
         )"""
     )
+    await conn.execute("CREATE INDEX puppet_username_idx ON puppet(LOWER(username))")
     await conn.execute(
         """CREATE TABLE telegram_file (
             id              TEXT PRIMARY KEY,
@@ -197,4 +204,4 @@ async def create_v7_tables(conn: Connection) -> int:
             PRIMARY KEY (session_id, entity_id)
         )"""
     )
-    return 7
+    return latest_version

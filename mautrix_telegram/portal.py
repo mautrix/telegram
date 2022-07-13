@@ -274,6 +274,7 @@ class Portal(DBPortal, BasePortal):
         encrypted: bool = False,
         first_event_id: EventID | None = None,
         next_batch_id: BatchID | None = None,
+        base_insertion_id: EventID | None = None,
         sponsored_event_id: EventID | None = None,
         sponsored_event_ts: int | None = None,
         sponsored_msg_random_id: bytes | None = None,
@@ -295,6 +296,7 @@ class Portal(DBPortal, BasePortal):
             encrypted=encrypted,
             first_event_id=first_event_id,
             next_batch_id=next_batch_id,
+            base_insertion_id=base_insertion_id,
             sponsored_event_id=sponsored_event_id,
             sponsored_event_ts=sponsored_event_ts,
             sponsored_msg_random_id=sponsored_msg_random_id,
@@ -1843,9 +1845,9 @@ class Portal(DBPortal, BasePortal):
             ),
         )
         if isinstance(err, IgnoredMessageError):
-            status.status = MessageStatus.FAIL
-            status.error = str(err)
             status.reason = MessageStatusReason.UNSUPPORTED
+            status.error = str(err)
+            status.status = MessageStatus.FAIL
         elif err:
             status.reason = MessageStatusReason.GENERIC_ERROR
             status.error = str(err)
