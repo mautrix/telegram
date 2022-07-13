@@ -4,7 +4,8 @@
 * Added provisioning API for resolving Telegram identifiers (like usernames).
 * Added option to not bridge chats with lots of members.
 * Added option to include captions in the same message as the media to
-  implement [MSC2530].
+  implement [MSC2530]. Sending captions the same way is also supported and
+  enabled by default.
 * Added support for bridging forwarded messages as forwards on Telegram.
   * If forwarding fails (e.g. due to it being blocked in the source chat), the
     bridge will automatically fall back to sending it as a normal new message.
