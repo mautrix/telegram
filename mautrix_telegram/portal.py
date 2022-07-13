@@ -480,6 +480,11 @@ class Portal(DBPortal, BasePortal):
         await self.update_info(source, entity)
 
     async def _migrate_and_save_telegram(self, new_id: TelegramID) -> None:
+        async with self._async_get_locks[(new_id,)]:
+            await self._migrate_and_save_telegram_locked(new_id)
+
+    async def _migrate_and_save_telegram_locked(self, new_id: TelegramID) -> None:
+        self.log.info(f"Starting migration to {new_id}")
         try:
             del self.by_tgid[self.tgid_full]
         except KeyError:
@@ -490,7 +495,12 @@ class Portal(DBPortal, BasePortal):
             existing = None
         self.by_tgid[(new_id, new_id)] = self
         if existing:
-            await existing.delete()
+            if existing.mxid:
+                self.log.warning(f"Deleting existing portal room {existing.mxid} for {new_id}")
+                await existing.cleanup_and_delete()
+            else:
+                self.log.debug(f"Deleting old database entry for {new_id}")
+                await existing.delete()
         old_id = self.tgid
         await self.update_id(new_id, "channel")
         self.log = self.__class__.log.getChild(self.tgid_log)

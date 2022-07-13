@@ -596,14 +596,26 @@ class AbstractUser(ABC):
             await portal.delete_telegram_user(self.tgid, sender=None)
         elif chan := getattr(update, "mau_channel", None):
             if not portal.mxid:
-                self.log.info(
-                    "Creating Matrix room with data fetched by Telethon due to UpdateChannel"
-                )
-                await portal.create_matrix_room(self, chan)
+                asyncio.create_task(self._delayed_create_channel(chan))
             else:
                 self.log.debug("Updating channel info with data fetched by Telethon")
                 await portal.update_info(self, chan)
                 await portal.invite_to_matrix(self.mxid)
+
+    async def _delayed_create_channel(self, chan: Channel) -> None:
+        self.log.debug("Waiting 5 seconds before handling UpdateChannel for non-existent portal")
+        await asyncio.sleep(5)
+        portal = await po.Portal.get_by_tgid(TelegramID(chan.id))
+        if portal.mxid:
+            self.log.debug(
+                "Portal started existing after waiting 5 seconds, dropping UpdateChannel"
+            )
+            return
+        else:
+            self.log.info(
+                "Creating Matrix room with data fetched by Telethon due to UpdateChannel"
+            )
+            await portal.create_matrix_room(self, chan)
 
     async def update_message(self, original_update: UpdateMessage) -> None:
         update, sender, portal = await self.get_message_details(original_update)
