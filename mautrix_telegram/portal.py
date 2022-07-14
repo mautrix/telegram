@@ -126,6 +126,7 @@ from telethon.tl.types import (
     UserProfilePhotoEmpty,
 )
 from telethon.utils import encode_waveform
+import attr
 import magic
 
 from mautrix.appservice import DOUBLE_PUPPET_SOURCE_KEY, IntentAPI
@@ -133,6 +134,9 @@ from mautrix.bridge import BasePortal, NotificationDisabler, RejectMatrixInvite,
 from mautrix.errors import IntentError, MatrixRequestError, MForbidden
 from mautrix.types import (
     BatchID,
+    BatchSendEvent,
+    BatchSendResponse,
+    BatchSendStateEvent,
     BeeperMessageStatusEventContent,
     ContentURI,
     EventID,
@@ -143,6 +147,7 @@ from mautrix.types import (
     LocationMessageEventContent,
     MediaMessageEventContent,
     Membership,
+    MemberStateEventContent,
     MessageEventContent,
     MessageStatus,
     MessageStatusReason,
@@ -239,7 +244,6 @@ class Portal(DBPortal, BasePortal):
     # Instance variables
     deleted: bool
 
-    backfill_lock: SimpleLock
     backfill_method_lock: asyncio.Lock
     backfill_leave: set[IntentAPI] | None
 
@@ -312,9 +316,6 @@ class Portal(DBPortal, BasePortal):
         self.log = self.log.getChild(self.tgid_log if self.tgid else self.mxid)
         self._main_intent = None
         self.deleted = False
-        self.backfill_lock = SimpleLock(
-            "Waiting for backfilling to finish before handling %s", log=self.log
-        )
         self.backfill_method_lock = asyncio.Lock()
         self.backfill_leave = None
 
@@ -868,56 +869,48 @@ class Portal(DBPortal, BasePortal):
                 }
             )
 
-        with self.backfill_lock:
-            room_id = await self.main_intent.create_room(
-                alias_localpart=alias,
-                preset=preset,
-                is_direct=self.is_direct,
-                invitees=create_invites,
-                name=self.title,
-                topic=self.about,
-                initial_state=initial_state,
-                creation_content=creation_content,
-            )
-            if not room_id:
-                raise Exception(f"Failed to create room")
-            self.name_set = bool(self.title)
-            self.avatar_set = bool(self.avatar_url)
+        room_id = await self.main_intent.create_room(
+            alias_localpart=alias,
+            preset=preset,
+            is_direct=self.is_direct,
+            invitees=create_invites,
+            name=self.title,
+            topic=self.about,
+            initial_state=initial_state,
+            creation_content=creation_content,
+        )
+        if not room_id:
+            raise Exception(f"Failed to create room")
+        self.name_set = bool(self.title)
+        self.avatar_set = bool(self.avatar_url)
 
-            if self.encrypted and self.matrix.e2ee and self.is_direct:
-                try:
-                    await self.az.intent.ensure_joined(room_id)
-                except Exception:
-                    self.log.warning(f"Failed to add bridge bot to new private chat {room_id}")
+        if self.encrypted and self.matrix.e2ee and self.is_direct:
+            try:
+                await self.az.intent.ensure_joined(room_id)
+            except Exception:
+                self.log.warning(f"Failed to add bridge bot to new private chat {room_id}")
 
-            self.mxid = room_id
-            self.by_mxid[self.mxid] = self
-            self.first_event_id = await self.main_intent.send_message_event(
-                self.mxid, DummyPortalCreated, {}
-            )
-            await self.save()
-            self.log.debug(f"Matrix room created: {self.mxid}")
-            await self.az.state_store.set_power_levels(self.mxid, power_levels)
-            await user.register_portal(self)
+        self.mxid = room_id
+        self.by_mxid[self.mxid] = self
+        await self.save()
+        self.log.debug(f"Matrix room created: {self.mxid}")
+        await self.az.state_store.set_power_levels(self.mxid, power_levels)
+        await user.register_portal(self)
 
-            await self.invite_to_matrix(invites)
+        await self.invite_to_matrix(invites)
+        await self.update_matrix_room(user, entity, puppet, levels=power_levels, users=users)
 
-            update_room = asyncio.create_task(
-                self.update_matrix_room(user, entity, puppet, levels=power_levels, users=users)
-            )
+        self.first_event_id = await self.main_intent.send_message_event(
+            self.mxid, DummyPortalCreated, {}
+        )
+        await self.save()
 
-            if self.config["bridge.backfill.initial_limit"] > 0:
-                self.log.debug(
-                    "Initial backfill is enabled. Waiting for room members to sync "
-                    "and then starting backfill"
-                )
-                await update_room
-
-                try:
-                    if isinstance(user, u.User):
-                        await self.backfill(user, is_initial=True)
-                except Exception:
-                    self.log.exception("Failed to backfill new portal")
+        if self.config["bridge.backfill.initial_limit"] > 0:
+            try:
+                if isinstance(user, u.User):
+                    await self.backfill(user, is_initial=True)
+            except Exception:
+                self.log.exception("Failed to backfill new portal")
 
         return self.mxid
 
@@ -2482,125 +2475,181 @@ class Portal(DBPortal, BasePortal):
     async def backfill(
         self,
         source: u.User,
-        is_initial: bool = False,
+        client: MautrixTelegramClient,
         limit: int | None = None,
-        last_id: int | None = None,
+        forward: bool = False,
+        last_tgid: int | None = None,
     ) -> None:
         async with self.backfill_method_lock:
-            await self._locked_backfill(source, is_initial, limit, last_id)
+            await self._locked_backfill(source, client, limit, forward, last_tgid)
 
     async def _locked_backfill(
         self,
         source: u.User,
-        is_initial: bool = False,
+        client: MautrixTelegramClient,
         limit: int | None = None,
+        forward: bool = False,
         last_tgid: int | None = None,
     ) -> None:
         limit = limit or (
             self.config["bridge.backfill.initial_limit"]
-            if is_initial
+            if not forward
             else self.config["bridge.backfill.missed_limit"]
         )
         if limit == 0:
             return
         if not self.config["bridge.backfill.normal_groups"] and self.peer_type == "chat":
             return
-        last_in_room = await DBMessage.find_last(
-            self.mxid, (source.tgid if self.peer_type != "channel" else self.tgid)
-        )
-        min_id = last_in_room.tgid if last_in_room else 0
-        if last_tgid is None:
-            messages = await source.client.get_messages(self.peer, limit=1)
-            if not messages:
-                # The chat seems empty
-                return
-            last_tgid = messages[0].id
-        if last_tgid <= min_id or (last_tgid == 1 and self.peer_type == "channel"):
-            # Nothing to backfill
-            return
-        if limit < 0:
-            limit = last_tgid - min_id
-            limit_type = "unlimited"
-        elif self.peer_type == "channel":
-            min_id = max(last_tgid - limit, min_id)
-            # This is now just an approximate message count, not the actual limit.
-            limit = last_tgid - min_id
-            limit_type = "channel"
-        else:
-            # This limit will be higher than the actual message count if there are any messages
-            # in other DMs or normal groups, but that's not too bad.
-            limit = min(last_tgid - min_id, limit)
-            limit_type = "dm/minigroup"
-        self.log.debug(
-            f"Backfilling up to {limit} messages after ID {min_id} through {source.mxid} "
-            f"(last message: {last_tgid}, limit type: {limit_type})"
-        )
-        with self.backfill_lock:
-            await self._backfill(source, min_id, limit)
-
-    async def _backfill(self, source: u.User, min_id: int, limit: int) -> None:
-        self.backfill_leave = set()
-        if (
-            self.peer_type == "user"
-            and self.tgid != source.tgid
-            and self.config["bridge.backfill.invite_own_puppet"]
-        ):
-            self.log.debug("Adding %s's default puppet to room for backfilling", source.mxid)
-            sender = await p.Puppet.get_by_tgid(source.tgid)
-            await self.main_intent.invite_user(self.mxid, sender.default_mxid)
-            await sender.default_mxid_intent.join_room_by_id(self.mxid)
-            self.backfill_leave.add(sender.default_mxid_intent)
-
-        client = source.client
-        async with NotificationDisabler(self.mxid, source):
-            if limit > self.config["bridge.backfill.takeout_limit"]:
-                self.log.debug(f"Opening takeout client for {source.tgid}")
-                async with client.takeout(**self._takeout_options) as takeout:
-                    count, handled = await self._backfill_messages(source, min_id, limit, takeout)
+        tg_space = source.tgid if self.peer_type != "channel" else self.tgid
+        prev_event_id = self.first_event_id
+        if forward:
+            last_in_room = await DBMessage.find_last(self.mxid, tg_space)
+            if last_in_room:
+                prev_event_id = last_in_room.mxid
+                min_id = last_in_room.tgid
             else:
-                count, handled = await self._backfill_messages(source, min_id, limit, client)
-
-        for intent in self.backfill_leave:
-            self.log.trace("Leaving room with %s post-backfill", intent.mxid)
-            await intent.leave_room(self.mxid)
-        self.backfill_leave = None
-        self.log.info(
-            "Backfilled %d (of %d fetched) messages through %s", handled, count, source.mxid
+                min_id = 0
+            if last_tgid is None:
+                messages = await source.client.get_messages(self.peer, limit=1)
+                if not messages:
+                    # The chat seems empty
+                    return
+                last_tgid = messages[0].id
+            if last_tgid <= min_id or (last_tgid == 1 and self.peer_type == "channel"):
+                # Nothing to backfill
+                return
+            limit = last_tgid - min_id
+            self.log.debug(
+                f"Backfilling up to {limit} messages after ID {min_id} through {source.mxid} "
+                f"(last message: {last_tgid})"
+            )
+            anchor_id = min_id
+        else:
+            first_in_room = await DBMessage.find_first(self.mxid, tg_space)
+            anchor_id = first_in_room.tgid if first_in_room else None
+        await self._backfill_messages(
+            source, client, forward, anchor_id, 0 if forward else limit, prev_event_id
         )
+
+    def _can_double_puppet_backfill(self, custom_mxid: UserID) -> bool:
+        if not self.config["bridge.backfill.double_puppet_backfill"]:
+            return False
+
+        # Batch sending can only use local users, so don't allow double puppets on other servers.
+        if custom_mxid[custom_mxid.index(":") + 1 :] != self.config["homeserver.domain"]:
+            return False
+        return True
+
+    async def _get_members_at(self, event_id: EventID) -> set[UserID]:
+        # TODO cache the list
+        ctx = await self.main_intent.get_event_context(self.mxid, event_id, limit=0)
+        return {evt.state_key for evt in ctx.state if evt.content.membership == Membership.JOIN}
 
     async def _backfill_messages(
-        self, source: u.User, min_id: int, limit: int, client: MautrixTelegramClient
-    ) -> tuple[int, int]:
-        count = handled_count = 0
+        self,
+        source: u.User,
+        client: MautrixTelegramClient,
+        forward: bool,
+        anchor_id: int,
+        limit: int,
+        prev_event_id: EventID,
+    ) -> None:
         entity = await self.get_input_entity(source)
-        if self.peer_type == "channel":
-            # This is a channel or supergroup, so we'll backfill messages based on the ID.
-            # There are some cases, such as deleted messages, where this may backfill less
-            # messages than the limit.
-            self.log.debug(f"Iterating all messages starting with {min_id} (approx: {limit})")
-            messages = client.iter_messages(entity, reverse=True, min_id=min_id)
-            async for message in messages:
-                count += 1
-                was_handled = await self._handle_telegram_backfill_message(source, message)
-                handled_count += 1 if was_handled else 0
-        else:
-            # Private chats and normal groups don't have their own message ID namespace,
-            # which means we'll have to fetch messages a different way.
-            self.log.debug(
-                f"Fetching up to {limit} most recent messages, ignoring anything before {min_id}"
+        events = []
+        metas = []
+        state_events = []
+        added_members = await self._get_members_at(prev_event_id)
+        before_first_msg_timestamp = 0
+
+        def add_member(intent: IntentAPI, displayname: str, avatar_url: ContentURI) -> None:
+            if intent.mxid in added_members:
+                return
+            added_members.add(intent.mxid)
+            invite_event = BatchSendStateEvent(
+                type=EventType.ROOM_MEMBER,
+                state_key=intent.mxid,
+                sender=self.main_intent.mxid,
+                timestamp=before_first_msg_timestamp,
+                content=MemberStateEventContent(
+                    membership=Membership.INVITE,
+                    displayname=displayname,
+                    avatar_url=avatar_url,
+                ),
             )
-            messages = await client.get_messages(entity, min_id=min_id, limit=limit)
-            for message in reversed(messages):
-                count += 1
-                if message.id <= min_id:
-                    self.log.trace(
-                        f"Skipping {message.id} in backfill response as it's lower than "
-                        f"the last bridged message ({min_id})"
+            join_event = attr.evolve(
+                invite_event, content=attr.evolve(invite_event.content, membership=Membership.JOIN)
+            )
+            state_events.append(invite_event)
+            state_events.append(join_event)
+
+        async for msg in client.iter_messages(
+            entity, offset_id=anchor_id, add_offset=-limit, limit=limit
+        ):
+            if (forward and msg.id <= anchor_id) or (not forward and msg.id >= anchor_id):
+                continue
+            elif isinstance(msg, MessageService):
+                # TODO some service messages can be backfilled
+                continue
+            if not before_first_msg_timestamp:
+                before_first_msg_timestamp = int(msg.date.timestamp() * 1000) - 1
+
+            if msg.from_id and isinstance(msg.from_id, (PeerUser, PeerChannel)):
+                sender = await p.Puppet.get_by_peer(msg.from_id)
+            elif isinstance(msg.peer_id, PeerUser):
+                if msg.out:
+                    sender = await p.Puppet.get_by_tgid(source.tgid)
+                else:
+                    sender = await p.Puppet.get_by_peer(msg.peer_id)
+            else:
+                sender = None
+            intent = sender.intent_for(self)
+            if intent.api.is_real_user and not self._can_double_puppet_backfill(intent.mxid):
+                intent = sender.default_mxid_intent
+            add_member(intent, sender.displayname, sender.avatar_url)
+            is_bot = sender.is_bot if sender else False
+            converted = await self._msg_conv.convert(source, intent, is_bot, msg)
+            events.append(
+                BatchSendEvent(
+                    sender=intent.mxid,
+                    timestamp=int(msg.date.timestamp() * 1000),
+                    content=converted.content,
+                    type=converted.type,
+                )
+            )
+            metas.append(msg)
+            if converted.caption:
+                events.append(
+                    BatchSendEvent(
+                        sender=intent.mxid,
+                        timestamp=int(msg.date.timestamp() * 1000),
+                        content=converted.caption,
+                        type=EventType.ROOM_MESSAGE,
                     )
-                    continue
-                was_handled = await self._handle_telegram_backfill_message(source, message)
-                handled_count += 1 if was_handled else 0
-        return count, handled_count
+                )
+                metas.append(None)
+        resp = await self.main_intent.batch_send(
+            self.mxid,
+            prev_event_id,
+            batch_id=self.next_batch_id if not forward else None,
+            events=events,
+            state_events_at_start=state_events,
+            beeper_new_messages=forward,
+        )
+        tg_space = source.tgid if self.peer_type != "channel" else self.tgid
+        await DBMessage.bulk_insert(
+            [
+                DBMessage(
+                    mxid=event_id,
+                    mx_room=self.mxid,
+                    tgid=msg.id,
+                    tg_space=tg_space,
+                    edit_index=0,
+                    content_hash=self.dedup.hash_event(msg),
+                )
+                for event_id, msg in zip(resp.event_ids, metas)
+                if msg is not None
+            ]
+        )
 
     async def _handle_telegram_backfill_message(
         self, source: au.AbstractUser, msg: Message | MessageService
