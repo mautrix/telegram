@@ -71,6 +71,8 @@ class ProvisioningAPI(AuthAPI):
         )
         self.app.router.add_route("POST", f"{user_prefix}/pm/{{identifier}}", self.start_dm)
 
+        self.app.router.add_route("POST", f"{user_prefix}/retry_takeout", self.retry_takeout)
+
         self.app.router.add_route("POST", f"{user_prefix}/logout", self.logout)
         self.app.router.add_route("POST", f"{user_prefix}/login/bot_token", self.send_bot_token)
         self.app.router.add_route("POST", f"{user_prefix}/login/request_code", self.request_code)
@@ -493,6 +495,22 @@ class ProvisioningAPI(AuthAPI):
             },
             status=201 if just_created else 200,
         )
+
+    async def retry_takeout(self, request: web.Request) -> web.Response:
+        data, user, err = await self.get_user_request_info(
+            request, expect_logged_in=True, want_data=False
+        )
+        if err is not None:
+            return err
+        if not user.takeout_requested:
+            return web.json_response(
+                {
+                    "error": "There was no takeout requested",
+                },
+                status=400,
+            )
+        user.takeout_retry_immediate.set()
+        return web.json_response({}, status=200)
 
     async def send_bot_token(self, request: web.Request) -> web.Response:
         data, user, err = await self.get_user_request_info(request)

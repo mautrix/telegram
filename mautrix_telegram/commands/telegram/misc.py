@@ -420,12 +420,15 @@ async def random(evt: CommandEvent) -> EventID:
 
 @command_handler(
     help_section=SECTION_PORTAL_MANAGEMENT,
-    help_args="[_limit_]",
+    help_args="[_batches_]",
     help_text="Backfill messages from Telegram history.",
 )
 async def backfill(evt: CommandEvent) -> None:
     if not evt.is_portal:
         await evt.reply("You can only use backfill in portal rooms")
+        return
+    elif not evt.config["bridge.backfill.enable"]:
+        await evt.reply("Backfilling is disabled in the bridge config")
         return
     try:
         limit = int(evt.args[0])
@@ -435,16 +438,4 @@ async def backfill(evt: CommandEvent) -> None:
     if not evt.config["bridge.backfill.normal_groups"] and portal.peer_type == "chat":
         await evt.reply("Backfilling normal groups is disabled in the bridge config")
         return
-    try:
-        await portal.backfill(evt.sender, limit=limit)
-    except TakeoutInitDelayError:
-        msg = (
-            "Please accept the data export request from a mobile device, "
-            "then re-run the backfill command."
-        )
-        if portal.peer_type == "user":
-            from mautrix.appservice import IntentAPI
-
-            await portal.main_intent.send_notice(evt.room_id, msg)
-        else:
-            await evt.reply(msg)
+    await portal.enqueue_immediate_backfill(evt.sender, 0, max_batches=limit)

@@ -13,4 +13,5 @@ from . import (
     v08_portal_first_event,
     v09_puppet_username_index,
     v10_more_backfill_fields,
+    v11_backfill_queue,
 )

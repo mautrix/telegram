@@ -15,6 +15,7 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from mautrix.util.async_db import Database
 
+from .backfill_queue import Backfill
 from .bot_chat import BotChat
 from .disappearing_message import DisappearingMessage
 from .message import Message
@@ -38,6 +39,7 @@ def init(db: Database) -> None:
         BotChat,
         PgSession,
         DisappearingMessage,
+        Backfill,
     ):
         table.db = db
 
@@ -54,4 +56,5 @@ __all__ = [
     "BotChat",
     "PgSession",
     "DisappearingMessage",
+    "Backfill",
 ]

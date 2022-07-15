@@ -168,7 +168,6 @@ from mautrix.types import (
 )
 from mautrix.util import variation_selector
 from mautrix.util.message_send_checkpoint import MessageSendCheckpointStatus
-from mautrix.util.simple_lock import SimpleLock
 from mautrix.util.simple_template import SimpleTemplate
 
 from . import (
@@ -182,6 +181,7 @@ from . import (
 )
 from .config import Config
 from .db import (
+    Backfill,
     DisappearingMessage,
     Message as DBMessage,
     Portal as DBPortal,
@@ -203,6 +203,7 @@ if TYPE_CHECKING:
 StateBridge = EventType.find("m.bridge", EventType.Class.STATE)
 StateHalfShotBridge = EventType.find("uk.half-shot.bridge", EventType.Class.STATE)
 DummyPortalCreated = EventType.find("fi.mau.dummy.portal_created", EventType.Class.MESSAGE)
+StateMarker = EventType.find("org.matrix.msc2716.marker", EventType.Class.STATE)
 
 InviteList = Union[UserID, List[UserID]]
 UpdateTyping = Union[UpdateUserTyping, UpdateChatUserTyping, UpdateChannelUserTyping]
@@ -264,6 +265,8 @@ class Portal(DBPortal, BasePortal):
     _sponsored_evt_id: EventID | None
     _sponsored_seen: dict[UserID, bool]
     _new_messages_after_sponsored: bool
+
+    _member_list_cache: dict[EventID, set[UserID]]
 
     _msg_conv: putil.TelegramMessageConverter
 
@@ -331,6 +334,8 @@ class Portal(DBPortal, BasePortal):
         self._sponsored_seen = {}
         self._new_messages_after_sponsored = True
         self._bridging_blocked_at_runtime = False
+
+        self._member_list_cache = {}
 
         self._msg_conv = putil.TelegramMessageConverter(self)
 
@@ -902,6 +907,9 @@ class Portal(DBPortal, BasePortal):
 
         self.first_event_id = await self.main_intent.send_message_event(
             self.mxid, DummyPortalCreated, {}
+        )
+        self._member_list_cache[self.first_event_id] = set(
+            (await self.main_intent.get_joined_members(self.mxid)).keys()
         )
         await self.save()
 
@@ -2461,43 +2469,40 @@ class Portal(DBPortal, BasePortal):
         ).insert()
         await DBMessage.replace_temp_mxid(temporary_identifier, self.mxid, event_id)
 
-    @property
-    def _takeout_options(self) -> dict[str, bool | int]:
-        return {
-            "files": True,
-            "megagroups": self.megagroup,
-            "chats": self.peer_type == "chat",
-            "users": self.peer_type == "user",
-            "channels": (self.peer_type == "channel" and not self.megagroup),
-            "max_file_size": min(self.matrix.media_config.upload_size, 2000 * 1024 * 1024),
-        }
+    async def enqueue_immediate_backfill(
+        self, source: u.User, priority: int, max_batches: int | None = None
+    ) -> None:
+        if not await Backfill.get(source.mxid, self.tgid, self.tg_receiver):
+            await Backfill.new(
+                source.mxid,
+                priority,
+                self.tgid,
+                self.tg_receiver,
+                self.config["bridge.backfill.incremental.messages_per_batch"],
+                self.config["bridge.backfill.incremental.post_batch_delay"],
+                max_batches or self.config["bridge.backfill.incremental.max_batches"],
+            ).insert()
 
     async def backfill(
         self,
         source: u.User,
         client: MautrixTelegramClient,
-        limit: int | None = None,
+        req: Backfill | None = None,
         forward: bool = False,
         last_tgid: int | None = None,
     ) -> None:
         async with self.backfill_method_lock:
-            await self._locked_backfill(source, client, limit, forward, last_tgid)
+            await self._locked_backfill(source, client, req, forward, last_tgid)
 
     async def _locked_backfill(
         self,
         source: u.User,
         client: MautrixTelegramClient,
-        limit: int | None = None,
+        req: Backfill | None = None,
         forward: bool = False,
         last_tgid: int | None = None,
     ) -> None:
-        limit = limit or (
-            self.config["bridge.backfill.initial_limit"]
-            if not forward
-            else self.config["bridge.backfill.missed_limit"]
-        )
-        if limit == 0:
-            return
+        assert forward != bool(req)
         if not self.config["bridge.backfill.normal_groups"] and self.peer_type == "chat":
             return
         tg_space = source.tgid if self.peer_type != "channel" else self.tgid
@@ -2527,9 +2532,48 @@ class Portal(DBPortal, BasePortal):
         else:
             first_in_room = await DBMessage.find_first(self.mxid, tg_space)
             anchor_id = first_in_room.tgid if first_in_room else None
-        await self._backfill_messages(
-            source, client, forward, anchor_id, 0 if forward else limit, prev_event_id
+            self.log.debug(
+                f"Backfilling up to {req.messages_per_batch} historical messages "
+                f"before {anchor_id} through {source.mxid}"
+            )
+        insertion_id, message_count, first_id = await self._backfill_messages(
+            source,
+            client,
+            forward,
+            anchor_id,
+            0 if forward else req.messages_per_batch,
+            prev_event_id,
         )
+        if prev_event_id == self.first_event_id:
+            if insertion_id and not self.base_insertion_id:
+                self.base_insertion_id = insertion_id
+            elif not insertion_id:
+                insertion_id = self.base_insertion_id
+        await self.main_intent.send_state_event(
+            self.mxid,
+            StateMarker,
+            {
+                "org.matrix.msc2716.marker.insertion": insertion_id,
+                "com.beeper.timestamp": int(time.time() * 1000),
+            },
+            state_key=insertion_id,
+        )
+        if message_count > 0 and first_id > 1:
+            if req.max_batches in (0, 1):
+                self.log.debug("Already backfilled enough batches, not enqueuing more")
+                return
+            self.log.debug(f"Enqueuing more backfill through {source.mxid}")
+            await Backfill.new(
+                user_mxid=source.mxid,
+                priority=0,
+                portal_tgid=self.tgid,
+                portal_tg_receiver=self.tg_receiver,
+                messages_per_batch=req.messages_per_batch,
+                post_batch_delay=req.post_batch_delay,
+                max_batches=-1 if req.max_batches < 0 else (req.max_batches - 1),
+            ).insert()
+        else:
+            self.log.debug("No more messages to backfill")
 
     def _can_double_puppet_backfill(self, custom_mxid: UserID) -> bool:
         if not self.config["bridge.backfill.double_puppet_backfill"]:
@@ -2541,9 +2585,17 @@ class Portal(DBPortal, BasePortal):
         return True
 
     async def _get_members_at(self, event_id: EventID) -> set[UserID]:
-        # TODO cache the list
+        try:
+            return self._member_list_cache[event_id]
+        except KeyError:
+            pass
+        # TODO cache the list in db?
+        self.log.debug(f"Fetching member list at {event_id}")
         ctx = await self.main_intent.get_event_context(self.mxid, event_id, limit=0)
-        return {evt.state_key for evt in ctx.state if evt.content.membership == Membership.JOIN}
+        members = {evt.state_key for evt in ctx.state if evt.content.membership == Membership.JOIN}
+        self.log.debug(f"Found {len(members)} members at {event_id}")
+        self._member_list_cache[event_id] = members
+        return members
 
     async def _backfill_messages(
         self,
@@ -2553,7 +2605,7 @@ class Portal(DBPortal, BasePortal):
         anchor_id: int,
         limit: int,
         prev_event_id: EventID,
-    ) -> None:
+    ) -> tuple[EventID | None, int, int]:
         entity = await self.get_input_entity(source)
         events = []
         metas = []
@@ -2582,15 +2634,19 @@ class Portal(DBPortal, BasePortal):
             state_events.append(invite_event)
             state_events.append(join_event)
 
+        first_id = anchor_id
+        message_count = 0
         async for msg in client.iter_messages(
             entity, offset_id=anchor_id, add_offset=-limit, limit=limit
         ):
+            message_count += 1
             if (forward and msg.id <= anchor_id) or (not forward and msg.id >= anchor_id):
                 continue
             elif isinstance(msg, MessageService):
                 # TODO some service messages can be backfilled
                 continue
             if not before_first_msg_timestamp:
+                first_id = msg.id
                 before_first_msg_timestamp = int(msg.date.timestamp() * 1000) - 1
 
             if msg.from_id and isinstance(msg.from_id, (PeerUser, PeerChannel)):
@@ -2602,10 +2658,11 @@ class Portal(DBPortal, BasePortal):
                     sender = await p.Puppet.get_by_peer(msg.peer_id)
             else:
                 sender = None
-            intent = sender.intent_for(self)
+            intent = sender.intent_for(self) if sender else self.main_intent
             if intent.api.is_real_user and not self._can_double_puppet_backfill(intent.mxid):
                 intent = sender.default_mxid_intent
-            add_member(intent, sender.displayname, sender.avatar_url)
+            if sender:
+                add_member(intent, sender.displayname, sender.avatar_url)
             is_bot = sender.is_bot if sender else False
             converted = await self._msg_conv.convert(source, intent, is_bot, msg)
             events.append(
@@ -2627,6 +2684,16 @@ class Portal(DBPortal, BasePortal):
                     )
                 )
                 metas.append(None)
+        if len(events) == 0:
+            self.log.debug(
+                f"Didn't get any events to send out of {message_count} messages fetched "
+                f"(first received ID: {first_id})"
+            )
+            return None, message_count, first_id
+        self.log.debug(
+            f"Got {len(events)} events to send out of {message_count} messages fetched "
+            f"(first received ID: {first_id})"
+        )
         resp = await self.main_intent.batch_send(
             self.mxid,
             prev_event_id,
@@ -2650,33 +2717,7 @@ class Portal(DBPortal, BasePortal):
                 if msg is not None
             ]
         )
-
-    async def _handle_telegram_backfill_message(
-        self, source: au.AbstractUser, msg: Message | MessageService
-    ) -> bool:
-        if msg.from_id and isinstance(msg.from_id, (PeerUser, PeerChannel)):
-            sender = await p.Puppet.get_by_peer(msg.from_id)
-        elif isinstance(msg.peer_id, PeerUser):
-            if msg.out:
-                sender = await p.Puppet.get_by_tgid(source.tgid)
-            else:
-                sender = await p.Puppet.get_by_peer(msg.peer_id)
-        else:
-            sender = None
-        if isinstance(msg, MessageService):
-            if isinstance(msg.action, MessageActionContactSignUp):
-                await self.handle_telegram_joined(source, sender, msg, backfill=True)
-                return True
-            else:
-                self.log.debug(
-                    f"Unhandled service message {type(msg.action).__name__} in backfill"
-                )
-        elif isinstance(msg, Message):
-            await self.handle_telegram_message(source, sender, msg)
-            return True
-        else:
-            self.log.debug(f"Unhandled message type {type(msg).__name__} in backfill")
-        return False
+        return resp.base_insertion_event_id, message_count, first_id
 
     def _split_dm_reaction_counts(self, counts: list[ReactionCount]) -> list[MessagePeerReaction]:
         if len(counts) == 1:
