@@ -330,7 +330,7 @@ class User(DBUser, AbstractUser, BaseUser):
         except Exception:
             self.log.exception("Failed to automatically enable custom puppet")
 
-        if not self.is_bot and self.config["bridge.startup_sync"]:
+        if not self.is_bot and (self.config["bridge.startup_sync"] or first_login):
             try:
                 self._is_backfilling = True
                 await self.sync_dialogs()
@@ -380,7 +380,6 @@ class User(DBUser, AbstractUser, BaseUser):
             try:
                 await asyncio.wait_for(self.takeout_retry_immediate.wait(), timeout=e.seconds)
                 self.log.info("Retrying takeout")
-                self.takeout_retry_immediate.clear()
             except asyncio.TimeoutError:
                 self.log.info("Takeout timeout expired")
             await self._takeout_and_backfill(first_req, first_attempt=False)
@@ -639,10 +638,7 @@ class User(DBUser, AbstractUser, BaseUser):
     ) -> None:
         was_created = False
         if portal.mxid:
-            try:
-                await portal.backfill(self, last_id=dialog.message.id)
-            except Exception:
-                self.log.exception(f"Error while backfilling {portal.tgid_log}")
+            # TODO check if forward backfill is necessary?
             try:
                 await portal.update_matrix_room(self, dialog.entity)
             except Exception:

@@ -913,12 +913,7 @@ class Portal(DBPortal, BasePortal):
         )
         await self.save()
 
-        if self.config["bridge.backfill.initial_limit"] > 0:
-            try:
-                if isinstance(user, u.User):
-                    await self.backfill(user, is_initial=True)
-            except Exception:
-                self.log.exception("Failed to backfill new portal")
+        # TODO enqueue backfill
 
         return self.mxid
 
