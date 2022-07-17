@@ -567,6 +567,7 @@ class Portal(DBPortal, BasePortal):
             await self.main_intent.set_power_levels(self.mxid, levels)
         await self.handle_matrix_power_levels(source, levels.users, {}, None)
         await self.update_bridge_info()
+        await self.main_intent.send_notice(self.mxid, f"Telegram chat created. ID: {self.tgid}")
 
     async def handle_matrix_invite(
         self, invited_by: u.User, puppet: p.Puppet | au.AbstractUser
