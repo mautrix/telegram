@@ -179,7 +179,7 @@ bridge:
     # out-of-Matrix login website (see appservice.public config section)
     allow_matrix_login: true
     # Whether or not to make portals of publicly joinable channels/supergroups publicly joinable on Matrix.
-    public_portals: true
+    public_portals: false
     # Whether or not to use /sync to get presence, read receipts and typing notifications
     # when double puppeting is enabled
     sync_with_custom_puppets: true
