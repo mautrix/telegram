@@ -130,6 +130,7 @@ class Config(BaseBridgeConfig):
         copy("bridge.sync_direct_chat_list")
         copy("bridge.double_puppet_server_map")
         copy("bridge.double_puppet_allow_discovery")
+        copy("bridge.create_group_on_invite")
         if "bridge.login_shared_secret" in self:
             base["bridge.login_shared_secret_map"] = {
                 base["homeserver.domain"]: self["bridge.login_shared_secret"]

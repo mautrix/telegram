@@ -81,4 +81,3 @@ async def create(evt: CommandEvent) -> EventID:
     except ValueError as e:
         await portal.delete()
         return await evt.reply(e.args[0])
-    return await evt.reply(f"Telegram chat created. ID: {portal.tgid}")
