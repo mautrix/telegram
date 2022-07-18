@@ -88,7 +88,7 @@ class MatrixHandler(BaseMatrixHandler):
         if (
             not double_puppet
             or self.az.bot_mxid in members
-            or not not self.config["bridge.create_group_on_invite"]
+            or not self.config["bridge.create_group_on_invite"]
         ):
             if self.az.bot_mxid not in members:
                 await puppet.default_mxid_intent.leave_room(
@@ -98,7 +98,8 @@ class MatrixHandler(BaseMatrixHandler):
             else:
                 await puppet.default_mxid_intent.send_notice(
                     room_id,
-                    "This ghost will remain inactive until a Telegram chat is created for this room.",
+                    "This ghost will remain inactive "
+                    "until a Telegram chat is created for this room.",
                 )
             return
         elif not await user_has_power_level(
@@ -114,7 +115,7 @@ class MatrixHandler(BaseMatrixHandler):
         title, about, levels, encrypted = await get_initial_state(double_puppet.intent, room_id)
         if not title:
             await puppet.default_mxid_intent.leave_room(
-                room_id, reason="Please set a title before inviting Telegram puppets."
+                room_id, reason="Please set a title before inviting Telegram ghosts."
             )
             return
 
@@ -150,7 +151,8 @@ class MatrixHandler(BaseMatrixHandler):
             await portal.create_telegram_chat(invited_by, invites=invites, supergroup=True)
         except ValueError as e:
             await portal.delete()
-            return await portal.az.intent.send_notice(room_id, e.args[0])
+            await portal.az.intent.send_notice(room_id, e.args[0])
+            return
 
     async def handle_invite(
         self, room_id: RoomID, user_id: UserID, inviter: u.User, event_id: EventID

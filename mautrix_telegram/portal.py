@@ -444,7 +444,7 @@ class Portal(DBPortal, BasePortal):
 
     async def get_telegram_users_in_matrix_room(
         self, source: u.User, pre_create: bool = False
-    ) -> tuple[list[InputPeerUser], list[UserID]]:
+    ) -> tuple[list[InputUser], list[UserID]]:
         user_tgids = {}
         intent = self.az.intent if pre_create else self.main_intent
         user_mxids = await intent.get_room_members(self.mxid, (Membership.JOIN, Membership.INVITE))

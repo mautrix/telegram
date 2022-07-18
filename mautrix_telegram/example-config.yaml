@@ -312,8 +312,8 @@ bridge:
     kick_on_logout: true
     # Should the "* user joined Telegram" notice always be marked as read automatically?
     always_read_joined_telegram_notice: true
-    # auto-create group chat portals by inviting Matrix puppet of Telegram user to a room
-    # requires double-puppeting to be enabled
+    # Should the bridge auto-create a group chat on Telegram when a ghost is invited to a room?
+    # Requires the user to have sufficient power level and double puppeting enabled.
     create_group_on_invite: true
     # Settings for backfilling messages from Telegram.
     backfill:
