@@ -398,7 +398,9 @@ class User(DBUser, AbstractUser, BaseUser):
             missed_reqs = 0
             self.log.info("Backfill request %s", req)
             try:
-                portal = await po.Portal.get_by_tgid(req.portal_tgid, req.portal_tg_receiver)
+                portal = await po.Portal.get_by_tgid(
+                    TelegramID(req.portal_tgid), tg_receiver=TelegramID(req.portal_tg_receiver)
+                )
                 await req.mark_dispatched()
                 await portal.backfill(self, client, req=req)
                 await req.mark_done()
@@ -801,7 +803,7 @@ class User(DBUser, AbstractUser, BaseUser):
     @classmethod
     @async_getter_lock
     async def get_by_mxid(
-        cls, mxid: UserID, *, check_db: bool = True, create: bool = True
+        cls, mxid: UserID, /, *, check_db: bool = True, create: bool = True
     ) -> User | None:
         if not mxid or pu.Puppet.get_id_from_mxid(mxid) or mxid == cls.az.bot_mxid:
             return None
@@ -829,7 +831,7 @@ class User(DBUser, AbstractUser, BaseUser):
 
     @classmethod
     @async_getter_lock
-    async def get_by_tgid(cls, tgid: TelegramID) -> User | None:
+    async def get_by_tgid(cls, tgid: TelegramID, /) -> User | None:
         try:
             return cls.by_tgid[tgid]
         except KeyError:

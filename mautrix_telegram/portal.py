@@ -2468,16 +2468,17 @@ class Portal(DBPortal, BasePortal):
     async def enqueue_immediate_backfill(
         self, source: u.User, priority: int, max_batches: int | None = None
     ) -> None:
-        if not await Backfill.get(source.mxid, self.tgid, self.tg_receiver):
-            await Backfill.new(
-                source.mxid,
-                priority,
-                self.tgid,
-                self.tg_receiver,
-                self.config["bridge.backfill.incremental.messages_per_batch"],
-                self.config["bridge.backfill.incremental.post_batch_delay"],
-                max_batches or self.config["bridge.backfill.incremental.max_batches"],
-            ).insert()
+        # TODO check that there are no queued backfills
+        # if not await Backfill.get(source.mxid, self.tgid, self.tg_receiver):
+        await Backfill.new(
+            source.mxid,
+            priority,
+            self.tgid,
+            self.tg_receiver,
+            self.config["bridge.backfill.incremental.messages_per_batch"],
+            self.config["bridge.backfill.incremental.post_batch_delay"],
+            max_batches or self.config["bridge.backfill.incremental.max_batches"],
+        ).insert()
 
     async def backfill(
         self,
@@ -2545,15 +2546,18 @@ class Portal(DBPortal, BasePortal):
                 self.base_insertion_id = insertion_id
             elif not insertion_id:
                 insertion_id = self.base_insertion_id
-        await self.main_intent.send_state_event(
-            self.mxid,
-            StateMarker,
-            {
-                "org.matrix.msc2716.marker.insertion": insertion_id,
-                "com.beeper.timestamp": int(time.time() * 1000),
-            },
-            state_key=insertion_id,
-        )
+        await self.save()
+        # TODO this should probably check actual event count instead of message count
+        if message_count > 0:
+            await self.main_intent.send_state_event(
+                self.mxid,
+                StateMarker,
+                {
+                    "org.matrix.msc2716.marker.insertion": insertion_id,
+                    "com.beeper.timestamp": int(time.time() * 1000),
+                },
+                state_key=insertion_id,
+            )
         if message_count > 0 and first_id > 1:
             if req.max_batches in (0, 1):
                 self.log.debug("Already backfilled enough batches, not enqueuing more")
@@ -2588,10 +2592,66 @@ class Portal(DBPortal, BasePortal):
         # TODO cache the list in db?
         self.log.debug(f"Fetching member list at {event_id}")
         ctx = await self.main_intent.get_event_context(self.mxid, event_id, limit=0)
-        members = {evt.state_key for evt in ctx.state if evt.content.membership == Membership.JOIN}
+        members = {
+            evt.state_key
+            for evt in ctx.state
+            if evt.type == EventType.ROOM_MEMBER and evt.content.membership == Membership.JOIN
+        }
         self.log.debug(f"Found {len(members)} members at {event_id}")
         self._member_list_cache[event_id] = members
         return members
+
+    async def _convert_batch_msg(
+        self,
+        source: u.User,
+        msg: Message,
+        add_member: Callable[[IntentAPI, str, ContentURI], None],
+    ) -> tuple[putil.ConvertedMessage, IntentAPI]:
+        if msg.from_id and isinstance(msg.from_id, (PeerUser, PeerChannel)):
+            sender = await p.Puppet.get_by_peer(msg.from_id)
+        elif isinstance(msg.peer_id, PeerUser):
+            if msg.out:
+                sender = await p.Puppet.get_by_tgid(source.tgid)
+            else:
+                sender = await p.Puppet.get_by_peer(msg.peer_id)
+        else:
+            sender = None
+        if sender:
+            intent = sender.intent_for(self)
+            if not sender.displayname:
+                entity = await source.client.get_entity(sender.peer)
+                await sender.update_info(source, entity)
+        else:
+            intent = self.main_intent
+        if intent.api.is_real_user and not self._can_double_puppet_backfill(intent.mxid):
+            intent = sender.default_mxid_intent
+        if sender:
+            add_member(intent, sender.displayname, sender.avatar_url)
+        is_bot = sender.is_bot if sender else False
+        converted = await self._msg_conv.convert(source, intent, is_bot, msg)
+        return converted, intent
+
+    async def _wrap_batch_msg(
+        self,
+        intent: IntentAPI,
+        msg: Message,
+        converted: putil.ConvertedMessage,
+        caption: bool = False,
+    ) -> BatchSendEvent:
+        if caption:
+            content = converted.caption
+            event_type = EventType.ROOM_MESSAGE
+        else:
+            content = converted.content
+            event_type = converted.type
+        if self.encrypted and self.matrix.e2ee:
+            event_type, content = await self.matrix.e2ee.encrypt(self.mxid, event_type, content)
+        return BatchSendEvent(
+            sender=intent.mxid,
+            timestamp=int(msg.date.timestamp() * 1000),
+            content=content,
+            type=event_type,
+        )
 
     async def _backfill_messages(
         self,
@@ -2625,16 +2685,28 @@ class Portal(DBPortal, BasePortal):
                 ),
             )
             join_event = attr.evolve(
-                invite_event, content=attr.evolve(invite_event.content, membership=Membership.JOIN)
+                invite_event,
+                content=attr.evolve(invite_event.content, membership=Membership.JOIN),
+                sender=intent.mxid,
             )
             state_events.append(invite_event)
             state_events.append(join_event)
 
         first_id = anchor_id
         message_count = 0
-        async for msg in client.iter_messages(
-            entity, offset_id=anchor_id, add_offset=-limit, limit=limit
-        ):
+        args = (
+            {
+                "min_id": anchor_id,
+                "limit": None,
+            }
+            if forward
+            else {
+                "max_id": anchor_id,
+                "limit": limit,
+            }
+        )
+        self.log.debug(f"Iterating messages through {source.tgid} with {args}")
+        async for msg in client.iter_messages(entity, **args):
             message_count += 1
             if (forward and msg.id <= anchor_id) or (not forward and msg.id >= anchor_id):
                 continue
@@ -2645,40 +2717,11 @@ class Portal(DBPortal, BasePortal):
                 first_id = msg.id
                 before_first_msg_timestamp = int(msg.date.timestamp() * 1000) - 1
 
-            if msg.from_id and isinstance(msg.from_id, (PeerUser, PeerChannel)):
-                sender = await p.Puppet.get_by_peer(msg.from_id)
-            elif isinstance(msg.peer_id, PeerUser):
-                if msg.out:
-                    sender = await p.Puppet.get_by_tgid(source.tgid)
-                else:
-                    sender = await p.Puppet.get_by_peer(msg.peer_id)
-            else:
-                sender = None
-            intent = sender.intent_for(self) if sender else self.main_intent
-            if intent.api.is_real_user and not self._can_double_puppet_backfill(intent.mxid):
-                intent = sender.default_mxid_intent
-            if sender:
-                add_member(intent, sender.displayname, sender.avatar_url)
-            is_bot = sender.is_bot if sender else False
-            converted = await self._msg_conv.convert(source, intent, is_bot, msg)
-            events.append(
-                BatchSendEvent(
-                    sender=intent.mxid,
-                    timestamp=int(msg.date.timestamp() * 1000),
-                    content=converted.content,
-                    type=converted.type,
-                )
-            )
+            converted, intent = await self._convert_batch_msg(source, msg, add_member)
+            events.append(await self._wrap_batch_msg(intent, msg, converted))
             metas.append(msg)
             if converted.caption:
-                events.append(
-                    BatchSendEvent(
-                        sender=intent.mxid,
-                        timestamp=int(msg.date.timestamp() * 1000),
-                        content=converted.caption,
-                        type=EventType.ROOM_MESSAGE,
-                    )
-                )
+                events.append(await self._wrap_batch_msg(intent, msg, converted, caption=True))
                 metas.append(None)
         if len(events) == 0:
             self.log.debug(
@@ -2694,10 +2737,12 @@ class Portal(DBPortal, BasePortal):
             self.mxid,
             prev_event_id,
             batch_id=self.next_batch_id if not forward else None,
-            events=events,
+            events=list(reversed(events)),
             state_events_at_start=state_events,
             beeper_new_messages=forward,
         )
+        if prev_event_id == self.first_event_id and resp.next_batch_id:
+            self.next_batch_id = resp.next_batch_id
         tg_space = source.tgid if self.peer_type != "channel" else self.tgid
         await DBMessage.bulk_insert(
             [
@@ -2709,7 +2754,7 @@ class Portal(DBPortal, BasePortal):
                     edit_index=0,
                     content_hash=self.dedup.hash_event(msg),
                 )
-                for event_id, msg in zip(resp.event_ids, metas)
+                for event_id, msg in zip(resp.event_ids, reversed(metas))
                 if msg is not None
             ]
         )
@@ -3289,7 +3334,7 @@ class Portal(DBPortal, BasePortal):
 
     @classmethod
     @async_getter_lock
-    async def get_by_mxid(cls, mxid: RoomID) -> Portal | None:
+    async def get_by_mxid(cls, mxid: RoomID, /) -> Portal | None:
         try:
             return cls.by_mxid[mxid]
         except KeyError:
@@ -3330,7 +3375,7 @@ class Portal(DBPortal, BasePortal):
     @classmethod
     @async_getter_lock
     async def get_by_tgid(
-        cls, tgid: TelegramID, *, tg_receiver: TelegramID | None = None, peer_type: str = None
+        cls, tgid: TelegramID, /, *, tg_receiver: TelegramID | None = None, peer_type: str = None
     ) -> Portal | None:
         if peer_type == "user" and tg_receiver is None:
             raise ValueError('tg_receiver is required when peer_type is "user"')

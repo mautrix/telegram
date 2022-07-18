@@ -406,7 +406,7 @@ class Puppet(DBPuppet, BasePuppet):
     @classmethod
     @async_getter_lock
     async def get_by_tgid(
-        cls, tgid: TelegramID, *, create: bool = True, is_channel: bool = False
+        cls, tgid: TelegramID, /, *, create: bool = True, is_channel: bool = False
     ) -> Puppet | None:
         if tgid is None:
             return None
@@ -459,7 +459,7 @@ class Puppet(DBPuppet, BasePuppet):
 
     @classmethod
     @async_getter_lock
-    async def get_by_custom_mxid(cls, mxid: UserID) -> Puppet | None:
+    async def get_by_custom_mxid(cls, mxid: UserID, /) -> Puppet | None:
         try:
             return cls.by_custom_mxid[mxid]
         except KeyError:
