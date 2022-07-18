@@ -914,7 +914,7 @@ class Portal(DBPortal, BasePortal):
         )
         await self.save()
 
-        # TODO enqueue backfill
+        await self.enqueue_immediate_backfill(user)
 
         return self.mxid
 
@@ -2465,8 +2465,20 @@ class Portal(DBPortal, BasePortal):
         ).insert()
         await DBMessage.replace_temp_mxid(temporary_identifier, self.mxid, event_id)
 
+    @property
+    def _default_max_batches(self) -> int:
+        if self.peer_type == "user":
+            own_type = "user"
+        elif self.peer_type == "chat":
+            own_type = "normal_group"
+        elif self.megagroup:
+            own_type = "supergroup"
+        else:
+            own_type = "channel"
+        return self.config[f"bridge.backfill.incremental.max_batches.{own_type}"]
+
     async def enqueue_immediate_backfill(
-        self, source: u.User, priority: int, max_batches: int | None = None
+        self, source: u.User, priority: int = 0, max_batches: int | None = None
     ) -> None:
         # TODO check that there are no queued backfills
         # if not await Backfill.get(source.mxid, self.tgid, self.tg_receiver):
@@ -2477,7 +2489,7 @@ class Portal(DBPortal, BasePortal):
             self.tg_receiver,
             self.config["bridge.backfill.incremental.messages_per_batch"],
             self.config["bridge.backfill.incremental.post_batch_delay"],
-            max_batches or self.config["bridge.backfill.incremental.max_batches"],
+            max_batches or self._default_max_batches,
         ).insert()
 
     async def backfill(
@@ -2558,7 +2570,7 @@ class Portal(DBPortal, BasePortal):
                 },
                 state_key=insertion_id,
             )
-        if message_count > 0 and first_id > 1:
+        if message_count > 0 and first_id and first_id > 1:
             if req.max_batches in (0, 1):
                 self.log.debug("Already backfilled enough batches, not enqueuing more")
                 return
@@ -2694,19 +2706,12 @@ class Portal(DBPortal, BasePortal):
 
         first_id = anchor_id
         message_count = 0
-        args = (
-            {
-                "min_id": anchor_id,
-                "limit": None,
-            }
-            if forward
-            else {
-                "max_id": anchor_id,
-                "limit": limit,
-            }
-        )
-        self.log.debug(f"Iterating messages through {source.tgid} with {args}")
-        async for msg in client.iter_messages(entity, **args):
+        minmax = {"min_id": anchor_id} if forward else {"max_id": anchor_id}
+        if not forward and not anchor_id:
+            anchor_id = 2**31 - 1
+            minmax = {}
+        self.log.debug(f"Iterating messages through {source.tgid} with {limit=}, {minmax}")
+        async for msg in client.iter_messages(entity, limit=limit, **minmax):
             message_count += 1
             if (forward and msg.id <= anchor_id) or (not forward and msg.id >= anchor_id):
                 continue
