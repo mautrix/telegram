@@ -1,4 +1,4 @@
-# mautrix-facebook - A Matrix-Facebook Messenger puppeting bridge.
+# mautrix-telegram - A Matrix-Telegram puppeting bridge
 # Copyright (C) 2022 Tulir Asokan, Sumner Evans
 #
 # This program is free software: you can redistribute it and/or modify
