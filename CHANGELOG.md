@@ -1,5 +1,9 @@
 # v0.12.0 (unreleased)
 
+**N.B.** This release requires a homeserver with Matrix v1.1 support, which
+bumps up the minimum homeserver versions to Synapse 1.54 and Dendrite 0.8.7.
+Minimum Conduit version remains at 0.4.0.
+
 ### Added
 * Added provisioning API for resolving Telegram identifiers (like usernames).
 * Added option to not bridge chats with lots of members.
@@ -7,6 +11,12 @@
   implement [MSC2530]. Sending captions the same way is also supported and
   enabled by default.
 * Added support for bridging forwarded messages as forwards on Telegram.
+  * Forwarding is not allowed in relay mode as the bot wouldn't be able to
+    specify who sent the message.
+  * Matrix doesn't have real forwarding (there's no forwarding metadata), so
+    only messages bridged from Telegram can be forwarded.
+  * Double puppeted messages from Telegram currently can't be forwarded without
+    removing the `fi.mau.double_puppet_source` key from the content.
   * If forwarding fails (e.g. due to it being blocked in the source chat), the
     bridge will automatically fall back to sending it as a normal new message.
 * Added options to make encryption more secure.
