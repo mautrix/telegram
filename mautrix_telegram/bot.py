@@ -235,6 +235,38 @@ class Bot(AbstractUser):
         else:
             return reply("Failed to find chat ID.")
 
+    async def handle_command_ban(self, message: Message, reply: ReplyFunc) -> Awaitable[Message]:
+        if not message.is_reply:
+            return
+
+        reply_message: Message = await message.get_reply_message()
+        if not reply_message:
+            return
+
+        _, bot_id = await self.get_me()
+        if reply_message.sender_id != bot_id:
+            return
+
+        chat = await message.get_chat()
+        if not chat:
+            return
+
+        sender = message.get_sender()
+        if not sender:
+            return
+
+        portal = await po.Portal.get_by_entity(chat)
+        if not portal:
+            return
+
+        target_user = portal.get_matrix_user_by_tg_msg_id(reply_message.id)
+        if not target_user:
+            return
+
+        portal.az.intent.ban_user(
+            portal.mxid, target_user.mxid, f"Banned from Telegram by {sender.displayname}")
+        return reply(f"Banned {target_user.username} from matrix.")
+
     def match_command(self, text: str, command: str) -> bool:
         text = text.lower()
         command = f"/{command.lower()}"
@@ -263,6 +295,11 @@ class Bot(AbstractUser):
             return
         elif self.match_command(text, "id"):
             await self.handle_command_id(message, reply)
+            return
+        elif self.match_command(text, "mxban"):
+            if not await self.check_can_use_commands(message, reply):
+                return
+            await self.handle_command_ban(message, reply)
             return
         elif message.is_private:
             return

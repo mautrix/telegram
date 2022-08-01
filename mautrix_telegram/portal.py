@@ -26,6 +26,7 @@ import random
 import time
 
 from asyncpg import UniqueViolationError
+from mautrix_telegram.util.lu_dict import LUDict
 from telethon.errors import (
     ChatNotModifiedError,
     MessageIdInvalidError,
@@ -262,6 +263,7 @@ class Portal(DBPortal, BasePortal):
     _new_messages_after_sponsored: bool
 
     _msg_conv: putil.TelegramMessageConverter
+    _tg_msg_id_to_mx_user: LUDict[TelegramID, u.User]
 
     def __init__(
         self,
@@ -330,8 +332,9 @@ class Portal(DBPortal, BasePortal):
         self._sponsored_seen = {}
         self._new_messages_after_sponsored = True
         self._bridging_blocked_at_runtime = False
-
         self._msg_conv = putil.TelegramMessageConverter(self)
+        # Store up to 5000 messages per portal instance
+        self._tg_msg_id_to_mx_user = LUDict(5000)
 
     # region Properties
 
@@ -1811,6 +1814,9 @@ class Portal(DBPortal, BasePortal):
                     sender, EventType.ROOM_MESSAGE, event_id, space, 0, response, content.msgtype
                 )
 
+    def get_matrix_user_by_tg_msg_id(self, msgId: TelegramID) -> u.User | None:
+        return self.by_tgid.get(msgId)
+
     async def _mark_matrix_handled(
         self,
         sender: u.User,
@@ -1822,6 +1828,7 @@ class Portal(DBPortal, BasePortal):
         msgtype: MessageType | None = None,
     ) -> None:
         self.log.trace("Handled Matrix message: %s", response)
+        self._tg_msg_id_to_mx_user[self.response.id] = sender.mxid
         event_hash, _ = self.dedup.check(response, (event_id, space), force_hash=edit_index != 0)
         if edit_index < 0:
             prev_edit = await DBMessage.get_one_by_tgid(TelegramID(response.id), space, -1)
