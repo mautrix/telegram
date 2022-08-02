@@ -18,7 +18,7 @@ from __future__ import annotations
 import re
 
 from telethon import TelegramClient
-from telethon.helpers import add_surrogate, del_surrogate
+from telethon.helpers import add_surrogate, del_surrogate, strip_text
 from telethon.tl.types import MessageEntityItalic, TypeMessageEntity
 
 from mautrix.types import MessageEventContent, RoomID
@@ -73,8 +73,8 @@ async def _matrix_html_to_telegram(
         html = not_command_regex.sub(r"\1", html)
 
         parsed = await MatrixParser(client).parse(add_surrogate(html))
-        text = del_surrogate(parsed.text.strip())
-        text, entities = _cut_long_message(text, parsed.telegram_entities)
+        text, entities = _cut_long_message(parsed.text, parsed.telegram_entities)
+        text = del_surrogate(strip_text(text, entities))
 
         return text, entities
     except Exception as e:

@@ -125,9 +125,9 @@ def _read_video_thumbnail(
 
 def _location_to_id(location: TypeLocation) -> str:
     if isinstance(location, Document):
-        return f"{location.id}-{location.access_hash}"
+        return str(location.id)
     elif isinstance(location, (InputDocumentFileLocation, InputPhotoFileLocation)):
-        return f"{location.id}-{location.access_hash}-{location.thumb_size}"
+        return f"{location.id}-{location.thumb_size}"
     elif isinstance(location, InputFileLocation):
         return f"{location.volume_id}-{location.local_id}"
     elif isinstance(location, InputPeerPhotoFileLocation):
@@ -155,6 +155,8 @@ async def transfer_thumbnail_to_matrix(
 
     if custom_data:
         loc_id += "-mau_custom_thumbnail"
+    if encrypt:
+        loc_id += "-encrypted"
 
     db_file = await DBTelegramFile.get(loc_id)
     if db_file:
@@ -226,6 +228,8 @@ async def transfer_file_to_matrix(
     location_id = _location_to_id(location)
     if not location_id:
         return None
+    if encrypt:
+        location_id += "-encrypted"
 
     db_file = await DBTelegramFile.get(location_id)
     if db_file:

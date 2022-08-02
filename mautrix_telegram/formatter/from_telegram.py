@@ -28,6 +28,7 @@ from telethon.tl.types import (
     MessageEntityBotCommand,
     MessageEntityCashtag,
     MessageEntityCode,
+    MessageEntityCustomEmoji,
     MessageEntityEmail,
     MessageEntityHashtag,
     MessageEntityItalic,
@@ -133,7 +134,7 @@ async def telegram_to_matrix(
 ) -> TextMessageEventContent:
     content = TextMessageEventContent(
         msgtype=MessageType.TEXT,
-        body=add_surrogate(override_text or evt.message),
+        body=override_text or evt.message,
     )
     entities = override_entities or evt.entities
     if entities:
@@ -196,8 +197,9 @@ async def _telegram_entities_to_matrix(
         elif relative_offset < last_offset:
             continue
 
-        while within_surrogate(text, relative_offset, length=length):
-            relative_offset += 1
+        # TODO this breaks when there are lots of emojis in a row (e.g. custom emojis)
+        # while within_surrogate(text, relative_offset, length=length):
+        #     relative_offset += 1
         while within_surrogate(text, relative_offset + entity.length, length=length):
             entity.length += 1
 
@@ -241,6 +243,9 @@ async def _telegram_entities_to_matrix(
             await _parse_url(
                 html, entity_text, entity.url if entity_type == MessageEntityTextUrl else None
             )
+        elif entity_type == MessageEntityCustomEmoji:
+            # TODO support properly
+            html.append(entity_text)
         elif entity_type in (
             MessageEntityBotCommand,
             MessageEntityHashtag,
@@ -318,7 +323,7 @@ message_link_regex = re.compile(
 )
 
 
-async def _parse_url(html: list[str], entity_text: str, url: str):
+async def _parse_url(html: list[str], entity_text: str, url: str) -> None:
     url = escape(url) if url else entity_text
     if not url.startswith(("https://", "http://", "ftp://", "magnet://")):
         url = "http://" + url
