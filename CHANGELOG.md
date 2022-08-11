@@ -1,4 +1,9 @@
-# v0.11.3 (unreleased)
+# v0.11.3 (2022-04-17)
+
+**N.B.** This release drops support for old homeservers which don't support the
+new `/v3` API endpoints. Synapse 1.48+, Dendrite 0.6.5+ and Conduit 0.4.0+ are
+supported. Legacy `r0` API support can be temporarily re-enabled with `pip install mautrix==0.16.0`.
+However, this option will not be available in future releases.
 
 ### Added
 * Added `list-invite-links` command to list invite links in a chat.
