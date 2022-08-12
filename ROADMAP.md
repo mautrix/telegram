@@ -24,6 +24,7 @@
 * Telegram → Matrix
   * [x] Message content (text, formatting, files, etc..)
   * [ ] Advanced message content/media
+    * [x] Custom emojis
     * [x] Polls
 	* [x] Games
 	* [ ] Buttons

@@ -31,6 +31,7 @@ from telethon.errors import (
     LocationInvalidError,
     SecurityError,
 )
+from telethon.tl.functions.messages import GetCustomEmojiDocumentsRequest
 from telethon.tl.types import (
     Document,
     InputDocumentFileLocation,
@@ -45,6 +46,7 @@ import magic
 
 from mautrix.appservice import IntentAPI
 
+from .. import abstract_user as au
 from ..db import TelegramFile as DBTelegramFile
 from ..tgclient import MautrixTelegramClient
 from ..util import sane_mimetypes
@@ -210,6 +212,37 @@ async def transfer_thumbnail_to_matrix(
 transfer_locks: dict[str, asyncio.Lock] = {}
 
 TypeThumbnail = Optional[Union[TypeLocation, TypePhotoSize]]
+
+
+async def transfer_custom_emojis_to_matrix(
+    source: au.AbstractUser, emoji_ids: list[int]
+) -> dict[int, DBTelegramFile]:
+    emoji_ids = set(emoji_ids)
+    existing = await DBTelegramFile.get_many([str(id) for id in emoji_ids])
+    file_map = {int(file.id): file for file in existing}
+    not_existing_ids = list(emoji_ids - file_map.keys())
+    if not_existing_ids:
+        log.debug(f"Transferring custom emojis through {source.mxid}: {not_existing_ids}")
+
+        documents: list[Document] = await source.client(
+            GetCustomEmojiDocumentsRequest(document_id=not_existing_ids)
+        )
+
+        async def transfer(document: Document) -> None:
+            file_map[document.id] = await transfer_file_to_matrix(
+                source.client,
+                source.bridge.az.intent,
+                document,
+                is_sticker=True,
+                tgs_convert={"target": "png", "args": {"width": 256, "height": 256}},
+                filename=f"emoji-{document.id}",
+                # Emojis are used as inline images and can't be encrypted
+                encrypt=False,
+                async_upload=source.config["homeserver.async_media"],
+            )
+
+        await asyncio.gather(*[transfer(doc) for doc in documents])
+    return file_map
 
 
 async def transfer_file_to_matrix(
