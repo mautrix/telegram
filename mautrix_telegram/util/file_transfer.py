@@ -228,13 +228,18 @@ async def transfer_custom_emojis_to_matrix(
             GetCustomEmojiDocumentsRequest(document_id=not_existing_ids)
         )
 
+        tgs_args = source.config["bridge.animated_sticker"]
+        if tgs_args["target"] == "webm":
+            # Inline images can't be videos, let's hope animated webp is supported
+            tgs_args = {**tgs_args, "target": "webp"}
+
         async def transfer(document: Document) -> None:
             file_map[document.id] = await transfer_file_to_matrix(
                 source.client,
                 source.bridge.az.intent,
                 document,
                 is_sticker=True,
-                tgs_convert={"target": "png", "args": {"width": 256, "height": 256}},
+                tgs_convert=tgs_args,
                 filename=f"emoji-{document.id}",
                 # Emojis are used as inline images and can't be encrypted
                 encrypt=False,

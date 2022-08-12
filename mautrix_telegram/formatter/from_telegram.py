@@ -280,7 +280,7 @@ async def _telegram_entities_to_matrix(
             html.append(entity_text)
         elif entity_type == ReuploadedCustomEmoji:
             html.append(
-                f'<img data-mx-emoticon src="{escape(entity.file.mxc)}" height="32" '
+                f'<img data-mx-emoticon src="{escape(entity.file.mxc)}" height="32" width="32" '
                 f'alt="{entity_text}" title="{entity_text}"/>'
             )
         elif entity_type in (

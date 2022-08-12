@@ -228,12 +228,13 @@ bridge:
         # png - converts to non-animated png (fastest),
         # gif - converts to animated gif
         # webm - converts to webm video, requires ffmpeg executable with vp9 codec and webm container support
+        # webp - converts to animated webp, requires ffmpeg executable with webp codec/container support
         target: gif
         # Arguments for converter. All converters take width and height.
         args:
             width: 256
             height: 256
-            fps: 25 # only for webm and gif (2, 5, 10, 20 or 25 recommended)
+            fps: 25 # only for webm, webp and gif (2, 5, 10, 20 or 25 recommended)
     # End-to-bridge encryption support options.
     #
     # See https://docs.mau.fi/bridges/general/end-to-bridge-encryption.html for more info.
