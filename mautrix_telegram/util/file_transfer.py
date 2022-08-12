@@ -233,18 +233,21 @@ async def transfer_custom_emojis_to_matrix(
             # Inline images can't be videos, let's hope animated webp is supported
             tgs_args = {**tgs_args, "target": "webp"}
 
+        transfer_sema = asyncio.Semaphore(5)
+
         async def transfer(document: Document) -> None:
-            file_map[document.id] = await transfer_file_to_matrix(
-                source.client,
-                source.bridge.az.intent,
-                document,
-                is_sticker=True,
-                tgs_convert=tgs_args,
-                filename=f"emoji-{document.id}",
-                # Emojis are used as inline images and can't be encrypted
-                encrypt=False,
-                async_upload=source.config["homeserver.async_media"],
-            )
+            async with transfer_sema:
+                file_map[document.id] = await transfer_file_to_matrix(
+                    source.client,
+                    source.bridge.az.intent,
+                    document,
+                    is_sticker=True,
+                    tgs_convert=tgs_args,
+                    filename=f"emoji-{document.id}",
+                    # Emojis are used as inline images and can't be encrypted
+                    encrypt=False,
+                    async_upload=source.config["homeserver.async_media"],
+                )
 
         await asyncio.gather(*[transfer(doc) for doc in documents])
     return file_map
