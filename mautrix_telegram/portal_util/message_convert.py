@@ -92,7 +92,8 @@ class ConvertedMessage:
     content: MessageEventContent
     caption: MessageEventContent | None = None
     type: EventType = EventType.ROOM_MESSAGE
-    disappear_in: int | None = None
+    disappear_seconds: int | None = None
+    disappear_start_immediately: bool = False
 
 
 class DocAttrs(NamedTuple):
@@ -158,6 +159,9 @@ class TelegramMessageConverter:
             self.log.debug("Unhandled Telegram message %d", evt.id)
             return
         if converted:
+            if evt.ttl_period and not converted.disappear_seconds:
+                converted.disappear_seconds = evt.ttl_period
+                converted.disappear_start_immediately = True
             converted.content.external_url = self._get_external_url(evt)
             converted.content["fi.mau.telegram.source"] = {
                 "space": self.portal.tgid if self.portal.peer_type == "channel" else source.tgid,
@@ -388,7 +392,7 @@ class TelegramMessageConverter:
         return ConvertedMessage(
             content=content,
             caption=caption_content,
-            disappear_in=media.ttl_seconds,
+            disappear_seconds=media.ttl_seconds,
         )
 
     async def _convert_document(
@@ -488,7 +492,7 @@ class TelegramMessageConverter:
             type=event_type,
             content=content,
             caption=caption_content,
-            disappear_in=evt.media.ttl_seconds,
+            disappear_seconds=evt.media.ttl_seconds,
         )
 
     @staticmethod

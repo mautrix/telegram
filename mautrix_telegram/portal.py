@@ -1843,6 +1843,12 @@ class Portal(DBPortal, BasePortal):
         )
         await self._send_delivery_receipt(event_id)
         asyncio.create_task(self._send_message_status(event_id, err=None))
+        if response.ttl_period:
+            await self._mark_disappearing(
+                event_id=event_id,
+                seconds=response.ttl_period,
+                expires_at=int(response.date.timestamp()) + response.ttl_period,
+            )
 
     async def _send_message_status(self, event_id: EventID, err: Exception | None) -> None:
         if not self.config["bridge.message_status_events"]:
@@ -2867,8 +2873,9 @@ class Portal(DBPortal, BasePortal):
         event_id = await self._send_message(
             intent, converted.content, timestamp=evt.date, event_type=converted.type
         )
+        caption_id = None
         if converted.caption:
-            await self._send_message(intent, converted.caption, timestamp=evt.date)
+            caption_id = await self._send_message(intent, converted.caption, timestamp=evt.date)
 
         self._new_messages_after_sponsored = True
 
@@ -2914,6 +2921,24 @@ class Portal(DBPortal, BasePortal):
                 )
             )
         await self._send_delivery_receipt(event_id)
+        if converted.disappear_seconds:
+            if converted.disappear_start_immediately:
+                expires_at = int(evt.date.timestamp()) + converted.disappear_seconds
+            else:
+                expires_at = None
+            await self._mark_disappearing(event_id, converted.disappear_seconds, expires_at)
+            if caption_id:
+                await self._mark_disappearing(caption_id, converted.disappear_seconds, expires_at)
+
+    async def _mark_disappearing(
+        self, event_id: EventID, seconds: int, expires_at: int | None
+    ) -> None:
+        dm = DisappearingMessage(
+            self.mxid, event_id, seconds * 1000, expiration_ts=expires_at * 1000
+        )
+        await dm.insert()
+        if expires_at:
+            asyncio.create_task(self._disappear_event(dm))
 
     async def _create_room_on_action(
         self, source: au.AbstractUser, action: TypeMessageAction
