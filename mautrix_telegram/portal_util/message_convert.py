@@ -413,13 +413,15 @@ class TelegramMessageConverter:
             thumb_loc = None
             thumb_size = None
         parallel_id = source.tgid if self.config["bridge.parallel_file_transfer"] else None
+        tgs_convert = self.config["bridge.animated_sticker"]
         file = await util.transfer_file_to_matrix(
             source.client,
             intent,
             document,
             thumb_loc,
             is_sticker=attrs.is_sticker,
-            tgs_convert=self.config["bridge.animated_sticker"],
+            tgs_convert=tgs_convert,
+            webm_convert=tgs_convert["target"] if tgs_convert["convert_from_webm"] else None,
             filename=attrs.name,
             parallel_id=parallel_id,
             encrypt=self.portal.encrypted,

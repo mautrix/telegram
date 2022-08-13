@@ -52,6 +52,7 @@ from ..tgclient import MautrixTelegramClient
 from ..util import sane_mimetypes
 from .parallel_file_transfer import parallel_transfer_to_matrix
 from .tgs_converter import convert_tgs_to
+from .webm_converter import convert_webm_to
 
 try:
     from PIL import Image
@@ -228,10 +229,8 @@ async def transfer_custom_emojis_to_matrix(
             GetCustomEmojiDocumentsRequest(document_id=not_existing_ids)
         )
 
-        tgs_args = source.config["bridge.animated_sticker"]
-        if tgs_args["target"] == "webm":
-            # Inline images can't be videos, let's hope animated webp is supported
-            tgs_args = {**tgs_args, "target": "webp"}
+        tgs_args = source.config["bridge.animated_emoji"]
+        webm_convert = tgs_args["target"]
 
         transfer_sema = asyncio.Semaphore(5)
 
@@ -243,6 +242,7 @@ async def transfer_custom_emojis_to_matrix(
                     document,
                     is_sticker=True,
                     tgs_convert=tgs_args,
+                    webm_convert=webm_convert,
                     filename=f"emoji-{document.id}",
                     # Emojis are used as inline images and can't be encrypted
                     encrypt=False,
@@ -261,6 +261,7 @@ async def transfer_file_to_matrix(
     *,
     is_sticker: bool = False,
     tgs_convert: dict | None = None,
+    webm_convert: str | None = None,
     filename: str | None = None,
     encrypt: bool = False,
     parallel_id: int | None = None,
@@ -290,6 +291,7 @@ async def transfer_file_to_matrix(
             thumbnail,
             is_sticker,
             tgs_convert,
+            webm_convert,
             filename,
             encrypt,
             parallel_id,
@@ -305,6 +307,7 @@ async def _unlocked_transfer_file_to_matrix(
     thumbnail: TypeThumbnail,
     is_sticker: bool,
     tgs_convert: dict | None,
+    webm_convert: str | None,
     filename: str | None,
     encrypt: bool,
     parallel_id: int | None,
@@ -347,6 +350,12 @@ async def _unlocked_transfer_file_to_matrix(
             file = converted_anim.data
             width, height = converted_anim.width, converted_anim.height
             image_converted = mime_type != "application/gzip"
+            thumbnail = None
+        elif is_sticker and webm_convert and webm_convert != "webm" and mime_type == "video/webm":
+            converted_anim = await convert_webm_to(file, webm_convert)
+            mime_type = converted_anim.mime
+            file = converted_anim.data
+            image_converted = mime_type != "video/webm"
             thumbnail = None
 
         decryption_info = None

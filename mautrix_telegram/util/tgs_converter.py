@@ -99,7 +99,7 @@ if lottieconverter:
     converters["png"] = tgs_to_png
     converters["gif"] = tgs_to_gif
 
-if lottieconverter and ffmpeg:
+if lottieconverter and ffmpeg.ffmpeg_path:
 
     async def tgs_to_webm(
         file: bytes, width: int, height: int, fps: int = 30, **_: Any

@@ -230,11 +230,22 @@ bridge:
         # webm - converts to webm video, requires ffmpeg executable with vp9 codec and webm container support
         # webp - converts to animated webp, requires ffmpeg executable with webp codec/container support
         target: gif
+        # Should video stickers be converted to the specified format as well?
+        convert_from_webm: false
         # Arguments for converter. All converters take width and height.
         args:
             width: 256
             height: 256
             fps: 25 # only for webm, webp and gif (2, 5, 10, 20 or 25 recommended)
+    # Settings for converting animated emoji.
+    # Same as animated_sticker, but webm is not supported as the target
+    # (because inline images can only contain images, not videos).
+    animated_emoji:
+        target: webp
+        args:
+            width: 64
+            height: 64
+            fps: 25
     # End-to-bridge encryption support options.
     #
     # See https://docs.mau.fi/bridges/general/end-to-bridge-encryption.html for more info.

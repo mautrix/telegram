@@ -6,7 +6,7 @@ Minimum Conduit version remains at 0.4.0.
 
 ### Added
 * Added provisioning API for resolving Telegram identifiers (like usernames).
-* Added basic bridging of Telegram custom emojis to Matrix.
+* Added support for bridging Telegram custom emojis to Matrix.
 * Added option to not bridge chats with lots of members.
 * Added option to include captions in the same message as the media to
   implement [MSC2530]. Sending captions the same way is also supported and
@@ -33,6 +33,9 @@ Minimum Conduit version remains at 0.4.0.
 ### Improved
 * Improved handling the bridge user leaving chats on Telegram, and new users
   being added on Telegram.
+* Improved animated sticker conversion options: added support for animated webp
+  and added option to convert video stickers (webm) to the specified image
+  format.
 * Audio and video metadata is now bridged properly to Telegram.
 * Added database index on Telegram usernames (used when bridging username
   @-mentions in messages).
