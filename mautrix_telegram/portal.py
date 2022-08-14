@@ -3229,7 +3229,7 @@ class Portal(DBPortal, BasePortal):
 
     @classmethod
     @async_getter_lock
-    async def get_by_mxid(cls, mxid: RoomID) -> Portal | None:
+    async def get_by_mxid(cls, mxid: RoomID, /) -> Portal | None:
         try:
             return cls.by_mxid[mxid]
         except KeyError:
@@ -3270,7 +3270,7 @@ class Portal(DBPortal, BasePortal):
     @classmethod
     @async_getter_lock
     async def get_by_tgid(
-        cls, tgid: TelegramID, *, tg_receiver: TelegramID | None = None, peer_type: str = None
+        cls, tgid: TelegramID, /, *, tg_receiver: TelegramID | None = None, peer_type: str = None
     ) -> Portal | None:
         if peer_type == "user" and tg_receiver is None:
             raise ValueError('tg_receiver is required when peer_type is "user"')
