@@ -11,6 +11,7 @@ Minimum Conduit version remains at 0.4.0.
 * Added option to include captions in the same message as the media to
   implement [MSC2530]. Sending captions the same way is also supported and
   enabled by default.
+* Added commands to kick or ban relaybot users from Telegram.
 * Added support for Telegram's disappearing messages.
 * Added support for bridging forwarded messages as forwards on Telegram.
   * Forwarding is not allowed in relay mode as the bot wouldn't be able to

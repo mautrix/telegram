@@ -49,7 +49,7 @@ from telethon.tl.types import (
 from telethon.utils import add_surrogate, del_surrogate
 
 from mautrix.errors import MBadState, MForbidden
-from mautrix.types import UserID
+from mautrix.types import RoomID, UserID
 
 from . import portal as po, puppet as pu, user as u
 from .abstract_user import AbstractUser
@@ -57,6 +57,7 @@ from .db import BotChat, Message as DBMessage
 from .types import TelegramID
 
 ReplyFunc = Callable[[str], Awaitable[Message]]
+BanFunc = Callable[[RoomID, UserID, str], Awaitable[None]]
 TelegramAdminPermission = Literal[
     "change_info",
     "post_messages",
@@ -89,6 +90,7 @@ class Bot(AbstractUser):
         "portal": None,
         "invite": "invite_users",
         "mxban": "ban_users",
+        "mxkick": "ban_users",
     }
 
     def __init__(self, token: str) -> None:
@@ -295,7 +297,12 @@ class Bot(AbstractUser):
             return await reply(f"Invited `{user.mxid}` to the portal.")
 
     async def handle_command_ban(
-        self, message: Message, portal: po.Portal, reply: ReplyFunc, reason: str
+        self,
+        message: Message,
+        portal: po.Portal,
+        reply: ReplyFunc,
+        reason: str,
+        action: Literal["kick", "ban"] = "ban",
     ) -> Message:
         if not message.reply_to:
             return await reply("You must reply to a relaybot message when using that command")
@@ -305,23 +312,29 @@ class Bot(AbstractUser):
         if not msg or msg.sender != self.tgid or not msg.sender_mxid:
             return await reply("Target message is not a relayed message")
         puppet = await pu.Puppet.get_by_peer(message.from_id)
+        actioned = "Banned" if action == "ban" else "Kicked"
         try:
-            await puppet.intent_for(portal).ban_user(portal.mxid, msg.sender_mxid, reason)
+            intent = puppet.intent_for(portal)
+            func: BanFunc = intent.ban_user if action == "ban" else intent.kick_user
+            await func(portal.mxid, msg.sender_mxid, reason)
         except MForbidden as e:
             self.log.warning(
-                f"Failed to ban {msg.sender_mxid} from {portal.mxid} as {puppet.mxid}: {e}, "
+                f"Failed to {action} {msg.sender_mxid} from {portal.mxid} as {puppet.mxid}: {e}, "
                 f"falling back to bridge bot"
             )
-            reason_prefix = f"Banned by {puppet.displayname or puppet.tgid}"
+            reason_prefix = f"{actioned} by {puppet.displayname or puppet.tgid}"
             reason = f"{reason_prefix}: {reason}" if reason else reason_prefix
             try:
-                await self.az.intent.ban_user(portal.mxid, msg.sender_mxid, reason)
+                func: BanFunc = (
+                    self.az.intent.ban_user if action == "ban" else self.az.intent.kick_user
+                )
+                await func(portal.mxid, msg.sender_mxid, reason)
             except MForbidden as e:
                 self.log.warning(
-                    f"Failed to ban {msg.sender_mxid} from {portal.mxid} as bridge bot: {e}"
+                    f"Failed to {action} {msg.sender_mxid} from {portal.mxid} as bridge bot: {e}"
                 )
-                return await reply(f"Failed to ban `{msg.sender_mxid}`")
-        return await reply(f"Successfully banned `{msg.sender_mxid}`")
+                return await reply(f"Failed to {action} `{msg.sender_mxid}`")
+        return await reply(f"Successfully {actioned.lower()} `{msg.sender_mxid}`")
 
     @staticmethod
     def handle_command_id(message: Message, reply: ReplyFunc) -> Awaitable[Message]:
@@ -378,6 +391,8 @@ class Bot(AbstractUser):
                 await self.handle_command_invite(portal, reply, mxid_input=UserID(args))
             elif command == "mxban":
                 await self.handle_command_ban(message, portal, reply, reason=args)
+            elif command == "mxkick":
+                await self.handle_command_ban(message, portal, reply, reason=args, action="kick")
 
     async def handle_service_message(self, message: MessageService) -> None:
         to_peer = message.to_id
