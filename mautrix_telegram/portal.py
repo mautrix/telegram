@@ -1598,14 +1598,14 @@ class Portal(DBPortal, BasePortal):
                         link_preview=lp,
                     )
                     await self._mark_matrix_handled(
-                        sender,
-                        sender_id,
-                        EventType.ROOM_MESSAGE,
-                        event_id,
-                        space,
-                        -1,
-                        resp,
-                        content.msgtype,
+                        sender=sender,
+                        sender_tgid=sender_id,
+                        event_type=EventType.ROOM_MESSAGE,
+                        event_id=event_id,
+                        space=space,
+                        edit_index=-1,
+                        response=resp,
+                        msgtype=content.msgtype,
                     )
                     return
             response = await client.send_message(
@@ -1616,14 +1616,14 @@ class Portal(DBPortal, BasePortal):
                 link_preview=lp,
             )
             await self._mark_matrix_handled(
-                sender,
-                sender_id,
-                EventType.ROOM_MESSAGE,
-                event_id,
-                space,
-                0,
-                response,
-                content.msgtype,
+                sender=sender,
+                sender_tgid=sender_id,
+                event_type=EventType.ROOM_MESSAGE,
+                event_id=event_id,
+                space=space,
+                edit_index=0,
+                response=response,
+                msgtype=content.msgtype,
             )
 
     async def _handle_matrix_file(
@@ -1750,14 +1750,14 @@ class Portal(DBPortal, BasePortal):
                 raise
             else:
                 await self._mark_matrix_handled(
-                    sender,
-                    sender_id,
-                    EventType.ROOM_MESSAGE,
-                    event_id,
-                    space,
-                    0,
-                    response,
-                    content.msgtype,
+                    sender=sender,
+                    sender_tgid=sender_id,
+                    event_type=EventType.ROOM_MESSAGE,
+                    event_id=event_id,
+                    space=space,
+                    edit_index=0,
+                    response=response,
+                    msgtype=content.msgtype,
                 )
 
     async def _matrix_document_edit(
@@ -1783,14 +1783,14 @@ class Portal(DBPortal, BasePortal):
                     file=media,
                 )
                 await self._mark_matrix_handled(
-                    sender,
-                    sender_tgid,
-                    EventType.ROOM_MESSAGE,
-                    event_id,
-                    space,
-                    -1,
-                    response,
-                    content.msgtype,
+                    sender=sender,
+                    sender_tgid=sender_tgid,
+                    event_type=EventType.ROOM_MESSAGE,
+                    event_id=event_id,
+                    space=space,
+                    edit_index=-1,
+                    response=response,
+                    msgtype=content.msgtype,
                 )
                 return True
         return False
@@ -1832,14 +1832,14 @@ class Portal(DBPortal, BasePortal):
                 raise
             else:
                 await self._mark_matrix_handled(
-                    sender,
-                    sender_id,
-                    EventType.ROOM_MESSAGE,
-                    event_id,
-                    space,
-                    0,
-                    response,
-                    content.msgtype,
+                    sender=sender,
+                    sender_tgid=sender_id,
+                    event_type=EventType.ROOM_MESSAGE,
+                    event_id=event_id,
+                    space=space,
+                    edit_index=0,
+                    response=response,
+                    msgtype=content.msgtype,
                 )
 
     async def _mark_matrix_handled(
@@ -2024,14 +2024,14 @@ class Portal(DBPortal, BasePortal):
                 return False
             else:
                 await self._mark_matrix_handled(
-                    sender,
-                    sender.tgid,
-                    EventType.ROOM_MESSAGE,
-                    event_id,
-                    space,
-                    0,
-                    response[0],
-                    msgtype,
+                    sender=sender,
+                    sender_tgid=sender.tgid,
+                    event_type=EventType.ROOM_MESSAGE,
+                    event_id=event_id,
+                    space=space,
+                    edit_index=0,
+                    response=response[0],
+                    msgtype=msgtype,
                 )
                 return True
 
