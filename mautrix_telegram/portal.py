@@ -1263,12 +1263,7 @@ class Portal(DBPortal, BasePortal):
     async def _send_delivery_receipt(
         self, event_id: EventID, room_id: RoomID | None = None
     ) -> None:
-        # TODO maybe check if the bot is in the room rather than assuming based on self.encrypted
-        if (
-            event_id
-            and self.config["bridge.delivery_receipts"]
-            and (self.encrypted or self.peer_type != "user")
-        ):
+        if event_id and self.config["bridge.delivery_receipts"]:
             try:
                 await self.az.intent.mark_read(room_id or self.mxid, event_id)
             except Exception:
