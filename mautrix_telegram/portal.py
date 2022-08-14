@@ -2978,9 +2978,7 @@ class Portal(DBPortal, BasePortal):
     async def _mark_disappearing(
         self, event_id: EventID, seconds: int, expires_at: int | None
     ) -> None:
-        dm = DisappearingMessage(
-            self.mxid, event_id, seconds * 1000, expiration_ts=expires_at * 1000
-        )
+        dm = DisappearingMessage(self.mxid, event_id, seconds, expiration_ts=expires_at * 1000)
         await dm.insert()
         if expires_at:
             asyncio.create_task(self._disappear_event(dm))
