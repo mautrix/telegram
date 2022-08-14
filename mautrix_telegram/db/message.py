@@ -20,7 +20,7 @@ from typing import TYPE_CHECKING, ClassVar
 from asyncpg import Record
 from attr import dataclass
 
-from mautrix.types import EventID, RoomID
+from mautrix.types import EventID, RoomID, UserID
 from mautrix.util.async_db import Database, Scheme
 
 from ..types import TelegramID
@@ -39,6 +39,8 @@ class Message:
     edit_index: int
     redacted: bool = False
     content_hash: bytes | None = None
+    sender_mxid: UserID | None = None
+    sender: TelegramID | None = None
 
     @classmethod
     def _from_row(cls, row: Record | None) -> Message | None:
@@ -46,7 +48,19 @@ class Message:
             return None
         return cls(**row)
 
-    columns: ClassVar[str] = "mxid, mx_room, tgid, tg_space, edit_index, redacted, content_hash"
+    columns: ClassVar[str] = ", ".join(
+        (
+            "mxid",
+            "mx_room",
+            "tgid",
+            "tg_space",
+            "edit_index",
+            "redacted",
+            "content_hash",
+            "sender_mxid",
+            "sender",
+        )
+    )
 
     @classmethod
     async def get_all_by_tgid(cls, tgid: TelegramID, tg_space: TelegramID) -> list[Message]:
@@ -158,12 +172,16 @@ class Message:
             self.edit_index,
             self.redacted,
             self.content_hash,
+            self.sender_mxid,
+            self.sender,
         )
 
     async def insert(self) -> None:
         q = """
-            INSERT INTO message (mxid, mx_room, tgid, tg_space, edit_index, redacted, content_hash)
-            VALUES ($1, $2, $3, $4, $5, $6, $7)
+            INSERT INTO message (
+                mxid, mx_room, tgid, tg_space, edit_index, redacted, content_hash,
+                sender_mxid, sender
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
         """
         await self.db.execute(q, *self._values)
 

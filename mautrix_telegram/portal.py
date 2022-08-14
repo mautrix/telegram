@@ -1598,7 +1598,14 @@ class Portal(DBPortal, BasePortal):
                         link_preview=lp,
                     )
                     await self._mark_matrix_handled(
-                        sender, EventType.ROOM_MESSAGE, event_id, space, -1, resp, content.msgtype
+                        sender,
+                        sender_id,
+                        EventType.ROOM_MESSAGE,
+                        event_id,
+                        space,
+                        -1,
+                        resp,
+                        content.msgtype,
                     )
                     return
             response = await client.send_message(
@@ -1609,7 +1616,14 @@ class Portal(DBPortal, BasePortal):
                 link_preview=lp,
             )
             await self._mark_matrix_handled(
-                sender, EventType.ROOM_MESSAGE, event_id, space, 0, response, content.msgtype
+                sender,
+                sender_id,
+                EventType.ROOM_MESSAGE,
+                event_id,
+                space,
+                0,
+                response,
+                content.msgtype,
             )
 
     async def _handle_matrix_file(
@@ -1736,12 +1750,20 @@ class Portal(DBPortal, BasePortal):
                 raise
             else:
                 await self._mark_matrix_handled(
-                    sender, EventType.ROOM_MESSAGE, event_id, space, 0, response, content.msgtype
+                    sender,
+                    sender_id,
+                    EventType.ROOM_MESSAGE,
+                    event_id,
+                    space,
+                    0,
+                    response,
+                    content.msgtype,
                 )
 
     async def _matrix_document_edit(
         self,
         sender: u.User,
+        sender_tgid: TelegramID,
         client: MautrixTelegramClient,
         content: MessageEventContent,
         space: TelegramID,
@@ -1761,7 +1783,14 @@ class Portal(DBPortal, BasePortal):
                     file=media,
                 )
                 await self._mark_matrix_handled(
-                    sender, EventType.ROOM_MESSAGE, event_id, space, -1, response, content.msgtype
+                    sender,
+                    sender_tgid,
+                    EventType.ROOM_MESSAGE,
+                    event_id,
+                    space,
+                    -1,
+                    response,
+                    content.msgtype,
                 )
                 return True
         return False
@@ -1792,7 +1821,7 @@ class Portal(DBPortal, BasePortal):
 
         async with self.send_lock(sender_id):
             if await self._matrix_document_edit(
-                sender, client, content, space, caption, media, event_id
+                sender, sender_id, client, content, space, caption, entities, media, event_id
             ):
                 return
             try:
@@ -1803,12 +1832,20 @@ class Portal(DBPortal, BasePortal):
                 raise
             else:
                 await self._mark_matrix_handled(
-                    sender, EventType.ROOM_MESSAGE, event_id, space, 0, response, content.msgtype
+                    sender,
+                    sender_id,
+                    EventType.ROOM_MESSAGE,
+                    event_id,
+                    space,
+                    0,
+                    response,
+                    content.msgtype,
                 )
 
     async def _mark_matrix_handled(
         self,
         sender: u.User,
+        sender_tgid: TelegramID,
         event_type: EventType,
         event_id: EventID,
         space: TelegramID,
@@ -1828,6 +1865,8 @@ class Portal(DBPortal, BasePortal):
             mxid=event_id,
             edit_index=edit_index,
             content_hash=event_hash,
+            sender_mxid=sender.mxid,
+            sender=sender_tgid,
         ).insert()
         sender.send_remote_checkpoint(
             MessageSendCheckpointStatus.SUCCESS,
@@ -1985,7 +2024,14 @@ class Portal(DBPortal, BasePortal):
                 return False
             else:
                 await self._mark_matrix_handled(
-                    sender, EventType.ROOM_MESSAGE, event_id, space, 0, response[0], msgtype
+                    sender,
+                    sender.tgid,
+                    EventType.ROOM_MESSAGE,
+                    event_id,
+                    space,
+                    0,
+                    response[0],
+                    msgtype,
                 )
                 return True
 
@@ -2427,6 +2473,7 @@ class Portal(DBPortal, BasePortal):
                         tgid=TelegramID(evt.id),
                         edit_index=prev_edit_msg.edit_index + 1,
                         content_hash=event_hash,
+                        sender=sender.id,
                     ).insert()
                 return
 
@@ -2467,6 +2514,7 @@ class Portal(DBPortal, BasePortal):
             tgid=TelegramID(evt.id),
             edit_index=prev_edit_msg.edit_index + 1,
             content_hash=event_hash,
+            sender=sender.id,
         ).insert()
         await DBMessage.replace_temp_mxid(temporary_identifier, self.mxid, event_id)
 
@@ -2822,6 +2870,7 @@ class Portal(DBPortal, BasePortal):
                         tg_space=tg_space,
                         edit_index=0,
                         content_hash=event_hash,
+                        sender=sender.id,
                     ).insert()
                 return
 
@@ -2899,6 +2948,7 @@ class Portal(DBPortal, BasePortal):
                 tg_space=tg_space,
                 edit_index=0,
                 content_hash=event_hash,
+                sender=sender.id,
             )
             await dbm.insert()
             await DBMessage.replace_temp_mxid(temporary_identifier, self.mxid, event_id)
@@ -3021,6 +3071,7 @@ class Portal(DBPortal, BasePortal):
             mxid=event_id,
             tg_space=source.tgid,
             edit_index=0,
+            sender=sender.id,
         ).insert()
         if self.config["bridge.always_read_joined_telegram_notice"]:
             double_puppet = await p.Puppet.get_by_tgid(source.tgid)
