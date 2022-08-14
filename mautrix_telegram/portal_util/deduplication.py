@@ -96,13 +96,13 @@ class PortalDedup:
                 )
                 yield media_hash_func(event.media)
 
-    def _hash_event(self, event: TypeMessage) -> bytes:
+    def hash_event(self, event: TypeMessage) -> bytes:
         return hashlib.sha256(
             "-".join(str(a) for a in self._hash_content(event)).encode("utf-8")
         ).digest()
 
     def check_action(self, event: TypeMessage) -> bool:
-        dedup_id = self._hash_event(event) if self._always_force_hash else event.id
+        dedup_id = self.hash_event(event) if self._always_force_hash else event.id
         if dedup_id in self._dedup_action:
             return True
 
@@ -116,7 +116,7 @@ class PortalDedup:
         expected_mxid: DedupMXID | None = None,
         force_hash: bool = False,
     ) -> tuple[bytes, DedupMXID | None]:
-        evt_hash = self._hash_event(event)
+        evt_hash = self.hash_event(event)
         dedup_id = evt_hash if self._always_force_hash or force_hash else event.id
         try:
             found_mxid = self._dedup_mxid[dedup_id]
@@ -133,7 +133,7 @@ class PortalDedup:
     def check(
         self, event: TypeMessage, mxid: DedupMXID = None, force_hash: bool = False
     ) -> tuple[bytes, DedupMXID | None]:
-        evt_hash = self._hash_event(event)
+        evt_hash = self.hash_event(event)
         dedup_id = evt_hash if self._always_force_hash or force_hash else event.id
         if dedup_id in self._dedup:
             return evt_hash, self._dedup_mxid[dedup_id]
