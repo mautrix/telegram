@@ -1727,7 +1727,7 @@ class Portal(DBPortal, BasePortal):
 
         async with self.send_lock(sender_id):
             if await self._matrix_document_edit(
-                sender, client, content, space, capt, entities, media, event_id
+                sender, sender_id, client, content, space, capt, entities, media, event_id
             ):
                 return
             try:
