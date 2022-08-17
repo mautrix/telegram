@@ -2431,7 +2431,7 @@ class Portal(DBPortal, BasePortal):
         await user.default_mxid_intent.set_typing(self.mxid, is_typing=is_typing)
 
     async def handle_telegram_edit(
-        self, source: au.AbstractUser, sender: p.Puppet, evt: Message
+        self, source: au.AbstractUser, sender: p.Puppet | None, evt: Message
     ) -> None:
         if not self.mxid:
             self.log.trace("Ignoring edit to %d as chat has no Matrix room", evt.id)
@@ -2444,8 +2444,9 @@ class Portal(DBPortal, BasePortal):
             asyncio.create_task(
                 self.try_handle_telegram_reactions(source, TelegramID(evt.id), evt.reactions)
             )
+        sender_id = sender.tgid if sender else None
 
-        async with self.send_lock(sender.tgid if sender else None, required=False):
+        async with self.send_lock(sender_id, required=False):
             tg_space = self.tgid if self.peer_type == "channel" else source.tgid
 
             temporary_identifier = EventID(
@@ -2473,7 +2474,7 @@ class Portal(DBPortal, BasePortal):
                         tgid=TelegramID(evt.id),
                         edit_index=prev_edit_msg.edit_index + 1,
                         content_hash=event_hash,
-                        sender=sender.id,
+                        sender=sender_id,
                     ).insert()
                 return
 
@@ -2514,7 +2515,7 @@ class Portal(DBPortal, BasePortal):
             tgid=TelegramID(evt.id),
             edit_index=prev_edit_msg.edit_index + 1,
             content_hash=event_hash,
-            sender=sender.id,
+            sender=sender_id,
         ).insert()
         await DBMessage.replace_temp_mxid(temporary_identifier, self.mxid, event_id)
 
@@ -2827,7 +2828,7 @@ class Portal(DBPortal, BasePortal):
             await changed_reaction.save()
 
     async def handle_telegram_message(
-        self, source: au.AbstractUser, sender: p.Puppet, evt: Message
+        self, source: au.AbstractUser, sender: p.Puppet | None, evt: Message
     ) -> None:
         if not self.mxid:
             self.log.trace("Got telegram message %d, but no room exists, creating...", evt.id)
@@ -2849,7 +2850,8 @@ class Portal(DBPortal, BasePortal):
             )
             return
 
-        async with self.send_lock(sender.tgid if sender else None, required=False):
+        sender_id = sender.tgid if sender else None
+        async with self.send_lock(sender_id, required=False):
             tg_space = self.tgid if self.peer_type == "channel" else source.tgid
 
             temporary_identifier = EventID(
@@ -2870,7 +2872,7 @@ class Portal(DBPortal, BasePortal):
                         tg_space=tg_space,
                         edit_index=0,
                         content_hash=event_hash,
-                        sender=sender.id,
+                        sender=sender_id,
                     ).insert()
                 return
 
@@ -2886,7 +2888,7 @@ class Portal(DBPortal, BasePortal):
             "Handling Telegram message %d@%d from %s (ts: %s)",
             evt.id,
             tg_space,
-            sender.tgid if sender else None,
+            sender_id,
             evt.date,
         )
         self.log.trace("Message content: %s", evt)
@@ -2948,7 +2950,7 @@ class Portal(DBPortal, BasePortal):
                 tg_space=tg_space,
                 edit_index=0,
                 content_hash=event_hash,
-                sender=sender.id,
+                sender=sender_id,
             )
             await dbm.insert()
             await DBMessage.replace_temp_mxid(temporary_identifier, self.mxid, event_id)
@@ -3003,7 +3005,7 @@ class Portal(DBPortal, BasePortal):
         return True
 
     async def handle_telegram_action(
-        self, source: au.AbstractUser, sender: p.Puppet, update: MessageService
+        self, source: au.AbstractUser, sender: p.Puppet | None, update: MessageService
     ) -> None:
         action = update.action
         should_ignore = (
