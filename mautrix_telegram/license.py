@@ -21,9 +21,12 @@ import os
 
 from mautrix.util.logging import TraceLogger
 
-_LICENCE_FILE_PATH = os.environ.get("MAUTRIX_TELEGRAM_LICENCE_PATH", os.path.abspath("../instanceId"))
+_LICENCE_FILE_PATH = os.environ.get(
+    "MAUTRIX_TELEGRAM_LICENCE_PATH", os.path.abspath("../instanceId")
+)
 
 _instance_id: str | None = None
+
 
 def get_instance_id(log: TraceLogger) -> str | None:
     global _instance_id
