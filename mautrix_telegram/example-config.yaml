@@ -95,6 +95,21 @@ metrics:
     enabled: false
     listen_port: 8000
 
+# (Optional) Telemetry settings
+telemetry:
+    # Enable usage telemetry -- Mandatory for on-premise installations
+    enabled: false
+    # EMS instance identifier
+    instance_id: "unique_instance_id"
+    # (Optional)
+    # The EMS endpoint to submit telemetry entries to.
+    # If disabled, no telemetry is sent, but is still gathered.
+    endpoint: https://ems.element.io/api/remote/telemetry
+    # How many times to retry sending telemetry if it fails. Defaults to 3
+    retry_count: 3
+    # How long to wait between retries, in seconds. Defaults to 60
+    retry_interval: 60
+
 # Manhole config.
 manhole:
     # Whether or not opening the manhole is allowed.

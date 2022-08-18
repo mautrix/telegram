@@ -29,6 +29,7 @@ from mautrix.util.opt_prometheus import Gauge
 from .bot import Bot
 from .config import Config
 from .db import UserActivity, init as init_db, upgrade_table
+from .license import get_instance_id
 from .matrix import MatrixHandler
 from .portal import Portal
 from .puppet import Puppet
@@ -136,6 +137,19 @@ class TelegramBridge(Bridge):
             self.as_connection_metric_task = self.loop.create_task(
                 self._loop_check_as_connection_pool()
             )
+
+        if not self.config["telemetry.enabled"]:
+            self.log.warning(
+                "** "
+                "Telemetry is disabled in config. "
+                "This may violate your terms of service if not expressly permitted under license with New Vector Ltd. "
+                "Please contact ems-support@element.io with any questions, or details on how to silence this warning. "
+                "**"
+            )
+        else:
+            # Get an identifier for the current instance (used for licensing / telemetry)
+            self.config["telemetry.instance_id"] = instance_id = get_instance_id(self.log)
+            self.log.info(f"License ID: {instance_id}")
 
         if self.bot:
             try:
