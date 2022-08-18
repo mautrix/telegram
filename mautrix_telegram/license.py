@@ -16,11 +16,10 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from __future__ import annotations
 
-import os
 from uuid import uuid4
+import os
 
 from mautrix.util.logging import TraceLogger
-
 
 _LICENCE_FILE_PATH = os.environ.get("MAUTRIX_TELEGRAM_LICENCE_PATH", os.path.abspath("../instanceId"))
 
