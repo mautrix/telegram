@@ -31,6 +31,7 @@ from telethon.tl.types import (
     ChatForbidden,
     InputUserSelf,
     NotifyPeer,
+    PeerUser,
     TypeUpdate,
     UpdateFolderPeers,
     UpdateNewChannelMessage,
@@ -129,6 +130,10 @@ class User(DBUser, AbstractUser, BaseUser):
     @property
     def human_tg_id(self) -> str:
         return f"@{self.tg_username}" if self.tg_username else f"+{self.tg_phone}" or None
+
+    @property
+    def peer(self) -> PeerUser | None:
+        return PeerUser(user_id=self.tgid) if self.tgid else None
 
     # TODO replace with proper displayname getting everywhere
     @property

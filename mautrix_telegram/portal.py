@@ -572,7 +572,7 @@ class Portal(DBPortal, BasePortal):
     async def handle_matrix_invite(
         self, invited_by: u.User, puppet: p.Puppet | au.AbstractUser
     ) -> None:
-        if puppet.is_channel:
+        if isinstance(puppet, p.Puppet) and puppet.is_channel:
             raise ValueError("Can't invite channels to chats")
         try:
             if self.peer_type == "chat":
