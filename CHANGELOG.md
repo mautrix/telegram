@@ -47,6 +47,10 @@ Minimum Conduit version remains at 0.4.0.
     is not currently supported in the provisioning API.
 * Removed `plaintext_highlights` config option (the code using it was already
   removed in v0.11.0).
+* Enabled appservice ephemeral events by default for new installations.
+  * Existing bridges can turn it on by enabling `ephemeral_events` and disabling
+    `sync_with_custom_puppets` in the config, then regenerating the registration
+    file.
 * Updated to API layer 143 so that Telegram would send new message types like
   premium stickers to the bridge.
 * Updated Docker image to Alpine 3.16 and made it smaller.
