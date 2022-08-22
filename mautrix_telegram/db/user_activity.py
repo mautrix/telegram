@@ -59,7 +59,7 @@ class UserActivity:
     @classmethod
     async def get_by_puppet_id(cls, tgid: TelegramID) -> UserActivity | None:
         q = f"SELECT {cls.columns} FROM user_activity WHERE tgid=$1"
-        return cls._from_row(await cls.db.fetchrow(q, tgid, tg_receiver))
+        return cls._from_row(await cls.db.fetchrow(q, tgid))
 
     @classmethod
     async def update_for_puppet(cls, puppet: Puppet, activity_dt: datetime) -> None:
@@ -81,7 +81,7 @@ class UserActivity:
             obj.insert()
 
     @classmethod
-    def get_active_count(cls, min_activity_days: int, max_activity_days: int | None) -> int:
+    async def get_active_count(cls, min_activity_days: int, max_activity_days: int | None) -> int:
         current_ms = time.time() * 1000
 
         query = (
@@ -89,12 +89,12 @@ class UserActivity:
         )
         if max_activity_days is not None:
             query += " AND ($1 - last_activity_ts) <= $3"
-        return cls.db.fetchval(
-            query, current_ms, ONE_DAY_MS * min_activity_days, max_activity_days * ONE_DAY_MS
+        return await cls.db.fetchval(
+            query, current_ms, ONE_DAY_MS * min_activity_days, (max_activity_days or 0) * ONE_DAY_MS
         )
 
     async def update(self, activity_ts: int) -> None:
-        if self.last_activity_ts > activity_ts:
+        if self.last_activity_ts and self.last_activity_ts > activity_ts:
             return
 
         self.last_activity_ts = activity_ts
@@ -107,7 +107,7 @@ class UserActivity:
 
     async def insert(self) -> None:
         await self.db.execute(
-            f"INSERT INTO user_activity ({cls.columns}) VALUES ($1, $2, $3)",
+            f"INSERT INTO user_activity ({UserActivity.columns}) VALUES ($1, $2, $3)",
             self.puppet_id,
             self.first_activity_ts,
             self.last_activity_ts,
