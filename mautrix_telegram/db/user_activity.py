@@ -17,19 +17,20 @@
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, ClassVar
-import datetime
 import logging
 import time
 
 from asyncpg import Record
 from attr import dataclass
-from yarl import URL
 
-from mautrix.types import SyncToken, UserID
 from mautrix.util.async_db import Database
 from mautrix.util.logging import TraceLogger
 
 from ..types import TelegramID
+
+if TYPE_CHECKING:
+    from datetime import datetime
+    from . import Puppet
 
 fake_db = Database.create("") if TYPE_CHECKING else None
 
@@ -49,19 +50,19 @@ class UserActivity:
     columns: ClassVar[str] = "puppet_id, first_activity_ts, last_activity_ts"
 
     @classmethod
-    def _from_row(cls, row: Record | None) -> Portal | None:
+    def _from_row(cls, row: Record | None) -> UserActivity | None:
         if row is None:
             return None
         data = {**row}
         return cls(**data)
 
     @classmethod
-    async def get_by_puppet_id(cls, tgid: TelegramID) -> Portal | None:
+    async def get_by_puppet_id(cls, tgid: TelegramID) -> UserActivity | None:
         q = f"SELECT {cls.columns} FROM user_activity WHERE tgid=$1"
         return cls._from_row(await cls.db.fetchrow(q, tgid, tg_receiver))
 
     @classmethod
-    async def update_for_puppet(cls, puppet: "Puppet", activity_dt: datetime) -> None:
+    async def update_for_puppet(cls, puppet: Puppet, activity_dt: datetime) -> None:
         activity_ts = int(activity_dt.timestamp() * 1000)
 
         if (time.time() * 1000) - activity_ts > UPPER_ACTIVITY_LIMIT_MS:

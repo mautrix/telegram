@@ -15,7 +15,7 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Dict
 from time import time
 import asyncio
 
@@ -67,7 +67,6 @@ class TelegramBridge(Bridge):
     matrix_class = MatrixHandler
     upgrade_table = upgrade_table
 
-    db: "Engine"
     config: Config
     bot: Bot | None
     public_website: PublicBridgeWebsite | None
@@ -75,15 +74,15 @@ class TelegramBridge(Bridge):
 
     periodic_active_metrics_task: asyncio.Task
     is_blocked: bool = False
-    _admin_rooms: Dict[RoomID, UserID] = None
+    _admin_rooms: Dict[RoomID, UserID] | None = None
     _last_blocking_notification: int = 0
 
-    periodic_sync_task: asyncio.Task = None
-    as_bridge_liveness_task: asyncio.Task = None
+    periodic_sync_task: asyncio.Task | None = None
+    as_bridge_liveness_task: asyncio.Task | None = None
 
     latest_telegram_update_timestamp: float | None = None
 
-    as_connection_metric_task: asyncio.Task = None
+    as_connection_metric_task: asyncio.Task | None = None
 
     def prepare_db(self) -> None:
         super().prepare_db()

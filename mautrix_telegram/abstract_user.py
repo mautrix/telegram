@@ -114,7 +114,7 @@ class AbstractUser(ABC):
     az: AppService
     bridge: "TelegramBridge"
     config: Config
-    relaybot: "Bot"
+    relaybot: Bot | None
     ignore_incoming_bot_events: bool = True
     max_deletions: int = 10
 
