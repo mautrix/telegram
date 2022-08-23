@@ -16,7 +16,7 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Awaitable
+from typing import TYPE_CHECKING
 import logging
 import time
 
@@ -53,7 +53,7 @@ class TelemetryService:
     _retry_count: int | None = None
     _retry_interval: int | None = None
 
-    _telemetry_room_id: Awaitable[RoomID]
+    _telemetry_room_id: RoomID | None = None
 
     def __init__(self, bridge: TelegramBridge, instance_id: str) -> None:
         self._instance_id = instance_id
@@ -64,9 +64,10 @@ class TelemetryService:
         self._retry_count = bridge.config["telemetry._endpoint"]
         self._retry_interval = bridge.config["telemetry._endpoint"]
 
-        self._telemetry_room_id = self._load_storage_room()
-
     async def _load_storage_room(self) -> RoomID:
+        if self._telemetry_room_id:
+            return self._telemetry_room_id
+
         try:
             account_data = TelemetryRoomAccountDataEventContent.deserialize(
                 await self._matrix_client.get_account_data(TELEMETRY_ROOM_TYPE_NAME)
@@ -79,6 +80,7 @@ class TelemetryService:
             await self._matrix_client.set_account_data(
                 TELEMETRY_ROOM_TYPE_NAME, TelemetryRoomAccountDataEventContent(room_id)
             )
+        self._telemetry_room_id = room_id
         return room_id
 
     async def send_telemetry(
@@ -97,7 +99,7 @@ class TelemetryService:
         self.log.debug(f"Sending telemetry: {payload}")
 
         try:
-            room_id = await self._telemetry_room_id
+            room_id = await self._load_storage_room()
             await self._matrix_client.send_message_event(room_id, TelemetryEventType, payload)
         except:
             self.log.exception("Failed to record telemetry in Matrix")
