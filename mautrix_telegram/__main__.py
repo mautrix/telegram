@@ -269,18 +269,20 @@ class TelegramBridge(Bridge):
     async def _loop_check_bridge_liveness(self) -> None:
         try:
             while True:
-                self.log.debug(f'Last Telegram update: {self.latest_telegram_update_timestamp}')
+                self.log.debug(f"Last Telegram update: {self.latest_telegram_update_timestamp}")
                 if (
                     self.latest_telegram_update_timestamp
                     and self.latest_telegram_update_timestamp
                     < time() - self.config.get("telegram.liveness_timeout", 0)
                 ):
-                    self.log.debug('Liveness check has failed: bridge has not seen Telegram updates in a while')
+                    self.log.debug(
+                        "Liveness check has failed: bridge has not seen Telegram updates in a while"
+                    )
                     self.az.live = False
 
                 await asyncio.sleep(15)
         except Exception as e:
-            self.log.error(f'Failed to check bridge liveness: {e}')
+            self.log.error(f"Failed to check bridge liveness: {e}")
 
     async def manhole_global_namespace(self, user_id: UserID) -> dict[str, Any]:
         return {
@@ -297,18 +299,24 @@ class TelegramBridge(Bridge):
         # not on every blocked message.
         if is_blocked:
             msg = self.config["bridge.limits.block_begins_notification"]
-            next_notification = self._last_blocking_notification + self.config["bridge.limits.block_notification_interval_seconds"]
+            next_notification = (
+                self._last_blocking_notification
+                + self.config["bridge.limits.block_notification_interval_seconds"]
+            )
             if next_notification > int(time()):
                 return
             self._last_blocking_notification = int(time())
 
-        admins = list(map(lambda entry: entry[0],
-            filter(lambda entry: entry[1] == 'admin',
-                self.config["bridge.permissions"].items()
+        admins = list(
+            map(
+                lambda entry: entry[0],
+                filter(
+                    lambda entry: entry[1] == "admin", self.config["bridge.permissions"].items()
+                ),
             )
-        ))
+        )
         if len(admins) == 0:
-            self.log.debug('No bridge admins to notify about the bridge being blocked')
+            self.log.debug("No bridge admins to notify about the bridge being blocked")
             return
 
         self.log.debug(f'Notifying bridge admins ({",".join(admins)}) about bridge being blocked')
@@ -318,8 +326,10 @@ class TelegramBridge(Bridge):
             admin_rooms = {}
             joined_rooms = await self.az.intent.get_joined_rooms()
             for room_id in joined_rooms:
-                members = await self.az.intent.get_room_members(room_id, (Membership.JOIN, Membership.INVITE))
-                if len(members) == 2: # a DM with someone
+                members = await self.az.intent.get_room_members(
+                    room_id, (Membership.JOIN, Membership.INVITE)
+                )
+                if len(members) == 2:  # a DM with someone
                     for admin_mxid in admins:
                         if admin_mxid in members:
                             admin_rooms[admin_mxid] = room_id
@@ -335,11 +345,14 @@ class TelegramBridge(Bridge):
                     is_direct=True,
                 )
 
-            await self.az.intent.send_message(self._admin_rooms[admin_mxid], TextMessageEventContent(
-                # \u26a0 is a warning sign
-                msgtype=MessageType.NOTICE, body=f"\u26a0 {msg}"
-            ))
-
+            await self.az.intent.send_message(
+                self._admin_rooms[admin_mxid],
+                TextMessageEventContent(
+                    # \u26a0 is a warning sign
+                    msgtype=MessageType.NOTICE,
+                    body=f"\u26a0 {msg}",
+                ),
+            )
 
     @property
     def manhole_banner_program_version(self) -> str:
