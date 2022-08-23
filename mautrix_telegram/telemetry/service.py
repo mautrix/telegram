@@ -21,10 +21,10 @@ import asyncio
 import logging
 import time
 
-from aiohttp import ClientSession
+from aiohttp import ClientSession, hdrs
 from attr import dataclass
 
-from mautrix.api import HTTPAPI, Method
+from mautrix.api import HTTPAPI
 from mautrix.client import ClientAPI
 from mautrix.errors import MNotFound
 from mautrix.types import EventType, RoomID, SerializableAttrs, SerializerError
@@ -72,8 +72,8 @@ class TelemetryService:
             self._session = ClientSession(
                 loop=bridge.loop,
                 headers={
-                    "User-Agent": HTTPAPI.default_ua,
-                    "Content-Type": "application/json",
+                    hdrs.USER_AGENT: HTTPAPI.default_ua,
+                    hdrs.CONTENT_TYPE: "application/json",
                 },
             )
 
@@ -123,7 +123,7 @@ class TelemetryService:
             while True:
                 try:
                     request = self._session.request(
-                        str(Method.POST), self._endpoint, data=payload.serialize()
+                        hdrs.METH_POST, self._endpoint, data=payload.serialize()
                     )
                     async with request as response:
                         response.raise_for_status()
