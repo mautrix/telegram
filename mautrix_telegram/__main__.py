@@ -143,13 +143,13 @@ class TelegramBridge(Bridge):
             self.log.warning(
                 "** "
                 "Telemetry is disabled in config. "
-                "This may violate your terms of service if not expressly permitted under license with New Vector Ltd. "
+                "This may violate your terms of service if not expressly permitted under licence with New Vector Ltd. "
                 "Please contact ems-support@element.io with any questions, or details on how to silence this warning. "
                 "**"
             )
         else:
             instance_id = get_instance_id(self.config["telemetry.instance_id"], self.log)
-            self.log.info(f"License ID: {instance_id}")
+            self.log.info(f"Licence ID: {instance_id}")
             self._telemetry_service = TelemetryService(self, instance_id)
 
         if self.bot:
