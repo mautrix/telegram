@@ -20,9 +20,16 @@ from typing import TYPE_CHECKING, Awaitable
 import logging
 import time
 
+from attr import dataclass
+
 from mautrix.client import ClientAPI
 from mautrix.errors import MNotFound
-from mautrix.types import RoomID
+from mautrix.types import (
+    EventType,
+    RoomID,
+    SerializableAttrs,
+    SerializerError,
+)
 
 from .types import (
     TELEMETRY_TYPE,
@@ -34,9 +41,16 @@ from .types import (
 if TYPE_CHECKING:
     from ..__main__ import TelegramBridge
 
-TELEMETRY_BASE_TYPE = f"{TELEMETRY_TYPE}.telemetry"
-TELEMETRY_ROOM_TYPE = f"{TELEMETRY_BASE_TYPE}.storage.room"
-TELEMETRY_EVENT_TYPE = f"{TELEMETRY_BASE_TYPE}.activity"
+TELEMETRY_BASE_TYPE_NAME = f"{TELEMETRY_TYPE}.telemetry"
+TELEMETRY_ROOM_TYPE_NAME = f"{TELEMETRY_BASE_TYPE_NAME}.storage.room"
+TELEMETRY_EVENT_TYPE_NAME = f"{TELEMETRY_BASE_TYPE_NAME}.activity"
+
+TelemetryEventType = EventType.find(TELEMETRY_EVENT_TYPE_NAME, EventType.Class.MESSAGE)
+
+
+@dataclass
+class TelemetryRoomAccountDataEventContent(SerializableAttrs):
+    room_id: RoomID
 
 
 class TelemetryService:
@@ -64,13 +78,21 @@ class TelemetryService:
 
     async def _load_storage_room(self) -> RoomID:
         try:
-            account_data = await self._matrix_client.get_account_data(TELEMETRY_ROOM_TYPE)
-            if isinstance(account_data, dict):
-                return RoomID(account_data["room_id"])
-        except (MNotFound, KeyError):
-            room_id = await self._matrix_client.create_room(creation_content={"type": TELEMETRY_ROOM_TYPE})
-            await self._matrix_client.set_account_data(TELEMETRY_ROOM_TYPE, {"room_id": room_id})
-            return room_id
+            account_data = TelemetryRoomAccountDataEventContent.deserialize(
+                await self._matrix_client.get_account_data(TELEMETRY_ROOM_TYPE_NAME)
+            )
+            room_id = account_data.room_id
+        except (MNotFound, SerializerError):
+            room_id = await self._matrix_client.create_room(
+                creation_content={
+                    "type": TELEMETRY_ROOM_TYPE_NAME
+                }
+            )
+            await self._matrix_client.set_account_data(
+                TELEMETRY_ROOM_TYPE_NAME,
+                TelemetryRoomAccountDataEventContent(room_id)
+            )
+        return room_id
 
     async def send_telemetry(self, active_users: int, current_ms: float = time.time() * 1000) -> None:
         payload = TelemetryEvent(
@@ -87,6 +109,6 @@ class TelemetryService:
 
         try:
             room_id = await self._telemetry_room_id
-            await self._matrix_client.send_message_event(room_id, TELEMETRY_EVENT_TYPE, payload)
+            await self._matrix_client.send_message_event(room_id, TelemetryEventType, payload)
         except:
             self.log.exception("Failed to record telemetry in Matrix")
