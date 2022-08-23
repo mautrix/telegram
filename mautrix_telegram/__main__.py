@@ -33,6 +33,7 @@ from .license import get_instance_id
 from .matrix import MatrixHandler
 from .portal import Portal
 from .puppet import Puppet
+from .telemetry import TelemetryService
 from .user import User
 from .version import linkified_version, version
 from .web.provisioning import ProvisioningAPI
@@ -72,7 +73,8 @@ class TelegramBridge(Bridge):
     public_website: PublicBridgeWebsite | None
     provisioning_api: ProvisioningAPI | None
 
-    periodic_active_metrics_task: asyncio.Task
+    _telemetry_service: TelemetryService | None = None
+
     is_blocked: bool = False
     _admin_rooms: Dict[RoomID, UserID] | None = None
     _last_blocking_notification: int = 0
@@ -148,6 +150,7 @@ class TelegramBridge(Bridge):
         else:
             instance_id = get_instance_id(self.config["telemetry.instance_id"], self.log)
             self.log.info(f"License ID: {instance_id}")
+            self._telemetry_service = TelemetryService(self, instance_id)
 
         if self.bot:
             try:
@@ -224,7 +227,7 @@ class TelegramBridge(Bridge):
         self.az.live = True
 
     async def _update_active_puppet_metric(self) -> None:
-        active_users = await UserActivity.get_active_count(
+        active_users, current_ms = await UserActivity.get_active_count(
             self.config["bridge.limits.min_puppet_activity_days"],
             self.config["bridge.limits.puppet_inactivity_days"],
         )
@@ -243,6 +246,8 @@ class TelegramBridge(Bridge):
             METRIC_BLOCKING.set(int(self.is_blocked))
         self.log.debug(f"Current active puppet count is {active_users}")
         METRIC_ACTIVE_PUPPETS.set(active_users)
+        if self._telemetry_service:
+            await self._telemetry_service.send_telemetry(active_users, current_ms)
 
     async def _loop_active_puppet_metric(self) -> None:
         try:

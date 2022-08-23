@@ -16,7 +16,7 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, ClassVar
+from typing import TYPE_CHECKING, ClassVar, Tuple
 import logging
 import time
 
@@ -81,7 +81,7 @@ class UserActivity:
             obj.insert()
 
     @classmethod
-    async def get_active_count(cls, min_activity_days: int, max_activity_days: int | None) -> int:
+    async def get_active_count(cls, min_activity_days: int, max_activity_days: int | None) -> Tuple[int, float]:
         current_ms = time.time() * 1000
 
         query = (
@@ -91,7 +91,7 @@ class UserActivity:
             query += " AND ($1 - last_activity_ts) <= $3"
         return await cls.db.fetchval(
             query, current_ms, ONE_DAY_MS * min_activity_days, (max_activity_days or 0) * ONE_DAY_MS
-        )
+        ), current_ms
 
     async def update(self, activity_ts: int) -> None:
         if self.last_activity_ts and self.last_activity_ts > activity_ts:
