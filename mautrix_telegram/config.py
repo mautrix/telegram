@@ -23,6 +23,8 @@ from mautrix.client import Client
 from mautrix.types import UserID
 from mautrix.util.config import ConfigUpdateHelper, ForbiddenDefault, ForbiddenKey
 
+from .license import generate_instance_id
+
 Permissions = NamedTuple(
     "Permissions",
     relaybot=bool,
@@ -104,6 +106,8 @@ class Config(BaseBridgeConfig):
 
         copy("telemetry.enabled")
         copy("telemetry.instance_id")
+        if base["telemetry.instance_id"] == "generate":
+            base["telemetry.instance_id"] = generate_instance_id()
         copy("telemetry.endpoint")
         copy("telemetry.retry_count")
         copy("telemetry.retry_interval")

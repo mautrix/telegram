@@ -17,30 +17,37 @@
 from __future__ import annotations
 
 from uuid import uuid4
+import logging
 import os
 
-from mautrix.util.logging import TraceLogger
-
-_LICENCE_FILE_PATH = os.environ.get(
-    "MAUTRIX_TELEGRAM_LICENCE_PATH", os.path.abspath("../instanceId")
-)
 
 _instance_id: str | None = None
 
-
-def get_instance_id(log: TraceLogger) -> str | None:
+def get_instance_id(
+    default_id: str,
+    log: logging.Logger = logging.getLogger()
+) -> str:
     global _instance_id
     if not _instance_id:
-        try:
-            with open(_LICENCE_FILE_PATH) as licence_file:
-                _instance_id = licence_file.read().strip()
-        except:
-            log.info("Licence ID not present. Generating new key...")
-            _instance_id = str(uuid4())
+        licence_file_path = os.environ.get("MAUTRIX_TELEGRAM_LICENCE_PATH")
+        if not licence_file_path and default_id:
+            _instance_id = default_id
+        else:
+            if not licence_file_path:
+                licence_file_path = os.path.abspath("../instanceId")
             try:
-                with open(_LICENCE_FILE_PATH, "w") as licence_file:
-                    licence_file.write(_instance_id)
-            except Exception as e:
-                log.error(f"Failed to write licence key {_instance_id} to disk ({e})")
+                with open(licence_file_path) as licence_file:
+                    _instance_id = licence_file.read().strip()
+            except:
+                log.info("Licence ID not present. Generating new key...")
+                _instance_id = generate_instance_id()
+                try:
+                    with open(licence_file_path, "w") as licence_file:
+                        licence_file.write(_instance_id)
+                except Exception as e:
+                    log.error(f"Failed to write licence key {_instance_id} to disk ({e})")
 
     return _instance_id
+
+def generate_instance_id() -> str:
+    return str(uuid4())

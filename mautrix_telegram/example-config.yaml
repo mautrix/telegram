@@ -97,10 +97,14 @@ metrics:
 
 # (Optional) Telemetry settings
 telemetry:
-    # Enable usage telemetry -- Mandatory for on-premise installations
+    # Enable usage telemetry. Mandatory for on-premise installations.
     enabled: false
-    # EMS instance identifier
-    instance_id: "unique_instance_id"
+    # EMS instance identifier.
+    # Set to "generate" to generate and save a new ID.
+    # Alternatively, set the "MAUTRIX_TELEGRAM_LICENCE_PATH" environment variable to specify
+    # a file to read the ID from, which is generated if it does not exist.
+    # If neither instance_id nor a file path are set, a default file is used.
+    instance_id: generate
     # (Optional)
     # The EMS endpoint to submit telemetry entries to.
     # If disabled, no telemetry is sent, but is still gathered.
