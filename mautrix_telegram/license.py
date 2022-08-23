@@ -20,13 +20,10 @@ from uuid import uuid4
 import logging
 import os
 
-
 _instance_id: str | None = None
 
-def get_instance_id(
-    default_id: str,
-    log: logging.Logger = logging.getLogger()
-) -> str:
+
+def get_instance_id(default_id: str, log: logging.Logger = logging.getLogger()) -> str:
     global _instance_id
     if not _instance_id:
         licence_file_path = os.environ.get("MAUTRIX_TELEGRAM_LICENCE_PATH")
@@ -48,6 +45,7 @@ def get_instance_id(
                     log.error(f"Failed to write licence key {_instance_id} to disk ({e})")
 
     return _instance_id
+
 
 def generate_instance_id() -> str:
     return str(uuid4())

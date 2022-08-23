@@ -29,6 +29,7 @@ class TelemetryVersion(SerializableAttrs):
     Telemetry payload properties that describe the format of payloads sent by
     the current version of the bridge.
     """
+
     version = 1
     type = TELEMETRY_TYPE
 
@@ -36,6 +37,7 @@ class TelemetryVersion(SerializableAttrs):
 @dataclass
 class TelemetryInstance(SerializableAttrs):
     """Telemetry payload properties that depend on bridge configuration."""
+
     instanceId: str
     hostname: str
 
@@ -43,6 +45,7 @@ class TelemetryInstance(SerializableAttrs):
 @dataclass
 class TelemetryEvent(TelemetryVersion, TelemetryInstance):
     """Top-level class for telemetry event payloads."""
+
     generationTime: int
     data: TelemetryData
 

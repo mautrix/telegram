@@ -24,19 +24,9 @@ from attr import dataclass
 
 from mautrix.client import ClientAPI
 from mautrix.errors import MNotFound
-from mautrix.types import (
-    EventType,
-    RoomID,
-    SerializableAttrs,
-    SerializerError,
-)
+from mautrix.types import EventType, RoomID, SerializableAttrs, SerializerError
 
-from .types import (
-    TELEMETRY_TYPE,
-    TelemetryEvent,
-    TelemetryData,
-    TelemetryDataRMAU,
-)
+from .types import TELEMETRY_TYPE, TelemetryData, TelemetryDataRMAU, TelemetryEvent
 
 if TYPE_CHECKING:
     from ..__main__ import TelegramBridge
@@ -84,17 +74,16 @@ class TelemetryService:
             room_id = account_data.room_id
         except (MNotFound, SerializerError):
             room_id = await self._matrix_client.create_room(
-                creation_content={
-                    "type": TELEMETRY_ROOM_TYPE_NAME
-                }
+                creation_content={"type": TELEMETRY_ROOM_TYPE_NAME}
             )
             await self._matrix_client.set_account_data(
-                TELEMETRY_ROOM_TYPE_NAME,
-                TelemetryRoomAccountDataEventContent(room_id)
+                TELEMETRY_ROOM_TYPE_NAME, TelemetryRoomAccountDataEventContent(room_id)
             )
         return room_id
 
-    async def send_telemetry(self, active_users: int, current_ms: float = time.time() * 1000) -> None:
+    async def send_telemetry(
+        self, active_users: int, current_ms: float = time.time() * 1000
+    ) -> None:
         payload = TelemetryEvent(
             self._instance_id,
             self._hostname,
@@ -103,7 +92,7 @@ class TelemetryService:
                 TelemetryDataRMAU(
                     allUsers=active_users,
                 )
-            )
+            ),
         )
         self.log.debug(f"Sending telemetry: {payload}")
 

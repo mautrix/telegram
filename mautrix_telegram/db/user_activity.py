@@ -30,6 +30,7 @@ from ..types import TelegramID
 
 if TYPE_CHECKING:
     from datetime import datetime
+
     from . import Puppet
 
 fake_db = Database.create("") if TYPE_CHECKING else None
@@ -81,7 +82,9 @@ class UserActivity:
             obj.insert()
 
     @classmethod
-    async def get_active_count(cls, min_activity_days: int, max_activity_days: int | None) -> Tuple[int, float]:
+    async def get_active_count(
+        cls, min_activity_days: int, max_activity_days: int | None
+    ) -> Tuple[int, float]:
         current_ms = time.time() * 1000
 
         query = (
@@ -89,9 +92,15 @@ class UserActivity:
         )
         if max_activity_days is not None:
             query += " AND ($1 - last_activity_ts) <= $3"
-        return await cls.db.fetchval(
-            query, current_ms, ONE_DAY_MS * min_activity_days, (max_activity_days or 0) * ONE_DAY_MS
-        ), current_ms
+        return (
+            await cls.db.fetchval(
+                query,
+                current_ms,
+                ONE_DAY_MS * min_activity_days,
+                (max_activity_days or 0) * ONE_DAY_MS,
+            ),
+            current_ms,
+        )
 
     async def update(self, activity_ts: int) -> None:
         if self.last_activity_ts and self.last_activity_ts > activity_ts:
