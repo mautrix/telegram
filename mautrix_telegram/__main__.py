@@ -15,7 +15,7 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Dict
 from time import time
 import asyncio
 
@@ -29,9 +29,11 @@ from mautrix.util.opt_prometheus import Gauge
 from .bot import Bot
 from .config import Config
 from .db import UserActivity, init as init_db, upgrade_table
+from .license import get_instance_id
 from .matrix import MatrixHandler
 from .portal import Portal
 from .puppet import Puppet
+from .telemetry import TelemetryService
 from .user import User
 from .version import linkified_version, version
 from .web.provisioning import ProvisioningAPI
@@ -66,23 +68,23 @@ class TelegramBridge(Bridge):
     matrix_class = MatrixHandler
     upgrade_table = upgrade_table
 
-    db: "Engine"
     config: Config
     bot: Bot | None
     public_website: PublicBridgeWebsite | None
     provisioning_api: ProvisioningAPI | None
 
-    periodic_active_metrics_task: asyncio.Task
+    _telemetry_service: TelemetryService | None = None
+
     is_blocked: bool = False
-    _admin_rooms: Dict[RoomID, UserID] = None
+    _admin_rooms: Dict[RoomID, UserID] | None = None
     _last_blocking_notification: int = 0
 
-    periodic_sync_task: asyncio.Task = None
-    as_bridge_liveness_task: asyncio.Task = None
+    periodic_sync_task: asyncio.Task | None = None
+    as_bridge_liveness_task: asyncio.Task | None = None
 
     latest_telegram_update_timestamp: float | None = None
 
-    as_connection_metric_task: asyncio.Task = None
+    as_connection_metric_task: asyncio.Task | None = None
 
     def prepare_db(self) -> None:
         super().prepare_db()
@@ -136,6 +138,19 @@ class TelegramBridge(Bridge):
             self.as_connection_metric_task = self.loop.create_task(
                 self._loop_check_as_connection_pool()
             )
+
+        if not self.config["telemetry.enabled"]:
+            self.log.warning(
+                "** "
+                "Telemetry is disabled in config. "
+                "This may violate your terms of service if not expressly permitted under licence with New Vector Ltd. "
+                "Please contact ems-support@element.io with any questions, or details on how to silence this warning. "
+                "**"
+            )
+        else:
+            instance_id = get_instance_id(self.config["telemetry.instance_id"], self.log)
+            self.log.info(f"Licence ID: {instance_id}")
+            self._telemetry_service = TelemetryService(self, instance_id)
 
         if self.bot:
             try:
@@ -212,7 +227,7 @@ class TelegramBridge(Bridge):
         self.az.live = True
 
     async def _update_active_puppet_metric(self) -> None:
-        active_users = await UserActivity.get_active_count(
+        active_users, current_ms = await UserActivity.get_active_count(
             self.config["bridge.limits.min_puppet_activity_days"],
             self.config["bridge.limits.puppet_inactivity_days"],
         )
@@ -231,6 +246,8 @@ class TelegramBridge(Bridge):
             METRIC_BLOCKING.set(int(self.is_blocked))
         self.log.debug(f"Current active puppet count is {active_users}")
         METRIC_ACTIVE_PUPPETS.set(active_users)
+        if self._telemetry_service:
+            await self._telemetry_service.send_telemetry(active_users, current_ms)
 
     async def _loop_active_puppet_metric(self) -> None:
         try:
@@ -269,18 +286,20 @@ class TelegramBridge(Bridge):
     async def _loop_check_bridge_liveness(self) -> None:
         try:
             while True:
-                self.log.debug(f'Last Telegram update: {self.latest_telegram_update_timestamp}')
+                self.log.debug(f"Last Telegram update: {self.latest_telegram_update_timestamp}")
                 if (
                     self.latest_telegram_update_timestamp
                     and self.latest_telegram_update_timestamp
                     < time() - self.config.get("telegram.liveness_timeout", 0)
                 ):
-                    self.log.debug('Liveness check has failed: bridge has not seen Telegram updates in a while')
+                    self.log.debug(
+                        "Liveness check has failed: bridge has not seen Telegram updates in a while"
+                    )
                     self.az.live = False
 
                 await asyncio.sleep(15)
         except Exception as e:
-            self.log.error(f'Failed to check bridge liveness: {e}')
+            self.log.error(f"Failed to check bridge liveness: {e}")
 
     async def manhole_global_namespace(self, user_id: UserID) -> dict[str, Any]:
         return {
@@ -297,18 +316,24 @@ class TelegramBridge(Bridge):
         # not on every blocked message.
         if is_blocked:
             msg = self.config["bridge.limits.block_begins_notification"]
-            next_notification = self._last_blocking_notification + self.config["bridge.limits.block_notification_interval_seconds"]
+            next_notification = (
+                self._last_blocking_notification
+                + self.config["bridge.limits.block_notification_interval_seconds"]
+            )
             if next_notification > int(time()):
                 return
             self._last_blocking_notification = int(time())
 
-        admins = list(map(lambda entry: entry[0],
-            filter(lambda entry: entry[1] == 'admin',
-                self.config["bridge.permissions"].items()
+        admins = list(
+            map(
+                lambda entry: entry[0],
+                filter(
+                    lambda entry: entry[1] == "admin", self.config["bridge.permissions"].items()
+                ),
             )
-        ))
+        )
         if len(admins) == 0:
-            self.log.debug('No bridge admins to notify about the bridge being blocked')
+            self.log.debug("No bridge admins to notify about the bridge being blocked")
             return
 
         self.log.debug(f'Notifying bridge admins ({",".join(admins)}) about bridge being blocked')
@@ -318,8 +343,10 @@ class TelegramBridge(Bridge):
             admin_rooms = {}
             joined_rooms = await self.az.intent.get_joined_rooms()
             for room_id in joined_rooms:
-                members = await self.az.intent.get_room_members(room_id, (Membership.JOIN, Membership.INVITE))
-                if len(members) == 2: # a DM with someone
+                members = await self.az.intent.get_room_members(
+                    room_id, (Membership.JOIN, Membership.INVITE)
+                )
+                if len(members) == 2:  # a DM with someone
                     for admin_mxid in admins:
                         if admin_mxid in members:
                             admin_rooms[admin_mxid] = room_id
@@ -335,11 +362,14 @@ class TelegramBridge(Bridge):
                     is_direct=True,
                 )
 
-            await self.az.intent.send_message(self._admin_rooms[admin_mxid], TextMessageEventContent(
-                # \u26a0 is a warning sign
-                msgtype=MessageType.NOTICE, body=f"\u26a0 {msg}"
-            ))
-
+            await self.az.intent.send_message(
+                self._admin_rooms[admin_mxid],
+                TextMessageEventContent(
+                    # \u26a0 is a warning sign
+                    msgtype=MessageType.NOTICE,
+                    body=f"\u26a0 {msg}",
+                ),
+            )
 
     @property
     def manhole_banner_program_version(self) -> str:

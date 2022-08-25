@@ -16,20 +16,22 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, ClassVar
-import datetime
+from typing import TYPE_CHECKING, ClassVar, Tuple
 import logging
 import time
 
 from asyncpg import Record
 from attr import dataclass
-from yarl import URL
 
-from mautrix.types import SyncToken, UserID
 from mautrix.util.async_db import Database
 from mautrix.util.logging import TraceLogger
 
 from ..types import TelegramID
+
+if TYPE_CHECKING:
+    from datetime import datetime
+
+    from . import Puppet
 
 fake_db = Database.create("") if TYPE_CHECKING else None
 
@@ -49,19 +51,19 @@ class UserActivity:
     columns: ClassVar[str] = "puppet_id, first_activity_ts, last_activity_ts"
 
     @classmethod
-    def _from_row(cls, row: Record | None) -> Portal | None:
+    def _from_row(cls, row: Record | None) -> UserActivity | None:
         if row is None:
             return None
         data = {**row}
         return cls(**data)
 
     @classmethod
-    async def get_by_puppet_id(cls, tgid: TelegramID) -> Portal | None:
+    async def get_by_puppet_id(cls, tgid: TelegramID) -> UserActivity | None:
         q = f"SELECT {cls.columns} FROM user_activity WHERE tgid=$1"
-        return cls._from_row(await cls.db.fetchrow(q, tgid, tg_receiver))
+        return cls._from_row(await cls.db.fetchrow(q, tgid))
 
     @classmethod
-    async def update_for_puppet(cls, puppet: "Puppet", activity_dt: datetime) -> None:
+    async def update_for_puppet(cls, puppet: Puppet, activity_dt: datetime) -> None:
         activity_ts = int(activity_dt.timestamp() * 1000)
 
         if (time.time() * 1000) - activity_ts > UPPER_ACTIVITY_LIMIT_MS:
@@ -80,7 +82,9 @@ class UserActivity:
             obj.insert()
 
     @classmethod
-    def get_active_count(cls, min_activity_days: int, max_activity_days: int | None) -> int:
+    async def get_active_count(
+        cls, min_activity_days: int, max_activity_days: int | None
+    ) -> Tuple[int, float]:
         current_ms = time.time() * 1000
 
         query = (
@@ -88,12 +92,18 @@ class UserActivity:
         )
         if max_activity_days is not None:
             query += " AND ($1 - last_activity_ts) <= $3"
-        return cls.db.fetchval(
-            query, current_ms, ONE_DAY_MS * min_activity_days, max_activity_days * ONE_DAY_MS
+        return (
+            await cls.db.fetchval(
+                query,
+                current_ms,
+                ONE_DAY_MS * min_activity_days,
+                (max_activity_days or 0) * ONE_DAY_MS,
+            ),
+            current_ms,
         )
 
     async def update(self, activity_ts: int) -> None:
-        if self.last_activity_ts > activity_ts:
+        if self.last_activity_ts and self.last_activity_ts > activity_ts:
             return
 
         self.last_activity_ts = activity_ts
@@ -106,7 +116,7 @@ class UserActivity:
 
     async def insert(self) -> None:
         await self.db.execute(
-            f"INSERT INTO user_activity ({cls.columns}) VALUES ($1, $2, $3)",
+            f"INSERT INTO user_activity ({UserActivity.columns}) VALUES ($1, $2, $3)",
             self.puppet_id,
             self.first_activity_ts,
             self.last_activity_ts,
