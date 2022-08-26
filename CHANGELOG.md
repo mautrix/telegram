@@ -1,4 +1,4 @@
-# v0.12.0 (unreleased)
+# v0.12.0 (2022-08-26)
 
 **N.B.** This release requires a homeserver with Matrix v1.1 support, which
 bumps up the minimum homeserver versions to Synapse 1.54 and Dendrite 0.8.7.
@@ -51,7 +51,7 @@ Minimum Conduit version remains at 0.4.0.
   * Existing bridges can turn it on by enabling `ephemeral_events` and disabling
     `sync_with_custom_puppets` in the config, then regenerating the registration
     file.
-* Updated to API layer 143 so that Telegram would send new message types like
+* Updated to API layer 144 so that Telegram would send new message types like
   premium stickers to the bridge.
 * Updated Docker image to Alpine 3.16 and made it smaller.
 
