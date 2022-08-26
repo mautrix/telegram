@@ -29,6 +29,7 @@ from telethon.tl.types import (
     ChatForbidden,
     ChatParticipantAdmin,
     ChatParticipantCreator,
+    ChatParticipantsForbidden,
     InputChannel,
     InputUser,
     MessageActionChatAddUser,
@@ -198,6 +199,8 @@ class Bot(AbstractUser):
             return pcp
         elif isinstance(chat, PeerChat):
             chat = await self.client(GetFullChatRequest(chat.chat_id))
+            if isinstance(chat.full_chat.participants, ChatParticipantsForbidden):
+                return None
             participants = chat.full_chat.participants.participants
             for p in participants:
                 self._admin_cache[chat.channel_id, tgid] = (p, time.time())
