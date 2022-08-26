@@ -24,6 +24,7 @@ from telethon.tl.types import (
     ChannelParticipantBanned,
     ChannelParticipantsRecent,
     ChannelParticipantsSearch,
+    ChatParticipantsForbidden,
     InputChannel,
     InputUser,
     TypeChannelParticipant,
@@ -93,6 +94,8 @@ async def get_users(
 ) -> list[TypeUser]:
     if peer_type == "chat":
         chat = await client(GetFullChatRequest(chat_id=tgid))
+        if isinstance(chat.full_chat.participants, ChatParticipantsForbidden):
+            return []
         users = list(_filter_participants(chat.users, chat.full_chat.participants.participants))
         return users[:limit] if limit > 0 else users
     elif peer_type == "channel":
