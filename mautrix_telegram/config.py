@@ -35,12 +35,6 @@ Permissions = NamedTuple(
 
 
 class Config(BaseBridgeConfig):
-    def __getitem__(self, key: str) -> Any:
-        try:
-            return os.environ[f"MAUTRIX_TELEGRAM_{key.replace('.', '_').upper()}"]
-        except KeyError:
-            return super().__getitem__(key)
-
     @property
     def forbidden_defaults(self) -> List[ForbiddenDefault]:
         return [
