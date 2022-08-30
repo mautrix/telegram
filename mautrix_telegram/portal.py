@@ -2444,7 +2444,7 @@ class Portal(DBPortal, BasePortal):
             asyncio.create_task(
                 self.try_handle_telegram_reactions(source, TelegramID(evt.id), evt.reactions)
             )
-        sender_id = sender.tgid if sender else None
+        sender_id = sender.tgid if sender else self.tgid
 
         async with self.send_lock(sender_id, required=False):
             tg_space = self.tgid if self.peer_type == "channel" else source.tgid
@@ -2850,7 +2850,7 @@ class Portal(DBPortal, BasePortal):
             )
             return
 
-        sender_id = sender.tgid if sender else None
+        sender_id = sender.tgid if sender else self.tgid
         async with self.send_lock(sender_id, required=False):
             tg_space = self.tgid if self.peer_type == "channel" else source.tgid
 
