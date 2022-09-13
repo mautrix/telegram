@@ -290,7 +290,9 @@ class User(DBUser, AbstractUser, BaseUser):
         self._track_metric(METRIC_CONNECTED, False)
 
     async def post_login(self, info: TLUser = None, first_login: bool = False) -> None:
-        if self.config["metrics.enabled"] and not self._track_connection_task:
+        if (
+            self.config["metrics.enabled"] or self.config["homeserver.status_endpoint"]
+        ) and not self._track_connection_task:
             self._track_connection_task = asyncio.create_task(self._track_connection())
 
         try:
@@ -686,6 +688,7 @@ class User(DBUser, AbstractUser, BaseUser):
             await puppet.update_info(self, user)
             contacts[user.id] = puppet.contact_info
         await self.set_contacts(contacts.keys())
+        self.log.debug("Contact syncing complete")
         return contacts
 
     # endregion
