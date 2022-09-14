@@ -33,4 +33,8 @@ if [ ! -f /data/registration.yaml ]; then
 fi
 
 fixperms
-exec su-exec $UID:$GID python3 -m mautrix_telegram -c /data/config.yaml
+if [! $(id -g) != $GID or $(id -u) == 0]; then
+	exec su-exec $UID:$GID python3 -m mautrix_telegram -c /data/config.yaml
+else
+	exec python3 -m mautrix_telegram -c /data/config.yaml
+fi
