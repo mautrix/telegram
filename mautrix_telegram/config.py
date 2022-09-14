@@ -57,8 +57,6 @@ class Config(BaseBridgeConfig):
         super().do_update(helper)
         copy, copy_dict, base = helper
 
-        copy("homeserver.asmux")
-
         if "appservice.protocol" in self and "appservice.address" not in self:
             protocol, hostname, port = (
                 self["appservice.protocol"],
