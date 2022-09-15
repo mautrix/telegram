@@ -51,7 +51,9 @@ from telethon.tl.functions.messages import (
     EditChatPhotoRequest,
     EditChatTitleRequest,
     ExportChatInviteRequest,
+    GetAllStickersRequest,
     GetMessageReactionsListRequest,
+    GetStickerSetRequest,
     MigrateChatRequest,
     SendReactionRequest,
     SetTypingRequest,
@@ -79,6 +81,7 @@ from telethon.tl.types import (
     InputPeerChat,
     InputPeerPhotoFileLocation,
     InputPeerUser,
+    InputStickerSetID,
     InputUser,
     MessageActionChannelCreate,
     MessageActionChatAddUser,
@@ -1626,6 +1629,31 @@ class Portal(DBPortal, BasePortal):
                 msgtype=content.msgtype,
             )
 
+    async def _find_telegram_sticker(self, client, metadata):
+        sticker_set_id = int(metadata["pack"]["id"])
+        sticker_sets = await client(GetAllStickersRequest(0))
+
+        found_sticker_set = None
+        for sticker_set in sticker_sets.sets:
+            if sticker_set.id == sticker_set_id:
+                found_sticker_set = sticker_set
+                break
+        if not found_sticker_set:
+            return None
+
+        stickers = await client(
+            GetStickerSetRequest(
+                hash=0,
+                stickerset=InputStickerSetID(
+                    id=found_sticker_set.id, access_hash=found_sticker_set.access_hash
+                ),
+            )
+        )
+
+        for sticker in stickers.documents:
+            if sticker.id == int(metadata["id"]):
+                return sticker
+
     async def _handle_matrix_file(
         self,
         sender: u.User,
@@ -1646,6 +1674,7 @@ class Portal(DBPortal, BasePortal):
             w = h = None
         max_image_size = self.config["bridge.image_as_file_size"] * 1000**2
         max_image_pixels = self.config["bridge.image_as_file_pixels"]
+        media = None
 
         if self.config["bridge.parallel_file_transfer"] and content.url:
             file_handle, file_size = await util.parallel_transfer_to_telegram(
@@ -1666,7 +1695,16 @@ class Portal(DBPortal, BasePortal):
                 file = await self.main_intent.download_media(content.url)
 
             if content.msgtype == MessageType.STICKER:
-                if mime != "image/gif":
+                tg_sticker = None
+
+                if "net.maunium.telegram.sticker" in content.info:
+                    tg_sticker = await self._find_telegram_sticker(
+                        client, content.info["net.maunium.telegram.sticker"]
+                    )
+
+                if tg_sticker is not None:
+                    media = tg_sticker
+                elif mime != "image/gif":
                     mime, file, w, h = util.convert_image(
                         file, source_mime=mime, target_type="webp"
                     )
@@ -1708,7 +1746,9 @@ class Portal(DBPortal, BasePortal):
         if "fi.mau.telegram.force_document" in content:
             force_document = bool(content["fi.mau.telegram.force_document"])
 
-        if (mime == "image/png" or mime == "image/jpeg") and not force_document:
+        if media is not None:
+            pass
+        elif (mime == "image/png" or mime == "image/jpeg") and not force_document:
             media = InputMediaUploadedPhoto(file_handle)
         else:
             media = InputMediaUploadedDocument(
