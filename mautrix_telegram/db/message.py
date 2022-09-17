@@ -153,6 +153,17 @@ class Message:
         return [cls._from_row(row) for row in rows]
 
     @classmethod
+    async def find_recent(
+        cls, mx_room: RoomID, not_sender: TelegramID, limit: int = 20
+    ) -> list[Message]:
+        q = f"""
+        SELECT {cls.columns} FROM message
+        WHERE mx_room=$1 AND sender<>$2
+        ORDER BY tgid DESC LIMIT $3
+        """
+        return [cls._from_row(row) for row in await cls.db.fetch(q, mx_room, not_sender, limit)]
+
+    @classmethod
     async def replace_temp_mxid(cls, temp_mxid: str, mx_room: RoomID, real_mxid: EventID) -> None:
         q = "UPDATE message SET mxid=$1 WHERE mxid=$2 AND mx_room=$3"
         await cls.db.execute(q, real_mxid, temp_mxid, mx_room)

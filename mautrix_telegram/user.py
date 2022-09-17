@@ -92,6 +92,7 @@ class User(DBUser, AbstractUser, BaseUser):
         tg_username: str | None = None,
         tg_phone: str | None = None,
         is_bot: bool = False,
+        is_premium: bool = False,
         saved_contacts: int = 0,
     ) -> None:
         super().__init__(
@@ -100,6 +101,7 @@ class User(DBUser, AbstractUser, BaseUser):
             tg_username=tg_username,
             tg_phone=tg_phone,
             is_bot=is_bot,
+            is_premium=is_premium,
             saved_contacts=saved_contacts,
         )
         AbstractUser.__init__(self)
@@ -370,6 +372,9 @@ class User(DBUser, AbstractUser, BaseUser):
         changed = False
         if self.is_bot != info.bot:
             self.is_bot = info.bot
+            changed = True
+        if self.is_premium != info.premium:
+            self.is_premium = info.premium
             changed = True
         if self.tg_username != info.username:
             self.tg_username = info.username

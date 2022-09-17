@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING, ClassVar
 
 from asyncpg import Record
 from attr import dataclass
+from telethon.tl.types import ReactionCustomEmoji, ReactionEmoji, TypeReaction
 
 from mautrix.types import EventID, RoomID
 from mautrix.util.async_db import Database
@@ -58,15 +59,23 @@ class Reaction:
     @classmethod
     async def get_by_sender(
         cls, mxid: EventID, mx_room: RoomID, tg_sender: TelegramID
-    ) -> Reaction | None:
+    ) -> list[Reaction]:
         q = f"SELECT {cls.columns} FROM reaction WHERE msg_mxid=$1 AND mx_room=$2 AND tg_sender=$3"
-        return cls._from_row(await cls.db.fetchrow(q, mxid, mx_room, tg_sender))
+        rows = await cls.db.fetch(q, mxid, mx_room, tg_sender)
+        return [cls._from_row(row) for row in rows]
 
     @classmethod
     async def get_all_by_message(cls, mxid: EventID, mx_room: RoomID) -> list[Reaction]:
         q = f"SELECT {cls.columns} FROM reaction WHERE msg_mxid=$1 AND mx_room=$2"
         rows = await cls.db.fetch(q, mxid, mx_room)
         return [cls._from_row(row) for row in rows]
+
+    @property
+    def telegram(self) -> TypeReaction:
+        if self.reaction.isdecimal():
+            return ReactionCustomEmoji(document_id=int(self.reaction))
+        else:
+            return ReactionEmoji(emoticon=self.reaction)
 
     @property
     def _values(self):
@@ -81,11 +90,11 @@ class Reaction:
     async def save(self) -> None:
         q = """
             INSERT INTO reaction (mxid, mx_room, msg_mxid, tg_sender, reaction)
-            VALUES ($1, $2, $3, $4, $5) ON CONFLICT (msg_mxid, mx_room, tg_sender)
-                DO UPDATE SET mxid=$1, reaction=$5
+            VALUES ($1, $2, $3, $4, $5) ON CONFLICT (msg_mxid, mx_room, tg_sender, reaction)
+                DO UPDATE SET mxid=excluded.mxid
         """
         await self.db.execute(q, *self._values)
 
     async def delete(self) -> None:
-        q = "DELETE FROM reaction WHERE msg_mxid=$1 AND mx_room=$2 AND tg_sender=$3"
-        await self.db.execute(q, self.msg_mxid, self.mx_room, self.tg_sender)
+        q = "DELETE FROM reaction WHERE msg_mxid=$1 AND mx_room=$2 AND tg_sender=$3 AND reaction=$4"
+        await self.db.execute(q, self.msg_mxid, self.mx_room, self.tg_sender, self.reaction)

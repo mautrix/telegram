@@ -82,6 +82,11 @@ class TelegramFile:
             file.thumbnail = await cls.get(thumbnail_id, _thumbnail=True)
         return file
 
+    @classmethod
+    async def find_by_mxc(cls, mxc: ContentURI) -> TelegramFile | None:
+        q = f"SELECT {cls.columns} FROM telegram_file WHERE mxc=$1"
+        return cls._from_row(await cls.db.fetchrow(q, mxc))
+
     async def insert(self) -> None:
         q = (
             "INSERT INTO telegram_file (id, mxc, mime_type, was_converted, size, width, height, "
