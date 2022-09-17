@@ -42,9 +42,9 @@ from telethon.tl.types import (
     PhotoSize,
     TypePhotoSize,
 )
-import magic
 
 from mautrix.appservice import IntentAPI
+from mautrix.util import magic
 
 from .. import abstract_user as au
 from ..db import TelegramFile as DBTelegramFile
@@ -177,7 +177,7 @@ async def transfer_thumbnail_to_matrix(
     else:
         file = await client.download_file(thumbnail_loc)
         width, height = None, None
-        mime_type = magic.from_buffer(file, mime=True)
+        mime_type = magic.mimetype(file)
 
     decryption_info = None
     upload_mime_type = mime_type
@@ -335,13 +335,10 @@ async def _unlocked_transfer_file_to_matrix(
             return None
 
         width, height = None, None
-        mime_type = magic.from_buffer(file, mime=True)
+        mime_type = magic.mimetype(file)
 
         image_converted = False
-        # A weird bug in alpine/magic makes it return application/octet-stream for gzips...
-        is_tgs = mime_type == "application/gzip" or (
-            mime_type == "application/octet-stream" and magic.from_buffer(file).startswith("gzip")
-        )
+        is_tgs = mime_type == "application/gzip"
         if is_sticker and tgs_convert and is_tgs:
             converted_anim = await convert_tgs_to(
                 file, tgs_convert["target"], **tgs_convert["args"]

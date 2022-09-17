@@ -132,7 +132,6 @@ from telethon.tl.types import (
     UserProfilePhotoEmpty,
 )
 from telethon.utils import encode_waveform
-import magic
 
 from mautrix.appservice import DOUBLE_PUPPET_SOURCE_KEY, IntentAPI
 from mautrix.bridge import BasePortal, NotificationDisabler, RejectMatrixInvite, async_getter_lock
@@ -167,7 +166,7 @@ from mautrix.types import (
     UserID,
     VideoInfo,
 )
-from mautrix.util import variation_selector
+from mautrix.util import magic, variation_selector
 from mautrix.util.message_send_checkpoint import MessageSendCheckpointStatus
 from mautrix.util.simple_lock import SimpleLock
 from mautrix.util.simple_template import SimpleTemplate
@@ -2405,7 +2404,7 @@ class Portal(DBPortal, BasePortal):
 
         self.avatar_url = url
         file = await self.main_intent.download_media(url)
-        mime = magic.from_buffer(file, mime=True)
+        mime = magic.mimetype(file)
         ext = sane_mimetypes.guess_extension(mime)
         uploaded = await sender.client.upload_file(file, file_name=f"avatar{ext}")
         photo = InputChatUploadedPhoto(file=uploaded)
