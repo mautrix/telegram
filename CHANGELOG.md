@@ -1,3 +1,26 @@
+# v0.12.1 (unreleased)
+
+### Added
+* Support for custom emojis in reactions.
+  * Like other bridges with custom emoji reactions, they're bridged as `mxc://`
+    URIs, so client support is required to render them properly.
+
+### Improved
+* The bridge will now poll for reactions to 20 most recent messages when
+  receiving a read receipt. This works around Telegram's bad protocol that
+  doesn't notify clients on reactions to other users' messages.
+* The docker image now has an option to bypass the startup script by setting
+  the `MAUTRIX_DIRECT_STARTUP` environment variable. Additionally, it will
+  refuse to run as a non-root user if that variable is not set (and print an
+  error message suggesting to either set the variable or use a custom command).
+* Moved environment variable overrides for config fields to mautrix-python.
+  The new system also allows loading JSON values to enable overriding maps like
+  `login_shared_secret_map`.
+
+### Fixed
+* `ChatParticipantsForbidden` is handled properly when syncing non-supergroup
+  info.
+
 # v0.12.0 (2022-08-26)
 
 **N.B.** This release requires a homeserver with Matrix v1.1 support, which
