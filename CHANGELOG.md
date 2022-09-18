@@ -1,12 +1,48 @@
-# v0.12.0 (unreleased)
+# v0.12.1 (unreleased)
+
+### Added
+* Support for custom emojis in reactions.
+  * Like other bridges with custom emoji reactions, they're bridged as `mxc://`
+    URIs, so client support is required to render them properly.
+
+### Improved
+* The bridge will now poll for reactions to 20 most recent messages when
+  receiving a read receipt. This works around Telegram's bad protocol that
+  doesn't notify clients on reactions to other users' messages.
+* The docker image now has an option to bypass the startup script by setting
+  the `MAUTRIX_DIRECT_STARTUP` environment variable. Additionally, it will
+  refuse to run as a non-root user if that variable is not set (and print an
+  error message suggesting to either set the variable or use a custom command).
+* Moved environment variable overrides for config fields to mautrix-python.
+  The new system also allows loading JSON values to enable overriding maps like
+  `login_shared_secret_map`.
+
+### Fixed
+* `ChatParticipantsForbidden` is handled properly when syncing non-supergroup
+  info.
+
+# v0.12.0 (2022-08-26)
+
+**N.B.** This release requires a homeserver with Matrix v1.1 support, which
+bumps up the minimum homeserver versions to Synapse 1.54 and Dendrite 0.8.7.
+Minimum Conduit version remains at 0.4.0.
 
 ### Added
 * Added provisioning API for resolving Telegram identifiers (like usernames).
+* Added support for bridging Telegram custom emojis to Matrix.
 * Added option to not bridge chats with lots of members.
 * Added option to include captions in the same message as the media to
   implement [MSC2530]. Sending captions the same way is also supported and
   enabled by default.
+* Added commands to kick or ban relaybot users from Telegram.
+* Added support for Telegram's disappearing messages.
 * Added support for bridging forwarded messages as forwards on Telegram.
+  * Forwarding is not allowed in relay mode as the bot wouldn't be able to
+    specify who sent the message.
+  * Matrix doesn't have real forwarding (there's no forwarding metadata), so
+    only messages bridged from Telegram can be forwarded.
+  * Double puppeted messages from Telegram currently can't be forwarded without
+    removing the `fi.mau.double_puppet_source` key from the content.
   * If forwarding fails (e.g. due to it being blocked in the source chat), the
     bridge will automatically fall back to sending it as a normal new message.
 * Added options to make encryption more secure.
@@ -22,6 +58,9 @@
 ### Improved
 * Improved handling the bridge user leaving chats on Telegram, and new users
   being added on Telegram.
+* Improved animated sticker conversion options: added support for animated webp
+  and added option to convert video stickers (webm) to the specified image
+  format.
 * Audio and video metadata is now bridged properly to Telegram.
 * Added database index on Telegram usernames (used when bridging username
   @-mentions in messages).
@@ -31,7 +70,11 @@
     is not currently supported in the provisioning API.
 * Removed `plaintext_highlights` config option (the code using it was already
   removed in v0.11.0).
-* Updated to API layer 143 so that Telegram would send new message types like
+* Enabled appservice ephemeral events by default for new installations.
+  * Existing bridges can turn it on by enabling `ephemeral_events` and disabling
+    `sync_with_custom_puppets` in the config, then regenerating the registration
+    file.
+* Updated to API layer 144 so that Telegram would send new message types like
   premium stickers to the bridge.
 * Updated Docker image to Alpine 3.16 and made it smaller.
 

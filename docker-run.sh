@@ -1,4 +1,18 @@
 #!/bin/sh
+if [ ! -z "$MAUTRIX_DIRECT_STARTUP" ]; then
+	if [ $(id -u) == 0 ]; then
+		echo "|------------------------------------------|"
+		echo "| Warning: running bridge unsafely as root |"
+		echo "|------------------------------------------|"
+	fi
+	exec python3 -m mautrix_telegram -c /data/config.yaml
+elif [ $(id -u) != 0 ]; then
+	echo "The startup script must run as root. It will use su-exec to drop permissions before running the bridge."
+	echo "To bypass the startup script, either set the `MAUTRIX_DIRECT_STARTUP` environment variable,"
+	echo "or just use `python3 -m mautrix_telegram -c /data/config.yaml` as the run command."
+	echo "Note that the config and registration will not be auto-generated when bypassing the startup script."
+	exit 1
+fi
 
 # Define functions.
 function fixperms {

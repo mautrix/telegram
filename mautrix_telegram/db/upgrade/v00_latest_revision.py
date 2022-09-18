@@ -26,6 +26,7 @@ async def create_latest_tables(conn: Connection) -> int:
             tg_username    TEXT,
             tg_phone       TEXT,
             is_bot         BOOLEAN NOT NULL DEFAULT false,
+            is_premium     BOOLEAN NOT NULL DEFAULT false,
             saved_contacts INTEGER NOT NULL DEFAULT 0
         )"""
     )
@@ -78,7 +79,7 @@ async def create_latest_tables(conn: Connection) -> int:
             tg_sender BIGINT,
             reaction  TEXT NOT NULL,
 
-            PRIMARY KEY (msg_mxid, mx_room, tg_sender),
+            PRIMARY KEY (msg_mxid, mx_room, tg_sender, reaction),
             UNIQUE (mxid, mx_room)
         )"""
     )
@@ -111,6 +112,7 @@ async def create_latest_tables(conn: Connection) -> int:
             avatar_set          BOOLEAN NOT NULL DEFAULT false,
             is_bot              BOOLEAN,
             is_channel          BOOLEAN NOT NULL DEFAULT false,
+            is_premium          BOOLEAN NOT NULL DEFAULT false,
 
             access_token TEXT,
             custom_mxid  TEXT,
@@ -135,6 +137,7 @@ async def create_latest_tables(conn: Connection) -> int:
                 ON UPDATE CASCADE ON DELETE SET NULL
         )"""
     )
+    await conn.execute("CREATE INDEX telegram_file_mxc_idx ON telegram_file(mxc)")
     await conn.execute(
         """CREATE TABLE bot_chat (
             id   BIGINT PRIMARY KEY,

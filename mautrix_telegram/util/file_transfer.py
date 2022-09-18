@@ -31,6 +31,7 @@ from telethon.errors import (
     LocationInvalidError,
     SecurityError,
 )
+from telethon.tl.functions.messages import GetCustomEmojiDocumentsRequest
 from telethon.tl.types import (
     Document,
     InputDocumentFileLocation,
@@ -41,15 +42,17 @@ from telethon.tl.types import (
     PhotoSize,
     TypePhotoSize,
 )
-import magic
 
 from mautrix.appservice import IntentAPI
+from mautrix.util import magic
 
+from .. import abstract_user as au
 from ..db import TelegramFile as DBTelegramFile
 from ..tgclient import MautrixTelegramClient
 from ..util import sane_mimetypes
 from .parallel_file_transfer import parallel_transfer_to_matrix
 from .tgs_converter import convert_tgs_to
+from .webm_converter import convert_webm_to
 
 try:
     from PIL import Image
@@ -125,9 +128,9 @@ def _read_video_thumbnail(
 
 def _location_to_id(location: TypeLocation) -> str:
     if isinstance(location, Document):
-        return f"{location.id}-{location.access_hash}"
+        return str(location.id)
     elif isinstance(location, (InputDocumentFileLocation, InputPhotoFileLocation)):
-        return f"{location.id}-{location.access_hash}-{location.thumb_size}"
+        return f"{location.id}-{location.thumb_size}"
     elif isinstance(location, InputFileLocation):
         return f"{location.volume_id}-{location.local_id}"
     elif isinstance(location, InputPeerPhotoFileLocation):
@@ -155,6 +158,8 @@ async def transfer_thumbnail_to_matrix(
 
     if custom_data:
         loc_id += "-mau_custom_thumbnail"
+    if encrypt:
+        loc_id += "-encrypted"
 
     db_file = await DBTelegramFile.get(loc_id)
     if db_file:
@@ -172,7 +177,7 @@ async def transfer_thumbnail_to_matrix(
     else:
         file = await client.download_file(thumbnail_loc)
         width, height = None, None
-        mime_type = magic.from_buffer(file, mime=True)
+        mime_type = magic.mimetype(file)
 
     decryption_info = None
     upload_mime_type = mime_type
@@ -210,6 +215,44 @@ transfer_locks: dict[str, asyncio.Lock] = {}
 TypeThumbnail = Optional[Union[TypeLocation, TypePhotoSize]]
 
 
+async def transfer_custom_emojis_to_matrix(
+    source: au.AbstractUser, emoji_ids: list[int]
+) -> dict[int, DBTelegramFile]:
+    emoji_ids = set(emoji_ids)
+    existing = await DBTelegramFile.get_many([str(id) for id in emoji_ids])
+    file_map = {int(file.id): file for file in existing}
+    not_existing_ids = list(emoji_ids - file_map.keys())
+    if not_existing_ids:
+        log.debug(f"Transferring custom emojis through {source.mxid}: {not_existing_ids}")
+
+        documents: list[Document] = await source.client(
+            GetCustomEmojiDocumentsRequest(document_id=not_existing_ids)
+        )
+
+        tgs_args = source.config["bridge.animated_emoji"]
+        webm_convert = tgs_args["target"]
+
+        transfer_sema = asyncio.Semaphore(5)
+
+        async def transfer(document: Document) -> None:
+            async with transfer_sema:
+                file_map[document.id] = await transfer_file_to_matrix(
+                    source.client,
+                    source.bridge.az.intent,
+                    document,
+                    is_sticker=True,
+                    tgs_convert=tgs_args,
+                    webm_convert=webm_convert,
+                    filename=f"emoji-{document.id}",
+                    # Emojis are used as inline images and can't be encrypted
+                    encrypt=False,
+                    async_upload=source.config["homeserver.async_media"],
+                )
+
+        await asyncio.gather(*[transfer(doc) for doc in documents])
+    return file_map
+
+
 async def transfer_file_to_matrix(
     client: MautrixTelegramClient,
     intent: IntentAPI,
@@ -218,6 +261,7 @@ async def transfer_file_to_matrix(
     *,
     is_sticker: bool = False,
     tgs_convert: dict | None = None,
+    webm_convert: str | None = None,
     filename: str | None = None,
     encrypt: bool = False,
     parallel_id: int | None = None,
@@ -226,6 +270,8 @@ async def transfer_file_to_matrix(
     location_id = _location_to_id(location)
     if not location_id:
         return None
+    if encrypt:
+        location_id += "-encrypted"
 
     db_file = await DBTelegramFile.get(location_id)
     if db_file:
@@ -245,6 +291,7 @@ async def transfer_file_to_matrix(
             thumbnail,
             is_sticker,
             tgs_convert,
+            webm_convert,
             filename,
             encrypt,
             parallel_id,
@@ -260,6 +307,7 @@ async def _unlocked_transfer_file_to_matrix(
     thumbnail: TypeThumbnail,
     is_sticker: bool,
     tgs_convert: dict | None,
+    webm_convert: str | None,
     filename: str | None,
     encrypt: bool,
     parallel_id: int | None,
@@ -287,13 +335,10 @@ async def _unlocked_transfer_file_to_matrix(
             return None
 
         width, height = None, None
-        mime_type = magic.from_buffer(file, mime=True)
+        mime_type = magic.mimetype(file)
 
         image_converted = False
-        # A weird bug in alpine/magic makes it return application/octet-stream for gzips...
-        is_tgs = mime_type == "application/gzip" or (
-            mime_type == "application/octet-stream" and magic.from_buffer(file).startswith("gzip")
-        )
+        is_tgs = mime_type == "application/gzip"
         if is_sticker and tgs_convert and is_tgs:
             converted_anim = await convert_tgs_to(
                 file, tgs_convert["target"], **tgs_convert["args"]
@@ -302,6 +347,12 @@ async def _unlocked_transfer_file_to_matrix(
             file = converted_anim.data
             width, height = converted_anim.width, converted_anim.height
             image_converted = mime_type != "application/gzip"
+            thumbnail = None
+        elif is_sticker and webm_convert and webm_convert != "webm" and mime_type == "video/webm":
+            converted_anim = await convert_webm_to(file, webm_convert)
+            mime_type = converted_anim.mime
+            file = converted_anim.data
+            image_converted = mime_type != "video/webm"
             thumbnail = None
 
         decryption_info = None

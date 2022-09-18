@@ -21,7 +21,7 @@ from asyncpg import Record
 from attr import dataclass
 import attr
 
-from mautrix.types import EventID, RoomID
+from mautrix.types import EventID, RoomID, UserID
 from mautrix.util.async_db import Database, Scheme
 
 from ..types import TelegramID
@@ -40,6 +40,8 @@ class Message:
     edit_index: int
     redacted: bool = False
     content_hash: bytes | None = None
+    sender_mxid: UserID | None = None
+    sender: TelegramID | None = None
 
     @classmethod
     def _from_row(cls, row: Record | None) -> Message | None:
@@ -47,7 +49,19 @@ class Message:
             return None
         return cls(**row)
 
-    columns: ClassVar[str] = "mxid, mx_room, tgid, tg_space, edit_index, redacted, content_hash"
+    columns: ClassVar[str] = ", ".join(
+        (
+            "mxid",
+            "mx_room",
+            "tgid",
+            "tg_space",
+            "edit_index",
+            "redacted",
+            "content_hash",
+            "sender_mxid",
+            "sender",
+        )
+    )
 
     @classmethod
     async def get_all_by_tgid(cls, tgid: TelegramID, tg_space: TelegramID) -> list[Message]:
@@ -148,6 +162,17 @@ class Message:
         return [cls._from_row(row) for row in rows]
 
     @classmethod
+    async def find_recent(
+        cls, mx_room: RoomID, not_sender: TelegramID, limit: int = 20
+    ) -> list[Message]:
+        q = f"""
+        SELECT {cls.columns} FROM message
+        WHERE mx_room=$1 AND sender<>$2
+        ORDER BY tgid DESC LIMIT $3
+        """
+        return [cls._from_row(row) for row in await cls.db.fetch(q, mx_room, not_sender, limit)]
+
+    @classmethod
     async def replace_temp_mxid(cls, temp_mxid: str, mx_room: RoomID, real_mxid: EventID) -> None:
         q = "UPDATE message SET mxid=$1 WHERE mxid=$2 AND mx_room=$3"
         await cls.db.execute(q, real_mxid, temp_mxid, mx_room)
@@ -170,8 +195,8 @@ class Message:
     _insert_query: ClassVar[
         str
     ] = """
-        INSERT INTO message (mxid, mx_room, tgid, tg_space, edit_index, redacted, content_hash)
-        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        INSERT INTO message (mxid, mx_room, tgid, tg_space, edit_index, redacted, content_hash, sender_mxid, sender)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
     """
 
     @property
@@ -184,6 +209,8 @@ class Message:
             self.edit_index,
             self.redacted,
             self.content_hash,
+            self.sender_mxid,
+            self.sender,
         )
 
     async def insert(self) -> None:

@@ -14,4 +14,6 @@ from . import (
     v09_puppet_username_index,
     v10_more_backfill_fields,
     v11_backfill_queue,
+    v12_message_sender,
+    v13_multiple_reactions,
 )

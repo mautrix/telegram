@@ -50,6 +50,7 @@ class Puppet:
     avatar_set: bool
     is_bot: bool | None
     is_channel: bool
+    is_premium: bool
 
     custom_mxid: UserID | None
     access_token: str | None
@@ -67,7 +68,8 @@ class Puppet:
     columns: ClassVar[str] = (
         "id, is_registered, displayname, displayname_source, displayname_contact, "
         "displayname_quality, disable_updates, username, phone, photo_id, avatar_url, "
-        "name_set, avatar_set, is_bot, is_channel, custom_mxid, access_token, next_batch, base_url"
+        "name_set, avatar_set, is_bot, is_channel, is_premium, "
+        "custom_mxid, access_token, next_batch, base_url"
     )
 
     @classmethod
@@ -108,6 +110,7 @@ class Puppet:
             self.avatar_set,
             self.is_bot,
             self.is_channel,
+            self.is_premium,
             self.custom_mxid,
             self.access_token,
             self.next_batch,
@@ -120,7 +123,7 @@ class Puppet:
         SET is_registered=$2, displayname=$3, displayname_source=$4, displayname_contact=$5,
             displayname_quality=$6, disable_updates=$7, username=$8, phone=$9, photo_id=$10,
             avatar_url=$11, name_set=$12, avatar_set=$13, is_bot=$14, is_channel=$15,
-            custom_mxid=$16, access_token=$17, next_batch=$18, base_url=$19
+            is_premium=$16, custom_mxid=$17, access_token=$18, next_batch=$19, base_url=$20
         WHERE id=$1
         """
         await self.db.execute(q, *self._values)
@@ -130,8 +133,9 @@ class Puppet:
         INSERT INTO puppet (
             id, is_registered, displayname, displayname_source, displayname_contact,
             displayname_quality, disable_updates, username, phone, photo_id, avatar_url, name_set,
-            avatar_set, is_bot, is_channel, custom_mxid, access_token, next_batch, base_url
+            avatar_set, is_bot, is_channel, is_premium, custom_mxid, access_token, next_batch,
+            base_url
         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18,
-                  $19)
+                  $19, $20)
         """
         await self.db.execute(q, *self._values)

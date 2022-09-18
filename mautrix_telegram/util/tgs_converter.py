@@ -99,7 +99,7 @@ if lottieconverter:
     converters["png"] = tgs_to_png
     converters["gif"] = tgs_to_gif
 
-if lottieconverter and ffmpeg:
+if lottieconverter and ffmpeg.ffmpeg_path:
 
     async def tgs_to_webm(
         file: bytes, width: int, height: int, fps: int = 30, **_: Any
@@ -126,7 +126,33 @@ if lottieconverter and ffmpeg:
                 log.error(str(e))
         return ConvertedSticker("application/gzip", file)
 
+    async def tgs_to_webp(
+        file: bytes, width: int, height: int, fps: int = 30, **_: Any
+    ) -> ConvertedSticker:
+        with tempfile.TemporaryDirectory(prefix="tgs_") as tmpdir:
+            file_template = tmpdir + "/out_"
+            try:
+                await _run_lottieconverter(
+                    args=("-", file_template, "pngs", f"{width}x{height}", str(fps)),
+                    input_data=file,
+                )
+                first_frame_name = min(os.listdir(tmpdir))
+                with open(f"{tmpdir}/{first_frame_name}", "rb") as first_frame_file:
+                    first_frame_data = first_frame_file.read()
+                webp_data = await ffmpeg.convert_path(
+                    input_args=("-framerate", str(fps), "-pattern_type", "glob"),
+                    input_file=f"{file_template}*.png",
+                    output_args=("-c:v", "libwebp_anim", "-pix_fmt", "yuva420p", "-f", "webp"),
+                    output_path_override="-",
+                    output_extension=None,
+                )
+                return ConvertedSticker("image/webp", webp_data, "image/png", first_frame_data)
+            except ffmpeg.ConverterError as e:
+                log.error(str(e))
+        return ConvertedSticker("application/gzip", file)
+
     converters["webm"] = tgs_to_webm
+    converters["webp"] = tgs_to_webp
 
 
 async def convert_tgs_to(

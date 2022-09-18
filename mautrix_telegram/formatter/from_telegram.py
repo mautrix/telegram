@@ -20,7 +20,7 @@ import logging
 import re
 
 from telethon.errors import RPCError
-from telethon.helpers import add_surrogate, del_surrogate, within_surrogate
+from telethon.helpers import add_surrogate, del_surrogate
 from telethon.tl.custom import Message
 from telethon.tl.types import (
     MessageEntityBlockquote,
@@ -28,6 +28,7 @@ from telethon.tl.types import (
     MessageEntityBotCommand,
     MessageEntityCashtag,
     MessageEntityCode,
+    MessageEntityCustomEmoji,
     MessageEntityEmail,
     MessageEntityHashtag,
     MessageEntityItalic,
@@ -51,8 +52,9 @@ from telethon.tl.types import (
 from mautrix.types import Format, MessageType, TextMessageEventContent
 
 from .. import abstract_user as au, portal as po, puppet as pu, user as u
-from ..db import Message as DBMessage
+from ..db import Message as DBMessage, TelegramFile as DBTelegramFile
 from ..types import TelegramID
+from ..util.file_transfer import transfer_custom_emojis_to_matrix
 
 log: logging.Logger = logging.getLogger("mau.fmt.tg")
 
@@ -124,6 +126,27 @@ async def _add_forward_header(
     )
 
 
+class ReuploadedCustomEmoji(MessageEntityCustomEmoji):
+    file: DBTelegramFile
+
+    def __init__(self, parent: MessageEntityCustomEmoji, file: DBTelegramFile) -> None:
+        super().__init__(parent.offset, parent.length, parent.document_id)
+        self.file = file
+
+
+async def _convert_custom_emoji(
+    source: au.AbstractUser, entities: list[TypeMessageEntity]
+) -> None:
+    emoji_ids = [
+        entity.document_id for entity in entities if isinstance(entity, MessageEntityCustomEmoji)
+    ]
+    custom_emojis = await transfer_custom_emojis_to_matrix(source, emoji_ids)
+    if len(custom_emojis) > 0:
+        for i, entity in enumerate(entities):
+            if isinstance(entity, MessageEntityCustomEmoji):
+                entities[i] = ReuploadedCustomEmoji(entity, custom_emojis[entity.document_id])
+
+
 async def telegram_to_matrix(
     evt: Message | SponsoredMessage,
     source: au.AbstractUser,
@@ -133,10 +156,11 @@ async def telegram_to_matrix(
 ) -> TextMessageEventContent:
     content = TextMessageEventContent(
         msgtype=MessageType.TEXT,
-        body=add_surrogate(override_text or evt.message),
+        body=override_text or evt.message,
     )
     entities = override_entities or evt.entities
     if entities:
+        await _convert_custom_emoji(source, entities)
         content.format = Format.HTML
         html = await _telegram_entities_to_matrix_catch(add_surrogate(content.body), entities)
         content.formatted_body = del_surrogate(html)
@@ -165,9 +189,20 @@ async def _telegram_entities_to_matrix_catch(text: str, entities: list[TypeMessa
     return "[failed conversion in _telegram_entities_to_matrix]"
 
 
+def within_surrogate(text, index):
+    """
+    `True` if ``index`` is within a surrogate (before and after it, not at!).
+    """
+    return (
+        1 < index < len(text)  # in bounds
+        and "\ud800" <= text[index - 1] <= "\udbff"  # current is low surrogate
+        and "\udc00" <= text[index] <= "\udfff"  # previous is high surrogate
+    )
+
+
 async def _telegram_entities_to_matrix(
     text: str,
-    entities: list[TypeMessageEntity],
+    entities: list[TypeMessageEntity | ReuploadedCustomEmoji],
     offset: int = 0,
     length: int = None,
     in_codeblock: bool = False,
@@ -196,9 +231,9 @@ async def _telegram_entities_to_matrix(
         elif relative_offset < last_offset:
             continue
 
-        while within_surrogate(text, relative_offset, length=length):
+        while within_surrogate(text, relative_offset):
             relative_offset += 1
-        while within_surrogate(text, relative_offset + entity.length, length=length):
+        while within_surrogate(text, relative_offset + entity.length):
             entity.length += 1
 
         skip_entity = False
@@ -240,6 +275,13 @@ async def _telegram_entities_to_matrix(
         elif entity_type in (MessageEntityTextUrl, MessageEntityUrl):
             await _parse_url(
                 html, entity_text, entity.url if entity_type == MessageEntityTextUrl else None
+            )
+        elif entity_type == MessageEntityCustomEmoji:
+            html.append(entity_text)
+        elif entity_type == ReuploadedCustomEmoji:
+            html.append(
+                f'<img data-mx-emoticon data-mau-animated-emoji src="{escape(entity.file.mxc)}" '
+                f'height="32" width="32" alt="{entity_text}" title="{entity_text}"/>'
             )
         elif entity_type in (
             MessageEntityBotCommand,
@@ -318,7 +360,7 @@ message_link_regex = re.compile(
 )
 
 
-async def _parse_url(html: list[str], entity_text: str, url: str):
+async def _parse_url(html: list[str], entity_text: str, url: str) -> None:
     url = escape(url) if url else entity_text
     if not url.startswith(("https://", "http://", "ftp://", "magnet://")):
         url = "http://" + url

@@ -80,6 +80,7 @@ class Puppet(DBPuppet, BasePuppet):
         avatar_set: bool = False,
         is_bot: bool = False,
         is_channel: bool = False,
+        is_premium: bool = False,
         custom_mxid: UserID | None = None,
         access_token: str | None = None,
         next_batch: SyncToken | None = None,
@@ -101,6 +102,7 @@ class Puppet(DBPuppet, BasePuppet):
             avatar_set=avatar_set,
             is_bot=is_bot,
             is_channel=is_channel,
+            is_premium=is_premium,
             custom_mxid=custom_mxid,
             access_token=access_token,
             next_batch=next_batch,
@@ -255,11 +257,15 @@ class Puppet(DBPuppet, BasePuppet):
 
     async def update_info(self, source: au.AbstractUser, info: User | Channel) -> None:
         is_bot = False if isinstance(info, Channel) else info.bot
+        is_premium = False if isinstance(info, Channel) else info.premium
         is_channel = isinstance(info, Channel)
-        changed = is_bot != self.is_bot or is_channel != self.is_channel
+        changed = (
+            is_bot != self.is_bot or is_channel != self.is_channel or is_premium != self.is_premium
+        )
 
         self.is_bot = is_bot
         self.is_channel = is_channel
+        self.is_premium = is_premium
 
         if self.username != info.username:
             self.username = info.username

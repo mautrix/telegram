@@ -37,6 +37,7 @@ class User:
     tg_username: str | None
     tg_phone: str | None
     is_bot: bool
+    is_premium: bool
     saved_contacts: int
 
     @classmethod
@@ -45,7 +46,9 @@ class User:
             return None
         return cls(**row)
 
-    columns: ClassVar[str] = "mxid, tgid, tg_username, tg_phone, is_bot, saved_contacts"
+    columns: ClassVar[str] = ", ".join(
+        ("mxid", "tgid", "tg_username", "tg_phone", "is_bot", "is_premium", "saved_contacts")
+    )
 
     @classmethod
     async def get_by_tgid(cls, tgid: TelegramID) -> User | None:
@@ -78,21 +81,23 @@ class User:
             self.tg_username,
             self.tg_phone,
             self.is_bot,
+            self.is_premium,
             self.saved_contacts,
         )
 
     async def save(self) -> None:
-        q = (
-            'UPDATE "user" SET tgid=$2, tg_username=$3, tg_phone=$4, is_bot=$5, saved_contacts=$6 '
-            "WHERE mxid=$1"
-        )
+        q = """
+        UPDATE "user" SET tgid=$2, tg_username=$3, tg_phone=$4, is_bot=$5, is_premium=$6,
+                          saved_contacts=$7
+        WHERE mxid=$1
+        """
         await self.db.execute(q, *self._values)
 
     async def insert(self) -> None:
-        q = (
-            'INSERT INTO "user" (mxid, tgid, tg_username, tg_phone, is_bot, saved_contacts) '
-            "VALUES ($1, $2, $3, $4, $5, $6)"
-        )
+        q = """
+        INSERT INTO "user" (mxid, tgid, tg_username, tg_phone, is_bot, is_premium, saved_contacts)
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        """
         await self.db.execute(q, *self._values)
 
     async def get_contacts(self) -> list[TelegramID]:

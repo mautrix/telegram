@@ -35,12 +35,6 @@ Permissions = NamedTuple(
 
 
 class Config(BaseBridgeConfig):
-    def __getitem__(self, key: str) -> Any:
-        try:
-            return os.environ[f"MAUTRIX_TELEGRAM_{key.replace('.', '_').upper()}"]
-        except KeyError:
-            return super().__getitem__(key)
-
     @property
     def forbidden_defaults(self) -> List[ForbiddenDefault]:
         return [
@@ -62,8 +56,6 @@ class Config(BaseBridgeConfig):
     def do_update(self, helper: ConfigUpdateHelper) -> None:
         super().do_update(helper)
         copy, copy_dict, base = helper
-
-        copy("homeserver.asmux")
 
         if "appservice.protocol" in self and "appservice.address" not in self:
             protocol, hostname, port = (
@@ -145,9 +137,14 @@ class Config(BaseBridgeConfig):
         copy("bridge.parallel_file_transfer")
         copy("bridge.federate_rooms")
         copy("bridge.animated_sticker.target")
+        copy("bridge.animated_sticker.convert_from_webm")
         copy("bridge.animated_sticker.args.width")
         copy("bridge.animated_sticker.args.height")
         copy("bridge.animated_sticker.args.fps")
+        copy("bridge.animated_emoji.target")
+        copy("bridge.animated_emoji.args.width")
+        copy("bridge.animated_emoji.args.height")
+        copy("bridge.animated_emoji.args.fps")
         copy("bridge.private_chat_portal_meta")
         copy("bridge.delivery_receipts")
         copy("bridge.delivery_error_reports")

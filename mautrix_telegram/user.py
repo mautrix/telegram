@@ -36,6 +36,7 @@ from telethon.tl.types import (
     ChatForbidden,
     InputUserSelf,
     NotifyPeer,
+    PeerUser,
     TypeUpdate,
     UpdateFolderPeers,
     UpdateNewChannelMessage,
@@ -100,6 +101,7 @@ class User(DBUser, AbstractUser, BaseUser):
         tg_username: str | None = None,
         tg_phone: str | None = None,
         is_bot: bool = False,
+        is_premium: bool = False,
         saved_contacts: int = 0,
     ) -> None:
         super().__init__(
@@ -108,6 +110,7 @@ class User(DBUser, AbstractUser, BaseUser):
             tg_username=tg_username,
             tg_phone=tg_phone,
             is_bot=is_bot,
+            is_premium=is_premium,
             saved_contacts=saved_contacts,
         )
         AbstractUser.__init__(self)
@@ -141,6 +144,10 @@ class User(DBUser, AbstractUser, BaseUser):
     @property
     def human_tg_id(self) -> str:
         return f"@{self.tg_username}" if self.tg_username else f"+{self.tg_phone}" or None
+
+    @property
+    def peer(self) -> PeerUser | None:
+        return PeerUser(user_id=self.tgid) if self.tgid else None
 
     # TODO replace with proper displayname getting everywhere
     @property
@@ -309,7 +316,9 @@ class User(DBUser, AbstractUser, BaseUser):
         self._track_metric(METRIC_CONNECTED, False)
 
     async def post_login(self, info: TLUser = None, first_login: bool = False) -> None:
-        if self.config["metrics.enabled"] and not self._track_connection_task:
+        if (
+            self.config["metrics.enabled"] or self.config["homeserver.status_endpoint"]
+        ) and not self._track_connection_task:
             self._track_connection_task = asyncio.create_task(self._track_connection())
 
         try:
@@ -458,6 +467,9 @@ class User(DBUser, AbstractUser, BaseUser):
         changed = False
         if self.is_bot != info.bot:
             self.is_bot = info.bot
+            changed = True
+        if self.is_premium != info.premium:
+            self.is_premium = info.premium
             changed = True
         if self.tg_username != info.username:
             self.tg_username = info.username
@@ -773,6 +785,7 @@ class User(DBUser, AbstractUser, BaseUser):
             await puppet.update_info(self, user)
             contacts[user.id] = puppet.contact_info
         await self.set_contacts(contacts.keys())
+        self.log.debug("Contact syncing complete")
         return contacts
 
     # endregion
