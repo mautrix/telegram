@@ -22,6 +22,7 @@ import logging
 import platform
 import time
 
+from telethon.errors import UnauthorizedError
 from telethon.network import (
     Connection,
     ConnectionTcpFull,
@@ -238,6 +239,9 @@ class AbstractUser(ABC):
             self.log.critical(f"Stopping due to update handling error {type(err).__name__}")
             self.bridge.manual_stop(50)
         else:
+            if isinstance(err, UnauthorizedError):
+                self.log.warning("Not recreating Telethon update loop")
+                return
             self.log.info("Recreating Telethon update loop in 60 seconds")
             await asyncio.sleep(60)
             self.log.debug("Now recreating Telethon update loop")
