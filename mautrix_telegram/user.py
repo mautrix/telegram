@@ -421,10 +421,11 @@ class User(DBUser, AbstractUser, BaseUser):
                 pass
             self.tgid = None
         ok = await self.client.log_out()
-        await self.client.session.delete()
+        sess = self.client.session
+        await self.stop()
+        await sess.delete()
         await self.delete()
         self.by_mxid.pop(self.mxid, None)
-        await self.stop()
         self._track_metric(METRIC_LOGGED_IN, False)
         return ok
 

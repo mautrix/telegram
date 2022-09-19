@@ -301,17 +301,18 @@ class AbstractUser(ABC):
     async def ensure_started(self, even_if_no_session=False) -> AbstractUser:
         if self.connected:
             return self
-        if even_if_no_session or await PgSession.has(self.mxid):
+        session_exists = await PgSession.has(self.mxid)
+        if even_if_no_session or session_exists:
             self.log.debug(
-                "Starting client due to ensure_started"
-                f"(even_if_no_session={even_if_no_session})"
+                f"Starting client due to ensure_started({even_if_no_session=}, {session_exists=})"
             )
             await self.start(delete_unless_authenticated=not even_if_no_session)
         return self
 
     async def stop(self) -> None:
-        await self.client.disconnect()
-        self.client = None
+        if self.client:
+            await self.client.disconnect()
+            self.client = None
 
     # region Telegram update handling
 

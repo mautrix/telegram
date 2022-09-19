@@ -113,6 +113,7 @@ class Bot(AbstractUser):
         )
         self._me_info = None
         self._me_mxid = None
+        self._login_wait_fut = self.loop.create_future()
 
     async def get_me(self, use_cache: bool = True) -> tuple[User, UserID]:
         if not use_cache or not self._me_mxid:
@@ -146,6 +147,8 @@ class Bot(AbstractUser):
         self.tgid = TelegramID(info.id)
         self.tg_username = info.username
         self.mxid = pu.Puppet.get_mxid_from_id(self.tgid)
+        self._login_wait_fut.set_result(None)
+        self._login_wait_fut = None
 
         chat_ids = [chat_id for chat_id, chat_type in self.chats.items() if chat_type == "chat"]
         response = await self.client(GetChatsRequest(chat_ids))
@@ -418,6 +421,8 @@ class Bot(AbstractUser):
             await self.add_chat(TelegramID(action.channel_id), "channel")
 
     async def update(self, update) -> bool:
+        if self._login_wait_fut:
+            await self._login_wait_fut
         if not isinstance(update, (UpdateNewMessage, UpdateNewChannelMessage)):
             return False
         if isinstance(update.message, MessageService):
