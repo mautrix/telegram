@@ -13,12 +13,12 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from mautrix.util.async_db import Connection
+from mautrix.util.async_db import Connection, Scheme
 
-latest_version = 10
+latest_version = 13
 
 
-async def create_latest_tables(conn: Connection) -> int:
+async def create_latest_tables(conn: Connection, scheme: Scheme) -> int:
     await conn.execute(
         """CREATE TABLE "user" (
             mxid TEXT   PRIMARY KEY,
@@ -67,6 +67,8 @@ async def create_latest_tables(conn: Connection) -> int:
             edit_index   INTEGER,
             redacted     BOOLEAN NOT NULL DEFAULT false,
             content_hash bytea,
+            sender_mxid  TEXT,
+            sender       BIGINT,
             PRIMARY KEY (tgid, tg_space, edit_index),
             UNIQUE (mxid, mx_room, tg_space)
         )"""
@@ -207,4 +209,28 @@ async def create_latest_tables(conn: Connection) -> int:
             PRIMARY KEY (session_id, entity_id)
         )"""
     )
+    gen = ""
+    if scheme in (Scheme.POSTGRES, Scheme.COCKROACH):
+        gen = "GENERATED ALWAYS AS IDENTITY"
+    await conn.execute(
+        f"""
+        CREATE TABLE backfill_queue (
+            queue_id            INTEGER PRIMARY KEY {gen},
+            user_mxid           TEXT,
+            priority            INTEGER NOT NULL,
+            portal_tgid         BIGINT,
+            portal_tg_receiver  BIGINT,
+            messages_per_batch  INTEGER NOT NULL,
+            post_batch_delay    INTEGER NOT NULL,
+            max_batches         INTEGER NOT NULL,
+            dispatch_time       TIMESTAMP,
+            completed_at        TIMESTAMP,
+            cooldown_timeout    TIMESTAMP,
+            FOREIGN KEY (user_mxid) REFERENCES "user"(mxid) ON DELETE CASCADE ON UPDATE CASCADE,
+            FOREIGN KEY (portal_tgid, portal_tg_receiver)
+                REFERENCES portal(tgid, tg_receiver) ON DELETE CASCADE
+        )
+        """
+    )
+
     return latest_version
