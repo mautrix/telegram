@@ -582,16 +582,19 @@ class User(DBUser, AbstractUser, BaseUser):
                 last_read = await DBMessage.get_one_by_tgid(
                     portal.tgid, tg_space, dialog.dialog.read_inbox_max_id
                 )
-            if last_read:
-                await puppet.intent.mark_read(last_read.mx_room, last_read.mxid)
-            if was_created or not self.config["bridge.tag_only_on_create"]:
-                await self._mute_room(puppet, portal, dialog.dialog.notify_settings.mute_until)
-                await self._tag_room(
-                    puppet, portal, self.config["bridge.pinned_tag"], dialog.pinned
-                )
-                await self._tag_room(
-                    puppet, portal, self.config["bridge.archive_tag"], dialog.archived
-                )
+            try:
+                if last_read:
+                    await puppet.intent.mark_read(last_read.mx_room, last_read.mxid)
+                if was_created or not self.config["bridge.tag_only_on_create"]:
+                    await self._mute_room(puppet, portal, dialog.dialog.notify_settings.mute_until)
+                    await self._tag_room(
+                        puppet, portal, self.config["bridge.pinned_tag"], dialog.pinned
+                    )
+                    await self._tag_room(
+                        puppet, portal, self.config["bridge.archive_tag"], dialog.archived
+                    )
+            except Exception:
+                self.log.exception(f"Error updating read status and tags for {portal.tgid_log}")
 
     async def get_cached_portals(self) -> dict[tuple[TelegramID, TelegramID], po.Portal]:
         if self._portals_cache is None:
