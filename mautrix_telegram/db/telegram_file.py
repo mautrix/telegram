@@ -77,7 +77,10 @@ class TelegramFile:
         file = cls._from_row(row)
         if file is None:
             return None
-        thumbnail_id = row.get("thumbnail", None)
+        try:
+            thumbnail_id = row["thumbnail"]
+        except KeyError:
+            thumbnail_id = None
         if thumbnail_id and not _thumbnail:
             file.thumbnail = await cls.get(thumbnail_id, _thumbnail=True)
         return file
