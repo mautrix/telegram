@@ -20,6 +20,11 @@
 ### Fixed
 * `ChatParticipantsForbidden` is handled properly when syncing non-supergroup
   info.
+* Fixed some bugs with file transfers when using SQLite.
+* Fixed error when attempting to log in again after logging out.
+* Fixed QR login not working.
+* Fixed error syncing chats if bridging a message had previously been
+  interrupted.
 
 # v0.12.0 (2022-08-26)
 
