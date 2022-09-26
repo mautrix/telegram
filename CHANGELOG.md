@@ -1,4 +1,4 @@
-# v0.12.1 (unreleased)
+# v0.12.1 (2022-09-26)
 
 ### Added
 * Support for custom emojis in reactions.
