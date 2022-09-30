@@ -16,5 +16,5 @@ from . import (
     v11_backfill_queue,
     v12_message_sender,
     v13_multiple_reactions,
-    v14_multiple_reactions,
+    v14_puppet_custom_mxid_index,
 )
