@@ -66,7 +66,7 @@ setuptools.setup(
     ],
     package_data={"mautrix_telegram": [
         "web/public/*.mako", "web/public/*.png", "web/public/*.css",
-        "example-config.yaml",
+        "example-config.yaml", "unicodemojipack.pickle",
     ]},
     data_files=[
         (".", ["mautrix_telegram/example-config.yaml"]),

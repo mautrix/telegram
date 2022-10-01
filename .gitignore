@@ -14,5 +14,8 @@ __pycache__
 /registration.yaml
 *.log*
 *.db
-*.pickle
+/*.pickle
 *.bak
+/*.session
+/*.session-journal
+/*.json

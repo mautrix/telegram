@@ -54,7 +54,7 @@ from mautrix.types import Format, MessageType, TextMessageEventContent
 from .. import abstract_user as au, portal as po, puppet as pu, user as u
 from ..db import Message as DBMessage, TelegramFile as DBTelegramFile
 from ..types import TelegramID
-from ..util.file_transfer import transfer_custom_emojis_to_matrix
+from ..util.file_transfer import UnicodeCustomEmoji, transfer_custom_emojis_to_matrix
 
 log: logging.Logger = logging.getLogger("mau.fmt.tg")
 
@@ -279,10 +279,14 @@ async def _telegram_entities_to_matrix(
         elif entity_type == MessageEntityCustomEmoji:
             html.append(entity_text)
         elif entity_type == ReuploadedCustomEmoji:
-            html.append(
-                f'<img data-mx-emoticon data-mau-animated-emoji src="{escape(entity.file.mxc)}" '
-                f'height="32" width="32" alt="{entity_text}" title="{entity_text}"/>'
-            )
+            if isinstance(entity.file, UnicodeCustomEmoji):
+                html.append(entity.file.emoji)
+            else:
+                html.append(
+                    f"<img data-mx-emoticon data-mau-animated-emoji"
+                    f' src="{escape(entity.file.mxc)}" height="32" width="32"'
+                    f' alt="{entity_text}" title="{entity_text}"/>'
+                )
         elif entity_type in (
             MessageEntityBotCommand,
             MessageEntityHashtag,

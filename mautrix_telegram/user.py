@@ -18,15 +18,16 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, AsyncGenerator, AsyncIterable, Awaitable, NamedTuple, cast
 from datetime import datetime, timezone
 import asyncio
+import time
 
 from telethon.errors import AuthKeyDuplicatedError, RPCError, UnauthorizedError
 from telethon.tl.custom import Dialog
 from telethon.tl.functions.account import UpdateStatusRequest
 from telethon.tl.functions.contacts import GetContactsRequest, SearchRequest
+from telethon.tl.functions.messages import GetAvailableReactionsRequest
 from telethon.tl.functions.updates import GetStateRequest
 from telethon.tl.functions.users import GetUsersRequest
 from telethon.tl.types import (
-    Channel,
     Chat,
     ChatForbidden,
     InputUserSelf,
@@ -43,6 +44,7 @@ from telethon.tl.types import (
     User as TLUser,
 )
 from telethon.tl.types.contacts import ContactsNotModified
+from telethon.tl.types.messages import AvailableReactions
 
 from mautrix.appservice import DOUBLE_PUPPET_SOURCE_KEY
 from mautrix.bridge import BaseUser, async_getter_lock
@@ -85,6 +87,11 @@ class User(DBUser, AbstractUser, BaseUser):
     _track_connection_task: asyncio.Task | None
     _is_backfilling: bool
 
+    _available_emoji_reactions: set[str] | None
+    _available_emoji_reactions_hash: int | None
+    _available_emoji_reactions_fetched: float
+    _available_emoji_reactions_lock: asyncio.Lock
+
     def __init__(
         self,
         mxid: UserID,
@@ -110,6 +117,10 @@ class User(DBUser, AbstractUser, BaseUser):
         self._track_connection_task = None
         self._is_backfilling = False
         self._portals_cache = None
+        self._available_emoji_reactions = None
+        self._available_emoji_reactions_hash = None
+        self._available_emoji_reactions_fetched = 0
+        self._available_emoji_reactions_lock = asyncio.Lock()
 
         (
             self.relaybot_whitelisted,
@@ -699,6 +710,29 @@ class User(DBUser, AbstractUser, BaseUser):
         await self.set_contacts(contacts.keys())
         self.log.debug("Contact syncing complete")
         return contacts
+
+    async def get_available_reactions(self) -> set[str]:
+        if self._available_emoji_reactions_fetched + 12 * 60 * 60 > time.monotonic():
+            return self._available_emoji_reactions
+        async with self._available_emoji_reactions_lock:
+            if self._available_emoji_reactions_fetched + 12 * 60 * 60 > time.monotonic():
+                return self._available_emoji_reactions
+            self.log.debug("Fetching available emoji reactions")
+            available_reactions = await self.client(
+                GetAvailableReactionsRequest(hash=self._available_emoji_reactions_hash or 0)
+            )
+            if isinstance(available_reactions, AvailableReactions):
+                self._available_emoji_reactions = {
+                    react.reaction
+                    for react in available_reactions.reactions
+                    if self.is_premium or not react.premium
+                }
+                self._available_emoji_reactions_hash = available_reactions.hash
+                self._available_emoji_reactions_fetched = time.monotonic()
+                self.log.debug(
+                    "Got available emoji reactions: %s", self._available_emoji_reactions
+                )
+            return self._available_emoji_reactions
 
     # endregion
     # region Class instance lookup

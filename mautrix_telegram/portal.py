@@ -2204,6 +2204,7 @@ class Portal(DBPortal, BasePortal):
             raise IgnoredMessageError(
                 f"Ignoring Matrix redaction of reaction to unknown event {reaction.msg_mxid}"
             )
+        # TODO keep other reactions for premium users with multiple reactions
         async with self.reaction_lock(reaction_target.mxid):
             await reaction.delete()
             await deleter.client(SendReactionRequest(peer=self.peer, msg_id=reaction_target.tgid))
@@ -2250,6 +2251,21 @@ class Portal(DBPortal, BasePortal):
                 return
             reaction = ReactionCustomEmoji(document_id=int(db_reaction.id))
             emoji_id = db_reaction.id
+        elif (
+            self.config["bridge.always_custom_emoji_reaction"]
+            or reaction.emoticon not in await user.get_available_reactions()
+        ):
+            try:
+                doc_id = util.unicode_custom_emoji_map[reaction.emoticon]
+            except KeyError:
+                pass
+            else:
+                self.log.trace(
+                    f"Using custom reaction {doc_id} instead of unicode {reaction.emoticon} "
+                    f"for {user.mxid}'s reaction"
+                )
+                reaction = ReactionCustomEmoji(document_id=doc_id)
+                emoji_id = str(doc_id)
         try:
             async with self.reaction_lock(target_event_id):
                 await self._handle_matrix_reaction(
@@ -2303,6 +2319,7 @@ class Portal(DBPortal, BasePortal):
         existing_reacts = await DBReaction.get_by_sender(msg.mxid, msg.mx_room, user.tgid)
         new_tg_reactions: list[TypeReaction] = []
         reactions_to_remove: list[DBReaction] = []
+        # TODO use config https://corefork.telegram.org/api/config#reactions-user-max-default
         max_reactions = 3 if user.is_premium else 1
         max_reactions -= 1  # Leave one reaction of space for the new reaction
         for db_reaction in existing_reacts:
@@ -2847,6 +2864,7 @@ class Portal(DBPortal, BasePortal):
     @staticmethod
     async def _get_reaction_limit(sender: TelegramID) -> int:
         puppet = await p.Puppet.get_by_tgid(sender, create=False)
+        # TODO use config https://corefork.telegram.org/api/config#reactions-user-max-default
         if puppet and puppet.is_premium:
             return 3
         return 1
@@ -2898,7 +2916,11 @@ class Portal(DBPortal, BasePortal):
                     matrix_reaction = variation_selector.add(new_reaction.emoticon)
                 elif isinstance(new_reaction, ReactionCustomEmoji):
                     emoji_id = str(new_reaction.document_id)
-                    matrix_reaction = custom_emojis[new_reaction.document_id].mxc
+                    custom_emoji = custom_emojis[new_reaction.document_id]
+                    if isinstance(custom_emoji, util.UnicodeCustomEmoji):
+                        matrix_reaction = custom_emoji.emoji
+                    else:
+                        matrix_reaction = custom_emoji.mxc
                 else:
                     self.log.warning("Unknown reaction type %s", type(new_reaction))
                     continue

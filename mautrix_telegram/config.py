@@ -136,6 +136,7 @@ class Config(BaseBridgeConfig):
         copy("bridge.image_as_file_pixels")
         copy("bridge.parallel_file_transfer")
         copy("bridge.federate_rooms")
+        copy("bridge.always_custom_emoji_reaction")
         copy("bridge.animated_sticker.target")
         copy("bridge.animated_sticker.convert_from_webm")
         copy("bridge.animated_sticker.args.width")
