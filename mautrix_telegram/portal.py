@@ -2197,17 +2197,24 @@ class Portal(DBPortal, BasePortal):
             raise IgnoredMessageError(f"Ignoring Matrix redaction of unknown event {event_id}")
         elif reaction.tg_sender != deleter.tgid:
             raise IgnoredMessageError(f"Ignoring Matrix redaction of reaction by another user")
-        reaction_target = await DBMessage.get_by_mxid(
-            reaction.msg_mxid, reaction.mx_room, tg_space
-        )
-        if not reaction_target or reaction_target.redacted:
+        msg = await DBMessage.get_by_mxid(reaction.msg_mxid, reaction.mx_room, tg_space)
+        if not msg or msg.redacted:
             raise IgnoredMessageError(
                 f"Ignoring Matrix redaction of reaction to unknown event {reaction.msg_mxid}"
             )
-        # TODO keep other reactions for premium users with multiple reactions
-        async with self.reaction_lock(reaction_target.mxid):
+        async with self.reaction_lock(msg.mxid):
             await reaction.delete()
-            await deleter.client(SendReactionRequest(peer=self.peer, msg_id=reaction_target.tgid))
+            new_reactions = None
+            if await deleter.get_max_reactions() > 1:
+                new_reactions = [
+                    react.telegram
+                    for react in await DBReaction.get_by_sender(
+                        msg.mxid, msg.mx_room, deleter.tgid
+                    )
+                ] or None
+            await deleter.client(
+                SendReactionRequest(peer=self.peer, msg_id=msg.tgid, reaction=new_reactions)
+            )
 
     async def _handle_matrix_deletion(self, deleter: u.User, event_id: EventID) -> None:
         real_deleter = deleter if not await deleter.needs_relaybot(self) else self.bot
