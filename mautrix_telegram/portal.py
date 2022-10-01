@@ -2319,8 +2319,7 @@ class Portal(DBPortal, BasePortal):
         existing_reacts = await DBReaction.get_by_sender(msg.mxid, msg.mx_room, user.tgid)
         new_tg_reactions: list[TypeReaction] = []
         reactions_to_remove: list[DBReaction] = []
-        # TODO use config https://corefork.telegram.org/api/config#reactions-user-max-default
-        max_reactions = 3 if user.is_premium else 1
+        max_reactions = await user.get_max_reactions()
         max_reactions -= 1  # Leave one reaction of space for the new reaction
         for db_reaction in existing_reacts:
             if db_reaction.reaction == emoji_id:
@@ -2862,12 +2861,12 @@ class Portal(DBPortal, BasePortal):
         return False
 
     @staticmethod
-    async def _get_reaction_limit(sender: TelegramID) -> int:
+    async def _get_reaction_limit(source: au.AbstractUser, sender: TelegramID) -> int:
         puppet = await p.Puppet.get_by_tgid(sender, create=False)
-        # TODO use config https://corefork.telegram.org/api/config#reactions-user-max-default
-        if puppet and puppet.is_premium:
-            return 3
-        return 1
+        is_premium = puppet and puppet.is_premium
+        if isinstance(source, u.User) and not source.is_bot:
+            return await source.get_max_reactions(is_premium)
+        return 3 if is_premium else 1
 
     async def _handle_telegram_reactions_locked(
         self,
@@ -2903,7 +2902,7 @@ class Portal(DBPortal, BasePortal):
             else:
                 if is_full or (
                     new_reactions is not None
-                    and len(new_reactions) == await self._get_reaction_limit(sender_id)
+                    and len(new_reactions) == await self._get_reaction_limit(source, sender_id)
                 ):
                     removed.append(existing_reaction)
                 # else: assume the reaction is still there, too much effort to fetch it

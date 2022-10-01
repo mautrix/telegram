@@ -8,3 +8,4 @@ from .file_transfer import (
 )
 from .parallel_file_transfer import parallel_transfer_to_telegram
 from .recursive_dict import recursive_del, recursive_get, recursive_set
+from .tl_json import parse_tl_json

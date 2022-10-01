@@ -15,7 +15,7 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, AsyncGenerator, AsyncIterable, Awaitable, NamedTuple, cast
+from typing import TYPE_CHECKING, Any, AsyncGenerator, AsyncIterable, Awaitable, NamedTuple, cast
 from datetime import datetime, timezone
 import asyncio
 import time
@@ -24,6 +24,7 @@ from telethon.errors import AuthKeyDuplicatedError, RPCError, UnauthorizedError
 from telethon.tl.custom import Dialog
 from telethon.tl.functions.account import UpdateStatusRequest
 from telethon.tl.functions.contacts import GetContactsRequest, SearchRequest
+from telethon.tl.functions.help import GetAppConfigRequest
 from telethon.tl.functions.messages import GetAvailableReactionsRequest
 from telethon.tl.functions.updates import GetStateRequest
 from telethon.tl.functions.users import GetUsersRequest
@@ -54,7 +55,7 @@ from mautrix.types import PushActionType, PushRuleKind, PushRuleScope, RoomID, R
 from mautrix.util.bridge_state import BridgeState, BridgeStateEvent
 from mautrix.util.opt_prometheus import Gauge
 
-from . import portal as po, puppet as pu
+from . import portal as po, puppet as pu, util
 from .abstract_user import AbstractUser
 from .db import Message as DBMessage, PgSession, User as DBUser
 from .types import TelegramID
@@ -91,6 +92,7 @@ class User(DBUser, AbstractUser, BaseUser):
     _available_emoji_reactions_hash: int | None
     _available_emoji_reactions_fetched: float
     _available_emoji_reactions_lock: asyncio.Lock
+    _app_config: dict[str, Any] | None
 
     def __init__(
         self,
@@ -121,6 +123,7 @@ class User(DBUser, AbstractUser, BaseUser):
         self._available_emoji_reactions_hash = None
         self._available_emoji_reactions_fetched = 0
         self._available_emoji_reactions_lock = asyncio.Lock()
+        self._app_config = None
 
         (
             self.relaybot_whitelisted,
@@ -733,6 +736,25 @@ class User(DBUser, AbstractUser, BaseUser):
                     "Got available emoji reactions: %s", self._available_emoji_reactions
                 )
             return self._available_emoji_reactions
+
+    def tl_to_json(self) -> Any:
+        pass
+
+    async def get_app_config(self) -> dict[str, Any]:
+        if not self._app_config:
+            cfg = await self.client(GetAppConfigRequest())
+            self._app_config = util.parse_tl_json(cfg)
+        return self._app_config
+
+    async def get_max_reactions(self, is_premium: bool | None = None) -> int:
+        if is_premium is None:
+            is_premium = self.is_premium
+        cfg = await self.get_app_config()
+        return (
+            cfg.get("reactions_user_max_premium", 3)
+            if is_premium
+            else cfg.get("reactions_user_max_default", 1)
+        )
 
     # endregion
     # region Class instance lookup
