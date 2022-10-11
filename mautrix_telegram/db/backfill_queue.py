@@ -21,8 +21,10 @@ from datetime import datetime, timedelta
 from asyncpg import Record
 from attr import dataclass
 
-from mautrix.types import RoomID, UserID
+from mautrix.types import UserID
 from mautrix.util.async_db import Database
+
+from ..types import TelegramID
 
 fake_db = Database.create("") if TYPE_CHECKING else None
 
@@ -34,8 +36,9 @@ class Backfill:
     queue_id: int | None
     user_mxid: UserID
     priority: int
-    portal_tgid: int
-    portal_tg_receiver: int
+    portal_tgid: TelegramID
+    portal_tg_receiver: TelegramID
+    anchor_msg_id: TelegramID | None
     messages_per_batch: int
     post_batch_delay: int
     max_batches: int
@@ -47,9 +50,10 @@ class Backfill:
     def new(
         user_mxid: UserID,
         priority: int,
-        portal_tgid: int,
-        portal_tg_receiver: int,
+        portal_tgid: TelegramID,
+        portal_tg_receiver: TelegramID,
         messages_per_batch: int,
+        anchor_msg_id: TelegramID | None = None,
         post_batch_delay: int = 0,
         max_batches: int = -1,
     ) -> "Backfill":
@@ -59,6 +63,7 @@ class Backfill:
             priority=priority,
             portal_tgid=portal_tgid,
             portal_tg_receiver=portal_tg_receiver,
+            anchor_msg_id=anchor_msg_id,
             messages_per_batch=messages_per_batch,
             post_batch_delay=post_batch_delay,
             max_batches=max_batches,
@@ -78,6 +83,7 @@ class Backfill:
         "priority",
         "portal_tgid",
         "portal_tg_receiver",
+        "anchor_msg_id",
         "messages_per_batch",
         "post_batch_delay",
         "max_batches",
@@ -150,6 +156,7 @@ class Backfill:
             self.priority,
             self.portal_tgid,
             self.portal_tg_receiver,
+            self.anchor_msg_id,
             self.messages_per_batch,
             self.post_batch_delay,
             self.max_batches,
