@@ -93,6 +93,7 @@ class User(DBUser, AbstractUser, BaseUser):
     _ensure_started_lock: asyncio.Lock
     _track_connection_task: asyncio.Task | None
     _backfill_task: asyncio.Task | None
+    wakeup_backfill_task: asyncio.Event
     _is_backfilling: bool
     takeout_retry_immediate: asyncio.Event
     takeout_requested: bool
@@ -130,6 +131,7 @@ class User(DBUser, AbstractUser, BaseUser):
         self._portals_cache = None
 
         self._backfill_task = None
+        self.wakeup_backfill_task = asyncio.Event()
         self.takeout_retry_immediate = asyncio.Event()
         self.takeout_requested = False
 
@@ -380,7 +382,8 @@ class User(DBUser, AbstractUser, BaseUser):
         while True:
             req = await Backfill.get_next(self.mxid)
             if not req:
-                await asyncio.sleep(30)
+                await self.wakeup_backfill_task.wait()
+                self.wakeup_backfill_task.clear()
             else:
                 await self._takeout_and_backfill(req)
 
@@ -417,8 +420,12 @@ class User(DBUser, AbstractUser, BaseUser):
             req = first_req or await Backfill.get_next(self.mxid)
             first_req = None
             if not req:
-                await asyncio.sleep(10)
                 missed_reqs += 1
+                try:
+                    await asyncio.wait_for(self.wakeup_backfill_task.wait(), timeout=30)
+                except asyncio.TimeoutError:
+                    pass
+                self.wakeup_backfill_task.clear()
                 continue
             missed_reqs = 0
             self.log.info("Backfill request %s", req)

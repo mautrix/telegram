@@ -2635,6 +2635,7 @@ class Portal(DBPortal, BasePortal):
             post_batch_delay=self.config["bridge.backfill.incremental.post_batch_delay"],
             max_batches=max_batches or self._default_max_batches,
         ).insert()
+        source.wakeup_backfill_task.set()
 
     async def forward_backfill(
         self,
@@ -2745,14 +2746,6 @@ class Portal(DBPortal, BasePortal):
                 messages_per_batch=req.messages_per_batch,
                 max_batches=-1 if req.max_batches < 0 else (req.max_batches - 1),
             )
-            await Backfill.new(
-                user_mxid=source.mxid,
-                priority=100,
-                portal_tgid=self.tgid,
-                portal_tg_receiver=self.tg_receiver,
-                messages_per_batch=req.messages_per_batch,
-                max_batches=-1 if req.max_batches < 0 else (req.max_batches - 1),
-            ).insert()
         else:
             self.log.debug("No more messages to backfill")
         return f"Backfilled {message_count} messages"
