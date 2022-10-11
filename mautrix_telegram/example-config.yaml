@@ -355,6 +355,9 @@ bridge:
         normal_groups: false
 
         # Forward backfilling limits. These apply to both MSC2716 and legacy backfill.
+        #
+        # Using a negative initial limit is not recommended, as it would try to backfill everything in a single batch.
+        # MSC2716 and the incremental settings are meant for backfilling everything incrementally rather than at once.
         forward:
             # Number of messages to backfill immediately after creating a portal.
             initial_limit: 10

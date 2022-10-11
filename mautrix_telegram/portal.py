@@ -2646,6 +2646,8 @@ class Portal(DBPortal, BasePortal):
     ) -> str:
         type = "initial" if initial else "sync"
         limit = override_limit or self.config[f"bridge.backfill.forward.{type}_limit"]
+        if limit == 0:
+            return "Limit is zero, not backfilling"
         with self.backfill_lock:
             output = await self.backfill(
                 source, source.client, forward=True, forward_limit=limit, last_tgid=last_tgid
