@@ -53,6 +53,7 @@ from mautrix.types import Format, MessageType, TextMessageEventContent
 
 from .. import abstract_user as au, portal as po, puppet as pu, user as u
 from ..db import Message as DBMessage, TelegramFile as DBTelegramFile
+from ..tgclient import MautrixTelegramClient
 from ..types import TelegramID
 from ..util.file_transfer import UnicodeCustomEmoji, transfer_custom_emojis_to_matrix
 
@@ -60,7 +61,7 @@ log: logging.Logger = logging.getLogger("mau.fmt.tg")
 
 
 async def _add_forward_header(
-    source: au.AbstractUser, content: TextMessageEventContent, fwd_from: MessageFwdHeader
+    client: MautrixTelegramClient, content: TextMessageEventContent, fwd_from: MessageFwdHeader
 ) -> None:
     fwd_from_html, fwd_from_text = None, None
     if isinstance(fwd_from.from_id, PeerUser):
@@ -81,7 +82,7 @@ async def _add_forward_header(
 
         if not fwd_from_text:
             try:
-                user = await source.client.get_entity(fwd_from.from_id)
+                user = await client.get_entity(fwd_from.from_id)
                 if user:
                     fwd_from_text, _ = pu.Puppet.get_displayname(user, False)
                     fwd_from_html = f"<b>{escape(fwd_from_text)}</b>"
@@ -104,7 +105,7 @@ async def _add_forward_header(
                 fwd_from_html = f"channel <b>{escape(fwd_from_text)}</b>"
         else:
             try:
-                channel = await source.client.get_entity(fwd_from.from_id)
+                channel = await client.get_entity(fwd_from.from_id)
                 if channel:
                     fwd_from_text = f"channel {channel.title}"
                     fwd_from_html = f"channel <b>{escape(channel.title)}</b>"
@@ -135,12 +136,14 @@ class ReuploadedCustomEmoji(MessageEntityCustomEmoji):
 
 
 async def _convert_custom_emoji(
-    source: au.AbstractUser, entities: list[TypeMessageEntity]
+    source: au.AbstractUser,
+    entities: list[TypeMessageEntity],
+    client: MautrixTelegramClient | None = None,
 ) -> None:
     emoji_ids = [
         entity.document_id for entity in entities if isinstance(entity, MessageEntityCustomEmoji)
     ]
-    custom_emojis = await transfer_custom_emojis_to_matrix(source, emoji_ids)
+    custom_emojis = await transfer_custom_emojis_to_matrix(source, emoji_ids, client=client)
     if len(custom_emojis) > 0:
         for i, entity in enumerate(entities):
             if isinstance(entity, MessageEntityCustomEmoji):
@@ -150,17 +153,20 @@ async def _convert_custom_emoji(
 async def telegram_to_matrix(
     evt: Message | SponsoredMessage,
     source: au.AbstractUser,
+    client: MautrixTelegramClient | None = None,
     override_text: str = None,
     override_entities: list[TypeMessageEntity] = None,
     require_html: bool = False,
 ) -> TextMessageEventContent:
+    if not client:
+        client = source.client
     content = TextMessageEventContent(
         msgtype=MessageType.TEXT,
         body=override_text or evt.message,
     )
     entities = override_entities or evt.entities
     if entities:
-        await _convert_custom_emoji(source, entities)
+        await _convert_custom_emoji(source, entities, client=client)
         content.format = Format.HTML
         html = await _telegram_entities_to_matrix_catch(add_surrogate(content.body), entities)
         content.formatted_body = del_surrogate(html)
@@ -169,7 +175,7 @@ async def telegram_to_matrix(
         content.ensure_has_html()
 
     if getattr(evt, "fwd_from", None):
-        await _add_forward_header(source, content, evt.fwd_from)
+        await _add_forward_header(client, content, evt.fwd_from)
 
     if isinstance(evt, Message) and evt.post and evt.post_author:
         content.ensure_has_html()

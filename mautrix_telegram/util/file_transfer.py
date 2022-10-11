@@ -229,8 +229,10 @@ class UnicodeCustomEmoji(NamedTuple):
 
 
 async def transfer_custom_emojis_to_matrix(
-    source: au.AbstractUser, emoji_ids: list[int]
+    source: au.AbstractUser, emoji_ids: list[int], client: MautrixTelegramClient | None = None
 ) -> dict[int, DBTelegramFile | UnicodeCustomEmoji]:
+    if not client:
+        client = source.client
     emoji_ids = set(emoji_ids)
     existing_unicode = {}
     for emoji_id in emoji_ids:
@@ -249,7 +251,7 @@ async def transfer_custom_emojis_to_matrix(
     if not_existing_ids:
         log.debug(f"Transferring custom emojis through {source.mxid}: {not_existing_ids}")
 
-        documents: list[Document] = await source.client(
+        documents: list[Document] = await client(
             GetCustomEmojiDocumentsRequest(document_id=not_existing_ids)
         )
 
@@ -261,7 +263,7 @@ async def transfer_custom_emojis_to_matrix(
         async def transfer(document: Document) -> None:
             async with transfer_sema:
                 file_map[document.id] = await transfer_file_to_matrix(
-                    source.client,
+                    client,
                     source.bridge.az.intent,
                     document,
                     is_sticker=True,

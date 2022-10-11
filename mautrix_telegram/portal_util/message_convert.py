@@ -78,6 +78,7 @@ from mautrix.util.logging import TraceLogger
 from .. import abstract_user as au, formatter, matrix as m, portal as po, puppet as pu, util
 from ..config import Config
 from ..db import Message as DBMessage, TelegramFile as DBTelegramFile
+from ..tgclient import MautrixTelegramClient
 from ..types import TelegramID
 from ..util import sane_mimetypes
 
@@ -149,12 +150,15 @@ class TelegramMessageConverter:
         is_bot: bool,
         evt: Message,
         no_reply_fallback: bool = False,
+        client: MautrixTelegramClient | None = None,
     ) -> ConvertedMessage | None:
+        if not client:
+            client = source.client
         if hasattr(evt, "media") and isinstance(evt.media, self._allowed_media):
             convert_media = self._media_converters[type(evt.media)]
-            converted = await convert_media(source=source, intent=intent, evt=evt)
+            converted = await convert_media(source=source, intent=intent, evt=evt, client=client)
         elif evt.message:
-            converted = await self._convert_text(source, intent, is_bot, evt)
+            converted = await self._convert_text(source, intent, is_bot, evt, client)
         else:
             self.log.debug("Unhandled Telegram message %d", evt.id)
             return
@@ -326,9 +330,14 @@ class TelegramMessageConverter:
         return beeper_link_preview
 
     async def _convert_text(
-        self, source: au.AbstractUser, intent: IntentAPI, is_bot: bool, evt: Message
+        self,
+        source: au.AbstractUser,
+        intent: IntentAPI,
+        is_bot: bool,
+        evt: Message,
+        client: MautrixTelegramClient,
     ) -> ConvertedMessage:
-        content = await formatter.telegram_to_matrix(evt, source)
+        content = await formatter.telegram_to_matrix(evt, source, client)
         if is_bot and self.portal.get_config("bot_messages_as_notices"):
             content.msgtype = MessageType.NOTICE
 
@@ -344,7 +353,11 @@ class TelegramMessageConverter:
         return ConvertedMessage(content=content)
 
     async def _convert_photo(
-        self, source: au.AbstractUser, intent: IntentAPI, evt: Message
+        self,
+        source: au.AbstractUser,
+        intent: IntentAPI,
+        evt: Message,
+        client: MautrixTelegramClient,
     ) -> ConvertedMessage | None:
         media: MessageMediaPhoto = evt.media
         if media.photo is None and media.ttl_seconds:
@@ -362,7 +375,7 @@ class TelegramMessageConverter:
                 )
             )
         file = await util.transfer_file_to_matrix(
-            source.client,
+            client,
             intent,
             loc,
             encrypt=self.portal.encrypted,
@@ -388,7 +401,9 @@ class TelegramMessageConverter:
             content.file = file.decryption_info
         else:
             content.url = file.mxc
-        caption_content = await formatter.telegram_to_matrix(evt, source) if evt.message else None
+        caption_content = (
+            await formatter.telegram_to_matrix(evt, source, client) if evt.message else None
+        )
         return ConvertedMessage(
             content=content,
             caption=caption_content,
@@ -396,7 +411,11 @@ class TelegramMessageConverter:
         )
 
     async def _convert_document(
-        self, source: au.AbstractUser, intent: IntentAPI, evt: Message
+        self,
+        source: au.AbstractUser,
+        intent: IntentAPI,
+        evt: Message,
+        client: MautrixTelegramClient,
     ) -> ConvertedMessage | None:
         document = evt.media.document
 
@@ -419,7 +438,7 @@ class TelegramMessageConverter:
         parallel_id = source.tgid if self.config["bridge.parallel_file_transfer"] else None
         tgs_convert = self.config["bridge.animated_sticker"]
         file = await util.transfer_file_to_matrix(
-            source.client,
+            client,
             intent,
             document,
             thumb_loc,
@@ -486,7 +505,9 @@ class TelegramMessageConverter:
         else:
             content.url = file.mxc
 
-        caption_content = await formatter.telegram_to_matrix(evt, source) if evt.message else None
+        caption_content = (
+            await formatter.telegram_to_matrix(evt, source, client) if evt.message else None
+        )
 
         return ConvertedMessage(
             type=event_type,
@@ -527,13 +548,17 @@ class TelegramMessageConverter:
         return ConvertedMessage(content=content)
 
     @staticmethod
-    async def _convert_unsupported(source: au.AbstractUser, evt: Message, **_) -> ConvertedMessage:
+    async def _convert_unsupported(
+        source: au.AbstractUser, evt: Message, client: MautrixTelegramClient, **_
+    ) -> ConvertedMessage:
         override_text = (
             "This message is not supported on your version of Mautrix-Telegram. "
             "Please check https://github.com/mautrix/telegram or ask your "
             "bridge administrator about possible updates."
         )
-        content = await formatter.telegram_to_matrix(evt, source, override_text=override_text)
+        content = await formatter.telegram_to_matrix(
+            evt, source, client, override_text=override_text
+        )
         content.msgtype = MessageType.NOTICE
         content["fi.mau.telegram.unsupported"] = True
         return ConvertedMessage(content=content)
@@ -589,7 +614,9 @@ class TelegramMessageConverter:
         content["fi.mau.telegram.dice"] = {"emoticon": roll.emoticon, "value": roll.value}
         return ConvertedMessage(content=content)
 
-    async def _convert_game(self, source: au.AbstractUser, evt: Message, **_) -> ConvertedMessage:
+    async def _convert_game(
+        self, source: au.AbstractUser, evt: Message, client: MautrixTelegramClient, **_
+    ) -> ConvertedMessage:
         game: Game = evt.media.game
         play_id = self._encode_msgid(source, evt)
         command = f"{self.command_prefix} play {play_id}"
@@ -599,7 +626,7 @@ class TelegramMessageConverter:
         ]
 
         content = await formatter.telegram_to_matrix(
-            evt, source, override_text=override_text, override_entities=override_entities
+            evt, source, client, override_text=override_text, override_entities=override_entities
         )
         content.msgtype = MessageType.NOTICE
         content["fi.mau.telegram.game"] = play_id
@@ -607,7 +634,9 @@ class TelegramMessageConverter:
         return ConvertedMessage(content=content)
 
     @staticmethod
-    async def _convert_contact(source: au.AbstractUser, evt: Message, **_) -> ConvertedMessage:
+    async def _convert_contact(
+        source: au.AbstractUser, evt: Message, client: MautrixTelegramClient, **_
+    ) -> ConvertedMessage:
         contact: MessageMediaContact = evt.media
         name = " ".join(x for x in [contact.first_name, contact.last_name] if x)
         formatted_phone = f"+{contact.phone_number}"
@@ -633,8 +662,8 @@ class TelegramMessageConverter:
         puppet = await pu.Puppet.get_by_tgid(TelegramID(contact.user_id))
         if not puppet.displayname:
             try:
-                entity = await source.client.get_entity(PeerUser(contact.user_id))
-                await puppet.update_info(source, entity)
+                entity = await client.get_entity(PeerUser(contact.user_id))
+                await puppet.update_info(source, entity, client_override=client)
             except Exception as e:
                 source.log.warning(f"Failed to sync puppet info of received contact: {e}")
         else:

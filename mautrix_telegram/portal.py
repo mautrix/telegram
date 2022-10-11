@@ -2785,6 +2785,7 @@ class Portal(DBPortal, BasePortal):
     async def _convert_batch_msg(
         self,
         source: u.User,
+        client: MautrixTelegramClient,
         msg: Message,
         add_member: Callable[[IntentAPI, str, ContentURI], Awaitable[None]],
     ) -> tuple[putil.ConvertedMessage, IntentAPI]:
@@ -2800,8 +2801,8 @@ class Portal(DBPortal, BasePortal):
         if sender:
             intent = sender.intent_for(self)
             if not sender.displayname:
-                entity = await source.client.get_entity(sender.peer)
-                await sender.update_info(source, entity)
+                entity = await client.get_entity(sender.peer)
+                await sender.update_info(source, entity, client_override=client)
         else:
             intent = self.main_intent
         if intent.api.is_real_user and not self._can_double_puppet_backfill(intent.mxid):
@@ -2809,7 +2810,7 @@ class Portal(DBPortal, BasePortal):
         if sender:
             await add_member(intent, sender.displayname, sender.avatar_url)
         is_bot = sender.is_bot if sender else False
-        converted = await self._msg_conv.convert(source, intent, is_bot, msg)
+        converted = await self._msg_conv.convert(source, intent, is_bot, msg, client=client)
         return converted, intent
 
     async def _wrap_batch_msg(
@@ -2902,7 +2903,7 @@ class Portal(DBPortal, BasePortal):
                 first_id = msg.id
                 before_first_msg_timestamp = int(msg.date.timestamp() * 1000) - 1
 
-            converted, intent = await self._convert_batch_msg(source, msg, add_member)
+            converted, intent = await self._convert_batch_msg(source, client, msg, add_member)
             if converted is None:
                 continue
             events.append(await self._wrap_batch_msg(intent, msg, converted))

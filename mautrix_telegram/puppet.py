@@ -29,8 +29,6 @@ from telethon.tl.types import (
     PeerChat,
     PeerUser,
     TypeChatPhoto,
-    TypeInputPeer,
-    TypeInputUser,
     TypePeer,
     TypeUserProfilePhoto,
     UpdateUserName,
@@ -48,6 +46,7 @@ from mautrix.util.simple_template import SimpleTemplate
 from . import abstract_user as au, portal as p, util
 from .config import Config
 from .db import Puppet as DBPuppet
+from .tgclient import MautrixTelegramClient
 from .types import TelegramID
 
 if TYPE_CHECKING:
@@ -146,9 +145,6 @@ class Puppet(DBPuppet, BasePuppet):
     @property
     def plain_displayname(self) -> str:
         return self.displayname_template.parse(self.displayname) or self.displayname
-
-    def get_input_entity(self, user: au.AbstractUser) -> Awaitable[TypeInputPeer | TypeInputUser]:
-        return user.client.get_input_entity(self.peer)
 
     def intent_for(self, portal: p.Portal) -> IntentAPI:
         if portal.tgid == self.tgid:
@@ -255,7 +251,12 @@ class Puppet(DBPuppet, BasePuppet):
         except Exception:
             source.log.exception(f"Failed to update info of {self.tgid}")
 
-    async def update_info(self, source: au.AbstractUser, info: User | Channel) -> None:
+    async def update_info(
+        self,
+        source: au.AbstractUser,
+        info: User | Channel,
+        client_override: MautrixTelegramClient | None = None,
+    ) -> None:
         is_bot = False if isinstance(info, Channel) else info.bot
         is_premium = False if isinstance(info, Channel) else info.premium
         is_channel = isinstance(info, Channel)
@@ -277,8 +278,14 @@ class Puppet(DBPuppet, BasePuppet):
 
         if not self.disable_updates:
             try:
-                changed = await self.update_displayname(source, info) or changed
-                changed = await self.update_avatar(source, info.photo) or changed
+                changed = (
+                    await self.update_displayname(source, info, client_override=client_override)
+                    or changed
+                )
+                changed = (
+                    await self.update_avatar(source, info.photo, client_override=client_override)
+                    or changed
+                )
             except Exception:
                 self.log.exception(f"Failed to update info from source {source.tgid}")
 
@@ -293,7 +300,10 @@ class Puppet(DBPuppet, BasePuppet):
             await portal.update_info_from_puppet(self)
 
     async def update_displayname(
-        self, source: au.AbstractUser, info: User | Channel | UpdateUserName
+        self,
+        source: au.AbstractUser,
+        info: User | Channel | UpdateUserName,
+        client_override: MautrixTelegramClient | None = None,
     ) -> bool:
         if self.disable_updates:
             return False
@@ -320,7 +330,7 @@ class Puppet(DBPuppet, BasePuppet):
             return False
 
         if isinstance(info, UpdateUserName):
-            info = await source.client.get_entity(self.peer)
+            info = await (client_override or source.client).get_entity(self.peer)
         if isinstance(info, Channel) or not info.contact:
             self.displayname_contact = False
         elif not self.displayname_contact:
@@ -357,7 +367,10 @@ class Puppet(DBPuppet, BasePuppet):
         return False
 
     async def update_avatar(
-        self, source: au.AbstractUser, photo: TypeUserProfilePhoto | TypeChatPhoto
+        self,
+        source: au.AbstractUser,
+        photo: TypeUserProfilePhoto | TypeChatPhoto,
+        client_override: MautrixTelegramClient | None = None,
     ) -> bool:
         if self.disable_updates:
             return False
@@ -376,11 +389,14 @@ class Puppet(DBPuppet, BasePuppet):
                 self.photo_id = ""
                 self.avatar_url = None
             elif self.photo_id != photo_id or not self.avatar_url:
+                client = client_override or source.client
                 file = await util.transfer_file_to_matrix(
-                    client=source.client,
+                    client=client,
                     intent=self.default_mxid_intent,
                     location=InputPeerPhotoFileLocation(
-                        peer=await self.get_input_entity(source), photo_id=photo.photo_id, big=True
+                        peer=await client.get_input_entity(self.peer),
+                        photo_id=photo.photo_id,
+                        big=True,
                     ),
                     async_upload=self.config["homeserver.async_media"],
                 )
