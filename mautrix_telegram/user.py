@@ -18,6 +18,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, AsyncGenerator, AsyncIterable, Awaitable, NamedTuple, cast
 from datetime import datetime, timezone
 import asyncio
+import time
 
 from telethon.errors import (
     AuthKeyDuplicatedError,
@@ -28,10 +29,11 @@ from telethon.errors import (
 from telethon.tl.custom import Dialog
 from telethon.tl.functions.account import UpdateStatusRequest
 from telethon.tl.functions.contacts import GetContactsRequest, SearchRequest
+from telethon.tl.functions.help import GetAppConfigRequest
+from telethon.tl.functions.messages import GetAvailableReactionsRequest
 from telethon.tl.functions.updates import GetStateRequest
 from telethon.tl.functions.users import GetUsersRequest
 from telethon.tl.types import (
-    Channel,
     Chat,
     ChatForbidden,
     InputUserSelf,
@@ -48,6 +50,7 @@ from telethon.tl.types import (
     User as TLUser,
 )
 from telethon.tl.types.contacts import ContactsNotModified
+from telethon.tl.types.messages import AvailableReactions
 
 from mautrix.appservice import DOUBLE_PUPPET_SOURCE_KEY
 from mautrix.bridge import BaseUser, async_getter_lock
@@ -57,7 +60,7 @@ from mautrix.types import PushActionType, PushRuleKind, PushRuleScope, RoomID, R
 from mautrix.util.bridge_state import BridgeState, BridgeStateEvent
 from mautrix.util.opt_prometheus import Gauge
 
-from . import portal as po, puppet as pu
+from . import portal as po, puppet as pu, util
 from .abstract_user import AbstractUser
 from .db import Backfill, Message as DBMessage, PgSession, User as DBUser
 from .tgclient import MautrixTelegramClient
@@ -94,6 +97,12 @@ class User(DBUser, AbstractUser, BaseUser):
     takeout_retry_immediate: asyncio.Event
     takeout_requested: bool
 
+    _available_emoji_reactions: set[str] | None
+    _available_emoji_reactions_hash: int | None
+    _available_emoji_reactions_fetched: float
+    _available_emoji_reactions_lock: asyncio.Lock
+    _app_config: dict[str, Any] | None
+
     def __init__(
         self,
         mxid: UserID,
@@ -119,9 +128,16 @@ class User(DBUser, AbstractUser, BaseUser):
         self._track_connection_task = None
         self._is_backfilling = False
         self._portals_cache = None
+
         self._backfill_task = None
         self.takeout_retry_immediate = asyncio.Event()
         self.takeout_requested = False
+
+        self._available_emoji_reactions = None
+        self._available_emoji_reactions_hash = None
+        self._available_emoji_reactions_fetched = 0
+        self._available_emoji_reactions_lock = asyncio.Lock()
+        self._app_config = None
 
         (
             self.relaybot_whitelisted,
@@ -516,10 +532,11 @@ class User(DBUser, AbstractUser, BaseUser):
                 pass
             self.tgid = None
         ok = await self.client.log_out()
-        await self.client.session.delete()
+        sess = self.client.session
+        await self.stop()
+        await sess.delete()
         await self.delete()
         self.by_mxid.pop(self.mxid, None)
-        await self.stop()
         self._track_metric(METRIC_LOGGED_IN, False)
         return ok
 
@@ -673,16 +690,19 @@ class User(DBUser, AbstractUser, BaseUser):
                 last_read = await DBMessage.get_one_by_tgid(
                     portal.tgid, tg_space, dialog.dialog.read_inbox_max_id
                 )
-            if last_read:
-                await puppet.intent.mark_read(last_read.mx_room, last_read.mxid)
-            if was_created or not self.config["bridge.tag_only_on_create"]:
-                await self._mute_room(puppet, portal, dialog.dialog.notify_settings.mute_until)
-                await self._tag_room(
-                    puppet, portal, self.config["bridge.pinned_tag"], dialog.pinned
-                )
-                await self._tag_room(
-                    puppet, portal, self.config["bridge.archive_tag"], dialog.archived
-                )
+            try:
+                if last_read:
+                    await puppet.intent.mark_read(last_read.mx_room, last_read.mxid)
+                if was_created or not self.config["bridge.tag_only_on_create"]:
+                    await self._mute_room(puppet, portal, dialog.dialog.notify_settings.mute_until)
+                    await self._tag_room(
+                        puppet, portal, self.config["bridge.pinned_tag"], dialog.pinned
+                    )
+                    await self._tag_room(
+                        puppet, portal, self.config["bridge.archive_tag"], dialog.archived
+                    )
+            except Exception:
+                self.log.exception(f"Error updating read status and tags for {portal.tgid_log}")
 
     async def get_cached_portals(self) -> dict[tuple[TelegramID, TelegramID], po.Portal]:
         if self._portals_cache is None:
@@ -787,6 +807,48 @@ class User(DBUser, AbstractUser, BaseUser):
         await self.set_contacts(contacts.keys())
         self.log.debug("Contact syncing complete")
         return contacts
+
+    async def get_available_reactions(self) -> set[str]:
+        if self._available_emoji_reactions_fetched + 12 * 60 * 60 > time.monotonic():
+            return self._available_emoji_reactions
+        async with self._available_emoji_reactions_lock:
+            if self._available_emoji_reactions_fetched + 12 * 60 * 60 > time.monotonic():
+                return self._available_emoji_reactions
+            self.log.debug("Fetching available emoji reactions")
+            available_reactions = await self.client(
+                GetAvailableReactionsRequest(hash=self._available_emoji_reactions_hash or 0)
+            )
+            if isinstance(available_reactions, AvailableReactions):
+                self._available_emoji_reactions = {
+                    react.reaction
+                    for react in available_reactions.reactions
+                    if self.is_premium or not react.premium
+                }
+                self._available_emoji_reactions_hash = available_reactions.hash
+                self._available_emoji_reactions_fetched = time.monotonic()
+                self.log.debug(
+                    "Got available emoji reactions: %s", self._available_emoji_reactions
+                )
+            return self._available_emoji_reactions
+
+    def tl_to_json(self) -> Any:
+        pass
+
+    async def get_app_config(self) -> dict[str, Any]:
+        if not self._app_config:
+            cfg = await self.client(GetAppConfigRequest())
+            self._app_config = util.parse_tl_json(cfg)
+        return self._app_config
+
+    async def get_max_reactions(self, is_premium: bool | None = None) -> int:
+        if is_premium is None:
+            is_premium = self.is_premium
+        cfg = await self.get_app_config()
+        return (
+            cfg.get("reactions_user_max_premium", 3)
+            if is_premium
+            else cfg.get("reactions_user_max_default", 1)
+        )
 
     # endregion
     # region Class instance lookup

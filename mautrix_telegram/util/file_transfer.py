@@ -15,11 +15,13 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from __future__ import annotations
 
-from typing import Optional, Union
+from typing import NamedTuple, Optional, Union
 from io import BytesIO
 from sqlite3 import IntegrityError
 import asyncio
 import logging
+import pickle
+import pkgutil
 import tempfile
 import time
 
@@ -44,7 +46,7 @@ from telethon.tl.types import (
 )
 
 from mautrix.appservice import IntentAPI
-from mautrix.util import magic
+from mautrix.util import magic, variation_selector
 
 from .. import abstract_user as au
 from ..db import TelegramFile as DBTelegramFile
@@ -212,15 +214,37 @@ async def transfer_thumbnail_to_matrix(
 
 transfer_locks: dict[str, asyncio.Lock] = {}
 
+unicode_custom_emoji_map = pickle.loads(
+    pkgutil.get_data("mautrix_telegram", "unicodemojipack.pickle")
+)
+reverse_unicode_custom_emoji_map = {
+    doc_id: emoji for emoji, doc_id in unicode_custom_emoji_map.items()
+}
+
 TypeThumbnail = Optional[Union[TypeLocation, TypePhotoSize]]
+
+
+class UnicodeCustomEmoji(NamedTuple):
+    emoji: str
 
 
 async def transfer_custom_emojis_to_matrix(
     source: au.AbstractUser, emoji_ids: list[int]
-) -> dict[int, DBTelegramFile]:
+) -> dict[int, DBTelegramFile | UnicodeCustomEmoji]:
     emoji_ids = set(emoji_ids)
+    existing_unicode = {}
+    for emoji_id in emoji_ids:
+        try:
+            existing_unicode[emoji_id] = UnicodeCustomEmoji(
+                variation_selector.add(reverse_unicode_custom_emoji_map[emoji_id])
+            )
+        except KeyError:
+            pass
+    emoji_ids -= existing_unicode.keys()
+    if not emoji_ids:
+        return existing_unicode
     existing = await DBTelegramFile.get_many([str(id) for id in emoji_ids])
-    file_map = {int(file.id): file for file in existing}
+    file_map = {int(file.id): file for file in existing} | existing_unicode
     not_existing_ids = list(emoji_ids - file_map.keys())
     if not_existing_ids:
         log.debug(f"Transferring custom emojis through {source.mxid}: {not_existing_ids}")

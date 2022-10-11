@@ -22,6 +22,7 @@ import logging
 import platform
 import time
 
+from telethon.errors import UnauthorizedError
 from telethon.network import (
     Connection,
     ConnectionTcpFull,
@@ -238,6 +239,9 @@ class AbstractUser(ABC):
             self.log.critical(f"Stopping due to update handling error {type(err).__name__}")
             self.bridge.manual_stop(50)
         else:
+            if isinstance(err, UnauthorizedError):
+                self.log.warning("Not recreating Telethon update loop")
+                return
             self.log.info("Recreating Telethon update loop in 60 seconds")
             await asyncio.sleep(60)
             self.log.debug("Now recreating Telethon update loop")
@@ -297,17 +301,18 @@ class AbstractUser(ABC):
     async def ensure_started(self, even_if_no_session=False) -> AbstractUser:
         if self.connected:
             return self
-        if even_if_no_session or await PgSession.has(self.mxid):
+        session_exists = await PgSession.has(self.mxid)
+        if even_if_no_session or session_exists:
             self.log.debug(
-                "Starting client due to ensure_started"
-                f"(even_if_no_session={even_if_no_session})"
+                f"Starting client due to ensure_started({even_if_no_session=}, {session_exists=})"
             )
             await self.start(delete_unless_authenticated=not even_if_no_session)
         return self
 
     async def stop(self) -> None:
-        await self.client.disconnect()
-        self.client = None
+        if self.client:
+            await self.client.disconnect()
+            self.client = None
 
     # region Telegram update handling
 

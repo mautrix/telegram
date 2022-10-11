@@ -224,6 +224,9 @@ bridge:
     # Whether or not created rooms should have federation enabled.
     # If false, created portal rooms will never be federated.
     federate_rooms: true
+    # Should the bridge send all unicode reactions as custom emoji reactions to Telegram?
+    # By default, the bridge only uses custom emojis for unicode emojis that aren't allowed in reactions.
+    always_custom_emoji_reaction: false
     # Settings for converting animated stickers.
     animated_sticker:
         # Format to which animated stickers should be converted.
