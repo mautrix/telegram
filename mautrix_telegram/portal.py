@@ -2903,6 +2903,8 @@ class Portal(DBPortal, BasePortal):
                 before_first_msg_timestamp = int(msg.date.timestamp() * 1000) - 1
 
             converted, intent = await self._convert_batch_msg(source, msg, add_member)
+            if converted is None:
+                continue
             events.append(await self._wrap_batch_msg(intent, msg, converted))
             intents.append(intent)
             metas.append(msg)
