@@ -382,7 +382,10 @@ class User(DBUser, AbstractUser, BaseUser):
         while True:
             req = await Backfill.get_next(self.mxid)
             if not req:
-                await self.wakeup_backfill_task.wait()
+                try:
+                    await asyncio.wait_for(self.wakeup_backfill_task.wait(), timeout=300)
+                except asyncio.TimeoutError:
+                    pass
                 self.wakeup_backfill_task.clear()
             else:
                 await self._takeout_and_backfill(req)
@@ -439,7 +442,7 @@ class User(DBUser, AbstractUser, BaseUser):
                 await asyncio.sleep(req.post_batch_delay)
             except Exception:
                 self.log.exception("Error handling backfill request for %s", req.portal_tgid)
-                await req.set_cooldown_timeout(10)
+                await req.set_cooldown_timeout(1800)
 
     async def update(self, update: TypeUpdate) -> bool:
         if not self.is_bot:

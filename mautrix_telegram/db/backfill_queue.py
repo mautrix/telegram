@@ -167,7 +167,7 @@ class Backfill:
         q = "UPDATE backfill_queue SET completed_at=$1 WHERE queue_id=$2"
         await self.db.execute(q, datetime.now(), self.queue_id)
 
-    async def set_cooldown_timeout(self, timeout) -> None:
+    async def set_cooldown_timeout(self, timeout: int) -> None:
         """
         Set the backfill request to cooldown for ``timeout`` seconds.
         """
