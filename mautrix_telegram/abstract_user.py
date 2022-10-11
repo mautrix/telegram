@@ -651,6 +651,8 @@ class AbstractUser(ABC):
             self.log.debug("Ignoring relaybot-sent message %s to %s", update.id, portal.tgid_log)
             return
 
+        await portal.backfill_lock.wait(f"update {update.id}")
+
         if isinstance(update, MessageService):
             if isinstance(update.action, MessageActionChannelMigrateFrom):
                 self.log.trace(

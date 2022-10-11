@@ -18,6 +18,7 @@ from __future__ import annotations
 from typing import cast
 import base64
 import codecs
+import math
 import re
 
 from aiohttp import ClientSession, InvalidURL
@@ -420,7 +421,7 @@ async def random(evt: CommandEvent) -> EventID:
 
 @command_handler(
     help_section=SECTION_PORTAL_MANAGEMENT,
-    help_args="[_batches_]",
+    help_args="[_limit_]",
     help_text="Backfill messages from Telegram history.",
 )
 async def backfill(evt: CommandEvent) -> None:
@@ -438,4 +439,14 @@ async def backfill(evt: CommandEvent) -> None:
     if not evt.config["bridge.backfill.normal_groups"] and portal.peer_type == "chat":
         await evt.reply("Backfilling normal groups is disabled in the bridge config")
         return
-    await portal.enqueue_immediate_backfill(evt.sender, 0, max_batches=limit)
+    if portal.backfill_msc2716:
+        messages_per_batch = evt.config["bridge.backfill.incremental.messages_per_batch"]
+        batches = math.ceil(limit / messages_per_batch)
+        rounded = ""
+        if batches * messages_per_batch != limit:
+            rounded = f" (rounded message limit to {batches}*{messages_per_batch})"
+        await portal.enqueue_backfill(evt.sender, priority=0, max_batches=batches)
+        await evt.reply(f"Backfill queued{rounded}")
+    else:
+        output = await portal.forward_backfill(evt.sender, initial=False, override_limit=limit)
+        await evt.reply(output)

@@ -669,7 +669,10 @@ class User(DBUser, AbstractUser, BaseUser):
     ) -> None:
         was_created = False
         if portal.mxid:
-            # TODO check if forward backfill is necessary?
+            try:
+                await portal.forward_backfill(self, initial=False, last_tgid=dialog.message.id)
+            except Exception:
+                self.log.exception(f"Error while backfilling {portal.tgid_log}")
             try:
                 await portal.update_matrix_room(self, dialog.entity)
             except Exception:

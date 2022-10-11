@@ -140,7 +140,6 @@ from mautrix.errors import IntentError, MatrixRequestError, MForbidden
 from mautrix.types import (
     BatchID,
     BatchSendEvent,
-    BatchSendResponse,
     BatchSendStateEvent,
     BeeperMessageStatusEventContent,
     ContentURI,
@@ -173,6 +172,7 @@ from mautrix.types import (
 )
 from mautrix.util import magic, variation_selector
 from mautrix.util.message_send_checkpoint import MessageSendCheckpointStatus
+from mautrix.util.simple_lock import SimpleLock
 from mautrix.util.simple_template import SimpleTemplate
 
 from . import (
@@ -253,8 +253,10 @@ class Portal(DBPortal, BasePortal):
     # Instance variables
     deleted: bool
 
+    backfill_lock: SimpleLock
     backfill_method_lock: asyncio.Lock
     backfill_leave: set[IntentAPI] | None
+    backfill_msc2716: bool
 
     alias: RoomAlias | None
 
@@ -328,6 +330,10 @@ class Portal(DBPortal, BasePortal):
         self.log = self.log.getChild(self.tgid_log if self.tgid else self.mxid)
         self._main_intent = None
         self.deleted = False
+
+        self.backfill_lock = SimpleLock(
+            "Waiting for backfilling to finish before handling %s", log=self.log
+        )
         self.backfill_method_lock = asyncio.Lock()
         self.backfill_leave = None
 
@@ -432,6 +438,7 @@ class Portal(DBPortal, BasePortal):
         cls.filter_mode = cls.config["bridge.filter.mode"]
         cls.filter_list = cls.config["bridge.filter.list"]
         cls.hs_domain = cls.config["homeserver.domain"]
+        cls.backfill_msc2716 = cls.config["bridge.backfill.msc2716"]
         cls.alias_template = SimpleTemplate(
             cls.config["bridge.alias_template"],
             "groupname",
@@ -885,46 +892,54 @@ class Portal(DBPortal, BasePortal):
                 }
             )
 
-        room_id = await self.main_intent.create_room(
-            alias_localpart=alias,
-            preset=preset,
-            is_direct=self.is_direct,
-            invitees=create_invites,
-            name=self.title,
-            topic=self.about,
-            initial_state=initial_state,
-            creation_content=creation_content,
-        )
-        if not room_id:
-            raise Exception(f"Failed to create room")
-        self.name_set = bool(self.title)
-        self.avatar_set = bool(self.avatar_url)
+        with self.backfill_lock:
+            room_id = await self.main_intent.create_room(
+                alias_localpart=alias,
+                preset=preset,
+                is_direct=self.is_direct,
+                invitees=create_invites,
+                name=self.title,
+                topic=self.about,
+                initial_state=initial_state,
+                creation_content=creation_content,
+            )
+            if not room_id:
+                raise Exception(f"Failed to create room")
+            self.name_set = bool(self.title)
+            self.avatar_set = bool(self.avatar_url)
 
-        if self.encrypted and self.matrix.e2ee and self.is_direct:
-            try:
-                await self.az.intent.ensure_joined(room_id)
-            except Exception:
-                self.log.warning(f"Failed to add bridge bot to new private chat {room_id}")
+            if self.encrypted and self.matrix.e2ee and self.is_direct:
+                try:
+                    await self.az.intent.ensure_joined(room_id)
+                except Exception:
+                    self.log.warning(f"Failed to add bridge bot to new private chat {room_id}")
 
-        self.mxid = room_id
-        self.by_mxid[self.mxid] = self
-        await self.save()
-        self.log.debug(f"Matrix room created: {self.mxid}")
-        await self.az.state_store.set_power_levels(self.mxid, power_levels)
-        await user.register_portal(self)
+            self.mxid = room_id
+            self.by_mxid[self.mxid] = self
+            await self.save()
+            self.log.debug(f"Matrix room created: {self.mxid}")
+            await self.az.state_store.set_power_levels(self.mxid, power_levels)
+            await user.register_portal(self)
 
-        await self.invite_to_matrix(invites)
-        await self.update_matrix_room(user, entity, puppet, levels=power_levels, users=users)
+            await self.invite_to_matrix(invites)
+            await self.update_matrix_room(user, entity, puppet, levels=power_levels, users=users)
 
-        self.first_event_id = await self.main_intent.send_message_event(
-            self.mxid, DummyPortalCreated, {}
-        )
-        self._member_list_cache[self.first_event_id] = set(
-            (await self.main_intent.get_joined_members(self.mxid)).keys()
-        )
-        await self.save()
+            self.first_event_id = await self.main_intent.send_message_event(
+                self.mxid, DummyPortalCreated, {}
+            )
+            if not self.bridge.homeserver_software.is_hungry:
+                self._member_list_cache[self.first_event_id] = set(
+                    (await self.main_intent.get_joined_members(self.mxid)).keys()
+                )
+            await self.save()
 
-        await self.enqueue_immediate_backfill(user)
+            if isinstance(user, u.User) or not self.backfill_msc2716:
+                try:
+                    await self.forward_backfill(user, initial=True)
+                except Exception:
+                    self.log.exception("Error in initial backfill")
+                if self.backfill_msc2716:
+                    await self.enqueue_backfill(user, priority=50)
 
         return self.mxid
 
@@ -2600,20 +2615,42 @@ class Portal(DBPortal, BasePortal):
             own_type = "channel"
         return self.config[f"bridge.backfill.incremental.max_batches.{own_type}"]
 
-    async def enqueue_immediate_backfill(
-        self, source: u.User, priority: int = 0, max_batches: int | None = None
+    async def enqueue_backfill(
+        self,
+        source: u.User,
+        priority: int,
+        max_batches: int | None = None,
+        messages_per_batch: int | None = None,
     ) -> None:
         # TODO check that there are no queued backfills
         # if not await Backfill.get(source.mxid, self.tgid, self.tg_receiver):
         await Backfill.new(
-            source.mxid,
-            priority,
-            self.tgid,
-            self.tg_receiver,
-            self.config["bridge.backfill.incremental.messages_per_batch"],
-            self.config["bridge.backfill.incremental.post_batch_delay"],
-            max_batches or self._default_max_batches,
+            user_mxid=source.mxid,
+            priority=priority,
+            portal_tgid=self.tgid,
+            portal_tg_receiver=self.tg_receiver,
+            messages_per_batch=(
+                messages_per_batch or self.config["bridge.backfill.incremental.messages_per_batch"]
+            ),
+            post_batch_delay=self.config["bridge.backfill.incremental.post_batch_delay"],
+            max_batches=max_batches or self._default_max_batches,
         ).insert()
+
+    async def forward_backfill(
+        self,
+        source: u.User,
+        initial: bool,
+        last_tgid: int | None = None,
+        override_limit: int | None = None,
+    ) -> str:
+        type = "initial" if initial else "sync"
+        limit = override_limit or self.config[f"bridge.backfill.forward.{type}_limit"]
+        with self.backfill_lock:
+            output = await self.backfill(
+                source, source.client, forward=True, forward_limit=limit, last_tgid=last_tgid
+            )
+            self.log.debug(f"Forward backfill complete, status: {output}")
+            return output
 
     async def backfill(
         self,
@@ -2621,10 +2658,13 @@ class Portal(DBPortal, BasePortal):
         client: MautrixTelegramClient,
         req: Backfill | None = None,
         forward: bool = False,
+        forward_limit: int | None = None,
         last_tgid: int | None = None,
-    ) -> None:
+    ) -> str:
         async with self.backfill_method_lock:
-            await self._locked_backfill(source, client, req, forward, last_tgid)
+            return await self._locked_backfill(
+                source, client, req, forward, forward_limit, last_tgid
+            )
 
     async def _locked_backfill(
         self,
@@ -2632,11 +2672,12 @@ class Portal(DBPortal, BasePortal):
         client: MautrixTelegramClient,
         req: Backfill | None = None,
         forward: bool = False,
+        forward_limit: int | None = None,
         last_tgid: int | None = None,
-    ) -> None:
+    ) -> str:
         assert forward != bool(req)
         if not self.config["bridge.backfill.normal_groups"] and self.peer_type == "chat":
-            return
+            return "Backfilling normal groups is disabled in the bridge config"
         tg_space = source.tgid if self.peer_type != "channel" else self.tgid
         prev_event_id = self.first_event_id
         if forward:
@@ -2649,19 +2690,23 @@ class Portal(DBPortal, BasePortal):
             if last_tgid is None:
                 messages = await source.client.get_messages(self.peer, limit=1)
                 if not messages:
-                    # The chat seems empty
-                    return
+                    return "Chat is empty, nothing to backfill"
                 last_tgid = messages[0].id
             if last_tgid <= min_id or (last_tgid == 1 and self.peer_type == "channel"):
-                # Nothing to backfill
-                return
+                return (
+                    f"Last bridged message {min_id} is equal to or greater than last message "
+                    f"in Telegram chat {last_tgid}, nothing to backfill"
+                )
             limit = last_tgid - min_id
+            if (forward_limit or 0) > 0:
+                limit = min(limit, forward_limit)
             self.log.debug(
                 f"Backfilling up to {limit} messages after ID {min_id} through {source.mxid} "
                 f"(last message: {last_tgid})"
             )
             anchor_id = min_id
         else:
+            limit = req.messages_per_batch
             first_in_room = await DBMessage.find_first(self.mxid, tg_space)
             anchor_id = first_in_room.tgid if first_in_room else None
             self.log.debug(
@@ -2669,12 +2714,7 @@ class Portal(DBPortal, BasePortal):
                 f"before {anchor_id} through {source.mxid}"
             )
         insertion_id, message_count, first_id = await self._backfill_messages(
-            source,
-            client,
-            forward,
-            anchor_id,
-            0 if forward else req.messages_per_batch,
-            prev_event_id,
+            source, client, forward, anchor_id, limit, prev_event_id
         )
         if prev_event_id == self.first_event_id:
             if insertion_id and not self.base_insertion_id:
@@ -2683,7 +2723,7 @@ class Portal(DBPortal, BasePortal):
                 insertion_id = self.base_insertion_id
         await self.save()
         # TODO this should probably check actual event count instead of message count
-        if message_count > 0:
+        if message_count > 0 and self.backfill_msc2716:
             await self.main_intent.send_state_event(
                 self.mxid,
                 StateMarker,
@@ -2693,26 +2733,37 @@ class Portal(DBPortal, BasePortal):
                 },
                 state_key=insertion_id,
             )
-        if message_count > 0 and first_id and first_id > 1:
+        if forward:
+            self.log.debug(f"Forward backfill finished with {message_count} messages")
+        elif message_count > 0 and first_id and first_id > 1:
             if req.max_batches in (0, 1):
-                self.log.debug("Already backfilled enough batches, not enqueuing more")
-                return
+                return "Already backfilled enough batches, not enqueuing more"
             self.log.debug(f"Enqueuing more backfill through {source.mxid}")
+            await self.enqueue_backfill(
+                source,
+                priority=100,
+                messages_per_batch=req.messages_per_batch,
+                max_batches=-1 if req.max_batches < 0 else (req.max_batches - 1),
+            )
             await Backfill.new(
                 user_mxid=source.mxid,
-                priority=0,
+                priority=100,
                 portal_tgid=self.tgid,
                 portal_tg_receiver=self.tg_receiver,
                 messages_per_batch=req.messages_per_batch,
-                post_batch_delay=req.post_batch_delay,
                 max_batches=-1 if req.max_batches < 0 else (req.max_batches - 1),
             ).insert()
         else:
             self.log.debug("No more messages to backfill")
+        return f"Backfilled {message_count} messages"
 
     def _can_double_puppet_backfill(self, custom_mxid: UserID) -> bool:
+        if not self.backfill_msc2716:
+            return True
         if not self.config["bridge.backfill.double_puppet_backfill"]:
             return False
+        if self.bridge.homeserver_software.is_hungry:
+            return True
 
         # Batch sending can only use local users, so don't allow double puppets on other servers.
         if custom_mxid[custom_mxid.index(":") + 1 :] != self.config["homeserver.domain"]:
@@ -2740,7 +2791,7 @@ class Portal(DBPortal, BasePortal):
         self,
         source: u.User,
         msg: Message,
-        add_member: Callable[[IntentAPI, str, ContentURI], None],
+        add_member: Callable[[IntentAPI, str, ContentURI], Awaitable[None]],
     ) -> tuple[putil.ConvertedMessage, IntentAPI]:
         if msg.from_id and isinstance(msg.from_id, (PeerUser, PeerChannel)):
             sender = await p.Puppet.get_by_peer(msg.from_id)
@@ -2761,7 +2812,7 @@ class Portal(DBPortal, BasePortal):
         if intent.api.is_real_user and not self._can_double_puppet_backfill(intent.mxid):
             intent = sender.default_mxid_intent
         if sender:
-            add_member(intent, sender.displayname, sender.avatar_url)
+            await add_member(intent, sender.displayname, sender.avatar_url)
         is_bot = sender.is_bot if sender else False
         converted = await self._msg_conv.convert(source, intent, is_bot, msg)
         return converted, intent
@@ -2799,15 +2850,25 @@ class Portal(DBPortal, BasePortal):
     ) -> tuple[EventID | None, int, int]:
         entity = await self.get_input_entity(source)
         events = []
+        intents = []
         metas = []
         state_events = []
-        added_members = await self._get_members_at(prev_event_id)
+        do_batch_send = self.backfill_msc2716
+        added_members = (
+            await self._get_members_at(prev_event_id)
+            if not self.bridge.homeserver_software.is_hungry and do_batch_send
+            else []
+        )
         before_first_msg_timestamp = 0
 
-        def add_member(intent: IntentAPI, displayname: str, avatar_url: ContentURI) -> None:
-            if intent.mxid in added_members:
+        async def add_member(intent: IntentAPI, displayname: str, avatar_url: ContentURI) -> None:
+            if self.bridge.homeserver_software.is_hungry or intent.mxid in added_members:
                 return
             added_members.add(intent.mxid)
+            if not do_batch_send:
+                # TODO leave these members?
+                await intent.ensure_joined(self.mxid)
+                return
             invite_event = BatchSendStateEvent(
                 type=EventType.ROOM_MEMBER,
                 state_key=intent.mxid,
@@ -2834,6 +2895,7 @@ class Portal(DBPortal, BasePortal):
             anchor_id = 2**31 - 1
             minmax = {}
         self.log.debug(f"Iterating messages through {source.tgid} with {limit=}, {minmax}")
+        # Iterate messages newest to oldest and collect the results
         async for msg in client.iter_messages(entity, limit=limit, **minmax):
             message_count += 1
             if (forward and msg.id <= anchor_id) or (not forward and msg.id >= anchor_id):
@@ -2847,9 +2909,11 @@ class Portal(DBPortal, BasePortal):
 
             converted, intent = await self._convert_batch_msg(source, msg, add_member)
             events.append(await self._wrap_batch_msg(intent, msg, converted))
+            intents.append(intent)
             metas.append(msg)
             if converted.caption:
                 events.append(await self._wrap_batch_msg(intent, msg, converted, caption=True))
+                intents.append(intent)
                 metas.append(None)
         if len(events) == 0:
             self.log.debug(
@@ -2861,16 +2925,29 @@ class Portal(DBPortal, BasePortal):
             f"Got {len(events)} events to send out of {message_count} messages fetched "
             f"(first received ID: {first_id})"
         )
-        resp = await self.main_intent.batch_send(
-            self.mxid,
-            prev_event_id,
-            batch_id=self.next_batch_id if not forward else None,
-            events=list(reversed(events)),
-            state_events_at_start=state_events,
-            beeper_new_messages=forward,
-        )
-        if prev_event_id == self.first_event_id and resp.next_batch_id:
-            self.next_batch_id = resp.next_batch_id
+        if do_batch_send:
+            resp = await self.main_intent.batch_send(
+                self.mxid,
+                prev_event_id,
+                batch_id=self.next_batch_id if not forward else None,
+                # We iterated the events in reverse chronological order,
+                # so reverse them before sending
+                events=list(reversed(events)),
+                state_events_at_start=state_events,
+                beeper_new_messages=forward,
+            )
+            if prev_event_id == self.first_event_id and resp.next_batch_id:
+                self.next_batch_id = resp.next_batch_id
+            base_insertion_event_id = resp.base_insertion_event_id
+            event_ids = resp.event_ids
+        else:
+            base_insertion_event_id = None
+            event_ids = [
+                await intent.send_message_event(
+                    self.mxid, evt.type, evt.content, timestamp=evt.timestamp
+                )
+                for evt, intent in zip(reversed(events), reversed(intents))
+            ]
         tg_space = source.tgid if self.peer_type != "channel" else self.tgid
         await DBMessage.bulk_insert(
             [
@@ -2883,11 +2960,13 @@ class Portal(DBPortal, BasePortal):
                     content_hash=self.dedup.hash_event(msg),
                     # TODO sender
                 )
-                for event_id, msg in zip(resp.event_ids, reversed(metas))
+                # Original arrays are in reverse chronological order, but event IDs are
+                # chronological (because we reversed the original messages list before sending)
+                for event_id, msg in zip(event_ids, reversed(metas))
                 if msg is not None
             ]
         )
-        return resp.base_insertion_event_id, message_count, first_id
+        return base_insertion_event_id, message_count, first_id
 
     def _split_dm_reaction_counts(self, counts: list[ReactionCount]) -> list[MessagePeerReaction]:
         reactions = []
