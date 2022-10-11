@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING, ClassVar
 
 from asyncpg import Record
 from attr import dataclass
+import attr
 
 from mautrix.types import EventID, RoomID, UserID
 from mautrix.util.async_db import Database, Scheme
@@ -123,6 +124,14 @@ class Message:
         return cls._from_row(await cls.db.fetchrow(q, mx_room, tg_space))
 
     @classmethod
+    async def find_first(cls, mx_room: RoomID, tg_space: TelegramID) -> Message | None:
+        q = (
+            f"SELECT {cls.columns} FROM message WHERE mx_room=$1 AND tg_space=$2 "
+            f"ORDER BY tgid ASC LIMIT 1"
+        )
+        return cls._from_row(await cls.db.fetchrow(q, mx_room, tg_space))
+
+    @classmethod
     async def delete_all(cls, mx_room: RoomID) -> None:
         await cls.db.execute("DELETE FROM message WHERE mx_room=$1", mx_room)
 
@@ -173,6 +182,23 @@ class Message:
         q = "DELETE FROM message WHERE mxid=$1 AND mx_room=$2"
         await cls.db.execute(q, temp_mxid, mx_room)
 
+    @classmethod
+    async def bulk_insert(cls, messages: list[Message]) -> None:
+        columns = cls.columns.split(", ")
+        records = [attr.astuple(message) for message in messages]
+        async with cls.db.acquire() as conn, conn.transaction():
+            if cls.db.scheme == Scheme.POSTGRES:
+                await conn.copy_records_to_table("message", records=records, columns=columns)
+            else:
+                await conn.executemany(cls._insert_query, records)
+
+    _insert_query: ClassVar[
+        str
+    ] = """
+        INSERT INTO message (mxid, mx_room, tgid, tg_space, edit_index, redacted, content_hash, sender_mxid, sender)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+    """
+
     @property
     def _values(self):
         return (
@@ -188,13 +214,7 @@ class Message:
         )
 
     async def insert(self) -> None:
-        q = """
-            INSERT INTO message (
-                mxid, mx_room, tgid, tg_space, edit_index, redacted, content_hash,
-                sender_mxid, sender
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-        """
-        await self.db.execute(q, *self._values)
+        await self.db.execute(self._insert_query, *self._values)
 
     async def delete(self) -> None:
         q = "DELETE FROM message WHERE mxid=$1 AND mx_room=$2 AND tg_space=$3"

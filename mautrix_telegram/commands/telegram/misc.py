@@ -18,6 +18,7 @@ from __future__ import annotations
 from typing import cast
 import base64
 import codecs
+import math
 import re
 
 from aiohttp import ClientSession, InvalidURL
@@ -427,6 +428,9 @@ async def backfill(evt: CommandEvent) -> None:
     if not evt.is_portal:
         await evt.reply("You can only use backfill in portal rooms")
         return
+    elif not evt.config["bridge.backfill.enable"]:
+        await evt.reply("Backfilling is disabled in the bridge config")
+        return
     try:
         limit = int(evt.args[0])
     except (ValueError, IndexError):
@@ -435,16 +439,14 @@ async def backfill(evt: CommandEvent) -> None:
     if not evt.config["bridge.backfill.normal_groups"] and portal.peer_type == "chat":
         await evt.reply("Backfilling normal groups is disabled in the bridge config")
         return
-    try:
-        await portal.backfill(evt.sender, limit=limit)
-    except TakeoutInitDelayError:
-        msg = (
-            "Please accept the data export request from a mobile device, "
-            "then re-run the backfill command."
-        )
-        if portal.peer_type == "user":
-            from mautrix.appservice import IntentAPI
-
-            await portal.main_intent.send_notice(evt.room_id, msg)
-        else:
-            await evt.reply(msg)
+    if portal.backfill_msc2716:
+        messages_per_batch = evt.config["bridge.backfill.incremental.messages_per_batch"]
+        batches = math.ceil(limit / messages_per_batch)
+        rounded = ""
+        if batches * messages_per_batch != limit:
+            rounded = f" (rounded message limit to {batches}*{messages_per_batch})"
+        await portal.enqueue_backfill(evt.sender, priority=0, max_batches=batches)
+        await evt.reply(f"Backfill queued{rounded}")
+    else:
+        output = await portal.forward_backfill(evt.sender, initial=False, override_limit=limit)
+        await evt.reply(output)

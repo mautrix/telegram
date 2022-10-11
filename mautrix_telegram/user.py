@@ -20,7 +20,12 @@ from datetime import datetime, timezone
 import asyncio
 import time
 
-from telethon.errors import AuthKeyDuplicatedError, RPCError, UnauthorizedError
+from telethon.errors import (
+    AuthKeyDuplicatedError,
+    RPCError,
+    TakeoutInitDelayError,
+    UnauthorizedError,
+)
 from telethon.tl.custom import Dialog
 from telethon.tl.functions.account import UpdateStatusRequest
 from telethon.tl.functions.contacts import GetContactsRequest, SearchRequest
@@ -57,7 +62,8 @@ from mautrix.util.opt_prometheus import Gauge
 
 from . import portal as po, puppet as pu, util
 from .abstract_user import AbstractUser
-from .db import Message as DBMessage, PgSession, User as DBUser
+from .db import Backfill, Message as DBMessage, PgSession, User as DBUser
+from .tgclient import MautrixTelegramClient
 from .types import TelegramID
 
 if TYPE_CHECKING:
@@ -86,7 +92,11 @@ class User(DBUser, AbstractUser, BaseUser):
 
     _ensure_started_lock: asyncio.Lock
     _track_connection_task: asyncio.Task | None
+    _backfill_task: asyncio.Task | None
+    wakeup_backfill_task: asyncio.Event
     _is_backfilling: bool
+    takeout_retry_immediate: asyncio.Event
+    takeout_requested: bool
 
     _available_emoji_reactions: set[str] | None
     _available_emoji_reactions_hash: int | None
@@ -119,6 +129,12 @@ class User(DBUser, AbstractUser, BaseUser):
         self._track_connection_task = None
         self._is_backfilling = False
         self._portals_cache = None
+
+        self._backfill_task = None
+        self.wakeup_backfill_task = asyncio.Event()
+        self.takeout_retry_immediate = asyncio.Event()
+        self.takeout_requested = False
+
         self._available_emoji_reactions = None
         self._available_emoji_reactions_hash = None
         self._available_emoji_reactions_fetched = 0
@@ -248,6 +264,14 @@ class User(DBUser, AbstractUser, BaseUser):
             self.client and self.client._sender and self.client._sender._transport_connected()
         )
 
+    @property
+    def _bridge_state_info(self) -> dict[str, Any]:
+        if self.takeout_requested:
+            return {
+                "takeout_requested": True,
+            }
+        return {}
+
     async def _track_connection(self) -> None:
         self.log.debug("Starting loop to track connection state")
         while True:
@@ -260,6 +284,7 @@ class User(DBUser, AbstractUser, BaseUser):
                     if self._is_backfilling
                     else BridgeStateEvent.CONNECTED,
                     ttl=3600,
+                    info=self._bridge_state_info,
                 )
             else:
                 await self.push_bridge_state(
@@ -284,7 +309,7 @@ class User(DBUser, AbstractUser, BaseUser):
         else:
             state_event = BridgeStateEvent.UNKNOWN_ERROR
             ttl = 240
-        return [BridgeState(state_event=state_event, ttl=ttl)]
+        return [BridgeState(state_event=state_event, ttl=ttl, info=self._bridge_state_info)]
 
     async def get_puppet(self) -> pu.Puppet | None:
         if not self.tgid:
@@ -302,6 +327,9 @@ class User(DBUser, AbstractUser, BaseUser):
         if self._track_connection_task:
             self._track_connection_task.cancel()
             self._track_connection_task = None
+        if self._backfill_task:
+            self._backfill_task.cancel()
+            self._backfill_task = None
         await super().stop()
         self._track_metric(METRIC_CONNECTED, False)
 
@@ -318,6 +346,8 @@ class User(DBUser, AbstractUser, BaseUser):
             return
 
         self._track_metric(METRIC_LOGGED_IN, True)
+        if not self._backfill_task or self._backfill_task.done():
+            self._backfill_task = asyncio.create_task(self._handle_backfill_requests_loop())
 
         try:
             puppet = await pu.Puppet.get_by_tgid(self.tgid)
@@ -327,7 +357,7 @@ class User(DBUser, AbstractUser, BaseUser):
         except Exception:
             self.log.exception("Failed to automatically enable custom puppet")
 
-        if not self.is_bot and self.config["bridge.startup_sync"]:
+        if not self.is_bot and (self.config["bridge.startup_sync"] or first_login):
             try:
                 self._is_backfilling = True
                 await self.sync_dialogs()
@@ -336,6 +366,80 @@ class User(DBUser, AbstractUser, BaseUser):
                 self.log.exception("Failed to run post-login sync")
             finally:
                 self._is_backfilling = False
+
+    @property
+    def _takeout_options(self) -> dict[str, bool | int]:
+        return {
+            "users": True,
+            "chats": self.config["bridge.backfill.normal_groups"],
+            "megagroups": True,
+            "channels": True,
+            "files": True,
+            "max_file_size": min(self.bridge.matrix.media_config.upload_size, 2000 * 1024 * 1024),
+        }
+
+    async def _handle_backfill_requests_loop(self) -> None:
+        while True:
+            req = await Backfill.get_next(self.mxid)
+            if not req:
+                await self.wakeup_backfill_task.wait()
+                self.wakeup_backfill_task.clear()
+            else:
+                await self._takeout_and_backfill(req)
+
+    async def _takeout_and_backfill(self, first_req: Backfill, first_attempt: bool = True) -> None:
+        self.takeout_retry_immediate.clear()
+        self.takeout_requested = True
+        try:
+            async with self.client.takeout(**self._takeout_options) as takeout_client:
+                self.takeout_requested = False
+                self.log.info("Acquired takeout client successfully")
+                await self._backfill_loop_with_client(takeout_client, first_req)
+                self.log.info("Backfills finished, exiting takeout")
+        except TakeoutInitDelayError as e:
+            if first_attempt:
+                self.log.info(
+                    f"Takeout requested, will wait for retry request or {e.seconds} seconds"
+                )
+            else:
+                self.log.warning(
+                    f"Got takeout init delay again after retry, waiting for {e.seconds} seconds"
+                )
+            try:
+                await asyncio.wait_for(self.takeout_retry_immediate.wait(), timeout=e.seconds)
+                self.log.info("Retrying takeout")
+            except asyncio.TimeoutError:
+                self.log.info("Takeout timeout expired")
+            await self._takeout_and_backfill(first_req, first_attempt=False)
+
+    async def _backfill_loop_with_client(
+        self, client: MautrixTelegramClient, first_req: Backfill
+    ) -> None:
+        missed_reqs = 0
+        while missed_reqs < 20:
+            req = first_req or await Backfill.get_next(self.mxid)
+            first_req = None
+            if not req:
+                missed_reqs += 1
+                try:
+                    await asyncio.wait_for(self.wakeup_backfill_task.wait(), timeout=30)
+                except asyncio.TimeoutError:
+                    pass
+                self.wakeup_backfill_task.clear()
+                continue
+            missed_reqs = 0
+            self.log.info("Backfill request %s", req)
+            try:
+                portal = await po.Portal.get_by_tgid(
+                    TelegramID(req.portal_tgid), tg_receiver=TelegramID(req.portal_tg_receiver)
+                )
+                await req.mark_dispatched()
+                await portal.backfill(self, client, req=req)
+                await req.mark_done()
+                await asyncio.sleep(req.post_batch_delay)
+            except Exception:
+                self.log.exception("Error handling backfill request for %s", req.portal_tgid)
+                await req.set_cooldown_timeout(10)
 
     async def update(self, update: TypeUpdate) -> bool:
         if not self.is_bot:
@@ -573,7 +677,7 @@ class User(DBUser, AbstractUser, BaseUser):
         was_created = False
         if portal.mxid:
             try:
-                await portal.backfill(self, last_id=dialog.message.id)
+                await portal.forward_backfill(self, initial=False, last_tgid=dialog.message.id)
             except Exception:
                 self.log.exception(f"Error while backfilling {portal.tgid_log}")
             try:

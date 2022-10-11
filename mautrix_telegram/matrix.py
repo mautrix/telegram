@@ -16,15 +16,14 @@
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
+import sys
 
 from mautrix.bridge import BaseMatrixHandler
-from mautrix.errors import MatrixError
 from mautrix.types import (
     Event,
     EventID,
     EventType,
     MemberStateEventContent,
-    MessageType,
     PresenceEvent,
     PresenceState,
     ReactionEvent,
@@ -36,7 +35,6 @@ from mautrix.types import (
     RoomTopicStateEventContent as TopicContent,
     SingleReceiptEventContent,
     StateEvent,
-    TextMessageEventContent,
     TypingEvent,
     UserID,
 )
@@ -62,6 +60,21 @@ class MatrixHandler(BaseMatrixHandler):
         super().__init__(command_processor=com.CommandProcessor(bridge), bridge=bridge)
 
         self._previously_typing = {}
+
+    async def check_versions(self) -> None:
+        await super().check_versions()
+        if self.config["bridge.backfill.msc2716"] and not (
+            support := self.versions.supports("org.matrix.msc2716")
+        ):
+            self.log.fatal(
+                "Backfilling with MSC2716 is enabled in bridge config, but "
+                + (
+                    "batch sending is not enabled on homeserver"
+                    if support is False
+                    else "homeserver does not support batch sending"
+                )
+            )
+            sys.exit(18)
 
     async def handle_puppet_group_invite(
         self,
