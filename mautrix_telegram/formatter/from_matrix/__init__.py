@@ -59,7 +59,7 @@ async def matrix_to_telegram(
     if html is not None:
         return await _matrix_html_to_telegram(client, html)
     elif text is not None:
-        return _matrix_text_to_telegram(text), []
+        return _matrix_text_to_telegram(text)
     else:
         raise ValueError("text or html must be provided to convert formatting")
 
@@ -98,8 +98,13 @@ def _cut_long_message(
     return message, entities
 
 
-def _matrix_text_to_telegram(text: str) -> str:
+def _matrix_text_to_telegram(text: str) -> tuple[str, list[TypeMessageEntity]]:
     text = command_regex.sub(r"/\1", text)
     text = text.replace("\t", " " * 4)
     text = not_command_regex.sub(r"\1", text)
-    return text
+    entities = []
+    surrogated_text = add_surrogate(text)
+    if len(surrogated_text) > MAX_LENGTH:
+        surrogated_text, entities = _cut_long_message(surrogated_text, entities)
+        text = del_surrogate(surrogated_text)
+    return text, entities
