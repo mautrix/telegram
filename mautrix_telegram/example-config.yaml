@@ -354,6 +354,10 @@ bridge:
         # will likely cause problems if there are multiple Matrix users in the group.
         normal_groups: false
 
+        # If a backfilled chat is older than this number of hours, mark it as read even if it's unread on Telegram.
+        # Set to -1 to let any chat be unread.
+        unread_hours_threshold: 720
+
         # Forward backfilling limits. These apply to both MSC2716 and legacy backfill.
         #
         # Using a negative initial limit is not recommended, as it would try to backfill everything in a single batch.

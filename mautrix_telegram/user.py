@@ -16,7 +16,7 @@
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, AsyncGenerator, AsyncIterable, Awaitable, NamedTuple, cast
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import asyncio
 import time
 
@@ -695,10 +695,22 @@ class User(DBUser, AbstractUser, BaseUser):
                 self.log.exception(f"Error while creating {portal.tgid_log}")
         if portal.mxid and puppet and puppet.is_real_user:
             tg_space = portal.tgid if portal.peer_type == "channel" else self.tgid
-            if dialog.unread_count == 0:
+            last_message_date: datetime = cast(datetime, dialog.date)
+            unread_threshold_hours = self.config["bridge.backfill.unread_hours_threshold"]
+            force_read = (
+                was_created
+                and unread_threshold_hours >= 0
+                and last_message_date + timedelta(hours=unread_threshold_hours) < datetime.now()
+            )
+            if dialog.unread_count == 0 or force_read:
                 # This is usually more reliable than finding a specific message
                 # e.g. if the last read message is a service message that isn't in the message db
                 last_read = await DBMessage.find_last(portal.mxid, tg_space)
+                if force_read:
+                    self.log.debug(
+                        f"Marking {portal.tgid_log} as read because the last message is from "
+                        f"{last_message_date} (unread threshold is {unread_threshold_hours} hours)"
+                    )
             else:
                 last_read = await DBMessage.get_one_by_tgid(
                     portal.tgid, tg_space, dialog.dialog.read_inbox_max_id

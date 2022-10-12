@@ -162,6 +162,7 @@ class Config(BaseBridgeConfig):
         copy("bridge.backfill.msc2716")
         copy("bridge.backfill.double_puppet_backfill")
         copy("bridge.backfill.normal_groups")
+        copy("bridge.backfill.unread_hours_threshold")
         copy("bridge.backfill.forward.initial_limit")
         copy("bridge.backfill.forward.sync_limit")
         copy("bridge.backfill.incremental.messages_per_batch")
