@@ -2862,7 +2862,7 @@ class Portal(DBPortal, BasePortal):
         added_members = (
             await self._get_members_at(prev_event_id)
             if not self.bridge.homeserver_software.is_hungry and do_batch_send
-            else []
+            else set()
         )
         before_first_msg_timestamp = 0
 
