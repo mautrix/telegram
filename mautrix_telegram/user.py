@@ -700,7 +700,7 @@ class User(DBUser, AbstractUser, BaseUser):
             force_read = (
                 was_created
                 and unread_threshold_hours >= 0
-                and last_message_date + timedelta(hours=unread_threshold_hours) < datetime.now()
+                and last_message_date + timedelta(hours=unread_threshold_hours) < datetime.utcnow()
             )
             if dialog.unread_count == 0 or force_read:
                 # This is usually more reliable than finding a specific message
