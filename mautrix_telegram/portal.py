@@ -2835,6 +2835,8 @@ class Portal(DBPortal, BasePortal):
             event_type = converted.type
         if self.encrypted and self.matrix.e2ee:
             event_type, content = await self.matrix.e2ee.encrypt(self.mxid, event_type, content)
+        if intent.api.is_real_user:
+            content[DOUBLE_PUPPET_SOURCE_KEY] = self.bridge.name
         return BatchSendEvent(
             sender=intent.mxid,
             timestamp=int(msg.date.timestamp() * 1000),
