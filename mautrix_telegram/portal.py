@@ -802,22 +802,17 @@ class Portal(DBPortal, BasePortal):
 
         self.log.debug("Creating room")
 
-        try:
-            self.title = entity.title
-        except AttributeError:
-            self.title = None
-
-        if self.is_direct and self.tgid == user.tgid:
-            self.title = "Telegram Saved Messages"
-            self.about = "Your Telegram cloud storage chat"
-
-        puppet = await self.get_dm_puppet()
-        if puppet:
+        if self.is_direct:
+            puppet = await self.get_dm_puppet()
             await puppet.update_info(user, entity)
-        self._main_intent = puppet.intent_for(self) if self.is_direct else self.az.intent
-
-        if self.peer_type == "channel":
-            self.megagroup = entity.megagroup
+            self._main_intent = puppet.intent_for(self)
+            if self.tgid == user.tgid:
+                self.title = "Telegram Saved Messages"
+                self.about = "Your Telegram cloud storage chat"
+        else:
+            puppet = None
+            self._main_intent = self.az.intent
+            await self.update_info(user, entity)
 
         preset = RoomCreatePreset.PRIVATE
         if self.peer_type == "channel" and entity.username:
@@ -844,6 +839,7 @@ class Portal(DBPortal, BasePortal):
                     power_levels.users.setdefault(invite, 100)
             await putil.participants_to_power_levels(self, users, power_levels)
         elif self.bot and self.tg_receiver == self.bot.tgid:
+            assert puppet is not None
             invites = self.config["bridge.relaybot.private_chat.invite"]
             for invite in invites:
                 power_levels.users.setdefault(invite, 100)
@@ -866,7 +862,13 @@ class Portal(DBPortal, BasePortal):
                 "content": self.bridge_info,
             },
         ]
-        create_invites = []
+        autojoin_invites = self.bridge.homeserver_software.is_hungry
+        create_invites = set()
+        if autojoin_invites:
+            invites = []
+            create_invites |= set(invites)
+            if not self.is_direct:
+                create_invites |= await self._sync_telegram_users(user, users)
         if self.config["bridge.encryption.default"] and self.matrix.e2ee:
             self.encrypted = True
             initial_state.append(
@@ -876,8 +878,9 @@ class Portal(DBPortal, BasePortal):
                 }
             )
             if self.is_direct:
-                create_invites.append(self.az.bot_mxid)
+                create_invites.add(self.az.bot_mxid)
         if self.is_direct and (self.encrypted or self.private_chat_portal_meta):
+            assert puppet is not None
             self.title = puppet.displayname
             self.avatar_url = puppet.avatar_url
             self.photo_id = puppet.photo_id
@@ -897,11 +900,12 @@ class Portal(DBPortal, BasePortal):
                 alias_localpart=alias,
                 preset=preset,
                 is_direct=self.is_direct,
-                invitees=create_invites,
+                invitees=list(create_invites),
                 name=self.title,
                 topic=self.about,
                 initial_state=initial_state,
                 creation_content=creation_content,
+                beeper_auto_join_invites=autojoin_invites,
             )
             if not room_id:
                 raise Exception(f"Failed to create room")
@@ -921,8 +925,14 @@ class Portal(DBPortal, BasePortal):
             await self.az.state_store.set_power_levels(self.mxid, power_levels)
             await user.register_portal(self)
 
-            await self.invite_to_matrix(invites)
-            await self.update_matrix_room(user, entity, puppet, levels=power_levels, users=users)
+            if not autojoin_invites or not self.is_direct:
+                await self.invite_to_matrix(invites)
+                await self.update_matrix_room(
+                    user, entity, puppet, levels=power_levels, users=users
+                )
+            else:
+                # When using autojoining, all metadata is already set, so just update state caches
+                await self.main_intent.get_joined_members(self.mxid)
 
             self.first_event_id = await self.main_intent.send_message_event(
                 self.mxid, DummyPortalCreated, {}
@@ -974,8 +984,11 @@ class Portal(DBPortal, BasePortal):
         if user and user.is_bot:
             await user.register_portal(self)
 
-    async def _sync_telegram_users(self, source: au.AbstractUser, users: list[User]) -> None:
+    async def _sync_telegram_users(
+        self, source: au.AbstractUser, users: list[User]
+    ) -> set[UserID] | None:
         allowed_tgids = set()
+        join_mxids = set()
         skip_deleted = self.config["bridge.skip_deleted_members"]
         for entity in users:
             puppet = await p.Puppet.get_by_tgid(TelegramID(entity.id))
@@ -987,11 +1000,20 @@ class Portal(DBPortal, BasePortal):
             if skip_deleted and entity.deleted:
                 continue
 
-            await puppet.intent_for(self).ensure_joined(self.mxid)
+            if self.mxid:
+                await puppet.intent_for(self).ensure_joined(self.mxid)
+            else:
+                join_mxids.add(puppet.intent_for(self).mxid)
 
             user = await u.User.get_by_tgid(TelegramID(entity.id))
             if user:
-                await self.invite_to_matrix(user.mxid)
+                if self.mxid:
+                    await self.invite_to_matrix(user.mxid)
+                else:
+                    join_mxids.add(user.mxid)
+
+        if not self.mxid:
+            return join_mxids
 
         # We can't trust the member list if any of the following cases is true:
         #  * There are close to 10 000 users, because Telegram might not be sending all members.
@@ -1003,7 +1025,7 @@ class Portal(DBPortal, BasePortal):
             else len(allowed_tgids) < self.max_initial_member_sync - 10
         ) and (self.megagroup or self.peer_type != "channel")
         if not trust_member_list:
-            return
+            return None
 
         for user_mxid in await self.main_intent.get_room_members(self.mxid):
             if user_mxid == self.az.bot_mxid:
@@ -1037,6 +1059,8 @@ class Portal(DBPortal, BasePortal):
                         )
                     except MForbidden:
                         pass
+
+        return None
 
     async def _add_telegram_user(
         self, user_id: TelegramID, source: au.AbstractUser | None = None
@@ -1136,12 +1160,15 @@ class Portal(DBPortal, BasePortal):
         if self.username:
             await self.main_intent.remove_room_alias(self.alias_localpart)
         self.username = username or None
-        if self.username:
-            await self.main_intent.add_room_alias(self.mxid, self.alias_localpart, override=True)
-            if self.public_portals:
-                await self.main_intent.set_join_rule(self.mxid, JoinRule.PUBLIC)
-        else:
-            await self.main_intent.set_join_rule(self.mxid, JoinRule.INVITE)
+        if self.mxid:
+            if self.username:
+                await self.main_intent.add_room_alias(
+                    self.mxid, self.alias_localpart, override=True
+                )
+                if self.public_portals:
+                    await self.main_intent.set_join_rule(self.mxid, JoinRule.PUBLIC)
+            else:
+                await self.main_intent.set_join_rule(self.mxid, JoinRule.INVITE)
 
         if save:
             await self.save()
@@ -2746,6 +2773,7 @@ class Portal(DBPortal, BasePortal):
             self.log.debug(f"Forward backfill finished with {event_count}/{message_count} events")
         elif message_count > 0 and lowest_id and lowest_id > 1:
             if req.max_batches in (0, 1):
+                self.log.debug(f"Backfilled enough through {source.mxid}, not enqueuing more")
                 return "Already backfilled enough batches, not enqueuing more"
             self.log.debug(f"Enqueuing more backfill through {source.mxid}")
             await self.enqueue_backfill(
