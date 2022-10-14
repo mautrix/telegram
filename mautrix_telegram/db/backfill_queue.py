@@ -194,14 +194,14 @@ class Backfill:
         RETURNING queue_id
         """
         async with self.db.acquire() as conn, conn.transaction():
-            deleted_rows = await self.db.fetch(
+            deleted_rows = await conn.fetch(
                 delete_q,
                 self.user_mxid,
                 self.portal_tgid,
                 self.portal_tg_receiver,
                 self.type.value,
             )
-            self.queue_id = await self.db.fetchval(
+            self.queue_id = await conn.fetchval(
                 q,
                 self.user_mxid,
                 self.priority,
