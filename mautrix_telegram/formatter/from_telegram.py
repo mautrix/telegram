@@ -23,6 +23,9 @@ from telethon.errors import RPCError
 from telethon.helpers import add_surrogate, del_surrogate
 from telethon.tl.custom import Message
 from telethon.tl.types import (
+    Channel,
+    InputPeerChannelFromMessage,
+    InputPeerUserFromMessage,
     MessageEntityBlockquote,
     MessageEntityBold,
     MessageEntityBotCommand,
@@ -47,6 +50,7 @@ from telethon.tl.types import (
     PeerUser,
     SponsoredMessage,
     TypeMessageEntity,
+    User,
 )
 
 from mautrix.types import Format, MessageType, TextMessageEventContent
@@ -60,9 +64,33 @@ from ..util.file_transfer import UnicodeCustomEmoji, transfer_custom_emojis_to_m
 log: logging.Logger = logging.getLogger("mau.fmt.tg")
 
 
+async def _get_fwd_entity(client: MautrixTelegramClient, evt: Message) -> Channel | User | None:
+    try:
+        return await client.get_entity(evt.fwd_from.from_id)
+    except (ValueError, RPCError) as e:
+        try:
+            input_peer = await client.get_input_entity(evt.peer_id)
+            if isinstance(evt.fwd_from.from_id, PeerUser):
+                return await client.get_entity(
+                    InputPeerUserFromMessage(
+                        peer=input_peer, msg_id=evt.id, user_id=evt.fwd_from.from_id.user_id
+                    )
+                )
+            elif isinstance(evt.fwd_from.from_id, PeerChannel):
+                return await client.get_entity(
+                    InputPeerChannelFromMessage(
+                        peer=input_peer, msg_id=evt.id, channel_id=evt.fwd_from.from_id.channel_id
+                    )
+                )
+        except (ValueError, RPCError) as e:
+            pass
+        return None
+
+
 async def _add_forward_header(
-    client: MautrixTelegramClient, content: TextMessageEventContent, fwd_from: MessageFwdHeader
+    client: MautrixTelegramClient, content: TextMessageEventContent, evt: Message
 ) -> None:
+    fwd_from = evt.fwd_from
     fwd_from_html, fwd_from_text = None, None
     if isinstance(fwd_from.from_id, PeerUser):
         user = await u.User.get_by_tgid(TelegramID(fwd_from.from_id.user_id))
@@ -81,12 +109,11 @@ async def _add_forward_header(
                 )
 
         if not fwd_from_text:
-            try:
-                user = await client.get_entity(fwd_from.from_id)
-                if user:
-                    fwd_from_text, _ = pu.Puppet.get_displayname(user, False)
-                    fwd_from_html = f"<b>{escape(fwd_from_text)}</b>"
-            except (ValueError, RPCError):
+            user = await _get_fwd_entity(client, evt)
+            if user:
+                fwd_from_text, _ = pu.Puppet.get_displayname(user, False)
+                fwd_from_html = f"<b>{escape(fwd_from_text)}</b>"
+            else:
                 fwd_from_text = fwd_from_html = "unknown user"
     elif isinstance(fwd_from.from_id, (PeerChannel, PeerChat)):
         from_id = (
@@ -104,12 +131,11 @@ async def _add_forward_header(
             else:
                 fwd_from_html = f"channel <b>{escape(fwd_from_text)}</b>"
         else:
-            try:
-                channel = await client.get_entity(fwd_from.from_id)
-                if channel:
-                    fwd_from_text = f"channel {channel.title}"
-                    fwd_from_html = f"channel <b>{escape(channel.title)}</b>"
-            except (ValueError, RPCError):
+            channel = await _get_fwd_entity(client, evt)
+            if channel:
+                fwd_from_text = f"channel {channel.title}"
+                fwd_from_html = f"channel <b>{escape(channel.title)}</b>"
+            else:
                 fwd_from_text = fwd_from_html = "unknown channel"
     elif fwd_from.from_name:
         fwd_from_text = fwd_from.from_name
@@ -175,7 +201,7 @@ async def telegram_to_matrix(
         content.ensure_has_html()
 
     if getattr(evt, "fwd_from", None):
-        await _add_forward_header(client, content, evt.fwd_from)
+        await _add_forward_header(client, content, evt)
 
     if isinstance(evt, Message) and evt.post and evt.post_author:
         content.ensure_has_html()
