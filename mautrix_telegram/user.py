@@ -440,7 +440,7 @@ class User(DBUser, AbstractUser, BaseUser):
         self, client: MautrixTelegramClient, first_req: Backfill
     ) -> None:
         missed_reqs = 0
-        while missed_reqs < 20:
+        while missed_reqs < 10:
             req = first_req or await Backfill.get_next(self.mxid)
             first_req = None
             if not req:
