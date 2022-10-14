@@ -15,7 +15,7 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from mautrix.util.async_db import Connection, Scheme
 
-latest_version = 15
+latest_version = 16
 
 
 async def create_latest_tables(conn: Connection, scheme: Scheme) -> int:
@@ -219,9 +219,11 @@ async def create_latest_tables(conn: Connection, scheme: Scheme) -> int:
             queue_id            INTEGER PRIMARY KEY {gen},
             user_mxid           TEXT,
             priority            INTEGER NOT NULL,
+            type                TEXT NOT NULL,
             portal_tgid         BIGINT,
             portal_tg_receiver  BIGINT,
             anchor_msg_id       BIGINT,
+            extra_data          jsonb,
             messages_per_batch  INTEGER NOT NULL,
             post_batch_delay    INTEGER NOT NULL,
             max_batches         INTEGER NOT NULL,

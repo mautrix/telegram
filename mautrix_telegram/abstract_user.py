@@ -620,7 +620,7 @@ class AbstractUser(ABC):
             self.log.info(
                 "Creating Matrix room with data fetched by Telethon due to UpdateChannel"
             )
-            await portal.create_matrix_room(self, chan)
+            await portal.create_matrix_room(self, chan, invites=[self.mxid])
 
     async def update_message(self, original_update: UpdateMessage) -> None:
         update, sender, portal = await self.get_message_details(original_update)

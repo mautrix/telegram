@@ -18,4 +18,5 @@ from . import (
     v13_multiple_reactions,
     v14_puppet_custom_mxid_index,
     v15_backfill_anchor_id,
+    v16_backfill_type,
 )

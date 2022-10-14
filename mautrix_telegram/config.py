@@ -113,6 +113,7 @@ class Config(BaseBridgeConfig):
         else:
             copy("bridge.sync_update_limit")
             copy("bridge.sync_create_limit")
+        copy("bridge.sync_deferred_create_all")
         copy("bridge.sync_direct_chats")
         copy("bridge.max_telegram_delete")
         copy("bridge.sync_matrix_state")

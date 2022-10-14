@@ -187,6 +187,7 @@ from . import (
 from .config import Config
 from .db import (
     Backfill,
+    BackfillType,
     DisappearingMessage,
     Message as DBMessage,
     Portal as DBPortal,
@@ -257,6 +258,7 @@ class Portal(DBPortal, BasePortal):
     backfill_method_lock: asyncio.Lock
     backfill_leave: set[IntentAPI] | None
     backfill_msc2716: bool
+    backfill_enable: bool
 
     alias: RoomAlias | None
 
@@ -439,6 +441,7 @@ class Portal(DBPortal, BasePortal):
         cls.filter_list = cls.config["bridge.filter.list"]
         cls.hs_domain = cls.config["homeserver.domain"]
         cls.backfill_msc2716 = cls.config["bridge.backfill.msc2716"]
+        cls.backfill_enable = cls.config["bridge.backfill.enable"]
         cls.alias_template = SimpleTemplate(
             cls.config["bridge.alias_template"],
             "groupname",
@@ -645,9 +648,10 @@ class Portal(DBPortal, BasePortal):
         puppet: p.Puppet = None,
         levels: PowerLevelStateEventContent = None,
         users: list[User] = None,
+        client: MautrixTelegramClient | None = None,
     ) -> None:
         try:
-            await self._update_matrix_room(user, entity, puppet, levels, users)
+            await self._update_matrix_room(user, entity, puppet, levels, users, client)
         except Exception:
             self.log.exception("Fatal error updating Matrix room")
 
@@ -658,12 +662,15 @@ class Portal(DBPortal, BasePortal):
         puppet: p.Puppet = None,
         levels: PowerLevelStateEventContent = None,
         users: list[User] = None,
+        client: MautrixTelegramClient | None = None,
     ) -> None:
+        if not client:
+            client = user.client
         if not self.is_direct:
-            await self.update_info(user, entity)
+            await self.update_info(user, entity, client=client)
             if not users:
-                users = await self._get_users(user, entity)
-            await self._sync_telegram_users(user, users)
+                users = await self._get_users(client, entity)
+            await self._sync_telegram_users(user, users, client=client)
             await self.update_power_levels(users, levels)
         else:
             if not puppet:
@@ -708,12 +715,13 @@ class Portal(DBPortal, BasePortal):
         entity: TypeChat | User = None,
         invites: InviteList = None,
         update_if_exists: bool = True,
+        client: MautrixTelegramClient | None = None,
     ) -> RoomID | None:
         if self.mxid:
             if update_if_exists:
                 if not entity:
                     try:
-                        entity = await self.get_entity(user)
+                        entity = await self.get_entity(user, client)
                     except Exception:
                         self.log.exception(f"Failed to get entity through {user.tgid} for update")
                         return self.mxid
@@ -723,7 +731,7 @@ class Portal(DBPortal, BasePortal):
             return self.mxid
         async with self._room_create_lock:
             try:
-                return await self._create_matrix_room(user, entity, invites)
+                return await self._create_matrix_room(user, entity, invites, client=client)
             except Exception:
                 self.log.exception("Fatal error creating Matrix room")
 
@@ -774,17 +782,23 @@ class Portal(DBPortal, BasePortal):
             self.log.warning("Failed to update bridge info", exc_info=True)
 
     async def _create_matrix_room(
-        self, user: au.AbstractUser, entity: TypeChat | User, invites: InviteList
+        self,
+        user: au.AbstractUser,
+        entity: TypeChat | User,
+        invites: InviteList,
+        client: MautrixTelegramClient | None = None,
     ) -> RoomID | None:
         if self.mxid:
             return self.mxid
         elif not self.allow_bridging:
             return None
+        if not client:
+            client = user.client
 
         invites = invites or []
 
         if not entity:
-            entity = await self.get_entity(user)
+            entity = await self.get_entity(user, client)
             self.log.trace("Fetched data: %s", entity)
 
         participants_count = 2
@@ -794,17 +808,17 @@ class Portal(DBPortal, BasePortal):
             participants_count = entity.participants_count
         if participants_count is None and self.config["bridge.max_member_count"] > 0:
             self.log.warning(f"Participant count not found in entity, fetching manually")
-            participants_count = (await user.client.get_participants(entity, limit=0)).total
+            participants_count = (await client.get_participants(entity, limit=0)).total
         if participants_count and 0 < self.config["bridge.max_member_count"] < participants_count:
             self.log.warning(f"Not bridging chat, too many participants (%d)", participants_count)
             self._bridging_blocked_at_runtime = True
             return None
 
-        self.log.debug("Creating room")
+        self.log.debug("Preparing to create room")
 
         if self.is_direct:
             puppet = await self.get_dm_puppet()
-            await puppet.update_info(user, entity)
+            await puppet.update_info(user, entity, client_override=client)
             self._main_intent = puppet.intent_for(self)
             if self.tgid == user.tgid:
                 self.title = "Telegram Saved Messages"
@@ -812,7 +826,7 @@ class Portal(DBPortal, BasePortal):
         else:
             puppet = None
             self._main_intent = self.az.intent
-            await self.update_info(user, entity)
+            await self.update_info(user, entity, client=client)
 
         preset = RoomCreatePreset.PRIVATE
         if self.peer_type == "channel" and entity.username:
@@ -831,7 +845,7 @@ class Portal(DBPortal, BasePortal):
         power_levels = putil.get_base_power_levels(self, entity=entity)
         users = None
         if not self.is_direct:
-            users = await self._get_users(user, entity)
+            users = await self._get_users(client, entity)
             if self.has_bot:
                 extra_invites = self.config["bridge.relaybot.group_chat_invite"]
                 invites += extra_invites
@@ -840,7 +854,7 @@ class Portal(DBPortal, BasePortal):
             await putil.participants_to_power_levels(self, users, power_levels)
         elif self.bot and self.tg_receiver == self.bot.tgid:
             assert puppet is not None
-            invites = self.config["bridge.relaybot.private_chat.invite"]
+            invites += self.config["bridge.relaybot.private_chat.invite"]
             for invite in invites:
                 power_levels.users.setdefault(invite, 100)
             self.title = puppet.displayname
@@ -865,10 +879,10 @@ class Portal(DBPortal, BasePortal):
         autojoin_invites = self.bridge.homeserver_software.is_hungry
         create_invites = set()
         if autojoin_invites:
-            invites = []
             create_invites |= set(invites)
+            invites = []
             if not self.is_direct:
-                create_invites |= await self._sync_telegram_users(user, users)
+                create_invites |= await self._sync_telegram_users(user, users, client=client)
         if self.config["bridge.encryption.default"] and self.matrix.e2ee:
             self.encrypted = True
             initial_state.append(
@@ -896,6 +910,11 @@ class Portal(DBPortal, BasePortal):
             )
 
         with self.backfill_lock:
+            self.log.debug(
+                f"Creating room with parameters invite={create_invites}, {autojoin_invites=}, "
+                f"{preset=}, {alias=!r}, name={self.title!r}, topic={self.about!r}, "
+                f"{creation_content=}, is_direct={self.is_direct}"
+            )
             room_id = await self.main_intent.create_room(
                 alias_localpart=alias,
                 preset=preset,
@@ -912,7 +931,7 @@ class Portal(DBPortal, BasePortal):
             self.name_set = bool(self.title)
             self.avatar_set = bool(self.avatar_url)
 
-            if self.encrypted and self.matrix.e2ee and self.is_direct:
+            if not autojoin_invites and self.encrypted and self.matrix.e2ee and self.is_direct:
                 try:
                     await self.az.intent.ensure_joined(room_id)
                 except Exception:
@@ -928,7 +947,7 @@ class Portal(DBPortal, BasePortal):
             if not autojoin_invites or not self.is_direct:
                 await self.invite_to_matrix(invites)
                 await self.update_matrix_room(
-                    user, entity, puppet, levels=power_levels, users=users
+                    user, entity, puppet, levels=power_levels, users=users, client=client
                 )
             else:
                 # When using autojoining, all metadata is already set, so just update state caches
@@ -943,9 +962,9 @@ class Portal(DBPortal, BasePortal):
                 )
             await self.save()
 
-            if isinstance(user, u.User) or not self.backfill_msc2716:
+            if self.backfill_enable and (isinstance(user, u.User) or not self.backfill_msc2716):
                 try:
-                    await self.forward_backfill(user, initial=True)
+                    await self.forward_backfill(user, initial=True, client=client)
                 except Exception:
                     self.log.exception("Error in initial backfill")
                 if self.backfill_msc2716:
@@ -955,7 +974,7 @@ class Portal(DBPortal, BasePortal):
 
     async def _get_users(
         self,
-        user: au.AbstractUser,
+        client: MautrixTelegramClient,
         entity: TypeInputPeer | InputUser | TypeChat | TypeUser | InputChannel,
     ) -> list[TypeUser]:
         if self.peer_type == "channel" and not self.megagroup and not self.sync_channel_members:
@@ -963,7 +982,7 @@ class Portal(DBPortal, BasePortal):
         limit = self.max_initial_member_sync
         if limit == 0:
             return []
-        return await putil.get_users(user.client, self.tgid, entity, limit, self.peer_type)
+        return await putil.get_users(client, self.tgid, entity, limit, self.peer_type)
 
     async def update_power_levels(
         self,
@@ -985,7 +1004,10 @@ class Portal(DBPortal, BasePortal):
             await user.register_portal(self)
 
     async def _sync_telegram_users(
-        self, source: au.AbstractUser, users: list[User]
+        self,
+        source: au.AbstractUser,
+        users: list[User],
+        client: MautrixTelegramClient | None = None,
     ) -> set[UserID] | None:
         allowed_tgids = set()
         join_mxids = set()
@@ -996,7 +1018,7 @@ class Portal(DBPortal, BasePortal):
                 await self._add_bot_chat(entity)
             allowed_tgids.add(entity.id)
 
-            await puppet.update_info(source, entity)
+            await puppet.update_info(source, entity, client_override=client)
             if skip_deleted and entity.deleted:
                 continue
 
@@ -1122,7 +1144,12 @@ class Portal(DBPortal, BasePortal):
             except MForbidden as e:
                 self.log.warning(f"Failed to kick {user.mxid}: {e}")
 
-    async def update_info(self, user: au.AbstractUser, entity: TypeChat = None) -> None:
+    async def update_info(
+        self,
+        user: au.AbstractUser,
+        entity: TypeChat = None,
+        client: MautrixTelegramClient | None = None,
+    ) -> None:
         if self.peer_type == "user":
             self.log.warning("Called update_info() for direct chat portal")
             return
@@ -1131,7 +1158,7 @@ class Portal(DBPortal, BasePortal):
         self.log.debug("Updating info")
         try:
             if not entity:
-                entity = await self.get_entity(user)
+                entity = await self.get_entity(user, client)
                 self.log.trace("Fetched data: %s", entity)
 
             if self.peer_type == "channel":
@@ -1145,7 +1172,7 @@ class Portal(DBPortal, BasePortal):
             changed = await self._update_title(entity.title) or changed
 
             if isinstance(entity.photo, ChatPhoto):
-                changed = await self._update_avatar(user, entity.photo) or changed
+                changed = await self._update_avatar(user, entity.photo, client=client) or changed
         except Exception:
             self.log.exception(f"Failed to update info from source {user.tgid}")
 
@@ -1254,6 +1281,7 @@ class Portal(DBPortal, BasePortal):
         photo: TypeChatPhoto | TypeUserProfilePhoto,
         sender: p.Puppet | None = None,
         save: bool = False,
+        client: MautrixTelegramClient | None = None,
     ) -> bool:
         if isinstance(photo, (ChatPhoto, UserProfilePhoto)):
             loc = InputPeerPhotoFileLocation(
@@ -1280,7 +1308,7 @@ class Portal(DBPortal, BasePortal):
                 self.avatar_url = None
             elif self.photo_id != photo_id or not self.avatar_url:
                 file = await util.transfer_file_to_matrix(
-                    user.client,
+                    client or user.client,
                     self.main_intent,
                     loc,
                     async_upload=self.config["homeserver.async_media"],
@@ -2649,21 +2677,28 @@ class Portal(DBPortal, BasePortal):
         max_batches: int | None = None,
         messages_per_batch: int | None = None,
         anchor_msg_id: int | None = None,
+        extra_data: dict[str, Any] | None = None,
+        type: BackfillType = BackfillType.HISTORICAL,
     ) -> None:
-        # TODO check that there are no queued backfills
-        # if not await Backfill.get(source.mxid, self.tgid, self.tg_receiver):
-        await Backfill.new(
+        new_backfill = Backfill.new(
             user_mxid=source.mxid,
             priority=priority,
+            type=type,
             portal_tgid=self.tgid,
             portal_tg_receiver=self.tg_receiver,
             anchor_msg_id=anchor_msg_id,
+            extra_data=extra_data,
             messages_per_batch=(
                 messages_per_batch or self.config["bridge.backfill.incremental.messages_per_batch"]
             ),
             post_batch_delay=self.config["bridge.backfill.incremental.post_batch_delay"],
             max_batches=max_batches or self._default_max_batches,
-        ).insert()
+        )
+        deleted_entries = await new_backfill.insert()
+        if deleted_entries:
+            self.log.debug(
+                "Deleted backfill queue entries while inserting new item: %s", deleted_entries
+            )
         source.wakeup_backfill_task.set()
 
     async def forward_backfill(
@@ -2672,14 +2707,17 @@ class Portal(DBPortal, BasePortal):
         initial: bool,
         last_tgid: int | None = None,
         override_limit: int | None = None,
+        client: MautrixTelegramClient | None = None,
     ) -> str:
+        if not client:
+            client = source.client
         type = "initial" if initial else "sync"
         limit = override_limit or self.config[f"bridge.backfill.forward.{type}_limit"]
         if limit == 0:
             return "Limit is zero, not backfilling"
         with self.backfill_lock:
             output = await self.backfill(
-                source, source.client, forward=True, forward_limit=limit, last_tgid=last_tgid
+                source, client, forward=True, forward_limit=limit, last_tgid=last_tgid
             )
             self.log.debug(f"Forward backfill complete, status: {output}")
             return output
@@ -2693,6 +2731,8 @@ class Portal(DBPortal, BasePortal):
         forward_limit: int | None = None,
         last_tgid: int | None = None,
     ) -> str:
+        if not self.backfill_enable:
+            return "Backfilling is disabled in the bridge config"
         async with self.backfill_method_lock:
             return await self._locked_backfill(
                 source, client, req, forward, forward_limit, last_tgid
@@ -2778,7 +2818,7 @@ class Portal(DBPortal, BasePortal):
             self.log.debug(f"Enqueuing more backfill through {source.mxid}")
             await self.enqueue_backfill(
                 source,
-                priority=100,
+                priority=max(100, req.priority + 1),
                 messages_per_batch=req.messages_per_batch,
                 max_batches=-1 if req.max_batches < 0 else (req.max_batches - 1),
                 anchor_msg_id=lowest_id,
@@ -3515,9 +3555,13 @@ class Portal(DBPortal, BasePortal):
     ) -> Awaitable[TypeInputPeer | TypeInputChannel]:
         return user.client.get_input_entity(self.peer)
 
-    async def get_entity(self, user: au.AbstractUser) -> TypeChat:
+    async def get_entity(
+        self, user: au.AbstractUser, client: MautrixTelegramClient | None = None
+    ) -> TypeChat:
+        if not client:
+            client = user.client
         try:
-            return await user.client.get_entity(self.peer)
+            return await client.get_entity(self.peer)
         except ValueError:
             if user.is_bot:
                 self.log.warning(f"Could not find entity with bot {user.tgid}. Failing...")
@@ -3525,7 +3569,7 @@ class Portal(DBPortal, BasePortal):
             self.log.warning(
                 f"Could not find entity with user {user.tgid}. falling back to get_dialogs."
             )
-            async for dialog in user.client.iter_dialogs():
+            async for dialog in client.iter_dialogs():
                 if dialog.entity.id == self.tgid:
                     return dialog.entity
             raise

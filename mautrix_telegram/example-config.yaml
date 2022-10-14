@@ -169,7 +169,10 @@ bridge:
     sync_update_limit: 0
     # Number of most recently active dialogs to create portals for when syncing chats.
     # Set to 0 to remove limit.
-    sync_create_limit: 30
+    sync_create_limit: 15
+    # Should all chats be scheduled to be created later?
+    # This is best used in combination with MSC2716 infinite backfill.
+    sync_deferred_create_all: false
     # Whether or not to sync and create portals for direct chats at startup.
     sync_direct_chats: false
     # The maximum number of simultaneous Telegram deletions to handle.

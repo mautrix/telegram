@@ -15,7 +15,7 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from mautrix.util.async_db import Database
 
-from .backfill_queue import Backfill
+from .backfill_queue import Backfill, BackfillType
 from .bot_chat import BotChat
 from .disappearing_message import DisappearingMessage
 from .message import Message

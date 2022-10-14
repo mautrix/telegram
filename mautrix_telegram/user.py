@@ -16,7 +16,7 @@
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, AsyncGenerator, AsyncIterable, Awaitable, NamedTuple, cast
-from datetime import datetime, timedelta, timezone
+from datetime import datetime
 import asyncio
 import time
 
@@ -39,6 +39,7 @@ from telethon.tl.types import (
     InputUserSelf,
     NotifyPeer,
     PeerUser,
+    TypeChat,
     TypeUpdate,
     UpdateFolderPeers,
     UpdateNewChannelMessage,
@@ -62,7 +63,7 @@ from mautrix.util.opt_prometheus import Gauge
 
 from . import portal as po, puppet as pu, util
 from .abstract_user import AbstractUser
-from .db import Backfill, Message as DBMessage, PgSession, User as DBUser
+from .db import Backfill, BackfillType, Message as DBMessage, PgSession, User as DBUser
 from .tgclient import MautrixTelegramClient
 from .types import TelegramID
 
@@ -347,7 +348,7 @@ class User(DBUser, AbstractUser, BaseUser):
 
         self._track_metric(METRIC_LOGGED_IN, True)
         if not self._backfill_task or self._backfill_task.done():
-            self._backfill_task = asyncio.create_task(self._handle_backfill_requests_loop())
+            self._backfill_task = asyncio.create_task(self._try_handle_backfill_requests_loop())
 
         try:
             puppet = await pu.Puppet.get_by_tgid(self.tgid)
@@ -378,6 +379,14 @@ class User(DBUser, AbstractUser, BaseUser):
             "max_file_size": min(self.bridge.matrix.media_config.upload_size, 2000 * 1024 * 1024),
         }
 
+    async def _try_handle_backfill_requests_loop(self) -> None:
+        if not self.config["bridge.backfill.enable"]:
+            return
+        try:
+            await self._handle_backfill_requests_loop()
+        except Exception:
+            self.log.exception("Fatal error in backfill request loop")
+
     async def _handle_backfill_requests_loop(self) -> None:
         while True:
             req = await Backfill.get_next(self.mxid)
@@ -388,7 +397,11 @@ class User(DBUser, AbstractUser, BaseUser):
                     pass
                 self.wakeup_backfill_task.clear()
             else:
-                await self._takeout_and_backfill(req)
+                try:
+                    await self._takeout_and_backfill(req)
+                except Exception:
+                    self.log.exception("Error in takeout backfill loop, retrying in an hour")
+                    await asyncio.sleep(3600)
 
     async def _takeout_and_backfill(self, first_req: Backfill, first_attempt: bool = True) -> None:
         self.takeout_retry_immediate.clear()
@@ -437,12 +450,32 @@ class User(DBUser, AbstractUser, BaseUser):
                     TelegramID(req.portal_tgid), tg_receiver=TelegramID(req.portal_tg_receiver)
                 )
                 await req.mark_dispatched()
-                await portal.backfill(self, client, req=req)
+                if req.type == BackfillType.HISTORICAL:
+                    await portal.backfill(self, client, req=req)
+                elif req.type == BackfillType.SYNC_DIALOG:
+                    await self._backfill_sync_dialog(portal, client, req.extra_data)
                 await req.mark_done()
                 await asyncio.sleep(req.post_batch_delay)
             except Exception:
                 self.log.exception("Error handling backfill request for %s", req.portal_tgid)
                 await req.set_cooldown_timeout(1800)
+
+    async def _backfill_sync_dialog(
+        self, portal: po.Portal, client: MautrixTelegramClient, post_sync_args: dict[str, Any]
+    ) -> None:
+        if portal.mxid:
+            self.log.debug("Portal already exists, skipping dialog sync backfill queue item")
+            return
+        self.log.info(f"Creating portal for {portal.tgid_log} as part of backfill loop")
+        try:
+            await portal.create_matrix_room(
+                self, client=client, update_if_exists=False, invites=[self.mxid]
+            )
+        except Exception:
+            self.log.exception(f"Error while creating {portal.tgid_log}")
+        else:
+            puppet = await pu.Puppet.get_by_custom_mxid(self.mxid)
+            await self._post_sync_dialog(portal, puppet, was_created=True, **post_sync_args)
 
     async def update(self, update: TypeUpdate) -> bool:
         if not self.is_bot:
@@ -604,19 +637,18 @@ class User(DBUser, AbstractUser, BaseUser):
         if active and tag_info is None:
             tag_info = RoomTagInfo(order=0.5)
             tag_info[DOUBLE_PUPPET_SOURCE_KEY] = self.bridge.name
-            self.log.debug("Adding tag {tag} to {portal.mxid}/{portal.tgid}")
+            self.log.debug(f"Adding tag {tag} to {portal.mxid}/{portal.tgid}")
             await puppet.intent.set_room_tag(portal.mxid, tag, tag_info)
         elif (
             not active and tag_info and tag_info.get(DOUBLE_PUPPET_SOURCE_KEY) == self.bridge.name
         ):
-            self.log.debug("Removing tag {tag} from {portal.mxid}/{portal.tgid}")
+            self.log.debug(f"Removing tag {tag} from {portal.mxid}/{portal.tgid}")
             await puppet.intent.remove_room_tag(portal.mxid, tag)
 
-    async def _mute_room(self, puppet: pu.Puppet, portal: po.Portal, mute_until: datetime) -> None:
+    async def _mute_room(self, puppet: pu.Puppet, portal: po.Portal, mute_until: float) -> None:
         if not self.config["bridge.mute_bridging"] or not portal or not portal.mxid:
             return
-        now = datetime.utcnow().replace(tzinfo=timezone.utc)
-        if mute_until is not None and mute_until > now:
+        if mute_until is not None and mute_until > time.time():
             self.log.debug(
                 f"Muting {portal.mxid}/{portal.tgid} (muted until {mute_until} on Telegram)"
             )
@@ -672,12 +704,24 @@ class User(DBUser, AbstractUser, BaseUser):
         portal = await po.Portal.get_by_entity(
             update.peer.peer, tg_receiver=self.tgid, create=False
         )
-        await self._mute_room(puppet, portal, update.notify_settings.mute_until)
+        await self._mute_room(puppet, portal, update.notify_settings.mute_until.timestamp())
 
     async def _sync_dialog(
         self, portal: po.Portal, dialog: Dialog, should_create: bool, puppet: pu.Puppet | None
     ) -> None:
         was_created = False
+        post_sync_args = {
+            "last_message_ts": cast(datetime, dialog.date).timestamp(),
+            "unread_count": dialog.unread_count,
+            "max_read_id": dialog.dialog.read_inbox_max_id,
+            "mute_until": (
+                dialog.dialog.notify_settings.mute_until.timestamp()
+                if dialog.dialog.notify_settings.mute_until
+                else None
+            ),
+            "pinned": dialog.pinned,
+            "archived": dialog.archived,
+        }
         if portal.mxid:
             try:
                 await portal.forward_backfill(self, initial=False, last_tgid=dialog.message.id)
@@ -693,41 +737,65 @@ class User(DBUser, AbstractUser, BaseUser):
                 was_created = True
             except Exception:
                 self.log.exception(f"Error while creating {portal.tgid_log}")
-        if portal.mxid and puppet and puppet.is_real_user:
-            tg_space = portal.tgid if portal.peer_type == "channel" else self.tgid
-            last_message_date: float = cast(datetime, dialog.date).timestamp()
-            unread_threshold_hours = self.config["bridge.backfill.unread_hours_threshold"]
-            force_read = (
-                was_created
-                and unread_threshold_hours >= 0
-                and last_message_date + (unread_threshold_hours * 60 * 60) < time.time()
+        elif self.config["bridge.sync_deferred_create_all"]:
+            await portal.enqueue_backfill(
+                self,
+                priority=40,
+                type=BackfillType.SYNC_DIALOG,
+                extra_data=post_sync_args,
             )
-            if dialog.unread_count == 0 or force_read:
-                # This is usually more reliable than finding a specific message
-                # e.g. if the last read message is a service message that isn't in the message db
-                last_read = await DBMessage.find_last(portal.mxid, tg_space)
-                if force_read:
-                    self.log.debug(
-                        f"Marking {portal.tgid_log} as read because the last message is from "
-                        f"{dialog.date} (unread threshold is {unread_threshold_hours} hours)"
-                    )
-            else:
-                last_read = await DBMessage.get_one_by_tgid(
-                    portal.tgid, tg_space, dialog.dialog.read_inbox_max_id
+        if portal.mxid and puppet and puppet.is_real_user:
+            await self._post_sync_dialog(
+                portal=portal,
+                puppet=puppet,
+                was_created=was_created,
+                **post_sync_args,
+            )
+
+    async def _post_sync_dialog(
+        self,
+        portal: po.Portal,
+        puppet: pu.Puppet,
+        was_created: bool,
+        max_read_id: int,
+        last_message_ts: float,
+        unread_count: int,
+        mute_until: float,
+        pinned: bool,
+        archived: bool,
+    ) -> None:
+        self.log.debug(
+            f"Running dialog post-sync for {portal.tgid_log} with args "
+            f"{was_created=}, {max_read_id=}, {last_message_ts=}, {unread_count=}, "
+            f"{mute_until=}, {pinned=}, {archived=}"
+        )
+        tg_space = portal.tgid if portal.peer_type == "channel" else self.tgid
+        unread_threshold_hours = self.config["bridge.backfill.unread_hours_threshold"]
+        force_read = (
+            was_created
+            and unread_threshold_hours >= 0
+            and last_message_ts + (unread_threshold_hours * 60 * 60) < time.time()
+        )
+        if unread_count == 0 or force_read:
+            # This is usually more reliable than finding a specific message
+            # e.g. if the last read message is a service message that isn't in the message db
+            last_read = await DBMessage.find_last(portal.mxid, tg_space)
+            if force_read:
+                self.log.debug(
+                    f"Marking {portal.tgid_log} as read because the last message is from "
+                    f"{last_message_ts} (unread threshold is {unread_threshold_hours} hours)"
                 )
-            try:
-                if last_read:
-                    await puppet.intent.mark_read(last_read.mx_room, last_read.mxid)
-                if was_created or not self.config["bridge.tag_only_on_create"]:
-                    await self._mute_room(puppet, portal, dialog.dialog.notify_settings.mute_until)
-                    await self._tag_room(
-                        puppet, portal, self.config["bridge.pinned_tag"], dialog.pinned
-                    )
-                    await self._tag_room(
-                        puppet, portal, self.config["bridge.archive_tag"], dialog.archived
-                    )
-            except Exception:
-                self.log.exception(f"Error updating read status and tags for {portal.tgid_log}")
+        else:
+            last_read = await DBMessage.get_one_by_tgid(portal.tgid, tg_space, max_read_id)
+        try:
+            if last_read:
+                await puppet.intent.mark_read(last_read.mx_room, last_read.mxid)
+            if was_created or not self.config["bridge.tag_only_on_create"]:
+                await self._mute_room(puppet, portal, mute_until)
+                await self._tag_room(puppet, portal, self.config["bridge.pinned_tag"], pinned)
+                await self._tag_room(puppet, portal, self.config["bridge.archive_tag"], archived)
+        except Exception:
+            self.log.exception(f"Error updating read status and tags for {portal.tgid_log}")
 
     async def get_cached_portals(self) -> dict[tuple[TelegramID, TelegramID], po.Portal]:
         if self._portals_cache is None:
@@ -744,9 +812,7 @@ class User(DBUser, AbstractUser, BaseUser):
         update_limit = self.config["bridge.sync_update_limit"] or None
         create_limit = self.config["bridge.sync_create_limit"]
         index = 0
-        self.log.debug(
-            f"Syncing dialogs (update_limit={update_limit}, create_limit={create_limit})"
-        )
+        self.log.debug(f"Syncing dialogs ({update_limit=}, {create_limit=})")
         await self.push_bridge_state(BridgeStateEvent.BACKFILLING)
         puppet = await pu.Puppet.get_by_custom_mxid(self.mxid)
         dialog: Dialog
@@ -767,11 +833,12 @@ class User(DBUser, AbstractUser, BaseUser):
                 continue
             portal = await po.Portal.get_by_entity(entity, tg_receiver=self.tgid)
             new_portal_cache[portal.tgid_full] = portal
+            should_create = not create_limit or index < create_limit
             coro = self._sync_dialog(
                 portal=portal,
                 dialog=dialog,
                 puppet=puppet,
-                should_create=not create_limit or index < create_limit,
+                should_create=should_create,
             )
             creators.append(asyncio.create_task(coro))
             index += 1
