@@ -731,6 +731,7 @@ class User(DBUser, AbstractUser, BaseUser):
             "archived": dialog.archived,
         }
         if portal.mxid:
+            self.log.debug(f"Backfilling and updating {portal.tgid_log} (dialog sync)")
             try:
                 await portal.forward_backfill(self, initial=False, last_tgid=dialog.message.id)
             except Exception:
@@ -740,12 +741,14 @@ class User(DBUser, AbstractUser, BaseUser):
             except Exception:
                 self.log.exception(f"Error while updating {portal.tgid_log}")
         elif should_create:
+            self.log.debug(f"Creating portal for {portal.tgid_log} immediately (dialog sync)")
             try:
                 await portal.create_matrix_room(self, dialog.entity, invites=[self.mxid])
                 was_created = True
             except Exception:
                 self.log.exception(f"Error while creating {portal.tgid_log}")
         elif self.config["bridge.sync_deferred_create_all"]:
+            self.log.debug(f"Enqueuing deferred dialog sync for {portal.tgid_log}")
             await portal.enqueue_backfill(
                 self,
                 priority=40,
@@ -759,6 +762,7 @@ class User(DBUser, AbstractUser, BaseUser):
                 was_created=was_created,
                 **post_sync_args,
             )
+        self.log.debug(f"_sync_dialog finished for {portal.tgid_log}")
 
     async def _post_sync_dialog(
         self,
