@@ -37,9 +37,9 @@ from telethon.tl.types import (
     Chat,
     ChatForbidden,
     InputUserSelf,
+    Message,
     NotifyPeer,
     PeerUser,
-    TypeChat,
     TypeUpdate,
     UpdateFolderPeers,
     UpdateNewChannelMessage,
@@ -402,6 +402,14 @@ class User(DBUser, AbstractUser, BaseUser):
                 except Exception:
                     self.log.exception("Error in takeout backfill loop, retrying in an hour")
                     await asyncio.sleep(3600)
+
+    async def _check_server_notice_edit(self, message: Message) -> None:
+        if "Data export request" in message.message and "Accepted" in message.message:
+            self.log.debug(
+                f"Received an edit to message {message.id} that looks like the data export"
+                " was accepted, marking takeout as retriable"
+            )
+            self.takeout_retry_immediate.set()
 
     async def _takeout_and_backfill(self, first_req: Backfill, first_attempt: bool = True) -> None:
         self.takeout_retry_immediate.clear()

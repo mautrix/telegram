@@ -541,6 +541,8 @@ class AbstractUser(ABC):
                 sender = await pu.Puppet.get_by_tgid(self.tgid)
             elif isinstance(update.from_id, (PeerUser, PeerChannel)):
                 sender = await pu.Puppet.get_by_peer(update.from_id)
+            elif isinstance(update.peer_id, PeerUser):
+                sender = await pu.Puppet.get_by_peer(update.peer_id)
             else:
                 sender = None
         else:
@@ -622,6 +624,9 @@ class AbstractUser(ABC):
             )
             await portal.create_matrix_room(self, chan, invites=[self.mxid])
 
+    async def _check_server_notice_edit(self, message: Message) -> None:
+        pass
+
     async def update_message(self, original_update: UpdateMessage) -> None:
         update, sender, portal = await self.get_message_details(original_update)
         if not portal:
@@ -673,6 +678,8 @@ class AbstractUser(ABC):
             return await portal.handle_telegram_action(self, sender, update)
 
         if isinstance(original_update, (UpdateEditMessage, UpdateEditChannelMessage)):
+            if sender and sender.tgid == 777000:
+                await self._check_server_notice_edit(update)
             return await portal.handle_telegram_edit(self, sender, update)
         return await portal.handle_telegram_message(self, sender, update)
 
