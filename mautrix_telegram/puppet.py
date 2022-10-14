@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING, AsyncGenerator, AsyncIterable, Awaitable, cast
 from difflib import SequenceMatcher
 import unicodedata
 
+from telethon import utils
 from telethon.tl.types import (
     Channel,
     ChatPhoto,
@@ -283,7 +284,9 @@ class Puppet(DBPuppet, BasePuppet):
                     or changed
                 )
                 changed = (
-                    await self.update_avatar(source, info.photo, client_override=client_override)
+                    await self.update_avatar(
+                        source, info.photo, entity=info, client_override=client_override
+                    )
                     or changed
                 )
             except Exception:
@@ -370,6 +373,7 @@ class Puppet(DBPuppet, BasePuppet):
         self,
         source: au.AbstractUser,
         photo: TypeUserProfilePhoto | TypeChatPhoto,
+        entity: User | None = None,
         client_override: MautrixTelegramClient | None = None,
     ) -> bool:
         if self.disable_updates:
@@ -390,11 +394,19 @@ class Puppet(DBPuppet, BasePuppet):
                 self.avatar_url = None
             elif self.photo_id != photo_id or not self.avatar_url:
                 client = client_override or source.client
+                try:
+                    peer = await client.get_input_entity(entity or self.peer)
+                except ValueError:
+                    if entity:
+                        peer = utils.get_input_peer(entity, check_hash=False)
+                    else:
+                        self.log.warning(f"Couldn't get input entity to update avatar")
+                        return False
                 file = await util.transfer_file_to_matrix(
                     client=client,
                     intent=self.default_mxid_intent,
                     location=InputPeerPhotoFileLocation(
-                        peer=await client.get_input_entity(self.peer),
+                        peer=peer,
                         photo_id=photo.photo_id,
                         big=True,
                     ),
