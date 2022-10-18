@@ -128,7 +128,7 @@ class AuthAPI(abc.ABC):
                 status=200,
                 message=(
                     "Code requested successfully. Check your SMS "
-                    "or Telegram client and enter the code below."
+                    "or Telegram app and enter the code below."
                 ),
             )
         except PhoneNumberInvalidError:
