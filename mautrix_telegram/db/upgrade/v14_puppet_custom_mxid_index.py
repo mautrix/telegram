@@ -20,4 +20,4 @@ from . import upgrade_table
 
 @upgrade_table.register(description="Add index to puppet custom_mxid column")
 async def upgrade_v14(conn: Connection) -> None:
-    await conn.execute("CREATE INDEX puppet_custom_mxid_idx ON puppet(custom_mxid)")
+    await conn.execute("CREATE INDEX IF NOT EXISTS puppet_custom_mxid_idx ON puppet(custom_mxid)")

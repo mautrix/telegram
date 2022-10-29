@@ -21,5 +21,5 @@ from . import upgrade_table
 @upgrade_table.register(description="Add index for Message.find_recent")
 async def upgrade_v17(conn: Connection) -> None:
     await conn.execute(
-        "CREATE INDEX message_mx_room_and_tgid_idx ON message(mx_room, tgid DESC)"
+        "CREATE INDEX IF NOT EXISTS message_mx_room_and_tgid_idx ON message(mx_room, tgid DESC)"
     )
