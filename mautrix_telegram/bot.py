@@ -15,7 +15,7 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from __future__ import annotations
 
-from typing import Awaitable, Callable, Literal
+from typing import TYPE_CHECKING, Awaitable, Callable, Literal
 import logging
 import time
 
@@ -57,6 +57,9 @@ from .abstract_user import AbstractUser
 from .db import BotChat, Message as DBMessage
 from .types import TelegramID
 
+if TYPE_CHECKING:
+    from asyncio import Future
+
 ReplyFunc = Callable[[str], Awaitable[Message]]
 BanFunc = Callable[[RoomID, UserID, str], Awaitable[None]]
 TelegramAdminPermission = Literal[
@@ -87,6 +90,7 @@ class Bot(AbstractUser):
         tuple[int, int],
         tuple[ChatParticipantAdmin | ChatParticipantCreator | None, float],
     ]
+    _login_wait_fut: Future | None
     required_permissions: dict[str, TelegramAdminPermission] = {
         "portal": None,
         "invite": "invite_users",
@@ -147,8 +151,9 @@ class Bot(AbstractUser):
         self.tgid = TelegramID(info.id)
         self.tg_username = info.username
         self.mxid = pu.Puppet.get_mxid_from_id(self.tgid)
-        self._login_wait_fut.set_result(None)
-        self._login_wait_fut = None
+        if self._login_wait_fut:
+            self._login_wait_fut.set_result(None)
+            self._login_wait_fut = None
 
         chat_ids = [chat_id for chat_id, chat_type in self.chats.items() if chat_type == "chat"]
         response = await self.client(GetChatsRequest(chat_ids))
