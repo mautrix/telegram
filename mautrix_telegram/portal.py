@@ -65,6 +65,7 @@ from telethon.tl.types import (
     Channel,
     ChannelFull,
     Chat,
+    ChatBannedRights,
     ChatFull,
     ChatPhoto,
     ChatPhotoEmpty,
@@ -993,6 +994,12 @@ class Portal(DBPortal, BasePortal):
             levels = await self.main_intent.get_power_levels(self.mxid)
         if await putil.participants_to_power_levels(self, users, levels):
             await self.main_intent.set_power_levels(self.mxid, levels)
+
+    async def update_default_banned_rights(self, dbr: ChatBannedRights) -> None:
+        self.log.debug("Default rights in chat changed: %s", dbr)
+        levels = await self.main_intent.get_power_levels(self.mxid)
+        levels = putil.get_base_power_levels(self, levels, dbr=dbr)
+        await self.main_intent.set_power_levels(self.mxid, levels)
 
     async def _add_bot_chat(self, bot: User) -> None:
         if self.bot and bot.id == self.bot.tgid:

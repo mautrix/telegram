@@ -11,6 +11,7 @@
 ### Improved
 * Redacting reactions on Matrix no longer removes the user's other reactions to
   the same message (premium users can have up to 3 reactions per message).
+* Changes to default user permissions on Telegram are now bridged.
 
 ### Fixed
 

@@ -34,8 +34,12 @@ from ..types import TelegramID
 
 
 def get_base_power_levels(
-    portal: po.Portal, levels: PowerLevelContent = None, entity: TypeChat = None
+    portal: po.Portal,
+    levels: PowerLevelContent = None,
+    entity: TypeChat | None = None,
+    dbr: ChatBannedRights | None = None,
 ) -> PowerLevelContent:
+    is_initial = not levels
     levels = levels or PowerLevelContent()
     if portal.peer_type == "user":
         overrides = portal.config["bridge.initial_power_level_overrides.user"]
@@ -51,7 +55,7 @@ def get_base_power_levels(
         levels.events_default = overrides.get("events_default", 0)
     else:
         overrides = portal.config["bridge.initial_power_level_overrides.group"]
-        dbr = entity.default_banned_rights
+        dbr = dbr or entity.default_banned_rights
         if not dbr:
             portal.log.debug(f"default_banned_rights is None in {entity}")
             dbr = ChatBannedRights(
@@ -80,16 +84,14 @@ def get_base_power_levels(
         levels.events_default = overrides.get(
             "events_default",
             50
-            if portal.peer_type == "channel" and not entity.megagroup or dbr.send_messages
+            if portal.peer_type == "channel" and not portal.megagroup or dbr.send_messages
             else 0,
         )
     for evt_type, value in overrides.get("events", {}).items():
         levels.events[EventType.find(evt_type)] = value
     userlevel_overrides = overrides.get("users", {})
-    bot_level = levels.get_user_level(portal.main_intent.mxid)
-    for user, user_level in levels.users.items():
-        if user_level < bot_level:
-            levels.users[user] = userlevel_overrides.get(user, 0)
+    if is_initial:
+        levels.users.update(userlevel_overrides)
     if portal.main_intent.mxid not in levels.users:
         levels.users[portal.main_intent.mxid] = 100
     return levels

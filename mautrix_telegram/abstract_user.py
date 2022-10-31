@@ -41,6 +41,7 @@ from telethon.tl.types import (
     TypeUpdate,
     UpdateChannel,
     UpdateChannelUserTyping,
+    UpdateChatDefaultBannedRights,
     UpdateChatParticipantAdmin,
     UpdateChatParticipants,
     UpdateChatUserTyping,
@@ -346,6 +347,8 @@ class AbstractUser(ABC):
             await self.update_admin(update)
         elif isinstance(update, UpdateChatParticipants):
             await self.update_participants(update)
+        elif isinstance(update, UpdateChatDefaultBannedRights):
+            await self.update_default_banned_rights(update)
         elif isinstance(update, (UpdatePinnedMessages, UpdatePinnedChannelMessages)):
             await self.update_pinned_messages(update)
         elif isinstance(update, (UpdateUserName, UpdateUserPhoto)):
@@ -391,6 +394,12 @@ class AbstractUser(ABC):
         portal = await po.Portal.get_by_tgid(TelegramID(update.participants.chat_id))
         if portal and portal.mxid:
             await portal.update_power_levels(update.participants.participants)
+
+    @staticmethod
+    async def update_default_banned_rights(update: UpdateChatDefaultBannedRights) -> None:
+        portal = await po.Portal.get_by_entity(update.peer)
+        if portal and portal.mxid:
+            await portal.update_default_banned_rights(update.default_banned_rights)
 
     async def update_read_receipt(self, update: UpdateReadHistoryOutbox) -> None:
         if not isinstance(update.peer, PeerUser):
