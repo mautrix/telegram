@@ -18,6 +18,8 @@ from mautrix.util.async_db import Connection
 from . import upgrade_table
 
 
-@upgrade_table.register(description="Add index to puppet custom_mxid column")
-async def upgrade_v14(conn: Connection) -> None:
-    await conn.execute("CREATE INDEX IF NOT EXISTS puppet_custom_mxid_idx ON puppet(custom_mxid)")
+@upgrade_table.register(description="Add index for Message.find_recent")
+async def upgrade_v17(conn: Connection) -> None:
+    await conn.execute(
+        "CREATE INDEX IF NOT EXISTS message_mx_room_and_tgid_idx ON message(mx_room, tgid DESC)"
+    )
