@@ -20,6 +20,7 @@ import html
 
 from telethon.tl.functions.channels import GetSponsoredMessagesRequest
 from telethon.tl.types import Channel, InputChannel, PeerChannel, PeerUser, SponsoredMessage, User
+from telethon.tl.types.messages import SponsoredMessages, SponsoredMessagesEmpty
 
 from mautrix.types import MessageType, TextMessageEventContent
 
@@ -32,8 +33,9 @@ async def get_sponsored_message(
     entity: InputChannel,
 ) -> tuple[SponsoredMessage | None, int | None, Channel | User | None]:
     resp = await user.client(GetSponsoredMessagesRequest(entity))
-    if len(resp.messages) == 0:
+    if isinstance(resp, SponsoredMessagesEmpty):
         return None, None, None
+    assert isinstance(resp, SponsoredMessages)
     msg = resp.messages[0]
     if isinstance(msg.from_id, PeerUser):
         entities = resp.users
