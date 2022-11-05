@@ -12,10 +12,15 @@
 * Redacting reactions on Matrix no longer removes the user's other reactions to
   the same message (premium users can have up to 3 reactions per message).
 * Changes to default user permissions on Telegram are now bridged.
+* Added database index to make reaction polling more efficient
+  (thanks to [@AndrewFerr] in [#862]).
 
 ### Fixed
+* Fixed provisioning API not working with URL-encoded parameters.
 
 [MSC2716]: https://github.com/matrix-org/matrix-spec-proposals/pull/2716
+[@AndrewFerr]: https://github.com/AndrewFerr
+[#862]: https://github.com/mautrix/telegram/pull/862
 
 # v0.12.1 (2022-09-26)
 
