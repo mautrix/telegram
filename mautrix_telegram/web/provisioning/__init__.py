@@ -25,6 +25,7 @@ from telethon.tl.types import ChannelForbidden, ChatForbidden, TypeChat, User as
 from telethon.utils import get_peer_id, resolve_id
 
 from mautrix.appservice import AppService
+from mautrix.client import Client
 from mautrix.errors import IntentError, MatrixRequestError
 from mautrix.types import UserID
 
@@ -53,7 +54,7 @@ class ProvisioningAPI(AuthAPI):
 
         self.app = web.Application(loop=bridge.loop, middlewares=[self.error_middleware])
 
-        portal_prefix = "/v1/portal/{mxid:![^/]+}"
+        portal_prefix = "/v1/portal/{mxid}"
         self.app.router.add_route("GET", f"{portal_prefix}", self.get_portal_by_mxid)
         self.app.router.add_route("GET", "/v1/portal/{tgid:-[0-9]+}", self.get_portal_by_tgid)
         self.app.router.add_route(
@@ -62,7 +63,7 @@ class ProvisioningAPI(AuthAPI):
         self.app.router.add_route("POST", f"{portal_prefix}/create", self.create_chat)
         self.app.router.add_route("POST", f"{portal_prefix}/disconnect", self.disconnect_chat)
 
-        user_prefix = "/v1/user/{mxid:@[^:]*:[^/]+}"
+        user_prefix = "/v1/user/{mxid}"
         self.app.router.add_route("GET", f"{user_prefix}", self.get_user_info)
         self.app.router.add_route("GET", f"{user_prefix}/chats", self.get_chats)
         self.app.router.add_route("GET", f"{user_prefix}/contacts", self.get_contacts)
@@ -656,6 +657,12 @@ class ProvisioningAPI(AuthAPI):
                 return None, None
             return None, self.get_login_response(
                 error="User ID not given.", errcode="mxid_empty", status=400
+            )
+        try:
+            Client.parse_user_id(mxid)
+        except ValueError:
+            return None, self.get_login_response(
+                error="Invalid user ID", errcode="mxid_invalid", status=400
             )
 
         user = await User.get_and_start_by_mxid(mxid, even_if_no_session=True)
