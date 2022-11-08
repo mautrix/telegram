@@ -429,6 +429,7 @@ class AbstractUser(ABC):
         if not puppet.is_real_user:
             return
 
+        self.log.debug("Handling own read receipt: %s", update)
         if isinstance(update, UpdateReadChannelInbox):
             portal = await po.Portal.get_by_tgid(TelegramID(update.channel_id))
         elif isinstance(update.peer, PeerChat):
@@ -442,6 +443,7 @@ class AbstractUser(ABC):
             return
 
         if not portal or not portal.mxid:
+            self.log.debug(f"Dropping own read receipt in unknown chat ({update.peer})")
             return
 
         tg_space = portal.tgid if portal.peer_type == "channel" else self.tgid
@@ -449,6 +451,9 @@ class AbstractUser(ABC):
             TelegramID(update.max_id), tg_space, edit_index=-1
         )
         if not message:
+            self.log.debug(
+                f"Dropping own read receipt: unknown message {update.max_id}@{tg_space}"
+            )
             return
 
         await puppet.intent.mark_read(portal.mxid, message.mxid)
