@@ -11,7 +11,7 @@ A Matrix-Telegram hybrid puppeting/relaybot bridge.
 ## Sponsors
 * [Joel Lehtonen / Zouppen](https://github.com/zouppen)
 
-### Documentation
+## Documentation
 All setup and usage instructions are located on
 [docs.mau.fi](https://docs.mau.fi/bridges/python/telegram/index.html).
 Some quick links:
