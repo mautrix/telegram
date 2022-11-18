@@ -2580,7 +2580,7 @@ class Portal(DBPortal, BasePortal):
         self, source: au.AbstractUser, sender: p.Puppet | None, evt: Message
     ) -> None:
         if not self.mxid:
-            self.log.trace("Ignoring edit to %d as chat has no Matrix room", evt.id)
+            self.log.debug("Ignoring edit to %d as chat has no Matrix room", evt.id)
             return
         elif hasattr(evt, "media") and isinstance(evt.media, MessageMediaGame):
             self.log.debug("Ignoring game message edit event")
@@ -2892,7 +2892,14 @@ class Portal(DBPortal, BasePortal):
         if sender:
             await add_member(intent, sender.displayname, sender.avatar_url)
         is_bot = sender.is_bot if sender else False
-        converted = await self._msg_conv.convert(source, intent, is_bot, msg, client=client)
+        converted = await self._msg_conv.convert(
+            source,
+            intent,
+            is_bot,
+            msg,
+            client=client,
+            deterministic_reply_id=self.bridge.homeserver_software.is_hungry,
+        )
         return converted, intent
 
     async def _wrap_batch_msg(
@@ -2901,6 +2908,7 @@ class Portal(DBPortal, BasePortal):
         msg: Message,
         converted: putil.ConvertedMessage,
         caption: bool = False,
+        event_id: EventID | None = None,
     ) -> BatchSendEvent:
         if caption:
             content = converted.caption
@@ -2917,6 +2925,7 @@ class Portal(DBPortal, BasePortal):
             timestamp=int(msg.date.timestamp() * 1000),
             content=content,
             type=event_type,
+            event_id=event_id,
         )
 
     async def _backfill_messages(
@@ -2940,6 +2949,7 @@ class Portal(DBPortal, BasePortal):
             else set()
         )
         before_first_msg_timestamp = 0
+        tg_space = self.tgid if self.peer_type == "channel" else source.tgid
 
         async def add_member(intent: IntentAPI, displayname: str, avatar_url: ContentURI) -> None:
             if self.bridge.homeserver_software.is_hungry or intent.mxid in added_members:
@@ -2993,7 +3003,10 @@ class Portal(DBPortal, BasePortal):
             converted, intent = await self._convert_batch_msg(source, client, msg, add_member)
             if converted is None:
                 continue
-            events.append(await self._wrap_batch_msg(intent, msg, converted))
+            d_event_id = None
+            if self.bridge.homeserver_software.is_hungry:
+                d_event_id = self._msg_conv.deterministic_event_id(tg_space, msg.id)
+            events.append(await self._wrap_batch_msg(intent, msg, converted, event_id=d_event_id))
             intents.append(intent)
             metas.append(msg)
             if converted.caption:

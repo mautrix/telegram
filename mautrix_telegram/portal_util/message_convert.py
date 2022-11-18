@@ -18,6 +18,7 @@ from __future__ import annotations
 from typing import Any, NamedTuple
 import base64
 import codecs
+import hashlib
 import html
 import mimetypes
 import unicodedata
@@ -63,6 +64,7 @@ from telethon.utils import decode_waveform
 
 from mautrix.appservice import IntentAPI
 from mautrix.types import (
+    EventID,
     EventType,
     Format,
     ImageInfo,
@@ -150,6 +152,7 @@ class TelegramMessageConverter:
         is_bot: bool,
         evt: Message,
         no_reply_fallback: bool = False,
+        deterministic_reply_id: bool = False,
         client: MautrixTelegramClient | None = None,
     ) -> ConvertedMessage | None:
         if not client:
@@ -180,7 +183,13 @@ class TelegramMessageConverter:
                 converted.caption.external_url = converted.content.external_url
                 if self.portal.get_config("caption_in_message"):
                     self._caption_to_message(converted)
-            await self._set_reply(source, evt, converted.content, no_fallback=no_reply_fallback)
+            await self._set_reply(
+                source,
+                evt,
+                converted.content,
+                no_fallback=no_reply_fallback,
+                deterministic_id=deterministic_reply_id,
+            )
         return converted
 
     @staticmethod
@@ -227,12 +236,19 @@ class TelegramMessageConverter:
             raise ValueError("Portal has invalid peer type")
         return base64.b64encode(play_id).decode("utf-8").rstrip("=")
 
+    def deterministic_event_id(self, space: TelegramID, msg_id: TelegramID) -> EventID:
+        hash_content = f"{self.portal.mxid}/telegram/{space}/{msg_id}"
+        hashed = hashlib.sha256(hash_content.encode("utf-8")).digest()
+        b64hash = base64.urlsafe_b64encode(hashed).decode("utf-8").rstrip("=")
+        return EventID(f"${b64hash}:telegram.org")
+
     async def _set_reply(
         self,
         source: au.AbstractUser,
         evt: Message,
         content: MessageEventContent,
         no_fallback: bool = False,
+        deterministic_id: bool = False,
     ) -> None:
         if not evt.reply_to:
             return
@@ -241,8 +257,11 @@ class TelegramMessageConverter:
             if isinstance(evt, Message) and isinstance(evt.peer_id, PeerChannel)
             else source.tgid
         )
-        msg = await DBMessage.get_one_by_tgid(TelegramID(evt.reply_to.reply_to_msg_id), space)
+        reply_to_id = TelegramID(evt.reply_to.reply_to_msg_id)
+        msg = await DBMessage.get_one_by_tgid(reply_to_id, space)
         if not msg or msg.mx_room != self.portal.mxid:
+            if deterministic_id:
+                content.set_reply(self.deterministic_event_id(space, reply_to_id))
             return
         elif not isinstance(content, TextMessageEventContent) or no_fallback:
             # Not a text message, just set the reply metadata and return

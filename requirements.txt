@@ -3,7 +3,7 @@ python-magic>=0.4,<0.5
 commonmark>=0.8,<0.10
 aiohttp>=3,<4
 yarl>=1,<2
-mautrix>=0.18.6,<0.19
+mautrix>=0.18.8,<0.19
 #telethon>=1.25.4,<1.26
 tulir-telethon==1.26.0a10
 asyncpg>=0.20,<0.27

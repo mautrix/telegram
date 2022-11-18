@@ -672,7 +672,7 @@ class AbstractUser(ABC):
 
         if isinstance(update, MessageService):
             if isinstance(update.action, MessageActionChannelMigrateFrom):
-                self.log.trace(
+                self.log.debug(
                     "Received %s in %s by %d, unregistering portal...",
                     update.action,
                     portal.tgid_log,
