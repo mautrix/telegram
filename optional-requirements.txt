@@ -3,7 +3,6 @@
 
 #/speedups
 cryptg>=0.1,<0.4
-cchardet
 aiodns
 brotli
 
