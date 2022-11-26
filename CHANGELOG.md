@@ -1,4 +1,4 @@
-# v0.12.2 (unreleased)
+# v0.12.2 (2022-11-26)
 
 ### Added
 * Added built-in custom emoji packs to allow reacting with any standard unicode
