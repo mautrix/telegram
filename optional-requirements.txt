@@ -2,7 +2,7 @@
 # Uncommented lines after the group definition insert things into that group.
 
 #/speedups
-cryptg>=0.1,<0.4
+cryptg>=0.1,<0.5
 aiodns
 brotli
 
