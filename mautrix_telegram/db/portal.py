@@ -167,7 +167,10 @@ class Portal:
             "UPDATE portal SET tgid=$1, tg_receiver=$1, peer_type=$2 "
             "WHERE tgid=$3 AND tg_receiver=$3"
         )
-        await self.db.execute(q, id, peer_type, self.tgid)
+        clear_queue = "DELETE FROM backfill_queue WHERE portal_tgid=$1 AND portal_tg_receiver=$2"
+        async with self.db.acquire() as conn, conn.transaction():
+            await conn.execute(clear_queue, self.tgid, self.tg_receiver)
+            await conn.execute(q, id, peer_type, self.tgid)
         self.tgid = id
         self.tg_receiver = id
         self.peer_type = peer_type
