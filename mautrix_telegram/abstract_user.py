@@ -504,7 +504,13 @@ class AbstractUser(ABC):
         # TODO duplication not checked
         puppet = await pu.Puppet.get_by_tgid(TelegramID(update.user_id))
         if isinstance(update, UpdateUserName):
-            puppet.username = update.username
+            if len(update.usernames) > 1:
+                self.log.warning(
+                    "Got update with multiple usernames (%s) for %s, only saving first one",
+                    update.usernames,
+                    update.user_id,
+                )
+            puppet.username = update.usernames[0] if update.usernames else None
             if await puppet.update_displayname(self, update):
                 await puppet.save()
                 await puppet.update_portals_meta()
