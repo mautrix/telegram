@@ -186,7 +186,7 @@ class MatrixHandler(BaseMatrixHandler):
             await portal.main_intent.kick_user(
                 room_id,
                 user.mxid,
-                "This chat does not have a bot relaying messages for unauthenticated users.",
+                "The Telegram side of this portal does not have a bot relaying messages to Matrix for unauthenticated users.",
             )
             return
 
