@@ -401,34 +401,37 @@ async def _unlocked_transfer_file_to_matrix(
             width=width,
             height=height,
         )
-    if thumbnail and (mime_type.startswith("video/") or mime_type == "image/gif"):
-        if isinstance(thumbnail, (PhotoSize, PhotoCachedSize)):
-            thumbnail = thumbnail.location
-        try:
+    try:
+        if thumbnail and (mime_type.startswith("video/") or mime_type == "image/gif"):
+            if isinstance(thumbnail, (PhotoSize, PhotoCachedSize)):
+                thumbnail = thumbnail.location
+            try:
+                db_file.thumbnail = await transfer_thumbnail_to_matrix(
+                    client,
+                    intent,
+                    thumbnail,
+                    video=file,
+                    mime_type=mime_type,
+                    encrypt=encrypt,
+                    async_upload=async_upload,
+                )
+            except FileIdInvalidError:
+                log.warning(f"Failed to transfer thumbnail {thumbnail!s}", exc_info=True)
+        elif converted_anim and converted_anim.thumbnail_data:
             db_file.thumbnail = await transfer_thumbnail_to_matrix(
                 client,
                 intent,
-                thumbnail,
-                video=file,
-                mime_type=mime_type,
+                location,
+                video=None,
                 encrypt=encrypt,
+                custom_data=converted_anim.thumbnail_data,
+                mime_type=converted_anim.thumbnail_mime,
+                width=converted_anim.width,
+                height=converted_anim.height,
                 async_upload=async_upload,
             )
-        except FileIdInvalidError:
-            log.warning(f"Failed to transfer thumbnail for {thumbnail!s}", exc_info=True)
-    elif converted_anim and converted_anim.thumbnail_data:
-        db_file.thumbnail = await transfer_thumbnail_to_matrix(
-            client,
-            intent,
-            location,
-            video=None,
-            encrypt=encrypt,
-            custom_data=converted_anim.thumbnail_data,
-            mime_type=converted_anim.thumbnail_mime,
-            width=converted_anim.width,
-            height=converted_anim.height,
-            async_upload=async_upload,
-        )
+    except Exception:
+        log.exception(f"Failed to transfer thumbnail for {loc_id}")
 
     try:
         await db_file.insert()
