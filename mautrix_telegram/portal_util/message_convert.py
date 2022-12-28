@@ -499,7 +499,7 @@ class TelegramMessageConverter:
             info["fi.mau.hide_controls"] = True
             info["fi.mau.no_audio"] = True
         if not name:
-            ext = sane_mimetypes.guess_extension(file.mime_type)
+            ext = sane_mimetypes.guess_extension(file.mime_type) or ""
             name = "unnamed_file" + ext
 
         content = MediaMessageEventContent(
