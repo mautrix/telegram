@@ -378,6 +378,16 @@ class Puppet(DBPuppet, BasePuppet):
     ) -> bool:
         if self.disable_updates:
             return False
+        if (
+            isinstance(photo, UserProfilePhoto)
+            and photo.personal
+            and not self.config["bridge.allow_contact_info"]
+        ):
+            self.log.trace(
+                "Dropping user avatar as it's personal "
+                "and contact info is disabled in bridge config"
+            )
+            return False
 
         if photo is None or isinstance(photo, (UserProfilePhotoEmpty, ChatPhotoEmpty)):
             photo_id = ""

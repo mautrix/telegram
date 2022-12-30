@@ -63,8 +63,8 @@ from telethon.tl.types import (
     UpdateShort,
     UpdateShortChatMessage,
     UpdateShortMessage,
+    UpdateUser,
     UpdateUserName,
-    UpdateUserPhoto,
     UpdateUserStatus,
     UpdateUserTyping,
     User,
@@ -351,7 +351,7 @@ class AbstractUser(ABC):
             await self.update_default_banned_rights(update)
         elif isinstance(update, (UpdatePinnedMessages, UpdatePinnedChannelMessages)):
             await self.update_pinned_messages(update)
-        elif isinstance(update, (UpdateUserName, UpdateUserPhoto)):
+        elif isinstance(update, (UpdateUserName, UpdateUser)):
             await self.update_others_info(update)
         elif isinstance(update, UpdateReadHistoryOutbox):
             await self.update_read_receipt(update)
@@ -500,7 +500,7 @@ class AbstractUser(ABC):
         except Exception:
             self.log.exception("Failed to handle entity updates")
 
-    async def update_others_info(self, update: UpdateUserName | UpdateUserPhoto) -> None:
+    async def update_others_info(self, update: UpdateUserName | UpdateUser) -> None:
         # TODO duplication not checked
         puppet = await pu.Puppet.get_by_tgid(TelegramID(update.user_id))
         if isinstance(update, UpdateUserName):
@@ -514,10 +514,9 @@ class AbstractUser(ABC):
             if await puppet.update_displayname(self, update):
                 await puppet.save()
                 await puppet.update_portals_meta()
-        elif isinstance(update, UpdateUserPhoto):
-            if await puppet.update_avatar(self, update.photo):
-                await puppet.save()
-                await puppet.update_portals_meta()
+        elif isinstance(update, UpdateUser):
+            info = await self.client.get_entity(puppet.peer)
+            await puppet.update_info(self, info)
         else:
             self.log.warning(f"Unexpected other user info update: {type(update)}")
 

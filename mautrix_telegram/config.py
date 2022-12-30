@@ -101,6 +101,7 @@ class Config(BaseBridgeConfig):
         copy("bridge.displayname_preference")
         copy("bridge.displayname_max_length")
         copy("bridge.allow_avatar_remove")
+        copy("bridge.allow_contact_info")
 
         copy("bridge.max_initial_member_sync")
         copy("bridge.max_member_count")

@@ -409,6 +409,8 @@ class TelegramMessageConverter:
             mimetype=file.mime_type,
             size=self._photo_size_key(largest_size),
         )
+        if media.spoiler:
+            info["fi.mau.telegram.spoiler"] = True
         ext = sane_mimetypes.guess_extension(file.mime_type)
         name = f"disappearing_image{ext}" if media.ttl_seconds else f"image{ext}"
         content = MediaMessageEventContent(
@@ -498,6 +500,8 @@ class TelegramMessageConverter:
             info["fi.mau.autoplay"] = True
             info["fi.mau.hide_controls"] = True
             info["fi.mau.no_audio"] = True
+        if evt.media.spoiler:
+            info["fi.mau.telegram.spoiler"] = True
         if not name:
             ext = sane_mimetypes.guess_extension(file.mime_type) or ""
             name = "unnamed_file" + ext

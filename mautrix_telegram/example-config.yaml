@@ -145,6 +145,9 @@ bridge:
     # as there's no way to determine whether an avatar is removed or just hidden from some users. If
     # you're on a single-user instance, this should be safe to enable.
     allow_avatar_remove: false
+    # Should contact names and profile pictures be allowed?
+    # This is only safe to enable on single-user instances.
+    allow_contact_info: false
 
     # Maximum number of members to sync per portal when starting up. Other members will be
     # synced when they send messages. The maximum is 10000, after which the Telegram server
