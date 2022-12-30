@@ -334,13 +334,15 @@ class Puppet(DBPuppet, BasePuppet):
 
         if isinstance(info, UpdateUserName):
             info = await (client_override or source.client).get_entity(self.peer)
-        if isinstance(info, Channel) or not info.contact:
-            self.displayname_contact = False
-        elif not self.displayname_contact:
-            if not self.displayname:
-                self.displayname_contact = True
-            else:
-                return False
+        is_contact_name = not isinstance(info, Channel) and info.contact
+        # Reject name change if the contact status is moving in an unwanted direction,
+        # and we already have a name for the ghost.
+        if (
+            is_contact_name != self.displayname_contact
+            and is_contact_name != self.config["bridge.allow_contact_info"]
+            and self.displayname
+        ):
+            return False
 
         displayname, quality = self.get_displayname(info)
         needs_reset = displayname != self.displayname or not self.name_set
@@ -348,12 +350,14 @@ class Puppet(DBPuppet, BasePuppet):
         if needs_reset and is_high_quality:
             allow_because = f"{allow_because} and quality {quality} >= {self.displayname_quality}"
             self.log.debug(
-                f"Updating displayname of {self.id} (src: {source.tgid}, allowed "
-                f"because {allow_because}) from {self.displayname} to {displayname}"
+                f"Updating displayname of {self.id} (src: {source.tgid}, "
+                f"contact: {is_contact_name}, allowed because {allow_because}) "
+                f"from {self.displayname} to {displayname}"
             )
             self.log.trace("Displayname source data: %s", info)
             self.displayname = displayname
             self.displayname_source = source.tgid
+            self.displayname_contact = is_contact_name
             self.displayname_quality = quality
             try:
                 await self.default_mxid_intent.set_displayname(
