@@ -510,7 +510,7 @@ class AbstractUser(ABC):
                     update.usernames,
                     update.user_id,
                 )
-            puppet.username = update.usernames[0] if update.usernames else None
+            puppet.username = update.usernames[0].username if update.usernames else None
             if await puppet.update_displayname(self, update):
                 await puppet.save()
                 await puppet.update_portals_meta()
