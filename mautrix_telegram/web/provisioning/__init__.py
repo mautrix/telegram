@@ -21,6 +21,7 @@ import json
 import logging
 
 from aiohttp import web
+from telethon.tl.functions.messages import GetAllStickersRequest
 from telethon.tl.types import ChannelForbidden, ChatForbidden, TypeChat, User as TLUser
 from telethon.utils import get_peer_id, resolve_id
 
@@ -71,6 +72,8 @@ class ProvisioningAPI(AuthAPI):
             "GET", f"{user_prefix}/resolve_identifier/{{identifier}}", self.resolve_identifier
         )
         self.app.router.add_route("POST", f"{user_prefix}/pm/{{identifier}}", self.start_dm)
+
+        self.app.router.add_route("GET", f"{user_prefix}/stickersets", self.get_stickersets)
 
         self.app.router.add_route("POST", f"{user_prefix}/retry_takeout", self.retry_takeout)
 
@@ -496,6 +499,18 @@ class ProvisioningAPI(AuthAPI):
             },
             status=201 if just_created else 200,
         )
+
+    async def get_stickersets(self, request: web.Request) -> web.Response:
+        _, user, err = await self.get_user_request_info(
+            request, expect_logged_in=True, want_data=False
+        )
+        if err is not None:
+            return err
+        result = await user.client(GetAllStickersRequest(0))
+        resp = []
+        for stickerset in result.sets:
+            resp.append(stickerset.short_name)
+        return web.json_response(resp, status=200)
 
     async def retry_takeout(self, request: web.Request) -> web.Response:
         data, user, err = await self.get_user_request_info(
