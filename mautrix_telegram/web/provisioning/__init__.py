@@ -21,8 +21,8 @@ import json
 import logging
 
 from aiohttp import web
-from telethon.tl.types import ChannelForbidden, ChatForbidden, TypeChat, User as TLUser
 from telethon.tl.functions.messages import GetAllStickersRequest
+from telethon.tl.types import ChannelForbidden, ChatForbidden, TypeChat, User as TLUser
 from telethon.utils import get_peer_id, resolve_id
 
 from mautrix.appservice import AppService
