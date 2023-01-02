@@ -1,3 +1,21 @@
+# unreleased
+
+### Added
+* Added `allow_contact_info` config option to specify whether personal names
+  and avatars for other users should be bridged.
+  * The option is only safe to enable on single-user instances, using it
+    anywhere else will cause ghost user profiles to flip back and forth between
+    personal and default ones.
+
+### Improved
+* Updated Docker image to Alpine 3.17.
+* Updated to Telegram API layer 151.
+
+### Fixed
+* Fixed handling Telegram chat upgrades when backfilling is enabled.
+* Fixed file transfers failing if transfering the thumbnail fails.
+* Fixed bridging unnamed files with unrecognized mime types.
+
 # v0.12.2 (2022-11-26)
 
 ### Added
