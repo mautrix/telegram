@@ -24,7 +24,7 @@ from asyncpg import Record
 from attr import dataclass
 
 from mautrix.types import UserID
-from mautrix.util.async_db import Database
+from mautrix.util.async_db import Connection, Database
 
 from ..types import TelegramID
 
@@ -169,8 +169,8 @@ class Backfill:
         )
 
     @classmethod
-    async def delete_all(cls, user_mxid: UserID) -> None:
-        await cls.db.execute("DELETE FROM backfill_queue WHERE user_mxid=$1", user_mxid)
+    async def delete_all(cls, user_mxid: UserID, conn: Connection | None = None) -> None:
+        await (conn or cls.db).execute("DELETE FROM backfill_queue WHERE user_mxid=$1", user_mxid)
 
     @classmethod
     async def delete_for_portal(cls, tgid: int, tg_receiver: int) -> None:

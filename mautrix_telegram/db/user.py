@@ -21,9 +21,10 @@ from asyncpg import Record
 from attr import dataclass
 
 from mautrix.types import UserID
-from mautrix.util.async_db import Database, Scheme
+from mautrix.util.async_db import Connection, Database, Scheme
 
 from ..types import TelegramID
+from .backfill_queue import Backfill
 
 fake_db = Database.create("") if TYPE_CHECKING else None
 
@@ -73,6 +74,20 @@ class User:
     async def delete(self) -> None:
         await self.db.execute('DELETE FROM "user" WHERE mxid=$1', self.mxid)
 
+    async def remove_tgid(self) -> None:
+        async with self.db.acquire() as conn, conn.transaction():
+            if self.tgid:
+                await conn.execute('DELETE FROM contact WHERE "user"=$1', self.tgid)
+                await conn.execute('DELETE FROM user_portal WHERE "user"=$1', self.tgid)
+            await Backfill.delete_all(self.mxid, conn=conn)
+            self.tgid = None
+            self.tg_username = None
+            self.tg_phone = None
+            self.is_bot = False
+            self.is_premium = False
+            self.saved_contacts = 0
+            await self.save(conn=conn)
+
     @property
     def _values(self):
         return (
@@ -85,13 +100,13 @@ class User:
             self.saved_contacts,
         )
 
-    async def save(self) -> None:
+    async def save(self, conn: Connection | None = None) -> None:
         q = """
         UPDATE "user" SET tgid=$2, tg_username=$3, tg_phone=$4, is_bot=$5, is_premium=$6,
                           saved_contacts=$7
         WHERE mxid=$1
         """
-        await self.db.execute(q, *self._values)
+        await (conn or self.db).execute(q, *self._values)
 
     async def insert(self) -> None:
         q = """

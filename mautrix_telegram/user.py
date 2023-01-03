@@ -22,6 +22,7 @@ import time
 
 from telethon.errors import (
     AuthKeyDuplicatedError,
+    AuthKeyError,
     RPCError,
     TakeoutInitDelayError,
     UnauthorizedError,
@@ -207,17 +208,30 @@ class User(DBUser, AbstractUser, BaseUser):
         async with self._ensure_started_lock:
             return cast(User, await super().ensure_started(even_if_no_session))
 
+    async def on_signed_out(self, err: UnauthorizedError | AuthKeyError) -> None:
+        error_code = "tg-auth-error"
+        if isinstance(err, AuthKeyDuplicatedError):
+            error_code = "tg-auth-key-duplicated"
+            message = None
+        else:
+            message = str(err)
+        self.log.warning(f"User got signed out with {err}, deleting data...")
+        try:
+            await self.log_out(
+                state=BridgeStateEvent.BAD_CREDENTIALS,
+                error=error_code,
+                message=message,
+                delete=False,
+            )
+        except Exception:
+            self.log.exception("Error handling external logout")
+
     async def start(self, delete_unless_authenticated: bool = False) -> User:
         try:
             await super().start()
-        except AuthKeyDuplicatedError:
+        except AuthKeyDuplicatedError as e:
             self.log.warning("Got AuthKeyDuplicatedError in start()")
-            await self.push_bridge_state(
-                BridgeStateEvent.BAD_CREDENTIALS, error="tg-auth-key-duplicated"
-            )
-            await self.client.disconnect()
-            await self.client.session.delete()
-            self.client = None
+            await self.on_signed_out(e)
             if not delete_unless_authenticated:
                 # The caller wants the client to be connected, so restart the connection.
                 await super().start()
@@ -237,12 +251,7 @@ class User(DBUser, AbstractUser, BaseUser):
             if delete_unless_authenticated or self.tgid:
                 self.log.error(f"Authorization error in start(): {type(e)}: {e}")
             if self.tgid:
-                await self.push_bridge_state(
-                    BridgeStateEvent.BAD_CREDENTIALS,
-                    error="tg-auth-error",
-                    message=str(e),
-                    ttl=3600,
-                )
+                await self.on_signed_out(e)
         except RPCError as e:
             self.log.error(f"Unknown RPC error in start(): {type(e)}: {e}")
             if self.tgid:
@@ -253,7 +262,7 @@ class User(DBUser, AbstractUser, BaseUser):
             asyncio.create_task(self.post_login())
             return self
         # Not authenticated, delete data if necessary
-        if delete_unless_authenticated:
+        if delete_unless_authenticated and self.client is not None:
             self.log.debug(f"Unauthenticated user {self.name} start()ed, deleting session...")
             await self.client.disconnect()
             await self.client.session.delete()
@@ -567,7 +576,14 @@ class User(DBUser, AbstractUser, BaseUser):
                 except MatrixRequestError:
                     pass
 
-    async def log_out(self) -> bool:
+    async def log_out(
+        self,
+        delete: bool = True,
+        do_logout: bool = True,
+        state: BridgeStateEvent = BridgeStateEvent.LOGGED_OUT,
+        error: str | None = None,
+        message: str | None = None,
+    ) -> bool:
         puppet = await pu.Puppet.get_by_tgid(self.tgid)
         if puppet.is_real_user:
             await puppet.switch_mxid(None, None)
@@ -575,19 +591,31 @@ class User(DBUser, AbstractUser, BaseUser):
             await self.kick_from_portals()
         except Exception:
             self.log.exception("Failed to kick user from portals on logout")
-        await self.push_bridge_state(BridgeStateEvent.LOGGED_OUT)
         if self.tgid:
             try:
                 del self.by_tgid[self.tgid]
             except KeyError:
                 pass
-            self.tgid = None
-        ok = await self.client.log_out()
-        sess = self.client.session
-        await self.stop()
-        await sess.delete()
-        await self.delete()
-        self.by_mxid.pop(self.mxid, None)
+        ok = False
+        if self.client is not None:
+            sess = self.client.session
+            # Try to send a logout request. If it succeeds, this also disconnects the client and
+            # deletes the session, but we do those again later just to be safe.
+            if do_logout:
+                ok = await self.client.log_out()
+            # Force-disconnect the client and set it to None
+            await self.stop()
+            await sess.delete()
+
+        # TODO send a management room notice for non-manual logouts?
+        await self.push_bridge_state(state, error=error, message=message)
+        if delete:
+            await self.delete()
+            self.by_mxid.pop(self.mxid, None)
+            self.log.info("User deleted")
+        else:
+            await self.remove_tgid()
+            self.log.info("User telegram ID cleared")
         self._track_metric(METRIC_LOGGED_IN, False)
         return ok
 

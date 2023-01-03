@@ -22,7 +22,7 @@ import logging
 import platform
 import time
 
-from telethon.errors import UnauthorizedError
+from telethon.errors import AuthKeyError, UnauthorizedError
 from telethon.network import (
     Connection,
     ConnectionTcpFull,
@@ -235,14 +235,18 @@ class AbstractUser(ABC):
         )
         self.client.add_event_handler(self._update_catch)
 
+    @abstractmethod
+    async def on_signed_out(self, err: UnauthorizedError | AuthKeyError) -> None:
+        pass
+
     async def _telethon_update_error_callback(self, err: Exception) -> None:
+        if isinstance(err, (UnauthorizedError, AuthKeyError)):
+            asyncio.create_task(self.on_signed_out(err))
+            return
         if self.config["telegram.exit_on_update_error"]:
             self.log.critical(f"Stopping due to update handling error {type(err).__name__}")
             self.bridge.manual_stop(50)
         else:
-            if isinstance(err, UnauthorizedError):
-                self.log.warning("Not recreating Telethon update loop")
-                return
             self.log.info("Recreating Telethon update loop in 60 seconds")
             await asyncio.sleep(60)
             self.log.debug("Now recreating Telethon update loop")

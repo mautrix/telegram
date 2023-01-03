@@ -19,7 +19,12 @@ from typing import TYPE_CHECKING, Awaitable, Callable, Literal
 import logging
 import time
 
-from telethon.errors import ChannelInvalidError, ChannelPrivateError
+from telethon.errors import (
+    AuthKeyError,
+    ChannelInvalidError,
+    ChannelPrivateError,
+    UnauthorizedError,
+)
 from telethon.tl.functions.channels import GetChannelsRequest, GetParticipantRequest
 from telethon.tl.functions.messages import GetChatsRequest, GetFullChatRequest
 from telethon.tl.patched import Message, MessageService
@@ -144,6 +149,10 @@ class Bot(AbstractUser):
             await self.client.sign_in(bot_token=self.token)
         await self.post_login()
         return self
+
+    async def on_signed_out(self, err: UnauthorizedError | AuthKeyError) -> None:
+        self.log.fatal("Relay bot got signed out, crashing bridge", exc_info=err)
+        self.bridge.manual_stop(51)
 
     async def post_login(self) -> None:
         await self.init_permissions()
