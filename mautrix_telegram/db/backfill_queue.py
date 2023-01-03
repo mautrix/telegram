@@ -186,7 +186,7 @@ class Backfill:
           AND type=$4
           AND dispatch_time IS NULL
           AND completed_at IS NULL
-        RETURNING {self.columns_str}
+        RETURNING queue_id, {self.columns_str}
         """
         q = f"""
         INSERT INTO backfill_queue ({self.columns_str})
