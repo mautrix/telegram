@@ -585,7 +585,7 @@ class User(DBUser, AbstractUser, BaseUser):
         message: str | None = None,
     ) -> bool:
         puppet = await pu.Puppet.get_by_tgid(self.tgid)
-        if puppet.is_real_user:
+        if puppet is not None and puppet.is_real_user:
             await puppet.switch_mxid(None, None)
         try:
             await self.kick_from_portals()
