@@ -10,11 +10,13 @@
 ### Improved
 * Updated Docker image to Alpine 3.17.
 * Updated to Telegram API layer 151.
+* Improved handling users getting logged out.
 
 ### Fixed
 * Fixed handling Telegram chat upgrades when backfilling is enabled.
 * Fixed file transfers failing if transfering the thumbnail fails.
 * Fixed bridging unnamed files with unrecognized mime types.
+* Fixed enqueueing more backfill.
 
 # v0.12.2 (2022-11-26)
 
