@@ -1993,7 +1993,6 @@ class Portal(DBPortal, BasePortal):
             status.status = MessageStatus.RETRIABLE
         else:
             status.status = MessageStatus.SUCCESS
-        status.fill_legacy_booleans()
 
         await intent.send_message_event(
             room_id=self.mxid,
@@ -2574,7 +2573,7 @@ class Portal(DBPortal, BasePortal):
             # Ignore typing notifications from double puppeted users to avoid echoing
             return
         is_typing = isinstance(update.action, SendMessageTypingAction)
-        await user.default_mxid_intent.set_typing(self.mxid, is_typing=is_typing)
+        await user.default_mxid_intent.set_typing(self.mxid, timeout=5000 if is_typing else 0)
 
     async def handle_telegram_edit(
         self, source: au.AbstractUser, sender: p.Puppet | None, evt: Message
@@ -2648,7 +2647,7 @@ class Portal(DBPortal, BasePortal):
             source, intent, is_bot, evt, no_reply_fallback=True
         )
         converted.content.set_edit(editing_msg.mxid)
-        await intent.set_typing(self.mxid, is_typing=False)
+        await intent.set_typing(self.mxid, timeout=0)
         timestamp = evt.edit_date if evt.edit_date != evt.date else None
         event_id = await self._send_message(
             intent, converted.content, timestamp=timestamp, event_type=converted.type
@@ -3350,7 +3349,7 @@ class Portal(DBPortal, BasePortal):
         converted = await self._msg_conv.convert(source, intent, is_bot, evt)
         if not converted:
             return
-        await intent.set_typing(self.mxid, is_typing=False)
+        await intent.set_typing(self.mxid, timeout=0)
         event_id = await self._send_message(
             intent, converted.content, timestamp=evt.date, event_type=converted.type
         )
