@@ -303,8 +303,9 @@ class User(DBUser, AbstractUser, BaseUser):
 
     async def fill_bridge_state(self, state: BridgeState) -> None:
         await super().fill_bridge_state(state)
-        state.remote_id = str(self.tgid)
-        state.remote_name = self.human_tg_id
+        if self.tgid:
+            state.remote_id = str(self.tgid)
+            state.remote_name = self.human_tg_id
 
     async def get_bridge_states(self) -> list[BridgeState]:
         if not self.tgid:
