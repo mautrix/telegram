@@ -134,15 +134,16 @@ async def search(evt: CommandEvent) -> EventID:
 
 @command_handler(
     help_section=SECTION_CREATING_PORTALS,
-    help_args="<_identifier_>",
-    help_text="Open a private chat with the given Telegram user. The identifier is "
-    "either the internal user ID, the username or the phone number. "
-    "**N.B.** The phone numbers you start chats with must already be in "
-    "your contacts.",
+    help_args="<_username_>",
+    help_text=(
+        "Open a private chat with the given Telegram user. You can also use a "
+        "phone number instead of username, but you must have the number in "
+        "your Telegram contacts for that to work."
+    ),
 )
 async def pm(evt: CommandEvent) -> EventID:
     if len(evt.args) == 0:
-        return await evt.reply("**Usage:** `$cmdprefix+sp pm <user identifier>`")
+        return await evt.reply("**Usage:** `$cmdprefix+sp pm <username>`")
 
     try:
         id = "".join(evt.args).translate({ord(c): None for c in "+()- "})
