@@ -2804,8 +2804,11 @@ class Portal(DBPortal, BasePortal):
             elif not insertion_id:
                 insertion_id = self.base_insertion_id
         await self.save()
-        # TODO this should probably check actual event count instead of message count
-        if event_count > 0 and self.backfill_msc2716:
+        if (
+            event_count > 0
+            and self.backfill_msc2716
+            and (not forward or not self.bridge.homeserver_software.is_hungry)
+        ):
             await self.main_intent.send_state_event(
                 self.mxid,
                 StateMarker,
