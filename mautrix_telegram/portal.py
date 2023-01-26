@@ -3267,6 +3267,26 @@ class Portal(DBPortal, BasePortal):
     async def handle_telegram_message(
         self, source: au.AbstractUser, sender: p.Puppet | None, evt: Message
     ) -> None:
+        try:
+            await self._handle_telegram_message(source, sender, evt)
+        except Exception:
+            sender_id = sender.tgid if sender else None
+            self.log.exception(
+                f"Failed to handle Telegram message {evt.id} from {sender_id} via {source.tgid}"
+            )
+            if self.config["bridge.incoming_bridge_error_reports"]:
+                intent = sender.intent_for(self) if sender else self.main_intent
+                await self._send_message(
+                    intent,
+                    TextMessageEventContent(
+                        msgtype=MessageType.NOTICE,
+                        body="Error processing message from Telegram",
+                    ),
+                )
+
+    async def _handle_telegram_message(
+        self, source: au.AbstractUser, sender: p.Puppet | None, evt: Message
+    ) -> None:
         if not self.mxid:
             self.log.trace("Got telegram message %d, but no room exists, creating...", evt.id)
             await self.create_matrix_room(source, invites=[source.mxid], update_if_exists=False)

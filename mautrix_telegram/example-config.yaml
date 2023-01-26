@@ -317,6 +317,8 @@ bridge:
     delivery_receipts: false
     # Whether or not delivery errors should be reported as messages in the Matrix room.
     delivery_error_reports: false
+    # Should errors in incoming message handling send a message to the Matrix room?
+    incoming_bridge_error_reports: false
     # Whether the bridge should send the message status as a custom com.beeper.message_send_status event.
     message_status_events: false
     # Set this to true to tell the bridge to re-send m.bridge events to all rooms on the next run.

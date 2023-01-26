@@ -151,6 +151,7 @@ class Config(BaseBridgeConfig):
         copy("bridge.private_chat_portal_meta")
         copy("bridge.delivery_receipts")
         copy("bridge.delivery_error_reports")
+        copy("bridge.incoming_bridge_error_reports")
         copy("bridge.message_status_events")
         copy("bridge.resend_bridge_info")
         copy("bridge.mute_bridging")

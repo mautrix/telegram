@@ -6,6 +6,8 @@
   * The option is only safe to enable on single-user instances, using it
     anywhere else will cause ghost user profiles to flip back and forth between
     personal and default ones.
+* Added config option to notify Matrix room if bridging an incoming message
+  fails.
 
 ### Improved
 * Updated Docker image to Alpine 3.17.
