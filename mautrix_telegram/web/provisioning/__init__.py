@@ -14,6 +14,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from __future__ import annotations
+import datetime
 
 from typing import TYPE_CHECKING, Awaitable, Callable
 import asyncio
@@ -542,17 +543,31 @@ class ProvisioningAPI(AuthAPI):
         ws = web.WebSocketResponse(protocols=["net.maunium.telegram.login"])
         await ws.prepare(request)
 
+        retries = 0
         user_info = None
-        try:
-            await qr_login.recreate()
-            await ws.send_json({"code": qr_login.url, "timeout": 30})
-            user_info = await qr_login.wait()
-        except asyncio.TimeoutError:
+        while retries < 4:
+            try:
+                await qr_login.recreate()
+                await ws.send_json(
+                    {
+                        "code": qr_login.url,
+                        "timeout": int(
+                            (
+                                qr_login.expires - datetime.datetime.now(tz=datetime.timezone.utc)
+                            ).total_seconds()
+                        ),
+                    }
+                )
+                user_info = await qr_login.wait()
+                break
+            except asyncio.TimeoutError:
+                retries += 1
+            except SessionPasswordNeededError:
+                await ws.send_json({"success": False, "error": "password-needed"})
+                await ws.close()
+                return ws
+        else:
             await ws.send_json({"success": False, "error": "timeout"})
-            await ws.close()
-            return ws
-        except SessionPasswordNeededError:
-            await ws.send_json({"success": False, "error": "password-needed"})
             await ws.close()
             return ws
 
