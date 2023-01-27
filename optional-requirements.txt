@@ -17,7 +17,7 @@ moviepy>=1,<2
 phonenumbers>=8,<9
 
 #/metrics
-prometheus_client>=0.6,<0.16
+prometheus_client>=0.6,<0.17
 
 #/e2be
 python-olm>=3,<4
