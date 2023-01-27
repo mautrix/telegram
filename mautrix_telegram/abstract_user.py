@@ -247,10 +247,11 @@ class AbstractUser(ABC):
             self.log.critical(f"Stopping due to update handling error {type(err).__name__}")
             self.bridge.manual_stop(50)
         else:
-            self.log.info("Recreating Telethon update loop in 60 seconds")
+            self.log.info("Recreating Telethon connection in 60 seconds")
             await asyncio.sleep(60)
-            self.log.debug("Now recreating Telethon update loop")
-            self.client._updates_handle = self.loop.create_task(self.client._update_loop())
+            self.log.debug("Now recreating Telethon connection")
+            await self.stop()
+            await self.start()
 
     @abstractmethod
     async def update(self, update: TypeUpdate) -> bool:
