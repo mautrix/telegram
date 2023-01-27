@@ -293,12 +293,11 @@ class User(DBUser, AbstractUser, BaseUser):
                     BridgeStateEvent.BACKFILLING
                     if self._is_backfilling
                     else BridgeStateEvent.CONNECTED,
-                    ttl=3600,
                     info=self._bridge_state_info,
                 )
             else:
                 await self.push_bridge_state(
-                    BridgeStateEvent.TRANSIENT_DISCONNECT, ttl=240, error="tg-not-connected"
+                    BridgeStateEvent.TRANSIENT_DISCONNECT, error="tg-not-connected"
                 )
 
     async def fill_bridge_state(self, state: BridgeState) -> None:
