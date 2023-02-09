@@ -458,7 +458,6 @@ bridge:
     # Filter rooms that can/can't be bridged. Can also be managed using the `filter` and
     # `filter-mode` management commands.
     #
-    # Filters do not affect direct chats.
     # An empty blacklist will essentially disable the filter.
     filter:
         # Filter mode to use. Either "blacklist" or "whitelist".
@@ -467,6 +466,11 @@ bridge:
         mode: blacklist
         # The list of group/channel IDs to filter.
         list: []
+        # How to handle direct chats:
+        # If users is "null", direct chats will follow the previous settings.
+        # If users is "true", direct chats will always be bridged.
+        # If users is "false", direct chats will never be bridged.
+        users: null
 
     # The prefix for commands. Only required in non-management rooms.
     command_prefix: "!tg"

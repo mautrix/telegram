@@ -1,6 +1,8 @@
 # unreleased
 
 ### Added
+* Added `bridge.filter.users` config option to specify how the bridge should 
+  handle filtering of direct messages in puppeting mode.
 * Added `allow_contact_info` config option to specify whether personal names
   and avatars for other users should be bridged.
   * The option is only safe to enable on single-user instances, using it
