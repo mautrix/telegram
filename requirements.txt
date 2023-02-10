@@ -5,7 +5,7 @@ aiohttp>=3,<4
 yarl>=1,<2
 mautrix>=0.19.3,<0.20
 #telethon>=1.25.4,<1.27
-tulir-telethon==1.27.0a7
+tulir-telethon==1.28.0a1
 asyncpg>=0.20,<0.28
 mako>=1,<2
 setuptools

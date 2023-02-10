@@ -11,8 +11,10 @@
 
 ### Improved
 * Updated Docker image to Alpine 3.17.
-* Updated to Telegram API layer 151.
+* Updated to Telegram API layer 152.
 * Improved handling users getting logged out.
+* Removed support for creating accounts, as Telegram only allows requesting SMS
+  login codes on the official mobile clients now.
 
 ### Fixed
 * Fixed handling Telegram chat upgrades when backfilling is enabled.

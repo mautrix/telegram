@@ -98,70 +98,6 @@ async def ping_bot(evt: CommandEvent) -> EventID:
     needs_auth=False,
     management_only=True,
     help_section=SECTION_AUTH,
-    help_args="<_phone_> <_full name_>",
-    help_text="Register to Telegram",
-)
-async def register(evt: CommandEvent) -> EventID:
-    if await evt.sender.is_logged_in():
-        return await evt.reply("You are already logged in.")
-    elif len(evt.args) < 1:
-        return await evt.reply("**Usage:** `$cmdprefix+sp register <phone> <full name>`")
-
-    phone_number = evt.args[0]
-    if len(evt.args) == 2:
-        full_name = evt.args[1], ""
-    else:
-        full_name = " ".join(evt.args[1:-1]), evt.args[-1]
-
-    await _request_code(
-        evt,
-        phone_number,
-        {
-            "next": enter_code_register,
-            "action": "Register",
-            "full_name": full_name,
-        },
-    )
-    return await evt.reply(
-        "By signing up for Telegram, you agree to "
-        "the terms of service: https://telegram.org/tos"
-    )
-
-
-async def enter_code_register(evt: CommandEvent) -> EventID:
-    if len(evt.args) == 0:
-        return await evt.reply("**Usage:** `$cmdprefix+sp <code>`")
-    try:
-        await evt.sender.ensure_started(even_if_no_session=True)
-        first_name, last_name = evt.sender.command_status["full_name"]
-        user = await evt.sender.client.sign_up(evt.args[0], first_name, last_name)
-        asyncio.create_task(evt.sender.post_login(user, first_login=True))
-        evt.sender.command_status = None
-        return await evt.reply(f"Successfully registered to Telegram.")
-    except PhoneNumberOccupiedError:
-        return await evt.reply(
-            "That phone number has already been registered. "
-            "You can log in with `$cmdprefix+sp login`."
-        )
-    except FirstNameInvalidError:
-        return await evt.reply("Invalid name. Please set a Matrix displayname before registering.")
-    except PhoneCodeExpiredError:
-        return await evt.reply(
-            "Phone code expired. Try again with `$cmdprefix+sp register <phone>`."
-        )
-    except PhoneCodeInvalidError:
-        return await evt.reply("Invalid phone code.")
-    except Exception:
-        evt.log.exception("Error sending phone code")
-        return await evt.reply(
-            "Unhandled exception while sending code. Check console for more details."
-        )
-
-
-@command_handler(
-    needs_auth=False,
-    management_only=True,
-    help_section=SECTION_AUTH,
     help_text="Log in by scanning a QR code.",
 )
 async def login_qr(evt: CommandEvent) -> EventID:
@@ -317,7 +253,7 @@ async def _request_code(
     except PhoneNumberUnoccupiedError:
         return await evt.reply(
             "That phone number has not been registered. "
-            "Please register with `$cmdprefix+sp register <phone>`."
+            "Please sign up to Telegram using an official mobile client first."
         )
     except PhoneNumberInvalidError:
         return await evt.reply("That phone number is not valid.")
