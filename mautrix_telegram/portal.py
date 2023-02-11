@@ -171,7 +171,7 @@ from mautrix.types import (
     UserID,
     VideoInfo,
 )
-from mautrix.util import magic, variation_selector
+from mautrix.util import background_task, magic, variation_selector
 from mautrix.util.message_send_checkpoint import MessageSendCheckpointStatus
 from mautrix.util.simple_lock import SimpleLock
 from mautrix.util.simple_template import SimpleTemplate
@@ -727,7 +727,7 @@ class Portal(DBPortal, BasePortal):
                         self.log.exception(f"Failed to get entity through {user.tgid} for update")
                         return self.mxid
                 update = self.update_matrix_room(user, entity)
-                asyncio.create_task(update)
+                background_task.create(update)
                 await self.invite_to_matrix(invites or [])
             return self.mxid
         async with self._room_create_lock:
@@ -1525,11 +1525,11 @@ class Portal(DBPortal, BasePortal):
         )
         if self.peer_type == "channel":
             if not self.megagroup:
-                asyncio.create_task(
+                background_task.create(
                     self._try_handle_read_for_sponsored_msg(user, event_id, timestamp)
                 )
             else:
-                asyncio.create_task(self._poll_telegram_reactions(user))
+                background_task.create(self._poll_telegram_reactions(user))
 
     async def _preproc_kick_ban(
         self, user: u.User | p.Puppet, source: u.User
@@ -1964,7 +1964,7 @@ class Portal(DBPortal, BasePortal):
             message_type=msgtype,
         )
         await self._send_delivery_receipt(event_id)
-        asyncio.create_task(self._send_message_status(event_id, err=None))
+        background_task.create(self._send_message_status(event_id, err=None))
         if response.ttl_period:
             await self._mark_disappearing(
                 event_id=event_id,
@@ -2257,7 +2257,7 @@ class Portal(DBPortal, BasePortal):
                 EventType.ROOM_REDACTION,
             )
             await self._send_delivery_receipt(redaction_event_id)
-            asyncio.create_task(self._send_message_status(redaction_event_id, err=None))
+            background_task.create(self._send_message_status(redaction_event_id, err=None))
 
     async def _handle_matrix_reaction_deletion(
         self, deleter: u.User, event_id: EventID, tg_space: TelegramID
@@ -2370,7 +2370,7 @@ class Portal(DBPortal, BasePortal):
                 EventType.REACTION,
             )
             await self._send_delivery_receipt(reaction_event_id)
-            asyncio.create_task(self._send_message_status(reaction_event_id, err=None))
+            background_task.create(self._send_message_status(reaction_event_id, err=None))
 
     async def _handle_matrix_reaction(
         self,
@@ -2586,7 +2586,7 @@ class Portal(DBPortal, BasePortal):
             return
 
         if self.peer_type != "channel" and isinstance(evt, Message) and evt.reactions is not None:
-            asyncio.create_task(
+            background_task.create(
                 self.try_handle_telegram_reactions(source, TelegramID(evt.id), evt.reactions)
             )
         sender_id = sender.tgid if sender else self.tgid
@@ -3419,7 +3419,7 @@ class Portal(DBPortal, BasePortal):
             await intent.redact(self.mxid, event_id)
             return
         if isinstance(evt, Message) and evt.reactions:
-            asyncio.create_task(
+            background_task.create(
                 self.try_handle_telegram_reactions(
                     source, dbm.tgid, evt.reactions, dbm=dbm, timestamp=evt.date
                 )
@@ -3440,7 +3440,7 @@ class Portal(DBPortal, BasePortal):
         dm = DisappearingMessage(self.mxid, event_id, seconds, expiration_ts=expires_at * 1000)
         await dm.insert()
         if expires_at:
-            asyncio.create_task(self._disappear_event(dm))
+            background_task.create(self._disappear_event(dm))
 
     async def _create_room_on_action(
         self, source: au.AbstractUser, action: TypeMessageAction

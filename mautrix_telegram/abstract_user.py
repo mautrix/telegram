@@ -75,6 +75,7 @@ from telethon.tl.types import (
 from mautrix.appservice import AppService
 from mautrix.errors import MatrixError
 from mautrix.types import PresenceState, UserID
+from mautrix.util import background_task
 from mautrix.util.logging import TraceLogger
 from mautrix.util.opt_prometheus import Counter, Histogram
 
@@ -241,7 +242,7 @@ class AbstractUser(ABC):
 
     async def _telethon_update_error_callback(self, err: Exception) -> None:
         if isinstance(err, (UnauthorizedError, AuthKeyError)):
-            asyncio.create_task(self.on_signed_out(err))
+            background_task.create(self.on_signed_out(err))
             return
         if self.config["telegram.exit_on_update_error"]:
             self.log.critical(f"Stopping due to update handling error {type(err).__name__}")
@@ -325,7 +326,7 @@ class AbstractUser(ABC):
     async def _update(self, update: TypeUpdate) -> None:
         if isinstance(update, UpdateShort):
             update = update.update
-        asyncio.create_task(self._handle_entity_updates(getattr(update, "_entities", {})))
+        background_task.create(self._handle_entity_updates(getattr(update, "_entities", {})))
         if isinstance(
             update,
             (
@@ -625,7 +626,7 @@ class AbstractUser(ABC):
             await portal.delete_telegram_user(self.tgid, sender=None)
         elif chan := getattr(update, "mau_channel", None):
             if not portal.mxid:
-                asyncio.create_task(self._delayed_create_channel(chan))
+                background_task.create(self._delayed_create_channel(chan))
             else:
                 self.log.debug("Updating channel info with data fetched by Telethon")
                 await portal.update_info(self, chan)

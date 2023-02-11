@@ -22,7 +22,6 @@ import io
 from telethon.errors import (
     AccessTokenExpiredError,
     AccessTokenInvalidError,
-    FirstNameInvalidError,
     FloodWaitError,
     PasswordHashInvalidError,
     PhoneCodeExpiredError,
@@ -31,14 +30,12 @@ from telethon.errors import (
     PhoneNumberBannedError,
     PhoneNumberFloodError,
     PhoneNumberInvalidError,
-    PhoneNumberOccupiedError,
     PhoneNumberUnoccupiedError,
     SessionPasswordNeededError,
 )
 from telethon.tl.types import User
 
 from mautrix.client import Client
-from mautrix.errors import MForbidden
 from mautrix.types import (
     EventID,
     ImageInfo,
@@ -47,6 +44,7 @@ from mautrix.types import (
     TextMessageEventContent,
     UserID,
 )
+from mautrix.util import background_task
 from mautrix.util.format_duration import format_duration as fmt_duration
 
 from ... import user as u
@@ -368,7 +366,7 @@ async def _finish_sign_in(evt: CommandEvent, user: User, login_as: u.User = None
             f"[{existing_user.displayname}] (https://matrix.to/#/{existing_user.mxid})"
             " was logged out from the account."
         )
-    asyncio.create_task(login_as.post_login(user, first_login=True))
+    background_task.create(login_as.post_login(user, first_login=True))
     evt.sender.command_status = None
     name = f"@{user.username}" if user.username else f"+{user.phone}"
     if login_as != evt.sender:

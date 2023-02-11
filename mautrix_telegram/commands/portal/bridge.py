@@ -21,6 +21,7 @@ import asyncio
 from telethon.tl.types import ChannelForbidden, ChatForbidden
 
 from mautrix.types import EventID, RoomID
+from mautrix.util import background_task
 
 from ... import portal as po
 from ...types import TelegramID
@@ -184,7 +185,7 @@ async def confirm_bridge(evt: CommandEvent) -> EventID | None:
         if not ok:
             return None
         elif coro:
-            asyncio.create_task(coro)
+            background_task.create(coro)
             await evt.reply("Cleaning up previous portal room...")
     elif portal.mxid:
         evt.sender.command_status = None
@@ -251,7 +252,7 @@ async def _locked_confirm_bridge(
     await portal.save()
     await portal.update_bridge_info()
 
-    asyncio.create_task(portal.update_matrix_room(user, entity, levels=levels))
+    background_task.create(portal.update_matrix_room(user, entity, levels=levels))
 
     await warn_missing_power(levels, evt)
 
