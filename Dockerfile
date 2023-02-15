@@ -13,13 +13,6 @@ RUN apk add --no-cache \
       # Indirect dependencies
       py3-idna \
       py3-rsa \
-      #moviepy
-        py3-decorator \
-        py3-tqdm \
-        py3-requests \
-        #py3-proglog \
-        #imageio
-          py3-numpy \
       #py3-telethon \ (outdated)
         # Optional for socks proxies
         py3-pysocks \
