@@ -92,9 +92,9 @@ class TelegramFile:
 
     async def insert(self) -> None:
         q = (
-            "INSERT INTO telegram_file (id, mxc, mime_type, was_converted, size, width, height, "
-            "                           thumbnail, decryption_info) "
-            "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)"
+            "INSERT INTO telegram_file (id, mxc, mime_type, was_converted, timestamp,"
+            "                           size, width, height, thumbnail, decryption_info) "
+            "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)"
         )
         await self.db.execute(
             q,
@@ -102,6 +102,7 @@ class TelegramFile:
             self.mxc,
             self.mime_type,
             self.was_converted,
+            self.timestamp,
             self.size,
             self.width,
             self.height,
