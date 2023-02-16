@@ -197,6 +197,10 @@ class Config(BaseBridgeConfig):
 
         copy("bridge.filter.mode")
         copy("bridge.filter.list")
+        if "bridge.filter.users" not in self:
+            base["bridge.filter.users"] = True
+        else:
+            copy("bridge.filter.users")
 
         copy("bridge.command_prefix")
 
