@@ -3361,12 +3361,17 @@ class Portal(DBPortal, BasePortal):
                 f"Telegram user {sender.tgid} sent a message, but doesn't have a displayname,"
                 " updating info..."
             )
-            entity = await source.client.get_entity(sender.peer)
-            await sender.update_info(source, entity)
-            if not sender.displayname:
-                self.log.debug(
-                    f"Telegram user {sender.tgid} doesn't have a displayname even after"
-                    f" updating with data {entity!s}"
+            try:
+                entity = await source.client.get_entity(sender.peer)
+                await sender.update_info(source, entity)
+                if not sender.displayname:
+                    self.log.debug(
+                        f"Telegram user {sender.tgid} doesn't have a displayname even after"
+                        f" updating with data {entity!s}"
+                    )
+            except ValueError as e:
+                self.log.warning(
+                    f"Couldn't find entity to update profile of {sender.tgid}", exc_info=True
                 )
 
         if sender:
