@@ -805,6 +805,12 @@ class Portal(DBPortal, BasePortal):
         participants_count = 2
         if isinstance(entity, Chat):
             participants_count = entity.participants_count
+            if entity.deactivated or entity.migrated_to:
+                self.log.error(
+                    "Throwing error for attempted portal creation "
+                    f"({entity.deactivated=}, {entity.migrated_to=})"
+                )
+                raise RuntimeError("Tried to create portal for deactivated chat")
         elif isinstance(entity, Channel) and not entity.broadcast:
             participants_count = entity.participants_count
         if participants_count is None and self.config["bridge.max_member_count"] > 0:
@@ -3288,7 +3294,7 @@ class Portal(DBPortal, BasePortal):
         self, source: au.AbstractUser, sender: p.Puppet | None, evt: Message
     ) -> None:
         if not self.mxid:
-            self.log.trace("Got telegram message %d, but no room exists, creating...", evt.id)
+            self.log.debug("Got telegram message %d, but no room exists, creating...", evt.id)
             await self.create_matrix_room(source, invites=[source.mxid], update_if_exists=False)
             if not self.mxid:
                 self.log.warning("Room doesn't exist even after creating, dropping %d", evt.id)
@@ -3454,6 +3460,10 @@ class Portal(DBPortal, BasePortal):
             MessageActionChatJoinedByRequest,
         )
         if isinstance(action, create_and_exit) or isinstance(action, create_and_continue):
+            self.log.debug(
+                f"Got telegram action of type {type(action).__name__},"
+                " but no room exists, creating..."
+            )
             await self.create_matrix_room(
                 source, invites=[source.mxid], update_if_exists=isinstance(action, create_and_exit)
             )

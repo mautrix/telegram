@@ -633,17 +633,21 @@ class AbstractUser(ABC):
                 await portal.invite_to_matrix(self.mxid)
 
     async def _delayed_create_channel(self, chan: Channel) -> None:
-        self.log.debug("Waiting 5 seconds before handling UpdateChannel for non-existent portal")
+        self.log.debug(
+            f"Waiting 5 seconds before handling UpdateChannel for non-existent portal {chan.id}"
+        )
         await asyncio.sleep(5)
         portal = await po.Portal.get_by_tgid(TelegramID(chan.id))
         if portal.mxid:
             self.log.debug(
-                "Portal started existing after waiting 5 seconds, dropping UpdateChannel"
+                "Portal started existing after waiting 5 seconds, "
+                f"dropping UpdateChannel for {portal.tgid}"
             )
             return
         else:
             self.log.info(
-                "Creating Matrix room with data fetched by Telethon due to UpdateChannel"
+                f"Creating Matrix room for {portal.tgid}"
+                " with data fetched by Telethon due to UpdateChannel"
             )
             await portal.create_matrix_room(self, chan, invites=[self.mxid])
 
@@ -692,7 +696,7 @@ class AbstractUser(ABC):
                 await self.unregister_portal(update.action.chat_id, update.action.chat_id)
                 await self.register_portal(portal)
                 return
-            self.log.trace(
+            self.log.debug(
                 "Handling action %s to %s by %d",
                 update.action,
                 portal.tgid_log,
