@@ -1,4 +1,4 @@
-# v0.13.0 (unreleased)
+# v0.13.0 (2023-02-26)
 
 ### Added
 * Added `allow_contact_info` config option to specify whether personal names
