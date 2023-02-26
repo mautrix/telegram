@@ -1,4 +1,4 @@
-# unreleased
+# v0.13.0 (unreleased)
 
 ### Added
 * Added `allow_contact_info` config option to specify whether personal names
@@ -23,6 +23,8 @@
 * Fixed bridging unnamed files with unrecognized mime types.
 * Fixed enqueueing more backfill.
 * Fixed timestamps not being saved in `telegram_file` table.
+* Fixed issues with old events being replayed if the bridge was shut down
+  uncleanly.
 
 # v0.12.2 (2022-11-26)
 
