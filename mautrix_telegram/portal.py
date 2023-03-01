@@ -95,6 +95,9 @@ from telethon.tl.types import (
     MessageActionChatMigrateTo,
     MessageActionContactSignUp,
     MessageActionGameScore,
+    MessageActionGiftPremium,
+    MessageActionGroupCall,
+    MessageActionPhoneCall,
     MessageMediaGame,
     MessageMediaGeo,
     MessagePeerReaction,
@@ -102,6 +105,10 @@ from telethon.tl.types import (
     PeerChannel,
     PeerChat,
     PeerUser,
+    PhoneCallDiscardReasonBusy,
+    PhoneCallDiscardReasonDisconnect,
+    PhoneCallDiscardReasonMissed,
+    PhoneCallRequested,
     Photo,
     PhotoEmpty,
     ReactionCount,
@@ -126,6 +133,7 @@ from telethon.tl.types import (
     UpdateChatUserTyping,
     UpdateMessageReactions,
     UpdateNewMessage,
+    UpdatePhoneCall,
     UpdateUserTyping,
     User,
     UserFull,
@@ -172,6 +180,7 @@ from mautrix.types import (
     VideoInfo,
 )
 from mautrix.util import background_task, magic, variation_selector
+from mautrix.util.format_duration import format_duration
 from mautrix.util.message_send_checkpoint import MessageSendCheckpointStatus
 from mautrix.util.simple_lock import SimpleLock
 from mautrix.util.simple_template import SimpleTemplate
@@ -3476,6 +3485,16 @@ class Portal(DBPortal, BasePortal):
             return False
         return True
 
+    async def handle_telegram_direct_call(
+        self, source: au.AbstractUser, sender: p.Puppet, update: UpdatePhoneCall
+    ) -> None:
+        if isinstance(update.phone_call, PhoneCallRequested):
+            call_type = "video call" if update.phone_call.video else "call"
+            await self._send_message(
+                sender.intent_for(self),
+                TextMessageEventContent(msgtype=MessageType.EMOTE, body=f"started a {call_type}"),
+            )
+
     async def handle_telegram_action(
         self, source: au.AbstractUser, sender: p.Puppet | None, update: MessageService
     ) -> None:
@@ -3503,11 +3522,53 @@ class Portal(DBPortal, BasePortal):
             await self.delete_telegram_user(TelegramID(action.user_id), sender)
         elif isinstance(action, MessageActionChatMigrateTo):
             await self._migrate_and_save_telegram(TelegramID(action.channel_id))
-            # TODO encrypt
-            await sender.intent_for(self).send_emote(
-                self.mxid, "upgraded this group to a supergroup."
+            await self._send_message(
+                sender.intent_for(self),
+                TextMessageEventContent(
+                    msgtype=MessageType.EMOTE,
+                    body="upgraded this group to a supergroup",
+                ),
             )
             await self.update_bridge_info()
+        elif isinstance(action, MessageActionPhoneCall):
+            call_type = "Video call" if action.video else "Call"
+            end_reason = "ended"
+            if isinstance(action.reason, PhoneCallDiscardReasonMissed):
+                end_reason = "cancelled" if sender.tgid == source.tgid else "missed"
+            elif isinstance(action.reason, PhoneCallDiscardReasonBusy):
+                end_reason = "rejected"
+            elif isinstance(action.reason, PhoneCallDiscardReasonDisconnect):
+                end_reason = "disconnected"
+            body = f"{call_type} {end_reason}"
+            if action.duration:
+                body += f" ({format_duration(action.duration)}"
+            await self._send_message(
+                sender.intent_for(self),
+                TextMessageEventContent(msgtype=MessageType.NOTICE, body=body),
+            )
+        elif isinstance(action, MessageActionGroupCall):
+            await self._send_message(
+                sender.intent_for(self),
+                TextMessageEventContent(
+                    msgtype=MessageType.EMOTE,
+                    body=(
+                        "started a video chat"
+                        if action.duration is None
+                        else f"ended the video chat ({format_duration(action.duration)})"
+                    ),
+                ),
+            )
+        elif isinstance(action, MessageActionGiftPremium):
+            await self._send_message(
+                sender.intent_for(self),
+                TextMessageEventContent(
+                    msgtype=MessageType.EMOTE,
+                    body=(
+                        f"gifted Telegram Premium for {action.months} "
+                        f"({action.amount / 100} {action.currency})"
+                    ),
+                ),
+            )
         elif isinstance(action, MessageActionGameScore):
             # TODO handle game score
             pass

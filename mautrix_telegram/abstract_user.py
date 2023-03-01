@@ -38,6 +38,7 @@ from telethon.tl.types import (
     PeerChannel,
     PeerChat,
     PeerUser,
+    PhoneCallRequested,
     TypeUpdate,
     UpdateChannel,
     UpdateChannelUserTyping,
@@ -54,6 +55,7 @@ from telethon.tl.types import (
     UpdateNewChannelMessage,
     UpdateNewMessage,
     UpdateNotifySettings,
+    UpdatePhoneCall,
     UpdatePinnedChannelMessages,
     UpdatePinnedDialogs,
     UpdatePinnedMessages,
@@ -343,6 +345,8 @@ class AbstractUser(ABC):
             await self.delete_message(update)
         elif isinstance(update, UpdateDeleteChannelMessages):
             await self.delete_channel_message(update)
+        elif isinstance(update, UpdatePhoneCall):
+            await self.update_phone_call(update)
         elif isinstance(update, UpdateMessageReactions):
             await self.update_reactions(update)
         elif isinstance(update, (UpdateChatUserTyping, UpdateChannelUserTyping, UpdateUserTyping)):
@@ -616,6 +620,19 @@ class AbstractUser(ABC):
         if not portal or not portal.mxid or not portal.allow_bridging:
             return
         await portal.handle_telegram_reactions(self, TelegramID(update.msg_id), update.reactions)
+
+    async def update_phone_call(self, update: UpdatePhoneCall) -> None:
+        self.log.debug("Phone call update %s", update)
+        if not isinstance(update.phone_call, PhoneCallRequested):
+            return
+        tgid = TelegramID(update.phone_call.participant_id)
+        if tgid == self.tgid:
+            tgid = update.phone_call.admin_id
+        portal = await po.Portal.get_by_tgid(tgid, tg_receiver=self.tgid, peer_type="user")
+        if not portal or not portal.mxid or not portal.allow_bridging:
+            return
+        sender = await pu.Puppet.get_by_tgid(TelegramID(update.phone_call.admin_id))
+        await portal.handle_telegram_direct_call(self, sender, update)
 
     async def update_channel(self, update: UpdateChannel) -> None:
         portal = await po.Portal.get_by_tgid(TelegramID(update.channel_id))
