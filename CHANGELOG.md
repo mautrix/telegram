@@ -1,4 +1,4 @@
-# unreleased
+# v0.13.0 (2023-02-26)
 
 ### Added
 * Added `bridge.filter.users` config option to specify how the bridge should 
@@ -13,14 +13,20 @@
 
 ### Improved
 * Updated Docker image to Alpine 3.17.
-* Updated to Telegram API layer 151.
+* Updated to Telegram API layer 152.
 * Improved handling users getting logged out.
+* Removed support for creating accounts, as Telegram only allows requesting SMS
+  login codes on the official mobile clients now.
+* Replaced moviepy with calling ffmpeg directly for generating video thumbnails.
 
 ### Fixed
 * Fixed handling Telegram chat upgrades when backfilling is enabled.
 * Fixed file transfers failing if transfering the thumbnail fails.
 * Fixed bridging unnamed files with unrecognized mime types.
 * Fixed enqueueing more backfill.
+* Fixed timestamps not being saved in `telegram_file` table.
+* Fixed issues with old events being replayed if the bridge was shut down
+  uncleanly.
 
 # v0.12.2 (2022-11-26)
 

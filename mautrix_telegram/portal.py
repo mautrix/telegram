@@ -95,6 +95,9 @@ from telethon.tl.types import (
     MessageActionChatMigrateTo,
     MessageActionContactSignUp,
     MessageActionGameScore,
+    MessageActionGiftPremium,
+    MessageActionGroupCall,
+    MessageActionPhoneCall,
     MessageMediaGame,
     MessageMediaGeo,
     MessagePeerReaction,
@@ -102,6 +105,10 @@ from telethon.tl.types import (
     PeerChannel,
     PeerChat,
     PeerUser,
+    PhoneCallDiscardReasonBusy,
+    PhoneCallDiscardReasonDisconnect,
+    PhoneCallDiscardReasonMissed,
+    PhoneCallRequested,
     Photo,
     PhotoEmpty,
     ReactionCount,
@@ -126,6 +133,7 @@ from telethon.tl.types import (
     UpdateChatUserTyping,
     UpdateMessageReactions,
     UpdateNewMessage,
+    UpdatePhoneCall,
     UpdateUserTyping,
     User,
     UserFull,
@@ -171,7 +179,8 @@ from mautrix.types import (
     UserID,
     VideoInfo,
 )
-from mautrix.util import magic, variation_selector
+from mautrix.util import background_task, magic, variation_selector
+from mautrix.util.format_duration import format_duration
 from mautrix.util.message_send_checkpoint import MessageSendCheckpointStatus
 from mautrix.util.simple_lock import SimpleLock
 from mautrix.util.simple_template import SimpleTemplate
@@ -728,7 +737,7 @@ class Portal(DBPortal, BasePortal):
                         self.log.exception(f"Failed to get entity through {user.tgid} for update")
                         return self.mxid
                 update = self.update_matrix_room(user, entity)
-                asyncio.create_task(update)
+                background_task.create(update)
                 await self.invite_to_matrix(invites or [])
             return self.mxid
         async with self._room_create_lock:
@@ -806,6 +815,12 @@ class Portal(DBPortal, BasePortal):
         participants_count = 2
         if isinstance(entity, Chat):
             participants_count = entity.participants_count
+            if entity.deactivated or entity.migrated_to:
+                self.log.error(
+                    "Throwing error for attempted portal creation "
+                    f"({entity.deactivated=}, {entity.migrated_to=})"
+                )
+                raise RuntimeError("Tried to create portal for deactivated chat")
         elif isinstance(entity, Channel) and not entity.broadcast:
             participants_count = entity.participants_count
         if participants_count is None and self.config["bridge.max_member_count"] > 0:
@@ -1526,11 +1541,11 @@ class Portal(DBPortal, BasePortal):
         )
         if self.peer_type == "channel":
             if not self.megagroup:
-                asyncio.create_task(
+                background_task.create(
                     self._try_handle_read_for_sponsored_msg(user, event_id, timestamp)
                 )
             else:
-                asyncio.create_task(self._poll_telegram_reactions(user))
+                background_task.create(self._poll_telegram_reactions(user))
 
     async def _preproc_kick_ban(
         self, user: u.User | p.Puppet, source: u.User
@@ -1965,7 +1980,7 @@ class Portal(DBPortal, BasePortal):
             message_type=msgtype,
         )
         await self._send_delivery_receipt(event_id)
-        asyncio.create_task(self._send_message_status(event_id, err=None))
+        background_task.create(self._send_message_status(event_id, err=None))
         if response.ttl_period:
             await self._mark_disappearing(
                 event_id=event_id,
@@ -2258,7 +2273,7 @@ class Portal(DBPortal, BasePortal):
                 EventType.ROOM_REDACTION,
             )
             await self._send_delivery_receipt(redaction_event_id)
-            asyncio.create_task(self._send_message_status(redaction_event_id, err=None))
+            background_task.create(self._send_message_status(redaction_event_id, err=None))
 
     async def _handle_matrix_reaction_deletion(
         self, deleter: u.User, event_id: EventID, tg_space: TelegramID
@@ -2371,7 +2386,7 @@ class Portal(DBPortal, BasePortal):
                 EventType.REACTION,
             )
             await self._send_delivery_receipt(reaction_event_id)
-            asyncio.create_task(self._send_message_status(reaction_event_id, err=None))
+            background_task.create(self._send_message_status(reaction_event_id, err=None))
 
     async def _handle_matrix_reaction(
         self,
@@ -2587,7 +2602,7 @@ class Portal(DBPortal, BasePortal):
             return
 
         if self.peer_type != "channel" and isinstance(evt, Message) and evt.reactions is not None:
-            asyncio.create_task(
+            background_task.create(
                 self.try_handle_telegram_reactions(source, TelegramID(evt.id), evt.reactions)
             )
         sender_id = sender.tgid if sender else self.tgid
@@ -3289,7 +3304,7 @@ class Portal(DBPortal, BasePortal):
         self, source: au.AbstractUser, sender: p.Puppet | None, evt: Message
     ) -> None:
         if not self.mxid:
-            self.log.trace("Got telegram message %d, but no room exists, creating...", evt.id)
+            self.log.debug("Got telegram message %d, but no room exists, creating...", evt.id)
             await self.create_matrix_room(source, invites=[source.mxid], update_if_exists=False)
             if not self.mxid:
                 self.log.warning("Room doesn't exist even after creating, dropping %d", evt.id)
@@ -3356,12 +3371,17 @@ class Portal(DBPortal, BasePortal):
                 f"Telegram user {sender.tgid} sent a message, but doesn't have a displayname,"
                 " updating info..."
             )
-            entity = await source.client.get_entity(sender.peer)
-            await sender.update_info(source, entity)
-            if not sender.displayname:
-                self.log.debug(
-                    f"Telegram user {sender.tgid} doesn't have a displayname even after"
-                    f" updating with data {entity!s}"
+            try:
+                entity = await source.client.get_entity(sender.peer)
+                await sender.update_info(source, entity)
+                if not sender.displayname:
+                    self.log.debug(
+                        f"Telegram user {sender.tgid} doesn't have a displayname even after"
+                        f" updating with data {entity!s}"
+                    )
+            except ValueError as e:
+                self.log.warning(
+                    f"Couldn't find entity to update profile of {sender.tgid}", exc_info=True
                 )
 
         if sender:
@@ -3420,7 +3440,7 @@ class Portal(DBPortal, BasePortal):
             await intent.redact(self.mxid, event_id)
             return
         if isinstance(evt, Message) and evt.reactions:
-            asyncio.create_task(
+            background_task.create(
                 self.try_handle_telegram_reactions(
                     source, dbm.tgid, evt.reactions, dbm=dbm, timestamp=evt.date
                 )
@@ -3441,7 +3461,7 @@ class Portal(DBPortal, BasePortal):
         dm = DisappearingMessage(self.mxid, event_id, seconds, expiration_ts=expires_at * 1000)
         await dm.insert()
         if expires_at:
-            asyncio.create_task(self._disappear_event(dm))
+            background_task.create(self._disappear_event(dm))
 
     async def _create_room_on_action(
         self, source: au.AbstractUser, action: TypeMessageAction
@@ -3455,12 +3475,26 @@ class Portal(DBPortal, BasePortal):
             MessageActionChatJoinedByRequest,
         )
         if isinstance(action, create_and_exit) or isinstance(action, create_and_continue):
+            self.log.debug(
+                f"Got telegram action of type {type(action).__name__},"
+                " but no room exists, creating..."
+            )
             await self.create_matrix_room(
                 source, invites=[source.mxid], update_if_exists=isinstance(action, create_and_exit)
             )
         if not isinstance(action, create_and_continue):
             return False
         return True
+
+    async def handle_telegram_direct_call(
+        self, source: au.AbstractUser, sender: p.Puppet, update: UpdatePhoneCall
+    ) -> None:
+        if isinstance(update.phone_call, PhoneCallRequested):
+            call_type = "video call" if update.phone_call.video else "call"
+            await self._send_message(
+                sender.intent_for(self),
+                TextMessageEventContent(msgtype=MessageType.EMOTE, body=f"started a {call_type}"),
+            )
 
     async def handle_telegram_action(
         self, source: au.AbstractUser, sender: p.Puppet | None, update: MessageService
@@ -3489,11 +3523,53 @@ class Portal(DBPortal, BasePortal):
             await self.delete_telegram_user(TelegramID(action.user_id), sender)
         elif isinstance(action, MessageActionChatMigrateTo):
             await self._migrate_and_save_telegram(TelegramID(action.channel_id))
-            # TODO encrypt
-            await sender.intent_for(self).send_emote(
-                self.mxid, "upgraded this group to a supergroup."
+            await self._send_message(
+                sender.intent_for(self),
+                TextMessageEventContent(
+                    msgtype=MessageType.EMOTE,
+                    body="upgraded this group to a supergroup",
+                ),
             )
             await self.update_bridge_info()
+        elif isinstance(action, MessageActionPhoneCall):
+            call_type = "Video call" if action.video else "Call"
+            end_reason = "ended"
+            if isinstance(action.reason, PhoneCallDiscardReasonMissed):
+                end_reason = "cancelled" if sender.tgid == source.tgid else "missed"
+            elif isinstance(action.reason, PhoneCallDiscardReasonBusy):
+                end_reason = "rejected"
+            elif isinstance(action.reason, PhoneCallDiscardReasonDisconnect):
+                end_reason = "disconnected"
+            body = f"{call_type} {end_reason}"
+            if action.duration:
+                body += f" ({format_duration(action.duration)}"
+            await self._send_message(
+                sender.intent_for(self),
+                TextMessageEventContent(msgtype=MessageType.NOTICE, body=body),
+            )
+        elif isinstance(action, MessageActionGroupCall):
+            await self._send_message(
+                sender.intent_for(self),
+                TextMessageEventContent(
+                    msgtype=MessageType.EMOTE,
+                    body=(
+                        "started a video chat"
+                        if action.duration is None
+                        else f"ended the video chat ({format_duration(action.duration)})"
+                    ),
+                ),
+            )
+        elif isinstance(action, MessageActionGiftPremium):
+            await self._send_message(
+                sender.intent_for(self),
+                TextMessageEventContent(
+                    msgtype=MessageType.EMOTE,
+                    body=(
+                        f"gifted Telegram Premium for {action.months} "
+                        f"({action.amount / 100} {action.currency})"
+                    ),
+                ),
+            )
         elif isinstance(action, MessageActionGameScore):
             # TODO handle game score
             pass

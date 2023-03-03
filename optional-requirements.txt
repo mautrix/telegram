@@ -10,8 +10,6 @@ brotli
 pillow>=4,<10
 qrcode>=6,<8
 
-#/hq_thumbnails
-moviepy>=1,<2
 
 #/formattednumbers
 phonenumbers>=8,<9

@@ -22,7 +22,6 @@ import asyncio
 import logging
 import pickle
 import pkgutil
-import tempfile
 import time
 
 from asyncpg import UniqueViolationError
@@ -46,7 +45,7 @@ from telethon.tl.types import (
 )
 
 from mautrix.appservice import IntentAPI
-from mautrix.util import magic, variation_selector
+from mautrix.util import ffmpeg, magic, variation_selector
 
 from .. import abstract_user as au
 from ..db import TelegramFile as DBTelegramFile
@@ -60,11 +59,6 @@ try:
     from PIL import Image
 except ImportError:
     Image = None
-
-try:
-    from moviepy.editor import VideoFileClip
-except ImportError:
-    VideoFileClip = None
 
 try:
     from mautrix.crypto.attachments import encrypt_attachment
@@ -103,29 +97,16 @@ def convert_image(
         return source_mime, file, None, None
 
 
-def _read_video_thumbnail(
-    data: bytes,
-    video_ext: str = "mp4",
-    frame_ext: str = "png",
-    max_size: tuple[int, int] = (1024, 720),
-) -> tuple[bytes, int, int]:
-    with tempfile.NamedTemporaryFile(prefix="mxtg_video_", suffix=f".{video_ext}") as file:
-        # We don't have any way to read the video from memory, so save it to disk.
-        file.write(data)
-
-        # Read temp file and get frame
-        frame = VideoFileClip(file.name).get_frame(0)
-
-    # Convert to png and save to BytesIO
-    image = Image.fromarray(frame).convert("RGBA")
-
-    thumbnail_file = BytesIO()
-    if max_size:
-        image.thumbnail(max_size, Image.ANTIALIAS)
-    image.save(thumbnail_file, frame_ext)
-
-    w, h = image.size
-    return thumbnail_file.getvalue(), w, h
+async def _read_video_thumbnail(data: bytes, mime_type: str) -> tuple[bytes, int, int]:
+    first_frame = await ffmpeg.convert_bytes(
+        data,
+        output_extension=".png",
+        output_args=("-update", "1", "-frames:v", "1"),
+        input_mime=mime_type,
+        logger=log,
+    )
+    width, height = Image.open(BytesIO(first_frame)).size
+    return first_frame, width, height
 
 
 def _location_to_id(location: TypeLocation) -> str:
@@ -151,7 +132,7 @@ async def transfer_thumbnail_to_matrix(
     height: int | None = None,
     async_upload: bool = False,
 ) -> DBTelegramFile | None:
-    if not Image or not VideoFileClip:
+    if not Image or not ffmpeg.ffmpeg_path:
         return None
 
     loc_id = _location_to_id(thumbnail_loc)
@@ -170,10 +151,12 @@ async def transfer_thumbnail_to_matrix(
     video_ext = sane_mimetypes.guess_extension(mime_type)
     if custom_data:
         file = custom_data
-    elif VideoFileClip and video_ext and video:
+    elif video_ext and video:
+        log.debug(f"Generating thumbnail for video {loc_id} with ffmpeg")
         try:
-            file, width, height = _read_video_thumbnail(video, video_ext, frame_ext="png")
-        except OSError:
+            file, width, height = await _read_video_thumbnail(video, mime_type=mime_type)
+        except Exception:
+            log.warning(f"Failed to generate thumbnail for {loc_id}", exc_info=True)
             return None
         mime_type = "image/png"
     else:
@@ -350,10 +333,10 @@ async def _unlocked_transfer_file_to_matrix(
             client, intent, loc_id, location, filename, encrypt, parallel_id
         )
         mime_type = location.mime_type
-        file = None
+        unencrypted_file = None
     else:
         try:
-            file = await client.download_file(location)
+            unencrypted_file = file = await client.download_file(location)
         except (LocationInvalidError, FileIdInvalidError):
             return None
         except (AuthBytesInvalidError, AuthKeyInvalidError, SecurityError) as e:
@@ -410,7 +393,7 @@ async def _unlocked_transfer_file_to_matrix(
                     client,
                     intent,
                     thumbnail,
-                    video=file,
+                    video=unencrypted_file,
                     mime_type=mime_type,
                     encrypt=encrypt,
                     async_upload=async_upload,

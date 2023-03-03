@@ -59,6 +59,7 @@ from mautrix.bridge import BaseUser, async_getter_lock
 from mautrix.client import Client
 from mautrix.errors import MatrixRequestError, MNotFound
 from mautrix.types import PushActionType, PushRuleKind, PushRuleScope, RoomID, RoomTagInfo, UserID
+from mautrix.util import background_task
 from mautrix.util.bridge_state import BridgeState, BridgeStateEvent
 from mautrix.util.opt_prometheus import Gauge
 
@@ -259,7 +260,7 @@ class User(DBUser, AbstractUser, BaseUser):
         else:
             # Authenticated, run post login
             self.log.debug(f"Ensuring post_login() for {self.name}")
-            asyncio.create_task(self.post_login())
+            background_task.create(self.post_login())
             return self
         # Not authenticated, delete data if necessary
         if delete_unless_authenticated and self.client is not None:

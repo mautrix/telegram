@@ -32,6 +32,7 @@ from mautrix.appservice import AppService
 from mautrix.client import Client
 from mautrix.errors import IntentError, MatrixRequestError
 from mautrix.types import UserID
+from mautrix.util import background_task
 
 from ...commands.portal.util import get_initial_state, user_has_power_level
 from ...portal import Portal
@@ -227,7 +228,7 @@ class ProvisioningAPI(AuthAPI):
             portal.photo_id = ""
             await portal.save()
 
-        asyncio.create_task(portal.update_matrix_room(user, entity, levels=levels))
+        background_task.create(portal.update_matrix_room(user, entity, levels=levels))
 
         return web.Response(status=202, body="{}")
 
@@ -348,7 +349,7 @@ class ProvisioningAPI(AuthAPI):
                 self.log.exception("Failed to disconnect chat")
                 return self.get_error_response(500, "exception", "Failed to disconnect chat")
         else:
-            asyncio.create_task(coro)
+            background_task.create(coro)
         return web.json_response({}, status=200 if sync else 202)
 
     async def get_user_info(self, request: web.Request) -> web.Response:

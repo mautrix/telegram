@@ -38,6 +38,7 @@ from telethon.tl.types import (
     PeerChannel,
     PeerChat,
     PeerUser,
+    PhoneCallRequested,
     TypeUpdate,
     UpdateChannel,
     UpdateChannelUserTyping,
@@ -54,6 +55,7 @@ from telethon.tl.types import (
     UpdateNewChannelMessage,
     UpdateNewMessage,
     UpdateNotifySettings,
+    UpdatePhoneCall,
     UpdatePinnedChannelMessages,
     UpdatePinnedDialogs,
     UpdatePinnedMessages,
@@ -75,6 +77,7 @@ from telethon.tl.types import (
 from mautrix.appservice import AppService
 from mautrix.errors import MatrixError
 from mautrix.types import PresenceState, UserID
+from mautrix.util import background_task
 from mautrix.util.logging import TraceLogger
 from mautrix.util.opt_prometheus import Counter, Histogram
 
@@ -241,7 +244,7 @@ class AbstractUser(ABC):
 
     async def _telethon_update_error_callback(self, err: Exception) -> None:
         if isinstance(err, (UnauthorizedError, AuthKeyError)):
-            asyncio.create_task(self.on_signed_out(err))
+            background_task.create(self.on_signed_out(err))
             return
         if self.config["telegram.exit_on_update_error"]:
             self.log.critical(f"Stopping due to update handling error {type(err).__name__}")
@@ -325,7 +328,7 @@ class AbstractUser(ABC):
     async def _update(self, update: TypeUpdate) -> None:
         if isinstance(update, UpdateShort):
             update = update.update
-        asyncio.create_task(self._handle_entity_updates(getattr(update, "_entities", {})))
+        background_task.create(self._handle_entity_updates(getattr(update, "_entities", {})))
         if isinstance(
             update,
             (
@@ -342,6 +345,8 @@ class AbstractUser(ABC):
             await self.delete_message(update)
         elif isinstance(update, UpdateDeleteChannelMessages):
             await self.delete_channel_message(update)
+        elif isinstance(update, UpdatePhoneCall):
+            await self.update_phone_call(update)
         elif isinstance(update, UpdateMessageReactions):
             await self.update_reactions(update)
         elif isinstance(update, (UpdateChatUserTyping, UpdateChannelUserTyping, UpdateUserTyping)):
@@ -616,6 +621,19 @@ class AbstractUser(ABC):
             return
         await portal.handle_telegram_reactions(self, TelegramID(update.msg_id), update.reactions)
 
+    async def update_phone_call(self, update: UpdatePhoneCall) -> None:
+        self.log.debug("Phone call update %s", update)
+        if not isinstance(update.phone_call, PhoneCallRequested):
+            return
+        tgid = TelegramID(update.phone_call.participant_id)
+        if tgid == self.tgid:
+            tgid = update.phone_call.admin_id
+        portal = await po.Portal.get_by_tgid(tgid, tg_receiver=self.tgid, peer_type="user")
+        if not portal or not portal.mxid or not portal.allow_bridging:
+            return
+        sender = await pu.Puppet.get_by_tgid(TelegramID(update.phone_call.admin_id))
+        await portal.handle_telegram_direct_call(self, sender, update)
+
     async def update_channel(self, update: UpdateChannel) -> None:
         portal = await po.Portal.get_by_tgid(TelegramID(update.channel_id))
         if not portal:
@@ -625,24 +643,28 @@ class AbstractUser(ABC):
             await portal.delete_telegram_user(self.tgid, sender=None)
         elif chan := getattr(update, "mau_channel", None):
             if not portal.mxid:
-                asyncio.create_task(self._delayed_create_channel(chan))
+                background_task.create(self._delayed_create_channel(chan))
             else:
                 self.log.debug("Updating channel info with data fetched by Telethon")
                 await portal.update_info(self, chan)
                 await portal.invite_to_matrix(self.mxid)
 
     async def _delayed_create_channel(self, chan: Channel) -> None:
-        self.log.debug("Waiting 5 seconds before handling UpdateChannel for non-existent portal")
+        self.log.debug(
+            f"Waiting 5 seconds before handling UpdateChannel for non-existent portal {chan.id}"
+        )
         await asyncio.sleep(5)
         portal = await po.Portal.get_by_tgid(TelegramID(chan.id))
         if portal.mxid:
             self.log.debug(
-                "Portal started existing after waiting 5 seconds, dropping UpdateChannel"
+                "Portal started existing after waiting 5 seconds, "
+                f"dropping UpdateChannel for {portal.tgid}"
             )
             return
         else:
             self.log.info(
-                "Creating Matrix room with data fetched by Telethon due to UpdateChannel"
+                f"Creating Matrix room for {portal.tgid}"
+                " with data fetched by Telethon due to UpdateChannel"
             )
             await portal.create_matrix_room(self, chan, invites=[self.mxid])
 
@@ -691,7 +713,7 @@ class AbstractUser(ABC):
                 await self.unregister_portal(update.action.chat_id, update.action.chat_id)
                 await self.register_portal(portal)
                 return
-            self.log.trace(
+            self.log.debug(
                 "Handling action %s to %s by %d",
                 update.action,
                 portal.tgid_log,
