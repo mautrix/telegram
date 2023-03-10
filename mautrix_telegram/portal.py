@@ -978,6 +978,17 @@ class Portal(DBPortal, BasePortal):
                 )
             await self.save()
 
+            async for dialog in client.iter_dialogs(limit=10):
+                if dialog.entity.id == self.tgid:
+                    mute_until = (
+                        dialog.dialog.notify_settings.mute_until.timestamp()
+                        if dialog.dialog.notify_settings.mute_until
+                        else None
+                    )
+                    await user.mute_and_update_tags(
+                        puppet, self, mute_until, dialog.pinned, dialog.archived
+                    )
+
             if self.backfill_enable and (isinstance(user, u.User) or not self.backfill_msc2716):
                 try:
                     await self.forward_backfill(user, initial=True, client=client)

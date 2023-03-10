@@ -831,12 +831,27 @@ class User(DBUser, AbstractUser, BaseUser):
         try:
             if last_read:
                 await puppet.intent.mark_read(last_read.mx_room, last_read.mxid)
-            if was_created or not self.config["bridge.tag_only_on_create"]:
-                await self._mute_room(puppet, portal, mute_until)
-                await self._tag_room(puppet, portal, self.config["bridge.pinned_tag"], pinned)
-                await self._tag_room(puppet, portal, self.config["bridge.archive_tag"], archived)
+
+            # Tagging is handled by the portal, so we only need to handle changing the mute
+            # state/tags in the update case here.
+            if not was_created and self.config["bridge.tag_only_on_create"]:
+                await self.mute_and_update_tags(puppet, portal, mute_until, pinned, archived)
         except Exception:
             self.log.exception(f"Error updating read status and tags for {portal.tgid_log}")
+
+    async def mute_and_update_tags(
+        self,
+        puppet: pu.Puppet | None,
+        portal: po.Portal,
+        mute_until: float,
+        pinned: bool,
+        archived: bool,
+    ):
+        if not puppet:
+            puppet = await pu.Puppet.get_by_custom_mxid(self.mxid)
+        await self._mute_room(puppet, portal, mute_until)
+        await self._tag_room(puppet, portal, self.config["bridge.pinned_tag"], pinned)
+        await self._tag_room(puppet, portal, self.config["bridge.archive_tag"], archived)
 
     async def get_cached_portals(self) -> dict[tuple[TelegramID, TelegramID], po.Portal]:
         if self._portals_cache is None:
