@@ -52,6 +52,7 @@ from telethon.tl.types import (
     User as TLUser,
 )
 from telethon.tl.types.contacts import ContactsNotModified
+from telethon.tl.types.help import AppConfig
 from telethon.tl.types.messages import AvailableReactions
 
 from mautrix.appservice import DOUBLE_PUPPET_SOURCE_KEY
@@ -106,6 +107,7 @@ class User(DBUser, AbstractUser, BaseUser):
     _available_emoji_reactions_fetched: float
     _available_emoji_reactions_lock: asyncio.Lock
     _app_config: dict[str, Any] | None
+    _app_config_hash: int
 
     def __init__(
         self,
@@ -143,6 +145,7 @@ class User(DBUser, AbstractUser, BaseUser):
         self._available_emoji_reactions_fetched = 0
         self._available_emoji_reactions_lock = asyncio.Lock()
         self._app_config = None
+        self._app_config_hash = 0
 
         (
             self.relaybot_whitelisted,
@@ -969,8 +972,9 @@ class User(DBUser, AbstractUser, BaseUser):
 
     async def get_app_config(self) -> dict[str, Any]:
         if not self._app_config:
-            cfg = await self.client(GetAppConfigRequest())
-            self._app_config = util.parse_tl_json(cfg)
+            cfg: AppConfig = await self.client(GetAppConfigRequest(hash=self._app_config_hash))
+            self._app_config = util.parse_tl_json(cfg.config)
+            self._app_config_hash = cfg.hash
         return self._app_config
 
     async def get_max_reactions(self, is_premium: bool | None = None) -> int:

@@ -3870,7 +3870,7 @@ class Portal(DBPortal, BasePortal):
             return portal
 
         if peer_type:
-            cls.log.info(f"Creating portal for {peer_type} {tgid} (receiver {tg_receiver})")
+            cls.log.info(f"Creating portal object for {peer_type} {tgid} (receiver {tg_receiver})")
             # TODO enable this for non-release builds
             #      (or add better wrong peer type error handling)
             # if peer_type == "chat":
