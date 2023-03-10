@@ -23,6 +23,7 @@ from sqlite3 import IntegrityError
 from string import Template
 import asyncio
 import base64
+import itertools
 import random
 import time
 
@@ -36,6 +37,7 @@ from telethon.errors import (
     ReactionInvalidError,
     RPCError,
 )
+from telethon.tl.custom import Dialog
 from telethon.tl.functions.channels import (
     CreateChannelRequest,
     EditPhotoRequest,
@@ -54,6 +56,7 @@ from telethon.tl.functions.messages import (
     ExportChatInviteRequest,
     GetMessageReactionsListRequest,
     GetMessagesReactionsRequest,
+    GetPeerDialogsRequest,
     MigrateChatRequest,
     SendReactionRequest,
     SetTypingRequest,
@@ -66,6 +69,7 @@ from telethon.tl.types import (
     ChannelFull,
     Chat,
     ChatBannedRights,
+    ChatEmpty,
     ChatFull,
     ChatPhoto,
     ChatPhotoEmpty,
@@ -76,6 +80,7 @@ from telethon.tl.types import (
     GeoPoint,
     InputChannel,
     InputChatUploadedPhoto,
+    InputDialogPeer,
     InputMediaUploadedDocument,
     InputMediaUploadedPhoto,
     InputPeerChannel,
@@ -136,11 +141,13 @@ from telethon.tl.types import (
     UpdatePhoneCall,
     UpdateUserTyping,
     User,
+    UserEmpty,
     UserFull,
     UserProfilePhoto,
     UserProfilePhotoEmpty,
 )
-from telethon.utils import encode_waveform
+from telethon.tl.types.messages import PeerDialogs
+from telethon.utils import encode_waveform, get_peer_id
 import attr
 
 from mautrix.appservice import DOUBLE_PUPPET_SOURCE_KEY, IntentAPI
@@ -725,6 +732,7 @@ class Portal(DBPortal, BasePortal):
         entity: TypeChat | User = None,
         invites: InviteList = None,
         update_if_exists: bool = True,
+        from_dialog_sync: bool = False,
         client: MautrixTelegramClient | None = None,
     ) -> RoomID | None:
         if self.mxid:
@@ -741,7 +749,9 @@ class Portal(DBPortal, BasePortal):
             return self.mxid
         async with self._room_create_lock:
             try:
-                return await self._create_matrix_room(user, entity, invites, client=client)
+                return await self._create_matrix_room(
+                    user, entity, invites, client=client, from_dialog_sync=from_dialog_sync
+                )
             except Exception:
                 self.log.exception("Fatal error creating Matrix room")
 
@@ -796,6 +806,7 @@ class Portal(DBPortal, BasePortal):
         user: au.AbstractUser,
         entity: TypeChat | User,
         invites: InviteList,
+        from_dialog_sync: bool,
         client: MautrixTelegramClient | None = None,
     ) -> RoomID | None:
         if self.mxid:
@@ -806,6 +817,31 @@ class Portal(DBPortal, BasePortal):
             client = user.client
 
         invites = invites or []
+
+        dialog = None
+        if not from_dialog_sync and not user.is_bot:
+            self.log.debug("Fetching dialog info for new portal")
+            dialogs: PeerDialogs = await user.client(
+                GetPeerDialogsRequest(peers=[InputDialogPeer(await self.get_input_entity(user))])
+            )
+            if dialogs.chats and dialogs.chats[0].id == self.tgid:
+                entity = dialogs.chats[0]
+                self.log.debug("Got entity info from get dialogs request")
+            elif self.is_direct and dialogs.users:
+                for user in dialogs.users:
+                    if user.id == self.tgid:
+                        entity = user
+                        self.log.debug("Got user entity info from get dialogs request")
+                        break
+            if dialogs.dialogs:
+                entities = {
+                    get_peer_id(x): x
+                    for x in itertools.chain(dialogs.users, dialogs.chats)
+                    if not isinstance(x, (UserEmpty, ChatEmpty))
+                }
+                msg = dialogs.messages[0] if len(dialogs.messages) == 1 else None
+                dialog = Dialog(user.client, dialogs.dialogs[0], entities, msg)
+                self.log.debug("Got dialog info for new portal: %s", dialog)
 
         if not entity:
             entity = await self.get_entity(user, client)
@@ -959,6 +995,10 @@ class Portal(DBPortal, BasePortal):
             self.log.debug(f"Matrix room created: {self.mxid}")
             await self.az.state_store.set_power_levels(self.mxid, power_levels)
             await user.register_portal(self)
+            if dialog and isinstance(user, u.User):
+                await user.post_sync_dialog(
+                    self, puppet=None, was_created=True, **user.dialog_to_sync_args(dialog)
+                )
 
             if not autojoin_invites or not self.is_direct:
                 await self.invite_to_matrix(invites)

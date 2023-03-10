@@ -490,13 +490,16 @@ class User(DBUser, AbstractUser, BaseUser):
         self.log.info(f"Creating portal for {portal.tgid_log} as part of backfill loop")
         try:
             await portal.create_matrix_room(
-                self, client=client, update_if_exists=False, invites=[self.mxid]
+                self,
+                client=client,
+                update_if_exists=False,
+                invites=[self.mxid],
+                from_dialog_sync=True,
             )
         except Exception:
             self.log.exception(f"Error while creating {portal.tgid_log}")
         else:
-            puppet = await pu.Puppet.get_by_custom_mxid(self.mxid)
-            await self._post_sync_dialog(portal, puppet, was_created=True, **post_sync_args)
+            await self.post_sync_dialog(portal, puppet=None, was_created=True, **post_sync_args)
 
     async def update(self, update: TypeUpdate) -> bool:
         if not self.is_bot:
@@ -746,12 +749,12 @@ class User(DBUser, AbstractUser, BaseUser):
         )
         await self._mute_room(puppet, portal, update.notify_settings.mute_until.timestamp())
 
-    async def _sync_dialog(
-        self, portal: po.Portal, dialog: Dialog, should_create: bool, puppet: pu.Puppet | None
-    ) -> None:
-        was_created = False
-        post_sync_args = {
-            "last_message_ts": cast(datetime, dialog.date).timestamp(),
+    @staticmethod
+    def dialog_to_sync_args(dialog: Dialog) -> dict:
+        return {
+            "last_message_ts": (
+                cast(datetime, dialog.date).timestamp() if dialog.date else time.time()
+            ),
             "unread_count": dialog.unread_count,
             "max_read_id": dialog.dialog.read_inbox_max_id,
             "mute_until": (
@@ -762,6 +765,12 @@ class User(DBUser, AbstractUser, BaseUser):
             "pinned": dialog.pinned,
             "archived": dialog.archived,
         }
+
+    async def _sync_dialog(
+        self, portal: po.Portal, dialog: Dialog, should_create: bool, puppet: pu.Puppet | None
+    ) -> None:
+        was_created = False
+        post_sync_args = self.dialog_to_sync_args(dialog)
         if portal.mxid:
             self.log.debug(f"Backfilling and updating {portal.tgid_log} (dialog sync)")
             try:
@@ -775,7 +784,9 @@ class User(DBUser, AbstractUser, BaseUser):
         elif should_create:
             self.log.debug(f"Creating portal for {portal.tgid_log} immediately (dialog sync)")
             try:
-                await portal.create_matrix_room(self, dialog.entity, invites=[self.mxid])
+                await portal.create_matrix_room(
+                    self, dialog.entity, invites=[self.mxid], from_dialog_sync=True
+                )
                 was_created = True
             except Exception:
                 self.log.exception(f"Error while creating {portal.tgid_log}")
@@ -788,7 +799,7 @@ class User(DBUser, AbstractUser, BaseUser):
                 extra_data=post_sync_args,
             )
         if portal.mxid and puppet and puppet.is_real_user:
-            await self._post_sync_dialog(
+            await self.post_sync_dialog(
                 portal=portal,
                 puppet=puppet,
                 was_created=was_created,
@@ -796,10 +807,10 @@ class User(DBUser, AbstractUser, BaseUser):
             )
         self.log.debug(f"_sync_dialog finished for {portal.tgid_log}")
 
-    async def _post_sync_dialog(
+    async def post_sync_dialog(
         self,
         portal: po.Portal,
-        puppet: pu.Puppet,
+        puppet: pu.Puppet | None,
         was_created: bool,
         max_read_id: int,
         last_message_ts: float,
@@ -808,6 +819,10 @@ class User(DBUser, AbstractUser, BaseUser):
         pinned: bool,
         archived: bool,
     ) -> None:
+        if puppet is None:
+            puppet = await pu.Puppet.get_by_custom_mxid(self.mxid)
+            if not puppet or not puppet.is_real_user:
+                return
         self.log.debug(
             f"Running dialog post-sync for {portal.tgid_log} with args "
             f"{was_created=}, {max_read_id=}, {last_message_ts=}, {unread_count=}, "
