@@ -3221,17 +3221,18 @@ class Portal(DBPortal, BasePortal):
             )
 
     @staticmethod
-    def _reactions_filter(lst: list[TypeReaction], existing: DBReaction) -> bool:
+    def _reactions_filter(lst: list[MessagePeerReaction], existing: DBReaction) -> bool:
         if not lst:
             return False
-        for reaction in lst:
+        for wrapped_reaction in lst:
+            reaction = wrapped_reaction.reaction
             if isinstance(reaction, ReactionCustomEmoji) and existing.reaction == str(
                 reaction.document_id
             ):
-                lst.remove(reaction)
+                lst.remove(wrapped_reaction)
                 return True
             elif isinstance(reaction, ReactionEmoji) and existing.reaction == reaction.emoticon:
-                lst.remove(reaction)
+                lst.remove(wrapped_reaction)
                 return True
         return False
 
@@ -3251,15 +3252,14 @@ class Portal(DBPortal, BasePortal):
         total_count: int,
         timestamp: datetime | None = None,
     ) -> None:
-        reactions: dict[TelegramID, list[TypeReaction]] = {}
+        reactions: dict[TelegramID, list[MessagePeerReaction]] = {}
         custom_emoji_ids: list[int] = []
         for reaction in reaction_list:
             if isinstance(reaction.peer_id, (PeerUser, PeerChannel)) and isinstance(
                 reaction.reaction, (ReactionEmoji, ReactionCustomEmoji)
             ):
-                reactions.setdefault(p.Puppet.get_id_from_peer(reaction.peer_id), []).append(
-                    reaction.reaction
-                )
+                sender_user_id = p.Puppet.get_id_from_peer(reaction.peer_id)
+                reactions.setdefault(sender_user_id, []).append(reaction)
                 if isinstance(reaction.reaction, ReactionCustomEmoji):
                     custom_emoji_ids.append(reaction.reaction.document_id)
         is_full = len(reaction_list) == total_count
@@ -3284,7 +3284,8 @@ class Portal(DBPortal, BasePortal):
 
         new_reaction: TypeReaction
         for sender, new_reactions in reactions.items():
-            for new_reaction in new_reactions:
+            for new_wrapped_reaction in new_reactions:
+                new_reaction = new_wrapped_reaction.reaction
                 if isinstance(new_reaction, ReactionEmoji):
                     emoji_id = new_reaction.emoticon
                     matrix_reaction = variation_selector.add(new_reaction.emoticon)
@@ -3301,7 +3302,10 @@ class Portal(DBPortal, BasePortal):
                 self.log.debug(f"Bridging reaction {emoji_id} by {sender} to {msg.tgid}")
                 puppet: p.Puppet = await p.Puppet.get_by_tgid(sender)
                 mxid = await puppet.intent_for(self).react(
-                    msg.mx_room, msg.mxid, matrix_reaction, timestamp=timestamp
+                    msg.mx_room,
+                    msg.mxid,
+                    matrix_reaction,
+                    timestamp=new_wrapped_reaction.date or timestamp,
                 )
                 await DBReaction(
                     mxid=mxid,
