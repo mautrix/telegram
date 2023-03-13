@@ -828,9 +828,9 @@ class Portal(DBPortal, BasePortal):
                 entity = dialogs.chats[0]
                 self.log.debug("Got entity info from get dialogs request")
             elif self.is_direct and dialogs.users:
-                for user in dialogs.users:
-                    if user.id == self.tgid:
-                        entity = user
+                for dialog_user in dialogs.users:
+                    if dialog_user.id == self.tgid:
+                        entity = dialog_user
                         self.log.debug("Got user entity info from get dialogs request")
                         break
             if dialogs.dialogs:
