@@ -1827,7 +1827,7 @@ class Portal(DBPortal, BasePortal):
         if content.msgtype == MessageType.VIDEO:
             attributes.append(
                 DocumentAttributeVideo(
-                    duration=content.info.duration // 1000 if content.info.duration else 0,
+                    duration=int(content.info.duration // 1000 if content.info.duration else 0),
                     w=w or 0,
                     h=h or 0,
                 )
@@ -1839,7 +1839,7 @@ class Portal(DBPortal, BasePortal):
                 waveform = [round(part / max(waveform_max / 32, 1)) for part in waveform]
             attributes.append(
                 DocumentAttributeAudio(
-                    duration=content.info.duration // 1000 if content.info.duration else 0,
+                    duration=int(content.info.duration // 1000 if content.info.duration else 0),
                     voice="org.matrix.msc3245.voice" in content,
                     waveform=encode_waveform(waveform) if waveform else None,
                 )
