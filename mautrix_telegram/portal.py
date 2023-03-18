@@ -821,19 +821,25 @@ class Portal(DBPortal, BasePortal):
         dialog = None
         if not from_dialog_sync and not user.is_bot:
             self.log.debug("Fetching dialog info for new portal")
-            dialogs: PeerDialogs = await user.client(
-                GetPeerDialogsRequest(peers=[InputDialogPeer(await self.get_input_entity(user))])
-            )
-            if dialogs.chats and dialogs.chats[0].id == self.tgid:
+            try:
+                dialogs: PeerDialogs | None = await user.client(
+                    GetPeerDialogsRequest(
+                        peers=[InputDialogPeer(await self.get_input_entity(user))]
+                    )
+                )
+            except Exception:
+                self.log.warning("Failed to fetch dialog info", exc_info=True)
+                dialogs = None
+            if dialogs and dialogs.chats and dialogs.chats[0].id == self.tgid:
                 entity = dialogs.chats[0]
                 self.log.debug("Got entity info from get dialogs request")
-            elif self.is_direct and dialogs.users:
+            elif dialogs and self.is_direct and dialogs.users:
                 for dialog_user in dialogs.users:
                     if dialog_user.id == self.tgid:
                         entity = dialog_user
                         self.log.debug("Got user entity info from get dialogs request")
                         break
-            if dialogs.dialogs:
+            if dialogs and dialogs.dialogs:
                 entities = {
                     get_peer_id(x): x
                     for x in itertools.chain(dialogs.users, dialogs.chats)
