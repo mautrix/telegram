@@ -481,8 +481,9 @@ class Portal(DBPortal, BasePortal):
 
     async def get_telegram_users_in_matrix_room(
         self, source: u.User, pre_create: bool = False
-    ) -> tuple[list[InputUser], list[UserID]]:
+    ) -> tuple[list[InputUser], list[UserID], list[u.User]]:
         user_tgids = {}
+        users = []
         intent = self.az.intent if pre_create else self.main_intent
         user_mxids = await intent.get_room_members(self.mxid, (Membership.JOIN, Membership.INVITE))
         for mxid in user_mxids:
@@ -490,6 +491,7 @@ class Portal(DBPortal, BasePortal):
                 continue
             mx_user = await u.User.get_by_mxid(mxid, create=False)
             if mx_user and mx_user.tgid:
+                users.append(mx_user)
                 user_tgids[mx_user.tgid] = mxid
             puppet_id = p.Puppet.get_id_from_mxid(mxid)
             if puppet_id:
@@ -505,7 +507,7 @@ class Portal(DBPortal, BasePortal):
                     f"creating a group: {e}"
                 )
                 errors.append(mxid)
-        return input_users, errors
+        return input_users, errors, users
 
     async def upgrade_telegram_chat(self, source: u.User) -> None:
         if self.peer_type != "chat":
@@ -556,11 +558,20 @@ class Portal(DBPortal, BasePortal):
         if await self._update_username(username):
             await self.save()
 
-    async def create_telegram_chat(
-        self, source: u.User, invites: list[InputUser], supergroup: bool = False
-    ) -> None:
+    async def create_telegram_chat(self, source: u.User, supergroup: bool = False) -> None:
         if not self.mxid:
             raise ValueError("Can't create Telegram chat for portal without Matrix room.")
+        invites, errors, users = await self.get_telegram_users_in_matrix_room(
+            source, pre_create=True
+        )
+        if len(errors) > 0:
+            error_list = "\n".join(f"* [{mxid}](https://matrix.to/#/{mxid})" for mxid in errors)
+            await self.az.intent.send_notice(
+                self.mxid,
+                f"Failed to add the following users to the chat:\n\n{error_list}\n\n"
+                "You can try `$cmdprefix+sp search -r <username>` to help the bridge find "
+                "those users.",
+            )
         elif self.tgid:
             raise ValueError("Can't create Telegram chat for portal with existing Telegram chat.")
 
@@ -610,6 +621,8 @@ class Portal(DBPortal, BasePortal):
             await self.main_intent.set_power_levels(self.mxid, levels)
         await self.handle_matrix_power_levels(source, levels.users, {}, None)
         await self.update_bridge_info()
+        for user in users:
+            await user.register_portal(self)
         await self.main_intent.send_notice(self.mxid, f"Telegram chat created. ID: {self.tgid}")
 
     async def handle_matrix_invite(
