@@ -676,7 +676,15 @@ class AbstractUser(ABC):
         if not portal:
             return
         elif portal and not portal.allow_bridging:
-            self.log.debug(f"Ignoring message in portal {portal.tgid_log} (bridging disallowed)")
+            self.log.debug(
+                f"Ignoring message {update.id} in portal {portal.tgid_log} (bridging disallowed)"
+            )
+            return
+
+        if not portal.mxid and getattr(original_update, "mau_left_channel", False):
+            self.log.debug(
+                f"Ignoring message {update.id} in portal {portal.tgid_log} because user isn't in the chat"
+            )
             return
 
         if self.is_relaybot:

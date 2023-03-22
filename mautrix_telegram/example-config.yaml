@@ -360,6 +360,9 @@ bridge:
         # Even without MSC2716, bridging old messages with correct timestamps requires the double
         # puppets to be in an appservice namespace, or the server to be modified to allow
         # overriding timestamps anyway.
+        #
+        # Also note that adding users to the appservice namespace may have unexpected side effects,
+        # as described in https://docs.mau.fi/bridges/general/double-puppeting.html#appservice-method
         double_puppet_backfill: false
         # Whether or not to enable backfilling in normal groups.
         # Normal groups have numerous technical problems in Telegram, and backfilling normal groups

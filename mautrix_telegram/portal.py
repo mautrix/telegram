@@ -23,6 +23,7 @@ from sqlite3 import IntegrityError
 from string import Template
 import asyncio
 import base64
+import itertools
 import random
 import time
 
@@ -36,6 +37,7 @@ from telethon.errors import (
     ReactionInvalidError,
     RPCError,
 )
+from telethon.tl.custom import Dialog
 from telethon.tl.functions.channels import (
     CreateChannelRequest,
     EditPhotoRequest,
@@ -54,6 +56,7 @@ from telethon.tl.functions.messages import (
     ExportChatInviteRequest,
     GetMessageReactionsListRequest,
     GetMessagesReactionsRequest,
+    GetPeerDialogsRequest,
     MigrateChatRequest,
     SendReactionRequest,
     SetTypingRequest,
@@ -66,6 +69,7 @@ from telethon.tl.types import (
     ChannelFull,
     Chat,
     ChatBannedRights,
+    ChatEmpty,
     ChatFull,
     ChatPhoto,
     ChatPhotoEmpty,
@@ -76,6 +80,7 @@ from telethon.tl.types import (
     GeoPoint,
     InputChannel,
     InputChatUploadedPhoto,
+    InputDialogPeer,
     InputMediaUploadedDocument,
     InputMediaUploadedPhoto,
     InputPeerChannel,
@@ -136,11 +141,13 @@ from telethon.tl.types import (
     UpdatePhoneCall,
     UpdateUserTyping,
     User,
+    UserEmpty,
     UserFull,
     UserProfilePhoto,
     UserProfilePhotoEmpty,
 )
-from telethon.utils import encode_waveform
+from telethon.tl.types.messages import PeerDialogs
+from telethon.utils import encode_waveform, get_peer_id
 import attr
 
 from mautrix.appservice import DOUBLE_PUPPET_SOURCE_KEY, IntentAPI
@@ -726,6 +733,7 @@ class Portal(DBPortal, BasePortal):
         entity: TypeChat | User = None,
         invites: InviteList = None,
         update_if_exists: bool = True,
+        from_dialog_sync: bool = False,
         client: MautrixTelegramClient | None = None,
     ) -> RoomID | None:
         if self.mxid:
@@ -742,7 +750,9 @@ class Portal(DBPortal, BasePortal):
             return self.mxid
         async with self._room_create_lock:
             try:
-                return await self._create_matrix_room(user, entity, invites, client=client)
+                return await self._create_matrix_room(
+                    user, entity, invites, client=client, from_dialog_sync=from_dialog_sync
+                )
             except Exception:
                 self.log.exception("Fatal error creating Matrix room")
 
@@ -797,6 +807,7 @@ class Portal(DBPortal, BasePortal):
         user: au.AbstractUser,
         entity: TypeChat | User,
         invites: InviteList,
+        from_dialog_sync: bool,
         client: MautrixTelegramClient | None = None,
     ) -> RoomID | None:
         if self.mxid:
@@ -807,6 +818,37 @@ class Portal(DBPortal, BasePortal):
             client = user.client
 
         invites = invites or []
+
+        dialog = None
+        if not from_dialog_sync and not user.is_bot:
+            self.log.debug("Fetching dialog info for new portal")
+            try:
+                dialogs: PeerDialogs | None = await user.client(
+                    GetPeerDialogsRequest(
+                        peers=[InputDialogPeer(await self.get_input_entity(user))]
+                    )
+                )
+            except Exception:
+                self.log.warning("Failed to fetch dialog info", exc_info=True)
+                dialogs = None
+            if dialogs and dialogs.chats and dialogs.chats[0].id == self.tgid:
+                entity = dialogs.chats[0]
+                self.log.debug("Got entity info from get dialogs request")
+            elif dialogs and self.is_direct and dialogs.users:
+                for dialog_user in dialogs.users:
+                    if dialog_user.id == self.tgid:
+                        entity = dialog_user
+                        self.log.debug("Got user entity info from get dialogs request")
+                        break
+            if dialogs and dialogs.dialogs:
+                entities = {
+                    get_peer_id(x): x
+                    for x in itertools.chain(dialogs.users, dialogs.chats)
+                    if not isinstance(x, (UserEmpty, ChatEmpty))
+                }
+                msg = dialogs.messages[0] if len(dialogs.messages) == 1 else None
+                dialog = Dialog(user.client, dialogs.dialogs[0], entities, msg)
+                self.log.debug("Got dialog info for new portal: %s", dialog)
 
         if not entity:
             entity = await self.get_entity(user, client)
@@ -960,6 +1002,10 @@ class Portal(DBPortal, BasePortal):
             self.log.debug(f"Matrix room created: {self.mxid}")
             await self.az.state_store.set_power_levels(self.mxid, power_levels)
             await user.register_portal(self)
+            if dialog and isinstance(user, u.User):
+                await user.post_sync_dialog(
+                    self, puppet=None, was_created=True, **user.dialog_to_sync_args(dialog)
+                )
 
             if not autojoin_invites or not self.is_direct:
                 await self.invite_to_matrix(invites)
@@ -1788,7 +1834,7 @@ class Portal(DBPortal, BasePortal):
         if content.msgtype == MessageType.VIDEO:
             attributes.append(
                 DocumentAttributeVideo(
-                    duration=content.info.duration // 1000 if content.info.duration else 0,
+                    duration=int(content.info.duration // 1000 if content.info.duration else 0),
                     w=w or 0,
                     h=h or 0,
                 )
@@ -1800,7 +1846,7 @@ class Portal(DBPortal, BasePortal):
                 waveform = [round(part / max(waveform_max / 32, 1)) for part in waveform]
             attributes.append(
                 DocumentAttributeAudio(
-                    duration=content.info.duration // 1000 if content.info.duration else 0,
+                    duration=int(content.info.duration // 1000 if content.info.duration else 0),
                     voice="org.matrix.msc3245.voice" in content,
                     waveform=encode_waveform(waveform) if waveform else None,
                 )
@@ -3182,17 +3228,18 @@ class Portal(DBPortal, BasePortal):
             )
 
     @staticmethod
-    def _reactions_filter(lst: list[TypeReaction], existing: DBReaction) -> bool:
+    def _reactions_filter(lst: list[MessagePeerReaction], existing: DBReaction) -> bool:
         if not lst:
             return False
-        for reaction in lst:
+        for wrapped_reaction in lst:
+            reaction = wrapped_reaction.reaction
             if isinstance(reaction, ReactionCustomEmoji) and existing.reaction == str(
                 reaction.document_id
             ):
-                lst.remove(reaction)
+                lst.remove(wrapped_reaction)
                 return True
             elif isinstance(reaction, ReactionEmoji) and existing.reaction == reaction.emoticon:
-                lst.remove(reaction)
+                lst.remove(wrapped_reaction)
                 return True
         return False
 
@@ -3212,15 +3259,14 @@ class Portal(DBPortal, BasePortal):
         total_count: int,
         timestamp: datetime | None = None,
     ) -> None:
-        reactions: dict[TelegramID, list[TypeReaction]] = {}
+        reactions: dict[TelegramID, list[MessagePeerReaction]] = {}
         custom_emoji_ids: list[int] = []
         for reaction in reaction_list:
             if isinstance(reaction.peer_id, (PeerUser, PeerChannel)) and isinstance(
                 reaction.reaction, (ReactionEmoji, ReactionCustomEmoji)
             ):
-                reactions.setdefault(p.Puppet.get_id_from_peer(reaction.peer_id), []).append(
-                    reaction.reaction
-                )
+                sender_user_id = p.Puppet.get_id_from_peer(reaction.peer_id)
+                reactions.setdefault(sender_user_id, []).append(reaction)
                 if isinstance(reaction.reaction, ReactionCustomEmoji):
                     custom_emoji_ids.append(reaction.reaction.document_id)
         is_full = len(reaction_list) == total_count
@@ -3245,7 +3291,8 @@ class Portal(DBPortal, BasePortal):
 
         new_reaction: TypeReaction
         for sender, new_reactions in reactions.items():
-            for new_reaction in new_reactions:
+            for new_wrapped_reaction in new_reactions:
+                new_reaction = new_wrapped_reaction.reaction
                 if isinstance(new_reaction, ReactionEmoji):
                     emoji_id = new_reaction.emoticon
                     matrix_reaction = variation_selector.add(new_reaction.emoticon)
@@ -3262,7 +3309,10 @@ class Portal(DBPortal, BasePortal):
                 self.log.debug(f"Bridging reaction {emoji_id} by {sender} to {msg.tgid}")
                 puppet: p.Puppet = await p.Puppet.get_by_tgid(sender)
                 mxid = await puppet.intent_for(self).react(
-                    msg.mx_room, msg.mxid, matrix_reaction, timestamp=timestamp
+                    msg.mx_room,
+                    msg.mxid,
+                    matrix_reaction,
+                    timestamp=new_wrapped_reaction.date or timestamp,
                 )
                 await DBReaction(
                     mxid=mxid,
@@ -3871,7 +3921,7 @@ class Portal(DBPortal, BasePortal):
             return portal
 
         if peer_type:
-            cls.log.info(f"Creating portal for {peer_type} {tgid} (receiver {tg_receiver})")
+            cls.log.info(f"Creating portal object for {peer_type} {tgid} (receiver {tg_receiver})")
             # TODO enable this for non-release builds
             #      (or add better wrong peer type error handling)
             # if peer_type == "chat":
