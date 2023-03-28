@@ -496,6 +496,7 @@ class TelegramMessageConverter:
                 info["fi.mau.telegram.gif"] = True
             else:
                 info["fi.mau.telegram.animated_sticker"] = True
+            info["fi.mau.gif"] = True
             info["fi.mau.loop"] = True
             info["fi.mau.autoplay"] = True
             info["fi.mau.hide_controls"] = True
