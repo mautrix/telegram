@@ -15,7 +15,7 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from mautrix.util.async_db import Connection, Scheme
 
-latest_version = 17
+latest_version = 18
 
 
 async def create_latest_tables(conn: Connection, scheme: Scheme) -> int:
@@ -113,6 +113,7 @@ async def create_latest_tables(conn: Connection, scheme: Scheme) -> int:
             avatar_url          TEXT,
             name_set            BOOLEAN NOT NULL DEFAULT false,
             avatar_set          BOOLEAN NOT NULL DEFAULT false,
+            contact_info_set    BOOLEAN NOT NULL DEFAULT false,
             is_bot              BOOLEAN,
             is_channel          BOOLEAN NOT NULL DEFAULT false,
             is_premium          BOOLEAN NOT NULL DEFAULT false,

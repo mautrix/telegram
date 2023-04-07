@@ -541,7 +541,7 @@ class User(DBUser, AbstractUser, BaseUser):
             await self.stop()
             return None
 
-    async def update_info(self, info: TLUser = None) -> None:
+    async def update_info(self, info: TLUser | None = None) -> None:
         if not info:
             info = await self.get_me()
             if not info:

@@ -48,6 +48,7 @@ class Puppet:
     avatar_url: ContentURI | None
     name_set: bool
     avatar_set: bool
+    contact_info_set: bool
     is_bot: bool | None
     is_channel: bool
     is_premium: bool
@@ -68,7 +69,7 @@ class Puppet:
     columns: ClassVar[str] = (
         "id, is_registered, displayname, displayname_source, displayname_contact, "
         "displayname_quality, disable_updates, username, phone, photo_id, avatar_url, "
-        "name_set, avatar_set, is_bot, is_channel, is_premium, "
+        "name_set, avatar_set, contact_info_set, is_bot, is_channel, is_premium, "
         "custom_mxid, access_token, next_batch, base_url"
     )
 
@@ -108,6 +109,7 @@ class Puppet:
             self.avatar_url,
             self.name_set,
             self.avatar_set,
+            self.contact_info_set,
             self.is_bot,
             self.is_channel,
             self.is_premium,
@@ -122,8 +124,9 @@ class Puppet:
         UPDATE puppet
         SET is_registered=$2, displayname=$3, displayname_source=$4, displayname_contact=$5,
             displayname_quality=$6, disable_updates=$7, username=$8, phone=$9, photo_id=$10,
-            avatar_url=$11, name_set=$12, avatar_set=$13, is_bot=$14, is_channel=$15,
-            is_premium=$16, custom_mxid=$17, access_token=$18, next_batch=$19, base_url=$20
+            avatar_url=$11, name_set=$12, avatar_set=$13, contact_info_set=$14, is_bot=$15,
+            is_channel=$16, is_premium=$17, custom_mxid=$18, access_token=$19, next_batch=$20,
+            base_url=$21
         WHERE id=$1
         """
         await self.db.execute(q, *self._values)
@@ -133,9 +136,9 @@ class Puppet:
         INSERT INTO puppet (
             id, is_registered, displayname, displayname_source, displayname_contact,
             displayname_quality, disable_updates, username, phone, photo_id, avatar_url, name_set,
-            avatar_set, is_bot, is_channel, is_premium, custom_mxid, access_token, next_batch,
-            base_url
+            avatar_set, contact_info_set, is_bot, is_channel, is_premium, custom_mxid,
+            access_token, next_batch, base_url
         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18,
-                  $19, $20)
+                  $19, $20, $21)
         """
         await self.db.execute(q, *self._values)
