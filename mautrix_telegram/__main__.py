@@ -39,6 +39,8 @@ from .abstract_user import AbstractUser  # isort: skip
 class TelegramBridge(Bridge):
     module = "mautrix_telegram"
     name = "mautrix-telegram"
+    beeper_service_name = "telegram"
+    beeper_network_name = "telegram"
     command = "python -m mautrix-telegram"
     description = "A Matrix-Telegram puppeting bridge."
     repo_url = "https://github.com/mautrix/telegram"
