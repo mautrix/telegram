@@ -35,6 +35,7 @@ from telethon.errors import (
     PhoneNumberInvalidError,
     PhoneNumberUnoccupiedError,
     SessionPasswordNeededError,
+    SessionRevokedError,
 )
 
 from mautrix.bridge import InvalidAccessToken, OnlyLoginSelf
@@ -342,6 +343,14 @@ class AuthAPI(abc.ABC):
                 errcode="password_invalid",
                 error="Incorrect password.",
             )
+        except SessionRevokedError:
+            return self.get_login_response(
+                mxid=user.mxid,
+                state="request",
+                status=401,
+                errcode="session_revoked",
+                error="Login cancelled because you terminated all of the sessions from your phone.",
+            )
         except Exception as e:
             self.log.exception("Error sending password")
             if isinstance(e, ValueError) and "You must provide a phone and a code" in str(e):
@@ -357,5 +366,5 @@ class AuthAPI(abc.ABC):
                 state="password",
                 status=500,
                 errcode="unknown_error",
-                error="Internal server error while sending password.",
+                error=f"Internal server error while sending password. {e}",
             )
