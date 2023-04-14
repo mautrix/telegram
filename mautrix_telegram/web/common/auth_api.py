@@ -349,7 +349,10 @@ class AuthAPI(abc.ABC):
                 state="request",
                 status=401,
                 errcode="session_revoked",
-                error="Login cancelled because you terminated all of the sessions from your phone.",
+                error=(
+                    "Please try again. Login cancelled because your other sessions were "
+                    "terminated via the Telegram app."
+                ),
             )
         except Exception as e:
             self.log.exception("Error sending password")
