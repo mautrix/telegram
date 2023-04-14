@@ -297,7 +297,7 @@ class Puppet(DBPuppet, BasePuppet):
             await self.save()
 
     async def update_portals_meta(self) -> None:
-        if not p.Portal.private_chat_portal_meta and not self.mx.e2ee:
+        if p.Portal.private_chat_portal_meta != "always" and not self.mx.e2ee:
             return
         async for portal in p.Portal.find_private_chats_with(self.tgid):
             await portal.update_info_from_puppet(self)

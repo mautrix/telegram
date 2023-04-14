@@ -50,6 +50,7 @@ class TelegramBridge(Bridge):
 
     config: Config
     bot: Bot | None
+    matrix: MatrixHandler
     public_website: PublicBridgeWebsite | None
     provisioning_api: ProvisioningAPI | None
 

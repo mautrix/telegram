@@ -1,5 +1,5 @@
 # mautrix-telegram - A Matrix-Telegram puppeting bridge
-# Copyright (C) 2022 Tulir Asokan
+# Copyright (C) 2023 Tulir Asokan
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as published by
@@ -15,7 +15,17 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, AsyncGenerator, Awaitable, Callable, List, Union, cast
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    AsyncGenerator,
+    Awaitable,
+    Callable,
+    List,
+    Literal,
+    Union,
+    cast,
+)
 from collections import defaultdict
 from datetime import datetime
 from html import escape as escape_html
@@ -263,7 +273,7 @@ class Portal(DBPortal, BasePortal):
     sync_channel_members: bool
     sync_matrix_state: bool
     public_portals: bool
-    private_chat_portal_meta: bool
+    private_chat_portal_meta: Literal["default", "always", "never"]
 
     alias_template: SimpleTemplate[str]
     hs_domain: str
@@ -439,6 +449,14 @@ class Portal(DBPortal, BasePortal):
         elif self.filter_mode == "blacklist":
             return self.tgid not in self.filter_list
         return True
+
+    @property
+    def set_dm_room_metadata(self) -> bool:
+        return (
+            not self.is_direct
+            or self.private_chat_portal_meta == "always"
+            or (self.encrypted and self.private_chat_portal_meta != "never")
+        )
 
     @classmethod
     def init_cls(cls, bridge: "TelegramBridge") -> None:
@@ -714,12 +732,8 @@ class Portal(DBPortal, BasePortal):
         source: au.AbstractUser | None = None,
         photo: UserProfilePhoto | None = None,
     ) -> None:
-        if not self.encrypted and not self.private_chat_portal_meta:
-            return
         if puppet is None:
             puppet = await self.get_dm_puppet()
-        # The bridge bot needs to join for e2ee, but that messes up the default name
-        # generation. If/when canonical DMs happen, this might not be necessary anymore.
         changed = await self._update_avatar_from_puppet(puppet, source, photo)
         changed = await self._update_title(puppet.displayname) or changed
         if changed:
@@ -951,7 +965,7 @@ class Portal(DBPortal, BasePortal):
             )
             if self.is_direct:
                 create_invites.add(self.az.bot_mxid)
-        if self.is_direct and (self.encrypted or self.private_chat_portal_meta):
+        if self.is_direct:
             assert puppet is not None
             self.title = puppet.displayname
             self.avatar_url = puppet.avatar_url
@@ -959,7 +973,7 @@ class Portal(DBPortal, BasePortal):
         creation_content = {}
         if not self.config["bridge.federate_rooms"]:
             creation_content["m.federate"] = False
-        if self.avatar_url:
+        if self.avatar_url and self.set_dm_room_metadata:
             initial_state.append(
                 {
                     "type": str(EventType.ROOM_AVATAR),
@@ -971,14 +985,14 @@ class Portal(DBPortal, BasePortal):
             self.log.debug(
                 f"Creating room with parameters invite={create_invites}, {autojoin_invites=}, "
                 f"{preset=}, {alias=!r}, name={self.title!r}, topic={self.about!r}, "
-                f"{creation_content=}, is_direct={self.is_direct}"
+                f"{creation_content=}, is_direct={self.is_direct}, {self.set_dm_room_metadata=}"
             )
             room_id = await self.main_intent.create_room(
                 alias_localpart=alias,
                 preset=preset,
                 is_direct=self.is_direct,
                 invitees=list(create_invites),
-                name=self.title,
+                name=self.title if self.set_dm_room_metadata else None,
                 topic=self.about,
                 initial_state=initial_state,
                 creation_content=creation_content,
@@ -986,8 +1000,8 @@ class Portal(DBPortal, BasePortal):
             )
             if not room_id:
                 raise Exception(f"Failed to create room")
-            self.name_set = bool(self.title)
-            self.avatar_set = bool(self.avatar_url)
+            self.name_set = bool(self.title) and self.set_dm_room_metadata
+            self.avatar_set = bool(self.avatar_url) and self.set_dm_room_metadata
 
             if not autojoin_invites and self.encrypted and self.matrix.e2ee and self.is_direct:
                 try:
@@ -1301,11 +1315,12 @@ class Portal(DBPortal, BasePortal):
     async def _update_title(
         self, title: str, sender: p.Puppet | None = None, save: bool = False
     ) -> bool:
-        if self.title == title and self.name_set:
+        if self.title == title and (self.name_set or not self.set_dm_room_metadata):
             return False
 
         self.title = title
-        if self.mxid:
+        self.name_set = False
+        if self.mxid and self.set_dm_room_metadata:
             try:
                 await self._try_set_state(
                     sender, EventType.ROOM_NAME, RoomNameStateEventContent(name=self.title)
@@ -1313,7 +1328,6 @@ class Portal(DBPortal, BasePortal):
                 self.name_set = True
             except Exception as e:
                 self.log.warning(f"Failed to set room name: {e}")
-                self.name_set = False
         if save:
             await self.save()
         return True
@@ -1321,12 +1335,13 @@ class Portal(DBPortal, BasePortal):
     async def _update_avatar_from_puppet(
         self, puppet: p.Puppet, user: au.AbstractUser | None, photo: UserProfilePhoto | None
     ) -> bool:
-        if self.photo_id == puppet.photo_id and self.avatar_set:
+        if self.photo_id == puppet.photo_id and (self.avatar_set or not self.set_dm_room_metadata):
             return False
         if puppet.avatar_url:
             self.photo_id = puppet.photo_id
             self.avatar_url = puppet.avatar_url
-            if self.mxid:
+            self.avatar_set = False
+            if self.mxid and self.set_dm_room_metadata:
                 try:
                     await self._try_set_state(
                         None,
@@ -1336,9 +1351,8 @@ class Portal(DBPortal, BasePortal):
                     self.avatar_set = True
                 except Exception as e:
                     self.log.warning(f"Failed to set room avatar: {e}")
-                    self.avatar_set = False
             return True
-        elif photo is not None and user is not None:
+        elif photo is not None and user is not None and self.set_dm_room_metadata:
             return await self._update_avatar(user, photo=photo)
         else:
             return False
