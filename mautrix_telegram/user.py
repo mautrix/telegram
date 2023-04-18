@@ -39,6 +39,9 @@ from telethon.tl.types import (
     ChatForbidden,
     InputUserSelf,
     Message,
+    MessageActionContactSignUp,
+    MessageActionHistoryClear,
+    MessageService,
     NotifyPeer,
     PeerUser,
     TypeUpdate,
@@ -769,6 +772,18 @@ class User(DBUser, AbstractUser, BaseUser):
     async def _sync_dialog(
         self, portal: po.Portal, dialog: Dialog, should_create: bool, puppet: pu.Puppet | None
     ) -> None:
+        if (
+            not portal.mxid
+            and isinstance(dialog.message, MessageService)
+            and isinstance(
+                dialog.message.action, (MessageActionContactSignUp, MessageActionHistoryClear)
+            )
+        ):
+            self.log.debug(
+                f"Not syncing {portal.tgid_log} "
+                f"(last message is a {type(dialog.message.action).__name__})"
+            )
+            return
         was_created = False
         post_sync_args = self.dialog_to_sync_args(dialog)
         if portal.mxid:
