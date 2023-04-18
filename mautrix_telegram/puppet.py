@@ -323,7 +323,7 @@ class Puppet(DBPuppet, BasePuppet):
                     "com.beeper.bridge.service": "telegram",
                     "com.beeper.bridge.network": "telegram",
                     "com.beeper.bridge.is_bridge_bot": False,
-                    "com.beeper.bridge.is_bot": False,
+                    "com.beeper.bridge.is_bot": self.is_bot,
                 }
             )
             self.contact_info_set = True
