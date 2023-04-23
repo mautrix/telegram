@@ -259,6 +259,7 @@ class TelegramMessageConverter:
         )
         reply_to_id = TelegramID(evt.reply_to.reply_to_msg_id)
         msg = await DBMessage.get_one_by_tgid(reply_to_id, space)
+        no_fallback = no_fallback or self.config["bridge.disable_reply_fallbacks"]
         if not msg or msg.mx_room != self.portal.mxid:
             if deterministic_id:
                 content.set_reply(self.deterministic_event_id(space, reply_to_id))

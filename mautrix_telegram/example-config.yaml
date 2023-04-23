@@ -331,6 +331,9 @@ bridge:
     # If set to `always`, all DM rooms will have explicit names and avatars set.
     # If set to `never`, DM rooms will never have names and avatars set.
     private_chat_portal_meta: default
+    # Disable generating reply fallbacks? Some extremely bad clients still rely on them,
+    # but they're being phased out and will be completely removed in the future.
+    disable_reply_fallbacks: false
     # Whether or not the bridge should send a read receipt from the bridge bot when a message has
     # been sent to Telegram.
     delivery_receipts: false
