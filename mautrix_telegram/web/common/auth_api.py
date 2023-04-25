@@ -289,6 +289,17 @@ class AuthAPI(abc.ABC):
                 errcode="phone_number_unoccupied",
                 error="That phone number has not been registered.",
             )
+        except FloodWaitError as e:
+            return self.get_login_response(
+                mxid=user.mxid,
+                state="code",
+                status=429,
+                errcode="flood_wait",
+                error=(
+                    "You tried to enter your phone code too many times. "
+                    f"Please wait for {format_duration(e.seconds)} before trying again."
+                ),
+            )
         except SessionPasswordNeededError:
             if not password_in_data:
                 if user.command_status and user.command_status["action"] == "Login":
@@ -352,6 +363,17 @@ class AuthAPI(abc.ABC):
                 error=(
                     "Please try again. Login cancelled because your other sessions were "
                     "terminated via the Telegram app."
+                ),
+            )
+        except FloodWaitError as e:
+            return self.get_login_response(
+                mxid=user.mxid,
+                state="password",
+                status=429,
+                errcode="flood_wait",
+                error=(
+                    "You tried to enter your password too many times. "
+                    f"Please wait for {format_duration(e.seconds)} before trying again."
                 ),
             )
         except Exception as e:
