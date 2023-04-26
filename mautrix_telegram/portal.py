@@ -39,13 +39,26 @@ import time
 
 from asyncpg import UniqueViolationError
 from telethon.errors import (
+    ChatAdminRequiredError,
     ChatNotModifiedError,
+    ChatRestrictedError,
+    ChatWriteForbiddenError,
+    EntitiesTooLongError,
+    EntityBoundsInvalidError,
+    EntityMentionUserInvalidError,
+    InputUserDeactivatedError,
+    MessageEmptyError,
     MessageIdInvalidError,
+    MessageTooLongError,
     PhotoExtInvalidError,
     PhotoInvalidDimensionsError,
     PhotoSaveFileInvalidError,
     ReactionInvalidError,
     RPCError,
+    SlowModeWaitError,
+    UserBannedInChannelError,
+    UserIsBlockedError,
+    YouBlockedUserError,
 )
 from telethon.tl.custom import Dialog
 from telethon.tl.functions.channels import (
@@ -2047,6 +2060,34 @@ class Portal(DBPortal, BasePortal):
                 expires_at=int(response.date.timestamp()) + response.ttl_period,
             )
 
+    @staticmethod
+    def _error_to_human_message(err: Exception) -> str | None:
+        if isinstance(err, YouBlockedUserError):
+            return "You blocked this user"
+        elif isinstance(err, UserIsBlockedError):
+            return "You were blocked by this user"
+        elif isinstance(err, UserBannedInChannelError):
+            return "You're banned from sending messages in supergroups/channels"
+        elif isinstance(err, InputUserDeactivatedError):
+            return "This user was deleted"
+        elif isinstance(err, ChatAdminRequiredError):
+            return "Only admins can do that"
+        elif isinstance(err, (ChatRestrictedError, ChatWriteForbiddenError)):
+            return "You can't send messages in this chat"
+        elif isinstance(err, SlowModeWaitError):
+            return f"Slow mode enabled, wait {format_duration(err.seconds)} before sending"
+        elif isinstance(err, MessageEmptyError):
+            return "Message is empty"
+        elif isinstance(err, MessageTooLongError):
+            return "Message is too long"
+        elif isinstance(err, EntitiesTooLongError):
+            return "Message has too many formatting entities"
+        elif isinstance(err, EntityBoundsInvalidError):
+            return "Message formatting entities are malformed"
+        elif isinstance(err, EntityMentionUserInvalidError):
+            return "You mentioned an invalid user"
+        return None
+
     async def _send_message_status(self, event_id: EventID, err: Exception | None) -> None:
         if not self.config["bridge.message_status_events"]:
             return
@@ -2064,8 +2105,9 @@ class Portal(DBPortal, BasePortal):
             status.status = MessageStatus.FAIL
         elif err:
             status.reason = MessageStatusReason.GENERIC_ERROR
-            status.error = str(err)
+            status.error = f"{type(err)}: {err}"
             status.status = MessageStatus.RETRIABLE
+            status.message = self._error_to_human_message(err)
         else:
             status.status = MessageStatus.SUCCESS
 
