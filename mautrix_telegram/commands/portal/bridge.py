@@ -56,7 +56,9 @@ async def bridge(evt: CommandEvent) -> EventID:
         return await evt.reply(f"{that_this} room is already a portal room.")
 
     if not await user_has_power_level(room_id, evt.az.intent, evt.sender, "bridge"):
-        return await evt.reply(f"You do not have the permissions to bridge {that_this} room.")
+        return await evt.reply(
+            f"You do not have the permissions to bridge {that_this.lower()} room."
+        )
 
     # The /id bot command provides the prefixed ID, so we assume
     tgid_str = evt.args[0]
