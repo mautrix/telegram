@@ -186,7 +186,7 @@ from mautrix.types import (
     UserID,
     VideoInfo,
 )
-from mautrix.util import background_task, magic, variation_selector
+from mautrix.util import background_task, magic, markdown, variation_selector
 from mautrix.util.format_duration import format_duration
 from mautrix.util.message_send_checkpoint import MessageSendCheckpointStatus
 from mautrix.util.simple_lock import SimpleLock
@@ -566,11 +566,14 @@ class Portal(DBPortal, BasePortal):
         )
         if len(errors) > 0:
             error_list = "\n".join(f"* [{mxid}](https://matrix.to/#/{mxid})" for mxid in errors)
+            command_prefix = self.config["bridge.command_prefix"]
             await self.az.intent.send_notice(
                 self.mxid,
-                f"Failed to add the following users to the chat:\n\n{error_list}\n\n"
-                "You can try `$cmdprefix+sp search -r <username>` to help the bridge find "
-                "those users.",
+                markdown.render(
+                    f"Failed to add the following users to the chat:\n\n{error_list}\n\n"
+                    f"You can try `{command_prefix} search -r <username>` to help the bridge find "
+                    "those users."
+                ),
             )
         elif self.tgid:
             raise ValueError("Can't create Telegram chat for portal with existing Telegram chat.")
