@@ -567,13 +567,13 @@ class Portal(DBPortal, BasePortal):
         if len(errors) > 0:
             error_list = "\n".join(f"* [{mxid}](https://matrix.to/#/{mxid})" for mxid in errors)
             command_prefix = self.config["bridge.command_prefix"]
+            message = (
+                f"Failed to add the following users to the chat:\n\n{error_list}\n\n"
+                f"You can try `{command_prefix} search -r <username>` to help the bridge find "
+                "those users."
+            )
             await self.az.intent.send_notice(
-                self.mxid,
-                markdown.render(
-                    f"Failed to add the following users to the chat:\n\n{error_list}\n\n"
-                    f"You can try `{command_prefix} search -r <username>` to help the bridge find "
-                    "those users."
-                ),
+                self.mxid, text=message, html=markdown.render(message)
             )
         elif self.tgid:
             raise ValueError("Can't create Telegram chat for portal with existing Telegram chat.")
