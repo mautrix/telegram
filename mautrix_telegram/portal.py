@@ -281,6 +281,7 @@ class Portal(DBPortal, BasePortal):
     # Config cache
     filter_mode: str
     filter_list: list[int]
+    filter_users: bool | None
 
     max_initial_member_sync: int
     sync_channel_members: bool
@@ -455,8 +456,8 @@ class Portal(DBPortal, BasePortal):
     def allow_bridging(self) -> bool:
         if self._bridging_blocked_at_runtime:
             return False
-        elif self.peer_type == "user":
-            return True
+        elif self.peer_type == "user" and self.filter_users is not None:
+            return self.filter_users
         elif self.filter_mode == "whitelist":
             return self.tgid in self.filter_list
         elif self.filter_mode == "blacklist":
@@ -487,6 +488,7 @@ class Portal(DBPortal, BasePortal):
         cls.private_chat_portal_meta = cls.config["bridge.private_chat_portal_meta"]
         cls.filter_mode = cls.config["bridge.filter.mode"]
         cls.filter_list = cls.config["bridge.filter.list"]
+        cls.filter_users = cls.config["bridge.filter.filter_users"]
         cls.hs_domain = cls.config["homeserver.domain"]
         cls.backfill_msc2716 = cls.config["bridge.backfill.msc2716"]
         cls.backfill_enable = cls.config["bridge.backfill.enable"]

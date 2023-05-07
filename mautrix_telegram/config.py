@@ -205,6 +205,7 @@ class Config(BaseBridgeConfig):
 
         copy("bridge.filter.mode")
         copy("bridge.filter.list")
+        copy("bridge.filter.users")
 
         copy("bridge.command_prefix")
 
