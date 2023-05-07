@@ -135,20 +135,8 @@ class MatrixHandler(BaseMatrixHandler):
             levels.users[self.az.bot_mxid] = 100 if invited_by_level >= 100 else invited_by_level
             await double_puppet.intent.set_power_levels(room_id, levels)
 
-        invites, errors = await portal.get_telegram_users_in_matrix_room(
-            invited_by, pre_create=True
-        )
-        if len(errors) > 0:
-            error_list = "\n".join(f"* [{mxid}](https://matrix.to/#/{mxid})" for mxid in errors)
-            await portal.az.intent.send_notice(
-                room_id,
-                f"Failed to add the following users to the chat:\n\n{error_list}\n\n"
-                "You can try `$cmdprefix+sp search -r <username>` to help the bridge find "
-                "those users.",
-            )
-
         try:
-            await portal.create_telegram_chat(invited_by, invites=invites, supergroup=True)
+            await portal.create_telegram_chat(invited_by, supergroup=True)
         except ValueError as e:
             await portal.delete()
             await portal.az.intent.send_notice(room_id, e.args[0])
