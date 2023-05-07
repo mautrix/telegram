@@ -395,7 +395,7 @@ class Bot(AbstractUser):
         def reply(reply_text: str) -> Awaitable[Message]:
             return self.client.send_message(message.chat_id, reply_text, reply_to=message.id)
 
-        if command == "start":
+        if command == "start" and message.is_private:
             pcm = self.config["bridge.relaybot.private_chat.message"]
             if pcm:
                 await reply(pcm)
