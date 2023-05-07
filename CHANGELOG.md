@@ -1,3 +1,26 @@
+# v0.13.1 (unreleased)
+
+### Added
+* Added fallback messages for calls and premium gifts.
+* Added options to automatically ratchet/delete megolm sessions to minimize
+  access to old messages.
+* Added option to not set room name/avatar even in encrypted rooms.
+* Implemented [MSC2659]: Application service ping endpoint.
+
+[MSC2659]: https://github.com/matrix-org/matrix-spec-proposals/pull/2659
+
+### Improved
+* Improved handling logouts and certain connection errors.
+* Changed reaction bridging to preserve timestamps.
+* Disabled creating portals for DMs that don't have any messages when
+  `sync_direct_chats` is enabled.
+
+### Fixed
+* Fixed syncing mute status when portal is created through incoming message
+  rather than in startup sync.
+* Fixed bridge incorrectly trusting member list and kicking users when
+  supergroup has member list hidden.
+
 # v0.13.0 (2023-02-26)
 
 ### Added
