@@ -174,8 +174,24 @@ class Config(BaseBridgeConfig):
         copy("bridge.backfill.double_puppet_backfill")
         copy("bridge.backfill.normal_groups")
         copy("bridge.backfill.unread_hours_threshold")
-        copy("bridge.backfill.forward.initial_limit")
-        copy("bridge.backfill.forward.sync_limit")
+        if "bridge.backfill.forward" in self:
+            initial_limit = self.get("bridge.backfill.forward.initial_limit", 10)
+            sync_limit = self.get("bridge.backfill.forward.sync_limit", 100)
+            base["bridge.backfill.forward_limits.initial.user"] = initial_limit
+            base["bridge.backfill.forward_limits.initial.normal_group"] = initial_limit
+            base["bridge.backfill.forward_limits.initial.supergroup"] = initial_limit
+            base["bridge.backfill.forward_limits.initial.channel"] = initial_limit
+            base["bridge.backfill.forward_limits.sync.user"] = sync_limit
+            base["bridge.backfill.forward_limits.sync.normal_group"] = sync_limit
+            base["bridge.backfill.forward_limits.sync.supergroup"] = sync_limit
+            base["bridge.backfill.forward_limits.sync.channel"] = sync_limit
+        else:
+            copy("bridge.backfill.forward_limits.initial.user")
+            copy("bridge.backfill.forward_limits.initial.chat")
+            copy("bridge.backfill.forward_limits.initial.channel")
+            copy("bridge.backfill.forward_limits.sync.user")
+            copy("bridge.backfill.forward_limits.sync.chat")
+            copy("bridge.backfill.forward_limits.sync.channel")
         copy("bridge.backfill.incremental.messages_per_batch")
         copy("bridge.backfill.incremental.post_batch_delay")
         copy("bridge.backfill.incremental.max_batches.user")

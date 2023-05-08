@@ -2800,16 +2800,19 @@ class Portal(DBPortal, BasePortal):
         await DBMessage.replace_temp_mxid(temporary_identifier, self.mxid, event_id)
 
     @property
-    def _default_max_batches(self) -> int:
+    def _backfill_config_type(self) -> str:
         if self.peer_type == "user":
-            own_type = "user"
+            return "user"
         elif self.peer_type == "chat":
-            own_type = "normal_group"
+            return "normal_group"
         elif self.megagroup:
-            own_type = "supergroup"
+            return "supergroup"
         else:
-            own_type = "channel"
-        return self.config[f"bridge.backfill.incremental.max_batches.{own_type}"]
+            return "channel"
+
+    @property
+    def _default_max_batches(self) -> int:
+        return self.config[f"bridge.backfill.incremental.max_batches.{self._backfill_config_type}"]
 
     async def enqueue_backfill(
         self,
@@ -2853,7 +2856,10 @@ class Portal(DBPortal, BasePortal):
         if not client:
             client = source.client
         type = "initial" if initial else "sync"
-        limit = override_limit or self.config[f"bridge.backfill.forward.{type}_limit"]
+        limit = (
+            override_limit
+            or self.config[f"bridge.backfill.forward_limits.{type}.{self._backfill_config_type}"]
+        )
         if limit == 0:
             return "Limit is zero, not backfilling"
         with self.backfill_lock:

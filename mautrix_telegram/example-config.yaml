@@ -399,11 +399,19 @@ bridge:
         #
         # Using a negative initial limit is not recommended, as it would try to backfill everything in a single batch.
         # MSC2716 and the incremental settings are meant for backfilling everything incrementally rather than at once.
-        forward:
+        forward_limits:
             # Number of messages to backfill immediately after creating a portal.
-            initial_limit: 10
+            initial:
+                user: 50
+                normal_group: 100
+                supergroup: 10
+                channel: 10
             # Number of messages to backfill when syncing chats.
-            sync_limit: 100
+            sync:
+                user: 100
+                normal_group: 100
+                supergroup: 100
+                channel: 100
 
         # Settings for incremental backfill of history. These only apply when using MSC2716.
         incremental:
