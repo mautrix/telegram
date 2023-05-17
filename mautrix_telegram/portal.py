@@ -3694,7 +3694,7 @@ class Portal(DBPortal, BasePortal):
                 TextMessageEventContent(
                     msgtype=MessageType.EMOTE,
                     body=(
-                        f"gifted Telegram Premium for {action.months} "
+                        f"gifted Telegram Premium for {action.months} months "
                         f"({action.amount / 100} {action.currency})"
                     ),
                 ),
