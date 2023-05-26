@@ -1,13 +1,15 @@
-# v0.13.1 (unreleased)
+# v0.14.0 (2023-05-26)
 
 ### Added
 * Added fallback messages for calls and premium gifts.
 * Added options to automatically ratchet/delete megolm sessions to minimize
   access to old messages.
 * Added option to not set room name/avatar even in encrypted rooms.
-* Implemented [MSC2659]: Application service ping endpoint.
-
-[MSC2659]: https://github.com/matrix-org/matrix-spec-proposals/pull/2659
+* Implemented appservice pinging using MSC2659.
+* Added option to disable or filter bridging direct chats
+  (thanks to [@Steffo99] in [#892]).
+* Added options to specify different limits for forward and catchup backfilling
+  depending on chat type.
 
 ### Improved
 * Improved handling logouts and certain connection errors.
@@ -20,6 +22,13 @@
   rather than in startup sync.
 * Fixed bridge incorrectly trusting member list and kicking users when
   supergroup has member list hidden.
+* Fixed sending messages after creating groups from Matrix using relaybot
+  instead of puppet (thanks to [@maltee1] in [#902]).
+
+[@Steffo99]: https://github.com/Steffo99
+[@maltee1]: https://github.com/maltee1
+[#892]: https://github.com/mautrix/telegram/pull/892
+[#902]: https://github.com/mautrix/telegram/pull/902
 
 # v0.13.0 (2023-02-26)
 
