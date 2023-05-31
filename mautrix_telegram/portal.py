@@ -488,7 +488,7 @@ class Portal(DBPortal, BasePortal):
         cls.private_chat_portal_meta = cls.config["bridge.private_chat_portal_meta"]
         cls.filter_mode = cls.config["bridge.filter.mode"]
         cls.filter_list = cls.config["bridge.filter.list"]
-        cls.filter_users = cls.config["bridge.filter.filter_users"]
+        cls.filter_users = cls.config["bridge.filter.users"]
         cls.hs_domain = cls.config["homeserver.domain"]
         cls.backfill_msc2716 = cls.config["bridge.backfill.msc2716"]
         cls.backfill_enable = cls.config["bridge.backfill.enable"]
