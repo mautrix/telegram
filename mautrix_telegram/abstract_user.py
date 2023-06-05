@@ -235,6 +235,7 @@ class AbstractUser(ABC):
             loop=self.loop,
             base_logger=base_logger,
             update_error_callback=self._telethon_update_error_callback,
+            use_ipv6=self.config["telegram.connection.use_ipv6"],
         )
         self.client.add_event_handler(self._update_catch)
 

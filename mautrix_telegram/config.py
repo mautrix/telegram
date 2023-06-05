@@ -268,6 +268,7 @@ class Config(BaseBridgeConfig):
         copy("telegram.connection.retry_delay")
         copy("telegram.connection.flood_sleep_threshold")
         copy("telegram.connection.request_retries")
+        copy("telegram.connection.use_ipv6")
 
         copy("telegram.device_info.device_model")
         copy("telegram.device_info.system_version")
