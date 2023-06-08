@@ -24,5 +24,5 @@ unpaddedbase64>=1,<3
 #/sqlite
 aiosqlite>=0.16,<0.20
 
-#/socks
+#/proxy
 python-socks[asyncio]
