@@ -14,8 +14,6 @@ RUN apk add --no-cache \
       py3-idna \
       py3-rsa \
       #py3-telethon \ (outdated)
-        # Optional for socks proxies
-        py3-pysocks \
         py3-pyaes \
         # cryptg
           py3-cffi \
