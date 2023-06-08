@@ -208,6 +208,8 @@ class AbstractUser(ABC):
         sysversion = self.config["telegram.device_info.system_version"]
         appversion = self.config["telegram.device_info.app_version"]
         connection, proxy = self._proxy_settings
+        if proxy:
+            self.log.debug(f"Using proxy setting: {proxy}")
 
         assert isinstance(session, Session)
 
