@@ -40,7 +40,7 @@ appservice:
 
     # The full URI to the database. SQLite and Postgres are supported.
     # Format examples:
-    #   SQLite:   sqlite:///filename.db
+    #   SQLite:   sqlite:filename.db
     #   Postgres: postgres://username:password@hostname/dbname
     database: postgres://username:password@hostname/dbname
     # Additional arguments for asyncpg.create_pool() or sqlite3.connect()
@@ -325,6 +325,10 @@ bridge:
             # session before changing it. The Matrix spec recommends 100 as the
             # default.
             messages: 100
+
+            # Disable rotating keys when a user's devices change?
+            # You should not enable this option unless you understand all the implications.
+            disable_device_change_key_rotation: false
 
     # Whether to explicitly set the avatar and room name for private chat portal rooms.
     # If set to `default`, this will be enabled in encrypted rooms and disabled in unencrypted rooms.
