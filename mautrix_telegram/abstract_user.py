@@ -711,6 +711,22 @@ class AbstractUser(ABC):
             self.log.debug("Ignoring relaybot-sent message %s to %s", update.id, portal.tgid_log)
             return
 
+        task = self._call_portal_message_handler(update, original_update, portal, sender)
+        if portal.backfill_lock.locked:
+            self.log.debug(
+                f"{portal.tgid_log} is backfill locked, moving incoming message to async task"
+            )
+            background_task.create(task)
+        else:
+            await task
+
+    async def _call_portal_message_handler(
+        self,
+        update: UpdateMessageContent,
+        original_update: UpdateMessage,
+        portal: po.Portal,
+        sender: pu.Puppet,
+    ) -> None:
         await portal.backfill_lock.wait(f"update {update.id}")
 
         if isinstance(update, MessageService):
