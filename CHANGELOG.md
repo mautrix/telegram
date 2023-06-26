@@ -1,3 +1,24 @@
+# v0.14.1 (unreleased)
+
+### Added
+* Added option to delete megolm sessions that were received before the
+  automatic ratcheting options were introduced.
+* Added config option to use IPv6 for Telegram connection
+  (thanks to [@exciler] in [#920]).
+
+### Improved
+* Dropped support for Python 3.8.
+* Updated Docker image to Alpine 3.18.
+* Added timeout for forward backfills to prevent it from getting stuck
+  permanently.
+
+### Fixed
+* Fixed `bridge.filter.users` config option not being read correctly.
+* Fixed proxy support to use python-socks instead of pysocks.
+
+[@exciler]: https://github.com/exciler
+[#920]: https://github.com/mautrix/telegram/pull/920
+
 # v0.14.0 (2023-05-26)
 
 ### Added
