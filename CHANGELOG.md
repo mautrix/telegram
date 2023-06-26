@@ -1,4 +1,4 @@
-# v0.14.1 (unreleased)
+# v0.14.1 (2023-06-26)
 
 ### Added
 * Added option to delete megolm sessions that were received before the
