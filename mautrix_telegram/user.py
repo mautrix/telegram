@@ -617,8 +617,11 @@ class User(DBUser, AbstractUser, BaseUser):
             await self.stop()
             await sess.delete()
 
+        # Drop LOGGED_OUT states if the user was already logged out previously
+        # and doesn't have a remote ID anymore
         # TODO send a management room notice for non-manual logouts?
-        await self.push_bridge_state(state, error=error, message=message)
+        if self.tgid or state != BridgeStateEvent.LOGGED_OUT:
+            await self.push_bridge_state(state, error=error, message=message)
         if delete:
             await self.delete()
             self.by_mxid.pop(self.mxid, None)
