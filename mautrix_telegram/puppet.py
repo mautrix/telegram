@@ -274,6 +274,7 @@ class Puppet(DBPuppet, BasePuppet):
         self.is_premium = is_premium
 
         if self.username != info.username:
+            self.log.debug(f"Updating username {self.username} -> {info.username}")
             self.username = info.username
             changed = True
 
