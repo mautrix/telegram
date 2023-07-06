@@ -2047,7 +2047,7 @@ class Portal(DBPortal, BasePortal):
         response: TypeMessage,
         msgtype: MessageType | None = None,
     ) -> None:
-        self.log.trace("Handled Matrix message: %s", response)
+        self.log.trace("Raw event handling response for %s: %s", event_id, response)
         event_hash, _ = self.dedup.check(response, (event_id, space), force_hash=edit_index != 0)
         if edit_index < 0:
             prev_edit = await DBMessage.get_one_by_tgid(TelegramID(response.id), space, -1)
@@ -2077,6 +2077,9 @@ class Portal(DBPortal, BasePortal):
                 seconds=response.ttl_period,
                 expires_at=int(response.date.timestamp()) + response.ttl_period,
             )
+        self.log.debug(
+            f"Handled Matrix message {event_id} -> {response.id} (edit index {edit_index})"
+        )
 
     @staticmethod
     def _error_to_human_message(err: Exception) -> str | None:
@@ -2420,6 +2423,10 @@ class Portal(DBPortal, BasePortal):
             await deleter.client(
                 SendReactionRequest(peer=self.peer, msg_id=msg.tgid, reaction=new_reactions)
             )
+            self.log.debug(
+                f"Handled Matrix deletion of reaction {event_id} to {msg.tgid} "
+                f"(new reaction count: {len(new_reactions) if new_reactions else 0})"
+            )
 
     async def _handle_matrix_deletion(self, deleter: u.User, event_id: EventID) -> None:
         real_deleter = deleter if not await deleter.needs_relaybot(self) else self.bot
@@ -2440,6 +2447,7 @@ class Portal(DBPortal, BasePortal):
         else:
             await message.mark_redacted()
             await real_deleter.client.delete_messages(self.peer, [message.tgid])
+            self.log.debug(f"Handled Matrix redaction of {event_id} / {message.tgid}")
 
     async def handle_matrix_reaction(
         self, user: u.User, target_event_id: EventID, emoji: str, reaction_event_id: EventID
@@ -2546,9 +2554,15 @@ class Portal(DBPortal, BasePortal):
             SendReactionRequest(peer=self.peer, msg_id=msg.tgid, reaction=new_tg_reactions)
         )
         puppet = await user.get_puppet()
+        removed = 0
         for db_reaction in reactions_to_remove:
+            removed += 1
             await db_reaction.delete()
             await puppet.intent_for(self).redact(db_reaction.mx_room, db_reaction.mxid)
+        self.log.debug(
+            f"Handled Matrix reaction {reaction_event_id} to {msg.tgid} "
+            f"(new reaction count: {len(new_tg_reactions)}, removed {removed} old reactions)"
+        )
         await DBReaction(
             mxid=reaction_event_id,
             mx_room=self.mxid,
