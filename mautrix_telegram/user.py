@@ -1005,6 +1005,11 @@ class User(DBUser, AbstractUser, BaseUser):
                 self.log.debug(
                     "Got available emoji reactions: %s", self._available_emoji_reactions
                 )
+            elif self._available_emoji_reactions is None:
+                self.log.warning(
+                    f"Got {available_reactions} in response to available reactions request"
+                    " even though nothing is cached"
+                )
             return self._available_emoji_reactions
 
     def tl_to_json(self) -> Any:
