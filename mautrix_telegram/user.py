@@ -977,11 +977,18 @@ class User(DBUser, AbstractUser, BaseUser):
         self.log.debug("Contact syncing complete")
         return contacts
 
+    @property
+    def _available_reactions_up_to_date(self) -> bool:
+        return (
+            bool(self._available_emoji_reactions)
+            and self._available_emoji_reactions_fetched + 12 * 60 * 60 > time.monotonic()
+        )
+
     async def get_available_reactions(self) -> set[str]:
-        if self._available_emoji_reactions_fetched + 12 * 60 * 60 > time.monotonic():
+        if self._available_reactions_up_to_date:
             return self._available_emoji_reactions
         async with self._available_emoji_reactions_lock:
-            if self._available_emoji_reactions_fetched + 12 * 60 * 60 > time.monotonic():
+            if self._available_reactions_up_to_date:
                 return self._available_emoji_reactions
             self.log.debug("Fetching available emoji reactions")
             available_reactions = await self.client(
