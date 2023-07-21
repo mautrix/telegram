@@ -998,7 +998,7 @@ class User(DBUser, AbstractUser, BaseUser):
                 self._available_emoji_reactions = {
                     react.reaction
                     for react in available_reactions.reactions
-                    if self.is_premium or not react.premium
+                    if not react.inactive and (self.is_premium or not react.premium)
                 }
                 self._available_emoji_reactions_hash = available_reactions.hash
                 self._available_emoji_reactions_fetched = time.monotonic()
