@@ -269,11 +269,13 @@ class Puppet(DBPuppet, BasePuppet):
             is_bot != self.is_bot or is_channel != self.is_channel or is_premium != self.is_premium
         )
 
-        self.is_bot = is_bot
+        if is_bot is not None:
+            self.is_bot = is_bot
         self.is_channel = is_channel
-        self.is_premium = is_premium
+        if is_premium is not None:
+            self.is_premium = is_premium
 
-        if self.username != info.username:
+        if self.username != info.username and (info.username or not info.min):
             self.log.debug(f"Updating username {self.username} -> {info.username}")
             self.username = info.username
             changed = True
