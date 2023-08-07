@@ -22,6 +22,7 @@ from telethon.tl.patched import Message
 from telethon.tl.types import (
     InputMediaUploadedDocument,
     InputMediaUploadedPhoto,
+    InputReplyToMessage,
     TypeDocumentAttribute,
     TypeInputMedia,
     TypeInputPeer,
@@ -67,6 +68,10 @@ class MautrixTelegramClient(TelegramClient):
         entity = await self.get_input_entity(entity)
         reply_to = utils.get_message_id(reply_to)
         request = SendMediaRequest(
-            entity, media, message=caption or "", entities=entities or [], reply_to_msg_id=reply_to
+            entity,
+            media,
+            message=caption or "",
+            entities=entities or [],
+            reply_to=InputReplyToMessage(reply_to_msg_id=reply_to),
         )
         return self._get_response_message(request, await self(request), entity)

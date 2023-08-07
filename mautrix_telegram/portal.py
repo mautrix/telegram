@@ -3248,9 +3248,13 @@ class Portal(DBPortal, BasePortal):
         for item in counts:
             if item.count == 2:
                 reactions += [
-                    MessagePeerReaction(reaction=item.reaction, peer_id=PeerUser(self.tgid)),
                     MessagePeerReaction(
-                        reaction=item.reaction, peer_id=PeerUser(self.tg_receiver)
+                        reaction=item.reaction, peer_id=PeerUser(self.tgid), date=None
+                    ),
+                    MessagePeerReaction(
+                        reaction=item.reaction,
+                        peer_id=PeerUser(self.tg_receiver),
+                        date=None,
                     ),
                 ]
             elif item.count == 1:
@@ -3258,6 +3262,7 @@ class Portal(DBPortal, BasePortal):
                     MessagePeerReaction(
                         reaction=item.reaction,
                         peer_id=PeerUser(self.tg_receiver if item.chosen_order else self.tgid),
+                        date=None,
                     )
                 )
         return reactions
