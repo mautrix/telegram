@@ -99,6 +99,7 @@ from telethon.tl.types import (
     DocumentAttributeAudio,
     DocumentAttributeFilename,
     DocumentAttributeImageSize,
+    DocumentAttributeSticker,
     DocumentAttributeVideo,
     GeoPoint,
     InputChannel,
@@ -110,6 +111,7 @@ from telethon.tl.types import (
     InputPeerChat,
     InputPeerPhotoFileLocation,
     InputPeerUser,
+    InputStickerSetEmpty,
     InputUser,
     MessageActionChannelCreate,
     MessageActionChatAddUser,
@@ -1841,6 +1843,7 @@ class Portal(DBPortal, BasePortal):
         max_image_size = self.config["bridge.image_as_file_size"] * 1000**2
         max_image_pixels = self.config["bridge.image_as_file_pixels"]
 
+        attributes = []
         if self.config["bridge.parallel_file_transfer"] and content.url:
             file_handle, file_size = await util.parallel_transfer_to_telegram(
                 client, self.main_intent, content.url, sender_id
@@ -1860,21 +1863,27 @@ class Portal(DBPortal, BasePortal):
                 file = await self.main_intent.download_media(content.url)
 
             if content.msgtype == MessageType.STICKER:
-                if mime != "image/gif":
-                    mime, file, w, h = util.convert_image(
-                        file, source_mime=mime, target_type="webp"
-                    )
-                else:
+                if mime == "image/gif":
                     # Remove sticker description
                     file_name = "sticker.gif"
+                else:
+                    if mime not in ("video/webm", "application/x-tgsticker"):
+                        mime, file, w, h = util.convert_image(
+                            file, source_mime=mime, target_type="webp"
+                        )
+                    attributes.append(
+                        DocumentAttributeSticker(
+                            alt=content.body, stickerset=InputStickerSetEmpty()
+                        )
+                    )
 
             file_handle = await client.upload_file(file)
             file_size = len(file)
 
         file_handle.name = file_name
         force_document = file_size >= max_image_size
+        attributes.append(DocumentAttributeFilename(file_name=file_name))
 
-        attributes = [DocumentAttributeFilename(file_name=file_name)]
         if content.msgtype == MessageType.VIDEO:
             attributes.append(
                 DocumentAttributeVideo(
