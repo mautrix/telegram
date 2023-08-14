@@ -72,6 +72,6 @@ class MautrixTelegramClient(TelegramClient):
             media,
             message=caption or "",
             entities=entities or [],
-            reply_to=InputReplyToMessage(reply_to_msg_id=reply_to),
+            reply_to=InputReplyToMessage(reply_to_msg_id=reply_to) if reply_to else None,
         )
         return self._get_response_message(request, await self(request), entity)
