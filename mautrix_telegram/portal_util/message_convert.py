@@ -44,9 +44,11 @@ from telethon.tl.types import (
     MessageMediaGeoLive,
     MessageMediaPhoto,
     MessageMediaPoll,
+    MessageMediaStory,
     MessageMediaUnsupported,
     MessageMediaVenue,
     MessageMediaWebPage,
+    MessageReplyStoryHeader,
     PeerChannel,
     PeerUser,
     Photo,
@@ -142,6 +144,7 @@ class TelegramMessageConverter:
             MessageMediaUnsupported: self._convert_unsupported,
             MessageMediaGame: self._convert_game,
             MessageMediaContact: self._convert_contact,
+            MessageMediaStory: self._convert_story,
         }
         self._allowed_media = tuple(self._media_converters.keys())
 
@@ -251,6 +254,8 @@ class TelegramMessageConverter:
         deterministic_id: bool = False,
     ) -> None:
         if not evt.reply_to:
+            return
+        elif isinstance(evt.reply_to, MessageReplyStoryHeader):
             return
         space = (
             evt.peer_id.channel_id
@@ -698,6 +703,17 @@ class TelegramMessageConverter:
                 f"<a href='https://matrix.to/#/{puppet.mxid}'>{html.escape(name)}</a>: "
                 f"{html.escape(formatted_phone)}"
             )
+        return ConvertedMessage(content=content)
+
+    @staticmethod
+    async def _convert_story(
+        source: au.AbstractUser, evt: Message, client: MautrixTelegramClient, **_
+    ) -> ConvertedMessage:
+        content = await formatter.telegram_to_matrix(
+            evt, source, client, override_text="Stories are not yet supported"
+        )
+        content.msgtype = MessageType.NOTICE
+        content["fi.mau.telegram.unsupported"] = True
         return ConvertedMessage(content=content)
 
 
