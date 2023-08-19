@@ -42,6 +42,7 @@ from telethon.tl.types import (
     MessageMediaGame,
     MessageMediaGeo,
     MessageMediaGeoLive,
+    MessageMediaInvoice,
     MessageMediaPhoto,
     MessageMediaPoll,
     MessageMediaStory,
@@ -145,6 +146,7 @@ class TelegramMessageConverter:
             MessageMediaGame: self._convert_game,
             MessageMediaContact: self._convert_contact,
             MessageMediaStory: self._convert_story,
+            MessageMediaInvoice: self._convert_invoice,
         }
         self._allowed_media = tuple(self._media_converters.keys())
 
@@ -711,6 +713,17 @@ class TelegramMessageConverter:
     ) -> ConvertedMessage:
         content = await formatter.telegram_to_matrix(
             evt, source, client, override_text="Stories are not yet supported"
+        )
+        content.msgtype = MessageType.NOTICE
+        content["fi.mau.telegram.unsupported"] = True
+        return ConvertedMessage(content=content)
+
+    @staticmethod
+    async def _convert_invoice(
+        source: au.AbstractUser, evt: Message, client: MautrixTelegramClient, **_
+    ) -> ConvertedMessage:
+        content = await formatter.telegram_to_matrix(
+            evt, source, client, override_text="Invoices are not yet supported"
         )
         content.msgtype = MessageType.NOTICE
         content["fi.mau.telegram.unsupported"] = True
