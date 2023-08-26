@@ -1,3 +1,14 @@
+# v0.14.2 (unreleased)
+
+* Added support for double puppeting with arbitrary `as_token`s.
+  See [docs](https://docs.mau.fi/bridges/general/double-puppeting.html#appservice-method-new) for more info.
+* Added support for sending webm and tgs files as stickers.
+* Updated to Telegram API layer 161.
+* Fixed cached usernames for Telegram users being cleared incorrectly, leading
+  to mentions not being bridged as usernames.
+* Fixed reaction bridging failing if the server running the bridge was rebooted
+  less than 12 hours ago.
+
 # v0.14.1 (2023-06-26)
 
 ### Added
