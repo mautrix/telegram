@@ -104,8 +104,6 @@ class TelegramBridge(Bridge):
         self.log.info("Finished re-sending bridge info state events")
 
     def prepare_stop(self) -> None:
-        for puppet in Puppet.by_custom_mxid.values():
-            puppet.stop()
         self.add_shutdown_actions(user.stop() for user in User.by_tgid.values())
         if self.bot:
             self.add_shutdown_actions(self.bot.stop())

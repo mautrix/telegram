@@ -39,8 +39,6 @@ async def clear_db_cache(evt: CommandEvent) -> EventID:
         await evt.reply("Cleared portal cache")
     elif section == "puppet":
         pu.Puppet.by_tgid = {}
-        for puppet in pu.Puppet.by_custom_mxid.values():
-            puppet.stop()
         pu.Puppet.by_custom_mxid = {}
         await asyncio.gather(
             *[puppet.try_start() async for puppet in pu.Puppet.all_with_custom_mxid()]
@@ -69,8 +67,6 @@ async def reload_user(evt: CommandEvent) -> EventID:
     if not user:
         return await evt.reply("User not found")
     puppet = await pu.Puppet.get_by_custom_mxid(mxid)
-    if puppet:
-        puppet.stop()
     await user.stop()
     del u.User.by_tgid[user.tgid]
     del u.User.by_mxid[user.mxid]
