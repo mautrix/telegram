@@ -2885,13 +2885,15 @@ class Portal(DBPortal, BasePortal):
         )
         if limit == 0:
             return "Limit is zero, not backfilling"
+        timeout = self.config["bridge.backfill.forward_timeout"]
         with self.backfill_lock:
-            output = await asyncio.wait_for(
-                self.backfill(
-                    source, client, forward=True, forward_limit=limit, last_tgid=last_tgid
-                ),
-                timeout=15 * 60,
+            task = self.backfill(
+                source, client, forward=True, forward_limit=limit, last_tgid=last_tgid
             )
+            if timeout > 0:
+                output = await asyncio.wait_for(task, timeout=timeout)
+            else:
+                output = await task
             self.log.debug(f"Forward backfill complete, status: {output}")
             return output
 

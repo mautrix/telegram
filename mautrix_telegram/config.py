@@ -194,6 +194,7 @@ class Config(BaseBridgeConfig):
             copy("bridge.backfill.forward_limits.sync.normal_group")
             copy("bridge.backfill.forward_limits.sync.supergroup")
             copy("bridge.backfill.forward_limits.sync.channel")
+        copy("bridge.backfill.forward_timeout")
         copy("bridge.backfill.incremental.messages_per_batch")
         copy("bridge.backfill.incremental.post_batch_delay")
         copy("bridge.backfill.incremental.max_batches.user")

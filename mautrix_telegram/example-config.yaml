@@ -420,6 +420,8 @@ bridge:
                 normal_group: 100
                 supergroup: 100
                 channel: 100
+        # Timeout for forward backfills in seconds. If you have a high limit, you'll have to increase this too.
+        forward_timeout: 900
 
         # Settings for incremental backfill of history. These only apply when using MSC2716.
         incremental:
