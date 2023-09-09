@@ -308,6 +308,7 @@ class Portal(DBPortal, BasePortal):
     dedup: putil.PortalDedup
     send_lock: putil.PortalSendLock
     reaction_lock: putil.PortalReactionLock
+    incoming_message_order_lock: asyncio.Lock
     _pin_lock: asyncio.Lock
 
     _main_intent: IntentAPI | None
@@ -385,6 +386,7 @@ class Portal(DBPortal, BasePortal):
         self.dedup = putil.PortalDedup(self)
         self.send_lock = putil.PortalSendLock()
         self.reaction_lock = putil.PortalReactionLock()
+        self.incoming_message_order_lock = asyncio.Lock()
         self._pin_lock = asyncio.Lock()
         self._room_create_lock = asyncio.Lock()
 
