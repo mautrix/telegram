@@ -34,6 +34,8 @@ from telethon.tl.types import (
     DocumentAttributeVideo,
     Game,
     InputPhotoFileLocation,
+    InputStickerSetID,
+    InputStickerSetShortName,
     Message,
     MessageEntityPre,
     MessageMediaContact,
@@ -107,6 +109,7 @@ class DocAttrs(NamedTuple):
     mime_type: str | None
     is_sticker: bool
     sticker_alt: str | None
+    sticker_pack_ref: dict | None
     width: int
     height: int
     is_gif: bool
@@ -733,6 +736,7 @@ class TelegramMessageConverter:
 def _parse_document_attributes(attributes: list[TypeDocumentAttribute]) -> DocAttrs:
     name, mime_type, is_sticker, sticker_alt, width, height = None, None, False, None, 0, 0
     is_gif, is_audio, is_voice, duration, waveform = False, False, False, 0, bytes()
+    sticker_pack_ref = {}
     for attr in attributes:
         if isinstance(attr, DocumentAttributeFilename):
             name = name or attr.file_name
@@ -740,6 +744,13 @@ def _parse_document_attributes(attributes: list[TypeDocumentAttribute]) -> DocAt
         elif isinstance(attr, DocumentAttributeSticker):
             is_sticker = True
             sticker_alt = attr.alt
+            if isinstance(attr.stickerset, InputStickerSetID):
+                sticker_pack_ref = {
+                    "id": attr.stickerset.id,
+                    "access_hash": attr.stickerset.access_hash,
+                }
+            elif isinstance(attr.stickerset, InputStickerSetShortName):
+                sticker_pack_ref = {"short_name": attr.stickerset.short_name}
         elif isinstance(attr, DocumentAttributeAnimated):
             is_gif = True
         elif isinstance(attr, DocumentAttributeVideo):
@@ -757,6 +768,7 @@ def _parse_document_attributes(attributes: list[TypeDocumentAttribute]) -> DocAt
         mime_type,
         is_sticker,
         sticker_alt,
+        sticker_pack_ref,
         width,
         height,
         is_gif,
@@ -788,6 +800,12 @@ def _parse_document_meta(
     else:
         mime_type = file.mime_type or document.mime_type
     info = ImageInfo(size=file.size, mimetype=mime_type)
+
+    if attrs.is_sticker:
+        info["fi.mau.telegram.sticker"] = {
+            "alt": attrs.sticker_alt,
+            "pack": attrs.sticker_pack_ref,
+        }
 
     if attrs.mime_type and not file.was_converted:
         file.mime_type = attrs.mime_type or file.mime_type
