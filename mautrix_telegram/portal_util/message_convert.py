@@ -764,18 +764,18 @@ def _parse_document_attributes(attributes: list[TypeDocumentAttribute]) -> DocAt
             waveform = decode_waveform(attr.waveform) if attr.waveform else b""
 
     return DocAttrs(
-        name,
-        mime_type,
-        is_sticker,
-        sticker_alt,
-        sticker_pack_ref,
-        width,
-        height,
-        is_gif,
-        is_audio,
-        is_voice,
-        duration,
-        waveform,
+        name=name,
+        mime_type=mime_type,
+        is_sticker=is_sticker,
+        sticker_alt=sticker_alt,
+        sticker_pack_ref=sticker_pack_ref,
+        width=width,
+        height=height,
+        is_gif=is_gif,
+        is_audio=is_audio,
+        is_voice=is_voice,
+        duration=duration,
+        waveform=waveform,
     )
 
 
@@ -827,6 +827,10 @@ def _parse_document_meta(
             size=file.thumbnail.size,
         )
     elif attrs.is_sticker:
+        if not info.width or not info.height:
+            info.width = 256
+            info.height = 256
+
         # This is a hack for bad clients like Element iOS that require a thumbnail
         info.thumbnail_info = ImageInfo.deserialize(info.serialize())
         if file.decryption_info:
