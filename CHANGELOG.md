@@ -1,5 +1,6 @@
-# v0.14.2 (unreleased)
+# v0.14.2 (2023-09-19)
 
+* **Security:** Updated Pillow to 10.0.1.
 * Added support for double puppeting with arbitrary `as_token`s.
   See [docs](https://docs.mau.fi/bridges/general/double-puppeting.html#appservice-method-new) for more info.
 * Added support for sending webm and tgs files as stickers.
