@@ -10,13 +10,19 @@ __pycache__
 /*.egg-info
 /.eggs
 
-/config.yaml
-/registration.yaml
+*.yaml
+!.pre-commit-config.yaml
+!example-config.yaml
+!/mautrix_telegram/web/provisioning/spec.yaml
+!/.github/workflows/*.yaml
+
+/start
+/mautrix
+/telethon
+
 *.log*
 *.db
 *.db-*
 /*.pickle
 *.bak
-/*.session
-/*.session-journal
 /*.json
