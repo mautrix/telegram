@@ -439,8 +439,20 @@ class TelegramMessageConverter:
         return ConvertedMessage(
             content=content,
             caption=caption_content,
-            disappear_seconds=media.ttl_seconds,
+            disappear_seconds=self._adjust_ttl(media.ttl_seconds),
         )
+
+    @staticmethod
+    def _adjust_ttl(ttl: int | None) -> int | None:
+        if not ttl:
+            return None
+        elif ttl == 2147483647:
+            # View-once media, set low TTL
+            return 15
+        else:
+            # Increase media TTL because it's supposed to be counted from opening the media,
+            # but we can only count it from read receipt.
+            return ttl * 5
 
     async def _convert_document(
         self,
@@ -548,7 +560,7 @@ class TelegramMessageConverter:
             type=event_type,
             content=content,
             caption=caption_content,
-            disappear_seconds=evt.media.ttl_seconds,
+            disappear_seconds=self._adjust_ttl(evt.media.ttl_seconds),
         )
 
     @staticmethod
