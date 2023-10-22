@@ -456,6 +456,7 @@ class AbstractUser(ABC):
             return
 
         if not portal or not portal.mxid:
+            # TODO This explodes on channels because the field is channel_id
             self.log.debug(f"Dropping own read receipt in unknown chat ({update.peer})")
             return
 
