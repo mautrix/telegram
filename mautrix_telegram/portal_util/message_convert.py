@@ -267,16 +267,29 @@ class TelegramMessageConverter:
             if isinstance(evt, Message) and isinstance(evt.peer_id, PeerChannel)
             else source.tgid
         )
+        if evt.reply_to.reply_to_peer_id and evt.reply_to.reply_to_peer_id != evt.peer_id:
+            if not self.config["bridge.cross_room_replies"]:
+                return
+            space = (
+                evt.reply_to.reply_to_peer_id.channel_id
+                if isinstance(evt.reply_to.reply_to_peer_id, PeerChannel)
+                else source.tgid
+            )
         reply_to_id = TelegramID(evt.reply_to.reply_to_msg_id)
         msg = await DBMessage.get_one_by_tgid(reply_to_id, space)
         no_fallback = no_fallback or self.config["bridge.disable_reply_fallbacks"]
-        if not msg or msg.mx_room != self.portal.mxid:
+        if not msg:
+            # TODO try to find room ID when generating deterministic ID for cross-room reply
             if deterministic_id:
                 content.set_reply(self.deterministic_event_id(space, reply_to_id))
+            return
+        elif msg.mx_room != self.portal.mxid and not self.config["bridge.cross_room_replies"]:
             return
         elif not isinstance(content, TextMessageEventContent) or no_fallback:
             # Not a text message, just set the reply metadata and return
             content.set_reply(msg.mxid)
+            if msg.mx_room != self.portal.mxid:
+                content.relates_to.in_reply_to["room_id"] = msg.mx_room
             return
 
         # Text message, try to fetch original message to generate reply fallback.
@@ -291,6 +304,8 @@ class TelegramMessageConverter:
         except Exception:
             self.log.exception("Failed to get event to add reply fallback")
             content.set_reply(msg.mxid)
+        if msg.mx_room != self.portal.mxid:
+            content.relates_to.in_reply_to["room_id"] = msg.mx_room
 
     @staticmethod
     def _photo_size_key(photo: TypePhotoSize) -> int:
