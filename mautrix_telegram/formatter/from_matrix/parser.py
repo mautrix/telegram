@@ -82,14 +82,6 @@ class MatrixParser(BaseMatrixParser[TelegramMessage]):
         prefix = "#" * length + " "
         return TelegramMessage.join(children, "").prepend(prefix).format(TelegramEntityType.BOLD)
 
-    async def blockquote_to_fstring(
-        self, node: HTMLNode, ctx: RecursionContext
-    ) -> TelegramMessage:
-        msg = await self.tag_aware_parse_node(node, ctx)
-        children = msg.trim().split("\n")
-        children = [child.prepend("> ") for child in children]
-        return TelegramMessage.join(children, "\n")
-
     async def color_to_fstring(self, msg: TelegramMessage, color: str) -> TelegramMessage:
         return msg
 
