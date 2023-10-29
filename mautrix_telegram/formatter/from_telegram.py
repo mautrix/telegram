@@ -348,7 +348,11 @@ async def _telegram_entities_to_matrix(
         last_offset = relative_offset + (0 if skip_entity else entity.length)
     html.append(text_to_html(text[last_offset:]))
 
-    return "".join(html)
+    html_string = "".join(html)
+    # Remove redundant <br>'s after block tags
+    html_string = html_string.replace("</blockquote><br/>", "</blockquote>")
+    html_string = html_string.replace("</pre><br/>", "</pre>")
+    return html_string
 
 
 def _parse_pre(html: list[str], entity_text: str, language: str) -> bool:
