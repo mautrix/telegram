@@ -262,6 +262,17 @@ class TelegramMessageConverter:
             return
         elif isinstance(evt.reply_to, MessageReplyStoryHeader):
             return
+
+        if evt.reply_to.quote and content.msgtype.is_text:
+            content.ensure_has_html()
+            quote_html = await formatter.telegram_text_to_matrix_html(
+                source, evt.reply_to.quote_text, evt.reply_to.quote_entities
+            )
+            content.formatted_body = (
+                f"<blockquote data-telegram-partial-reply>{quote_html}</blockquote>"
+                f"{content.formatted_body}"
+            )
+
         space = (
             evt.peer_id.channel_id
             if isinstance(evt, Message) and isinstance(evt.peer_id, PeerChannel)
@@ -275,6 +286,7 @@ class TelegramMessageConverter:
                 if isinstance(evt.reply_to.reply_to_peer_id, PeerChannel)
                 else source.tgid
             )
+
         reply_to_id = TelegramID(evt.reply_to.reply_to_msg_id)
         msg = await DBMessage.get_one_by_tgid(reply_to_id, space)
         no_fallback = no_fallback or self.config["bridge.disable_reply_fallbacks"]

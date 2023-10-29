@@ -176,6 +176,21 @@ async def _convert_custom_emoji(
                 entities[i] = ReuploadedCustomEmoji(entity, custom_emojis[entity.document_id])
 
 
+async def telegram_text_to_matrix_html(
+    source: au.AbstractUser,
+    text: str,
+    entities: list[TypeMessageEntity],
+    client: MautrixTelegramClient | None = None,
+) -> str:
+    if not entities:
+        return escape(text).replace("\n", "<br/>")
+    await _convert_custom_emoji(source, entities, client=client)
+    text = add_surrogate(text)
+    html = await _telegram_entities_to_matrix_catch(text, entities)
+    html = del_surrogate(html)
+    return html
+
+
 async def telegram_to_matrix(
     evt: Message | SponsoredMessage,
     source: au.AbstractUser,
@@ -192,10 +207,10 @@ async def telegram_to_matrix(
     )
     entities = override_entities or evt.entities
     if entities:
-        await _convert_custom_emoji(source, entities, client=client)
         content.format = Format.HTML
-        html = await _telegram_entities_to_matrix_catch(add_surrogate(content.body), entities)
-        content.formatted_body = del_surrogate(html)
+        content.formatted_body = await telegram_text_to_matrix_html(
+            source, content.body, entities, client=client
+        )
 
     if require_html:
         content.ensure_has_html()
