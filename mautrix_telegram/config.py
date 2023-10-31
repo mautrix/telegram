@@ -171,8 +171,6 @@ class Config(BaseBridgeConfig):
         copy("bridge.kick_on_logout")
         copy("bridge.always_read_joined_telegram_notice")
         copy("bridge.backfill.enable")
-        copy("bridge.backfill.msc2716")
-        copy("bridge.backfill.double_puppet_backfill")
         copy("bridge.backfill.normal_groups")
         copy("bridge.backfill.unread_hours_threshold")
         if "bridge.backfill.forward" in self:

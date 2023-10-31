@@ -440,14 +440,5 @@ async def backfill(evt: CommandEvent) -> None:
     if not evt.config["bridge.backfill.normal_groups"] and portal.peer_type == "chat":
         await evt.reply("Backfilling normal groups is disabled in the bridge config")
         return
-    if portal.backfill_msc2716:
-        messages_per_batch = evt.config["bridge.backfill.incremental.messages_per_batch"]
-        batches = math.ceil(limit / messages_per_batch)
-        rounded = ""
-        if batches * messages_per_batch != limit:
-            rounded = f" (rounded message limit to {batches}*{messages_per_batch})"
-        await portal.enqueue_backfill(evt.sender, priority=0, max_batches=batches)
-        await evt.reply(f"Backfill queued{rounded}")
-    else:
-        output = await portal.forward_backfill(evt.sender, initial=False, override_limit=limit)
-        await evt.reply(output)
+    output = await portal.forward_backfill(evt.sender, initial=False, override_limit=limit)
+    await evt.reply(output)

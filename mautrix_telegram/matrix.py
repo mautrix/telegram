@@ -61,21 +61,6 @@ class MatrixHandler(BaseMatrixHandler):
 
         self._previously_typing = {}
 
-    async def check_versions(self) -> None:
-        await super().check_versions()
-        if self.config["bridge.backfill.msc2716"] and not (
-            support := self.versions.supports("org.matrix.msc2716")
-        ):
-            self.log.fatal(
-                "Backfilling with MSC2716 is enabled in bridge config, but "
-                + (
-                    "batch sending is not enabled on homeserver"
-                    if support is False
-                    else "homeserver does not support batch sending"
-                )
-            )
-            sys.exit(18)
-
     async def handle_puppet_group_invite(
         self,
         room_id: RoomID,

@@ -379,23 +379,6 @@ bridge:
     backfill:
         # Allow backfilling at all?
         enable: true
-        # Use MSC2716 for backfilling?
-        #
-        # This requires a server with MSC2716 support, which is currently an experimental feature in Synapse.
-        # It can be enabled by setting experimental_features -> msc2716_enabled to true in homeserver.yaml.
-        msc2716: false
-        # Use double puppets for backfilling?
-        #
-        # If using MSC2716, the double puppets must be in the appservice's user ID namespace
-        # (because the bridge can't use the double puppet access token with batch sending).
-        #
-        # Even without MSC2716, bridging old messages with correct timestamps requires the double
-        # puppets to be in an appservice namespace, or the server to be modified to allow
-        # overriding timestamps anyway.
-        #
-        # Also note that adding users to the appservice namespace may have unexpected side effects,
-        # as described in https://docs.mau.fi/bridges/general/double-puppeting.html#appservice-method
-        double_puppet_backfill: false
         # Whether or not to enable backfilling in normal groups.
         # Normal groups have numerous technical problems in Telegram, and backfilling normal groups
         # will likely cause problems if there are multiple Matrix users in the group.
@@ -405,10 +388,9 @@ bridge:
         # Set to -1 to let any chat be unread.
         unread_hours_threshold: 720
 
-        # Forward backfilling limits. These apply to both MSC2716 and legacy backfill.
+        # Forward backfilling limits.
         #
         # Using a negative initial limit is not recommended, as it would try to backfill everything in a single batch.
-        # MSC2716 and the incremental settings are meant for backfilling everything incrementally rather than at once.
         forward_limits:
             # Number of messages to backfill immediately after creating a portal.
             initial:
@@ -425,7 +407,7 @@ bridge:
         # Timeout for forward backfills in seconds. If you have a high limit, you'll have to increase this too.
         forward_timeout: 900
 
-        # Settings for incremental backfill of history. These only apply when using MSC2716.
+        # Settings for incremental backfill of history. These only apply to Beeper, as upstream abandoned MSC2716.
         incremental:
             # Maximum number of messages to backfill per batch.
             messages_per_batch: 100
