@@ -18,8 +18,8 @@ from __future__ import annotations
 from typing import cast
 import base64
 import codecs
-import math
 import re
+import shlex
 
 from aiohttp import ClientSession, InvalidURL
 from telethon.errors import (
@@ -29,10 +29,10 @@ from telethon.errors import (
     InviteHashInvalidError,
     InviteRequestSentError,
     OptionsTooMuchError,
-    TakeoutInitDelayError,
     UserAlreadyParticipantError,
 )
 from telethon.tl.functions.channels import JoinChannelRequest
+from telethon.tl.functions.contacts import DeleteByPhonesRequest, ImportContactsRequest
 from telethon.tl.functions.messages import (
     CheckChatInviteRequest,
     GetBotCallbackAnswerRequest,
@@ -42,12 +42,14 @@ from telethon.tl.functions.messages import (
 from telethon.tl.patched import Message
 from telethon.tl.types import (
     InputMediaDice,
+    InputPhoneContact,
     MessageMediaGame,
     MessageMediaPoll,
     TypeInputPeer,
     TypeUpdates,
     User as TLUser,
 )
+from telethon.tl.types.contacts import ImportedContacts
 from telethon.tl.types.messages import BotCallbackAnswer
 
 from mautrix.types import EventID, Format
@@ -159,6 +161,76 @@ async def pm(evt: CommandEvent) -> EventID:
     await portal.create_matrix_room(evt.sender, user, [evt.sender.mxid])
     displayname, _ = pu.Puppet.get_displayname(user, False)
     return await evt.reply(f"Created private chat room with {displayname}")
+
+
+async def _handle_contact(source: AbstractUser, user: TLUser) -> str:
+    puppet: pu.Puppet = await pu.Puppet.get_by_tgid(user.id)
+    await puppet.update_info(source, user)
+
+    params = []
+    if user.username:
+        params.append(f"[@{user.username}](https://t.me/{user.username})")
+    if user.phone:
+        params.append(f"+{user.phone}")
+    params.append(f"ID `{user.id}`")
+    params_str = " / ".join(params)
+    return f"[{puppet.displayname}](https://matrix.to/#/{puppet.mxid}): {params_str}"
+
+
+@command_handler(
+    help_section=SECTION_CREATING_PORTALS,
+    help_args="<_phone_> <_first name_> <_last name_>",
+    help_text="Add a phone number to your contacts on Telegram",
+)
+async def add_contact(evt: CommandEvent) -> EventID:
+    if len(evt.args) < 3:
+        return await evt.reply(
+            "**Usage:** `$cmdprefix+sp add-contact <phone> <first name> <last name>`"
+        )
+    try:
+        names = shlex.split(" ".join(evt.args[1:]))
+    except ValueError as e:
+        return await evt.reply(
+            f"Failed to parse names (use shell quoting for names with spaces): {e}"
+        )
+    if len(names) != 2:
+        return await evt.reply(
+            "Wrong number of names, must have first and last name "
+            "(use shell quoting for names with spaces)"
+        )
+    res: ImportedContacts = await evt.sender.client(
+        ImportContactsRequest(
+            contacts=[
+                InputPhoneContact(
+                    client_id=1, phone=evt.args[0], first_name=names[0], last_name=names[1]
+                )
+            ]
+        )
+    )
+    if res.retry_contacts:
+        return await evt.reply("Failed to import contacts")
+    elif not res.users:
+        return await evt.reply("Contact imported, but user not found on Telegram")
+    imported_str = "\n".join(
+        [f"* {await _handle_contact(evt.sender, user)}" for user in res.users]
+    )
+    return await evt.reply(f"Imported contacts:\n\n{imported_str}")
+
+
+@command_handler(
+    help_section=SECTION_CREATING_PORTALS,
+    help_args="<_phones..._>",
+    help_text="Remove phone numbers from your contacts on Telegram.",
+    aliases=["remove-contact", "delete-contacts", "remove-contacts"],
+)
+async def delete_contact(evt: CommandEvent) -> EventID:
+    if len(evt.args) == 0:
+        return await evt.reply("**Usage:** `$cmdprefix+sp delete-contact <phones...>`")
+    ok = await evt.sender.client(DeleteByPhonesRequest(phones=evt.args))
+    if ok:
+        return await evt.reply("Contacts deleted")
+    else:
+        return await evt.reply("Contacts not deleted?")
 
 
 async def _join(
