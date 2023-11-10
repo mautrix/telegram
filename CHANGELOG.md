@@ -1,3 +1,13 @@
+# v0.15.0 (unreleased)
+
+* Removed support for MSC2716 backfilling.
+* Added `add-contact` and `delete-contact` commands.
+* Updated Telegram API layer to 166.
+  * Includes receiving view-once media, blockquotes, quote replies and other
+    such things
+* Fixed AuthKeyNotFound errors not being handled and causing users to get stuck
+  in a non-logged-in state.
+
 # v0.14.2 (2023-09-19)
 
 * **Security:** Updated Pillow to 10.0.1.
