@@ -306,7 +306,16 @@ class AbstractUser(ABC):
     async def start(self, delete_unless_authenticated: bool = False) -> AbstractUser:
         if not self.client:
             await self._init_client()
-        await self.client.connect()
+        attempts = 1
+        while True:
+            try:
+                await self.client.connect()
+            except Exception:
+                attempts += 1
+                if attempts > 10:
+                    raise
+                self.log.exception("Exception connecting to Telegram, retrying in 5s...")
+                await asyncio.sleep(5)
         self.log.debug(f"{'Bot' if self.is_relaybot else self.mxid} connected: {self.connected}")
         return self
 
