@@ -306,8 +306,8 @@ class AbstractUser(ABC):
     async def start(self, delete_unless_authenticated: bool = False) -> AbstractUser:
         if not self.client:
             await self._init_client()
+        attempts = 1
         while True:
-            attempts = 1
             try:
                 await self.client.connect()
             except Exception:
