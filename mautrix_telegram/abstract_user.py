@@ -316,6 +316,8 @@ class AbstractUser(ABC):
                     raise
                 self.log.exception("Exception connecting to Telegram, retrying in 5s...")
                 await asyncio.sleep(5)
+            else:
+                break
         self.log.debug(f"{'Bot' if self.is_relaybot else self.mxid} connected: {self.connected}")
         return self
 
