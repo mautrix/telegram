@@ -1,4 +1,4 @@
-# v0.15.0 (unreleased)
+# v0.15.0 (2023-11-26)
 
 * Removed support for MSC2716 backfilling.
 * Added `add-contact` and `delete-contact` commands.
