@@ -490,6 +490,9 @@ class TelegramMessageConverter:
     ) -> ConvertedMessage | None:
         document = evt.media.document
 
+        if not document:
+            return None
+
         attrs = _parse_document_attributes(document.attributes)
 
         if document.size > self.matrix.media_config.upload_size:
