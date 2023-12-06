@@ -20,6 +20,8 @@ import asyncio
 import datetime
 import json
 import logging
+import pickle
+import tracemalloc
 
 from aiohttp import web
 from telethon.errors import SessionPasswordNeededError
@@ -89,6 +91,18 @@ class ProvisioningAPI(AuthAPI):
         self.app.router.add_route("POST", f"{user_prefix}/login/send_password", self.send_password)
 
         self.app.router.add_route("GET", "/v1/bridge", self.bridge_info)
+
+        if bridge.config["appservice.provisioning.debug_endpoints"]:
+            self.log.info("Enabling provisioning debug endpoints")
+            self.app.router.add_route("POST", "/debug/tracemalloc", self.post_tracemalloc)
+            self.app.router.add_route("DELETE", "/debug/tracemalloc", self.delete_tracemalloc)
+            self.app.router.add_route("GET", "/debug/tracemalloc", self.get_tracemalloc)
+            self.app.router.add_route(
+                "GET", "/debug/tracemalloc/snapshot", self.get_tracemalloc_snapshot
+            )
+            self.app.router.add_route(
+                "GET", "/debug/tracemalloc/statistics/{key}", self.get_tracemalloc_statistics
+            )
 
     async def get_portal_by_mxid(self, request: web.Request) -> web.Response:
         err = self.check_authorization(request)
@@ -790,3 +804,91 @@ class ProvisioningAPI(AuthAPI):
         user, err = await self.get_user(mxid, expect_logged_in, require_puppeting)
 
         return data, user, err
+
+    async def post_tracemalloc(self, request: web.Request) -> web.Response:
+        err = self.check_authorization(request)
+        if err is not None:
+            return err
+
+        tracemalloc.start()
+
+        return web.Response(
+            status=201,
+        )
+
+    async def delete_tracemalloc(self, request: web.Request) -> web.Response:
+        err = self.check_authorization(request)
+        if err is not None:
+            return err
+
+        tracemalloc.stop()
+
+        return web.Response(
+            status=201,
+        )
+
+    async def get_tracemalloc(self, request: web.Request) -> web.Response:
+        err = self.check_authorization(request)
+        if err is not None:
+            return err
+
+        current_memory, peak_memory = tracemalloc.get_traced_memory()
+
+        return web.json_response(
+            {
+                "is_tracing": tracemalloc.is_tracing(),
+                "traced_memory": {
+                    "current": current_memory,
+                    "peak": peak_memory,
+                },
+                "tracemalloc_memory": tracemalloc.get_tracemalloc_memory(),
+            },
+            status=200,
+        )
+
+    async def get_tracemalloc_statistics(self, request: web.Request) -> web.Response:
+        err = self.check_authorization(request)
+        if err is not None:
+            return err
+
+        try:
+            snapshot = tracemalloc.take_snapshot()
+        except RuntimeError:
+            return web.Response(status=400)
+
+        key = request.match_info["key"]
+
+        if key not in ["filename", "lineno", "traceback"]:
+            return web.Response(status=400)
+
+        stats = snapshot.statistics(key)
+
+        response = []
+        for stat in stats:
+            response.append(
+                {
+                    "count": stat.count,
+                    "size": stat.size,
+                    "traceback": stat.traceback.format(),
+                }
+            )
+
+        return web.json_response(
+            response,
+            status=200,
+        )
+
+    async def get_tracemalloc_snapshot(self, request: web.Request) -> web.Response:
+        err = self.check_authorization(request)
+        if err is not None:
+            return err
+
+        try:
+            snapshot = tracemalloc.take_snapshot()
+        except RuntimeError:
+            return web.Response(status=400)
+
+        return web.Response(
+            body=pickle.dumps(snapshot, pickle.HIGHEST_PROTOCOL),
+            status=200,
+        )
