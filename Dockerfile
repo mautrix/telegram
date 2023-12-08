@@ -1,9 +1,11 @@
-FROM dock.mau.dev/tulir/lottieconverter:alpine-3.18
+FROM dock.mau.dev/tulir/lottieconverter:alpine-3.19
 
 RUN apk add --no-cache \
       python3 py3-pip py3-setuptools py3-wheel \
-      #py3-pillow \
+      py3-pillow \
       py3-aiohttp \
+      py3-asyncpg \
+      py3-aiosqlite \
       py3-magic \
       py3-ruamel.yaml \
       py3-commonmark \
@@ -15,6 +17,8 @@ RUN apk add --no-cache \
       py3-rsa \
       #py3-telethon \ (outdated)
         py3-pyaes \
+        py3-aiodns \
+        py3-python-socks \
         # cryptg
           py3-cffi \
           py3-qrcode \
@@ -32,21 +36,19 @@ RUN apk add --no-cache \
       bash \
       curl \
       jq \
-      yq \
-  # Temporarily install pillow from edge repo to get up-to-date version
-  && apk add --no-cache py3-pillow --repository=https://dl-cdn.alpinelinux.org/alpine/edge/community
+      yq
 
 COPY requirements.txt /opt/mautrix-telegram/requirements.txt
 COPY optional-requirements.txt /opt/mautrix-telegram/optional-requirements.txt
 WORKDIR /opt/mautrix-telegram
 RUN apk add --virtual .build-deps python3-dev libffi-dev build-base \
- && pip3 install /cryptg-*.whl \
- && pip3 install --no-cache-dir -r requirements.txt -r optional-requirements.txt \
+ && pip3 install --break-system-packages /cryptg-*.whl \
+ && pip3 install --break-system-packages --no-cache-dir -r requirements.txt -r optional-requirements.txt \
  && apk del .build-deps \
  && rm -f /cryptg-*.whl
 
 COPY . /opt/mautrix-telegram
-RUN apk add git && pip3 install --no-cache-dir .[all] && apk del git \
+RUN apk add git && pip3 install --break-system-packages --no-cache-dir .[all] && apk del git \
   # This doesn't make the image smaller, but it's needed so that the `version` command works properly
   && cp mautrix_telegram/example-config.yaml . && rm -rf mautrix_telegram .git build
 
