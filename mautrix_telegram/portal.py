@@ -322,6 +322,8 @@ class Portal(DBPortal, BasePortal):
 
     _msg_conv: putil.TelegramMessageConverter
 
+    _disappearing_event: asyncio.Event
+
     def __init__(
         self,
         tgid: TelegramID,
@@ -467,6 +469,42 @@ class Portal(DBPortal, BasePortal):
             or self.private_chat_portal_meta == "always"
             or (self.encrypted and self.private_chat_portal_meta != "never")
         )
+
+    @classmethod
+    async def _disappearing_message_loop(cls, seconds: int | None = None) -> None:
+        try:
+            seconds = None
+            while True:
+                print("fetching disappearing")
+                cls._disappearing_event.clear()
+                msgs = await cls.disappearing_msg_class.unqueue_expiring(seconds)
+                print(f"got {len(msgs)} rows")
+                for msg in msgs:
+                    print("handling disappear thing")
+                    portal = await cls.bridge.get_portal(msg.room_id)
+                    if portal and portal.mxid:
+                        background_task.create(portal._disappear_event(msg))
+                    else:
+                        await msg.delete()
+
+                try:
+                    await asyncio.wait_for(cls._disappearing_event.wait(), 10)
+                except TimeoutError:
+                    pass
+
+                seconds = 10
+        except RuntimeError:
+            return
+
+    @classmethod
+    async def restart_scheduled_disappearing(cls) -> None:
+        cls._disappearing_event = asyncio.Event()
+        background_task.create(cls._disappearing_message_loop())
+
+    @classmethod
+    async def notify_disappearing_message_loop(cls) -> None:
+        print("notifying disappear loop")
+        cls._disappearing_event.set()
 
     @classmethod
     def init_cls(cls, bridge: "TelegramBridge") -> None:
@@ -3531,7 +3569,7 @@ class Portal(DBPortal, BasePortal):
         )
         await dm.insert()
         if expires_at:
-            background_task.create(self._disappear_event(dm))
+            Portal.notify_disappearing_message_loop()
 
     async def _create_room_on_action(
         self, source: au.AbstractUser, action: TypeMessageAction
