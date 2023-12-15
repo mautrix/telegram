@@ -1,3 +1,9 @@
+# v0.15.1 (unreleased)
+
+* Updated Docker image to Alpine 3.19.
+* Fixed some potential cases where a portal room would be created for the
+  relaybot even if `ignore_unbridged_group_chat` was enabled.
+
 # v0.15.0 (2023-11-26)
 
 * Removed support for MSC2716 backfilling.

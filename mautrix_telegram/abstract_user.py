@@ -658,7 +658,11 @@ class AbstractUser(ABC):
             await portal.delete_telegram_user(self.tgid, sender=None)
         elif chan := getattr(update, "mau_channel", None):
             if not portal.mxid:
-                background_task.create(self._delayed_create_channel(chan))
+                if (
+                    not self.is_relaybot
+                    or not self.config["bridge.relaybot.ignore_unbridged_group_chat"]
+                ):
+                    background_task.create(self._delayed_create_channel(chan))
             else:
                 self.log.debug("Updating channel info with data fetched by Telethon")
                 await portal.update_info(self, chan)

@@ -787,6 +787,8 @@ class Portal(DBPortal, BasePortal):
                 background_task.create(update)
                 await self.invite_to_matrix(invites or [])
             return self.mxid
+        elif user.is_relaybot and self.config["bridge.relaybot.ignore_unbridged_group_chat"]:
+            raise Exception("create_matrix_room called as relaybot")
         async with self._room_create_lock:
             try:
                 return await self._create_matrix_room(
@@ -3372,6 +3374,8 @@ class Portal(DBPortal, BasePortal):
         self, source: au.AbstractUser, sender: p.Puppet | None, evt: Message
     ) -> None:
         if not self.mxid:
+            if source.is_relaybot and self.config["bridge.relaybot.ignore_unbridged_group_chat"]:
+                return
             self.log.debug("Got telegram message %d, but no room exists, creating...", evt.id)
             await self.create_matrix_room(source, invites=[source.mxid], update_if_exists=False)
             if not self.mxid:
@@ -3536,7 +3540,7 @@ class Portal(DBPortal, BasePortal):
     async def _create_room_on_action(
         self, source: au.AbstractUser, action: TypeMessageAction
     ) -> bool:
-        if source.is_relaybot and self.config["bridge.ignore_unbridged_group_chat"]:
+        if source.is_relaybot and self.config["bridge.relaybot.ignore_unbridged_group_chat"]:
             return False
         create_and_exit = (MessageActionChatCreate, MessageActionChannelCreate)
         create_and_continue = (
