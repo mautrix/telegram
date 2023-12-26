@@ -1,5 +1,6 @@
 # v0.15.1 (unreleased)
 
+* Updated Telegram API to layer 169.
 * Updated Docker image to Alpine 3.19.
 * Fixed some potential cases where a portal room would be created for the
   relaybot even if `ignore_unbridged_group_chat` was enabled.
