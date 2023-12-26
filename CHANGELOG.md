@@ -4,6 +4,8 @@
 * Updated Docker image to Alpine 3.19.
 * Fixed some potential cases where a portal room would be created for the
   relaybot even if `ignore_unbridged_group_chat` was enabled.
+* Fixed member sync in groups with hidden members causing puppeted Matrix users
+  to be kicked even if they're still in the group.
 
 # v0.15.0 (2023-11-26)
 
