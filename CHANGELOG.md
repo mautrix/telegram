@@ -1,4 +1,4 @@
-# v0.15.1 (unreleased)
+# v0.15.1 (2023-12-26)
 
 * Updated Telegram API to layer 169.
 * Updated Docker image to Alpine 3.19.
