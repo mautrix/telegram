@@ -6,17 +6,17 @@ jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v2
-    - uses: actions/setup-python@v2
+    - uses: actions/checkout@v4
+    - uses: actions/setup-python@v5
       with:
-        python-version: "3.11"
+        python-version: "3.12"
     - uses: isort/isort-action@master
       with:
         sortPaths: "./mautrix_telegram"
     - uses: psf/black@stable
       with:
         src: "./mautrix_telegram"
-        version: "23.1.0"
+        version: "23.11.0"
     - name: pre-commit
       run: |
         pip install pre-commit

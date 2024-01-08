@@ -1,3 +1,8 @@
+# unreleased
+
+* Dropped support for Python 3.9.
+* Updated Telegram API to layer 170.
+
 # v0.15.1 (2023-12-26)
 
 * Updated Telegram API to layer 169.
