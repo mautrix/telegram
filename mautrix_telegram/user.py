@@ -298,9 +298,11 @@ class User(DBUser, AbstractUser, BaseUser):
             self._track_metric(METRIC_CONNECTED, connected)
             if connected:
                 await self.push_bridge_state(
-                    BridgeStateEvent.BACKFILLING
-                    if self._is_backfilling
-                    else BridgeStateEvent.CONNECTED,
+                    (
+                        BridgeStateEvent.BACKFILLING
+                        if self._is_backfilling
+                        else BridgeStateEvent.CONNECTED
+                    ),
                     info=self._bridge_state_info,
                 )
             else:

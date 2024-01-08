@@ -208,9 +208,9 @@ class PgSession(MemorySession):
             await self._locked_process_entities(tlo)
 
     async def _locked_process_entities(self, tlo) -> None:
-        rows: list[
-            tuple[str, int, int, str | None, str | None, str | None]
-        ] = self._entities_to_rows(tlo)
+        rows: list[tuple[str, int, int, str | None, str | None, str | None]] = (
+            self._entities_to_rows(tlo)
+        )
         if not rows:
             return
         if self.db.scheme == Scheme.POSTGRES:

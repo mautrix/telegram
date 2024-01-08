@@ -130,9 +130,9 @@ class ProvisioningAPI(AuthAPI):
                 "about": portal.about,
                 "username": portal.username,
                 "megagroup": portal.megagroup,
-                "can_unbridge": (await portal.can_user_perform(user, "unbridge"))
-                if user
-                else False,
+                "can_unbridge": (
+                    (await portal.can_user_perform(user, "unbridge")) if user else False
+                ),
             }
         )
 
@@ -188,9 +188,11 @@ class ProvisioningAPI(AuthAPI):
             if force in ("delete", "unbridge"):
                 delete = force == "delete"
                 await portal.cleanup_portal(
-                    "Portal deleted (moving to another room)"
-                    if delete
-                    else "Room unbridged (portal moving to another room)",
+                    (
+                        "Portal deleted (moving to another room)"
+                        if delete
+                        else "Room unbridged (portal moving to another room)"
+                    ),
                     puppets_only=not delete,
                 )
             else:

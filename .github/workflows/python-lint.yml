@@ -16,7 +16,7 @@ jobs:
     - uses: psf/black@stable
       with:
         src: "./mautrix_telegram"
-        version: "23.11.0"
+        version: "24.1.1"
     - name: pre-commit
       run: |
         pip install pre-commit
