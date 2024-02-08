@@ -93,6 +93,7 @@ class Config(BaseBridgeConfig):
 
         copy("metrics.enabled")
         copy("metrics.listen_port")
+        copy("metrics.addr")
 
         copy("bridge.username_template")
         copy("bridge.alias_template")
