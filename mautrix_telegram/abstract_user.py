@@ -40,6 +40,7 @@ from telethon.tl.types import (
     PeerUser,
     PhoneCallRequested,
     TypeUpdate,
+    UpdateBotMessageReaction,
     UpdateChannel,
     UpdateChannelUserTyping,
     UpdateChatDefaultBannedRights,
@@ -363,6 +364,8 @@ class AbstractUser(ABC):
             await self.update_phone_call(update)
         elif isinstance(update, UpdateMessageReactions):
             await self.update_reactions(update)
+        elif isinstance(update, UpdateBotMessageReaction):
+            await self.update_bot_reactions(update)
         elif isinstance(update, (UpdateChatUserTyping, UpdateChannelUserTyping, UpdateUserTyping)):
             await self.update_typing(update)
         elif isinstance(update, UpdateUserStatus):
@@ -635,6 +638,12 @@ class AbstractUser(ABC):
         if not portal or not portal.mxid or not portal.allow_bridging:
             return
         await portal.handle_telegram_reactions(self, TelegramID(update.msg_id), update.reactions)
+
+    async def update_bot_reactions(self, update: UpdateBotMessageReaction) -> None:
+        portal = await po.Portal.get_by_entity(update.peer, tg_receiver=self.tgid)
+        if not portal or not portal.mxid or not portal.allow_bridging:
+            return
+        await portal.handle_telegram_bot_reactions(self, update)
 
     async def update_phone_call(self, update: UpdatePhoneCall) -> None:
         self.log.debug("Phone call update %s", update)
