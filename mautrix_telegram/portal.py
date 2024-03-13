@@ -113,6 +113,7 @@ from telethon.tl.types import (
     InputPeerUser,
     InputStickerSetEmpty,
     InputUser,
+    MessageActionBoostApply,
     MessageActionChannelCreate,
     MessageActionChatAddUser,
     MessageActionChatCreate,
@@ -3648,6 +3649,18 @@ class Portal(DBPortal, BasePortal):
                     body=(
                         f"gifted Telegram Premium for {action.months} months "
                         f"({action.amount / 100} {action.currency})"
+                    ),
+                ),
+            )
+        elif isinstance(action, MessageActionBoostApply):
+            await self._send_message(
+                sender.intent_for(self),
+                TextMessageEventContent(
+                    msgtype=MessageType.EMOTE,
+                    body=(
+                        "boosted the group"
+                        if action.boosts == 1
+                        else f"boosted the group {action.boosts} times"
                     ),
                 ),
             )

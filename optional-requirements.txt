@@ -14,7 +14,7 @@ qrcode>=6,<8
 phonenumbers>=8,<9
 
 #/metrics
-prometheus_client>=0.6,<0.20
+prometheus_client>=0.6,<0.21
 
 #/e2be
 python-olm>=3,<4
@@ -22,7 +22,7 @@ pycryptodome>=3,<4
 unpaddedbase64>=1,<3
 
 #/sqlite
-aiosqlite>=0.16,<0.20
+aiosqlite>=0.16,<0.21
 
 #/proxy
 python-socks[asyncio]

@@ -4,7 +4,7 @@ commonmark>=0.8,<0.10
 aiohttp>=3,<4
 yarl>=1,<2
 mautrix>=0.20.4,<0.21
-tulir-telethon==1.34.0a3
+tulir-telethon==1.35.0a1
 asyncpg>=0.20,<0.30
 mako>=1,<2
 setuptools
