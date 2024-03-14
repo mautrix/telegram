@@ -50,6 +50,7 @@ from telethon.errors import (
     InputUserDeactivatedError,
     MessageEmptyError,
     MessageIdInvalidError,
+    MessageNotModifiedError,
     MessageTooLongError,
     PhotoExtInvalidError,
     PhotoInvalidDimensionsError,
@@ -2172,9 +2173,10 @@ class Portal(DBPortal, BasePortal):
         )
 
         if msg and self.config["bridge.delivery_error_reports"]:
-            await self._send_message(
-                self.main_intent, TextMessageEventContent(msgtype=MessageType.NOTICE, body=msg)
-            )
+            if not isinstance(err, MessageNotModifiedError):
+                await self._send_message(
+                    self.main_intent, TextMessageEventContent(msgtype=MessageType.NOTICE, body=msg)
+                )
         await self._send_message_status(event_id, err)
 
     async def handle_matrix_message(
