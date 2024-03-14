@@ -2194,7 +2194,6 @@ class Portal(DBPortal, BasePortal):
                 message_type=content.msgtype,
                 msg=f"\u26a0 Your message may not have been bridged: {e}",
             )
-            raise
         except Exception as e:
             if isinstance(e, IgnoredMessageError):
                 self.log.debug(f"Ignored {event_id}: {e}")
