@@ -2142,7 +2142,7 @@ class Portal(DBPortal, BasePortal):
             status.status = MessageStatus.FAIL
         elif err:
             status.reason = MessageStatusReason.GENERIC_ERROR
-            status.error = f"{type(err)}: {err}"
+            status.error = f"{type(err).__name__}: {err}"
             status.status = MessageStatus.RETRIABLE
             status.message = self._error_to_human_message(err)
         else:
