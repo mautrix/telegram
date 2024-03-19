@@ -53,6 +53,7 @@ from telethon.tl.types import (
     MessageMediaWebPage,
     MessageReplyStoryHeader,
     PeerChannel,
+    PeerChat,
     PeerUser,
     Photo,
     PhotoCachedSize,
@@ -63,6 +64,8 @@ from telethon.tl.types import (
     Poll,
     TypeDocumentAttribute,
     TypePhotoSize,
+    UpdateShortChatMessage,
+    UpdateShortMessage,
     WebPage,
 )
 from telethon.utils import decode_waveform
@@ -278,7 +281,15 @@ class TelegramMessageConverter:
             if isinstance(evt, Message) and isinstance(evt.peer_id, PeerChannel)
             else source.tgid
         )
-        if evt.reply_to.reply_to_peer_id and evt.reply_to.reply_to_peer_id != evt.peer_id:
+        if isinstance(evt, Message):
+            evt_peer_id = evt.peer_id
+        elif isinstance(evt, UpdateShortMessage):
+            evt_peer_id = PeerUser(evt.user_id)
+        elif isinstance(evt, UpdateShortChatMessage):
+            evt_peer_id = PeerChat(evt.chat_id)
+        else:
+            evt_peer_id = None
+        if evt.reply_to.reply_to_peer_id and evt.reply_to.reply_to_peer_id != evt_peer_id:
             if not self.config["bridge.cross_room_replies"]:
                 return
             space = (
