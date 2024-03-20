@@ -574,6 +574,7 @@ class TelegramMessageConverter:
         content = MediaMessageEventContent(
             body=name,
             info=info,
+            url=file.mxc,
             msgtype={
                 "video/": MessageType.VIDEO,
                 "audio/": MessageType.AUDIO,
