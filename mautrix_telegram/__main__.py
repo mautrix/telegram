@@ -16,6 +16,8 @@
 from __future__ import annotations
 
 from typing import Any
+from os import getenv
+import tracemalloc
 
 from telethon import __version__ as __telethon_version__
 
@@ -141,5 +143,8 @@ class TelegramBridge(Bridge):
     def manhole_banner_program_version(self) -> str:
         return f"{super().manhole_banner_program_version} and Telethon {__telethon_version__}"
 
+
+if getenv("MAUTRIXTRACEMALLOC"):
+    tracemalloc.start()
 
 TelegramBridge().run()
