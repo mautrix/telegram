@@ -1,3 +1,6 @@
 include:
 - project: 'mautrix/ci'
-  file: '/python.yml'
+  file: '/go.yml'
+
+variables:
+  BINARY_NAME: mautrix-telegram

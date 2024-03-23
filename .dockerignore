@@ -1,9 +1,7 @@
 .editorconfig
-.codeclimate.yml
 *.png
 *.md
 logs
-.venv
 start
 config.yaml
 registration.yaml

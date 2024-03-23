@@ -10,12 +10,11 @@ insert_final_newline = true
 
 [*.md]
 trim_trailing_whitespace = false
-
-[*.py]
-max_line_length = 99
-
-[*.{yaml,yml,py}]
+indent_size = 2
 indent_style = space
 
-[{.gitlab-ci.yml,.pre-commit-config.yaml,mautrix_telegram/web/provisioning/spec.yaml}]
+[*.{yaml,yml,sql}]
+indent_style = space
+
+[{.gitlab-ci.yml,.pre-commit-config.yaml,provisioning-spec.yaml,.github/workflows/*.yml}]
 indent_size = 2

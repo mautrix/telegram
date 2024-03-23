@@ -1,28 +1,15 @@
-/.idea/
-
-/.venv
-/env/
-pip-selfcheck.json
-*.pyc
-__pycache__
-/build
-/dist
-/*.egg-info
-/.eggs
+.idea
 
 *.yaml
 !.pre-commit-config.yaml
 !example-config.yaml
-!/mautrix_telegram/web/provisioning/spec.yaml
-!/.github/workflows/*.yaml
+!provisioning-spec.yaml
 
-/start
-/mautrix
-/telethon
-
-*.log*
+*.json
 *.db
-*.db-*
-/*.pickle
+*.log
 *.bak
-/*.json
+
+/mautrix-telegram
+/mautrix-telegramgo
+/start

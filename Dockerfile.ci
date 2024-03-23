@@ -1,0 +1,14 @@
+FROM alpine:3.19
+
+ENV UID=1337 \
+    GID=1337
+
+RUN apk add --no-cache ffmpeg su-exec ca-certificates bash jq curl yq
+
+ARG EXECUTABLE=./mautrix-telegram
+COPY $EXECUTABLE /usr/bin/mautrix-telegram
+COPY ./example-config.yaml /opt/mautrix-telegram/example-config.yaml
+COPY ./docker-run.sh /docker-run.sh
+VOLUME /data
+
+CMD ["/docker-run.sh"]
