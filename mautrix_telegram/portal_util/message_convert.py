@@ -170,8 +170,13 @@ class TelegramMessageConverter:
         if not client:
             client = source.client
         if hasattr(evt, "media") and isinstance(evt.media, self._allowed_media):
-            convert_media = self._media_converters[type(evt.media)]
-            converted = await convert_media(source=source, intent=intent, evt=evt, client=client)
+            if self._should_convert_full_document(evt.media, is_bot, is_channel):
+                convert_media = self._media_converters[type(evt.media)]
+                converted = await convert_media(
+                    source=source, intent=intent, evt=evt, client=client
+                )
+            else:
+                converted = await self._convert_document_thumb_only(source, intent, evt, client)
         elif evt.message:
             converted = await self._convert_text(source, intent, is_bot, evt, client)
         else:
@@ -203,6 +208,16 @@ class TelegramMessageConverter:
                 deterministic_id=deterministic_reply_id,
             )
         return converted
+
+    def _should_convert_full_document(self, media, is_bot: bool, is_channel: bool) -> bool:
+        if not isinstance(media, MessageMediaDocument):
+            return True
+        size = media.document.size
+        if is_bot and self.config["bridge.document_as_link_size.bot"]:
+            return size < self.config["bridge.document_as_link_size.bot"] * 1000**2
+        if is_channel and self.config["bridge.document_as_link_size.channel"]:
+            return size < self.config["bridge.document_as_link_size.channel"] * 1000**2
+        return True
 
     @staticmethod
     def _caption_to_message(converted: ConvertedMessage) -> None:
@@ -492,6 +507,91 @@ class TelegramMessageConverter:
             # Increase media TTL because it's supposed to be counted from opening the media,
             # but we can only count it from read receipt.
             return ttl * 5
+
+    async def _convert_document_thumb_only(
+        self,
+        source: au.AbstractUser,
+        intent: IntentAPI,
+        evt: Message,
+        client: MautrixTelegramClient,
+    ) -> ConvertedMessage | None:
+        document = evt.media.document
+
+        if not document:
+            return None
+
+        external_link_content = "Unsupported file, please access directly on Telegram"
+
+        external_url = self._get_external_url(evt)
+        # We don't generate external URLs for bot users so only set if known
+        if external_url is not None:
+            external_link_content = (
+                f"Unsupported file, please access directly on Telegram here: {external_url}"
+            )
+
+        attrs = _parse_document_attributes(document.attributes)
+        file = None
+
+        thumb_loc, thumb_size = self.get_largest_photo_size(document)
+        if thumb_size and not isinstance(thumb_size, (PhotoSize, PhotoCachedSize)):
+            self.log.debug(f"Unsupported thumbnail type {type(thumb_size)}")
+            thumb_loc = None
+            thumb_size = None
+        if thumb_loc:
+            try:
+                file = await util.transfer_thumbnail_to_matrix(
+                    client,
+                    intent,
+                    thumb_loc,
+                    video=None,
+                    mime_type=document.mime_type,
+                    encrypt=self.portal.encrypted,
+                    async_upload=self.config["homeserver.async_media"],
+                )
+            except Exception:
+                self.log.exception("Failed to transfer thumbnail")
+        if not file:
+            name = attrs.name or ""
+            caption = f"\n{evt.message}" if evt.message else ""
+            return ConvertedMessage(
+                content=TextMessageEventContent(
+                    msgtype=MessageType.NOTICE,
+                    body=f"{name}{caption}\n{external_link_content}",
+                )
+            )
+
+        info, name = _parse_document_meta(evt, file, attrs, thumb_size)
+
+        event_type = EventType.ROOM_MESSAGE
+        if not name:
+            ext = sane_mimetypes.guess_extension(file.mime_type) or ""
+            name = "unnamed_file" + ext
+
+        content = MediaMessageEventContent(
+            body=name,
+            info=info,
+            msgtype={
+                "video/": MessageType.VIDEO,
+                "audio/": MessageType.AUDIO,
+                "image/": MessageType.IMAGE,
+            }.get(info.mimetype[:6], MessageType.FILE),
+        )
+        if file.decryption_info:
+            content.file = file.decryption_info
+        else:
+            content.url = file.mxc
+
+        caption_content = (
+            await formatter.telegram_to_matrix(evt, source, client) if evt.message else None
+        )
+        caption_content = f"{caption_content}\n{external_link_content}"
+
+        return ConvertedMessage(
+            type=event_type,
+            content=content,
+            caption=caption_content,
+            disappear_seconds=self._adjust_ttl(evt.media.ttl_seconds),
+        )
 
     async def _convert_document(
         self,
