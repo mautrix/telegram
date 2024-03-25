@@ -136,6 +136,8 @@ class Config(BaseBridgeConfig):
         copy("bridge.caption_in_message")
         copy("bridge.image_as_file_size")
         copy("bridge.image_as_file_pixels")
+        copy("bridge.document_as_link_size.bot")
+        copy("bridge.document_as_link_size.channel")
         copy("bridge.parallel_file_transfer")
         copy("bridge.federate_rooms")
         copy("bridge.always_custom_emoji_reaction")
