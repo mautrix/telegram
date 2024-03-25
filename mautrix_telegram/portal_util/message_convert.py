@@ -161,6 +161,7 @@ class TelegramMessageConverter:
         source: au.AbstractUser,
         intent: IntentAPI,
         is_bot: bool,
+        is_channel: bool,
         evt: Message,
         no_reply_fallback: bool = False,
         deterministic_reply_id: bool = False,

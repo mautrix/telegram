@@ -445,6 +445,10 @@ class Portal(DBPortal, BasePortal):
         return self.peer_type == "user"
 
     @property
+    def is_channel(self) -> bool:
+        return self.peer_type == "channel"
+
+    @property
     def has_bot(self) -> bool:
         return bool(self.bot) and (
             self.bot.is_in_chat(self.tgid)
@@ -2809,7 +2813,7 @@ class Portal(DBPortal, BasePortal):
         intent = sender.intent_for(self) if sender else self.main_intent
         is_bot = sender.is_bot if sender else False
         converted = await self._msg_conv.convert(
-            source, intent, is_bot, evt, no_reply_fallback=True
+            source, intent, is_bot, self.is_channel, evt, no_reply_fallback=True
         )
         converted.content.set_edit(editing_msg.mxid)
         await intent.set_typing(self.mxid, timeout=0)
@@ -3025,6 +3029,7 @@ class Portal(DBPortal, BasePortal):
             source,
             intent,
             is_bot,
+            self.is_channel,
             msg,
             client=client,
             deterministic_reply_id=self.bridge.homeserver_software.is_hungry,
@@ -3529,7 +3534,7 @@ class Portal(DBPortal, BasePortal):
         else:
             intent = self.main_intent
         is_bot = sender.is_bot if sender else False
-        converted = await self._msg_conv.convert(source, intent, is_bot, evt)
+        converted = await self._msg_conv.convert(source, intent, is_bot, self.is_channel, evt)
         if not converted:
             return
         await intent.set_typing(self.mxid, timeout=0)
