@@ -4,6 +4,7 @@ from .file_transfer import (
     convert_image,
     transfer_custom_emojis_to_matrix,
     transfer_file_to_matrix,
+    transfer_thumbnail_to_matrix,
     unicode_custom_emoji_map,
 )
 from .parallel_file_transfer import parallel_transfer_to_telegram
