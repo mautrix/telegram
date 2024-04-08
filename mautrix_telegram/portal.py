@@ -3688,7 +3688,7 @@ class Portal(DBPortal, BasePortal):
                 end_reason = "disconnected"
             body = f"{call_type} {end_reason}"
             if action.duration:
-                body += f" ({format_duration(action.duration)}"
+                body += f" ({format_duration(action.duration)})"
             await self._send_message(
                 sender.intent_for(self),
                 TextMessageEventContent(msgtype=MessageType.NOTICE, body=body),
