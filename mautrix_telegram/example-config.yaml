@@ -475,7 +475,8 @@ bridge:
     #    $username    - Telegram username (may not exist)
     #    $mention     - Telegram @username or displayname mention (depending on which exists)
     emote_format: "* $mention $formatted_body"
-
+    # Replace ! with / to send telegram bot commands without interfering with matrix client commands
+    convert_commands: true
     # The formats to use when sending state events to Telegram via the relay bot.
     #
     # Variables from `message_formats` that have the `sender_` prefix are available without the prefix.
