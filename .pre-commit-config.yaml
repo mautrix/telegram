@@ -12,10 +12,12 @@ repos:
     rev: v1.0.0-rc.1
     hooks:
       - id: go-imports
-        exclude: "pb\\.go$"
+        args:
+          - "-local"
+          - "go.mau.fi/mautrix-telegram"
+          - "-w"
       - id: go-vet-mod
-      #- id: go-staticcheck-repo-mod
-      # TODO: reenable this and fix all the problems
+      - id: go-staticcheck-repo-mod
 
   - repo: https://github.com/beeper/pre-commit-go
     rev: v0.3.1
