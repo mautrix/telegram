@@ -1,14 +1,13 @@
 package msgconv
 
 import (
-	"bytes"
 	"context"
+	"encoding/base64"
 	"fmt"
-	"os"
 
-	"github.com/gotd/td/telegram/downloader"
 	"github.com/gotd/td/tg"
 	"maunium.net/go/mautrix/event"
+	"maunium.net/go/mautrix/id"
 )
 
 type ConvertedMessage struct {
@@ -46,12 +45,6 @@ func getLargestPhotoSize(sizes []tg.PhotoSizeClass) (largest tg.PhotoSizeClass) 
 	return
 }
 
-func (mc *MessageConverter) downloadFile(ctx context.Context, file tg.InputFileLocationClass) ([]byte, error) {
-	var buf bytes.Buffer
-	_, err := downloader.NewDownloader().Download(mc.Client.API(), file).Stream(ctx, &buf)
-	return buf.Bytes(), err
-}
-
 func (mc *MessageConverter) ToMatrix(ctx context.Context, msg tg.MessageClass) *ConvertedMessage {
 	log := mc.getLogger(ctx).With().Str("action", "to_matrix").Logger()
 	cm := &ConvertedMessage{
@@ -85,21 +78,27 @@ func (mc *MessageConverter) ToMatrix(ctx context.Context, msg tg.MessageClass) *
 						fmt.Printf("photo: %v\n", photo)
 
 						largest := getLargestPhotoSize(photo.GetSizes())
-						file := tg.InputPhotoFileLocation{
-							ID:            photo.GetID(),
-							AccessHash:    photo.GetAccessHash(),
-							FileReference: photo.GetFileReference(),
-							ThumbSize:     largest.GetType(),
-						}
+						// file := tg.InputPhotoFileLocation{
+						// 	ID:            photo.GetID(),
+						// 	AccessHash:    photo.GetAccessHash(),
+						// 	FileReference: photo.GetFileReference(),
+						// 	ThumbSize:     largest.GetType(),
+						// }
 
-						data, err := mc.downloadFile(ctx, &file)
-						if err != nil {
-							panic(err)
-						}
-						err = os.WriteFile("/home/sumner/tmp/test.jpg", data, 0644)
-						if err != nil {
-							panic(err)
-						}
+						mxc := id.ContentURIString(
+							fmt.Sprintf("mxc://telegram.sumner.user.beeper.com/p.i%d.a%d.f%s.t%s", photo.GetID(), photo.GetAccessHash(), base64.RawURLEncoding.EncodeToString(photo.GetFileReference()), largest.GetType()),
+						)
+
+						fmt.Printf("%s\n", mxc)
+
+						// data, err := mc.downloadFile(ctx, &file)
+						// if err != nil {
+						// 	panic(err)
+						// }
+						// err = os.WriteFile("/home/sumner/tmp/test.jpg", data, 0644)
+						// if err != nil {
+						// 	panic(err)
+						// }
 					default:
 						log.Error().Type("msg", msg).Msg("Unhandled photo type")
 					}
