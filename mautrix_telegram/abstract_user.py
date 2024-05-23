@@ -248,7 +248,11 @@ class AbstractUser(ABC):
         if not reconnect_interval or reconnect_interval == 0:
             return
         refresh_time = time.time() + reconnect_interval
-        self.log.info("Scheduling forced reconnect in %d seconds. Connection will be refreshed at %s", reconnect_interval, time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(refresh_time)))
+        self.log.info(
+            "Scheduling forced reconnect in %d seconds. Connection will be refreshed at %s",
+            reconnect_interval,
+            time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(refresh_time)),
+        )
         self.loop.call_later(reconnect_interval, lambda: asyncio.create_task(self._reconnect()))
 
     async def _reconnect(self) -> None:
