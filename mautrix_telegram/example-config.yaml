@@ -581,6 +581,8 @@ telegram:
     # Should incoming updates be handled sequentially to make sure order is preserved on Matrix?
     sequential_updates: true
     exit_on_update_error: false
+    # Interval to force refresh the connection (full reconnect), default is 1 day. Set 0 to disable force refreshes.
+    force_refresh_interval_seconds: 10
 
     # Telethon connection options.
     connection:
