@@ -253,7 +253,7 @@ class AbstractUser(ABC):
             reconnect_interval,
             time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(refresh_time)),
         )
-        self.loop.call_later(reconnect_interval, lambda: asyncio.create_task(self._reconnect()))
+        self.loop.call_later(reconnect_interval, lambda: background_task.create(self._reconnect()))
 
     async def _reconnect(self) -> None:
         self.log.info("Reconnecting to Telegram...")
