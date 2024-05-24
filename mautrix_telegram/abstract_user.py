@@ -241,6 +241,24 @@ class AbstractUser(ABC):
             use_ipv6=self.config["telegram.connection.use_ipv6"],
         )
         self.client.add_event_handler(self._update_catch)
+        self._schedule_reconnect()
+
+    def _schedule_reconnect(self) -> None:
+        reconnect_interval = self.config["telegram.force_refresh_interval_seconds"]
+        if not reconnect_interval or reconnect_interval == 0:
+            return
+        refresh_time = time.time() + reconnect_interval
+        self.log.info(
+            "Scheduling forced reconnect in %d seconds. Connection will be refreshed at %s",
+            reconnect_interval,
+            time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(refresh_time)),
+        )
+        self.loop.call_later(reconnect_interval, lambda: background_task.create(self._reconnect()))
+
+    async def _reconnect(self) -> None:
+        self.log.info("Reconnecting to Telegram...")
+        await self.stop()
+        await self.start()
 
     @abstractmethod
     async def on_signed_out(self, err: UnauthorizedError | AuthKeyError) -> None:
