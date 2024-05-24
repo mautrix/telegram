@@ -264,6 +264,7 @@ class Config(BaseBridgeConfig):
         copy("telegram.catch_up")
         copy("telegram.sequential_updates")
         copy("telegram.exit_on_update_error")
+        copy("telegram.force_refresh_interval_seconds")
 
         copy("telegram.connection.timeout")
         copy("telegram.connection.retries")
