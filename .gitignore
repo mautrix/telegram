@@ -6,7 +6,7 @@
 !provisioning-spec.yaml
 
 *.json
-*.db
+*.db*
 *.log
 *.bak
 
