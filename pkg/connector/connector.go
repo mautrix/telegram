@@ -18,13 +18,8 @@ package connector
 
 import (
 	"context"
-	"strconv"
 
-	"github.com/gotd/td/telegram"
-	"github.com/rs/zerolog"
 	"go.mau.fi/util/dbutil"
-	"go.mau.fi/zerozap"
-	"go.uber.org/zap"
 	"maunium.net/go/mautrix/bridgev2"
 
 	"go.mau.fi/mautrix-telegram/pkg/store"
@@ -58,24 +53,7 @@ func (tg *TelegramConnector) Start(ctx context.Context) error {
 	return tg.store.Upgrade(ctx)
 }
 
-func (tg *TelegramConnector) LoadUserLogin(ctx context.Context, login *bridgev2.UserLogin) error {
-	loginID, err := strconv.ParseInt(string(login.ID), 10, 64)
-	if err != nil {
-		return err
-	}
-
-	logger := zerolog.Ctx(ctx).With().
-		Str("component", "telegram_client").
-		Int64("login_id", loginID).
-		Logger()
-
-	login.Client = &TelegramClient{
-		main:      tg,
-		userLogin: login,
-		client: telegram.NewClient(tg.Config.AppID, tg.Config.AppHash, telegram.Options{
-			SessionStorage: tg.store.GetSessionStore(loginID),
-			Logger:         zap.New(zerozap.New(logger)),
-		}),
-	}
-	return nil
+func (tc *TelegramConnector) LoadUserLogin(ctx context.Context, login *bridgev2.UserLogin) (err error) {
+	login.Client, err = NewTelegramClient(ctx, tc, login)
+	return
 }

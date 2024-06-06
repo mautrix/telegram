@@ -20,8 +20,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strconv"
-	"strings"
 
 	"github.com/gotd/td/session"
 	"github.com/gotd/td/telegram"
@@ -32,7 +30,6 @@ import (
 	"go.uber.org/zap"
 	"maunium.net/go/mautrix/bridgev2"
 	"maunium.net/go/mautrix/bridgev2/database"
-	"maunium.net/go/mautrix/bridgev2/networkid"
 )
 
 const LoginFlowIDPhone = "phone"
@@ -175,10 +172,6 @@ func (p *PhoneLogin) SubmitUserInput(ctx context.Context, input map[string]strin
 	return nil, fmt.Errorf("unexpected state during phone login")
 }
 
-func makeUserLoginID(userID int64) networkid.UserLoginID {
-	return networkid.UserLoginID(strconv.FormatInt(userID, 10))
-}
-
 func (p *PhoneLogin) handleAuthSuccess(ctx context.Context, authorization *tg.AuthAuthorization) (*bridgev2.LoginStep, error) {
 	// Now that we have the Telegram user ID, store it in the database and
 	// close the login client.
@@ -217,11 +210,10 @@ func (p *PhoneLogin) handleAuthSuccess(ctx context.Context, authorization *tg.Au
 	if err != nil {
 		return nil, err
 	}
-	name := strings.TrimSpace(fmt.Sprintf("%s %s", user.FirstName, user.LastName))
 	return &bridgev2.LoginStep{
 		Type:         bridgev2.LoginStepTypeComplete,
 		StepID:       completeStep,
-		Instructions: fmt.Sprintf("Successfully logged in as %d / +%s (%s)", user.ID, user.Phone, name),
+		Instructions: fmt.Sprintf("Successfully logged in as %d / +%s (%s)", user.ID, user.Phone, getFullName(user)),
 		CompleteParams: &bridgev2.LoginCompleteParams{
 			UserLoginID: ul.ID,
 		},

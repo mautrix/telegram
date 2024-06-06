@@ -78,12 +78,12 @@ func (mc *MessageConverter) ToMatrix(ctx context.Context, msg tg.MessageClass) *
 						fmt.Printf("photo: %v\n", photo)
 
 						largest := getLargestPhotoSize(photo.GetSizes())
-						file := tg.InputPhotoFileLocation{
-							ID:            photo.GetID(),
-							AccessHash:    photo.GetAccessHash(),
-							FileReference: photo.GetFileReference(),
-							ThumbSize:     largest.GetType(),
-						}
+						// file := tg.InputPhotoFileLocation{
+						// 	ID:            photo.GetID(),
+						// 	AccessHash:    photo.GetAccessHash(),
+						// 	FileReference: photo.GetFileReference(),
+						// 	ThumbSize:     largest.GetType(),
+						// }
 
 						mxc := id.ContentURIString(
 							fmt.Sprintf("mxc://telegram.sumner.user.beeper.com/p.i%d.a%d.f%s.t%s", photo.GetID(), photo.GetAccessHash(), base64.RawURLEncoding.EncodeToString(photo.GetFileReference()), largest.GetType()),
