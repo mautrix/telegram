@@ -11,7 +11,6 @@ import (
 	"github.com/gotd/td/telegram"
 	"github.com/gotd/td/telegram/message"
 	"github.com/gotd/td/telegram/updates"
-	"github.com/gotd/td/telegram/updates/hook"
 	"github.com/gotd/td/tg"
 	"github.com/rs/zerolog"
 	"go.mau.fi/zerozap"
@@ -36,12 +35,12 @@ func NewTelegramClient(ctx context.Context, tc *TelegramConnector, login *bridge
 		return nil, err
 	}
 
-	logger := zerolog.Ctx(ctx).With().
+	log := zerolog.Ctx(ctx).With().
 		Str("component", "telegram_client").
 		Int64("login_id", loginID).
 		Logger()
 
-	zaplog := zap.New(zerozap.New(logger))
+	zaplog := zap.New(zerozap.New(log))
 
 	client := TelegramClient{
 		main:      tc,
@@ -52,20 +51,32 @@ func NewTelegramClient(ctx context.Context, tc *TelegramConnector, login *bridge
 	dispatcher := tg.NewUpdateDispatcher()
 	dispatcher.OnNewMessage(client.onUpdateNewMessage)
 
+	store := tc.store.GetScopedStore(loginID)
+
 	updatesManager := updates.New(updates.Config{
-		Handler: dispatcher,
-		Logger:  zaplog.Named("gaps"),
+		OnChannelTooLong: func(channelID int64) {
+			log.Error().Int64("channel_id", channelID).Msg("OnChannelTooLong")
+			panic("unimplemented channel too long")
+		},
+		Handler:      dispatcher,
+		Logger:       zaplog.Named("gaps"),
+		Storage:      store,
+		AccessHasher: store,
 	})
 
 	client.client = telegram.NewClient(tc.Config.AppID, tc.Config.AppHash, telegram.Options{
-		SessionStorage: tc.store.GetSessionStore(loginID),
+		SessionStorage: store,
 		Logger:         zaplog,
 		UpdateHandler:  updatesManager,
-		Middlewares: []telegram.Middleware{
-			hook.UpdateHook(updatesManager.Handle),
-		},
 	})
 	client.clientCancel, err = connectTelegramClient(ctx, client.client)
+	go func() {
+		err = updatesManager.Run(ctx, client.client.API(), loginID, updates.AuthOptions{})
+		if err != nil {
+			log.Err(err).Msg("updates manager error")
+			client.clientCancel()
+		}
+	}()
 	return &client, err
 }
 
@@ -138,7 +149,10 @@ func (t *TelegramClient) onUpdateNewMessage(ctx context.Context, e tg.Entities, 
 		Type: bridgev2.RemoteEventMessage,
 		LogContext: func(c zerolog.Context) zerolog.Context {
 			return c.
-				Int("message_id", update.Message.GetID())
+				Int("message_id", update.Message.GetID()).
+				Str("sender", string(sender.Sender)).
+				Str("sender_login", string(sender.SenderLogin)).
+				Bool("is_from_me", sender.IsFromMe)
 		},
 		ID:           makeMessageID(msg.ID),
 		Sender:       sender,

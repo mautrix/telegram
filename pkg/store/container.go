@@ -36,6 +36,6 @@ func (c *Container) Upgrade(ctx context.Context) error {
 	return c.db.Upgrade(ctx)
 }
 
-func (c *Container) GetSessionStore(telegramUserID int64) *SessionStore {
-	return &SessionStore{c.db, telegramUserID}
+func (c *Container) GetScopedStore(telegramUserID int64) *scopedStore {
+	return &scopedStore{c.db, telegramUserID}
 }

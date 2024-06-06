@@ -175,7 +175,7 @@ func (p *PhoneLogin) SubmitUserInput(ctx context.Context, input map[string]strin
 func (p *PhoneLogin) handleAuthSuccess(ctx context.Context, authorization *tg.AuthAuthorization) (*bridgev2.LoginStep, error) {
 	// Now that we have the Telegram user ID, store it in the database and
 	// close the login client.
-	sessionStore := p.main.store.GetSessionStore(authorization.User.GetID())
+	sessionStore := p.main.store.GetScopedStore(authorization.User.GetID())
 	var sessionData []byte
 	sessionData, err := p.storage.Bytes(sessionData)
 	if err != nil {
