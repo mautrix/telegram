@@ -18,7 +18,8 @@ import (
 	"maunium.net/go/mautrix/bridgev2"
 	"maunium.net/go/mautrix/bridgev2/database"
 	"maunium.net/go/mautrix/bridgev2/networkid"
-	"maunium.net/go/mautrix/event"
+
+	"go.mau.fi/mautrix-telegram/pkg/connector/msgconv"
 )
 
 type TelegramClient struct {
@@ -27,6 +28,7 @@ type TelegramClient struct {
 	userLogin    *bridgev2.UserLogin
 	client       *telegram.Client
 	clientCancel context.CancelFunc
+	msgConv      *msgconv.MessageConverter
 }
 
 func NewTelegramClient(ctx context.Context, tc *TelegramConnector, login *bridgev2.UserLogin) (*TelegramClient, error) {
@@ -47,9 +49,9 @@ func NewTelegramClient(ctx context.Context, tc *TelegramConnector, login *bridge
 		loginID:   loginID,
 		userLogin: login,
 	}
-
 	dispatcher := tg.NewUpdateDispatcher()
 	dispatcher.OnNewMessage(client.onUpdateNewMessage)
+	dispatcher.OnNewChannelMessage(client.onUpdateNewChannelMessage)
 
 	store := tc.store.GetScopedStore(loginID)
 
@@ -69,6 +71,7 @@ func NewTelegramClient(ctx context.Context, tc *TelegramConnector, login *bridge
 		Logger:         zaplog,
 		UpdateHandler:  updatesManager,
 	})
+	client.msgConv = msgconv.NewMessageConverter(client.client)
 	client.clientCancel, err = connectTelegramClient(ctx, client.client)
 	go func() {
 		err = updatesManager.Run(ctx, client.client.API(), loginID, updates.AuthOptions{})
@@ -154,26 +157,18 @@ func (t *TelegramClient) onUpdateNewMessage(ctx context.Context, e tg.Entities, 
 				Str("sender_login", string(sender.SenderLogin)).
 				Bool("is_from_me", sender.IsFromMe)
 		},
-		ID:           makeMessageID(msg.ID),
-		Sender:       sender,
-		PortalID:     makePortalID(msg.PeerID),
-		Data:         msg,
-		CreatePortal: true,
-
-		ConvertMessageFunc: func(ctx context.Context, portal *bridgev2.Portal, intent bridgev2.MatrixAPI, data *tg.Message) (*bridgev2.ConvertedMessage, error) {
-			cm := &bridgev2.ConvertedMessage{
-				Timestamp: time.Unix(int64(data.Date), 0),
-			}
-			if data.Message != "" {
-				converted := bridgev2.ConvertedMessagePart{
-					Type:    event.EventMessage,
-					Content: &event.MessageEventContent{MsgType: event.MsgText, Body: data.Message},
-				}
-				cm.Parts = append(cm.Parts, &converted)
-			}
-			return cm, nil
-		},
+		ID:                 makeMessageID(msg.ID),
+		Sender:             sender,
+		PortalID:           makePortalID(msg.PeerID),
+		Data:               msg,
+		CreatePortal:       true,
+		ConvertMessageFunc: t.msgConv.ToMatrix,
 	})
+	return nil
+}
+
+func (t *TelegramClient) onUpdateNewChannelMessage(ctx context.Context, e tg.Entities, update *tg.UpdateNewChannelMessage) error {
+	fmt.Printf("update new channel message %+v\n", update)
 	return nil
 }
 
@@ -186,18 +181,15 @@ func getFullName(user *tg.User) string {
 	return strings.TrimSpace(fmt.Sprintf("%s %s", user.FirstName, user.LastName))
 }
 
-func getFullNamePtr(user *tg.User) *string {
-	fullName := getFullName(user)
-	return &fullName
-}
-
 func (t *TelegramClient) GetChatInfo(ctx context.Context, portal *bridgev2.Portal) (*bridgev2.PortalInfo, error) {
 	fmt.Printf("%+v\n", portal)
 	peerType, id, err := parsePortalID(portal.ID)
 	if err != nil {
 		return nil, err
 	}
-	isSpace := false
+	var name, topic string
+	var members []networkid.UserID
+	var isSpace, isDM bool
 
 	switch peerType {
 	case peerTypeUser:
@@ -211,20 +203,37 @@ func (t *TelegramClient) GetChatInfo(ctx context.Context, portal *bridgev2.Porta
 		if user, ok := users[0].(*tg.User); !ok {
 			return nil, fmt.Errorf("returned user is not *tg.User")
 		} else {
-			isDM := true
-			return &bridgev2.PortalInfo{
-				Name: getFullNamePtr(user),
-				// Topic  *string
-				// Avatar *Avatar
-
-				Members:      []networkid.UserID{makeUserID(id), makeUserID(t.loginID)},
-				IsDirectChat: &isDM,
-				IsSpace:      &isSpace,
-			}, nil
+			name = getFullName(user) // TODO gate this behind a config?
+			members = []networkid.UserID{makeUserID(id), makeUserID(t.loginID)}
+			isDM = true
 		}
+	case peerTypeChat:
+		// TODO get name of chat
+		chat, err := t.client.API().MessagesGetFullChat(ctx, id)
+		if err != nil {
+			return nil, err
+		}
+		if len(chat.Users) == 0 {
+			return nil, fmt.Errorf("no users found in chat %d", id)
+		}
+		for _, user := range chat.Users {
+			members = append(members, makeUserID(user.GetID()))
+		}
+	default:
+		fmt.Printf("%s %d\n", peerType, id)
+		panic("unimplemented getchatinfo")
 	}
-	fmt.Printf("%s %d\n", peerType, id)
-	panic("unimplemented getchatinfo")
+
+	return &bridgev2.PortalInfo{
+		Name:  &name,
+		Topic: &topic, // TODO
+		// TODO
+		// Avatar *Avatar
+
+		Members:      members,
+		IsDirectChat: &isDM,
+		IsSpace:      &isSpace,
+	}, nil
 }
 
 func (t *TelegramClient) GetUserInfo(ctx context.Context, ghost *bridgev2.Ghost) (*bridgev2.UserInfo, error) {
@@ -251,9 +260,11 @@ func (t *TelegramClient) GetUserInfo(ctx context.Context, ghost *bridgev2.Ghost)
 			identifiers = append(identifiers, fmt.Sprintf("tel:+%s", strings.TrimPrefix(phone, "+")))
 		}
 
+		name := getFullName(user)
 		return &bridgev2.UserInfo{
 			IsBot: &user.Bot,
-			Name:  getFullNamePtr(user),
+			Name:  &name,
+			// TODO
 			// Avatar *Avatar
 			Identifiers: identifiers,
 		}, nil
