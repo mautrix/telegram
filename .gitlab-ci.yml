@@ -1,6 +1,6 @@
 include:
 - project: 'mautrix/ci'
-  file: '/go.yml'
+  file: '/gov2.yml'
 
 variables:
-  BINARY_NAME: mautrix-telegram
+  BINARY_NAME_V2: mautrix-telegram
