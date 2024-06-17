@@ -4,12 +4,14 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"net/http"
 	"time"
 
 	"github.com/gotd/td/telegram"
 	"github.com/gotd/td/telegram/downloader"
 	"github.com/gotd/td/tg"
 	"github.com/rs/zerolog"
+	"go.mau.fi/util/exmime"
 	"maunium.net/go/mautrix/bridgev2"
 	"maunium.net/go/mautrix/bridgev2/networkid"
 	"maunium.net/go/mautrix/event"
@@ -39,66 +41,83 @@ func (mc *MessageConverter) ToMatrix(ctx context.Context, portal *bridgev2.Porta
 	if m, ok := msg.GetMedia(); ok {
 		switch media := m.(type) {
 		case *tg.MessageMediaPhoto:
-			if media.GetSpoiler() {
-				// TODO do something
-				fmt.Printf("SPOILER\n")
+			p, ok := media.GetPhoto()
+			if !ok {
+				return nil, fmt.Errorf("photo message sent without a photo")
 			}
-			if p, ok := media.GetPhoto(); ok {
-				switch photo := p.(type) {
-				case *tg.Photo:
-					largest := getLargestPhotoSize(photo.GetSizes())
-					file := tg.InputPhotoFileLocation{
-						ID:            photo.GetID(),
-						AccessHash:    photo.GetAccessHash(),
-						FileReference: photo.GetFileReference(),
-						ThumbSize:     largest.GetType(),
-					}
+			photo, ok := p.(*tg.Photo)
+			if !ok {
+				return nil, fmt.Errorf("unrecognized photo type %T", p)
+			}
 
-					// TODO convert to streaming directly into UploadMedia
-					var buf bytes.Buffer
-					storageFileTypeClass, err := downloader.NewDownloader().Download(mc.client.API(), &file).Stream(ctx, &buf)
-					if err != nil {
-						return nil, err
-					}
-					contentType := "application/octet-stream"
-					switch storageFileTypeClass.(type) {
-					case *tg.StorageFileJpeg:
-						contentType = "image/jpeg"
-					case *tg.StorageFileGif:
-						contentType = "image/gif"
-					case *tg.StorageFilePng:
-						contentType = "image/png"
-					case *tg.StorageFilePdf:
-						contentType = "application/pdf"
-					case *tg.StorageFileMp3:
-						contentType = "audio/mp3"
-					case *tg.StorageFileMov:
-						contentType = "video/quicktime"
-					case *tg.StorageFileMp4:
-						contentType = "video/mp4"
-					case *tg.StorageFileWebp:
-						contentType = "image/webp"
-					}
+			largest := getLargestPhotoSize(photo.GetSizes())
+			file := tg.InputPhotoFileLocation{
+				ID:            photo.GetID(),
+				AccessHash:    photo.GetAccessHash(),
+				FileReference: photo.GetFileReference(),
+				ThumbSize:     largest.GetType(),
+			}
 
-					mxcURI, encryptedFileInfo, err := intent.UploadMedia(ctx, "", buf.Bytes(), "", contentType)
-					if err != nil {
-						return nil, err
-					}
-					cm.Parts = append(cm.Parts, &bridgev2.ConvertedMessagePart{
-						ID:   networkid.PartID("photo"),
-						Type: event.EventMessage,
-						Content: &event.MessageEventContent{
-							MsgType: event.MsgImage,
-							// Body:    filename,
-							URL:  mxcURI,
-							File: encryptedFileInfo,
-						},
-					})
+			// TODO convert to streaming directly into UploadMedia
+			var buf bytes.Buffer
+			storageFileTypeClass, err := downloader.NewDownloader().Download(mc.client.API(), &file).Stream(ctx, &buf)
+			if err != nil {
+				return nil, err
+			}
+			var mimeType string
+			switch storageFileTypeClass.(type) {
+			case *tg.StorageFileJpeg:
+				mimeType = "image/jpeg"
+			case *tg.StorageFileGif:
+				mimeType = "image/gif"
+			case *tg.StorageFilePng:
+				mimeType = "image/png"
+			case *tg.StorageFilePdf:
+				mimeType = "application/pdf"
+			case *tg.StorageFileMp3:
+				mimeType = "audio/mp3"
+			case *tg.StorageFileMov:
+				mimeType = "video/quicktime"
+			case *tg.StorageFileMp4:
+				mimeType = "video/mp4"
+			case *tg.StorageFileWebp:
+				mimeType = "image/webp"
+			default:
+				mimeType = http.DetectContentType(buf.Bytes())
+			}
+			var filename string
+			if _, ok := media.GetTTLSeconds(); ok {
+				// TODO set the ttl on the converted message
+				filename = "disappearing_image" + exmime.ExtensionFromMimetype(mimeType)
+			} else {
+				filename = "image" + exmime.ExtensionFromMimetype(mimeType)
+			}
 
-				default:
-					log.Error().Type("msg", msg).Msg("Unhandled photo type")
+			mxcURI, encryptedFileInfo, err := intent.UploadMedia(ctx, "", buf.Bytes(), filename, mimeType)
+			if err != nil {
+				return nil, err
+			}
+
+			extra := map[string]any{}
+			if media.GetSpoiler() {
+				// See: https://github.com/matrix-org/matrix-spec-proposals/pull/3725
+				extra["town.robin.msc3725.content_warning"] = map[string]any{
+					"type": "town.robin.msc3725.spoiler",
 				}
 			}
+
+			cm.Parts = append(cm.Parts, &bridgev2.ConvertedMessagePart{
+				ID:   networkid.PartID("photo"),
+				Type: event.EventMessage,
+				Content: &event.MessageEventContent{
+					MsgType: event.MsgImage,
+					Body:    filename,
+					URL:     mxcURI,
+					File:    encryptedFileInfo,
+				},
+				Extra: extra,
+			})
+
 		case *tg.MessageMediaGeo: // messageMediaGeo#56e0d474
 		case *tg.MessageMediaContact: // messageMediaContact#70322949
 		case *tg.MessageMediaUnsupported: // messageMediaUnsupported#9f84f49e
