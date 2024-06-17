@@ -157,7 +157,7 @@ var _ updates.ChannelAccessHasher = (*scopedStore)(nil)
 
 func (s *scopedStore) GetChannelAccessHash(ctx context.Context, userID int64, channelID int64) (accessHash int64, found bool, err error) {
 	s.assertUserIDMatches(userID)
-	err = s.db.QueryRow(ctx, getChannelAccessHashQuery, userID).Scan(&accessHash)
+	err = s.db.QueryRow(ctx, getChannelAccessHashQuery, userID, channelID).Scan(&accessHash)
 	if errors.Is(err, sql.ErrNoRows) {
 		return 0, false, nil
 	}

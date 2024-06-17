@@ -10,7 +10,9 @@ import (
 
 	"github.com/gotd/td/telegram"
 	"github.com/gotd/td/telegram/message"
+	"github.com/gotd/td/telegram/message/html"
 	"github.com/gotd/td/telegram/updates"
+	"github.com/gotd/td/telegram/uploader"
 	"github.com/gotd/td/tg"
 	"github.com/rs/zerolog"
 	"go.mau.fi/zerozap"
@@ -18,6 +20,7 @@ import (
 	"maunium.net/go/mautrix/bridgev2"
 	"maunium.net/go/mautrix/bridgev2/database"
 	"maunium.net/go/mautrix/bridgev2/networkid"
+	"maunium.net/go/mautrix/event"
 
 	"go.mau.fi/mautrix-telegram/pkg/connector/msgconv"
 )
@@ -281,22 +284,78 @@ func (t *TelegramClient) HandleMatrixMessage(ctx context.Context, msg *bridgev2.
 	if err != nil {
 		return nil, err
 	}
+	builder := sender.To(peer)
 
-	updates, err := sender.To(peer).Text(ctx, msg.Content.Body)
-	if err != nil {
-		return nil, err
+	// TODO handle sticker
+
+	var updates tg.UpdatesClass
+	switch msg.Content.MsgType {
+	case event.MsgText:
+		updates, err = builder.Text(ctx, msg.Content.Body)
+		if err != nil {
+			return nil, err
+		}
+	case event.MsgImage, event.MsgFile, event.MsgAudio, event.MsgVideo:
+		var filename, caption string
+		if msg.Content.FileName != "" {
+			filename = msg.Content.FileName
+			caption = msg.Content.FormattedBody
+			if caption == "" {
+				caption = msg.Content.Body
+			}
+		} else {
+			filename = msg.Content.Body
+		}
+
+		// TODO stream this download straight into the uploader
+		fileData, err := t.main.Bridge.Bot.DownloadMedia(ctx, msg.Content.URL, msg.Content.File)
+		if err != nil {
+			return nil, fmt.Errorf("failed to download media from Matrix: %w", err)
+		}
+		uploader := uploader.NewUploader(t.client.API())
+		upload, err := uploader.FromBytes(ctx, filename, fileData)
+		if err != nil {
+			return nil, fmt.Errorf("failed to upload media to Telegram: %w", err)
+		}
+		var photo *message.UploadedPhotoBuilder
+		if caption != "" {
+			// TODO resolver?
+			photo = message.UploadedPhoto(upload, html.String(nil, caption))
+		} else {
+			photo = message.UploadedPhoto(upload)
+		}
+		updates, err = builder.Media(ctx, photo)
+		if err != nil {
+			return nil, err
+		}
 	}
-	sentMessage, ok := updates.(*tg.UpdateShortSentMessage)
-	if !ok {
+
+	var tgMessageID, tgDate int
+	switch sentMessage := updates.(type) {
+	case *tg.UpdateShortSentMessage:
+		tgMessageID = sentMessage.ID
+		tgDate = sentMessage.Date
+	case *tg.Updates:
+		tgDate = sentMessage.Date
+		for _, u := range sentMessage.Updates {
+			if update, ok := u.(*tg.UpdateMessageID); ok {
+				tgMessageID = update.ID
+				break
+			}
+		}
+		if tgMessageID == 0 {
+			return nil, fmt.Errorf("couldn't find update message ID update")
+		}
+	default:
 		return nil, fmt.Errorf("unknown update from message response %T", updates)
 	}
 
 	dbMessage = &database.Message{
-		ID:        makeMessageID(sentMessage.ID),
+		ID:        makeMessageID(tgMessageID),
 		MXID:      msg.Event.ID,
 		RoomID:    msg.Portal.ID,
 		SenderID:  makeUserID(t.loginID),
-		Timestamp: time.Unix(int64(sentMessage.Date), 0),
+		Timestamp: time.Unix(int64(tgDate), 0),
 	}
 	return
 }

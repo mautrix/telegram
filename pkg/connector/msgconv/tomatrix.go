@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/gotd/td/telegram"
 	"github.com/gotd/td/telegram/downloader"
 	"github.com/gotd/td/tg"
 	"github.com/rs/zerolog"
@@ -17,16 +16,9 @@ import (
 	"maunium.net/go/mautrix/event"
 )
 
-type MessageConverter struct {
-	client *telegram.Client
-}
-
-func NewMessageConverter(client *telegram.Client) *MessageConverter {
-	return &MessageConverter{client: client}
-}
-
 func (mc *MessageConverter) ToMatrix(ctx context.Context, portal *bridgev2.Portal, intent bridgev2.MatrixAPI, msg *tg.Message) (*bridgev2.ConvertedMessage, error) {
 	log := zerolog.Ctx(ctx).With().Str("conversion_direction", "to_matrix").Logger()
+	ctx = log.WithContext(ctx)
 
 	cm := &bridgev2.ConvertedMessage{
 		Timestamp: time.Unix(int64(msg.Date), 0),
@@ -118,22 +110,23 @@ func (mc *MessageConverter) ToMatrix(ctx context.Context, portal *bridgev2.Porta
 				Extra: extra,
 			})
 
-		case *tg.MessageMediaGeo: // messageMediaGeo#56e0d474
-		case *tg.MessageMediaContact: // messageMediaContact#70322949
-		case *tg.MessageMediaUnsupported: // messageMediaUnsupported#9f84f49e
-		case *tg.MessageMediaDocument: // messageMediaDocument#4cf4d72d
-		case *tg.MessageMediaWebPage: // messageMediaWebPage#ddf10c3b
-		case *tg.MessageMediaVenue: // messageMediaVenue#2ec0533f
-		case *tg.MessageMediaGame: // messageMediaGame#fdb19008
-		case *tg.MessageMediaInvoice: // messageMediaInvoice#f6a548d3
-		case *tg.MessageMediaGeoLive: // messageMediaGeoLive#b940c666
-		case *tg.MessageMediaPoll: // messageMediaPoll#4bd6e798
-		case *tg.MessageMediaDice: // messageMediaDice#3f7ee58b
-		case *tg.MessageMediaStory: // messageMediaStory#68cb6283
-		case *tg.MessageMediaGiveaway: // messageMediaGiveaway#daad85b0
-		case *tg.MessageMediaGiveawayResults: // messageMediaGiveawayResults#c6991068
+			// TODO all of these
+			// case *tg.MessageMediaGeo: // messageMediaGeo#56e0d474
+			// case *tg.MessageMediaContact: // messageMediaContact#70322949
+			// case *tg.MessageMediaUnsupported: // messageMediaUnsupported#9f84f49e
+			// case *tg.MessageMediaDocument: // messageMediaDocument#4cf4d72d
+			// case *tg.MessageMediaWebPage: // messageMediaWebPage#ddf10c3b
+			// case *tg.MessageMediaVenue: // messageMediaVenue#2ec0533f
+			// case *tg.MessageMediaGame: // messageMediaGame#fdb19008
+			// case *tg.MessageMediaInvoice: // messageMediaInvoice#f6a548d3
+			// case *tg.MessageMediaGeoLive: // messageMediaGeoLive#b940c666
+			// case *tg.MessageMediaPoll: // messageMediaPoll#4bd6e798
+			// case *tg.MessageMediaDice: // messageMediaDice#3f7ee58b
+			// case *tg.MessageMediaStory: // messageMediaStory#68cb6283
+			// case *tg.MessageMediaGiveaway: // messageMediaGiveaway#daad85b0
+			// case *tg.MessageMediaGiveawayResults: // messageMediaGiveawayResults#c6991068
 		default:
-			log.Error().Type("msg", msg).Msg("Unhandled media type")
+			return nil, fmt.Errorf("unhandled media type %T", m)
 		}
 	}
 	return cm, nil
