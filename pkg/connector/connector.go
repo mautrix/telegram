@@ -37,6 +37,8 @@ type TelegramConnector struct {
 	store *store.Container
 }
 
+var _ bridgev2.NetworkConnector = (*TelegramConnector)(nil)
+
 func NewConnector() *TelegramConnector {
 	return &TelegramConnector{
 		Config: &TelegramConfig{},
