@@ -5,7 +5,6 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"time"
 
 	"github.com/gotd/td/telegram/downloader"
 	"github.com/gotd/td/tg"
@@ -20,9 +19,7 @@ func (mc *MessageConverter) ToMatrix(ctx context.Context, portal *bridgev2.Porta
 	log := zerolog.Ctx(ctx).With().Str("conversion_direction", "to_matrix").Logger()
 	ctx = log.WithContext(ctx)
 
-	cm := &bridgev2.ConvertedMessage{
-		Timestamp: time.Unix(int64(msg.Date), 0),
-	}
+	cm := &bridgev2.ConvertedMessage{}
 	if msg.Message != "" {
 		cm.Parts = append(cm.Parts, &bridgev2.ConvertedMessagePart{
 			ID:      networkid.PartID("caption"),

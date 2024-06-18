@@ -17,31 +17,29 @@
 package main
 
 import (
-	"os"
-
-	"go.mau.fi/util/dbutil"
 	_ "go.mau.fi/util/dbutil/litestream"
-	"go.mau.fi/util/exerrors"
-	"go.mau.fi/util/exzerolog"
-	"gopkg.in/yaml.v3"
-	"maunium.net/go/mautrix/bridgev2"
-	"maunium.net/go/mautrix/bridgev2/bridgeconfig"
-	"maunium.net/go/mautrix/bridgev2/matrix"
+	"maunium.net/go/mautrix/bridgev2/matrix/mxmain"
 
 	"go.mau.fi/mautrix-telegram/pkg/connector"
 )
 
-func main() {
-	var cfg bridgeconfig.Config
-	config := exerrors.Must(os.ReadFile("config.yaml"))
-	exerrors.PanicIfNotNil(yaml.Unmarshal(config, &cfg))
-	log := exerrors.Must(cfg.Logging.Compile())
-	exzerolog.SetupDefaults(log)
+// Information to find out exactly which commit the bridge was built from.
+// These are filled at build time with the -X linker flag.
+var (
+	Tag       = "unknown"
+	Commit    = "unknown"
+	BuildTime = "unknown"
+)
 
-	db := exerrors.Must(dbutil.NewFromConfig("mautrix-telegram", cfg.Database, dbutil.ZeroLogger(log.With().Str("db_section", "main").Logger())))
-	telegramConnector := connector.NewConnector()
-	exerrors.PanicIfNotNil(cfg.Network.Decode(telegramConnector.Config))
-	bridge := bridgev2.NewBridge("", db, *log, matrix.NewConnector(&cfg), telegramConnector)
-	bridge.CommandPrefix = "!telegram"
-	bridge.Start()
+func main() {
+	m := mxmain.BridgeMain{
+		Name:        "mautrix-telegram",
+		URL:         "https://github.com/mautrix/telegram",
+		Description: "A Matrix-Telegram puppeting bridge.",
+		Version:     "0.16.0",
+
+		Connector: connector.NewConnector(),
+	}
+	m.InitVersion(Tag, Commit, BuildTime)
+	m.Run()
 }

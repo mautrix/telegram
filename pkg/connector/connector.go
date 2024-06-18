@@ -18,7 +18,10 @@ package connector
 
 import (
 	"context"
+	_ "embed"
+	"fmt"
 
+	up "go.mau.fi/util/configupgrade"
 	"go.mau.fi/util/dbutil"
 	"maunium.net/go/mautrix/bridgev2"
 
@@ -38,6 +41,9 @@ type TelegramConnector struct {
 }
 
 var _ bridgev2.NetworkConnector = (*TelegramConnector)(nil)
+var _ bridgev2.ConfigValidatingNetwork = (*TelegramConnector)(nil)
+
+// var _ bridgev2.MaxFileSizeingNetwork = (*TelegramConnector)(nil)
 
 func NewConnector() *TelegramConnector {
 	return &TelegramConnector{
@@ -58,4 +64,41 @@ func (tg *TelegramConnector) Start(ctx context.Context) error {
 func (tc *TelegramConnector) LoadUserLogin(ctx context.Context, login *bridgev2.UserLogin) (err error) {
 	login.Client, err = NewTelegramClient(ctx, tc, login)
 	return
+}
+
+//go:embed example-config.yaml
+var ExampleConfig string
+
+func upgradeConfig(helper up.Helper) {
+	helper.Copy(up.Int, "app_id")
+	helper.Copy(up.Str, "app_hash")
+}
+
+func (tg *TelegramConnector) GetConfig() (example string, data any, upgrader up.Upgrader) {
+	return ExampleConfig, tg.Config, up.SimpleUpgrader(upgradeConfig)
+}
+
+func (tg *TelegramConnector) ValidateConfig() error {
+	if tg.Config.AppID == 0 {
+		return fmt.Errorf("app_id is required")
+	}
+	if tg.Config.AppHash == "" {
+		return fmt.Errorf("app_hash is required")
+	}
+	return nil
+}
+
+// TODO
+// func (tg *TelegramConnector) SetMaxFileSize(maxSize int64) {
+// }
+
+func (tg *TelegramConnector) GetName() bridgev2.BridgeName {
+	return bridgev2.BridgeName{
+		DisplayName:      "Telegram",
+		NetworkURL:       "https://telegram.org/",
+		NetworkIcon:      "mxc://maunium.net/tJCRmUyJDsgRNgqhOgoiHWbX",
+		NetworkID:        "telegram",
+		BeeperBridgeType: "telegram",
+		DefaultPort:      29317,
+	}
 }

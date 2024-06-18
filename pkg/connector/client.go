@@ -9,18 +9,13 @@ import (
 	"time"
 
 	"github.com/gotd/td/telegram"
-	"github.com/gotd/td/telegram/message"
-	"github.com/gotd/td/telegram/message/html"
 	"github.com/gotd/td/telegram/updates"
-	"github.com/gotd/td/telegram/uploader"
 	"github.com/gotd/td/tg"
 	"github.com/rs/zerolog"
 	"go.mau.fi/zerozap"
 	"go.uber.org/zap"
 	"maunium.net/go/mautrix/bridgev2"
-	"maunium.net/go/mautrix/bridgev2/database"
 	"maunium.net/go/mautrix/bridgev2/networkid"
-	"maunium.net/go/mautrix/event"
 
 	"go.mau.fi/mautrix-telegram/pkg/connector/msgconv"
 )
@@ -33,6 +28,8 @@ type TelegramClient struct {
 	clientCancel context.CancelFunc
 	msgConv      *msgconv.MessageConverter
 }
+
+var _ bridgev2.NetworkAPI = (*TelegramClient)(nil)
 
 func NewTelegramClient(ctx context.Context, tc *TelegramConnector, login *bridgev2.UserLogin) (*TelegramClient, error) {
 	loginID, err := strconv.ParseInt(string(login.ID), 10, 64)
@@ -85,8 +82,6 @@ func NewTelegramClient(ctx context.Context, tc *TelegramConnector, login *bridge
 	}()
 	return &client, err
 }
-
-var _ bridgev2.NetworkAPI = (*TelegramClient)(nil)
 
 // connectTelegramClient blocks until client is connected, calling Run
 // internally.
@@ -162,10 +157,11 @@ func (t *TelegramClient) onUpdateNewMessage(ctx context.Context, e tg.Entities, 
 		},
 		ID:                 makeMessageID(msg.ID),
 		Sender:             sender,
-		PortalID:           makePortalID(msg.PeerID),
+		PortalKey:          makePortalID(msg.PeerID),
 		Data:               msg,
 		CreatePortal:       true,
 		ConvertMessageFunc: t.msgConv.ToMatrix,
+		Timestamp:          time.Unix(int64(msg.Date), 0),
 	})
 	return nil
 }
@@ -178,6 +174,10 @@ func (t *TelegramClient) onUpdateNewChannelMessage(ctx context.Context, e tg.Ent
 func (t *TelegramClient) Connect(ctx context.Context) (err error) {
 	t.clientCancel, err = connectTelegramClient(ctx, t.client)
 	return
+}
+
+func (t *TelegramClient) Disconnect() {
+	t.clientCancel()
 }
 
 func getFullName(user *tg.User) string {
@@ -274,111 +274,9 @@ func (t *TelegramClient) GetUserInfo(ctx context.Context, ghost *bridgev2.Ghost)
 	}
 }
 
-func (t *TelegramClient) HandleMatrixEdit(ctx context.Context, msg *bridgev2.MatrixEdit) error {
-	panic("unimplemented edit")
-}
-
-func (t *TelegramClient) HandleMatrixMessage(ctx context.Context, msg *bridgev2.MatrixMessage) (dbMessage *database.Message, err error) {
-	sender := message.NewSender(t.client.API())
-	peer, err := inputPeerForPortalID(msg.Portal.ID)
-	if err != nil {
-		return nil, err
-	}
-	builder := sender.To(peer)
-
-	// TODO handle sticker
-
-	var updates tg.UpdatesClass
-	switch msg.Content.MsgType {
-	case event.MsgText:
-		updates, err = builder.Text(ctx, msg.Content.Body)
-		if err != nil {
-			return nil, err
-		}
-	case event.MsgImage, event.MsgFile, event.MsgAudio, event.MsgVideo:
-		var filename, caption string
-		if msg.Content.FileName != "" {
-			filename = msg.Content.FileName
-			caption = msg.Content.FormattedBody
-			if caption == "" {
-				caption = msg.Content.Body
-			}
-		} else {
-			filename = msg.Content.Body
-		}
-
-		// TODO stream this download straight into the uploader
-		fileData, err := t.main.Bridge.Bot.DownloadMedia(ctx, msg.Content.URL, msg.Content.File)
-		if err != nil {
-			return nil, fmt.Errorf("failed to download media from Matrix: %w", err)
-		}
-		uploader := uploader.NewUploader(t.client.API())
-		upload, err := uploader.FromBytes(ctx, filename, fileData)
-		if err != nil {
-			return nil, fmt.Errorf("failed to upload media to Telegram: %w", err)
-		}
-		var photo *message.UploadedPhotoBuilder
-		if caption != "" {
-			// TODO resolver?
-			photo = message.UploadedPhoto(upload, html.String(nil, caption))
-		} else {
-			photo = message.UploadedPhoto(upload)
-		}
-		updates, err = builder.Media(ctx, photo)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	var tgMessageID, tgDate int
-	switch sentMessage := updates.(type) {
-	case *tg.UpdateShortSentMessage:
-		tgMessageID = sentMessage.ID
-		tgDate = sentMessage.Date
-	case *tg.Updates:
-		tgDate = sentMessage.Date
-		for _, u := range sentMessage.Updates {
-			if update, ok := u.(*tg.UpdateMessageID); ok {
-				tgMessageID = update.ID
-				break
-			}
-		}
-		if tgMessageID == 0 {
-			return nil, fmt.Errorf("couldn't find update message ID update")
-		}
-	default:
-		return nil, fmt.Errorf("unknown update from message response %T", updates)
-	}
-
-	dbMessage = &database.Message{
-		ID:        makeMessageID(tgMessageID),
-		MXID:      msg.Event.ID,
-		RoomID:    msg.Portal.ID,
-		SenderID:  makeUserID(t.loginID),
-		Timestamp: time.Unix(int64(tgDate), 0),
-	}
-	return
-}
-
-func (t *TelegramClient) HandleMatrixMessageRemove(ctx context.Context, msg *bridgev2.MatrixMessageRemove) error {
-	panic("unimplemented remove")
-}
-
-func (t *TelegramClient) HandleMatrixReaction(ctx context.Context, msg *bridgev2.MatrixReaction) (emojiID networkid.EmojiID, err error) {
-	panic("unimplemented reaction")
-}
-
-func (t *TelegramClient) HandleMatrixReactionRemove(ctx context.Context, msg *bridgev2.MatrixReactionRemove) error {
-	panic("unimplemented reaction remove")
-}
-
 func (t *TelegramClient) IsLoggedIn() bool {
 	_, err := t.client.Self(context.TODO())
 	return err == nil
-}
-
-func (t *TelegramClient) IsThisUser(ctx context.Context, userID networkid.UserID) bool {
-	return userID == networkid.UserID(t.userLogin.ID)
 }
 
 func (t *TelegramClient) LogoutRemote(ctx context.Context) {
@@ -386,4 +284,8 @@ func (t *TelegramClient) LogoutRemote(ctx context.Context) {
 	if err != nil {
 		zerolog.Ctx(ctx).Err(err).Msg("failed to logout on Telegram")
 	}
+}
+
+func (t *TelegramClient) IsThisUser(ctx context.Context, userID networkid.UserID) bool {
+	return userID == networkid.UserID(t.userLogin.ID)
 }

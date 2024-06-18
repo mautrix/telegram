@@ -33,14 +33,14 @@ const (
 	peerTypeChannel peerType = "channel"
 )
 
-func makePortalID(peer tg.PeerClass) networkid.PortalID {
+func makePortalID(peer tg.PeerClass) networkid.PortalKey {
 	switch v := peer.(type) {
 	case *tg.PeerUser:
-		return networkid.PortalID(fmt.Sprintf("%s:%d", peerTypeUser, v.UserID))
+		return networkid.PortalKey{ID: networkid.PortalID(fmt.Sprintf("%s:%d", peerTypeUser, v.UserID))}
 	case *tg.PeerChat:
-		return networkid.PortalID(fmt.Sprintf("%s:%d", peerTypeChat, v.ChatID))
+		return networkid.PortalKey{ID: networkid.PortalID(fmt.Sprintf("%s:%d", peerTypeChat, v.ChatID))}
 	case *tg.PeerChannel:
-		return networkid.PortalID(fmt.Sprintf("%s:%d", peerTypeChannel, v.ChannelID))
+		return networkid.PortalKey{ID: networkid.PortalID(fmt.Sprintf("%s:%d", peerTypeChannel, v.ChannelID))}
 	default:
 		panic(fmt.Errorf("unknown peer class type %T", v))
 	}
