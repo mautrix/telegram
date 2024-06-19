@@ -3,11 +3,13 @@ package msgconv
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/gotd/td/tg"
 	"github.com/rs/zerolog"
 	"go.mau.fi/util/exmime"
 	"maunium.net/go/mautrix/bridgev2"
+	"maunium.net/go/mautrix/bridgev2/database"
 	"maunium.net/go/mautrix/bridgev2/networkid"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
@@ -61,9 +63,12 @@ func (mc *MessageConverter) ToMatrix(ctx context.Context, portal *bridgev2.Porta
 				if err != nil {
 					return nil, err
 				}
-				if _, ok := media.GetTTLSeconds(); ok {
-					// TODO set the ttl on the converted message
+				if ttl, ok := media.GetTTLSeconds(); ok {
 					filename = "disappearing_image" + exmime.ExtensionFromMimetype(mimeType)
+					cm.Disappear = database.DisappearingSetting{
+						Type:  database.DisappearingTypeAfterSend,
+						Timer: time.Duration(ttl) * time.Second,
+					}
 				} else {
 					filename = "image" + exmime.ExtensionFromMimetype(mimeType)
 				}

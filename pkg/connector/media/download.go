@@ -53,7 +53,7 @@ func DownloadPhoto(ctx context.Context, client downloader.Client, media *tg.Mess
 		ThumbSize:     largest.GetType(),
 	}
 
-	// TODO convert to streaming
+	// TODO convert to streaming?
 	var buf bytes.Buffer
 	storageFileTypeClass, err := downloader.NewDownloader().Download(client, &file).Stream(ctx, &buf)
 	if err != nil {

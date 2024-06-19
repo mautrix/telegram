@@ -48,7 +48,6 @@ func ParseDirectMediaInfo(mediaID networkid.MediaID) (info DirectMediaInfo, err 
 		err = fmt.Errorf("invalid media ID")
 		return
 	}
-	fmt.Printf("%v\n", mediaID)
 	info.PeerType, err = PeerTypeFromByte(mediaID[1])
 	if err != nil {
 		return
