@@ -17,6 +17,7 @@ import (
 	"maunium.net/go/mautrix/bridgev2"
 	"maunium.net/go/mautrix/bridgev2/networkid"
 
+	"go.mau.fi/mautrix-telegram/pkg/connector/ids"
 	"go.mau.fi/mautrix-telegram/pkg/connector/msgconv"
 )
 
@@ -71,7 +72,7 @@ func NewTelegramClient(ctx context.Context, tc *TelegramConnector, login *bridge
 		Logger:         zaplog,
 		UpdateHandler:  updatesManager,
 	})
-	client.msgConv = msgconv.NewMessageConverter(client.client)
+	client.msgConv = msgconv.NewMessageConverter(client.client, tc.useDirectMedia)
 	client.clientCancel, err = connectTelegramClient(ctx, client.client)
 	go func() {
 		err = updatesManager.Run(ctx, client.client.API(), loginID, updates.AuthOptions{})
@@ -127,21 +128,21 @@ func (t *TelegramClient) onUpdateNewMessage(ctx context.Context, e tg.Entities, 
 	var sender bridgev2.EventSender
 	if msg.Out {
 		sender.IsFromMe = true
-		sender.SenderLogin = makeUserLoginID(t.loginID)
-		sender.Sender = makeUserID(t.loginID)
+		sender.SenderLogin = ids.MakeUserLoginID(t.loginID)
+		sender.Sender = ids.MakeUserID(t.loginID)
 	} else if msg.FromID != nil {
 		switch from := msg.FromID.(type) {
 		case *tg.PeerUser:
-			sender.SenderLogin = makeUserLoginID(from.UserID)
-			sender.Sender = makeUserID(from.UserID)
+			sender.SenderLogin = ids.MakeUserLoginID(from.UserID)
+			sender.Sender = ids.MakeUserID(from.UserID)
 		default:
 			fmt.Printf("%+v\n", msg.FromID)
 			fmt.Printf("%T\n", msg.FromID)
 			panic("unimplemented FromID")
 		}
 	} else if peer, ok := msg.PeerID.(*tg.PeerUser); ok {
-		sender.SenderLogin = makeUserLoginID(peer.UserID)
-		sender.Sender = makeUserID(peer.UserID)
+		sender.SenderLogin = ids.MakeUserLoginID(peer.UserID)
+		sender.Sender = ids.MakeUserID(peer.UserID)
 	} else {
 		panic("not from anyone")
 	}
@@ -155,9 +156,9 @@ func (t *TelegramClient) onUpdateNewMessage(ctx context.Context, e tg.Entities, 
 				Str("sender_login", string(sender.SenderLogin)).
 				Bool("is_from_me", sender.IsFromMe)
 		},
-		ID:                 makeMessageID(msg.ID),
+		ID:                 ids.MakeMessageID(msg.ID),
 		Sender:             sender,
-		PortalKey:          makePortalID(msg.PeerID),
+		PortalKey:          ids.MakePortalID(msg.PeerID),
 		Data:               msg,
 		CreatePortal:       true,
 		ConvertMessageFunc: t.msgConv.ToMatrix,
@@ -186,7 +187,7 @@ func getFullName(user *tg.User) string {
 
 func (t *TelegramClient) GetChatInfo(ctx context.Context, portal *bridgev2.Portal) (*bridgev2.PortalInfo, error) {
 	fmt.Printf("%+v\n", portal)
-	peerType, id, err := parsePortalID(portal.ID)
+	peerType, id, err := ids.ParsePortalID(portal.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -195,7 +196,7 @@ func (t *TelegramClient) GetChatInfo(ctx context.Context, portal *bridgev2.Porta
 	var isSpace, isDM bool
 
 	switch peerType {
-	case peerTypeUser:
+	case ids.PeerTypeUser:
 		users, err := t.client.API().UsersGetUsers(ctx, []tg.InputUserClass{&tg.InputUser{UserID: id}})
 		if err != nil {
 			return nil, err
@@ -207,10 +208,10 @@ func (t *TelegramClient) GetChatInfo(ctx context.Context, portal *bridgev2.Porta
 			return nil, fmt.Errorf("returned user is not *tg.User")
 		} else {
 			name = getFullName(user) // TODO gate this behind a config?
-			members = []networkid.UserID{makeUserID(id), makeUserID(t.loginID)}
+			members = []networkid.UserID{ids.MakeUserID(id), ids.MakeUserID(t.loginID)}
 			isDM = true
 		}
-	case peerTypeChat:
+	case ids.PeerTypeChat:
 		// TODO get name of chat
 		chat, err := t.client.API().MessagesGetFullChat(ctx, id)
 		if err != nil {
@@ -220,7 +221,7 @@ func (t *TelegramClient) GetChatInfo(ctx context.Context, portal *bridgev2.Porta
 			return nil, fmt.Errorf("no users found in chat %d", id)
 		}
 		for _, user := range chat.Users {
-			members = append(members, makeUserID(user.GetID()))
+			members = append(members, ids.MakeUserID(user.GetID()))
 		}
 	default:
 		fmt.Printf("%s %d\n", peerType, id)
@@ -240,7 +241,7 @@ func (t *TelegramClient) GetChatInfo(ctx context.Context, portal *bridgev2.Porta
 }
 
 func (t *TelegramClient) GetUserInfo(ctx context.Context, ghost *bridgev2.Ghost) (*bridgev2.UserInfo, error) {
-	id, err := parseUserID(ghost.ID)
+	id, err := ids.ParseUserID(ghost.ID)
 	if err != nil {
 		return nil, err
 	}

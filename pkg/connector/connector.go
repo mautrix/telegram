@@ -37,7 +37,8 @@ type TelegramConnector struct {
 	Bridge *bridgev2.Bridge
 	Config *TelegramConfig
 
-	store *store.Container
+	store          *store.Container
+	useDirectMedia bool
 }
 
 var _ bridgev2.NetworkConnector = (*TelegramConnector)(nil)

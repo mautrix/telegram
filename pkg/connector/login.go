@@ -30,6 +30,8 @@ import (
 	"go.uber.org/zap"
 	"maunium.net/go/mautrix/bridgev2"
 	"maunium.net/go/mautrix/bridgev2/database"
+
+	"go.mau.fi/mautrix-telegram/pkg/connector/ids"
 )
 
 const LoginFlowIDPhone = "phone"
@@ -187,7 +189,7 @@ func (p *PhoneLogin) handleAuthSuccess(ctx context.Context, authorization *tg.Au
 	}
 	p.clientCancel()
 
-	userLoginID := makeUserLoginID(authorization.User.GetID())
+	userLoginID := ids.MakeUserLoginID(authorization.User.GetID())
 	ul, err := p.user.NewLogin(ctx, &database.UserLogin{
 		ID: userLoginID,
 		Metadata: database.UserLoginMetadata{

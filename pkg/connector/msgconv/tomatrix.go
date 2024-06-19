@@ -1,18 +1,19 @@
 package msgconv
 
 import (
-	"bytes"
 	"context"
 	"fmt"
-	"net/http"
 
-	"github.com/gotd/td/telegram/downloader"
 	"github.com/gotd/td/tg"
 	"github.com/rs/zerolog"
 	"go.mau.fi/util/exmime"
 	"maunium.net/go/mautrix/bridgev2"
 	"maunium.net/go/mautrix/bridgev2/networkid"
 	"maunium.net/go/mautrix/event"
+	"maunium.net/go/mautrix/id"
+
+	"go.mau.fi/mautrix-telegram/pkg/connector/ids"
+	conmedia "go.mau.fi/mautrix-telegram/pkg/connector/media"
 )
 
 func (mc *MessageConverter) ToMatrix(ctx context.Context, portal *bridgev2.Portal, intent bridgev2.MatrixAPI, msg *tg.Message) (*bridgev2.ConvertedMessage, error) {
@@ -27,64 +28,50 @@ func (mc *MessageConverter) ToMatrix(ctx context.Context, portal *bridgev2.Porta
 			Content: &event.MessageEventContent{MsgType: event.MsgText, Body: msg.Message},
 		})
 	}
+
 	if m, ok := msg.GetMedia(); ok {
 		switch media := m.(type) {
 		case *tg.MessageMediaPhoto:
-			p, ok := media.GetPhoto()
-			if !ok {
-				return nil, fmt.Errorf("photo message sent without a photo")
-			}
-			photo, ok := p.(*tg.Photo)
-			if !ok {
-				return nil, fmt.Errorf("unrecognized photo type %T", p)
-			}
-
-			largest := getLargestPhotoSize(photo.GetSizes())
-			file := tg.InputPhotoFileLocation{
-				ID:            photo.GetID(),
-				AccessHash:    photo.GetAccessHash(),
-				FileReference: photo.GetFileReference(),
-				ThumbSize:     largest.GetType(),
-			}
-
-			// TODO convert to streaming directly into UploadMedia
-			var buf bytes.Buffer
-			storageFileTypeClass, err := downloader.NewDownloader().Download(mc.client.API(), &file).Stream(ctx, &buf)
-			if err != nil {
-				return nil, err
-			}
-			var mimeType string
-			switch storageFileTypeClass.(type) {
-			case *tg.StorageFileJpeg:
-				mimeType = "image/jpeg"
-			case *tg.StorageFileGif:
-				mimeType = "image/gif"
-			case *tg.StorageFilePng:
-				mimeType = "image/png"
-			case *tg.StorageFilePdf:
-				mimeType = "application/pdf"
-			case *tg.StorageFileMp3:
-				mimeType = "audio/mp3"
-			case *tg.StorageFileMov:
-				mimeType = "video/quicktime"
-			case *tg.StorageFileMp4:
-				mimeType = "video/mp4"
-			case *tg.StorageFileWebp:
-				mimeType = "image/webp"
-			default:
-				mimeType = http.DetectContentType(buf.Bytes())
-			}
 			var filename string
-			if _, ok := media.GetTTLSeconds(); ok {
-				// TODO set the ttl on the converted message
-				filename = "disappearing_image" + exmime.ExtensionFromMimetype(mimeType)
-			} else {
-				filename = "image" + exmime.ExtensionFromMimetype(mimeType)
+			var mxcURI id.ContentURIString
+			var encryptedFileInfo *event.EncryptedFileInfo
+			if mc.useDirectMedia {
+				var err error
+				filename = "image"
+				peerType, chatID, err := ids.ParsePortalID(portal.ID)
+				if err != nil {
+					return nil, err
+				}
+				mediaID, err := ids.DirectMediaInfo{
+					PeerType:  peerType,
+					ChatID:    chatID,
+					MessageID: int64(msg.ID),
+				}.AsMediaID()
+				if err != nil {
+					return nil, err
+				}
+				mxcURI, err = portal.Bridge.Matrix.GenerateContentURI(ctx, mediaID)
+				if err != nil {
+					return nil, err
+				}
 			}
 
-			mxcURI, encryptedFileInfo, err := intent.UploadMedia(ctx, "", buf.Bytes(), filename, mimeType)
-			if err != nil {
-				return nil, err
+			if mxcURI == "" {
+				data, mimeType, err := conmedia.DownloadPhoto(ctx, mc.client.API(), media)
+				if err != nil {
+					return nil, err
+				}
+				if _, ok := media.GetTTLSeconds(); ok {
+					// TODO set the ttl on the converted message
+					filename = "disappearing_image" + exmime.ExtensionFromMimetype(mimeType)
+				} else {
+					filename = "image" + exmime.ExtensionFromMimetype(mimeType)
+				}
+
+				mxcURI, encryptedFileInfo, err = intent.UploadMedia(ctx, "", data, filename, mimeType)
+				if err != nil {
+					return nil, err
+				}
 			}
 
 			extra := map[string]any{}
@@ -127,29 +114,4 @@ func (mc *MessageConverter) ToMatrix(ctx context.Context, portal *bridgev2.Porta
 		}
 	}
 	return cm, nil
-}
-
-func getLargestPhotoSize(sizes []tg.PhotoSizeClass) (largest tg.PhotoSizeClass) {
-	var maxSize int
-	for _, s := range sizes {
-		var currentSize int
-		switch size := s.(type) {
-		case *tg.PhotoSize:
-			currentSize = size.GetSize()
-		case *tg.PhotoCachedSize:
-			currentSize = max(size.GetW(), size.GetH())
-		case *tg.PhotoSizeProgressive:
-			currentSize = max(size.GetW(), size.GetH())
-		case *tg.PhotoPathSize:
-			currentSize = len(size.GetBytes())
-		case *tg.PhotoStrippedSize:
-			currentSize = len(size.GetBytes())
-		}
-
-		if currentSize > maxSize {
-			maxSize = currentSize
-			largest = s
-		}
-	}
-	return
 }
