@@ -7,12 +7,13 @@ import (
 	"io"
 
 	"github.com/gotd/td/tg"
+	"github.com/rs/zerolog"
 	"maunium.net/go/mautrix/bridgev2"
 	"maunium.net/go/mautrix/bridgev2/networkid"
 	"maunium.net/go/mautrix/mediaproxy"
 
+	"go.mau.fi/mautrix-telegram/pkg/connector/download"
 	"go.mau.fi/mautrix-telegram/pkg/connector/ids"
-	conmedia "go.mau.fi/mautrix-telegram/pkg/connector/media"
 )
 
 var _ bridgev2.DirectMediableNetwork = (*TelegramConnector)(nil)
@@ -26,6 +27,12 @@ func (tc *TelegramConnector) Download(ctx context.Context, mediaID networkid.Med
 	if err != nil {
 		return nil, err
 	}
+	log := zerolog.Ctx(ctx).With().
+		Str("component", "direct download").
+		Any("info", info).
+		Logger()
+	ctx = log.WithContext(ctx)
+	log.Info().Msg("handling direct download")
 
 	logins, err := tc.Bridge.GetUserLoginsInPortal(ctx, info.PeerType.AsPortalKey(info.ChatID))
 	if err != nil {
@@ -42,6 +49,7 @@ func (tc *TelegramConnector) Download(ctx context.Context, mediaID networkid.Med
 			&tg.InputMessageID{ID: int(info.MessageID)},
 		})
 	case ids.PeerTypeChannel:
+		// TODO test this
 		messages, err = client.client.API().ChannelsGetMessages(ctx, &tg.ChannelsGetMessagesRequest{
 			Channel: &tg.InputChannel{ChannelID: info.ChatID},
 			ID: []tg.InputMessageClass{
@@ -59,26 +67,31 @@ func (tc *TelegramConnector) Download(ctx context.Context, mediaID networkid.Med
 	if m, ok := messages.(getMessages); !ok {
 		return nil, fmt.Errorf("unknown message type")
 	} else {
+		var found bool
 		for _, message := range m.GetMessages() {
 			if msg, ok := message.(*tg.Message); ok && msg.ID == int(info.MessageID) {
 				media = msg.Media
+				found = true
 				break
 			}
 		}
+		if !found {
+			return nil, fmt.Errorf("no media found with ID %d", info.MessageID)
+		}
 	}
 
+	var data []byte
+	var mimeType string
 	switch media := media.(type) {
 	case *tg.MessageMediaPhoto:
-		data, mimeType, err := conmedia.DownloadPhoto(ctx, client.client.API(), media)
-		if err != nil {
-			return nil, err
+		data, mimeType, err = download.DownloadPhoto(ctx, client.client.API(), media)
+	case *tg.MessageMediaDocument:
+		document, ok := media.Document.(*tg.Document)
+		if !ok {
+			return nil, fmt.Errorf("unrecognized document type %T", media.Document)
 		}
-
-		return &mediaproxy.GetMediaResponseData{
-			Reader:        io.NopCloser(bytes.NewBuffer(data)),
-			ContentType:   mimeType,
-			ContentLength: int64(len(data)),
-		}, nil
+		mimeType = document.GetMimeType()
+		data, err = download.DownloadDocument(ctx, client.client.API(), document)
 
 		// TODO all of these
 		// case *tg.MessageMediaGeo: // messageMediaGeo#56e0d474
@@ -98,6 +111,15 @@ func (tc *TelegramConnector) Download(ctx context.Context, mediaID networkid.Med
 	default:
 		return nil, fmt.Errorf("unhandled media type %T", media)
 	}
+	if err != nil {
+		return nil, err
+	}
+
+	return &mediaproxy.GetMediaResponseData{
+		Reader:        io.NopCloser(bytes.NewBuffer(data)),
+		ContentType:   mimeType,
+		ContentLength: int64(len(data)),
+	}, nil
 }
 
 func (tg *TelegramConnector) SetUseDirectMedia() {

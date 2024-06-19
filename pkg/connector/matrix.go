@@ -7,6 +7,7 @@ import (
 
 	"github.com/gotd/td/telegram/message"
 	"github.com/gotd/td/telegram/message/html"
+	"github.com/gotd/td/telegram/message/styling"
 	"github.com/gotd/td/telegram/uploader"
 	"github.com/gotd/td/tg"
 	"maunium.net/go/mautrix/bridgev2"
@@ -16,6 +17,19 @@ import (
 
 	"go.mau.fi/mautrix-telegram/pkg/connector/ids"
 )
+
+func getMediaFilenameAndCaption(content *event.MessageEventContent) (filename, caption string) {
+	if content.FileName != "" {
+		filename = content.FileName
+		caption = content.FormattedBody
+		if caption == "" {
+			caption = content.Body
+		}
+	} else {
+		filename = content.Body
+	}
+	return
+}
 
 func (t *TelegramClient) HandleMatrixMessage(ctx context.Context, msg *bridgev2.MatrixMessage) (resp *bridgev2.MatrixMessageResponse, err error) {
 	sender := message.NewSender(t.client.API())
@@ -31,42 +45,39 @@ func (t *TelegramClient) HandleMatrixMessage(ctx context.Context, msg *bridgev2.
 	switch msg.Content.MsgType {
 	case event.MsgText:
 		updates, err = builder.Text(ctx, msg.Content.Body)
-		if err != nil {
-			return nil, err
-		}
 	case event.MsgImage, event.MsgFile, event.MsgAudio, event.MsgVideo:
-		var filename, caption string
-		if msg.Content.FileName != "" {
-			filename = msg.Content.FileName
-			caption = msg.Content.FormattedBody
-			if caption == "" {
-				caption = msg.Content.Body
-			}
-		} else {
-			filename = msg.Content.Body
-		}
+		filename, caption := getMediaFilenameAndCaption(msg.Content)
 
 		// TODO stream this download straight into the uploader
-		fileData, err := t.main.Bridge.Bot.DownloadMedia(ctx, msg.Content.URL, msg.Content.File)
+		var fileData []byte
+		fileData, err = t.main.Bridge.Bot.DownloadMedia(ctx, msg.Content.URL, msg.Content.File)
 		if err != nil {
 			return nil, fmt.Errorf("failed to download media from Matrix: %w", err)
 		}
 		uploader := uploader.NewUploader(t.client.API())
-		upload, err := uploader.FromBytes(ctx, filename, fileData)
+		var upload tg.InputFileClass
+		upload, err = uploader.FromBytes(ctx, filename, fileData)
 		if err != nil {
 			return nil, fmt.Errorf("failed to upload media to Telegram: %w", err)
 		}
-		var photo *message.UploadedPhotoBuilder
+		var styling []styling.StyledTextOption
 		if caption != "" {
 			// TODO resolver?
-			photo = message.UploadedPhoto(upload, html.String(nil, caption))
+			styling = append(styling, html.String(nil, caption))
+		}
+		if msg.Content.MsgType == event.MsgImage {
+			updates, err = builder.Media(ctx, message.UploadedPhoto(upload, styling...))
 		} else {
-			photo = message.UploadedPhoto(upload)
+			document := message.UploadedDocument(upload, styling...).
+				Filename(filename).
+				MIME(msg.Content.Info.MimeType)
+			updates, err = builder.Media(ctx, document)
 		}
-		updates, err = builder.Media(ctx, photo)
-		if err != nil {
-			return nil, err
-		}
+	default:
+		return nil, fmt.Errorf("unsupported message type %s", msg.Content.MsgType)
+	}
+	if err != nil {
+		return nil, err
 	}
 
 	var tgMessageID, tgDate int
