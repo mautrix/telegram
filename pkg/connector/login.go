@@ -32,6 +32,7 @@ import (
 	"maunium.net/go/mautrix/bridgev2/database"
 
 	"go.mau.fi/mautrix-telegram/pkg/connector/ids"
+	"go.mau.fi/mautrix-telegram/pkg/connector/util"
 )
 
 const LoginFlowIDPhone = "phone"
@@ -217,7 +218,7 @@ func (p *PhoneLogin) handleAuthSuccess(ctx context.Context, authorization *tg.Au
 	return &bridgev2.LoginStep{
 		Type:         bridgev2.LoginStepTypeComplete,
 		StepID:       completeStep,
-		Instructions: fmt.Sprintf("Successfully logged in as %d / +%s (%s)", user.ID, user.Phone, getFullName(user)),
+		Instructions: fmt.Sprintf("Successfully logged in as %d / +%s (%s)", user.ID, user.Phone, util.FormatFullName(user.FirstName, user.LastName)),
 		CompleteParams: &bridgev2.LoginCompleteParams{
 			UserLoginID: ul.ID,
 		},

@@ -3,7 +3,9 @@ package msgconv
 import (
 	"context"
 	"fmt"
+	"html"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/gotd/td/tg"
@@ -17,6 +19,7 @@ import (
 
 	"go.mau.fi/mautrix-telegram/pkg/connector/download"
 	"go.mau.fi/mautrix-telegram/pkg/connector/ids"
+	"go.mau.fi/mautrix-telegram/pkg/connector/util"
 )
 
 type spoilable interface {
@@ -30,10 +33,7 @@ type ttlable interface {
 func mediaRequiringUpload(media tg.MessageMediaClass) bool {
 	allowed := []uint32{
 		tg.MessageMediaPhotoTypeID,
-		tg.MessageMediaGeoTypeID,
-		tg.MessageMediaContactTypeID,
 		tg.MessageMediaDocumentTypeID,
-		tg.MessageMediaStoryTypeID,
 	}
 	return slices.Contains(allowed, media.TypeID())
 }
@@ -77,6 +77,41 @@ func (mc *MessageConverter) ToMatrix(ctx context.Context, portal *bridgev2.Porta
 				cm.Disappear = *disappearingSetting
 			}
 			cm.Parts = append(cm.Parts, mediaParts)
+		case media.TypeID() == tg.MessageMediaContactTypeID:
+			contact := media.(*tg.MessageMediaContact)
+			name := util.FormatFullName(contact.FirstName, contact.LastName)
+			formattedPhone := fmt.Sprintf("+%s", strings.TrimPrefix(contact.PhoneNumber, "+"))
+
+			content := event.MessageEventContent{
+				MsgType: event.MsgText,
+				Body:    fmt.Sprintf("Shared contact info for %s: %s", name, formattedPhone),
+			}
+			if contact.UserID > 0 {
+				content.Format = event.FormatHTML
+				content.FormattedBody = fmt.Sprintf(
+					`Shared contact info for <a href="https://matrix.to/#/%s">%s</a>: %s`,
+					mc.connector.FormatGhostMXID(ids.MakeUserID(contact.UserID)),
+					html.EscapeString(name),
+					html.EscapeString(formattedPhone),
+				)
+			}
+
+			cm.Parts = append(cm.Parts, &bridgev2.ConvertedMessagePart{
+				ID:      networkid.PartID("contact"),
+				Type:    event.EventMessage,
+				Content: &content,
+				Extra: map[string]any{
+					"fi.mau.telegram.contact": map[string]any{
+						"user_id":      contact.UserID,
+						"first_name":   contact.FirstName,
+						"last_name":    contact.LastName,
+						"phone_number": contact.PhoneNumber,
+						"vcard":        contact.Vcard,
+					},
+				},
+			})
+		default:
+			return nil, fmt.Errorf("unsupported media type %T", media)
 		}
 	}
 	return cm, nil
@@ -168,7 +203,6 @@ func (mc *MessageConverter) convertMediaRequiringUpload(ctx context.Context, por
 
 		// TODO all of these
 		// case *tg.MessageMediaGeo: // messageMediaGeo#56e0d474
-		// case *tg.MessageMediaContact: // messageMediaContact#70322949
 		// case *tg.MessageMediaUnsupported: // messageMediaUnsupported#9f84f49e
 		// case *tg.MessageMediaVenue: // messageMediaVenue#2ec0533f
 		// case *tg.MessageMediaGame: // messageMediaGame#fdb19008
@@ -230,7 +264,6 @@ func (mc *MessageConverter) convertMediaRequiringUpload(ctx context.Context, por
 
 			// TODO all of these
 			// case *tg.MessageMediaGeo: // messageMediaGeo#56e0d474
-			// case *tg.MessageMediaContact: // messageMediaContact#70322949
 			// case *tg.MessageMediaUnsupported: // messageMediaUnsupported#9f84f49e
 			// case *tg.MessageMediaVenue: // messageMediaVenue#2ec0533f
 			// case *tg.MessageMediaGame: // messageMediaGame#fdb19008

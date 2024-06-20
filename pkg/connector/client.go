@@ -19,6 +19,7 @@ import (
 
 	"go.mau.fi/mautrix-telegram/pkg/connector/ids"
 	"go.mau.fi/mautrix-telegram/pkg/connector/msgconv"
+	"go.mau.fi/mautrix-telegram/pkg/connector/util"
 )
 
 type TelegramClient struct {
@@ -72,7 +73,7 @@ func NewTelegramClient(ctx context.Context, tc *TelegramConnector, login *bridge
 		Logger:         zaplog,
 		UpdateHandler:  updatesManager,
 	})
-	client.msgConv = msgconv.NewMessageConverter(client.client, tc.useDirectMedia)
+	client.msgConv = msgconv.NewMessageConverter(client.client, tc.Bridge.Matrix, tc.useDirectMedia)
 	client.clientCancel, err = connectTelegramClient(ctx, client.client)
 	go func() {
 		err = updatesManager.Run(ctx, client.client.API(), loginID, updates.AuthOptions{})
@@ -147,6 +148,12 @@ func (t *TelegramClient) onUpdateNewMessage(ctx context.Context, e tg.Entities, 
 		panic("not from anyone")
 	}
 
+	if media, ok := msg.GetMedia(); ok && media.TypeID() == tg.MessageMediaContactTypeID {
+		contact := media.(*tg.MessageMediaContact)
+		// TODO update the corresponding puppet
+		log.Info().Int64("user_id", contact.UserID).Msg("received contact")
+	}
+
 	t.main.Bridge.QueueRemoteEvent(t.userLogin, &bridgev2.SimpleRemoteEvent[*tg.Message]{
 		Type: bridgev2.RemoteEventMessage,
 		LogContext: func(c zerolog.Context) zerolog.Context {
@@ -181,10 +188,6 @@ func (t *TelegramClient) Disconnect() {
 	t.clientCancel()
 }
 
-func getFullName(user *tg.User) string {
-	return strings.TrimSpace(fmt.Sprintf("%s %s", user.FirstName, user.LastName))
-}
-
 func (t *TelegramClient) GetChatInfo(ctx context.Context, portal *bridgev2.Portal) (*bridgev2.PortalInfo, error) {
 	fmt.Printf("%+v\n", portal)
 	peerType, id, err := ids.ParsePortalID(portal.ID)
@@ -207,7 +210,7 @@ func (t *TelegramClient) GetChatInfo(ctx context.Context, portal *bridgev2.Porta
 		if user, ok := users[0].(*tg.User); !ok {
 			return nil, fmt.Errorf("returned user is not *tg.User")
 		} else {
-			name = getFullName(user) // TODO gate this behind a config?
+			name = util.FormatFullName(user.FirstName, user.LastName) // TODO gate this behind a config?
 			members = []networkid.UserID{ids.MakeUserID(id), ids.MakeUserID(t.loginID)}
 			isDM = true
 		}
@@ -264,7 +267,7 @@ func (t *TelegramClient) GetUserInfo(ctx context.Context, ghost *bridgev2.Ghost)
 			identifiers = append(identifiers, fmt.Sprintf("tel:+%s", strings.TrimPrefix(phone, "+")))
 		}
 
-		name := getFullName(user)
+		name := util.FormatFullName(user.FirstName, user.LastName)
 		return &bridgev2.UserInfo{
 			IsBot: &user.Bot,
 			Name:  &name,

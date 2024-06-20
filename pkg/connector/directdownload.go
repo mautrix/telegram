@@ -95,7 +95,6 @@ func (tc *TelegramConnector) Download(ctx context.Context, mediaID networkid.Med
 
 		// TODO all of these
 		// case *tg.MessageMediaGeo: // messageMediaGeo#56e0d474
-		// case *tg.MessageMediaContact: // messageMediaContact#70322949
 		// case *tg.MessageMediaUnsupported: // messageMediaUnsupported#9f84f49e
 		// case *tg.MessageMediaDocument: // messageMediaDocument#4cf4d72d
 		// case *tg.MessageMediaVenue: // messageMediaVenue#2ec0533f
