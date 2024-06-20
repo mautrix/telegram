@@ -45,6 +45,9 @@ func (t *TelegramClient) HandleMatrixMessage(ctx context.Context, msg *bridgev2.
 	var updates tg.UpdatesClass
 	switch msg.Content.MsgType {
 	case event.MsgText:
+		if msg.Content.BeeperLinkPreviews != nil && len(msg.Content.BeeperLinkPreviews) == 0 {
+			builder.NoWebpage()
+		}
 		updates, err = builder.Text(ctx, msg.Content.Body)
 	case event.MsgImage, event.MsgFile, event.MsgAudio, event.MsgVideo:
 		filename, caption := getMediaFilenameAndCaption(msg.Content)
