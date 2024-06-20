@@ -16,6 +16,7 @@ import (
 	"maunium.net/go/mautrix/event"
 
 	"go.mau.fi/mautrix-telegram/pkg/connector/ids"
+	"go.mau.fi/mautrix-telegram/pkg/connector/msgconv"
 	"go.mau.fi/mautrix-telegram/pkg/connector/waveform"
 )
 
@@ -66,6 +67,7 @@ func (t *TelegramClient) HandleMatrixMessage(ctx context.Context, msg *bridgev2.
 		var styling []styling.StyledTextOption
 		if caption != "" {
 			// TODO resolver?
+			// TODO HTML
 			styling = append(styling, html.String(nil, caption))
 		}
 
@@ -98,6 +100,26 @@ func (t *TelegramClient) HandleMatrixMessage(ctx context.Context, msg *bridgev2.
 			}
 			updates, err = builder.Media(ctx, media)
 		}
+	case event.MsgLocation:
+		var uri msgconv.GeoURI
+		uri, err = msgconv.ParseGeoURI(msg.Content.GeoURI)
+		if err != nil {
+			return nil, err
+		}
+		var styling []styling.StyledTextOption
+		if location, ok := msg.Event.Content.Raw["org.matrix.msc3488.location"].(map[string]any); ok {
+			if desc, ok := location["description"].(string); ok {
+				// TODO resolver?
+				// TODO HTML
+				styling = append(styling, html.String(nil, desc))
+			}
+		}
+		updates, err = builder.Media(ctx, message.Media(&tg.InputMediaGeoPoint{
+			GeoPoint: &tg.InputGeoPoint{
+				Lat:  uri.Lat,
+				Long: uri.Long,
+			},
+		}, styling...))
 	default:
 		return nil, fmt.Errorf("unsupported message type %s", msg.Content.MsgType)
 	}

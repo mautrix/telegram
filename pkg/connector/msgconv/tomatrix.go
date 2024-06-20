@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"html"
-	"slices"
 	"strings"
 	"time"
 
@@ -28,14 +27,6 @@ type spoilable interface {
 
 type ttlable interface {
 	GetTTLSeconds() (value int, ok bool)
-}
-
-func mediaRequiringUpload(media tg.MessageMediaClass) bool {
-	allowed := []uint32{
-		tg.MessageMediaPhotoTypeID,
-		tg.MessageMediaDocumentTypeID,
-	}
-	return slices.Contains(allowed, media.TypeID())
 }
 
 func (mc *MessageConverter) ToMatrix(ctx context.Context, portal *bridgev2.Portal, intent bridgev2.MatrixAPI, msg *tg.Message) (*bridgev2.ConvertedMessage, error) {
@@ -67,8 +58,10 @@ func (mc *MessageConverter) ToMatrix(ctx context.Context, portal *bridgev2.Porta
 	}
 
 	if media, ok := msg.GetMedia(); ok {
-		switch {
-		case media.TypeID() == tg.MessageMediaUnsupportedTypeID:
+		switch media.TypeID() {
+		case tg.MessageMediaWebPageTypeID:
+			// Already handled above
+		case tg.MessageMediaUnsupportedTypeID:
 			cm.Parts = append(cm.Parts, &bridgev2.ConvertedMessagePart{
 				ID:   networkid.PartID("unsupported_media"),
 				Type: event.EventMessage,
@@ -80,48 +73,23 @@ func (mc *MessageConverter) ToMatrix(ctx context.Context, portal *bridgev2.Porta
 					"fi.mau.telegram.unsupported": true,
 				},
 			})
-		case mediaRequiringUpload(media):
-			mediaParts, disappearingSetting, err := mc.convertMediaRequiringUpload(ctx, portal, intent, msg.ID, media)
+		case tg.MessageMediaPhotoTypeID, tg.MessageMediaDocumentTypeID:
+			mediaPart, disappearingSetting, err := mc.convertMediaRequiringUpload(ctx, portal, intent, msg.ID, media)
 			if err != nil {
 				return nil, err
 			}
 			if disappearingSetting != nil {
 				cm.Disappear = *disappearingSetting
 			}
-			cm.Parts = append(cm.Parts, mediaParts)
-		case media.TypeID() == tg.MessageMediaContactTypeID:
-			contact := media.(*tg.MessageMediaContact)
-			name := util.FormatFullName(contact.FirstName, contact.LastName)
-			formattedPhone := fmt.Sprintf("+%s", strings.TrimPrefix(contact.PhoneNumber, "+"))
-
-			content := event.MessageEventContent{
-				MsgType: event.MsgText,
-				Body:    fmt.Sprintf("Shared contact info for %s: %s", name, formattedPhone),
+			cm.Parts = append(cm.Parts, mediaPart)
+		case tg.MessageMediaContactTypeID:
+			cm.Parts = append(cm.Parts, mc.convertContact(media))
+		case tg.MessageMediaGeoTypeID, tg.MessageMediaGeoLiveTypeID, tg.MessageMediaVenueTypeID:
+			location, err := mc.convertLocation(media)
+			if err != nil {
+				return nil, err
 			}
-			if contact.UserID > 0 {
-				content.Format = event.FormatHTML
-				content.FormattedBody = fmt.Sprintf(
-					`Shared contact info for <a href="https://matrix.to/#/%s">%s</a>: %s`,
-					mc.connector.FormatGhostMXID(ids.MakeUserID(contact.UserID)),
-					html.EscapeString(name),
-					html.EscapeString(formattedPhone),
-				)
-			}
-
-			cm.Parts = append(cm.Parts, &bridgev2.ConvertedMessagePart{
-				ID:      networkid.PartID("contact"),
-				Type:    event.EventMessage,
-				Content: &content,
-				Extra: map[string]any{
-					"fi.mau.telegram.contact": map[string]any{
-						"user_id":      contact.UserID,
-						"first_name":   contact.FirstName,
-						"last_name":    contact.LastName,
-						"phone_number": contact.PhoneNumber,
-						"vcard":        contact.Vcard,
-					},
-				},
-			})
+			cm.Parts = append(cm.Parts, location)
 		default:
 			return nil, fmt.Errorf("unsupported media type %T", media)
 		}
@@ -214,12 +182,9 @@ func (mc *MessageConverter) convertMediaRequiringUpload(ctx context.Context, por
 		}
 
 		// TODO all of these
-		// case *tg.MessageMediaGeo: // messageMediaGeo#56e0d474
 		// case *tg.MessageMediaUnsupported: // messageMediaUnsupported#9f84f49e
-		// case *tg.MessageMediaVenue: // messageMediaVenue#2ec0533f
 		// case *tg.MessageMediaGame: // messageMediaGame#fdb19008
 		// case *tg.MessageMediaInvoice: // messageMediaInvoice#f6a548d3
-		// case *tg.MessageMediaGeoLive: // messageMediaGeoLive#b940c666
 		// case *tg.MessageMediaPoll: // messageMediaPoll#4bd6e798
 		// case *tg.MessageMediaDice: // messageMediaDice#3f7ee58b
 		// case *tg.MessageMediaStory: // messageMediaStory#68cb6283
@@ -275,12 +240,9 @@ func (mc *MessageConverter) convertMediaRequiringUpload(ctx context.Context, por
 			data, err = download.DownloadDocument(ctx, mc.client.API(), document)
 
 			// TODO all of these
-			// case *tg.MessageMediaGeo: // messageMediaGeo#56e0d474
 			// case *tg.MessageMediaUnsupported: // messageMediaUnsupported#9f84f49e
-			// case *tg.MessageMediaVenue: // messageMediaVenue#2ec0533f
 			// case *tg.MessageMediaGame: // messageMediaGame#fdb19008
 			// case *tg.MessageMediaInvoice: // messageMediaInvoice#f6a548d3
-			// case *tg.MessageMediaGeoLive: // messageMediaGeoLive#b940c666
 			// case *tg.MessageMediaPoll: // messageMediaPoll#4bd6e798
 			// case *tg.MessageMediaDice: // messageMediaDice#3f7ee58b
 			// case *tg.MessageMediaStory: // messageMediaStory#68cb6283
@@ -334,4 +296,97 @@ func (mc *MessageConverter) convertMediaRequiringUpload(ctx context.Context, por
 		},
 		Extra: extra,
 	}, disappearingSetting, nil
+}
+
+func (mc *MessageConverter) convertContact(media tg.MessageMediaClass) *bridgev2.ConvertedMessagePart {
+	contact := media.(*tg.MessageMediaContact)
+	name := util.FormatFullName(contact.FirstName, contact.LastName)
+	formattedPhone := fmt.Sprintf("+%s", strings.TrimPrefix(contact.PhoneNumber, "+"))
+
+	content := event.MessageEventContent{
+		MsgType: event.MsgText,
+		Body:    fmt.Sprintf("Shared contact info for %s: %s", name, formattedPhone),
+	}
+	if contact.UserID > 0 {
+		content.Format = event.FormatHTML
+		content.FormattedBody = fmt.Sprintf(
+			`Shared contact info for <a href="https://matrix.to/#/%s">%s</a>: %s`,
+			mc.connector.FormatGhostMXID(ids.MakeUserID(contact.UserID)),
+			html.EscapeString(name),
+			html.EscapeString(formattedPhone),
+		)
+	}
+
+	return &bridgev2.ConvertedMessagePart{
+		ID:      networkid.PartID("contact"),
+		Type:    event.EventMessage,
+		Content: &content,
+		Extra: map[string]any{
+			"fi.mau.telegram.contact": map[string]any{
+				"user_id":      contact.UserID,
+				"first_name":   contact.FirstName,
+				"last_name":    contact.LastName,
+				"phone_number": contact.PhoneNumber,
+				"vcard":        contact.Vcard,
+			},
+		},
+	}
+}
+
+type hasGeo interface {
+	GetGeo() tg.GeoPointClass
+}
+
+func (mc *MessageConverter) convertLocation(media tg.MessageMediaClass) (*bridgev2.ConvertedMessagePart, error) {
+	g, ok := media.(hasGeo)
+	if !ok || g.GetGeo().TypeID() != tg.GeoPointTypeID {
+		return nil, fmt.Errorf("location didn't have geo or geo is wrong type")
+	}
+	point := g.GetGeo().(*tg.GeoPoint)
+	var longChar, latChar string
+	if point.Long > 0 {
+		longChar = "E"
+	} else {
+		longChar = "W"
+	}
+	if point.Lat > 0 {
+		latChar = "N"
+	} else {
+		latChar = "S"
+	}
+
+	geo := fmt.Sprintf("%f,%f", point.Lat, point.Long)
+	geoURI := GeoURIFromLatLong(point.Lat, point.Long)
+	body := fmt.Sprintf("%.4f° %s, %.4f° %s", point.Lat, latChar, point.Long, longChar)
+	url := fmt.Sprintf("https://maps.google.com/?q=%s", geo)
+
+	extra := map[string]any{}
+	var note string
+	if media.TypeID() == tg.MessageMediaGeoLiveTypeID {
+		note = "Live Location (see your Telegram client for live updates)"
+	} else if venue, ok := media.(*tg.MessageMediaVenue); ok {
+		note = venue.Title
+		body = fmt.Sprintf("%s (%s)", venue.Address, body)
+		extra["fi.mau.telegram.venue_id"] = venue.VenueID
+	} else {
+		note = "Location"
+	}
+
+	extra["org.matrix.msc3488.location"] = map[string]any{
+		"uri":         geoURI,
+		"description": note,
+	}
+
+	return &bridgev2.ConvertedMessagePart{
+		ID:   networkid.PartID("location"),
+		Type: event.EventMessage,
+		Content: &event.MessageEventContent{
+			MsgType:       event.MsgLocation,
+			GeoURI:        geoURI.URI(),
+			Body:          fmt.Sprintf("%s: %s\n%s", note, body, url),
+			Format:        event.FormatHTML,
+			FormattedBody: fmt.Sprintf(`%s: <a href="%s">%s</a>`, note, url, body),
+		},
+		Extra: extra,
+	}, nil
 }
