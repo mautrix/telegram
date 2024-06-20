@@ -84,7 +84,7 @@ func (tc *TelegramConnector) Download(ctx context.Context, mediaID networkid.Med
 	var mimeType string
 	switch media := media.(type) {
 	case *tg.MessageMediaPhoto:
-		data, mimeType, err = download.DownloadPhoto(ctx, client.client.API(), media)
+		data, mimeType, err = download.DownloadPhotoMedia(ctx, client.client.API(), media)
 	case *tg.MessageMediaDocument:
 		document, ok := media.Document.(*tg.Document)
 		if !ok {
@@ -98,7 +98,6 @@ func (tc *TelegramConnector) Download(ctx context.Context, mediaID networkid.Med
 		// case *tg.MessageMediaContact: // messageMediaContact#70322949
 		// case *tg.MessageMediaUnsupported: // messageMediaUnsupported#9f84f49e
 		// case *tg.MessageMediaDocument: // messageMediaDocument#4cf4d72d
-		// case *tg.MessageMediaWebPage: // messageMediaWebPage#ddf10c3b
 		// case *tg.MessageMediaVenue: // messageMediaVenue#2ec0533f
 		// case *tg.MessageMediaGame: // messageMediaGame#fdb19008
 		// case *tg.MessageMediaInvoice: // messageMediaInvoice#f6a548d3
