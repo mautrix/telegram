@@ -56,6 +56,8 @@ func (mc *MessageConverter) convertMedia(ctx context.Context, portal *bridgev2.P
 	var partID networkid.PartID
 	var msgType event.MessageType
 	var filename string
+	var audio *event.MSC1767Audio
+	var voice *event.MSC3245Voice
 
 	// Determine the filename and some other information
 	switch media := media.(type) {
@@ -72,9 +74,22 @@ func (mc *MessageConverter) convertMedia(ctx context.Context, portal *bridgev2.P
 		}
 
 		for _, attr := range document.GetAttributes() {
-			if f, ok := attr.(*tg.DocumentAttributeFilename); ok {
-				filename = f.GetFileName()
-				break
+			switch a := attr.(type) {
+			case *tg.DocumentAttributeFilename:
+				filename = a.GetFileName()
+			case *tg.DocumentAttributeAudio:
+				msgType = event.MsgAudio
+				audio = &event.MSC1767Audio{
+					Duration: a.Duration * 1000,
+				}
+				if waveform, ok := a.GetWaveform(); ok {
+					for _, v := range waveform {
+						audio.Waveform = append(audio.Waveform, int(v)<<5)
+					}
+				}
+				if a.Voice {
+					voice = &event.MSC3245Voice{}
+				}
 			}
 		}
 
@@ -170,12 +185,13 @@ func (mc *MessageConverter) convertMedia(ctx context.Context, portal *bridgev2.P
 
 	extra := map[string]any{}
 
-	// Handle spolilers
+	// Handle spoilers
 	// See: https://github.com/matrix-org/matrix-spec-proposals/pull/3725
 	if s, ok := media.(spoilable); ok && s.GetSpoiler() {
 		extra["town.robin.msc3725.content_warning"] = map[string]any{
 			"type": "town.robin.msc3725.spoiler",
 		}
+		extra["fi.mau.telegram.spoiler"] = true
 	}
 
 	// Handle disappearing messages
@@ -193,10 +209,12 @@ func (mc *MessageConverter) convertMedia(ctx context.Context, portal *bridgev2.P
 		ID:   partID,
 		Type: event.EventMessage,
 		Content: &event.MessageEventContent{
-			MsgType: msgType,
-			Body:    filename,
-			URL:     mxcURI,
-			File:    encryptedFileInfo,
+			MsgType:      msgType,
+			Body:         filename,
+			URL:          mxcURI,
+			File:         encryptedFileInfo,
+			MSC1767Audio: audio,
+			MSC3245Voice: voice,
 		},
 		Extra: extra,
 	}, disappearingSetting, nil

@@ -16,6 +16,7 @@ import (
 	"maunium.net/go/mautrix/event"
 
 	"go.mau.fi/mautrix-telegram/pkg/connector/ids"
+	"go.mau.fi/mautrix-telegram/pkg/connector/waveform"
 )
 
 func getMediaFilenameAndCaption(content *event.MessageEventContent) (filename, caption string) {
@@ -48,7 +49,6 @@ func (t *TelegramClient) HandleMatrixMessage(ctx context.Context, msg *bridgev2.
 	case event.MsgImage, event.MsgFile, event.MsgAudio, event.MsgVideo:
 		filename, caption := getMediaFilenameAndCaption(msg.Content)
 
-		// TODO stream this download straight into the uploader
 		var fileData []byte
 		fileData, err = t.main.Bridge.Bot.DownloadMedia(ctx, msg.Content.URL, msg.Content.File)
 		if err != nil {
@@ -65,13 +65,35 @@ func (t *TelegramClient) HandleMatrixMessage(ctx context.Context, msg *bridgev2.
 			// TODO resolver?
 			styling = append(styling, html.String(nil, caption))
 		}
+
 		if msg.Content.MsgType == event.MsgImage {
 			updates, err = builder.Media(ctx, message.UploadedPhoto(upload, styling...))
+			break
 		} else {
-			document := message.UploadedDocument(upload, styling...).
-				Filename(filename).
-				MIME(msg.Content.Info.MimeType)
-			updates, err = builder.Media(ctx, document)
+			document := message.UploadedDocument(upload, styling...).Filename(filename)
+			if msg.Content.Info != nil {
+				document.MIME(msg.Content.Info.MimeType)
+			}
+
+			var media message.MediaOption
+
+			switch msg.Content.MsgType {
+			case event.MsgAudio:
+				audioBuilder := document.Audio()
+				if msg.Content.MSC1767Audio != nil {
+					audioBuilder.Duration(time.Duration(msg.Content.MSC1767Audio.Duration) * time.Millisecond)
+					if len(msg.Content.MSC1767Audio.Waveform) > 0 {
+						audioBuilder.Waveform(waveform.Encode(msg.Content.MSC1767Audio.Waveform))
+					}
+				}
+				if msg.Content.MSC3245Voice != nil {
+					audioBuilder.Voice()
+				}
+				media = audioBuilder
+			default:
+				media = document
+			}
+			updates, err = builder.Media(ctx, media)
 		}
 	default:
 		return nil, fmt.Errorf("unsupported message type %s", msg.Content.MsgType)
