@@ -68,6 +68,18 @@ func (mc *MessageConverter) ToMatrix(ctx context.Context, portal *bridgev2.Porta
 
 	if media, ok := msg.GetMedia(); ok {
 		switch {
+		case media.TypeID() == tg.MessageMediaUnsupportedTypeID:
+			cm.Parts = append(cm.Parts, &bridgev2.ConvertedMessagePart{
+				ID:   networkid.PartID("unsupported_media"),
+				Type: event.EventMessage,
+				Content: &event.MessageEventContent{
+					MsgType: event.MsgNotice,
+					Body:    "This message is not supported on your version of Mautrix-Telegram. Please check https://github.com/mautrix/telegram or ask your bridge administrator about possible updates.",
+				},
+				Extra: map[string]any{
+					"fi.mau.telegram.unsupported": true,
+				},
+			})
 		case mediaRequiringUpload(media):
 			mediaParts, disappearingSetting, err := mc.convertMediaRequiringUpload(ctx, portal, intent, msg.ID, media)
 			if err != nil {
