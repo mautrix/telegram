@@ -92,8 +92,8 @@ func (mc *MessageConverter) ToMatrix(ctx context.Context, portal *bridgev2.Porta
 			cm.Parts = append(cm.Parts, location)
 		case tg.MessageMediaPollTypeID:
 			cm.Parts = append(cm.Parts, mc.convertPoll(media))
-		// case tg.MessageMediaDiceTypeID:
-		// 	cm.Parts = append(cm.Parts, mc.convertDice(media))
+		case tg.MessageMediaDiceTypeID:
+			cm.Parts = append(cm.Parts, mc.convertDice(media))
 		// case tg.MessageMediaGameTypeID:
 		// 	cm.Parts = append(cm.Parts, mc.convertGame(media))
 		// case tg.MessageMediaStoryTypeID:
@@ -404,6 +404,77 @@ func (mc *MessageConverter) convertPoll(media tg.MessageMediaClass) *bridgev2.Co
 			Body:          fmt.Sprintf("Poll: %s\n%s\nOpen the Telegram app to vote.", poll.Poll.Question.Text, strings.Join(textAnswers, "\n")),
 			Format:        event.FormatHTML,
 			FormattedBody: fmt.Sprintf(`<strong>Poll</strong>: %s<ol>%s</ol>Open the Telegram app to vote.`, poll.Poll.Question.Text, htmlAnswers.String()),
+		},
+	}
+}
+
+func (mc *MessageConverter) convertDice(media tg.MessageMediaClass) *bridgev2.ConvertedMessagePart {
+	roll := media.(*tg.MessageMediaDice)
+
+	var result string
+	var text strings.Builder
+	text.WriteString(roll.Emoticon)
+
+	switch roll.Emoticon {
+	case "🎯":
+		text.WriteString(" Dart throw")
+	case "🎲":
+		text.WriteString(" Dice roll")
+	case "🏀":
+		text.WriteString(" Basketball throw")
+	case "🎰":
+		text.WriteString(" Slot machine")
+		emojis := map[int]string{
+			0: "🍫",
+			1: "🍒",
+			2: "🍋",
+			3: "7️⃣",
+		}
+		res := roll.Value - 1
+		result = fmt.Sprintf("%s %s %s", emojis[res%4], emojis[res/4%4], emojis[res/16])
+	case "🎳":
+		text.WriteString(" Bowling")
+		result = map[int]string{
+			1: "miss",
+			2: "1 pin down",
+			3: "3 pins down, split",
+			4: "4 pins down, split",
+			5: "5 pins down",
+			6: "strike 🎉",
+		}[roll.Value]
+	case "⚽":
+		text.WriteString(" Football kick")
+		result = map[int]string{
+			1: "miss",
+			2: "hit the woodwork",
+			3: "goal", // seems to go in through the center
+			4: "goal",
+			5: "goal 🎉", // seems to go in through the top right corner, includes confetti
+		}[roll.Value]
+	}
+
+	text.WriteString(" result: ")
+	if len(result) > 0 {
+		text.WriteString(result)
+		text.WriteString(fmt.Sprintf(" (%d)", roll.Value))
+	} else {
+		text.WriteString(fmt.Sprintf("%d", roll.Value))
+	}
+
+	return &bridgev2.ConvertedMessagePart{
+		ID:   networkid.PartID("dice"),
+		Type: event.EventMessage,
+		Content: &event.MessageEventContent{
+			MsgType:       event.MsgText,
+			Body:          text.String(),
+			Format:        event.FormatHTML,
+			FormattedBody: fmt.Sprintf("<h4>%s</h4>", text.String()),
+		},
+		Extra: map[string]any{
+			"fi.mau.telegram.dice": map[string]any{
+				"emoticon": roll.Emoticon,
+				"value":    roll.Value,
+			},
 		},
 	}
 }
