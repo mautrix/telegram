@@ -96,14 +96,21 @@ func (mc *MessageConverter) ToMatrix(ctx context.Context, portal *bridgev2.Porta
 			cm.Parts = append(cm.Parts, mc.convertDice(media))
 		case tg.MessageMediaGameTypeID:
 			cm.Parts = append(cm.Parts, mc.convertGame(media))
-		// case tg.MessageMediaStoryTypeID:
-		// 	cm.Parts = append(cm.Parts, mc.convertStory(media))
-		// case tg.MessageMediaInvoiceTypeID:
-		// 	cm.Parts = append(cm.Parts, mc.convertInvoice(media))
 
-		// TODO
-		// case tg.MessageMediaGiveawayTypeID:
-		// case tg.MessageMediaGiveawayResultsTypeID:
+		case tg.MessageMediaStoryTypeID, tg.MessageMediaInvoiceTypeID, tg.MessageMediaGiveawayTypeID, tg.MessageMediaGiveawayResultsTypeID:
+			// TODO: support these properly
+			cm.Parts = append(cm.Parts, &bridgev2.ConvertedMessagePart{
+				ID:   networkid.PartID("story"),
+				Type: event.EventMessage,
+				Content: &event.MessageEventContent{
+					MsgType: event.MsgNotice,
+					Body:    fmt.Sprintf("%s are not yet supported. Open Telegram to view.", media.TypeName()),
+				},
+				Extra: map[string]any{
+					"fi.mau.telegram.unsupported": true,
+					"fi.mau.telegram.type_id":     media.TypeID(),
+				},
+			})
 		default:
 			return nil, fmt.Errorf("unsupported media type %T", media)
 		}
