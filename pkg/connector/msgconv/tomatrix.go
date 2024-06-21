@@ -90,6 +90,20 @@ func (mc *MessageConverter) ToMatrix(ctx context.Context, portal *bridgev2.Porta
 				return nil, err
 			}
 			cm.Parts = append(cm.Parts, location)
+		case tg.MessageMediaPollTypeID:
+			cm.Parts = append(cm.Parts, mc.convertPoll(media))
+		// case tg.MessageMediaDiceTypeID:
+		// 	cm.Parts = append(cm.Parts, mc.convertDice(media))
+		// case tg.MessageMediaGameTypeID:
+		// 	cm.Parts = append(cm.Parts, mc.convertGame(media))
+		// case tg.MessageMediaStoryTypeID:
+		// 	cm.Parts = append(cm.Parts, mc.convertStory(media))
+		// case tg.MessageMediaInvoiceTypeID:
+		// 	cm.Parts = append(cm.Parts, mc.convertInvoice(media))
+
+		// TODO
+		// case tg.MessageMediaGiveawayTypeID:
+		// case tg.MessageMediaGiveawayResultsTypeID:
 		default:
 			return nil, fmt.Errorf("unsupported media type %T", media)
 		}
@@ -180,16 +194,6 @@ func (mc *MessageConverter) convertMediaRequiringUpload(ctx context.Context, por
 				}
 			}
 		}
-
-		// TODO all of these
-		// case *tg.MessageMediaUnsupported: // messageMediaUnsupported#9f84f49e
-		// case *tg.MessageMediaGame: // messageMediaGame#fdb19008
-		// case *tg.MessageMediaInvoice: // messageMediaInvoice#f6a548d3
-		// case *tg.MessageMediaPoll: // messageMediaPoll#4bd6e798
-		// case *tg.MessageMediaDice: // messageMediaDice#3f7ee58b
-		// case *tg.MessageMediaStory: // messageMediaStory#68cb6283
-		// case *tg.MessageMediaGiveaway: // messageMediaGiveaway#daad85b0
-		// case *tg.MessageMediaGiveawayResults: // messageMediaGiveawayResults#c6991068
 	default:
 		return nil, nil, fmt.Errorf("unhandled media type %T", media)
 	}
@@ -238,16 +242,6 @@ func (mc *MessageConverter) convertMediaRequiringUpload(ctx context.Context, por
 
 			mimeType = document.GetMimeType()
 			data, err = download.DownloadDocument(ctx, mc.client.API(), document)
-
-			// TODO all of these
-			// case *tg.MessageMediaUnsupported: // messageMediaUnsupported#9f84f49e
-			// case *tg.MessageMediaGame: // messageMediaGame#fdb19008
-			// case *tg.MessageMediaInvoice: // messageMediaInvoice#f6a548d3
-			// case *tg.MessageMediaPoll: // messageMediaPoll#4bd6e798
-			// case *tg.MessageMediaDice: // messageMediaDice#3f7ee58b
-			// case *tg.MessageMediaStory: // messageMediaStory#68cb6283
-			// case *tg.MessageMediaGiveaway: // messageMediaGiveaway#daad85b0
-			// case *tg.MessageMediaGiveawayResults: // messageMediaGiveawayResults#c6991068
 		default:
 			return nil, nil, fmt.Errorf("unhandled media type %T", media)
 		}
@@ -389,4 +383,27 @@ func (mc *MessageConverter) convertLocation(media tg.MessageMediaClass) (*bridge
 		},
 		Extra: extra,
 	}, nil
+}
+
+func (mc *MessageConverter) convertPoll(media tg.MessageMediaClass) *bridgev2.ConvertedMessagePart {
+	// TODO (PLAT-25224) make this richer in the future once megabridge has support for polls
+
+	poll := media.(*tg.MessageMediaPoll)
+	var textAnswers []string
+	var htmlAnswers strings.Builder
+	for i, opt := range poll.Poll.Answers {
+		textAnswers = append(textAnswers, fmt.Sprintf("%d. %s", i+1, opt.Text.Text))
+		htmlAnswers.WriteString(fmt.Sprintf("<li>%s</li>", opt.Text.Text))
+	}
+
+	return &bridgev2.ConvertedMessagePart{
+		ID:   networkid.PartID("poll"),
+		Type: event.EventMessage,
+		Content: &event.MessageEventContent{
+			MsgType:       event.MsgText,
+			Body:          fmt.Sprintf("Poll: %s\n%s\nOpen the Telegram app to vote.", poll.Poll.Question.Text, strings.Join(textAnswers, "\n")),
+			Format:        event.FormatHTML,
+			FormattedBody: fmt.Sprintf(`<strong>Poll</strong>: %s<ol>%s</ol>Open the Telegram app to vote.`, poll.Poll.Question.Text, htmlAnswers.String()),
+		},
+	}
 }
