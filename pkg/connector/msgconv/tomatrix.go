@@ -94,8 +94,8 @@ func (mc *MessageConverter) ToMatrix(ctx context.Context, portal *bridgev2.Porta
 			cm.Parts = append(cm.Parts, mc.convertPoll(media))
 		case tg.MessageMediaDiceTypeID:
 			cm.Parts = append(cm.Parts, mc.convertDice(media))
-		// case tg.MessageMediaGameTypeID:
-		// 	cm.Parts = append(cm.Parts, mc.convertGame(media))
+		case tg.MessageMediaGameTypeID:
+			cm.Parts = append(cm.Parts, mc.convertGame(media))
 		// case tg.MessageMediaStoryTypeID:
 		// 	cm.Parts = append(cm.Parts, mc.convertStory(media))
 		// case tg.MessageMediaInvoiceTypeID:
@@ -475,6 +475,19 @@ func (mc *MessageConverter) convertDice(media tg.MessageMediaClass) *bridgev2.Co
 				"emoticon": roll.Emoticon,
 				"value":    roll.Value,
 			},
+		},
+	}
+}
+
+func (mc *MessageConverter) convertGame(media tg.MessageMediaClass) *bridgev2.ConvertedMessagePart {
+	// TODO (PLAT-25562) provide a richer experience for the game
+	game := media.(*tg.MessageMediaGame)
+	return &bridgev2.ConvertedMessagePart{
+		ID:   networkid.PartID("game"),
+		Type: event.EventMessage,
+		Content: &event.MessageEventContent{
+			MsgType: event.MsgText,
+			Body:    fmt.Sprintf("Game: %s. Open the Telegram app to play.", game.Game.Title),
 		},
 	}
 }
