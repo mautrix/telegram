@@ -99,3 +99,7 @@ func InputPeerForPortalID(portalID networkid.PortalID) (tg.InputPeerClass, error
 		panic("invalid peer type")
 	}
 }
+
+func MakeAvatarID(photoID int64) networkid.AvatarID {
+	return networkid.AvatarID(strconv.FormatInt(photoID, 10))
+}

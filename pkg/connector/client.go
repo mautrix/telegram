@@ -17,6 +17,7 @@ import (
 	"maunium.net/go/mautrix/bridgev2"
 	"maunium.net/go/mautrix/bridgev2/networkid"
 
+	"go.mau.fi/mautrix-telegram/pkg/connector/download"
 	"go.mau.fi/mautrix-telegram/pkg/connector/ids"
 	"go.mau.fi/mautrix-telegram/pkg/connector/msgconv"
 	"go.mau.fi/mautrix-telegram/pkg/connector/util"
@@ -258,6 +259,7 @@ func (t *TelegramClient) GetChatInfo(ctx context.Context, portal *bridgev2.Porta
 	var name string
 	var members []networkid.UserID
 	var isSpace, isDM bool
+	var avatar *bridgev2.Avatar
 
 	switch peerType {
 	case ids.PeerTypeUser:
@@ -287,6 +289,21 @@ func (t *TelegramClient) GetChatInfo(ctx context.Context, portal *bridgev2.Porta
 			}
 		}
 
+		chatFull, ok := fullChat.FullChat.(*tg.ChatFull)
+		if !ok {
+			return nil, fmt.Errorf("full chat is not %T", chatFull)
+		}
+
+		if photo, ok := chatFull.ChatPhoto.(*tg.Photo); ok {
+			avatar = &bridgev2.Avatar{
+				ID: ids.MakeAvatarID(photo.ID),
+				Get: func(ctx context.Context) (data []byte, err error) {
+					data, _, err = download.DownloadPhoto(ctx, t.client.API(), photo)
+					return
+				},
+			}
+		}
+
 		for _, user := range fullChat.Users {
 			members = append(members, ids.MakeUserID(user.GetID()))
 		}
@@ -296,10 +313,8 @@ func (t *TelegramClient) GetChatInfo(ctx context.Context, portal *bridgev2.Porta
 	}
 
 	return &bridgev2.PortalInfo{
-		Name: &name,
-		// TODO
-		// Avatar *Avatar
-
+		Name:         &name,
+		Avatar:       avatar,
 		Members:      members,
 		IsDirectChat: &isDM,
 		IsSpace:      &isSpace,

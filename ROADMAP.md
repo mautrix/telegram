@@ -48,7 +48,7 @@
     * [ ] Avatar
     * [ ] † About text
     * [ ] † Public channel username
-  * [ ] Initial chat metadata (about text missing)
+  * [x] Initial chat metadata (about text missing)
   * [ ] User metadata (displayname/avatar)
   * [ ] Supergroup upgrade
 * Misc
