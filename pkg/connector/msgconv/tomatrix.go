@@ -312,7 +312,7 @@ func (mc *MessageConverter) convertContact(media tg.MessageMediaClass) *bridgev2
 		content.Format = event.FormatHTML
 		content.FormattedBody = fmt.Sprintf(
 			`Shared contact info for <a href="https://matrix.to/#/%s">%s</a>: %s`,
-			mc.connector.FormatGhostMXID(ids.MakeUserID(contact.UserID)),
+			mc.connector.GhostIntent(ids.MakeUserID(contact.UserID)).GetMXID(),
 			html.EscapeString(name),
 			html.EscapeString(formattedPhone),
 		)

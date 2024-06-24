@@ -103,3 +103,9 @@ func (tg *TelegramConnector) GetName() bridgev2.BridgeName {
 		DefaultPort:      29317,
 	}
 }
+
+func (tg *TelegramConnector) GetCapabilities() *bridgev2.NetworkGeneralCapabilities {
+	return &bridgev2.NetworkGeneralCapabilities{
+		DisappearingMessages: true,
+	}
+}
