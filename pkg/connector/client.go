@@ -34,6 +34,34 @@ type TelegramClient struct {
 
 var _ bridgev2.NetworkAPI = (*TelegramClient)(nil)
 
+type UpdateDispatcher struct {
+	tg.UpdateDispatcher
+	EntityHandler func(context.Context, tg.Entities) error
+}
+
+func (u UpdateDispatcher) Handle(ctx context.Context, updates tg.UpdatesClass) error {
+	var (
+		e tg.Entities
+	)
+	switch u := updates.(type) {
+	case *tg.Updates:
+		e.Users = u.MapUsers().NotEmptyToMap()
+		chats := u.MapChats()
+		e.Chats = chats.ChatToMap()
+		e.Channels = chats.ChannelToMap()
+	case *tg.UpdatesCombined:
+		e.Users = u.MapUsers().NotEmptyToMap()
+		chats := u.MapChats()
+		e.Chats = chats.ChatToMap()
+		e.Channels = chats.ChannelToMap()
+	}
+	if u.EntityHandler != nil {
+		u.EntityHandler(ctx, e)
+	}
+
+	return u.UpdateDispatcher.Handle(ctx, updates)
+}
+
 func NewTelegramClient(ctx context.Context, tc *TelegramConnector, login *bridgev2.UserLogin) (*TelegramClient, error) {
 	loginID, err := strconv.ParseInt(string(login.ID), 10, 64)
 	if err != nil {
@@ -52,9 +80,13 @@ func NewTelegramClient(ctx context.Context, tc *TelegramConnector, login *bridge
 		loginID:   loginID,
 		userLogin: login,
 	}
-	dispatcher := tg.NewUpdateDispatcher()
+	dispatcher := UpdateDispatcher{
+		UpdateDispatcher: tg.NewUpdateDispatcher(),
+		EntityHandler:    client.onEntityUpdate,
+	}
 	dispatcher.OnNewMessage(client.onUpdateNewMessage)
 	dispatcher.OnNewChannelMessage(client.onUpdateNewChannelMessage)
+	dispatcher.OnUserName(client.onUserName)
 
 	store := tc.store.GetScopedStore(loginID)
 
@@ -120,6 +152,7 @@ func connectTelegramClient(ctx context.Context, client *telegram.Client) (contex
 }
 
 func (t *TelegramClient) onUpdateNewMessage(ctx context.Context, e tg.Entities, update *tg.UpdateNewMessage) error {
+	fmt.Printf("onupdatenewmessage %+v\n", e)
 	log := zerolog.Ctx(ctx)
 	switch msg := update.GetMessage().(type) {
 	case *tg.Message:
@@ -241,6 +274,34 @@ func (t *TelegramClient) onUpdateNewChannelMessage(ctx context.Context, e tg.Ent
 	return nil
 }
 
+func (t *TelegramClient) onUserName(ctx context.Context, e tg.Entities, update *tg.UpdateUserName) error {
+	ghost, err := t.main.Bridge.GetGhostByID(ctx, ids.MakeUserID(update.UserID))
+	if err != nil {
+		return err
+	}
+
+	name := util.FormatFullName(update.FirstName, update.LastName)
+
+	// TODO update identifiers?
+	ghost.UpdateInfo(ctx, &bridgev2.UserInfo{Name: &name})
+	return nil
+}
+
+func (t *TelegramClient) onEntityUpdate(ctx context.Context, e tg.Entities) error {
+	for userID, user := range e.Users {
+		ghost, err := t.main.Bridge.GetGhostByID(ctx, ids.MakeUserID(userID))
+		if err != nil {
+			return err
+		}
+		userInfo, err := t.getUserInfoFromTelegramUser(ctx, user)
+		if err != nil {
+			return err
+		}
+		ghost.UpdateInfo(ctx, userInfo)
+	}
+	return nil
+}
+
 func (t *TelegramClient) Connect(ctx context.Context) (err error) {
 	t.clientCancel, err = connectTelegramClient(ctx, t.client)
 	return
@@ -336,24 +397,42 @@ func (t *TelegramClient) GetUserInfo(ctx context.Context, ghost *bridgev2.Ghost)
 	if user, ok := users[0].(*tg.User); !ok {
 		return nil, fmt.Errorf("returned user is not *tg.User")
 	} else {
-		var identifiers []string
-
-		if username, ok := user.GetUsername(); ok {
-			identifiers = append(identifiers, fmt.Sprintf("telegram:%s", username))
-		}
-		if phone, ok := user.GetPhone(); ok {
-			identifiers = append(identifiers, fmt.Sprintf("tel:+%s", strings.TrimPrefix(phone, "+")))
-		}
-
-		name := util.FormatFullName(user.FirstName, user.LastName)
-		return &bridgev2.UserInfo{
-			IsBot: &user.Bot,
-			Name:  &name,
-			// TODO
-			// Avatar *Avatar
-			Identifiers: identifiers,
-		}, nil
+		return t.getUserInfoFromTelegramUser(ctx, user)
 	}
+}
+
+func (t *TelegramClient) getUserInfoFromTelegramUser(ctx context.Context, user *tg.User) (*bridgev2.UserInfo, error) {
+	var identifiers []string
+	for _, username := range user.Usernames {
+		identifiers = append(identifiers, fmt.Sprintf("telegram:%s", username.Username))
+	}
+	if phone, ok := user.GetPhone(); ok {
+		identifiers = append(identifiers, fmt.Sprintf("tel:+%s", strings.TrimPrefix(phone, "+")))
+	}
+
+	var avatar *bridgev2.Avatar
+	if p, ok := user.GetPhoto(); ok && p.TypeID() == tg.UserProfilePhotoTypeID {
+		photo := p.(*tg.UserProfilePhoto)
+		avatar = &bridgev2.Avatar{
+			ID: ids.MakeAvatarID(photo.PhotoID),
+			Get: func(ctx context.Context) (data []byte, err error) {
+				data, _, err = download.DownloadPhotoFileLocation(ctx, t.client.API(), &tg.InputPeerPhotoFileLocation{
+					Peer:    &tg.InputPeerUser{UserID: user.ID},
+					PhotoID: photo.PhotoID,
+					Big:     true,
+				})
+				return
+			},
+		}
+	}
+
+	name := util.FormatFullName(user.FirstName, user.LastName)
+	return &bridgev2.UserInfo{
+		IsBot:       &user.Bot,
+		Name:        &name,
+		Avatar:      avatar,
+		Identifiers: identifiers,
+	}, nil
 }
 
 func (t *TelegramClient) IsLoggedIn() bool {

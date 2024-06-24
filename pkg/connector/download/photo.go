@@ -35,18 +35,10 @@ func GetLargestPhotoSize(sizes []tg.PhotoSizeClass) (largest tg.PhotoSizeClass) 
 	return
 }
 
-func DownloadPhoto(ctx context.Context, client downloader.Client, photo *tg.Photo) (data []byte, mimeType string, err error) {
-	largest := GetLargestPhotoSize(photo.GetSizes())
-	file := tg.InputPhotoFileLocation{
-		ID:            photo.GetID(),
-		AccessHash:    photo.GetAccessHash(),
-		FileReference: photo.GetFileReference(),
-		ThumbSize:     largest.GetType(),
-	}
-
+func DownloadPhotoFileLocation(ctx context.Context, client downloader.Client, file tg.InputFileLocationClass) (data []byte, mimeType string, err error) {
 	// TODO convert to streaming?
 	var buf bytes.Buffer
-	storageFileTypeClass, err := downloader.NewDownloader().Download(client, &file).Stream(ctx, &buf)
+	storageFileTypeClass, err := downloader.NewDownloader().Download(client, file).Stream(ctx, &buf)
 	if err != nil {
 		return nil, "", err
 	}
@@ -71,6 +63,15 @@ func DownloadPhoto(ctx context.Context, client downloader.Client, photo *tg.Phot
 		mimeType = http.DetectContentType(buf.Bytes())
 	}
 	return buf.Bytes(), mimeType, nil
+}
+
+func DownloadPhoto(ctx context.Context, client downloader.Client, photo *tg.Photo) (data []byte, mimeType string, err error) {
+	return DownloadPhotoFileLocation(ctx, client, &tg.InputPhotoFileLocation{
+		ID:            photo.GetID(),
+		AccessHash:    photo.GetAccessHash(),
+		FileReference: photo.GetFileReference(),
+		ThumbSize:     GetLargestPhotoSize(photo.GetSizes()).GetType(),
+	})
 }
 
 func DownloadPhotoMedia(ctx context.Context, client downloader.Client, media *tg.MessageMediaPhoto) (data []byte, mimeType string, err error) {
