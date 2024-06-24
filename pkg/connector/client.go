@@ -120,58 +120,119 @@ func connectTelegramClient(ctx context.Context, client *telegram.Client) (contex
 
 func (t *TelegramClient) onUpdateNewMessage(ctx context.Context, e tg.Entities, update *tg.UpdateNewMessage) error {
 	log := zerolog.Ctx(ctx)
-	msg, ok := update.GetMessage().(*tg.Message)
-	if !ok {
-		log.Error().Type("message", update.GetMessage()).Msg("unknown message type")
-		return nil
-	}
+	switch msg := update.GetMessage().(type) {
+	case *tg.Message:
+		sender := t.getEventSender(msg)
 
-	var sender bridgev2.EventSender
-	if msg.Out {
+		if media, ok := msg.GetMedia(); ok && media.TypeID() == tg.MessageMediaContactTypeID {
+			contact := media.(*tg.MessageMediaContact)
+			// TODO update the corresponding puppet
+			log.Info().Int64("user_id", contact.UserID).Msg("received contact")
+		}
+
+		t.main.Bridge.QueueRemoteEvent(t.userLogin, &bridgev2.SimpleRemoteEvent[*tg.Message]{
+			Type: bridgev2.RemoteEventMessage,
+			LogContext: func(c zerolog.Context) zerolog.Context {
+				return c.
+					Int("message_id", update.Message.GetID()).
+					Str("sender", string(sender.Sender)).
+					Str("sender_login", string(sender.SenderLogin)).
+					Bool("is_from_me", sender.IsFromMe)
+			},
+			ID:                 ids.MakeMessageID(msg.ID),
+			Sender:             sender,
+			PortalKey:          ids.MakePortalID(msg.PeerID),
+			Data:               msg,
+			CreatePortal:       true,
+			ConvertMessageFunc: t.msgConv.ToMatrix,
+			Timestamp:          time.Unix(int64(msg.Date), 0),
+		})
+	case *tg.MessageService:
+		fmt.Printf("message service\n")
+		fmt.Printf("%v\n", msg)
+
+		// sender := t.getEventSender(msg)
+		// switch action := msg.Action.(type) {
+		// case *tg.MessageActionChatEditTitle:
+		// case *tg.MessageActionChatCreate:
+		// case *tg.MessageActionChatEditPhoto:
+		// case *tg.MessageActionChatDeletePhoto:
+		// case *tg.MessageActionChatAddUser:
+		// case *tg.MessageActionChatDeleteUser:
+		// case *tg.MessageActionChatJoinedByLink:
+		// case *tg.MessageActionChannelCreate:
+		// case *tg.MessageActionChatMigrateTo:
+		// case *tg.MessageActionChannelMigrateFrom:
+		// case *tg.MessageActionPinMessage:
+		// case *tg.MessageActionHistoryClear:
+		// case *tg.MessageActionGameScore:
+		// case *tg.MessageActionPaymentSentMe:
+		// case *tg.MessageActionPaymentSent:
+		// case *tg.MessageActionPhoneCall:
+		// case *tg.MessageActionScreenshotTaken:
+		// case *tg.MessageActionCustomAction:
+		// case *tg.MessageActionBotAllowed:
+		// case *tg.MessageActionSecureValuesSentMe:
+		// case *tg.MessageActionSecureValuesSent:
+		// case *tg.MessageActionContactSignUp:
+		// case *tg.MessageActionGeoProximityReached:
+		// case *tg.MessageActionGroupCall:
+		// case *tg.MessageActionInviteToGroupCall:
+		// case *tg.MessageActionSetMessagesTTL:
+		// case *tg.MessageActionGroupCallScheduled:
+		// case *tg.MessageActionSetChatTheme:
+		// case *tg.MessageActionChatJoinedByRequest:
+		// case *tg.MessageActionWebViewDataSentMe:
+		// case *tg.MessageActionWebViewDataSent:
+		// case *tg.MessageActionGiftPremium:
+		// case *tg.MessageActionTopicCreate:
+		// case *tg.MessageActionTopicEdit:
+		// case *tg.MessageActionSuggestProfilePhoto:
+		// case *tg.MessageActionRequestedPeer:
+		// case *tg.MessageActionSetChatWallPaper:
+		// case *tg.MessageActionGiftCode:
+		// case *tg.MessageActionGiveawayLaunch:
+		// case *tg.MessageActionGiveawayResults:
+		// case *tg.MessageActionBoostApply:
+		// case *tg.MessageActionRequestedPeerSentMe:
+		// default:
+		// 	return fmt.Errorf("unknown action type %T", action)
+		// }
+
+	default:
+		return fmt.Errorf("unknown message type %T", msg)
+	}
+	return nil
+}
+
+type messageWithSender interface {
+	GetOut() bool
+	GetFromID() (tg.PeerClass, bool)
+	GetPeerID() tg.PeerClass
+}
+
+func (t *TelegramClient) getEventSender(msg messageWithSender) (sender bridgev2.EventSender) {
+	if msg.GetOut() {
 		sender.IsFromMe = true
 		sender.SenderLogin = ids.MakeUserLoginID(t.loginID)
 		sender.Sender = ids.MakeUserID(t.loginID)
-	} else if msg.FromID != nil {
-		switch from := msg.FromID.(type) {
+	} else if f, ok := msg.GetFromID(); ok {
+		switch from := f.(type) {
 		case *tg.PeerUser:
 			sender.SenderLogin = ids.MakeUserLoginID(from.UserID)
 			sender.Sender = ids.MakeUserID(from.UserID)
 		default:
-			fmt.Printf("%+v\n", msg.FromID)
-			fmt.Printf("%T\n", msg.FromID)
+			fmt.Printf("%+v\n", f)
+			fmt.Printf("%T\n", f)
 			panic("unimplemented FromID")
 		}
-	} else if peer, ok := msg.PeerID.(*tg.PeerUser); ok {
+	} else if peer, ok := msg.GetPeerID().(*tg.PeerUser); ok {
 		sender.SenderLogin = ids.MakeUserLoginID(peer.UserID)
 		sender.Sender = ids.MakeUserID(peer.UserID)
 	} else {
 		panic("not from anyone")
 	}
-
-	if media, ok := msg.GetMedia(); ok && media.TypeID() == tg.MessageMediaContactTypeID {
-		contact := media.(*tg.MessageMediaContact)
-		// TODO update the corresponding puppet
-		log.Info().Int64("user_id", contact.UserID).Msg("received contact")
-	}
-
-	t.main.Bridge.QueueRemoteEvent(t.userLogin, &bridgev2.SimpleRemoteEvent[*tg.Message]{
-		Type: bridgev2.RemoteEventMessage,
-		LogContext: func(c zerolog.Context) zerolog.Context {
-			return c.
-				Int("message_id", update.Message.GetID()).
-				Str("sender", string(sender.Sender)).
-				Str("sender_login", string(sender.SenderLogin)).
-				Bool("is_from_me", sender.IsFromMe)
-		},
-		ID:                 ids.MakeMessageID(msg.ID),
-		Sender:             sender,
-		PortalKey:          ids.MakePortalID(msg.PeerID),
-		Data:               msg,
-		CreatePortal:       true,
-		ConvertMessageFunc: t.msgConv.ToMatrix,
-		Timestamp:          time.Unix(int64(msg.Date), 0),
-	})
-	return nil
+	return
 }
 
 func (t *TelegramClient) onUpdateNewChannelMessage(ctx context.Context, e tg.Entities, update *tg.UpdateNewChannelMessage) error {
@@ -194,7 +255,7 @@ func (t *TelegramClient) GetChatInfo(ctx context.Context, portal *bridgev2.Porta
 	if err != nil {
 		return nil, err
 	}
-	var name, topic string
+	var name string
 	var members []networkid.UserID
 	var isSpace, isDM bool
 
@@ -215,15 +276,18 @@ func (t *TelegramClient) GetChatInfo(ctx context.Context, portal *bridgev2.Porta
 			isDM = true
 		}
 	case ids.PeerTypeChat:
-		// TODO get name of chat
-		chat, err := t.client.API().MessagesGetFullChat(ctx, id)
+		fullChat, err := t.client.API().MessagesGetFullChat(ctx, id)
 		if err != nil {
 			return nil, err
 		}
-		if len(chat.Users) == 0 {
-			return nil, fmt.Errorf("no users found in chat %d", id)
+		for _, c := range fullChat.Chats {
+			if c.GetID() == id {
+				name = c.(*tg.Chat).Title
+				break
+			}
 		}
-		for _, user := range chat.Users {
+
+		for _, user := range fullChat.Users {
 			members = append(members, ids.MakeUserID(user.GetID()))
 		}
 	default:
@@ -232,8 +296,7 @@ func (t *TelegramClient) GetChatInfo(ctx context.Context, portal *bridgev2.Porta
 	}
 
 	return &bridgev2.PortalInfo{
-		Name:  &name,
-		Topic: &topic, // TODO
+		Name: &name,
 		// TODO
 		// Avatar *Avatar
 
