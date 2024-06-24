@@ -374,7 +374,7 @@ func (mc *MessageConverter) convertLocation(media tg.MessageMediaClass) (*bridge
 	}
 
 	extra["org.matrix.msc3488.location"] = map[string]any{
-		"uri":         geoURI,
+		"uri":         geoURI.URI(),
 		"description": note,
 	}
 
