@@ -65,7 +65,7 @@ func (tc *TelegramConnector) Download(ctx context.Context, mediaID networkid.Med
 
 	var media tg.MessageMediaClass
 	if m, ok := messages.(getMessages); !ok {
-		return nil, fmt.Errorf("unknown message type")
+		return nil, fmt.Errorf("unknown message type %T", messages)
 	} else {
 		var found bool
 		for _, message := range m.GetMessages() {
@@ -92,17 +92,6 @@ func (tc *TelegramConnector) Download(ctx context.Context, mediaID networkid.Med
 		}
 		mimeType = document.GetMimeType()
 		data, err = download.DownloadDocument(ctx, client.client.API(), document)
-
-		// TODO all of these
-		// case *tg.MessageMediaUnsupported: // messageMediaUnsupported#9f84f49e
-		// case *tg.MessageMediaDocument: // messageMediaDocument#4cf4d72d
-		// case *tg.MessageMediaGame: // messageMediaGame#fdb19008
-		// case *tg.MessageMediaInvoice: // messageMediaInvoice#f6a548d3
-		// case *tg.MessageMediaPoll: // messageMediaPoll#4bd6e798
-		// case *tg.MessageMediaDice: // messageMediaDice#3f7ee58b
-		// case *tg.MessageMediaStory: // messageMediaStory#68cb6283
-		// case *tg.MessageMediaGiveaway: // messageMediaGiveaway#daad85b0
-		// case *tg.MessageMediaGiveawayResults: // messageMediaGiveawayResults#c6991068
 	default:
 		return nil, fmt.Errorf("unhandled media type %T", media)
 	}
