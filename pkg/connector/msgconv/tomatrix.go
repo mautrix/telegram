@@ -19,6 +19,7 @@ import (
 	"go.mau.fi/mautrix-telegram/pkg/connector/download"
 	"go.mau.fi/mautrix-telegram/pkg/connector/ids"
 	"go.mau.fi/mautrix-telegram/pkg/connector/util"
+	"go.mau.fi/mautrix-telegram/pkg/connector/waveform"
 )
 
 type spoilable interface {
@@ -191,8 +192,8 @@ func (mc *MessageConverter) convertMediaRequiringUpload(ctx context.Context, por
 				audio = &event.MSC1767Audio{
 					Duration: a.Duration * 1000,
 				}
-				if waveform, ok := a.GetWaveform(); ok {
-					for _, v := range waveform {
+				if wf, ok := a.GetWaveform(); ok {
+					for _, v := range waveform.Decode(wf) {
 						audio.Waveform = append(audio.Waveform, int(v)<<5)
 					}
 				}
