@@ -164,7 +164,14 @@ func (t *TelegramClient) HandleMatrixEdit(ctx context.Context, msg *bridgev2.Mat
 }
 
 func (t *TelegramClient) HandleMatrixMessageRemove(ctx context.Context, msg *bridgev2.MatrixMessageRemove) error {
-	panic("unimplemented remove")
+	if dbMsg, err := t.main.Bridge.DB.Message.GetPartByMXID(ctx, msg.TargetMessage.MXID); err != nil {
+		return err
+	} else if messageID, err := ids.ParseMessageID(dbMsg.ID); err != nil {
+		return err
+	} else {
+		_, err = message.NewSender(t.client.API()).Self().Revoke().Messages(ctx, messageID)
+		return err
+	}
 }
 
 func (t *TelegramClient) PreHandleMatrixReaction(ctx context.Context, msg *bridgev2.MatrixReaction) (bridgev2.MatrixReactionPreResponse, error) {

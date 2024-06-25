@@ -25,6 +25,10 @@ func MakeMessageID(messageID int) networkid.MessageID {
 	return networkid.MessageID(strconv.Itoa(messageID))
 }
 
+func ParseMessageID(messageID networkid.MessageID) (int, error) {
+	return strconv.Atoi(string(messageID))
+}
+
 type PeerType string
 
 const (

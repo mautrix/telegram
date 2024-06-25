@@ -32,7 +32,18 @@ type TelegramClient struct {
 	msgConv      *msgconv.MessageConverter
 }
 
-var _ bridgev2.NetworkAPI = (*TelegramClient)(nil)
+var (
+	_ bridgev2.NetworkAPI                    = (*TelegramClient)(nil)
+	_ bridgev2.EditHandlingNetworkAPI        = (*TelegramClient)(nil)
+	_ bridgev2.ReactionHandlingNetworkAPI    = (*TelegramClient)(nil)
+	_ bridgev2.RedactionHandlingNetworkAPI   = (*TelegramClient)(nil)
+	_ bridgev2.ReadReceiptHandlingNetworkAPI = (*TelegramClient)(nil)
+	_ bridgev2.ReadReceiptHandlingNetworkAPI = (*TelegramClient)(nil)
+	_ bridgev2.TypingHandlingNetworkAPI      = (*TelegramClient)(nil)
+	// _ bridgev2.IdentifierResolvingNetworkAPI = (*TelegramClient)(nil)
+	// _ bridgev2.GroupCreatingNetworkAPI       = (*TelegramClient)(nil)
+	// _ bridgev2.ContactListingNetworkAPI      = (*TelegramClient)(nil)
+)
 
 type UpdateDispatcher struct {
 	tg.UpdateDispatcher
@@ -40,9 +51,7 @@ type UpdateDispatcher struct {
 }
 
 func (u UpdateDispatcher) Handle(ctx context.Context, updates tg.UpdatesClass) error {
-	var (
-		e tg.Entities
-	)
+	var e tg.Entities
 	switch u := updates.(type) {
 	case *tg.Updates:
 		e.Users = u.MapUsers().NotEmptyToMap()
@@ -87,6 +96,7 @@ func NewTelegramClient(ctx context.Context, tc *TelegramConnector, login *bridge
 	dispatcher.OnNewMessage(client.onUpdateNewMessage)
 	dispatcher.OnNewChannelMessage(client.onUpdateNewChannelMessage)
 	dispatcher.OnUserName(client.onUserName)
+	dispatcher.OnDeleteMessages(client.onDeleteMessages)
 
 	store := tc.store.GetScopedStore(loginID)
 
@@ -283,6 +293,30 @@ func (t *TelegramClient) onUserName(ctx context.Context, e tg.Entities, update *
 
 	// TODO update identifiers?
 	ghost.UpdateInfo(ctx, &bridgev2.UserInfo{Name: &name})
+	return nil
+}
+
+func (t *TelegramClient) onDeleteMessages(ctx context.Context, e tg.Entities, update *tg.UpdateDeleteMessages) error {
+	for _, messageID := range update.Messages {
+		parts, err := t.main.Bridge.DB.Message.GetAllPartsByID(ctx, ids.MakeMessageID(messageID))
+		if err != nil {
+			return err
+		}
+		if len(parts) == 0 {
+			return fmt.Errorf("no parts found for message %d", messageID)
+		}
+		t.main.Bridge.QueueRemoteEvent(t.userLogin, &bridgev2.SimpleRemoteEvent[any]{
+			Type: bridgev2.RemoteEventMessageRemove,
+			LogContext: func(c zerolog.Context) zerolog.Context {
+				return c.
+					Str("action", "delete message").
+					Int("message_id", messageID)
+			},
+			PortalKey:     parts[0].Room,
+			CreatePortal:  false,
+			TargetMessage: ids.MakeMessageID(messageID),
+		})
+	}
 	return nil
 }
 
