@@ -152,7 +152,6 @@ func connectTelegramClient(ctx context.Context, client *telegram.Client) (contex
 }
 
 func (t *TelegramClient) onUpdateNewMessage(ctx context.Context, e tg.Entities, update *tg.UpdateNewMessage) error {
-	fmt.Printf("onupdatenewmessage %+v\n", e)
 	log := zerolog.Ctx(ctx)
 	switch msg := update.GetMessage().(type) {
 	case *tg.Message:
