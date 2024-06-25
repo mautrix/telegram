@@ -119,12 +119,12 @@ func (mc *MessageConverter) ToMatrix(ctx context.Context, portal *bridgev2.Porta
 	return cm, nil
 }
 
-func (mc *MessageConverter) webpageToBeeperLinkPreview(ctx context.Context, intent bridgev2.MatrixAPI, media tg.MessageMediaClass) (*event.BeeperLinkPreview, error) {
+func (mc *MessageConverter) webpageToBeeperLinkPreview(ctx context.Context, intent bridgev2.MatrixAPI, media tg.MessageMediaClass) (preview *event.BeeperLinkPreview, err error) {
 	webpage, ok := media.(*tg.MessageMediaWebPage).Webpage.(*tg.WebPage)
 	if !ok {
 		return nil, nil
 	}
-	preview := &event.BeeperLinkPreview{
+	preview = &event.BeeperLinkPreview{
 		MatchedURL: webpage.URL,
 		LinkPreview: event.LinkPreview{
 			Title:        webpage.Title,
@@ -135,25 +135,13 @@ func (mc *MessageConverter) webpageToBeeperLinkPreview(ctx context.Context, inte
 
 	if pc, ok := webpage.GetPhoto(); ok && pc.TypeID() == tg.PhotoTypeID {
 		photo := pc.(*tg.Photo)
-		for _, s := range photo.GetSizes() {
-			switch size := s.(type) {
-			case *tg.PhotoCachedSize:
-				preview.ImageWidth = size.GetW()
-				preview.ImageHeight = size.GetH()
-			case *tg.PhotoSizeProgressive:
-				preview.ImageWidth = size.GetW()
-				preview.ImageHeight = size.GetH()
-			}
-		}
-
-		data, mimeType, err := download.DownloadPhoto(ctx, mc.client.API(), photo)
+		var data []byte
+		data, preview.ImageWidth, preview.ImageHeight, preview.ImageType, err = download.DownloadPhoto(ctx, mc.client.API(), photo)
 		if err != nil {
 			return nil, err
 		}
 		preview.ImageSize = len(data)
-		preview.ImageType = mimeType
-
-		preview.ImageURL, preview.ImageEncryption, err = intent.UploadMedia(ctx, "", data, "", mimeType)
+		preview.ImageURL, preview.ImageEncryption, err = intent.UploadMedia(ctx, "", data, "", preview.ImageType)
 		if err != nil {
 			return nil, err
 		}
@@ -162,12 +150,34 @@ func (mc *MessageConverter) webpageToBeeperLinkPreview(ctx context.Context, inte
 	return preview, nil
 }
 
+func (mc *MessageConverter) directMedia(ctx context.Context, portal *bridgev2.Portal, msgID int, thumbnail bool) (uri id.ContentURIString, err error) {
+	if !mc.useDirectMedia {
+		return "", nil
+	}
+
+	peerType, chatID, err := ids.ParsePortalID(portal.ID)
+	if err != nil {
+		return "", err
+	}
+	mediaID, err := ids.DirectMediaInfo{
+		PeerType:  peerType,
+		ChatID:    chatID,
+		MessageID: int64(msgID),
+		Thumbnail: thumbnail,
+	}.AsMediaID()
+	if err != nil {
+		return "", err
+	}
+	return portal.Bridge.Matrix.GenerateContentURI(ctx, mediaID)
+}
+
 func (mc *MessageConverter) convertMediaRequiringUpload(ctx context.Context, portal *bridgev2.Portal, intent bridgev2.MatrixAPI, msgID int, media tg.MessageMediaClass) (*bridgev2.ConvertedMessagePart, *database.DisappearingSetting, error) {
 	var partID networkid.PartID
 	var msgType event.MessageType
 	var filename string
 	var audio *event.MSC1767Audio
 	var voice *event.MSC3245Voice
+	var info event.FileInfo
 
 	// Determine the filename and some other information
 	switch media := media.(type) {
@@ -175,18 +185,55 @@ func (mc *MessageConverter) convertMediaRequiringUpload(ctx context.Context, por
 		partID = networkid.PartID("photo")
 		msgType = event.MsgImage
 		filename = "image"
+		if photo, ok := media.Photo.(*tg.Photo); ok {
+			info.Width, info.Height, _ = download.GetLargestPhotoSize(photo.GetSizes())
+		}
 	case *tg.MessageMediaDocument:
 		partID = networkid.PartID("document")
 		msgType = event.MsgFile
 		document, ok := media.Document.(*tg.Document)
+		info.Size = int(document.Size)
 		if !ok {
 			return nil, nil, fmt.Errorf("unrecognized document type %T", media.Document)
+		}
+
+		if thumbSizes, ok := document.GetThumbs(); ok {
+			info.ThumbnailInfo = &event.FileInfo{}
+			var largestThumbnail tg.PhotoSizeClass
+			info.ThumbnailInfo.Width, info.ThumbnailInfo.Height, largestThumbnail = download.GetLargestPhotoSize(thumbSizes)
+
+			var err error
+			info.ThumbnailInfo.ThumbnailURL, err = mc.directMedia(ctx, portal, msgID, true)
+			if err != nil {
+				return nil, nil, err
+			}
+
+			if info.ThumbnailInfo.ThumbnailURL == "" {
+				data, mimeType, err := download.DownloadPhotoFileLocation(ctx, mc.client.API(), &tg.InputDocumentFileLocation{
+					ID:            document.GetID(),
+					AccessHash:    document.GetAccessHash(),
+					FileReference: document.GetFileReference(),
+					ThumbSize:     largestThumbnail.GetType(),
+				})
+				if err != nil {
+					return nil, nil, fmt.Errorf("downloading thumbnail failed: %w", err)
+				}
+
+				info.ThumbnailInfo.ThumbnailURL, info.ThumbnailInfo.ThumbnailFile, err = intent.UploadMedia(ctx, "", data, filename, mimeType)
+				if err != nil {
+					return nil, nil, err
+				}
+			}
 		}
 
 		for _, attr := range document.GetAttributes() {
 			switch a := attr.(type) {
 			case *tg.DocumentAttributeFilename:
 				filename = a.GetFileName()
+			case *tg.DocumentAttributeVideo:
+				msgType = event.MsgVideo
+				info.Width, info.Height = a.W, a.H
+				info.Duration = int(a.Duration * 1000)
 			case *tg.DocumentAttributeAudio:
 				msgType = event.MsgAudio
 				audio = &event.MSC1767Audio{
@@ -206,27 +253,11 @@ func (mc *MessageConverter) convertMediaRequiringUpload(ctx context.Context, por
 		return nil, nil, fmt.Errorf("unhandled media type %T", media)
 	}
 
-	var mxcURI id.ContentURIString
 	var encryptedFileInfo *event.EncryptedFileInfo
 
-	if mc.useDirectMedia {
-		var err error
-		peerType, chatID, err := ids.ParsePortalID(portal.ID)
-		if err != nil {
-			return nil, nil, err
-		}
-		mediaID, err := ids.DirectMediaInfo{
-			PeerType:  peerType,
-			ChatID:    chatID,
-			MessageID: int64(msgID),
-		}.AsMediaID()
-		if err != nil {
-			return nil, nil, err
-		}
-		mxcURI, err = portal.Bridge.Matrix.GenerateContentURI(ctx, mediaID)
-		if err != nil {
-			return nil, nil, err
-		}
+	mxcURI, err := mc.directMedia(ctx, portal, msgID, false)
+	if err != nil {
+		return nil, nil, err
 	}
 
 	if mxcURI == "" {
@@ -241,7 +272,7 @@ func (mc *MessageConverter) convertMediaRequiringUpload(ctx context.Context, por
 				filename = "image" + exmime.ExtensionFromMimetype(mimeType)
 			}
 
-			data, mimeType, err = download.DownloadPhotoMedia(ctx, mc.client.API(), media)
+			data, _, _, mimeType, err = download.DownloadPhotoMedia(ctx, mc.client.API(), media)
 		case *tg.MessageMediaDocument:
 			document, ok := media.Document.(*tg.Document)
 			if !ok {
@@ -293,6 +324,7 @@ func (mc *MessageConverter) convertMediaRequiringUpload(ctx context.Context, por
 			Body:         filename,
 			URL:          mxcURI,
 			File:         encryptedFileInfo,
+			Info:         &info,
 			MSC1767Audio: audio,
 			MSC3245Voice: voice,
 		},

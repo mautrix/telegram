@@ -10,7 +10,16 @@ import (
 	"github.com/gotd/td/tg"
 )
 
-func GetLargestPhotoSize(sizes []tg.PhotoSizeClass) (largest tg.PhotoSizeClass) {
+type dimensionable interface {
+	GetW() int
+	GetH() int
+}
+
+func GetLargestPhotoSize(sizes []tg.PhotoSizeClass) (width, height int, largest tg.PhotoSizeClass) {
+	if len(sizes) == 0 {
+		panic("cannot get largest size from empty list of sizes")
+	}
+
 	var maxSize int
 	for _, s := range sizes {
 		var currentSize int
@@ -30,6 +39,24 @@ func GetLargestPhotoSize(sizes []tg.PhotoSizeClass) (largest tg.PhotoSizeClass) 
 		if currentSize > maxSize {
 			maxSize = currentSize
 			largest = s
+			if d, ok := s.(dimensionable); ok {
+				width = d.GetW()
+				height = d.GetH()
+			}
+		}
+	}
+	return
+}
+
+func GetLargestDimensions(sizes []tg.PhotoSizeClass) (width, height int) {
+	for _, s := range sizes {
+		switch size := s.(type) {
+		case *tg.PhotoCachedSize:
+			width = size.GetW()
+			height = size.GetH()
+		case *tg.PhotoSizeProgressive:
+			width = size.GetW()
+			height = size.GetH()
 		}
 	}
 	return
@@ -65,23 +92,26 @@ func DownloadPhotoFileLocation(ctx context.Context, client downloader.Client, fi
 	return buf.Bytes(), mimeType, nil
 }
 
-func DownloadPhoto(ctx context.Context, client downloader.Client, photo *tg.Photo) (data []byte, mimeType string, err error) {
-	return DownloadPhotoFileLocation(ctx, client, &tg.InputPhotoFileLocation{
+func DownloadPhoto(ctx context.Context, client downloader.Client, photo *tg.Photo) (data []byte, width, height int, mimeType string, err error) {
+	var largest tg.PhotoSizeClass
+	width, height, largest = GetLargestPhotoSize(photo.GetSizes())
+	data, mimeType, err = DownloadPhotoFileLocation(ctx, client, &tg.InputPhotoFileLocation{
 		ID:            photo.GetID(),
 		AccessHash:    photo.GetAccessHash(),
 		FileReference: photo.GetFileReference(),
-		ThumbSize:     GetLargestPhotoSize(photo.GetSizes()).GetType(),
+		ThumbSize:     largest.GetType(),
 	})
+	return
 }
 
-func DownloadPhotoMedia(ctx context.Context, client downloader.Client, media *tg.MessageMediaPhoto) (data []byte, mimeType string, err error) {
+func DownloadPhotoMedia(ctx context.Context, client downloader.Client, media *tg.MessageMediaPhoto) (data []byte, width, height int, mimeType string, err error) {
 	p, ok := media.GetPhoto()
 	if !ok {
-		return nil, "", fmt.Errorf("photo message sent without a photo")
+		return nil, 0, 0, "", fmt.Errorf("photo message sent without a photo")
 	}
 	photo, ok := p.(*tg.Photo)
 	if !ok {
-		return nil, "", fmt.Errorf("unrecognized photo type %T", p)
+		return nil, 0, 0, "", fmt.Errorf("unrecognized photo type %T", p)
 	}
 	return DownloadPhoto(ctx, client, photo)
 }

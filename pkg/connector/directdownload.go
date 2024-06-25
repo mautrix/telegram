@@ -84,14 +84,25 @@ func (tc *TelegramConnector) Download(ctx context.Context, mediaID networkid.Med
 	var mimeType string
 	switch media := media.(type) {
 	case *tg.MessageMediaPhoto:
-		data, mimeType, err = download.DownloadPhotoMedia(ctx, client.client.API(), media)
+		data, _, _, mimeType, err = download.DownloadPhotoMedia(ctx, client.client.API(), media)
 	case *tg.MessageMediaDocument:
 		document, ok := media.Document.(*tg.Document)
 		if !ok {
 			return nil, fmt.Errorf("unrecognized document type %T", media.Document)
 		}
-		mimeType = document.GetMimeType()
-		data, err = download.DownloadDocument(ctx, client.client.API(), document)
+
+		if info.Thumbnail {
+			_, _, largestThumbnail := download.GetLargestPhotoSize(document.Thumbs)
+			data, mimeType, err = download.DownloadPhotoFileLocation(ctx, client.client.API(), &tg.InputDocumentFileLocation{
+				ID:            document.GetID(),
+				AccessHash:    document.GetAccessHash(),
+				FileReference: document.GetFileReference(),
+				ThumbSize:     largestThumbnail.GetType(),
+			})
+		} else {
+			mimeType = document.GetMimeType()
+			data, err = download.DownloadDocument(ctx, client.client.API(), document)
+		}
 	default:
 		return nil, fmt.Errorf("unhandled media type %T", media)
 	}

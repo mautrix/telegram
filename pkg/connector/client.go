@@ -358,7 +358,7 @@ func (t *TelegramClient) GetChatInfo(ctx context.Context, portal *bridgev2.Porta
 			avatar = &bridgev2.Avatar{
 				ID: ids.MakeAvatarID(photo.ID),
 				Get: func(ctx context.Context) (data []byte, err error) {
-					data, _, err = download.DownloadPhoto(ctx, t.client.API(), photo)
+					data, _, _, _, err = download.DownloadPhoto(ctx, t.client.API(), photo)
 					return
 				},
 			}
