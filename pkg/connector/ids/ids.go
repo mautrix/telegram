@@ -21,6 +21,7 @@ func MakeUserLoginID(userID int64) networkid.UserLoginID {
 	return networkid.UserLoginID(strconv.FormatInt(userID, 10))
 }
 
+// TODO: add space ID
 func MakeMessageID(messageID int) networkid.MessageID {
 	return networkid.MessageID(strconv.Itoa(messageID))
 }
@@ -67,7 +68,7 @@ func (pt PeerType) AsPortalKey(chatID int64) networkid.PortalKey {
 	return networkid.PortalKey{ID: networkid.PortalID(fmt.Sprintf("%s:%d", pt, chatID))}
 }
 
-func MakePortalID(peer tg.PeerClass) networkid.PortalKey {
+func MakePortalKey(peer tg.PeerClass) networkid.PortalKey {
 	switch v := peer.(type) {
 	case *tg.PeerUser:
 		return networkid.PortalKey{ID: networkid.PortalID(fmt.Sprintf("%s:%d", PeerTypeUser, v.UserID))}
@@ -104,6 +105,30 @@ func InputPeerForPortalID(portalID networkid.PortalID) (tg.InputPeerClass, error
 	}
 }
 
+func InputPeerForPortalKey(portalKey networkid.PortalKey) (tg.InputPeerClass, error) {
+	return InputPeerForPortalID(portalKey.ID)
+}
+
 func MakeAvatarID(photoID int64) networkid.AvatarID {
 	return networkid.AvatarID(strconv.FormatInt(photoID, 10))
+}
+
+func MakeEmojiIDFromDocumentID(documentID int64) networkid.EmojiID {
+	return networkid.EmojiID(fmt.Sprintf("d%d", documentID))
+}
+
+func MakeEmojiIDFromEmoticon(emoticon string) networkid.EmojiID {
+	return networkid.EmojiID(fmt.Sprintf("e%s", emoticon))
+}
+
+func ParseEmojiID(emojiID networkid.EmojiID) (documentID int64, emoticon string, err error) {
+	switch emojiID[0] {
+	case 'd':
+		documentID, err = strconv.ParseInt(string(emojiID[1:]), 10, 64)
+	case 'e':
+		emoticon = string(emojiID[1:])
+	default:
+		err = fmt.Errorf("invalid emoji ID type %s", string(emojiID[0]))
+	}
+	return
 }
