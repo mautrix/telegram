@@ -39,3 +39,8 @@ func ConvertKnownEmojis(emojiIDs []int64) (result map[networkid.EmojiID]string, 
 	}
 	return
 }
+
+func GetEmojiDocumentID(emoji string) (int64, bool) {
+	id, ok := unicodemojiPack[emoji]
+	return id, ok
+}

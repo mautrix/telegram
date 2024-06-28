@@ -3,6 +3,8 @@ package connector
 import (
 	"context"
 	"fmt"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gotd/td/telegram/message"
@@ -15,6 +17,9 @@ import (
 	"maunium.net/go/mautrix/bridgev2/networkid"
 	"maunium.net/go/mautrix/event"
 
+	"go.mau.fi/util/variationselector"
+
+	"go.mau.fi/mautrix-telegram/pkg/connector/emojis"
 	"go.mau.fi/mautrix-telegram/pkg/connector/ids"
 	"go.mau.fi/mautrix-telegram/pkg/connector/msgconv"
 	"go.mau.fi/mautrix-telegram/pkg/connector/waveform"
@@ -175,11 +180,63 @@ func (t *TelegramClient) HandleMatrixMessageRemove(ctx context.Context, msg *bri
 }
 
 func (t *TelegramClient) PreHandleMatrixReaction(ctx context.Context, msg *bridgev2.MatrixReaction) (bridgev2.MatrixReactionPreResponse, error) {
-	panic("pre handle matrix reaction")
+	var resp bridgev2.MatrixReactionPreResponse
+
+	sender := ids.MakeUserID(t.loginID)
+	var maxReactions int
+	maxReactions, err := t.getReactionLimit(ctx, sender)
+	if err != nil {
+		return resp, err
+	}
+
+	var emojiID networkid.EmojiID
+	if strings.HasPrefix(msg.Content.RelatesTo.Key, "mxc://") {
+		if file, err := t.main.Store.TelegramFile.GetByMXC(ctx, msg.Content.RelatesTo.Key); err != nil {
+			return resp, err
+		} else if documentID, err := strconv.ParseInt(string(file.LocationID), 10, 64); err != nil {
+			return resp, err
+		} else {
+			emojiID = ids.MakeEmojiIDFromDocumentID(documentID)
+		}
+	} else if documentID, ok := emojis.GetEmojiDocumentID(msg.Content.RelatesTo.Key); ok {
+		emojiID = ids.MakeEmojiIDFromDocumentID(documentID)
+	} else {
+		emojiID = ids.MakeEmojiIDFromEmoticon(msg.Content.RelatesTo.Key)
+	}
+
+	return bridgev2.MatrixReactionPreResponse{
+		SenderID:     sender,
+		EmojiID:      emojiID,
+		Emoji:        variationselector.FullyQualify(msg.Content.RelatesTo.Key),
+		MaxReactions: maxReactions,
+	}, nil
 }
 
 func (t *TelegramClient) HandleMatrixReaction(ctx context.Context, msg *bridgev2.MatrixReaction) (reaction *database.Reaction, err error) {
-	panic("unimplemented reaction")
+	peer, err := ids.InputPeerForPortalID(msg.Portal.ID)
+	if err != nil {
+		return nil, err
+	}
+	targetMessageID, err := ids.ParseMessageID(msg.TargetMessage.ID)
+	if err != nil {
+		return nil, err
+	}
+
+	req := tg.MessagesSendReactionRequest{
+		Peer:        peer,
+		AddToRecent: true,
+		MsgID:       targetMessageID,
+	}
+	if documentID, emoticon, err := ids.ParseEmojiID(msg.PreHandleResp.EmojiID); err != nil {
+		return nil, err
+	} else if documentID > 0 {
+		req.SetReaction([]tg.ReactionClass{&tg.ReactionCustomEmoji{DocumentID: documentID}})
+	} else {
+		req.SetReaction([]tg.ReactionClass{&tg.ReactionEmoji{Emoticon: emoticon}})
+	}
+
+	_, err = t.client.API().MessagesSendReaction(ctx, &req)
+	return &database.Reaction{}, err
 }
 
 func (t *TelegramClient) HandleMatrixReactionRemove(ctx context.Context, msg *bridgev2.MatrixReactionRemove) error {
