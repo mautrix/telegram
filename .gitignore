@@ -6,6 +6,7 @@
 !provisioning-spec.yaml
 
 *.json
+!pkg/connector/emojis/unicodemojipack.json
 *.db*
 *.log
 *.bak

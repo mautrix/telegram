@@ -13,6 +13,7 @@ import (
 	"maunium.net/go/mautrix/bridgev2/database"
 	"maunium.net/go/mautrix/bridgev2/networkid"
 
+	"go.mau.fi/mautrix-telegram/pkg/connector/emojis"
 	"go.mau.fi/mautrix-telegram/pkg/connector/ids"
 	"go.mau.fi/mautrix-telegram/pkg/connector/util"
 )
@@ -283,8 +284,7 @@ func (t *TelegramClient) handleTelegramReactions(ctx context.Context, msg *tg.Me
 		if e, ok := reaction.Reaction.(*tg.ReactionCustomEmoji); ok {
 			customEmojiIDs = append(customEmojiIDs, e.DocumentID)
 		} else if reaction.Reaction.TypeID() != tg.ReactionEmojiTypeID {
-			// We don't know how to process this type of emoji
-			continue
+			return fmt.Errorf("unknown reaction type %T", reaction.Reaction)
 		}
 
 		if p, ok := reaction.PeerID.(*tg.PeerUser); !ok {
@@ -325,9 +325,20 @@ func (t *TelegramClient) getReactionLimit(ctx context.Context, sender networkid.
 	return 1, nil
 }
 
+// TODO move this to emojis package
+func (t *TelegramClient) transferEmojisToMatrix(ctx context.Context, customEmojiIDs []int64) (result map[networkid.EmojiID]string, err error) {
+	result, customEmojiIDs = emojis.ConvertKnownEmojis(customEmojiIDs)
+	fmt.Printf("leftover custom emoji ids %+v\n", customEmojiIDs)
+	return
+}
+
 func (t *TelegramClient) handleTelegramParsedReactionsLocked(ctx context.Context, msg *database.Message, reactions map[networkid.UserID][]tg.MessagePeerReaction, customEmojiIDs []int64, isFull bool, onlyUserID *networkid.UserID, timestamp *time.Time) error {
 	// TODO deal with the custom emoji IDs
 	fmt.Printf("custom emoji IDs %v\n", customEmojiIDs)
+	customEmojis, err := t.transferEmojisToMatrix(ctx, customEmojiIDs)
+	if err != nil {
+		return err
+	}
 
 	existingReactions, err := t.main.Bridge.DB.Reaction.GetAllToMessage(ctx, msg.ID)
 	if err != nil {
@@ -364,12 +375,14 @@ func (t *TelegramClient) handleTelegramParsedReactionsLocked(ctx context.Context
 		for _, reaction := range reactions {
 			var emojiID networkid.EmojiID
 			var emoji string
-			if rce, ok := reaction.Reaction.(*tg.ReactionCustomEmoji); ok {
-				emojiID = ids.MakeEmojiIDFromDocumentID(rce.DocumentID)
-				emoji = "custom" // TODO
+			if r, ok := reaction.Reaction.(*tg.ReactionCustomEmoji); ok {
+				emojiID = ids.MakeEmojiIDFromDocumentID(r.DocumentID)
+				emoji = customEmojis[emojiID]
 			} else if r, ok := reaction.Reaction.(*tg.ReactionEmoji); ok {
 				emojiID = ids.MakeEmojiIDFromEmoticon(r.Emoticon)
 				emoji = r.Emoticon
+			} else {
+				return fmt.Errorf("invalid reaction type %T", reaction.Reaction)
 			}
 
 			evt := &bridgev2.SimpleRemoteEvent[any]{
