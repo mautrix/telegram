@@ -18,20 +18,12 @@ package connector
 
 import (
 	"context"
-	_ "embed"
-	"fmt"
 
-	up "go.mau.fi/util/configupgrade"
 	"go.mau.fi/util/dbutil"
 	"maunium.net/go/mautrix/bridgev2"
 
 	"go.mau.fi/mautrix-telegram/pkg/connector/store"
 )
-
-type TelegramConfig struct {
-	AppID   int    `yaml:"app_id"`
-	AppHash string `yaml:"app_hash"`
-}
 
 type TelegramConnector struct {
 	Bridge *bridgev2.Bridge
@@ -42,7 +34,6 @@ type TelegramConnector struct {
 }
 
 var _ bridgev2.NetworkConnector = (*TelegramConnector)(nil)
-var _ bridgev2.ConfigValidatingNetwork = (*TelegramConnector)(nil)
 
 // var _ bridgev2.MaxFileSizeingNetwork = (*TelegramConnector)(nil)
 
@@ -53,7 +44,6 @@ func NewConnector() *TelegramConnector {
 }
 
 func (tg *TelegramConnector) Init(bridge *bridgev2.Bridge) {
-	// TODO
 	tg.Store = store.NewStore(bridge.DB.Database, dbutil.ZeroLogger(bridge.Log.With().Str("db_section", "telegram").Logger()))
 	tg.Bridge = bridge
 }
@@ -65,28 +55,6 @@ func (tg *TelegramConnector) Start(ctx context.Context) error {
 func (tc *TelegramConnector) LoadUserLogin(ctx context.Context, login *bridgev2.UserLogin) (err error) {
 	login.Client, err = NewTelegramClient(ctx, tc, login)
 	return
-}
-
-//go:embed example-config.yaml
-var ExampleConfig string
-
-func upgradeConfig(helper up.Helper) {
-	helper.Copy(up.Int, "app_id")
-	helper.Copy(up.Str, "app_hash")
-}
-
-func (tg *TelegramConnector) GetConfig() (example string, data any, upgrader up.Upgrader) {
-	return ExampleConfig, tg.Config, up.SimpleUpgrader(upgradeConfig)
-}
-
-func (tg *TelegramConnector) ValidateConfig() error {
-	if tg.Config.AppID == 0 {
-		return fmt.Errorf("app_id is required")
-	}
-	if tg.Config.AppHash == "" {
-		return fmt.Errorf("app_hash is required")
-	}
-	return nil
 }
 
 // TODO

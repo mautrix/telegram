@@ -91,8 +91,8 @@ func (tc *TelegramConnector) Download(ctx context.Context, mediaID networkid.Med
 			return nil, fmt.Errorf("unrecognized document type %T", msgMedia.Document)
 		}
 
-		// Download the thumbnail for this media rather than the media itself.
 		if info.Thumbnail {
+			// Download the thumbnail for this media rather than the media itself.
 			_, _, largestThumbnail := media.GetLargestPhotoSize(document.Thumbs)
 			data, mimeType, err = media.DownloadFileLocation(ctx, client.client.API(), &tg.InputDocumentFileLocation{
 				ID:            document.GetID(),

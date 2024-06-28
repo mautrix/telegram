@@ -9,37 +9,119 @@ import (
 	"maunium.net/go/mautrix/bridgev2"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
+
+	"go.mau.fi/util/lottie"
+
+	"go.mau.fi/mautrix-telegram/pkg/connector/store"
 )
 
-// LocationToID converts a Telegram [tg.Document],
+// getLocationID converts a Telegram [tg.Document],
 // [tg.InputDocumentFileLocation], [tg.InputPeerPhotoFileLocation],
-// [tg.InputFileLocation], or [tg.InputPhotoFileLocation] into a key for use in
-// the telegram_file table.
-func LocationToID(location any) (id string) {
-	switch location := location.(type) {
+// [tg.InputFileLocation], or [tg.InputPhotoFileLocation] into a [LocationID]
+// for use in the telegram_file table.
+func getLocationID(loc any) (locID store.TelegramFileLocationID) {
+	var id string
+	switch location := loc.(type) {
 	case *tg.Document:
-		return fmt.Sprintf("%d", location.ID)
+		id = fmt.Sprintf("%d", location.ID)
 	case *tg.InputDocumentFileLocation:
-		return fmt.Sprintf("%d-%s", location.ID, location.ThumbSize)
+		id = fmt.Sprintf("%d-%s", location.ID, location.ThumbSize)
 	case *tg.InputPhotoFileLocation:
-		return fmt.Sprintf("%d-%s", location.ID, location.ThumbSize)
+		id = fmt.Sprintf("%d-%s", location.ID, location.ThumbSize)
 	case *tg.InputFileLocation:
-		return fmt.Sprintf("%d-%d", location.VolumeID, location.LocalID)
+		id = fmt.Sprintf("%d-%d", location.VolumeID, location.LocalID)
 	case *tg.InputPeerPhotoFileLocation:
-		return fmt.Sprintf("%d", location.PhotoID)
+		id = fmt.Sprintf("%d", location.PhotoID)
 	default:
 		panic(fmt.Errorf("unknown location type %T", location))
 	}
+	return store.TelegramFileLocationID(id)
 }
 
-func TransferToMatrix(ctx context.Context, roomID id.RoomID, client downloader.Client, intent bridgev2.MatrixAPI, file tg.InputFileLocationClass, filenameOpt ...string) (id.ContentURIString, *event.EncryptedFileInfo, error) {
-	data, mimeType, err := DownloadFileLocation(ctx, client, file)
+type AnimatedStickerConfig struct {
+	Target          string `yaml:"target"`
+	ConvertFromWebm bool   `yaml:"convert_from_webm"`
+	Args            struct {
+		Width  int `yaml:"width"`
+		Height int `yaml:"height"`
+		FPS    int `yaml:"fps"`
+	} `yaml:"args"`
+}
+
+func (c AnimatedStickerConfig) TGSConvert() bool {
+	return c.Target == "gif" || c.Target == "png"
+}
+
+func (c AnimatedStickerConfig) WebmConvert() bool {
+	return c.ConvertFromWebm && c.Target != "webm"
+}
+
+type Transferer struct {
+	RoomID    id.RoomID
+	Filename  string
+	IsSticker bool
+	Config    AnimatedStickerConfig
+}
+
+func NewTransferer(cfg AnimatedStickerConfig) *Transferer {
+	return &Transferer{Config: cfg}
+}
+
+func (t *Transferer) WithRoomID(roomID id.RoomID) *Transferer {
+	t.RoomID = roomID
+	return t
+}
+
+func (t *Transferer) WithFilename(filename string) *Transferer {
+	t.Filename = filename
+	return t
+}
+
+func (t *Transferer) WithIsSticker(isSticker bool) *Transferer {
+	t.IsSticker = isSticker
+	return t
+}
+
+func (t *Transferer) Transfer(ctx context.Context, store *store.Container, client downloader.Client, intent bridgev2.MatrixAPI, loc tg.InputFileLocationClass) (mxc id.ContentURIString, encryptedFileInfo *event.EncryptedFileInfo, size int, mimeType string, err error) {
+	locationID := getLocationID(loc)
+	if file, err := store.TelegramFile.GetByLocationID(ctx, locationID); err != nil {
+		return "", nil, 0, "", fmt.Errorf("failed to search for Telegram file by location ID: %w", err)
+	} else if file != nil {
+		return file.MXC, nil, file.Size, file.MIMEType, nil
+	}
+
+	var data []byte
+	data, mimeType, err = DownloadFileLocation(ctx, client, loc)
 	if err != nil {
-		return "", nil, fmt.Errorf("downloading file failed: %w", err)
+		return "", nil, 0, "", fmt.Errorf("downloading file failed: %w", err)
 	}
-	var filename string
-	if len(filenameOpt) > 0 {
-		filename = filenameOpt[0]
+
+	if t.IsSticker {
+		if lottie.Supported() && t.Config.TGSConvert() && mimeType == "application/x-gzip" {
+			data, err = lottie.ConvertBytes(ctx, data, t.Config.Target, t.Config.Args.Width, t.Config.Args.Height, fmt.Sprintf("%d", t.Config.Args.FPS))
+			if err != nil {
+				return "", nil, 0, "", err
+			}
+			mimeType = fmt.Sprintf("image/%s", t.Config.Target)
+			// TODO support ffmpeg conversion
+			// } else if ffmpeg.Supported() && t.Config.WebmConvert() && mimeType == "video/webm" {
+		}
 	}
-	return intent.UploadMedia(ctx, roomID, data, filename, mimeType)
+
+	mxcURI, encryptedFileInfo, err := intent.UploadMedia(ctx, t.RoomID, data, t.Filename, mimeType)
+	if err != nil {
+		return "", nil, 0, "", err
+	}
+	if len(mxcURI) > 0 {
+		file := store.TelegramFile.New()
+		file.LocationID = locationID
+		file.MXC = mxcURI
+		file.Size = len(data)
+		file.MIMEType = mimeType
+		// TODO width, height, thumbnail?
+		if err = file.Insert(ctx); err != nil {
+			return "", nil, 0, "", fmt.Errorf("failed to insert Telegram file into database: %w", err)
+		}
+	}
+	return mxcURI, encryptedFileInfo, len(data), mimeType, nil
 }

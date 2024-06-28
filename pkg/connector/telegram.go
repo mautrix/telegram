@@ -15,6 +15,7 @@ import (
 
 	"go.mau.fi/mautrix-telegram/pkg/connector/emojis"
 	"go.mau.fi/mautrix-telegram/pkg/connector/ids"
+	"go.mau.fi/mautrix-telegram/pkg/connector/media"
 	"go.mau.fi/mautrix-telegram/pkg/connector/util"
 )
 
@@ -225,7 +226,6 @@ func (t *TelegramClient) handleTelegramReactions(ctx context.Context, msg *tg.Me
 	if _, set := msg.GetReactions(); !set {
 		return nil
 	}
-	fmt.Printf("handle reactions %+v\n", msg.Reactions)
 	var totalCount int
 	for _, r := range msg.Reactions.Results {
 		totalCount += r.Count
@@ -253,6 +253,8 @@ func (t *TelegramClient) handleTelegramReactions(ctx context.Context, msg *tg.Me
 	if len(reactionsList) < totalCount {
 		if user, ok := msg.PeerID.(*tg.PeerUser); ok {
 			reactionsList = splitDMReactionCounts(msg.Reactions.Results, user.UserID, t.loginID)
+
+			// TODO
 			// } else if t.isBot {
 			// 	// Can't fetch exact reaction senders as a bot
 			// 	return
@@ -325,25 +327,34 @@ func (t *TelegramClient) getReactionLimit(ctx context.Context, sender networkid.
 	return 1, nil
 }
 
-// TODO move this to emojis package
 func (t *TelegramClient) transferEmojisToMatrix(ctx context.Context, customEmojiIDs []int64) (result map[networkid.EmojiID]string, err error) {
 	result, customEmojiIDs = emojis.ConvertKnownEmojis(customEmojiIDs)
-	for _, customEmojiID := range customEmojiIDs {
-		fmt.Printf("customEmojiID %d\n", customEmojiID)
-		locationID := fmt.Sprintf("%d", customEmojiID)
-		if file, err := t.main.Store.TelegramFile.GetByLocationID(ctx, locationID); err != nil {
-			return nil, fmt.Errorf("failed to search for Telegram file by location ID")
-		} else if file == nil {
-			// TODO download shit
-		} else {
-			result[ids.MakeEmojiIDFromDocumentID(customEmojiID)] = file.MXC
+
+	if len(customEmojiIDs) > 0 {
+		customEmojiDocuments, err := t.client.API().MessagesGetCustomEmojiDocuments(ctx, customEmojiIDs)
+		if err != nil {
+			return nil, err
+		}
+
+		for _, customEmojiDocument := range customEmojiDocuments {
+			document := customEmojiDocument.(*tg.Document)
+			mxcURI, _, _, _, err := media.NewTransferer(t.main.Config.AnimatedSticker).
+				WithIsSticker(true).
+				Transfer(ctx, t.main.Store, t.client.API(), t.main.Bridge.Bot, &tg.InputDocumentFileLocation{
+					ID:            document.GetID(),
+					AccessHash:    document.GetAccessHash(),
+					FileReference: document.GetFileReference(),
+				})
+			if err != nil {
+				return nil, err
+			}
+			result[ids.MakeEmojiIDFromDocumentID(document.ID)] = string(mxcURI)
 		}
 	}
 	return
 }
 
 func (t *TelegramClient) handleTelegramParsedReactionsLocked(ctx context.Context, msg *database.Message, reactions map[networkid.UserID][]tg.MessagePeerReaction, customEmojiIDs []int64, isFull bool, onlyUserID *networkid.UserID, timestamp *time.Time) error {
-	// TODO deal with the custom emoji IDs
 	customEmojis, err := t.transferEmojisToMatrix(ctx, customEmojiIDs)
 	if err != nil {
 		return err
@@ -359,9 +370,8 @@ func (t *TelegramClient) handleTelegramParsedReactionsLocked(ctx context.Context
 		if onlyUserID != nil && existing.SenderID != *onlyUserID {
 			continue
 		}
-		newReactions := reactions[existing.SenderID]
 		var matched bool
-		reactions[existing.SenderID], matched, err = reactionsFilter(newReactions, existing)
+		reactions[existing.SenderID], matched, err = reactionsFilter(reactions[existing.SenderID], existing)
 		if err != nil {
 			return err
 		} else if !matched {
@@ -369,7 +379,7 @@ func (t *TelegramClient) handleTelegramParsedReactionsLocked(ctx context.Context
 				removed = append(removed, existing)
 			} else if reactionLimit, err := t.getReactionLimit(ctx, existing.SenderID); err != nil {
 				return err
-			} else if len(newReactions) == reactionLimit {
+			} else if len(reactions[existing.SenderID]) >= reactionLimit {
 				removed = append(removed, existing)
 			}
 		}
@@ -447,7 +457,6 @@ func (t *TelegramClient) handleTelegramParsedReactionsLocked(ctx context.Context
 		t.main.Bridge.QueueRemoteEvent(t.userLogin, evt)
 	}
 
-	fmt.Printf("%v %v %v\n", isFull, reactions, customEmojiIDs)
 	return nil
 }
 

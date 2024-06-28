@@ -9,10 +9,10 @@ import (
 	"github.com/gotd/td/tg"
 )
 
-func DownloadFileLocation(ctx context.Context, client downloader.Client, file tg.InputFileLocationClass) (data []byte, mimeType string, err error) {
-	// TODO convert to streaming? stream to file?
+func DownloadFileLocation(ctx context.Context, client downloader.Client, loc tg.InputFileLocationClass) (data []byte, mimeType string, err error) {
+	// TODO convert entire function to streaming? Maybe at least stream to file?
 	var buf bytes.Buffer
-	storageFileTypeClass, err := downloader.NewDownloader().Download(client, file).Stream(ctx, &buf)
+	storageFileTypeClass, err := downloader.NewDownloader().Download(client, loc).Stream(ctx, &buf)
 	if err != nil {
 		return nil, "", err
 	}

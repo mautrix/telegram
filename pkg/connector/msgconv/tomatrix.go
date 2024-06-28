@@ -208,12 +208,14 @@ func (mc *MessageConverter) convertMediaRequiringUpload(ctx context.Context, por
 			}
 
 			if info.ThumbnailInfo.ThumbnailURL == "" {
-				info.ThumbnailInfo.ThumbnailURL, info.ThumbnailInfo.ThumbnailFile, err = media.TransferToMatrix(ctx, portal.MXID, mc.client.API(), intent, &tg.InputDocumentFileLocation{
-					ID:            document.GetID(),
-					AccessHash:    document.GetAccessHash(),
-					FileReference: document.GetFileReference(),
-					ThumbSize:     largestThumbnail.GetType(),
-				})
+				info.ThumbnailInfo.ThumbnailURL, info.ThumbnailInfo.ThumbnailFile, info.ThumbnailInfo.Size, info.ThumbnailInfo.MimeType, err = media.NewTransferer(mc.animatedStickerConfig).
+					WithRoomID(portal.MXID).
+					Transfer(ctx, mc.store, mc.client.API(), intent, &tg.InputDocumentFileLocation{
+						ID:            document.GetID(),
+						AccessHash:    document.GetAccessHash(),
+						FileReference: document.GetFileReference(),
+						ThumbSize:     largestThumbnail.GetType(),
+					})
 				if err != nil {
 					return nil, nil, err
 				}
@@ -256,24 +258,23 @@ func (mc *MessageConverter) convertMediaRequiringUpload(ctx context.Context, por
 
 	if mxcURI == "" {
 		var data []byte
-		var mimeType string
-		var err error
 		switch msgMedia := msgMedia.(type) {
 		case *tg.MessageMediaPhoto:
+			// TODO convert to Transfer
+			data, _, _, info.MimeType, err = media.DownloadPhotoMedia(ctx, mc.client.API(), msgMedia)
 			if _, ok := msgMedia.GetTTLSeconds(); ok {
-				filename = "disappearing_image" + exmime.ExtensionFromMimetype(mimeType)
+				filename = "disappearing_image" + exmime.ExtensionFromMimetype(info.MimeType)
 			} else {
-				filename = "image" + exmime.ExtensionFromMimetype(mimeType)
+				filename = "image" + exmime.ExtensionFromMimetype(info.MimeType)
 			}
-
-			data, _, _, mimeType, err = media.DownloadPhotoMedia(ctx, mc.client.API(), msgMedia)
 		case *tg.MessageMediaDocument:
 			document, ok := msgMedia.Document.(*tg.Document)
 			if !ok {
 				return nil, nil, fmt.Errorf("unrecognized document type %T", msgMedia.Document)
 			}
 
-			mimeType = document.GetMimeType()
+			info.MimeType = document.GetMimeType()
+			// TODO convert to Transfer
 			data, err = media.DownloadDocument(ctx, mc.client.API(), document)
 		default:
 			return nil, nil, fmt.Errorf("unhandled media type %T", msgMedia)
@@ -282,7 +283,7 @@ func (mc *MessageConverter) convertMediaRequiringUpload(ctx context.Context, por
 			return nil, nil, err
 		}
 
-		mxcURI, encryptedFileInfo, err = intent.UploadMedia(ctx, portal.MXID, data, filename, mimeType)
+		mxcURI, encryptedFileInfo, err = intent.UploadMedia(ctx, portal.MXID, data, filename, info.MimeType)
 		if err != nil {
 			return nil, nil, err
 		}

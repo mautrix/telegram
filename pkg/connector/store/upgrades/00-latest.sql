@@ -32,16 +32,8 @@ CREATE TABLE telegram_channel_access_hashes (
 );
 
 CREATE TABLE telegram_file (
-    id              TEXT PRIMARY KEY,
-    mxc             TEXT NOT NULL,
-    mime_type       TEXT,
-    was_converted   BOOLEAN NOT NULL DEFAULT false,
-    timestamp       BIGINT  NOT NULL DEFAULT 0,
-    size            BIGINT,
-    width           INTEGER,
-    height          INTEGER,
-    thumbnail       TEXT,
-    decryption_info jsonb,
-    FOREIGN KEY (thumbnail) REFERENCES telegram_file(id)
-        ON UPDATE CASCADE ON DELETE SET NULL
+    id        TEXT PRIMARY KEY,
+    mxc       TEXT NOT NULL,
+    mime_type TEXT,
+    size      BIGINT
 );

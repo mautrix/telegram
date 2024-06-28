@@ -119,7 +119,7 @@ func NewTelegramClient(ctx context.Context, tc *TelegramConnector, login *bridge
 		Logger:         zaplog,
 		UpdateHandler:  updatesManager,
 	})
-	client.msgConv = msgconv.NewMessageConverter(client.client, tc.Bridge.Matrix, tc.useDirectMedia)
+	client.msgConv = msgconv.NewMessageConverter(client.client, tc.Bridge.Matrix, tc.Store, tc.Config.AnimatedSticker, tc.useDirectMedia)
 	client.clientCancel, err = connectTelegramClient(ctx, client.client)
 	client.reactionMessageLocks = map[int]*sync.Mutex{}
 	go func() {

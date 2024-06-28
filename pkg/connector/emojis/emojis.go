@@ -31,8 +31,7 @@ func ConvertKnownEmojis(emojiIDs []int64) (result map[networkid.EmojiID]string, 
 	result = map[networkid.EmojiID]string{}
 	for _, e := range emojiIDs {
 		if v, ok := reverseUnicodemojiPack[e]; ok {
-			emojiID := ids.MakeEmojiIDFromDocumentID(e)
-			result[emojiID] = v
+			result[ids.MakeEmojiIDFromDocumentID(e)] = v
 		} else {
 			remaining = append(remaining, e)
 		}
