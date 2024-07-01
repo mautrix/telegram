@@ -27,10 +27,12 @@ type TelegramFileQuery struct {
 	*dbutil.QueryHelper[*TelegramFile]
 }
 
+type TelegramFileLocationID string
+
 type TelegramFile struct {
 	qh *dbutil.QueryHelper[*TelegramFile]
 
-	LocationID     string
+	LocationID     TelegramFileLocationID
 	MXC            string
 	MimeType       string
 	WasConverted   bool

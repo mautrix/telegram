@@ -21,7 +21,7 @@ import (
 
 	"go.mau.fi/util/dbutil"
 
-	"go.mau.fi/mautrix-telegram/pkg/store/upgrades"
+	"go.mau.fi/mautrix-telegram/pkg/connector/store/upgrades"
 )
 
 type Container struct {

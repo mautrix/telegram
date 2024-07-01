@@ -25,7 +25,7 @@ import (
 	"go.mau.fi/util/dbutil"
 	"maunium.net/go/mautrix/bridgev2"
 
-	"go.mau.fi/mautrix-telegram/pkg/store"
+	"go.mau.fi/mautrix-telegram/pkg/connector/store"
 )
 
 type TelegramConfig struct {
