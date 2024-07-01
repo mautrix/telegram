@@ -36,8 +36,8 @@ type TelegramConfig struct {
 type TelegramConnector struct {
 	Bridge *bridgev2.Bridge
 	Config *TelegramConfig
+	Store  *store.Container
 
-	store          *store.Container
 	useDirectMedia bool
 }
 
@@ -54,12 +54,12 @@ func NewConnector() *TelegramConnector {
 
 func (tg *TelegramConnector) Init(bridge *bridgev2.Bridge) {
 	// TODO
-	tg.store = store.NewStore(bridge.DB.Database, dbutil.ZeroLogger(bridge.Log.With().Str("db_section", "telegram").Logger()))
+	tg.Store = store.NewStore(bridge.DB.Database, dbutil.ZeroLogger(bridge.Log.With().Str("db_section", "telegram").Logger()))
 	tg.Bridge = bridge
 }
 
 func (tg *TelegramConnector) Start(ctx context.Context) error {
-	return tg.store.Upgrade(ctx)
+	return tg.Store.Upgrade(ctx)
 }
 
 func (tc *TelegramConnector) LoadUserLogin(ctx context.Context, login *bridgev2.UserLogin) (err error) {

@@ -101,7 +101,7 @@ func NewTelegramClient(ctx context.Context, tc *TelegramConnector, login *bridge
 	dispatcher.OnDeleteMessages(client.onDeleteMessages)
 	dispatcher.OnEditMessage(client.onMessageEdit)
 
-	store := tc.store.GetScopedStore(loginID)
+	store := tc.Store.GetScopedStore(loginID)
 
 	updatesManager := updates.New(updates.Config{
 		OnChannelTooLong: func(channelID int64) {

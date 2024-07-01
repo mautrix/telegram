@@ -134,9 +134,8 @@ func (mc *MessageConverter) webpageToBeeperLinkPreview(ctx context.Context, inte
 	}
 
 	if pc, ok := webpage.GetPhoto(); ok && pc.TypeID() == tg.PhotoTypeID {
-		photo := pc.(*tg.Photo)
 		var data []byte
-		data, preview.ImageWidth, preview.ImageHeight, preview.ImageType, err = download.DownloadPhoto(ctx, mc.client.API(), photo)
+		data, preview.ImageWidth, preview.ImageHeight, preview.ImageType, err = download.DownloadPhoto(ctx, mc.client.API(), pc.(*tg.Photo))
 		if err != nil {
 			return nil, err
 		}

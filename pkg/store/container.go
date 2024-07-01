@@ -25,17 +25,23 @@ import (
 )
 
 type Container struct {
-	db *dbutil.Database
+	*dbutil.Database
+
+	TelegramFile *TelegramFileQuery
 }
 
 func NewStore(db *dbutil.Database, log dbutil.DatabaseLogger) *Container {
-	return &Container{db: db.Child("telegram_version", upgrades.Table, log)}
+	return &Container{
+		Database: db.Child("telegram_version", upgrades.Table, log),
+
+		TelegramFile: &TelegramFileQuery{dbutil.MakeQueryHelper(db, newTelegramFile)},
+	}
 }
 
 func (c *Container) Upgrade(ctx context.Context) error {
-	return c.db.Upgrade(ctx)
+	return c.Database.Upgrade(ctx)
 }
 
 func (c *Container) GetScopedStore(telegramUserID int64) *scopedStore {
-	return &scopedStore{c.db, telegramUserID}
+	return &scopedStore{c.Database, telegramUserID}
 }

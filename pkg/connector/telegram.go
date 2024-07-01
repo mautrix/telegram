@@ -328,13 +328,22 @@ func (t *TelegramClient) getReactionLimit(ctx context.Context, sender networkid.
 // TODO move this to emojis package
 func (t *TelegramClient) transferEmojisToMatrix(ctx context.Context, customEmojiIDs []int64) (result map[networkid.EmojiID]string, err error) {
 	result, customEmojiIDs = emojis.ConvertKnownEmojis(customEmojiIDs)
-	fmt.Printf("leftover custom emoji ids %+v\n", customEmojiIDs)
+	for _, customEmojiID := range customEmojiIDs {
+		fmt.Printf("customEmojiID %d\n", customEmojiID)
+		locationID := fmt.Sprintf("%d", customEmojiID)
+		if file, err := t.main.Store.TelegramFile.GetByLocationID(ctx, locationID); err != nil {
+			return nil, fmt.Errorf("failed to search for Telegram file by location ID")
+		} else if file == nil {
+			// TODO download shit
+		} else {
+			result[ids.MakeEmojiIDFromDocumentID(customEmojiID)] = file.MXC
+		}
+	}
 	return
 }
 
 func (t *TelegramClient) handleTelegramParsedReactionsLocked(ctx context.Context, msg *database.Message, reactions map[networkid.UserID][]tg.MessagePeerReaction, customEmojiIDs []int64, isFull bool, onlyUserID *networkid.UserID, timestamp *time.Time) error {
 	// TODO deal with the custom emoji IDs
-	fmt.Printf("custom emoji IDs %v\n", customEmojiIDs)
 	customEmojis, err := t.transferEmojisToMatrix(ctx, customEmojiIDs)
 	if err != nil {
 		return err
