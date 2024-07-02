@@ -17,8 +17,8 @@ import (
 	"maunium.net/go/mautrix/bridgev2"
 	"maunium.net/go/mautrix/bridgev2/networkid"
 
-	"go.mau.fi/mautrix-telegram/pkg/connector/download"
 	"go.mau.fi/mautrix-telegram/pkg/connector/ids"
+	"go.mau.fi/mautrix-telegram/pkg/connector/media"
 	"go.mau.fi/mautrix-telegram/pkg/connector/msgconv"
 	"go.mau.fi/mautrix-telegram/pkg/connector/util"
 )
@@ -241,7 +241,7 @@ func (t *TelegramClient) GetChatInfo(ctx context.Context, portal *bridgev2.Porta
 			avatar = &bridgev2.Avatar{
 				ID: ids.MakeAvatarID(photo.ID),
 				Get: func(ctx context.Context) (data []byte, err error) {
-					data, _, _, _, err = download.DownloadPhoto(ctx, t.client.API(), photo)
+					data, _, _, _, err = media.DownloadPhoto(ctx, t.client.API(), photo)
 					return
 				},
 			}
@@ -304,7 +304,7 @@ func (t *TelegramClient) getUserInfoFromTelegramUser(user *tg.User) (*bridgev2.U
 		avatar = &bridgev2.Avatar{
 			ID: ids.MakeAvatarID(photo.PhotoID),
 			Get: func(ctx context.Context) (data []byte, err error) {
-				data, _, err = download.DownloadPhotoFileLocation(ctx, t.client.API(), &tg.InputPeerPhotoFileLocation{
+				data, _, err = media.DownloadFileLocation(ctx, t.client.API(), &tg.InputPeerPhotoFileLocation{
 					Peer:    &tg.InputPeerUser{UserID: user.ID},
 					PhotoID: photo.PhotoID,
 					Big:     true,

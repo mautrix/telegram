@@ -16,8 +16,8 @@ import (
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 
-	"go.mau.fi/mautrix-telegram/pkg/connector/download"
 	"go.mau.fi/mautrix-telegram/pkg/connector/ids"
+	"go.mau.fi/mautrix-telegram/pkg/connector/media"
 	"go.mau.fi/mautrix-telegram/pkg/connector/util"
 	"go.mau.fi/mautrix-telegram/pkg/connector/waveform"
 )
@@ -119,8 +119,8 @@ func (mc *MessageConverter) ToMatrix(ctx context.Context, portal *bridgev2.Porta
 	return cm, nil
 }
 
-func (mc *MessageConverter) webpageToBeeperLinkPreview(ctx context.Context, intent bridgev2.MatrixAPI, media tg.MessageMediaClass) (preview *event.BeeperLinkPreview, err error) {
-	webpage, ok := media.(*tg.MessageMediaWebPage).Webpage.(*tg.WebPage)
+func (mc *MessageConverter) webpageToBeeperLinkPreview(ctx context.Context, intent bridgev2.MatrixAPI, msgMedia tg.MessageMediaClass) (preview *event.BeeperLinkPreview, err error) {
+	webpage, ok := msgMedia.(*tg.MessageMediaWebPage).Webpage.(*tg.WebPage)
 	if !ok {
 		return nil, nil
 	}
@@ -135,7 +135,7 @@ func (mc *MessageConverter) webpageToBeeperLinkPreview(ctx context.Context, inte
 
 	if pc, ok := webpage.GetPhoto(); ok && pc.TypeID() == tg.PhotoTypeID {
 		var data []byte
-		data, preview.ImageWidth, preview.ImageHeight, preview.ImageType, err = download.DownloadPhoto(ctx, mc.client.API(), pc.(*tg.Photo))
+		data, preview.ImageWidth, preview.ImageHeight, preview.ImageType, err = media.DownloadPhoto(ctx, mc.client.API(), pc.(*tg.Photo))
 		if err != nil {
 			return nil, err
 		}
@@ -170,7 +170,7 @@ func (mc *MessageConverter) directMedia(ctx context.Context, portal *bridgev2.Po
 	return portal.Bridge.Matrix.GenerateContentURI(ctx, mediaID)
 }
 
-func (mc *MessageConverter) convertMediaRequiringUpload(ctx context.Context, portal *bridgev2.Portal, intent bridgev2.MatrixAPI, msgID int, media tg.MessageMediaClass) (*bridgev2.ConvertedMessagePart, *database.DisappearingSetting, error) {
+func (mc *MessageConverter) convertMediaRequiringUpload(ctx context.Context, portal *bridgev2.Portal, intent bridgev2.MatrixAPI, msgID int, msgMedia tg.MessageMediaClass) (*bridgev2.ConvertedMessagePart, *database.DisappearingSetting, error) {
 	var partID networkid.PartID
 	var msgType event.MessageType
 	var filename string
@@ -179,27 +179,27 @@ func (mc *MessageConverter) convertMediaRequiringUpload(ctx context.Context, por
 	var info event.FileInfo
 
 	// Determine the filename and some other information
-	switch media := media.(type) {
+	switch msgMedia := msgMedia.(type) {
 	case *tg.MessageMediaPhoto:
 		partID = networkid.PartID("photo")
 		msgType = event.MsgImage
 		filename = "image"
-		if photo, ok := media.Photo.(*tg.Photo); ok {
-			info.Width, info.Height, _ = download.GetLargestPhotoSize(photo.GetSizes())
+		if photo, ok := msgMedia.Photo.(*tg.Photo); ok {
+			info.Width, info.Height, _ = media.GetLargestPhotoSize(photo.GetSizes())
 		}
 	case *tg.MessageMediaDocument:
 		partID = networkid.PartID("document")
 		msgType = event.MsgFile
-		document, ok := media.Document.(*tg.Document)
+		document, ok := msgMedia.Document.(*tg.Document)
 		info.Size = int(document.Size)
 		if !ok {
-			return nil, nil, fmt.Errorf("unrecognized document type %T", media.Document)
+			return nil, nil, fmt.Errorf("unrecognized document type %T", msgMedia.Document)
 		}
 
 		if thumbSizes, ok := document.GetThumbs(); ok {
 			info.ThumbnailInfo = &event.FileInfo{}
 			var largestThumbnail tg.PhotoSizeClass
-			info.ThumbnailInfo.Width, info.ThumbnailInfo.Height, largestThumbnail = download.GetLargestPhotoSize(thumbSizes)
+			info.ThumbnailInfo.Width, info.ThumbnailInfo.Height, largestThumbnail = media.GetLargestPhotoSize(thumbSizes)
 
 			var err error
 			info.ThumbnailInfo.ThumbnailURL, err = mc.directMedia(ctx, portal, msgID, true)
@@ -208,17 +208,12 @@ func (mc *MessageConverter) convertMediaRequiringUpload(ctx context.Context, por
 			}
 
 			if info.ThumbnailInfo.ThumbnailURL == "" {
-				data, mimeType, err := download.DownloadPhotoFileLocation(ctx, mc.client.API(), &tg.InputDocumentFileLocation{
+				info.ThumbnailInfo.ThumbnailURL, info.ThumbnailInfo.ThumbnailFile, err = media.TransferToMatrix(ctx, portal.MXID, mc.client.API(), intent, &tg.InputDocumentFileLocation{
 					ID:            document.GetID(),
 					AccessHash:    document.GetAccessHash(),
 					FileReference: document.GetFileReference(),
 					ThumbSize:     largestThumbnail.GetType(),
 				})
-				if err != nil {
-					return nil, nil, fmt.Errorf("downloading thumbnail failed: %w", err)
-				}
-
-				info.ThumbnailInfo.ThumbnailURL, info.ThumbnailInfo.ThumbnailFile, err = intent.UploadMedia(ctx, "", data, filename, mimeType)
 				if err != nil {
 					return nil, nil, err
 				}
@@ -249,7 +244,7 @@ func (mc *MessageConverter) convertMediaRequiringUpload(ctx context.Context, por
 			}
 		}
 	default:
-		return nil, nil, fmt.Errorf("unhandled media type %T", media)
+		return nil, nil, fmt.Errorf("unhandled media type %T", msgMedia)
 	}
 
 	var encryptedFileInfo *event.EncryptedFileInfo
@@ -263,31 +258,31 @@ func (mc *MessageConverter) convertMediaRequiringUpload(ctx context.Context, por
 		var data []byte
 		var mimeType string
 		var err error
-		switch media := media.(type) {
+		switch msgMedia := msgMedia.(type) {
 		case *tg.MessageMediaPhoto:
-			if _, ok := media.GetTTLSeconds(); ok {
+			if _, ok := msgMedia.GetTTLSeconds(); ok {
 				filename = "disappearing_image" + exmime.ExtensionFromMimetype(mimeType)
 			} else {
 				filename = "image" + exmime.ExtensionFromMimetype(mimeType)
 			}
 
-			data, _, _, mimeType, err = download.DownloadPhotoMedia(ctx, mc.client.API(), media)
+			data, _, _, mimeType, err = media.DownloadPhotoMedia(ctx, mc.client.API(), msgMedia)
 		case *tg.MessageMediaDocument:
-			document, ok := media.Document.(*tg.Document)
+			document, ok := msgMedia.Document.(*tg.Document)
 			if !ok {
-				return nil, nil, fmt.Errorf("unrecognized document type %T", media.Document)
+				return nil, nil, fmt.Errorf("unrecognized document type %T", msgMedia.Document)
 			}
 
 			mimeType = document.GetMimeType()
-			data, err = download.DownloadDocument(ctx, mc.client.API(), document)
+			data, err = media.DownloadDocument(ctx, mc.client.API(), document)
 		default:
-			return nil, nil, fmt.Errorf("unhandled media type %T", media)
+			return nil, nil, fmt.Errorf("unhandled media type %T", msgMedia)
 		}
 		if err != nil {
 			return nil, nil, err
 		}
 
-		mxcURI, encryptedFileInfo, err = intent.UploadMedia(ctx, "", data, filename, mimeType)
+		mxcURI, encryptedFileInfo, err = intent.UploadMedia(ctx, portal.MXID, data, filename, mimeType)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -297,7 +292,7 @@ func (mc *MessageConverter) convertMediaRequiringUpload(ctx context.Context, por
 
 	// Handle spoilers
 	// See: https://github.com/matrix-org/matrix-spec-proposals/pull/3725
-	if s, ok := media.(spoilable); ok && s.GetSpoiler() {
+	if s, ok := msgMedia.(spoilable); ok && s.GetSpoiler() {
 		extra["town.robin.msc3725.content_warning"] = map[string]any{
 			"type": "town.robin.msc3725.spoiler",
 		}
@@ -306,7 +301,7 @@ func (mc *MessageConverter) convertMediaRequiringUpload(ctx context.Context, por
 
 	// Handle disappearing messages
 	var disappearingSetting *database.DisappearingSetting
-	if t, ok := media.(ttlable); ok {
+	if t, ok := msgMedia.(ttlable); ok {
 		if ttl, ok := t.GetTTLSeconds(); ok {
 			disappearingSetting = &database.DisappearingSetting{
 				Type:  database.DisappearingTypeAfterSend,
