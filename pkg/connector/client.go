@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strconv"
 	"strings"
 	"sync"
 
@@ -24,14 +23,19 @@ import (
 )
 
 type TelegramClient struct {
-	main         *TelegramConnector
-	loginID      int64
-	userLogin    *bridgev2.UserLogin
-	client       *telegram.Client
-	clientCancel context.CancelFunc
-	msgConv      *msgconv.MessageConverter
+	main           *TelegramConnector
+	telegramUserID int64
+	loginID        networkid.UserLoginID
+	userID         networkid.UserID
+	userLogin      *bridgev2.UserLogin
+	client         *telegram.Client
+	clientCancel   context.CancelFunc
+	msgConv        *msgconv.MessageConverter
 
 	reactionMessageLocks map[int]*sync.Mutex
+
+	appConfig     map[string]any
+	appConfigHash int
 }
 
 var (
@@ -74,22 +78,24 @@ func (u UpdateDispatcher) Handle(ctx context.Context, updates tg.UpdatesClass) e
 }
 
 func NewTelegramClient(ctx context.Context, tc *TelegramConnector, login *bridgev2.UserLogin) (*TelegramClient, error) {
-	loginID, err := strconv.ParseInt(string(login.ID), 10, 64)
+	telegramUserID, err := ids.ParseUserLoginID(login.ID)
 	if err != nil {
 		return nil, err
 	}
 
 	log := zerolog.Ctx(ctx).With().
 		Str("component", "telegram_client").
-		Int64("login_id", loginID).
+		Str("user_login_id", string(login.ID)).
 		Logger()
 
 	zaplog := zap.New(zerozap.New(log))
 
 	client := TelegramClient{
-		main:      tc,
-		loginID:   loginID,
-		userLogin: login,
+		main:           tc,
+		telegramUserID: telegramUserID,
+		loginID:        login.ID,
+		userID:         networkid.UserID(login.ID),
+		userLogin:      login,
 	}
 	dispatcher := UpdateDispatcher{
 		UpdateDispatcher: tg.NewUpdateDispatcher(),
@@ -101,7 +107,7 @@ func NewTelegramClient(ctx context.Context, tc *TelegramConnector, login *bridge
 	dispatcher.OnDeleteMessages(client.onDeleteMessages)
 	dispatcher.OnEditMessage(client.onMessageEdit)
 
-	store := tc.Store.GetScopedStore(loginID)
+	store := tc.Store.GetScopedStore(telegramUserID)
 
 	updatesManager := updates.New(updates.Config{
 		OnChannelTooLong: func(channelID int64) {
@@ -123,7 +129,7 @@ func NewTelegramClient(ctx context.Context, tc *TelegramConnector, login *bridge
 	client.clientCancel, err = connectTelegramClient(ctx, client.client)
 	client.reactionMessageLocks = map[int]*sync.Mutex{}
 	go func() {
-		err = updatesManager.Run(ctx, client.client.API(), loginID, updates.AuthOptions{})
+		err = updatesManager.Run(ctx, client.client.API(), telegramUserID, updates.AuthOptions{})
 		if err != nil {
 			log.Err(err).Msg("updates manager error")
 			client.clientCancel()
@@ -164,9 +170,6 @@ func connectTelegramClient(ctx context.Context, client *telegram.Client) (contex
 
 	return cancel, nil
 }
-
-
-
 
 func (t *TelegramClient) Connect(ctx context.Context) (err error) {
 	t.clientCancel, err = connectTelegramClient(ctx, t.client)
@@ -213,8 +216,8 @@ func (t *TelegramClient) GetChatInfo(ctx context.Context, portal *bridgev2.Porta
 				{
 					EventSender: bridgev2.EventSender{
 						IsFromMe:    true,
-						SenderLogin: ids.MakeUserLoginID(t.loginID),
-						Sender:      ids.MakeUserID(t.loginID),
+						SenderLogin: t.loginID,
+						Sender:      t.userID,
 					},
 				},
 			}
@@ -250,7 +253,7 @@ func (t *TelegramClient) GetChatInfo(ctx context.Context, portal *bridgev2.Porta
 		for _, user := range fullChat.Users {
 			memberList.Members = append(memberList.Members, bridgev2.ChatMember{
 				EventSender: bridgev2.EventSender{
-					IsFromMe:    user.GetID() == t.loginID,
+					IsFromMe:    user.GetID() == t.telegramUserID,
 					SenderLogin: ids.MakeUserLoginID(user.GetID()),
 					Sender:      ids.MakeUserID(user.GetID()),
 				},
@@ -316,10 +319,11 @@ func (t *TelegramClient) getUserInfoFromTelegramUser(user *tg.User) (*bridgev2.U
 
 	name := util.FormatFullName(user.FirstName, user.LastName)
 	return &bridgev2.UserInfo{
-		IsBot:       &user.Bot,
-		Name:        &name,
-		Avatar:      avatar,
-		Identifiers: identifiers,
+		IsBot:        &user.Bot,
+		Name:         &name,
+		Avatar:       avatar,
+		Identifiers:  identifiers,
+		ExtraUpdates: bridgev2.SimpleMetadataUpdater[*bridgev2.Ghost]("fi.mau.telegram.is_premium", user.Premium),
 	}, nil
 }
 

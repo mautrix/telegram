@@ -16,6 +16,7 @@ import (
 	"go.mau.fi/mautrix-telegram/pkg/connector/emojis"
 	"go.mau.fi/mautrix-telegram/pkg/connector/ids"
 	"go.mau.fi/mautrix-telegram/pkg/connector/media"
+	"go.mau.fi/mautrix-telegram/pkg/connector/tljson"
 	"go.mau.fi/mautrix-telegram/pkg/connector/util"
 )
 
@@ -119,8 +120,8 @@ type messageWithSender interface {
 func (t *TelegramClient) getEventSender(msg messageWithSender) (sender bridgev2.EventSender) {
 	if msg.GetOut() {
 		sender.IsFromMe = true
-		sender.SenderLogin = ids.MakeUserLoginID(t.loginID)
-		sender.Sender = ids.MakeUserID(t.loginID)
+		sender.SenderLogin = t.loginID
+		sender.Sender = t.userID
 	} else if f, ok := msg.GetFromID(); ok {
 		switch from := f.(type) {
 		case *tg.PeerUser:
@@ -160,7 +161,7 @@ func (t *TelegramClient) onUserName(ctx context.Context, e tg.Entities, update *
 
 func (t *TelegramClient) onDeleteMessages(ctx context.Context, e tg.Entities, update *tg.UpdateDeleteMessages) error {
 	for _, messageID := range update.Messages {
-		parts, err := t.main.Bridge.DB.Message.GetAllPartsByID(ctx, ids.MakeUserLoginID(t.loginID), ids.MakeMessageID(messageID))
+		parts, err := t.main.Bridge.DB.Message.GetAllPartsByID(ctx, t.loginID, ids.MakeMessageID(messageID))
 		if err != nil {
 			return err
 		}
@@ -243,7 +244,7 @@ func (t *TelegramClient) handleTelegramReactions(ctx context.Context, msg *tg.Me
 	//     self.log.warning(f"Can see reaction list in channel ({data!s})")
 	//     # return
 
-	dbMsg, err := t.main.Bridge.DB.Message.GetFirstPartByID(ctx, ids.MakeUserLoginID(t.loginID), ids.MakeMessageID(msg.ID))
+	dbMsg, err := t.main.Bridge.DB.Message.GetFirstPartByID(ctx, t.loginID, ids.MakeMessageID(msg.ID))
 	if err != nil {
 		return err
 	} else if dbMsg == nil {
@@ -252,7 +253,7 @@ func (t *TelegramClient) handleTelegramReactions(ctx context.Context, msg *tg.Me
 
 	if len(reactionsList) < totalCount {
 		if user, ok := msg.PeerID.(*tg.PeerUser); ok {
-			reactionsList = splitDMReactionCounts(msg.Reactions.Results, user.UserID, t.loginID)
+			reactionsList = splitDMReactionCounts(msg.Reactions.Results, user.UserID, t.telegramUserID)
 
 			// TODO
 			// } else if t.isBot {
@@ -318,13 +319,44 @@ func splitDMReactionCounts(res []tg.ReactionCount, theirUserID, myUserID int64) 
 	return
 }
 
-func (t *TelegramClient) getReactionLimit(ctx context.Context, sender networkid.UserID) (int, error) {
-	// TODO implement this correctly (probably need to put something into metadata)
-	// ghost, err := t.main.Bridge.GetGhostByID(ctx, sender)
-	// if err != nil {
-	// 	return 0, err
-	// }
-	return 1, nil
+func (t *TelegramClient) getAppConfigCached(ctx context.Context) (map[string]any, error) {
+	if t.appConfig == nil {
+		cfg, err := t.client.API().HelpGetAppConfig(ctx, t.appConfigHash)
+		if err != nil {
+			return nil, err
+		}
+		appConfig, ok := cfg.(*tg.HelpAppConfig)
+		if !ok {
+			return nil, fmt.Errorf("failed to get app config: unexpected type %T", appConfig)
+		}
+		parsedConfig, err := tljson.Parse(appConfig.Config)
+		if err != nil {
+			return nil, err
+		}
+		t.appConfig, ok = parsedConfig.(map[string]any)
+		if !ok {
+			return nil, fmt.Errorf("failed to parse app config: unexpected type %T", t.appConfig)
+		}
+		t.appConfigHash = appConfig.Hash
+	}
+	return t.appConfig, nil
+}
+
+func (t *TelegramClient) getReactionLimit(ctx context.Context, sender networkid.UserID) (limit int, err error) {
+	config, err := t.getAppConfigCached(ctx)
+	if err != nil {
+		return 0, err
+	}
+
+	ghost, err := t.main.Bridge.GetGhostByID(ctx, sender)
+	if err != nil {
+		return 0, err
+	}
+	if isPremium, ok := ghost.Metadata.Extra["fi.mau.telegram.is_premium"].(bool); ok && isPremium {
+		return int(config["reactions_user_max_premium"].(float64)), nil
+	} else {
+		return int(config["reactions_user_max_default"].(float64)), nil
+	}
 }
 
 func (t *TelegramClient) transferEmojisToMatrix(ctx context.Context, customEmojiIDs []int64) (result map[networkid.EmojiID]string, err error) {
@@ -430,10 +462,6 @@ func (t *TelegramClient) handleTelegramParsedReactionsLocked(ctx context.Context
 	}
 
 	for _, r := range removed {
-		senderID, err := ids.ParseUserID(r.SenderID)
-		if err != nil {
-			return err
-		}
 		evt := &bridgev2.SimpleRemoteEvent[any]{
 			Type: bridgev2.RemoteEventReactionRemove,
 			LogContext: func(c zerolog.Context) zerolog.Context {
@@ -443,8 +471,8 @@ func (t *TelegramClient) handleTelegramParsedReactionsLocked(ctx context.Context
 					Str("message_id", string(msg.ID))
 			},
 			Sender: bridgev2.EventSender{
-				IsFromMe:    t.loginID == senderID,
-				SenderLogin: ids.MakeUserLoginID(senderID),
+				IsFromMe:    t.userID == r.SenderID,
+				SenderLogin: t.loginID,
 				Sender:      r.SenderID,
 			},
 			PortalKey:     msg.Room,

@@ -157,7 +157,7 @@ func (t *TelegramClient) HandleMatrixMessage(ctx context.Context, msg *bridgev2.
 			ID:        ids.MakeMessageID(tgMessageID),
 			MXID:      msg.Event.ID,
 			Room:      networkid.PortalKey{ID: msg.Portal.ID},
-			SenderID:  ids.MakeUserID(t.loginID),
+			SenderID:  t.userID,
 			Timestamp: time.Unix(int64(tgDate), 0),
 		},
 	}
@@ -182,9 +182,8 @@ func (t *TelegramClient) HandleMatrixMessageRemove(ctx context.Context, msg *bri
 func (t *TelegramClient) PreHandleMatrixReaction(ctx context.Context, msg *bridgev2.MatrixReaction) (bridgev2.MatrixReactionPreResponse, error) {
 	var resp bridgev2.MatrixReactionPreResponse
 
-	sender := ids.MakeUserID(t.loginID)
 	var maxReactions int
-	maxReactions, err := t.getReactionLimit(ctx, sender)
+	maxReactions, err := t.getReactionLimit(ctx, t.userID)
 	if err != nil {
 		return resp, err
 	}
@@ -207,11 +206,21 @@ func (t *TelegramClient) PreHandleMatrixReaction(ctx context.Context, msg *bridg
 	}
 
 	return bridgev2.MatrixReactionPreResponse{
-		SenderID:     sender,
+		SenderID:     t.userID,
 		EmojiID:      emojiID,
 		Emoji:        variationselector.FullyQualify(msg.Content.RelatesTo.Key),
 		MaxReactions: maxReactions,
 	}, nil
+}
+
+func (t *TelegramClient) appendEmojiID(reactionList []tg.ReactionClass, emojiID networkid.EmojiID) ([]tg.ReactionClass, error) {
+	if documentID, emoticon, err := ids.ParseEmojiID(emojiID); err != nil {
+		return nil, err
+	} else if documentID > 0 {
+		return append(reactionList, &tg.ReactionCustomEmoji{DocumentID: documentID}), nil
+	} else {
+		return append(reactionList, &tg.ReactionEmoji{Emoticon: emoticon}), nil
+	}
 }
 
 func (t *TelegramClient) HandleMatrixReaction(ctx context.Context, msg *bridgev2.MatrixReaction) (reaction *database.Reaction, err error) {
@@ -224,25 +233,63 @@ func (t *TelegramClient) HandleMatrixReaction(ctx context.Context, msg *bridgev2
 		return nil, err
 	}
 
-	req := tg.MessagesSendReactionRequest{
+	var newReactions []tg.ReactionClass
+	for _, existing := range msg.ExistingReactionsToKeep {
+		newReactions, err = t.appendEmojiID(newReactions, existing.EmojiID)
+		if err != nil {
+			return nil, err
+		}
+	}
+	newReactions, err = t.appendEmojiID(newReactions, msg.PreHandleResp.EmojiID)
+	if err != nil {
+		return nil, err
+	}
+
+	_, err = t.client.API().MessagesSendReaction(ctx, &tg.MessagesSendReactionRequest{
 		Peer:        peer,
 		AddToRecent: true,
 		MsgID:       targetMessageID,
-	}
-	if documentID, emoticon, err := ids.ParseEmojiID(msg.PreHandleResp.EmojiID); err != nil {
-		return nil, err
-	} else if documentID > 0 {
-		req.SetReaction([]tg.ReactionClass{&tg.ReactionCustomEmoji{DocumentID: documentID}})
-	} else {
-		req.SetReaction([]tg.ReactionClass{&tg.ReactionEmoji{Emoticon: emoticon}})
-	}
-
-	_, err = t.client.API().MessagesSendReaction(ctx, &req)
+		Reaction:    newReactions,
+	})
 	return &database.Reaction{}, err
 }
 
 func (t *TelegramClient) HandleMatrixReactionRemove(ctx context.Context, msg *bridgev2.MatrixReactionRemove) error {
-	panic("unimplemented reaction remove")
+	peer, err := ids.InputPeerForPortalID(msg.Portal.ID)
+	if err != nil {
+		return err
+	}
+
+	var newReactions []tg.ReactionClass
+
+	if maxReactions, err := t.getReactionLimit(ctx, t.userID); err != nil {
+		return err
+	} else if maxReactions > 1 {
+		existing, err := t.main.Bridge.DB.Reaction.GetAllToMessageBySender(ctx, msg.TargetReaction.MessageID, msg.TargetReaction.SenderID)
+		if err != nil {
+			return err
+		}
+		for _, existing := range existing {
+			if msg.TargetReaction.EmojiID != existing.EmojiID {
+				newReactions, err = t.appendEmojiID(newReactions, existing.EmojiID)
+				if err != nil {
+					return err
+				}
+			}
+		}
+	}
+
+	messageID, err := ids.ParseMessageID(msg.TargetReaction.MessageID)
+	if err != nil {
+		return err
+	}
+	_, err = t.client.API().MessagesSendReaction(ctx, &tg.MessagesSendReactionRequest{
+		Peer:        peer,
+		AddToRecent: true,
+		MsgID:       messageID,
+		Reaction:    newReactions,
+	})
+	return err
 }
 
 func (t *TelegramClient) HandleMatrixReadReceipt(ctx context.Context, msg *bridgev2.MatrixReadReceipt) error {
