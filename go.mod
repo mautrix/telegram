@@ -9,7 +9,7 @@ require (
 	go.mau.fi/util v0.5.1-0.20240702170310-bd1da3c069eb
 	go.mau.fi/zerozap v0.1.1
 	go.uber.org/zap v1.27.0
-	maunium.net/go/mautrix v0.19.0-beta.1.0.20240625211524-f246e7041420
+	maunium.net/go/mautrix v0.19.0-beta.1.0.20240706124659-b4057a26c3ed
 )
 
 require (
@@ -36,7 +36,7 @@ require (
 	github.com/tidwall/match v1.1.1 // indirect
 	github.com/tidwall/pretty v1.2.0 // indirect
 	github.com/tidwall/sjson v1.2.5 // indirect
-	github.com/yuin/goldmark v1.7.2 // indirect
+	github.com/yuin/goldmark v1.7.4 // indirect
 	go.mau.fi/zeroconfig v0.1.2 // indirect
 	go.opentelemetry.io/otel v1.26.0 // indirect
 	go.opentelemetry.io/otel/trace v1.26.0 // indirect

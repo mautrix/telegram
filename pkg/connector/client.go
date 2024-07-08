@@ -298,7 +298,7 @@ func (t *TelegramClient) onUserName(ctx context.Context, e tg.Entities, update *
 
 func (t *TelegramClient) onDeleteMessages(ctx context.Context, e tg.Entities, update *tg.UpdateDeleteMessages) error {
 	for _, messageID := range update.Messages {
-		parts, err := t.main.Bridge.DB.Message.GetAllPartsByID(ctx, ids.MakeMessageID(messageID))
+		parts, err := t.main.Bridge.DB.Message.GetAllPartsByID(ctx, ids.MakeUserLoginID(t.loginID), ids.MakeMessageID(messageID))
 		if err != nil {
 			return err
 		}
@@ -344,14 +344,16 @@ func (t *TelegramClient) Disconnect() {
 	t.clientCancel()
 }
 
-func (t *TelegramClient) GetChatInfo(ctx context.Context, portal *bridgev2.Portal) (*bridgev2.PortalInfo, error) {
+func (t *TelegramClient) GetChatInfo(ctx context.Context, portal *bridgev2.Portal) (*bridgev2.ChatInfo, error) {
 	fmt.Printf("%+v\n", portal)
 	peerType, id, err := ids.ParsePortalID(portal.ID)
 	if err != nil {
 		return nil, err
 	}
 	var name string
-	var members []networkid.UserID
+	memberList := &bridgev2.ChatMemberList{
+		IsFull: true, // TODO not true for channels
+	}
 	var isSpace, isDM bool
 	var avatar *bridgev2.Avatar
 
@@ -368,7 +370,21 @@ func (t *TelegramClient) GetChatInfo(ctx context.Context, portal *bridgev2.Porta
 			return nil, fmt.Errorf("returned user is not *tg.User")
 		} else {
 			name = util.FormatFullName(user.FirstName, user.LastName) // TODO gate this behind a config?
-			members = []networkid.UserID{ids.MakeUserID(id), ids.MakeUserID(t.loginID)}
+			memberList.Members = []bridgev2.ChatMember{
+				{
+					EventSender: bridgev2.EventSender{
+						SenderLogin: ids.MakeUserLoginID(id),
+						Sender:      ids.MakeUserID(id),
+					},
+				},
+				{
+					EventSender: bridgev2.EventSender{
+						IsFromMe:    true,
+						SenderLogin: ids.MakeUserLoginID(t.loginID),
+						Sender:      ids.MakeUserID(t.loginID),
+					},
+				},
+			}
 			isDM = true
 		}
 	case ids.PeerTypeChat:
@@ -399,17 +415,23 @@ func (t *TelegramClient) GetChatInfo(ctx context.Context, portal *bridgev2.Porta
 		}
 
 		for _, user := range fullChat.Users {
-			members = append(members, ids.MakeUserID(user.GetID()))
+			memberList.Members = append(memberList.Members, bridgev2.ChatMember{
+				EventSender: bridgev2.EventSender{
+					IsFromMe:    user.GetID() == t.loginID,
+					SenderLogin: ids.MakeUserLoginID(user.GetID()),
+					Sender:      ids.MakeUserID(user.GetID()),
+				},
+			})
 		}
 	default:
 		fmt.Printf("%s %d\n", peerType, id)
 		panic("unimplemented getchatinfo")
 	}
 
-	return &bridgev2.PortalInfo{
+	return &bridgev2.ChatInfo{
 		Name:         &name,
 		Avatar:       avatar,
-		Members:      members,
+		Members:      memberList,
 		IsDirectChat: &isDM,
 		IsSpace:      &isSpace,
 	}, nil
