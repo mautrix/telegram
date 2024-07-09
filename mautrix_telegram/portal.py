@@ -2336,20 +2336,17 @@ class Portal(DBPortal, BasePortal):
                 sender.command_status = None
             except (KeyError, TypeError):
                 if not logged_in or (
-                    "filename" in content and content["filename"] != content.body
+                    content.filename is not None and content.filename != content.body
                 ):
-                    if "filename" in content:
-                        file_name = content["filename"]
+                    if content.filename:
+                        file_name = content.filename
                     caption_content = TextMessageEventContent(
                         msgtype=MessageType.TEXT,
                         body=content.body,
                     )
-                    if (
-                        "formatted_body" in content
-                        and str(content.get("format")) == Format.HTML.value
-                    ):
-                        caption_content["formatted_body"] = content["formatted_body"]
-                        caption_content["format"] = Format.HTML
+                    if content.formatted_body and content.format == Format.HTML:
+                        caption_content.formatted_body = content.formatted_body
+                        caption_content.format = Format.HTML
                 else:
                     caption_content = None
             if caption_content:
