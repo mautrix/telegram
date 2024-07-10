@@ -154,8 +154,11 @@ func (mc *MessageConverter) convertMediaRequiringUpload(ctx context.Context, por
 		Str("portal_id", string(portal.ID)).
 		Int("msg_id", msgID).
 		Logger()
+	eventType := event.EventMessage
 	var partID networkid.PartID
 	var content event.MessageEventContent
+	var isSticker, isAnimatedSticker bool
+	extra := map[string]any{}
 
 	transferer := media.NewTransferer(mc.client.API()).WithRoomID(portal.MXID)
 	var mediaTransferer *media.ReadyTransferer
@@ -176,7 +179,81 @@ func (mc *MessageConverter) convertMediaRequiringUpload(ctx context.Context, por
 		partID = networkid.PartID("document")
 		content.MsgType = event.MsgFile
 
-		if _, ok := document.GetThumbs(); ok {
+		extraInfo := map[string]any{}
+		for _, attr := range document.GetAttributes() {
+			switch a := attr.(type) {
+			case *tg.DocumentAttributeFilename:
+				if content.Body == "" {
+					content.Body = a.GetFileName()
+				} else {
+					content.FileName = a.GetFileName()
+				}
+			case *tg.DocumentAttributeVideo:
+				content.MsgType = event.MsgVideo
+				transferer = transferer.WithVideo(a)
+			case *tg.DocumentAttributeAudio:
+				content.MsgType = event.MsgAudio
+				content.MSC1767Audio = &event.MSC1767Audio{
+					Duration: a.Duration * 1000,
+				}
+				if wf, ok := a.GetWaveform(); ok {
+					for _, v := range waveform.Decode(wf) {
+						content.MSC1767Audio.Waveform = append(content.MSC1767Audio.Waveform, int(v)<<5)
+					}
+				}
+				if a.Voice {
+					content.MSC3245Voice = &event.MSC3245Voice{}
+				}
+			case *tg.DocumentAttributeImageSize:
+				transferer = transferer.WithImageSize(a)
+			case *tg.DocumentAttributeSticker:
+				isSticker = true
+				if mc.animatedStickerConfig.Target == "webm" {
+					content.MsgType = event.MsgVideo
+				} else {
+					eventType = event.EventSticker
+					content.MsgType = ""
+				}
+				if content.Body == "" {
+					content.Body = a.Alt
+				} else {
+					content.FileName = content.Body
+					content.Body = a.Alt
+				}
+				stickerInfo := map[string]any{"alt": a.Alt, "id": document.ID}
+
+				if setID, ok := a.Stickerset.(*tg.InputStickerSetID); ok {
+					stickerInfo["pack"] = map[string]any{
+						"id":          setID.ID,
+						"access_hash": setID.AccessHash,
+					}
+				} else if shortName, ok := a.Stickerset.(*tg.InputStickerSetShortName); ok {
+					stickerInfo["pack"] = map[string]any{
+						"short_name": shortName.ShortName,
+					}
+				}
+				extraInfo["fi.mau.telegram.sticker"] = stickerInfo
+				extraInfo["fi.mau.gif"] = true
+				extraInfo["fi.mau.loop"] = true
+				extraInfo["fi.mau.autoplay"] = true
+				extraInfo["fi.mau.hide_controls"] = true
+				extraInfo["fi.mau.no_audio"] = true
+				transferer = transferer.WithStickerConfig(mc.animatedStickerConfig)
+			case *tg.DocumentAttributeAnimated:
+				isAnimatedSticker = true
+			}
+		}
+
+		if isAnimatedSticker || (isSticker && mc.animatedStickerConfig.Target == "webm") {
+			if isAnimatedSticker {
+				extraInfo["fi.mau.telegram.gif"] = true
+			} else {
+				extraInfo["fi.mau.telegram.animated_sticker"] = true
+			}
+		}
+		extra["info"] = extraInfo
+
+		if _, ok := document.GetThumbs(); ok && eventType != event.EventSticker {
 			var thumbnailURL id.ContentURIString
 			var thumbnailFile *event.EncryptedFileInfo
 			var thumbnailInfo *event.FileInfo
@@ -201,29 +278,6 @@ func (mc *MessageConverter) convertMediaRequiringUpload(ctx context.Context, por
 			transferer = transferer.WithThumbnail(thumbnailURL, thumbnailFile, thumbnailInfo)
 		}
 
-		for _, attr := range document.GetAttributes() {
-			switch a := attr.(type) {
-			case *tg.DocumentAttributeFilename:
-				content.Body = a.GetFileName()
-			case *tg.DocumentAttributeVideo:
-				content.MsgType = event.MsgVideo
-				transferer = transferer.WithVideo(a)
-			case *tg.DocumentAttributeAudio:
-				content.MsgType = event.MsgAudio
-				content.MSC1767Audio = &event.MSC1767Audio{
-					Duration: a.Duration * 1000,
-				}
-				if wf, ok := a.GetWaveform(); ok {
-					for _, v := range waveform.Decode(wf) {
-						content.MSC1767Audio.Waveform = append(content.MSC1767Audio.Waveform, int(v)<<5)
-					}
-				}
-				if a.Voice {
-					content.MSC3245Voice = &event.MSC3245Voice{}
-				}
-			}
-		}
-
 		mediaTransferer = transferer.
 			WithFilename(content.Body).
 			WithDocument(msgMedia.Document, false)
@@ -232,7 +286,7 @@ func (mc *MessageConverter) convertMediaRequiringUpload(ctx context.Context, por
 	}
 
 	var err error
-	if mc.useDirectMedia {
+	if mc.useDirectMedia && (!isSticker || mc.animatedStickerConfig.Target == "disable") {
 		content.URL, content.Info, err = mediaTransferer.DirectDownloadURL(ctx, portal, msgID, false)
 		if err != nil {
 			log.Err(err).Msg("error getting direct download URL for media")
@@ -248,15 +302,17 @@ func (mc *MessageConverter) convertMediaRequiringUpload(ctx context.Context, por
 		}
 	}
 
-	extra := map[string]any{}
-
 	// Handle spoilers
 	// See: https://github.com/matrix-org/matrix-spec-proposals/pull/3725
 	if s, ok := msgMedia.(spoilable); ok && s.GetSpoiler() {
 		extra["town.robin.msc3725.content_warning"] = map[string]any{
 			"type": "town.robin.msc3725.spoiler",
 		}
-		extra["fi.mau.telegram.spoiler"] = true
+		if extra["info"] == nil {
+			extra["info"] = map[string]any{}
+		}
+		info := extra["info"].(map[string]any)
+		info["fi.mau.telegram.spoiler"] = true
 	}
 
 	// Handle disappearing messages
@@ -275,7 +331,7 @@ func (mc *MessageConverter) convertMediaRequiringUpload(ctx context.Context, por
 
 	return &bridgev2.ConvertedMessagePart{
 		ID:      partID,
-		Type:    event.EventMessage,
+		Type:    eventType,
 		Content: &content,
 		Extra:   extra,
 	}, disappearingSetting, nil

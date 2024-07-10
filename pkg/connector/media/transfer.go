@@ -13,7 +13,7 @@ import (
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 
-	"go.mau.fi/util/lottie"
+	"go.mau.fi/util/gnuzip"
 
 	"go.mau.fi/mautrix-telegram/pkg/connector/ids"
 	"go.mau.fi/mautrix-telegram/pkg/connector/store"
@@ -80,24 +80,6 @@ func getLocationID(loc any) (locID store.TelegramFileLocationID) {
 	return store.TelegramFileLocationID(id)
 }
 
-type AnimatedStickerConfig struct {
-	Target          string `yaml:"target"`
-	ConvertFromWebm bool   `yaml:"convert_from_webm"`
-	Args            struct {
-		Width  int `yaml:"width"`
-		Height int `yaml:"height"`
-		FPS    int `yaml:"fps"`
-	} `yaml:"args"`
-}
-
-func (c AnimatedStickerConfig) TGSConvert() bool {
-	return c.Target == "gif" || c.Target == "png"
-}
-
-func (c AnimatedStickerConfig) WebmConvert() bool {
-	return c.ConvertFromWebm && c.Target != "webm"
-}
-
 // Transferer is a utility for downloading media from Telegram and uploading it
 // to Matrix.
 // TODO better name?
@@ -134,14 +116,19 @@ func (t *Transferer) WithFilename(filename string) *Transferer {
 	return t
 }
 
-func (t *Transferer) WithMIMEType(mimeType string) *Transferer {
-	t.fileInfo.MimeType = mimeType
-	return t
-}
-
 // WithStickerConfig sets the animated sticker config for the [Transferer].
 func (t *Transferer) WithStickerConfig(cfg AnimatedStickerConfig) *Transferer {
 	t.animatedStickerConfig = &cfg
+	switch cfg.Target {
+	case "png":
+		t.fileInfo.MimeType = "image/png"
+	case "gif":
+		t.fileInfo.MimeType = "image/gif"
+	case "webp":
+		t.fileInfo.MimeType = "image/webp"
+	case "webm":
+		t.fileInfo.MimeType = "video/webm"
+	}
 	return t
 }
 
@@ -155,6 +142,11 @@ func (t *Transferer) WithThumbnail(uri id.ContentURIString, file *event.Encrypte
 func (t *Transferer) WithVideo(attr *tg.DocumentAttributeVideo) *Transferer {
 	t.fileInfo.Width, t.fileInfo.Height = attr.W, attr.H
 	t.fileInfo.Duration = int(attr.Duration * 1000)
+	return t
+}
+
+func (t *Transferer) WithImageSize(attr *tg.DocumentAttributeImageSize) *Transferer {
+	t.fileInfo.Width, t.fileInfo.Height = attr.W, attr.H
 	return t
 }
 
@@ -173,7 +165,9 @@ func (t *Transferer) WithDocument(doc tg.DocumentClass, thumbnail bool) *ReadyTr
 		documentFileLocation.ThumbSize = largestThumbnail.GetType()
 	} else {
 		t.fileInfo.Size = int(document.Size)
-		t.fileInfo.MimeType = document.GetMimeType()
+		if t.fileInfo.MimeType == "" {
+			t.fileInfo.MimeType = document.GetMimeType()
+		}
 	}
 	return &ReadyTransferer{t, &documentFileLocation}
 }
@@ -225,6 +219,7 @@ func (t *ReadyTransferer) Transfer(ctx context.Context, store *store.Container, 
 		Str("component", "media_transfer").
 		Str("location_id", string(locationID)).
 		Logger()
+	ctx = log.WithContext(ctx)
 
 	if file, err := store.TelegramFile.GetByLocationID(ctx, locationID); err != nil {
 		return "", nil, nil, fmt.Errorf("failed to search for Telegram file by location ID: %w", err)
@@ -238,22 +233,26 @@ func (t *ReadyTransferer) Transfer(ctx context.Context, store *store.Container, 
 		return "", nil, nil, fmt.Errorf("downloading file failed: %w", err)
 	}
 
-	if t.inner.animatedStickerConfig != nil {
-		if lottie.Supported() && t.inner.animatedStickerConfig.TGSConvert() && t.inner.fileInfo.MimeType == "application/x-tgsticker" {
-			newData, err := lottie.ConvertBytes(ctx, data,
-				t.inner.animatedStickerConfig.Target,
-				t.inner.animatedStickerConfig.Args.Width,
-				t.inner.animatedStickerConfig.Args.Height,
-				fmt.Sprintf("%d", t.inner.animatedStickerConfig.Args.FPS))
+	if t.inner.animatedStickerConfig != nil && t.inner.fileInfo.MimeType == "application/x-tgsticker" {
+		converted := t.inner.animatedStickerConfig.convert(ctx, data)
+		data = converted.Data
+		t.inner.fileInfo.MimeType = converted.MIMEType
+		t.inner.fileInfo.Width = converted.Width
+		t.inner.fileInfo.Height = converted.Height
+		t.inner.fileInfo.Size = len(data)
+
+		if len(converted.ThumbnailData) > 0 {
+			thumbnailMXC, thumbnailFileInfo, err := intent.UploadMedia(ctx, t.inner.roomID, converted.ThumbnailData, t.inner.filename, converted.ThumbnailMIMEType)
 			if err != nil {
-				log.Err(err).Msg("failed to convert animated sticker")
+				log.Err(err).Msg("failed to upload animated sticker thumbnail to Matrix")
 			} else {
-				data = newData
-				t.inner.fileInfo.Size = len(data)
-				t.inner.fileInfo.MimeType = fmt.Sprintf("image/%s", t.inner.animatedStickerConfig.Target)
+				t.inner = t.inner.WithThumbnail(thumbnailMXC, thumbnailFileInfo, &event.FileInfo{
+					MimeType: converted.ThumbnailMIMEType,
+					Width:    converted.Width,
+					Height:   converted.Height,
+					Size:     len(converted.ThumbnailData),
+				})
 			}
-			// TODO support ffmpeg conversion
-			// } else if ffmpeg.Supported() && t.Config.WebmConvert() && mimeType == "video/webm" {
 		}
 	}
 
@@ -278,7 +277,7 @@ func (t *ReadyTransferer) Transfer(ctx context.Context, store *store.Container, 
 }
 
 // Download downloads the media from Telegram.
-func (t *ReadyTransferer) Download(ctx context.Context) (data []byte, fileInfo *event.FileInfo, err error) {
+func (t *ReadyTransferer) Download(ctx context.Context) ([]byte, *event.FileInfo, error) {
 	// TODO convert entire function to streaming? Maybe at least stream to file?
 	var buf bytes.Buffer
 	storageFileTypeClass, err := downloader.NewDownloader().Download(t.inner.client, t.loc).Stream(ctx, &buf)
@@ -307,7 +306,22 @@ func (t *ReadyTransferer) Download(ctx context.Context) (data []byte, fileInfo *
 			t.inner.fileInfo.MimeType = http.DetectContentType(buf.Bytes())
 		}
 	}
-	t.inner.fileInfo.Size = len(data)
+	t.inner.fileInfo.Size = buf.Len()
+
+	if t.inner.animatedStickerConfig != nil {
+		detected := http.DetectContentType(buf.Bytes())
+		if detected == "application/x-tgsticker" || detected == "application/x-gzip" {
+			if unzipped, err := gnuzip.MaybeGUnzip(buf.Bytes()); err != nil {
+				zerolog.Ctx(ctx).Err(err).Msg("failed to unzip animated sticker")
+			} else {
+				converted := t.inner.animatedStickerConfig.convert(ctx, unzipped)
+				t.inner.fileInfo.MimeType = converted.MIMEType
+				t.inner.fileInfo.Size = len(converted.Data)
+				return converted.Data, &t.inner.fileInfo, nil
+			}
+		}
+	}
+
 	return buf.Bytes(), &t.inner.fileInfo, nil
 }
 

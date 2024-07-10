@@ -86,6 +86,16 @@ func (tc *TelegramConnector) Download(ctx context.Context, mediaID networkid.Med
 	case *tg.MessageMediaPhoto:
 		readyTransferer = transferer.WithPhoto(msgMedia.Photo)
 	case *tg.MessageMediaDocument:
+		document, ok := msgMedia.Document.(*tg.Document)
+		if !ok {
+			return nil, fmt.Errorf("unknown document type %T", msgMedia.Document)
+		}
+		for _, attr := range document.GetAttributes() {
+			if attr.TypeID() == tg.DocumentAttributeStickerTypeID {
+				transferer = transferer.WithStickerConfig(tc.Config.AnimatedSticker)
+			}
+		}
+
 		readyTransferer = transferer.WithDocument(msgMedia.Document, info.Thumbnail)
 	default:
 		return nil, fmt.Errorf("unhandled media type %T", msgMedia)
@@ -93,6 +103,7 @@ func (tc *TelegramConnector) Download(ctx context.Context, mediaID networkid.Med
 
 	data, fileInfo, err := readyTransferer.Download(ctx)
 	if err != nil {
+		log.Err(err).Msg("failed to download media")
 		return nil, err
 	}
 
