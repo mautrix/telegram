@@ -47,6 +47,7 @@ func (mc *MessageConverter) ToMatrix(ctx context.Context, portal *bridgev2.Porta
 		}
 
 		// TODO formatting
+		// TODO combine with other media
 		cm.Parts = append(cm.Parts, &bridgev2.ConvertedMessagePart{
 			ID:   networkid.PartID("caption"),
 			Type: event.EventMessage,
@@ -134,158 +135,116 @@ func (mc *MessageConverter) webpageToBeeperLinkPreview(ctx context.Context, inte
 	}
 
 	if pc, ok := webpage.GetPhoto(); ok && pc.TypeID() == tg.PhotoTypeID {
-		var data []byte
-		data, preview.ImageWidth, preview.ImageHeight, preview.ImageType, err = media.DownloadPhoto(ctx, mc.client.API(), pc.(*tg.Photo))
+		var fileInfo *event.FileInfo
+		preview.ImageURL, preview.ImageEncryption, fileInfo, err = media.NewTransferer(mc.client.API()).
+			WithPhoto(pc).
+			Transfer(ctx, mc.store, intent)
 		if err != nil {
 			return nil, err
 		}
-		preview.ImageSize = len(data)
-		preview.ImageURL, preview.ImageEncryption, err = intent.UploadMedia(ctx, "", data, "", preview.ImageType)
-		if err != nil {
-			return nil, err
-		}
+		preview.ImageSize, preview.ImageWidth, preview.ImageHeight = fileInfo.Size, fileInfo.Width, fileInfo.Height
 	}
 
 	return preview, nil
 }
 
-func (mc *MessageConverter) directMedia(ctx context.Context, portal *bridgev2.Portal, msgID int, thumbnail bool) (uri id.ContentURIString, err error) {
-	if !mc.useDirectMedia {
-		return "", nil
-	}
-
-	peerType, chatID, err := ids.ParsePortalID(portal.ID)
-	if err != nil {
-		return "", err
-	}
-	mediaID, err := ids.DirectMediaInfo{
-		PeerType:  peerType,
-		ChatID:    chatID,
-		MessageID: int64(msgID),
-		Thumbnail: thumbnail,
-	}.AsMediaID()
-	if err != nil {
-		return "", err
-	}
-	return portal.Bridge.Matrix.GenerateContentURI(ctx, mediaID)
-}
-
 func (mc *MessageConverter) convertMediaRequiringUpload(ctx context.Context, portal *bridgev2.Portal, intent bridgev2.MatrixAPI, msgID int, msgMedia tg.MessageMediaClass) (*bridgev2.ConvertedMessagePart, *database.DisappearingSetting, error) {
+	log := zerolog.Ctx(ctx).With().
+		Str("conversion_direction", "to_matrix").
+		Str("portal_id", string(portal.ID)).
+		Int("msg_id", msgID).
+		Logger()
 	var partID networkid.PartID
-	var msgType event.MessageType
-	var filename string
-	var audio *event.MSC1767Audio
-	var voice *event.MSC3245Voice
-	var info event.FileInfo
+	var content event.MessageEventContent
+
+	transferer := media.NewTransferer(mc.client.API()).WithRoomID(portal.MXID)
+	var mediaTransferer *media.ReadyTransferer
 
 	// Determine the filename and some other information
 	switch msgMedia := msgMedia.(type) {
 	case *tg.MessageMediaPhoto:
 		partID = networkid.PartID("photo")
-		msgType = event.MsgImage
-		filename = "image"
-		if photo, ok := msgMedia.Photo.(*tg.Photo); ok {
-			info.Width, info.Height, _ = media.GetLargestPhotoSize(photo.GetSizes())
-		}
+		content.MsgType = event.MsgImage
+		content.Body = "image"
+		mediaTransferer = transferer.WithPhoto(msgMedia.Photo)
 	case *tg.MessageMediaDocument:
-		partID = networkid.PartID("document")
-		msgType = event.MsgFile
 		document, ok := msgMedia.Document.(*tg.Document)
-		info.Size = int(document.Size)
 		if !ok {
 			return nil, nil, fmt.Errorf("unrecognized document type %T", msgMedia.Document)
 		}
 
-		if thumbSizes, ok := document.GetThumbs(); ok {
-			info.ThumbnailInfo = &event.FileInfo{}
-			var largestThumbnail tg.PhotoSizeClass
-			info.ThumbnailInfo.Width, info.ThumbnailInfo.Height, largestThumbnail = media.GetLargestPhotoSize(thumbSizes)
+		partID = networkid.PartID("document")
+		content.MsgType = event.MsgFile
 
+		if _, ok := document.GetThumbs(); ok {
+			var thumbnailURL id.ContentURIString
+			var thumbnailFile *event.EncryptedFileInfo
+			var thumbnailInfo *event.FileInfo
 			var err error
-			info.ThumbnailInfo.ThumbnailURL, err = mc.directMedia(ctx, portal, msgID, true)
-			if err != nil {
-				return nil, nil, err
-			}
 
-			if info.ThumbnailInfo.ThumbnailURL == "" {
-				info.ThumbnailInfo.ThumbnailURL, info.ThumbnailInfo.ThumbnailFile, info.ThumbnailInfo.Size, info.ThumbnailInfo.MimeType, err = media.NewTransferer(mc.animatedStickerConfig).
-					WithRoomID(portal.MXID).
-					Transfer(ctx, mc.store, mc.client.API(), intent, &tg.InputDocumentFileLocation{
-						ID:            document.GetID(),
-						AccessHash:    document.GetAccessHash(),
-						FileReference: document.GetFileReference(),
-						ThumbSize:     largestThumbnail.GetType(),
-					})
+			thumbnailTransferer := media.NewTransferer(mc.client.API()).
+				WithRoomID(portal.MXID).
+				WithDocument(document, true)
+			if mc.useDirectMedia {
+				thumbnailURL, thumbnailInfo, err = thumbnailTransferer.DirectDownloadURL(ctx, portal, msgID, true)
 				if err != nil {
-					return nil, nil, err
+					log.Err(err).Msg("error getting direct download URL for thumbnail")
 				}
 			}
+			if thumbnailURL == "" {
+				thumbnailURL, thumbnailFile, thumbnailInfo, err = thumbnailTransferer.Transfer(ctx, mc.store, intent)
+				if err != nil {
+					return nil, nil, fmt.Errorf("error transferring thumbnail: %w", err)
+				}
+			}
+
+			transferer = transferer.WithThumbnail(thumbnailURL, thumbnailFile, thumbnailInfo)
 		}
 
 		for _, attr := range document.GetAttributes() {
 			switch a := attr.(type) {
 			case *tg.DocumentAttributeFilename:
-				filename = a.GetFileName()
+				content.Body = a.GetFileName()
 			case *tg.DocumentAttributeVideo:
-				msgType = event.MsgVideo
-				info.Width, info.Height = a.W, a.H
-				info.Duration = int(a.Duration * 1000)
+				content.MsgType = event.MsgVideo
+				transferer = transferer.WithVideo(a)
 			case *tg.DocumentAttributeAudio:
-				msgType = event.MsgAudio
-				audio = &event.MSC1767Audio{
+				content.MsgType = event.MsgAudio
+				content.MSC1767Audio = &event.MSC1767Audio{
 					Duration: a.Duration * 1000,
 				}
 				if wf, ok := a.GetWaveform(); ok {
 					for _, v := range waveform.Decode(wf) {
-						audio.Waveform = append(audio.Waveform, int(v)<<5)
+						content.MSC1767Audio.Waveform = append(content.MSC1767Audio.Waveform, int(v)<<5)
 					}
 				}
 				if a.Voice {
-					voice = &event.MSC3245Voice{}
+					content.MSC3245Voice = &event.MSC3245Voice{}
 				}
 			}
 		}
+
+		mediaTransferer = transferer.
+			WithFilename(content.Body).
+			WithDocument(msgMedia.Document, false)
 	default:
 		return nil, nil, fmt.Errorf("unhandled media type %T", msgMedia)
 	}
 
-	var encryptedFileInfo *event.EncryptedFileInfo
-
-	mxcURI, err := mc.directMedia(ctx, portal, msgID, false)
-	if err != nil {
-		return nil, nil, err
+	var err error
+	if mc.useDirectMedia {
+		content.URL, content.Info, err = mediaTransferer.DirectDownloadURL(ctx, portal, msgID, false)
+		if err != nil {
+			log.Err(err).Msg("error getting direct download URL for media")
+		}
 	}
-
-	if mxcURI == "" {
-		var data []byte
-		switch msgMedia := msgMedia.(type) {
-		case *tg.MessageMediaPhoto:
-			// TODO convert to Transfer
-			data, _, _, info.MimeType, err = media.DownloadPhotoMedia(ctx, mc.client.API(), msgMedia)
-			if _, ok := msgMedia.GetTTLSeconds(); ok {
-				filename = "disappearing_image" + exmime.ExtensionFromMimetype(info.MimeType)
-			} else {
-				filename = "image" + exmime.ExtensionFromMimetype(info.MimeType)
-			}
-		case *tg.MessageMediaDocument:
-			document, ok := msgMedia.Document.(*tg.Document)
-			if !ok {
-				return nil, nil, fmt.Errorf("unrecognized document type %T", msgMedia.Document)
-			}
-
-			info.MimeType = document.GetMimeType()
-			// TODO convert to Transfer
-			data, err = media.DownloadDocument(ctx, mc.client.API(), document)
-		default:
-			return nil, nil, fmt.Errorf("unhandled media type %T", msgMedia)
-		}
+	if content.URL == "" {
+		content.URL, content.File, content.Info, err = mediaTransferer.Transfer(ctx, mc.store, intent)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, fmt.Errorf("error transferring media: %w", err)
 		}
-
-		mxcURI, encryptedFileInfo, err = intent.UploadMedia(ctx, portal.MXID, data, filename, info.MimeType)
-		if err != nil {
-			return nil, nil, err
+		if msgMedia.TypeID() == tg.MessageMediaPhotoTypeID {
+			content.Body = content.Body + exmime.ExtensionFromMimetype(content.Info.MimeType)
 		}
 	}
 
@@ -304,6 +263,9 @@ func (mc *MessageConverter) convertMediaRequiringUpload(ctx context.Context, por
 	var disappearingSetting *database.DisappearingSetting
 	if t, ok := msgMedia.(ttlable); ok {
 		if ttl, ok := t.GetTTLSeconds(); ok {
+			if msgMedia.TypeID() == tg.MessageMediaPhotoTypeID {
+				content.Body = "disappearing_" + content.Body
+			}
 			disappearingSetting = &database.DisappearingSetting{
 				Type:  database.DisappearingTypeAfterSend,
 				Timer: time.Duration(ttl) * time.Second,
@@ -312,18 +274,10 @@ func (mc *MessageConverter) convertMediaRequiringUpload(ctx context.Context, por
 	}
 
 	return &bridgev2.ConvertedMessagePart{
-		ID:   partID,
-		Type: event.EventMessage,
-		Content: &event.MessageEventContent{
-			MsgType:      msgType,
-			Body:         filename,
-			URL:          mxcURI,
-			File:         encryptedFileInfo,
-			Info:         &info,
-			MSC1767Audio: audio,
-			MSC3245Voice: voice,
-		},
-		Extra: extra,
+		ID:      partID,
+		Type:    event.EventMessage,
+		Content: &content,
+		Extra:   extra,
 	}, disappearingSetting, nil
 }
 

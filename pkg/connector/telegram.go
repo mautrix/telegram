@@ -369,18 +369,14 @@ func (t *TelegramClient) transferEmojisToMatrix(ctx context.Context, customEmoji
 		}
 
 		for _, customEmojiDocument := range customEmojiDocuments {
-			document := customEmojiDocument.(*tg.Document)
-			mxcURI, _, _, _, err := media.NewTransferer(t.main.Config.AnimatedSticker).
-				WithIsSticker(true).
-				Transfer(ctx, t.main.Store, t.client.API(), t.main.Bridge.Bot, &tg.InputDocumentFileLocation{
-					ID:            document.GetID(),
-					AccessHash:    document.GetAccessHash(),
-					FileReference: document.GetFileReference(),
-				})
+			mxcURI, _, _, err := media.NewTransferer(t.client.API()).
+				WithStickerConfig(t.main.Config.AnimatedSticker).
+				WithDocument(customEmojiDocument, false).
+				Transfer(ctx, t.main.Store, t.main.Bridge.Bot)
 			if err != nil {
 				return nil, err
 			}
-			result[ids.MakeEmojiIDFromDocumentID(document.ID)] = string(mxcURI)
+			result[ids.MakeEmojiIDFromDocumentID(customEmojiDocument.GetID())] = string(mxcURI)
 		}
 	}
 	return

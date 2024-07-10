@@ -80,41 +80,26 @@ func (tc *TelegramConnector) Download(ctx context.Context, mediaID networkid.Med
 		}
 	}
 
-	var data []byte
-	var mimeType string
+	transferer := media.NewTransferer(client.client.API())
+	var readyTransferer *media.ReadyTransferer
 	switch msgMedia := msgMedia.(type) {
 	case *tg.MessageMediaPhoto:
-		data, _, _, mimeType, err = media.DownloadPhotoMedia(ctx, client.client.API(), msgMedia)
+		readyTransferer = transferer.WithPhoto(msgMedia.Photo)
 	case *tg.MessageMediaDocument:
-		document, ok := msgMedia.Document.(*tg.Document)
-		if !ok {
-			return nil, fmt.Errorf("unrecognized document type %T", msgMedia.Document)
-		}
-
-		if info.Thumbnail {
-			// Download the thumbnail for this media rather than the media itself.
-			_, _, largestThumbnail := media.GetLargestPhotoSize(document.Thumbs)
-			data, mimeType, err = media.DownloadFileLocation(ctx, client.client.API(), &tg.InputDocumentFileLocation{
-				ID:            document.GetID(),
-				AccessHash:    document.GetAccessHash(),
-				FileReference: document.GetFileReference(),
-				ThumbSize:     largestThumbnail.GetType(),
-			})
-		} else {
-			mimeType = document.GetMimeType()
-			data, err = media.DownloadDocument(ctx, client.client.API(), document)
-		}
+		readyTransferer = transferer.WithDocument(msgMedia.Document, info.Thumbnail)
 	default:
 		return nil, fmt.Errorf("unhandled media type %T", msgMedia)
 	}
+
+	data, fileInfo, err := readyTransferer.Download(ctx)
 	if err != nil {
 		return nil, err
 	}
 
 	return &mediaproxy.GetMediaResponseData{
 		Reader:        io.NopCloser(bytes.NewBuffer(data)),
-		ContentType:   mimeType,
-		ContentLength: int64(len(data)),
+		ContentType:   fileInfo.MimeType,
+		ContentLength: int64(fileInfo.Size),
 	}, nil
 }
 

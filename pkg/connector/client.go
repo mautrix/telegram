@@ -240,11 +240,11 @@ func (t *TelegramClient) GetChatInfo(ctx context.Context, portal *bridgev2.Porta
 			return nil, fmt.Errorf("full chat is not %T", chatFull)
 		}
 
-		if photo, ok := chatFull.ChatPhoto.(*tg.Photo); ok {
+		if photo, ok := chatFull.GetChatPhoto(); ok {
 			avatar = &bridgev2.Avatar{
-				ID: ids.MakeAvatarID(photo.ID),
+				ID: ids.MakeAvatarID(photo.GetID()),
 				Get: func(ctx context.Context) (data []byte, err error) {
-					data, _, _, _, err = media.DownloadPhoto(ctx, t.client.API(), photo)
+					data, _, err = media.NewTransferer(t.client.API()).WithPhoto(photo).Download(ctx)
 					return
 				},
 			}
@@ -307,11 +307,7 @@ func (t *TelegramClient) getUserInfoFromTelegramUser(user *tg.User) (*bridgev2.U
 		avatar = &bridgev2.Avatar{
 			ID: ids.MakeAvatarID(photo.PhotoID),
 			Get: func(ctx context.Context) (data []byte, err error) {
-				data, _, err = media.DownloadFileLocation(ctx, t.client.API(), &tg.InputPeerPhotoFileLocation{
-					Peer:    &tg.InputPeerUser{UserID: user.ID},
-					PhotoID: photo.PhotoID,
-					Big:     true,
-				})
+				data, _, err = media.NewTransferer(t.client.API()).WithUserPhoto(user, photo.PhotoID).Download(ctx)
 				return
 			},
 		}
