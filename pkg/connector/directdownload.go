@@ -49,18 +49,26 @@ func (tc *TelegramConnector) Download(ctx context.Context, mediaID networkid.Med
 			&tg.InputMessageID{ID: int(info.MessageID)},
 		})
 	case ids.PeerTypeChannel:
-		// TODO test this
-		messages, err = client.client.API().ChannelsGetMessages(ctx, &tg.ChannelsGetMessagesRequest{
-			Channel: &tg.InputChannel{ChannelID: info.ChatID},
-			ID: []tg.InputMessageClass{
-				&tg.InputMessageID{ID: int(info.MessageID)},
-			},
-		})
+		var accessHash int64
+		var found bool
+		accessHash, found, err = client.ScopedStore.GetChannelAccessHash(ctx, client.telegramUserID, info.ChatID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get channel access hash: %w", err)
+		} else if !found {
+			return nil, fmt.Errorf("channel access hash not found for %d", info.ChatID)
+		} else {
+			messages, err = client.client.API().ChannelsGetMessages(ctx, &tg.ChannelsGetMessagesRequest{
+				Channel: &tg.InputChannel{ChannelID: info.ChatID, AccessHash: accessHash},
+				ID: []tg.InputMessageClass{
+					&tg.InputMessageID{ID: int(info.MessageID)},
+				},
+			})
+		}
 	default:
 		return nil, fmt.Errorf("unknown peer type %s", info.PeerType)
 	}
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to get messages for %+v: %w", info, err)
 	}
 
 	var msgMedia tg.MessageMediaClass

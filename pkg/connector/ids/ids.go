@@ -92,27 +92,6 @@ func ParsePortalID(portalID networkid.PortalID) (pt PeerType, id int64, err erro
 	return
 }
 
-func InputPeerForPortalID(portalID networkid.PortalID) (tg.InputPeerClass, error) {
-	peerType, id, err := ParsePortalID(portalID)
-	if err != nil {
-		return nil, err
-	}
-	switch peerType {
-	case PeerTypeUser:
-		return &tg.InputPeerUser{UserID: id}, nil
-	case PeerTypeChat:
-		return &tg.InputPeerChat{ChatID: id}, nil
-	case PeerTypeChannel:
-		return &tg.InputPeerChannel{ChannelID: id}, nil
-	default:
-		panic("invalid peer type")
-	}
-}
-
-func InputPeerForPortalKey(portalKey networkid.PortalKey) (tg.InputPeerClass, error) {
-	return InputPeerForPortalID(portalKey.ID)
-}
-
 func MakeAvatarID(photoID int64) networkid.AvatarID {
 	return networkid.AvatarID(strconv.FormatInt(photoID, 10))
 }

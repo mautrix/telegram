@@ -20,7 +20,15 @@ import (
 	"go.mau.fi/mautrix-telegram/pkg/connector/util"
 )
 
-func (t *TelegramClient) onUpdateNewMessage(ctx context.Context, e tg.Entities, update *tg.UpdateNewMessage) error {
+type IGetMessage interface {
+	GetMessage() tg.MessageClass
+}
+
+type IGetMessages interface {
+	GetMessages() []int
+}
+
+func (t *TelegramClient) onUpdateNewMessage(ctx context.Context, update IGetMessage) error {
 	log := zerolog.Ctx(ctx)
 	switch msg := update.GetMessage().(type) {
 	case *tg.Message:
@@ -40,7 +48,7 @@ func (t *TelegramClient) onUpdateNewMessage(ctx context.Context, e tg.Entities, 
 			Type: bridgev2.RemoteEventMessage,
 			LogContext: func(c zerolog.Context) zerolog.Context {
 				return c.
-					Int("message_id", update.Message.GetID()).
+					Int("message_id", msg.GetID()).
 					Str("sender", string(sender.Sender)).
 					Str("sender_login", string(sender.SenderLogin)).
 					Bool("is_from_me", sender.IsFromMe)
@@ -141,11 +149,6 @@ func (t *TelegramClient) getEventSender(msg messageWithSender) (sender bridgev2.
 	return
 }
 
-func (t *TelegramClient) onUpdateNewChannelMessage(ctx context.Context, e tg.Entities, update *tg.UpdateNewChannelMessage) error {
-	fmt.Printf("update new channel message %+v\n", update)
-	return nil
-}
-
 func (t *TelegramClient) onUserName(ctx context.Context, e tg.Entities, update *tg.UpdateUserName) error {
 	ghost, err := t.main.Bridge.GetGhostByID(ctx, ids.MakeUserID(update.UserID))
 	if err != nil {
@@ -159,8 +162,8 @@ func (t *TelegramClient) onUserName(ctx context.Context, e tg.Entities, update *
 	return nil
 }
 
-func (t *TelegramClient) onDeleteMessages(ctx context.Context, e tg.Entities, update *tg.UpdateDeleteMessages) error {
-	for _, messageID := range update.Messages {
+func (t *TelegramClient) onDeleteMessages(ctx context.Context, update IGetMessages) error {
+	for _, messageID := range update.GetMessages() {
 		parts, err := t.main.Bridge.DB.Message.GetAllPartsByID(ctx, t.loginID, ids.MakeMessageID(messageID))
 		if err != nil {
 			return err
@@ -198,9 +201,9 @@ func (t *TelegramClient) onEntityUpdate(ctx context.Context, e tg.Entities) erro
 	return nil
 }
 
-func (t *TelegramClient) onMessageEdit(ctx context.Context, e tg.Entities, update *tg.UpdateEditMessage) error {
+func (t *TelegramClient) onMessageEdit(ctx context.Context, update IGetMessage) error {
 	fmt.Printf("message edit %+v\n", update)
-	msg, ok := update.Message.(*tg.Message)
+	msg, ok := update.GetMessage().(*tg.Message)
 	if !ok {
 		return fmt.Errorf("edit message is not *tg.Message")
 	}
@@ -261,7 +264,7 @@ func (t *TelegramClient) handleTelegramReactions(ctx context.Context, msg *tg.Me
 			// 	return
 
 			// TODO should calls to this be limited?
-		} else if peer, err := ids.InputPeerForPortalKey(ids.MakePortalKey(msg.PeerID)); err != nil {
+		} else if peer, err := t.inputPeerForPortalID(ctx, ids.MakePortalKey(msg.PeerID).ID); err != nil {
 			return err
 		} else {
 			reactions, err := t.client.API().MessagesGetMessageReactionsList(ctx, &tg.MessagesGetMessageReactionsListRequest{
@@ -298,6 +301,29 @@ func (t *TelegramClient) handleTelegramReactions(ctx context.Context, msg *tg.Me
 	}
 
 	return t.handleTelegramParsedReactionsLocked(ctx, dbMsg, reactions, customEmojiIDs, isFull, nil, nil)
+}
+
+func (t *TelegramClient) inputPeerForPortalID(ctx context.Context, portalID networkid.PortalID) (tg.InputPeerClass, error) {
+	peerType, id, err := ids.ParsePortalID(portalID)
+	if err != nil {
+		return nil, err
+	}
+	switch peerType {
+	case ids.PeerTypeUser:
+		return &tg.InputPeerUser{UserID: id}, nil
+	case ids.PeerTypeChat:
+		return &tg.InputPeerChat{ChatID: id}, nil
+	case ids.PeerTypeChannel:
+		accessHash, found, err := t.ScopedStore.GetChannelAccessHash(ctx, t.telegramUserID, id)
+		if err != nil {
+			return nil, err
+		} else if !found {
+			return nil, fmt.Errorf("channel access hash not found for %d", id)
+		}
+		return &tg.InputPeerChannel{ChannelID: id, AccessHash: accessHash}, nil
+	default:
+		panic("invalid peer type")
+	}
 }
 
 func splitDMReactionCounts(res []tg.ReactionCount, theirUserID, myUserID int64) (reactions []tg.MessagePeerReaction) {

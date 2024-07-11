@@ -21,11 +21,13 @@ import (
 	"go.mau.fi/mautrix-telegram/pkg/connector/ids"
 	"go.mau.fi/mautrix-telegram/pkg/connector/media"
 	"go.mau.fi/mautrix-telegram/pkg/connector/msgconv"
+	"go.mau.fi/mautrix-telegram/pkg/connector/store"
 	"go.mau.fi/mautrix-telegram/pkg/connector/util"
 )
 
 type TelegramClient struct {
 	main           *TelegramConnector
+	ScopedStore    *store.ScopedStore
 	telegramUserID int64
 	loginID        networkid.UserLoginID
 	userID         networkid.UserID
@@ -103,13 +105,28 @@ func NewTelegramClient(ctx context.Context, tc *TelegramConnector, login *bridge
 		UpdateDispatcher: tg.NewUpdateDispatcher(),
 		EntityHandler:    client.onEntityUpdate,
 	}
-	dispatcher.OnNewMessage(client.onUpdateNewMessage)
-	dispatcher.OnNewChannelMessage(client.onUpdateNewChannelMessage)
+	dispatcher.OnNewMessage(func(ctx context.Context, e tg.Entities, update *tg.UpdateNewMessage) error {
+		return client.onUpdateNewMessage(ctx, update)
+	})
+	dispatcher.OnNewChannelMessage(func(ctx context.Context, e tg.Entities, update *tg.UpdateNewChannelMessage) error {
+		fmt.Printf("%+v\n", update)
+		return client.onUpdateNewMessage(ctx, update)
+	})
 	dispatcher.OnUserName(client.onUserName)
-	dispatcher.OnDeleteMessages(client.onDeleteMessages)
-	dispatcher.OnEditMessage(client.onMessageEdit)
+	dispatcher.OnDeleteMessages(func(ctx context.Context, e tg.Entities, update *tg.UpdateDeleteMessages) error {
+		return client.onDeleteMessages(ctx, update)
+	})
+	dispatcher.OnDeleteChannelMessages(func(ctx context.Context, e tg.Entities, update *tg.UpdateDeleteChannelMessages) error {
+		return client.onDeleteMessages(ctx, update)
+	})
+	dispatcher.OnEditMessage(func(ctx context.Context, e tg.Entities, update *tg.UpdateEditMessage) error {
+		return client.onMessageEdit(ctx, update)
+	})
+	dispatcher.OnEditChannelMessage(func(ctx context.Context, e tg.Entities, update *tg.UpdateEditChannelMessage) error {
+		return client.onMessageEdit(ctx, update)
+	})
 
-	store := tc.Store.GetScopedStore(telegramUserID)
+	client.ScopedStore = tc.Store.GetScopedStore(telegramUserID)
 
 	updatesManager := updates.New(updates.Config{
 		OnChannelTooLong: func(channelID int64) {
@@ -118,12 +135,12 @@ func NewTelegramClient(ctx context.Context, tc *TelegramConnector, login *bridge
 		},
 		Handler:      dispatcher,
 		Logger:       zaplog.Named("gaps"),
-		Storage:      store,
-		AccessHasher: store,
+		Storage:      client.ScopedStore,
+		AccessHasher: client.ScopedStore,
 	})
 
 	client.client = telegram.NewClient(tc.Config.AppID, tc.Config.AppHash, telegram.Options{
-		SessionStorage: store,
+		SessionStorage: client.ScopedStore,
 		Logger:         zaplog,
 		UpdateHandler:  updatesManager,
 	})
@@ -184,7 +201,7 @@ func (t *TelegramClient) Disconnect() {
 }
 
 func (t *TelegramClient) GetChatInfo(ctx context.Context, portal *bridgev2.Portal) (*bridgev2.ChatInfo, error) {
-	fmt.Printf("%+v\n", portal)
+	fmt.Printf("get chat info %+v\n", portal)
 	peerType, id, err := ids.ParsePortalID(portal.ID)
 	if err != nil {
 		return nil, err
@@ -253,6 +270,54 @@ func (t *TelegramClient) GetChatInfo(ctx context.Context, portal *bridgev2.Porta
 			}
 		}
 
+		for _, user := range fullChat.Users {
+			memberList.Members = append(memberList.Members, bridgev2.ChatMember{
+				EventSender: bridgev2.EventSender{
+					IsFromMe:    user.GetID() == t.telegramUserID,
+					SenderLogin: ids.MakeUserLoginID(user.GetID()),
+					Sender:      ids.MakeUserID(user.GetID()),
+				},
+			})
+		}
+	case ids.PeerTypeChannel:
+		accessHash, found, err := t.ScopedStore.GetChannelAccessHash(ctx, t.telegramUserID, id)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get channel access hash: %w", err)
+		} else if !found {
+			return nil, fmt.Errorf("channel access hash not found for %d", id)
+		}
+		fullChat, err := t.client.API().ChannelsGetFullChannel(ctx, &tg.InputChannel{ChannelID: id, AccessHash: accessHash})
+		if err != nil {
+			return nil, err
+		}
+		for _, c := range fullChat.Chats {
+			if c.GetID() == id {
+				switch chat := c.(type) {
+				case *tg.Chat:
+					name = chat.Title
+				case *tg.Channel:
+					name = chat.Title
+				}
+				break
+			}
+		}
+
+		chatFull, ok := fullChat.FullChat.(*tg.ChatFull)
+		if !ok {
+			return nil, fmt.Errorf("full chat is not %T", chatFull)
+		}
+
+		if photo, ok := chatFull.GetChatPhoto(); ok {
+			avatar = &bridgev2.Avatar{
+				ID: ids.MakeAvatarID(photo.GetID()),
+				Get: func(ctx context.Context) (data []byte, err error) {
+					data, _, err = media.NewTransferer(t.client.API()).WithPhoto(photo).Download(ctx)
+					return
+				},
+			}
+		}
+
+		memberList.IsFull = false
 		for _, user := range fullChat.Users {
 			memberList.Members = append(memberList.Members, bridgev2.ChatMember{
 				EventSender: bridgev2.EventSender{

@@ -39,12 +39,11 @@ func getMediaFilenameAndCaption(content *event.MessageEventContent) (filename, c
 }
 
 func (t *TelegramClient) HandleMatrixMessage(ctx context.Context, msg *bridgev2.MatrixMessage) (resp *bridgev2.MatrixMessageResponse, err error) {
-	sender := message.NewSender(t.client.API())
-	peer, err := ids.InputPeerForPortalID(msg.Portal.ID)
+	peer, err := t.inputPeerForPortalID(ctx, msg.Portal.ID)
 	if err != nil {
 		return nil, err
 	}
-	builder := sender.To(peer)
+	builder := message.NewSender(t.client.API()).To(peer)
 
 	// TODO handle sticker
 
@@ -173,8 +172,13 @@ func (t *TelegramClient) HandleMatrixMessageRemove(ctx context.Context, msg *bri
 		return err
 	} else if messageID, err := ids.ParseMessageID(dbMsg.ID); err != nil {
 		return err
+	} else if peer, err := t.inputPeerForPortalID(ctx, msg.Portal.ID); err != nil {
+		return err
 	} else {
-		_, err = message.NewSender(t.client.API()).Self().Revoke().Messages(ctx, messageID)
+		_, err := message.NewSender(t.client.API()).
+			To(peer).
+			Revoke().
+			Messages(ctx, messageID)
 		return err
 	}
 }
@@ -224,7 +228,7 @@ func (t *TelegramClient) appendEmojiID(reactionList []tg.ReactionClass, emojiID 
 }
 
 func (t *TelegramClient) HandleMatrixReaction(ctx context.Context, msg *bridgev2.MatrixReaction) (reaction *database.Reaction, err error) {
-	peer, err := ids.InputPeerForPortalID(msg.Portal.ID)
+	peer, err := t.inputPeerForPortalID(ctx, msg.Portal.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -255,7 +259,7 @@ func (t *TelegramClient) HandleMatrixReaction(ctx context.Context, msg *bridgev2
 }
 
 func (t *TelegramClient) HandleMatrixReactionRemove(ctx context.Context, msg *bridgev2.MatrixReactionRemove) error {
-	peer, err := ids.InputPeerForPortalID(msg.Portal.ID)
+	peer, err := t.inputPeerForPortalID(ctx, msg.Portal.ID)
 	if err != nil {
 		return err
 	}

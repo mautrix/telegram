@@ -42,6 +42,6 @@ func (c *Container) Upgrade(ctx context.Context) error {
 	return c.Database.Upgrade(ctx)
 }
 
-func (c *Container) GetScopedStore(telegramUserID int64) *scopedStore {
-	return &scopedStore{c.Database, telegramUserID}
+func (c *Container) GetScopedStore(telegramUserID int64) *ScopedStore {
+	return &ScopedStore{c.Database, telegramUserID}
 }
