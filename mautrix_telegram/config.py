@@ -83,6 +83,7 @@ class Config(BaseBridgeConfig):
         copy("appservice.provisioning.shared_secret")
         if base["appservice.provisioning.shared_secret"] == "generate":
             base["appservice.provisioning.shared_secret"] = self._new_token()
+        copy("appservice.provisioning.debug_endpoints")
 
         if "pool_size" in base["appservice.database_opts"]:
             pool_size = base["appservice.database_opts"].pop("pool_size")

@@ -74,6 +74,8 @@ appservice:
         # The shared secret to authorize users of the API.
         # Set to "generate" to generate and save a new token.
         shared_secret: generate
+        # Enable debug API at {prefix}/debug with provisioning authentication.
+        debug_endpoints: false
 
     # The unique ID of this appservice.
     id: telegram
