@@ -4,7 +4,8 @@ if [[ -z "$GID" ]]; then
 	GID="$UID"
 fi
 
-# Define functions.
+BINARY_NAME=/usr/bin/mautrix-telegram
+
 function fixperms {
 	chown -R $UID:$GID /data
 
@@ -15,7 +16,7 @@ function fixperms {
 }
 
 if [[ ! -f /data/config.yaml ]]; then
-	cp /opt/mautrix-telegram/example-config.yaml /data/config.yaml
+	$BINARY_NAME -c /data/config.yaml -e
 	echo "Didn't find a config file."
 	echo "Copied default config file to /data/config.yaml"
 	echo "Modify that config file to your liking."
@@ -24,7 +25,7 @@ if [[ ! -f /data/config.yaml ]]; then
 fi
 
 if [[ ! -f /data/registration.yaml ]]; then
-	/usr/bin/mautrix-telegram -g -c /data/config.yaml -r /data/registration.yaml || exit $?
+	$BINARY_NAME -g -c /data/config.yaml -r /data/registration.yaml
 	echo "Didn't find a registration file."
 	echo "Generated one for you."
 	echo "See https://docs.mau.fi/bridges/general/registering-appservices.html on how to use it."
@@ -33,4 +34,4 @@ fi
 
 cd /data
 fixperms
-exec su-exec $UID:$GID /usr/bin/mautrix-telegram
+exec su-exec $UID:$GID $BINARY_NAME
