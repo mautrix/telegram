@@ -13,6 +13,7 @@ import (
 	"github.com/rs/zerolog"
 	"go.mau.fi/zerozap"
 	"go.uber.org/zap"
+	"maunium.net/go/mautrix/bridge/status"
 	"maunium.net/go/mautrix/bridgev2"
 	"maunium.net/go/mautrix/bridgev2/database"
 	"maunium.net/go/mautrix/bridgev2/networkid"
@@ -174,6 +175,7 @@ func connectTelegramClient(ctx context.Context, client *telegram.Client) (contex
 
 func (t *TelegramClient) Connect(ctx context.Context) (err error) {
 	t.clientCancel, err = connectTelegramClient(ctx, t.client)
+	t.userLogin.BridgeState.Send(status.BridgeState{StateEvent: status.StateConnected})
 	return
 }
 
