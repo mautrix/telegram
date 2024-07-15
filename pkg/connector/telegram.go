@@ -352,7 +352,7 @@ func (t *TelegramClient) getReactionLimit(ctx context.Context, sender networkid.
 	if err != nil {
 		return 0, err
 	}
-	if isPremium, ok := ghost.Metadata.Extra["fi.mau.telegram.is_premium"].(bool); ok && isPremium {
+	if ghost.Metadata.(*GhostMetadata).IsPremium {
 		return int(config["reactions_user_max_premium"].(float64)), nil
 	} else {
 		return int(config["reactions_user_max_default"].(float64)), nil

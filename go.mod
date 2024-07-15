@@ -6,10 +6,10 @@ require (
 	github.com/gotd/td v0.102.0
 	github.com/rs/zerolog v1.33.0
 	github.com/stretchr/testify v1.9.0
-	go.mau.fi/util v0.5.1-0.20240710154926-931b33d6d530
+	go.mau.fi/util v0.5.1-0.20240713134429-03648b3ede41
 	go.mau.fi/zerozap v0.1.1
 	go.uber.org/zap v1.27.0
-	maunium.net/go/mautrix v0.19.0-beta.1.0.20240706124659-b4057a26c3ed
+	maunium.net/go/mautrix v0.19.0-beta.1.0.20240714121051-fb9fb5ae4405
 )
 
 require (

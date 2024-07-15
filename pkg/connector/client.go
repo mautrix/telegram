@@ -14,6 +14,7 @@ import (
 	"go.mau.fi/zerozap"
 	"go.uber.org/zap"
 	"maunium.net/go/mautrix/bridgev2"
+	"maunium.net/go/mautrix/bridgev2/database"
 	"maunium.net/go/mautrix/bridgev2/networkid"
 
 	"go.mau.fi/mautrix-telegram/pkg/connector/ids"
@@ -187,10 +188,10 @@ func (t *TelegramClient) GetChatInfo(ctx context.Context, portal *bridgev2.Porta
 		return nil, err
 	}
 	var name string
+	roomType := database.RoomTypeDM
 	memberList := &bridgev2.ChatMemberList{
 		IsFull: true, // TODO not true for channels
 	}
-	var isSpace, isDM bool
 	var avatar *bridgev2.Avatar
 
 	switch peerType {
@@ -221,9 +222,9 @@ func (t *TelegramClient) GetChatInfo(ctx context.Context, portal *bridgev2.Porta
 					},
 				},
 			}
-			isDM = true
 		}
 	case ids.PeerTypeChat:
+		roomType = database.RoomTypeGroupDM
 		fullChat, err := t.client.API().MessagesGetFullChat(ctx, id)
 		if err != nil {
 			return nil, err
@@ -265,11 +266,10 @@ func (t *TelegramClient) GetChatInfo(ctx context.Context, portal *bridgev2.Porta
 	}
 
 	return &bridgev2.ChatInfo{
-		Name:         &name,
-		Avatar:       avatar,
-		Members:      memberList,
-		IsDirectChat: &isDM,
-		IsSpace:      &isSpace,
+		Name:    &name,
+		Avatar:  avatar,
+		Members: memberList,
+		Type:    &roomType,
 	}, nil
 }
 
@@ -315,11 +315,16 @@ func (t *TelegramClient) getUserInfoFromTelegramUser(user *tg.User) (*bridgev2.U
 
 	name := util.FormatFullName(user.FirstName, user.LastName)
 	return &bridgev2.UserInfo{
-		IsBot:        &user.Bot,
-		Name:         &name,
-		Avatar:       avatar,
-		Identifiers:  identifiers,
-		ExtraUpdates: bridgev2.SimpleMetadataUpdater[*bridgev2.Ghost]("fi.mau.telegram.is_premium", user.Premium),
+		IsBot:       &user.Bot,
+		Name:        &name,
+		Avatar:      avatar,
+		Identifiers: identifiers,
+		ExtraUpdates: func(ctx context.Context, ghost *bridgev2.Ghost) (changed bool) {
+			meta := ghost.Metadata.(*GhostMetadata)
+			changed = meta.IsPremium != user.Premium
+			meta.IsPremium = user.Premium
+			return changed
+		},
 	}, nil
 }
 

@@ -193,10 +193,8 @@ func (p *PhoneLogin) handleAuthSuccess(ctx context.Context, authorization *tg.Au
 	userLoginID := ids.MakeUserLoginID(authorization.User.GetID())
 	ul, err := p.user.NewLogin(ctx, &database.UserLogin{
 		ID: userLoginID,
-		Metadata: database.UserLoginMetadata{
-			Extra: map[string]any{
-				"phone": p.phone,
-			},
+		Metadata: UserLoginMetadata{
+			Phone: p.phone,
 		},
 	}, nil)
 	if err != nil {

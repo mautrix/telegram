@@ -7,6 +7,7 @@ import (
 
 	up "go.mau.fi/util/configupgrade"
 	"maunium.net/go/mautrix/bridgev2"
+	"maunium.net/go/mautrix/bridgev2/database"
 
 	"go.mau.fi/mautrix-telegram/pkg/connector/media"
 )
@@ -48,4 +49,26 @@ func (tg *TelegramConnector) ValidateConfig() error {
 		return fmt.Errorf("unsupported animated sticker target: %s", tg.Config.AnimatedSticker.Target)
 	}
 	return nil
+}
+
+func (tg *TelegramConnector) GetDBMetaTypes() database.MetaTypes {
+	return database.MetaTypes{
+		Ghost: func() any {
+			return &GhostMetadata{}
+		},
+		Portal:   nil,
+		Message:  nil,
+		Reaction: nil,
+		UserLogin: func() any {
+			return &UserLoginMetadata{}
+		},
+	}
+}
+
+type GhostMetadata struct {
+	IsPremium bool `json:"is_premium"`
+}
+
+type UserLoginMetadata struct {
+	Phone string `json:"phone"`
 }
