@@ -66,9 +66,9 @@ func (tg *TelegramConnector) GetDBMetaTypes() database.MetaTypes {
 }
 
 type GhostMetadata struct {
-	IsPremium bool `json:"is_premium"`
+	IsPremium bool `json:"fi.mau.telegram.is_premium"`
 }
 
 type UserLoginMetadata struct {
-	Phone string `json:"phone"`
+	Phone string `json:"fi.mau.telegram.phone"`
 }
