@@ -1,4 +1,4 @@
-# v0.15.2 (unreleased)
+# v0.15.2 (2024-07-16)
 
 * Dropped support for Python 3.9.
 * Updated Telegram API to layer 183.
