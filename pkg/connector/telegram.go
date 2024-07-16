@@ -186,17 +186,22 @@ func (t *TelegramClient) onDeleteMessages(ctx context.Context, update IGetMessag
 	return nil
 }
 
+func (t *TelegramClient) updateGhost(ctx context.Context, userID int64, user *tg.User) error {
+	ghost, err := t.main.Bridge.GetGhostByID(ctx, ids.MakeUserID(userID))
+	if err != nil {
+		return err
+	}
+	userInfo, err := t.getUserInfoFromTelegramUser(user)
+	if err != nil {
+		return err
+	}
+	ghost.UpdateInfo(ctx, userInfo)
+	return nil
+}
+
 func (t *TelegramClient) onEntityUpdate(ctx context.Context, e tg.Entities) error {
 	for userID, user := range e.Users {
-		ghost, err := t.main.Bridge.GetGhostByID(ctx, ids.MakeUserID(userID))
-		if err != nil {
-			return err
-		}
-		userInfo, err := t.getUserInfoFromTelegramUser(user)
-		if err != nil {
-			return err
-		}
-		ghost.UpdateInfo(ctx, userInfo)
+		t.updateGhost(ctx, userID, user)
 	}
 	return nil
 }

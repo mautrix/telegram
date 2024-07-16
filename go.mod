@@ -6,10 +6,10 @@ require (
 	github.com/gotd/td v0.102.0
 	github.com/rs/zerolog v1.33.0
 	github.com/stretchr/testify v1.9.0
-	go.mau.fi/util v0.5.1-0.20240713134429-03648b3ede41
+	go.mau.fi/util v0.6.0
 	go.mau.fi/zerozap v0.1.1
 	go.uber.org/zap v1.27.0
-	maunium.net/go/mautrix v0.19.0-beta.1.0.20240714121051-fb9fb5ae4405
+	maunium.net/go/mautrix v0.19.1-0.20240716175930-085859bfdd7c
 )
 
 require (
@@ -37,16 +37,16 @@ require (
 	github.com/tidwall/pretty v1.2.0 // indirect
 	github.com/tidwall/sjson v1.2.5 // indirect
 	github.com/yuin/goldmark v1.7.4 // indirect
-	go.mau.fi/zeroconfig v0.1.2 // indirect
+	go.mau.fi/zeroconfig v0.1.3 // indirect
 	go.opentelemetry.io/otel v1.26.0 // indirect
 	go.opentelemetry.io/otel/trace v1.26.0 // indirect
 	go.uber.org/atomic v1.11.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
-	golang.org/x/crypto v0.24.0 // indirect
-	golang.org/x/exp v0.0.0-20240613232115-7f521ea00fb8 // indirect
-	golang.org/x/net v0.26.0 // indirect
+	golang.org/x/crypto v0.25.0 // indirect
+	golang.org/x/exp v0.0.0-20240707233637-46b078467d37 // indirect
+	golang.org/x/net v0.27.0 // indirect
 	golang.org/x/sync v0.7.0 // indirect
-	golang.org/x/sys v0.21.0 // indirect
+	golang.org/x/sys v0.22.0 // indirect
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	maunium.net/go/mauflag v1.0.0 // indirect
