@@ -62,8 +62,8 @@ func (t *TelegramClient) onUpdateNewMessage(ctx context.Context, update IGetMess
 			Timestamp:          time.Unix(int64(msg.Date), 0),
 		})
 	case *tg.MessageService:
-		fmt.Printf("message service\n")
-		fmt.Printf("%v\n", msg)
+		// fmt.Printf("message service\n")
+		// fmt.Printf("%v\n", msg)
 
 		// sender := t.getEventSender(msg)
 		// switch action := msg.Action.(type) {
@@ -136,8 +136,8 @@ func (t *TelegramClient) getEventSender(msg messageWithSender) (sender bridgev2.
 			sender.SenderLogin = ids.MakeUserLoginID(from.UserID)
 			sender.Sender = ids.MakeUserID(from.UserID)
 		default:
-			fmt.Printf("%+v\n", f)
-			fmt.Printf("%T\n", f)
+			// fmt.Printf("%+v\n", f)
+			// fmt.Printf("%T\n", f)
 			panic("unimplemented FromID")
 		}
 	} else if peer, ok := msg.GetPeerID().(*tg.PeerUser); ok {
@@ -202,7 +202,7 @@ func (t *TelegramClient) onEntityUpdate(ctx context.Context, e tg.Entities) erro
 }
 
 func (t *TelegramClient) onMessageEdit(ctx context.Context, update IGetMessage) error {
-	fmt.Printf("message edit %+v\n", update)
+	// fmt.Printf("message edit %+v\n", update)
 	msg, ok := update.GetMessage().(*tg.Message)
 	if !ok {
 		return fmt.Errorf("edit message is not *tg.Message")
@@ -228,6 +228,7 @@ func (t *TelegramClient) onMessageEdit(ctx context.Context, update IGetMessage) 
 
 func (t *TelegramClient) handleTelegramReactions(ctx context.Context, msg *tg.Message) error {
 	if _, set := msg.GetReactions(); !set {
+		// fmt.Printf("no reactions\n")
 		return nil
 	}
 	var totalCount int
@@ -238,6 +239,7 @@ func (t *TelegramClient) handleTelegramReactions(ctx context.Context, msg *tg.Me
 	reactionsList := msg.Reactions.RecentReactions
 	if totalCount > 0 && len(reactionsList) == 0 && !msg.Reactions.CanSeeList {
 		// We don't know who reacted in a channel, so we can't bridge it properly either
+		zerolog.Ctx(ctx).Warn().Int("message_id", msg.ID).Msg("Can't see reaction list in channel")
 		return nil
 	}
 

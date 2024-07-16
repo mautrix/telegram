@@ -109,7 +109,6 @@ func NewTelegramClient(ctx context.Context, tc *TelegramConnector, login *bridge
 		return client.onUpdateNewMessage(ctx, update)
 	})
 	dispatcher.OnNewChannelMessage(func(ctx context.Context, e tg.Entities, update *tg.UpdateNewChannelMessage) error {
-		fmt.Printf("%+v\n", update)
 		return client.onUpdateNewMessage(ctx, update)
 	})
 	dispatcher.OnUserName(client.onUserName)
@@ -200,7 +199,7 @@ func (t *TelegramClient) Disconnect() {
 }
 
 func (t *TelegramClient) GetChatInfo(ctx context.Context, portal *bridgev2.Portal) (*bridgev2.ChatInfo, error) {
-	fmt.Printf("get chat info %+v\n", portal)
+	// fmt.Printf("get chat info %+v\n", portal)
 	peerType, id, err := ids.ParsePortalID(portal.ID)
 	if err != nil {
 		return nil, err
@@ -256,7 +255,7 @@ func (t *TelegramClient) GetChatInfo(ctx context.Context, portal *bridgev2.Porta
 
 		chatFull, ok := fullChat.FullChat.(*tg.ChatFull)
 		if !ok {
-			return nil, fmt.Errorf("full chat is not %T", chatFull)
+			return nil, fmt.Errorf("full chat is %T not *tg.ChatFull", fullChat.FullChat)
 		}
 
 		if photo, ok := chatFull.GetChatPhoto(); ok {
@@ -303,7 +302,7 @@ func (t *TelegramClient) GetChatInfo(ctx context.Context, portal *bridgev2.Porta
 
 		chatFull, ok := fullChat.FullChat.(*tg.ChatFull)
 		if !ok {
-			return nil, fmt.Errorf("full chat is not %T", chatFull)
+			return nil, fmt.Errorf("full chat is %T *tg.ChatFull", fullChat.FullChat)
 		}
 
 		if photo, ok := chatFull.GetChatPhoto(); ok {
@@ -327,7 +326,7 @@ func (t *TelegramClient) GetChatInfo(ctx context.Context, portal *bridgev2.Porta
 			})
 		}
 	default:
-		fmt.Printf("%s %d\n", peerType, id)
+		// fmt.Printf("%s %d\n", peerType, id)
 		panic("unimplemented getchatinfo")
 	}
 
