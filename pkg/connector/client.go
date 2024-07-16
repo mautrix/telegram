@@ -130,8 +130,7 @@ func NewTelegramClient(ctx context.Context, tc *TelegramConnector, login *bridge
 
 	updatesManager := updates.New(updates.Config{
 		OnChannelTooLong: func(channelID int64) {
-			log.Error().Int64("channel_id", channelID).Msg("OnChannelTooLong")
-			panic("unimplemented channel too long")
+			log.Warn().Int64("channel_id", channelID).Msg("channel too long")
 		},
 		Handler:      dispatcher,
 		Logger:       zaplog.Named("gaps"),
