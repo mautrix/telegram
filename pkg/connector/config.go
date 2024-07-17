@@ -14,17 +14,26 @@ import (
 
 var _ bridgev2.ConfigValidatingNetwork = (*TelegramConnector)(nil)
 
+type MemberListConfig struct {
+	MaxInitialSync int  `yaml:"max_initial_sync"`
+	SyncChannels   bool `yaml:"sync_channels"`
+	SkipDeleted    bool `yaml:"skip_deleted"`
+}
+
+func (c MemberListConfig) NormalizedMaxInitialSync() int {
+	if c.MaxInitialSync < 0 {
+		return 10000
+	}
+	return c.MaxInitialSync
+}
+
 type TelegramConfig struct {
 	AppID   int    `yaml:"app_id"`
 	AppHash string `yaml:"app_hash"`
 
 	AnimatedSticker media.AnimatedStickerConfig `yaml:"animated_sticker"`
 
-	MemberList struct {
-		MaxInitialSync int  `yaml:"max_initial_sync"`
-		SyncChannels   bool `yaml:"sync_channels"`
-		SkipDeleted    bool `yaml:"skip_deleted"`
-	} `yaml:"member_list"`
+	MemberList MemberListConfig `yaml:"member_list"`
 
 	MaxMemberCount int `yaml:"max_member_count"`
 }
