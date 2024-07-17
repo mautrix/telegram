@@ -231,14 +231,6 @@ func (t *TelegramClient) GetChatInfo(ctx context.Context, portal *bridgev2.Porta
 			return nil, err
 		}
 
-		if t.main.Config.SetPrivateChatPortalMeta {
-			chatInfo.Name = userInfo.Name
-			chatInfo.Avatar = userInfo.Avatar
-		} else {
-			chatInfo.Name = ptr.Ptr("")
-			chatInfo.Avatar = &bridgev2.Avatar{Remove: true}
-		}
-
 		chatInfo.Members.Members = []bridgev2.ChatMember{
 			{
 				EventSender: bridgev2.EventSender{
@@ -411,8 +403,7 @@ func (t *TelegramClient) GetChatInfo(ctx context.Context, portal *bridgev2.Porta
 			}
 		}
 	default:
-		// fmt.Printf("%s %d\n", peerType, id)
-		panic("unimplemented getchatinfo")
+		panic(fmt.Sprintf("unsupported peer type %s", peerType))
 	}
 
 	return &chatInfo, nil

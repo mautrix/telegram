@@ -2,10 +2,6 @@
 app_id: 12345
 app_hash: tjyd5yge35lbodk1xwzw2jstp90k55qz
 
-# Whether to explicitly set the avatar and room name for private chat portal
-# rooms.
-set_private_chat_portal_meta: true
-
 # Settings for converting animated stickers.
 animated_sticker:
     # Format to which animated stickers should be converted.
