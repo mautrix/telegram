@@ -18,6 +18,8 @@ type TelegramConfig struct {
 	AppID   int    `yaml:"app_id"`
 	AppHash string `yaml:"app_hash"`
 
+	SetPrivateChatPortalMeta bool `yaml:"set_private_chat_portal_meta"`
+
 	AnimatedSticker media.AnimatedStickerConfig `yaml:"animated_sticker"`
 }
 
@@ -27,6 +29,7 @@ var ExampleConfig string
 func upgradeConfig(helper up.Helper) {
 	helper.Copy(up.Int, "app_id")
 	helper.Copy(up.Str, "app_hash")
+	helper.Copy(up.Bool, "set_private_chat_portal_meta")
 	helper.Copy(up.Str, "animated_sticker", "target")
 	helper.Copy(up.Bool, "animated_sticker", "convert_from_webm")
 	helper.Copy(up.Int, "animated_sticker", "args", "width")

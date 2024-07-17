@@ -2,13 +2,21 @@
 app_id: 12345
 app_hash: tjyd5yge35lbodk1xwzw2jstp90k55qz
 
+# Whether to explicitly set the avatar and room name for private chat portal
+# rooms.
+set_private_chat_portal_meta: true
+
+# Settings for converting animated stickers.
 animated_sticker:
     # Format to which animated stickers should be converted.
-    # disable - No conversion, send as-is (gzipped lottie)
-    # png - converts to non-animated png (fastest),
-    # gif - converts to animated gif
-    # webm - converts to webm video, requires ffmpeg executable with vp9 codec and webm container support
-    # webp - converts to animated webp, requires ffmpeg executable with webp codec/container support
+    #
+    # disable - no conversion, send as-is (gzipped lottie)
+    # png -     converts to non-animated png (fastest),
+    # gif -     converts to animated gif
+    # webm -    converts to webm video, requires ffmpeg executable with vp9 codec
+    #           and webm container support
+    # webp -    converts to animated webp, requires ffmpeg executable with webp
+    #           codec/container support
     target: gif
     # Should video stickers be converted to the specified format as well?
     convert_from_webm: false
