@@ -21,6 +21,14 @@ type TelegramConfig struct {
 	SetPrivateChatPortalMeta bool `yaml:"set_private_chat_portal_meta"`
 
 	AnimatedSticker media.AnimatedStickerConfig `yaml:"animated_sticker"`
+
+	MemberList struct {
+		MaxInitialSync int  `yaml:"max_initial_sync"`
+		SyncChannels   bool `yaml:"sync_channels"`
+		SkipDeleted    bool `yaml:"skip_deleted"`
+	} `yaml:"member_list"`
+
+	MaxMemberCount int `yaml:"max_member_count"`
 }
 
 //go:embed example-config.yaml
@@ -35,6 +43,10 @@ func upgradeConfig(helper up.Helper) {
 	helper.Copy(up.Int, "animated_sticker", "args", "width")
 	helper.Copy(up.Int, "animated_sticker", "args", "height")
 	helper.Copy(up.Int, "animated_sticker", "args", "fps")
+	helper.Copy(up.Int, "member_list", "max_initial_sync")
+	helper.Copy(up.Bool, "member_list", "sync_channels")
+	helper.Copy(up.Bool, "member_list", "skip_deleted")
+	helper.Copy(up.Int, "max_member_count")
 }
 
 func (tg *TelegramConnector) GetConfig() (example string, data any, upgrader up.Upgrader) {
