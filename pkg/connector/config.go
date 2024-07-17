@@ -29,6 +29,10 @@ type TelegramConfig struct {
 	MaxMemberCount int `yaml:"max_member_count"`
 }
 
+func (c TelegramConfig) ShouldBridge(participantCount int) bool {
+	return c.MaxMemberCount < 0 || participantCount <= c.MaxMemberCount
+}
+
 //go:embed example-config.yaml
 var ExampleConfig string
 

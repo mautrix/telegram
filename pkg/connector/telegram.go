@@ -199,6 +199,15 @@ func (t *TelegramClient) updateGhost(ctx context.Context, userID int64, user *tg
 	return nil
 }
 
+func (t *TelegramClient) updateGhostWithUserInfo(ctx context.Context, userID int64, userInfo *bridgev2.UserInfo) error {
+	ghost, err := t.main.Bridge.GetGhostByID(ctx, ids.MakeUserID(userID))
+	if err != nil {
+		return err
+	}
+	ghost.UpdateInfo(ctx, userInfo)
+	return nil
+}
+
 func (t *TelegramClient) onEntityUpdate(ctx context.Context, e tg.Entities) error {
 	for userID, user := range e.Users {
 		t.updateGhost(ctx, userID, user)

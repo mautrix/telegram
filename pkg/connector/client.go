@@ -200,42 +200,42 @@ func (t *TelegramClient) Disconnect() {
 	t.clientCancel()
 }
 
-func (t *TelegramClient) GetChatInfo(ctx context.Context, portal *bridgev2.Portal) (*bridgev2.ChatInfo, error) {
-	// fmt.Printf("get chat info %+v\n", portal)
-	peerType, id, err := ids.ParsePortalID(portal.ID)
+func (t *TelegramClient) updateUsersFromResponse(ctx context.Context, resp interface{ GetUsers() []tg.UserClass }) error {
+	// TODO table for the access hashes?
+	for _, user := range resp.GetUsers() {
+		user, ok := user.(*tg.User)
+		if !ok {
+			return fmt.Errorf("user is %T not *tg.User", user)
+		}
+		err := t.updateGhost(ctx, user.ID, user)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (t *TelegramClient) getDMChatInfo(ctx context.Context, userID int64) (*bridgev2.ChatInfo, error) {
+	chatInfo := bridgev2.ChatInfo{
+		Type:    ptr.Ptr(database.RoomTypeDM),
+		Members: &bridgev2.ChatMemberList{IsFull: true},
+	}
+	// TODO need access hash here
+	users, err := t.client.API().UsersGetUsers(ctx, []tg.InputUserClass{&tg.InputUser{UserID: userID}})
 	if err != nil {
 		return nil, err
-	}
-	chatInfo := bridgev2.ChatInfo{
-		Type: ptr.Ptr(database.RoomTypeDM),
-		Members: &bridgev2.ChatMemberList{
-			IsFull: true,
-		},
-	}
-
-	switch peerType {
-	case ids.PeerTypeUser:
-		users, err := t.client.API().UsersGetUsers(ctx, []tg.InputUserClass{&tg.InputUser{UserID: id}})
-		if err != nil {
-			return nil, err
-		}
-		if len(users) == 0 {
-			return nil, fmt.Errorf("failed to get user info for user %d", id)
-		}
-		user, ok := users[0].(*tg.User)
-		if !ok {
-			return nil, fmt.Errorf("returned user is not *tg.User")
-		}
-		userInfo, err := t.getUserInfoFromTelegramUser(user)
-		if err != nil {
-			return nil, err
-		}
-
+	} else if len(users) == 0 {
+		return nil, fmt.Errorf("failed to get user info for user %d", userID)
+	} else if userInfo, err := t.getUserInfoFromTelegramUser(users[0]); err != nil {
+		return nil, err
+	} else if err = t.updateGhostWithUserInfo(ctx, userID, userInfo); err != nil {
+		return nil, err
+	} else {
 		chatInfo.Members.Members = []bridgev2.ChatMember{
 			{
 				EventSender: bridgev2.EventSender{
-					SenderLogin: ids.MakeUserLoginID(id),
-					Sender:      ids.MakeUserID(id),
+					SenderLogin: ids.MakeUserLoginID(userID),
+					Sender:      ids.MakeUserID(userID),
 				},
 				UserInfo: userInfo,
 			},
@@ -247,64 +247,102 @@ func (t *TelegramClient) GetChatInfo(ctx context.Context, portal *bridgev2.Porta
 				},
 			},
 		}
+	}
+	return &chatInfo, nil
+}
+
+func (t *TelegramClient) getGroupChatInfo(ctx context.Context, fullChat *tg.MessagesChatFull, chatID int64) (*bridgev2.ChatInfo, error) {
+	if err := t.updateUsersFromResponse(ctx, fullChat); err != nil {
+		return nil, err
+	}
+
+	chatInfo := bridgev2.ChatInfo{
+		Type:    ptr.Ptr(database.RoomTypeGroupDM), // TODO Is this correct for channels?
+		Members: &bridgev2.ChatMemberList{IsFull: true},
+	}
+	for _, c := range fullChat.GetChats() {
+		if c.GetID() == chatID {
+			switch chat := c.(type) {
+			case *tg.Chat:
+				chatInfo.Name = &chat.Title
+			case *tg.Channel:
+				chatInfo.Name = &chat.Title
+			}
+			break
+		}
+	}
+
+	if ttl, ok := fullChat.FullChat.GetTTLPeriod(); ok {
+		chatInfo.Disappear = &database.DisappearingSetting{
+			Type:  database.DisappearingTypeAfterSend,
+			Timer: time.Duration(ttl) * time.Second,
+		}
+	}
+
+	if about := fullChat.FullChat.GetAbout(); about != "" {
+		chatInfo.Topic = &about
+	}
+
+	return &chatInfo, nil
+}
+
+func (t *TelegramClient) avatarFromPhoto(ctx context.Context, photo tg.PhotoClass) *bridgev2.Avatar {
+	if photo == nil || photo.TypeID() != tg.PhotoTypeID {
+		return nil
+	}
+	return &bridgev2.Avatar{
+		ID: ids.MakeAvatarID(photo.GetID()),
+		Get: func(ctx context.Context) (data []byte, err error) {
+			data, _, err = media.NewTransferer(t.client.API()).WithPhoto(photo).Download(ctx)
+			return
+		},
+	}
+}
+
+func (t *TelegramClient) GetChatInfo(ctx context.Context, portal *bridgev2.Portal) (*bridgev2.ChatInfo, error) {
+	// fmt.Printf("get chat info %+v\n", portal)
+	peerType, id, err := ids.ParsePortalID(portal.ID)
+	if err != nil {
+		return nil, err
+	}
+
+	switch peerType {
+	case ids.PeerTypeUser:
+		return t.getDMChatInfo(ctx, id)
 	case ids.PeerTypeChat:
-		chatInfo.Type = ptr.Ptr(database.RoomTypeGroupDM)
 		fullChat, err := t.client.API().MessagesGetFullChat(ctx, id)
 		if err != nil {
 			return nil, err
 		}
-		for _, c := range fullChat.GetChats() {
-			if c.GetID() == id {
-				chatInfo.Name = &c.(*tg.Chat).Title
-				break
-			}
+		chatInfo, err := t.getGroupChatInfo(ctx, fullChat, id)
+		if err != nil {
+			return nil, err
 		}
 
 		chatFull, ok := fullChat.FullChat.(*tg.ChatFull)
 		if !ok {
 			return nil, fmt.Errorf("full chat is %T not *tg.ChatFull", fullChat.FullChat)
 		}
+		chatInfo.Avatar = t.avatarFromPhoto(ctx, chatFull.ChatPhoto)
 
-		if photo, ok := chatFull.GetChatPhoto(); ok {
-			chatInfo.Avatar = &bridgev2.Avatar{
-				ID: ids.MakeAvatarID(photo.GetID()),
-				Get: func(ctx context.Context) (data []byte, err error) {
-					data, _, err = media.NewTransferer(t.client.API()).WithPhoto(photo).Download(ctx)
-					return
+		participants, ok := chatFull.Participants.(*tg.ChatParticipants)
+		if !ok {
+			return nil, fmt.Errorf("full chat is %T not *tg.ChatParticipants", chatFull.Participants)
+		}
+		if !t.main.Config.ShouldBridge(len(participants.Participants)) {
+			return nil, fmt.Errorf("too many participants (%d) in chat %d", len(participants.Participants), id)
+		}
+		for _, user := range participants.Participants {
+			chatInfo.Members.Members = append(chatInfo.Members.Members, bridgev2.ChatMember{
+				EventSender: bridgev2.EventSender{
+					IsFromMe:    user.GetUserID() == t.telegramUserID,
+					SenderLogin: ids.MakeUserLoginID(user.GetUserID()),
+					Sender:      ids.MakeUserID(user.GetUserID()),
 				},
-			}
+			})
 		}
-
-		if ttl, ok := chatFull.GetTTLPeriod(); ok {
-			chatInfo.Disappear = &database.DisappearingSetting{
-				Type:  database.DisappearingTypeAfterSend,
-				Timer: time.Duration(ttl) * time.Second,
-			}
-		}
-
-		if about := chatFull.GetAbout(); about != "" {
-			chatInfo.Topic = &about
-		}
-
-		for _, user := range fullChat.GetUsers() {
-			if user, ok := user.(*tg.User); ok {
-				t.updateGhost(ctx, id, user)
-			}
-		}
-
-		if participants, ok := chatFull.Participants.(*tg.ChatParticipants); ok {
-			for _, user := range participants.Participants {
-				chatInfo.Members.Members = append(chatInfo.Members.Members, bridgev2.ChatMember{
-					EventSender: bridgev2.EventSender{
-						IsFromMe:    user.GetUserID() == t.telegramUserID,
-						SenderLogin: ids.MakeUserLoginID(user.GetUserID()),
-						Sender:      ids.MakeUserID(user.GetUserID()),
-					},
-				})
-			}
-		}
+		return chatInfo, nil
 	case ids.PeerTypeChannel:
-		chatInfo.Type = ptr.Ptr(database.RoomTypeGroupDM) // TODO is this correct?
 		accessHash, found, err := t.ScopedStore.GetChannelAccessHash(ctx, t.telegramUserID, id)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get channel access hash: %w", err)
@@ -316,43 +354,17 @@ func (t *TelegramClient) GetChatInfo(ctx context.Context, portal *bridgev2.Porta
 		if err != nil {
 			return nil, err
 		}
-		for _, c := range fullChat.Chats {
-			if c.GetID() == id {
-				switch chat := c.(type) {
-				case *tg.Chat:
-					chatInfo.Name = &chat.Title
-				case *tg.Channel:
-					chatInfo.Name = &chat.Title
-				}
-				break
-			}
+
+		chatInfo, err := t.getGroupChatInfo(ctx, fullChat, id)
+		if err != nil {
+			return nil, err
 		}
 
 		channelFull, ok := fullChat.FullChat.(*tg.ChannelFull)
 		if !ok {
 			return nil, fmt.Errorf("full chat is %T not *tg.ChannelFull", fullChat.FullChat)
 		}
-
-		if photo := channelFull.GetChatPhoto(); photo.TypeID() == tg.PhotoTypeID {
-			chatInfo.Avatar = &bridgev2.Avatar{
-				ID: ids.MakeAvatarID(photo.GetID()),
-				Get: func(ctx context.Context) (data []byte, err error) {
-					data, _, err = media.NewTransferer(t.client.API()).WithPhoto(photo).Download(ctx)
-					return
-				},
-			}
-		}
-
-		if ttl, ok := channelFull.GetTTLPeriod(); ok {
-			chatInfo.Disappear = &database.DisappearingSetting{
-				Type:  database.DisappearingTypeAfterSend,
-				Timer: time.Duration(ttl) * time.Second,
-			}
-		}
-
-		if about := channelFull.GetAbout(); about != "" {
-			chatInfo.Topic = &about
-		}
+		chatInfo.Avatar = t.avatarFromPhoto(ctx, channelFull.ChatPhoto)
 
 		// TODO save available reactions?
 		// TODO save reactions limit?
@@ -361,12 +373,6 @@ func (t *TelegramClient) GetChatInfo(ctx context.Context, portal *bridgev2.Porta
 		chatInfo.Members.IsFull = false
 
 		// TODO when do we have to make a request to get the participants?
-
-		for _, user := range fullChat.GetUsers() {
-			if user, ok := user.(*tg.User); ok {
-				t.updateGhost(ctx, id, user)
-			}
-		}
 
 		if channelFull.CanViewParticipants && !channelFull.ParticipantsHidden {
 			// TODO paginate
@@ -383,11 +389,6 @@ func (t *TelegramClient) GetChatInfo(ctx context.Context, portal *bridgev2.Porta
 				return nil, fmt.Errorf("returned participants is %T not *tg.ChannelsChannelParticipants", p)
 			}
 			for _, user := range participants.GetUsers() {
-				user, ok := user.(*tg.User)
-				if !ok {
-					return nil, fmt.Errorf("participant is %T not *tg.User", user)
-				}
-
 				userInfo, err := t.getUserInfoFromTelegramUser(user)
 				if err != nil {
 					return nil, err
@@ -402,11 +403,10 @@ func (t *TelegramClient) GetChatInfo(ctx context.Context, portal *bridgev2.Porta
 				})
 			}
 		}
+		return chatInfo, nil
 	default:
 		panic(fmt.Sprintf("unsupported peer type %s", peerType))
 	}
-
-	return &chatInfo, nil
 }
 
 func (t *TelegramClient) GetUserInfo(ctx context.Context, ghost *bridgev2.Ghost) (*bridgev2.UserInfo, error) {
@@ -424,14 +424,18 @@ func (t *TelegramClient) GetUserInfo(ctx context.Context, ghost *bridgev2.Ghost)
 	if len(users) == 0 {
 		return nil, fmt.Errorf("failed to get user info for user %d", id)
 	}
-	if user, ok := users[0].(*tg.User); !ok {
-		return nil, fmt.Errorf("returned user is not *tg.User")
-	} else {
-		return t.getUserInfoFromTelegramUser(user)
+	userInfo, err := t.getUserInfoFromTelegramUser(users[0])
+	if err != nil {
+		return nil, err
 	}
+	return userInfo, t.updateGhostWithUserInfo(ctx, id, userInfo)
 }
 
-func (t *TelegramClient) getUserInfoFromTelegramUser(user *tg.User) (*bridgev2.UserInfo, error) {
+func (t *TelegramClient) getUserInfoFromTelegramUser(u tg.UserClass) (*bridgev2.UserInfo, error) {
+	user, ok := u.(*tg.User)
+	if !ok {
+		return nil, fmt.Errorf("user is %T not *tg.User", user)
+	}
 	var identifiers []string
 	for _, username := range user.Usernames {
 		identifiers = append(identifiers, fmt.Sprintf("telegram:%s", username.Username))
