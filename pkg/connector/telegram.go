@@ -119,34 +119,27 @@ func (t *TelegramClient) onUpdateNewMessage(ctx context.Context, update IGetMess
 	return nil
 }
 
-type messageWithSender interface {
+func (t *TelegramClient) getEventSender(msg interface {
 	GetOut() bool
 	GetFromID() (tg.PeerClass, bool)
 	GetPeerID() tg.PeerClass
-}
-
-func (t *TelegramClient) getEventSender(msg messageWithSender) (sender bridgev2.EventSender) {
+}) bridgev2.EventSender {
 	if msg.GetOut() {
-		sender.IsFromMe = true
-		sender.SenderLogin = t.loginID
-		sender.Sender = t.userID
-	} else if f, ok := msg.GetFromID(); ok {
-		switch from := f.(type) {
-		case *tg.PeerUser:
-			sender.SenderLogin = ids.MakeUserLoginID(from.UserID)
-			sender.Sender = ids.MakeUserID(from.UserID)
-		default:
-			// fmt.Printf("%+v\n", f)
-			// fmt.Printf("%T\n", f)
-			panic("unimplemented FromID")
+		return bridgev2.EventSender{IsFromMe: true, SenderLogin: t.loginID, Sender: t.userID}
+	} else if f, ok := msg.GetFromID(); ok && f.TypeID() == tg.PeerUserTypeID {
+		from := f.(*tg.PeerUser)
+		return bridgev2.EventSender{
+			SenderLogin: ids.MakeUserLoginID(from.UserID),
+			Sender:      ids.MakeUserID(from.UserID),
 		}
 	} else if peer, ok := msg.GetPeerID().(*tg.PeerUser); ok {
-		sender.SenderLogin = ids.MakeUserLoginID(peer.UserID)
-		sender.Sender = ids.MakeUserID(peer.UserID)
+		return bridgev2.EventSender{
+			SenderLogin: ids.MakeUserLoginID(peer.UserID),
+			Sender:      ids.MakeUserID(peer.UserID),
+		}
 	} else {
-		panic("not from anyone")
+		panic(fmt.Sprintf("couldn't determine sender (from: %+v) (peer: %+v)", f, msg.GetPeerID()))
 	}
-	return
 }
 
 func (t *TelegramClient) onUserName(ctx context.Context, e tg.Entities, update *tg.UpdateUserName) error {
