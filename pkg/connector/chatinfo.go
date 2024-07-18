@@ -50,9 +50,9 @@ func (t *TelegramClient) getDMChatInfo(ctx context.Context, userID int64) (*brid
 	return &chatInfo, nil
 }
 
-func (t *TelegramClient) getGroupChatInfo(ctx context.Context, fullChat *tg.MessagesChatFull, chatID int64) (*bridgev2.ChatInfo, error) {
+func (t *TelegramClient) getGroupChatInfo(ctx context.Context, fullChat *tg.MessagesChatFull, chatID int64) (*bridgev2.ChatInfo, bool, error) {
 	if err := t.updateUsersFromResponse(ctx, fullChat); err != nil {
-		return nil, err
+		return nil, false, err
 	}
 
 	chatInfo := bridgev2.ChatInfo{
@@ -70,6 +70,7 @@ func (t *TelegramClient) getGroupChatInfo(ctx context.Context, fullChat *tg.Mess
 			},
 		},
 	}
+	var isBroadcastChannel bool
 	for _, c := range fullChat.GetChats() {
 		if c.GetID() == chatID {
 			switch chat := c.(type) {
@@ -77,6 +78,7 @@ func (t *TelegramClient) getGroupChatInfo(ctx context.Context, fullChat *tg.Mess
 				chatInfo.Name = &chat.Title
 			case *tg.Channel:
 				chatInfo.Name = &chat.Title
+				isBroadcastChannel = chat.Broadcast
 			}
 			break
 		}
@@ -93,7 +95,7 @@ func (t *TelegramClient) getGroupChatInfo(ctx context.Context, fullChat *tg.Mess
 		chatInfo.Topic = &about
 	}
 
-	return &chatInfo, nil
+	return &chatInfo, isBroadcastChannel, nil
 }
 
 func (t *TelegramClient) avatarFromPhoto(photo tg.PhotoClass) *bridgev2.Avatar {
@@ -146,7 +148,7 @@ func (t *TelegramClient) GetChatInfo(ctx context.Context, portal *bridgev2.Porta
 		if err != nil {
 			return nil, err
 		}
-		chatInfo, err := t.getGroupChatInfo(ctx, fullChat, id)
+		chatInfo, _, err := t.getGroupChatInfo(ctx, fullChat, id)
 		if err != nil {
 			return nil, err
 		}
@@ -199,7 +201,7 @@ func (t *TelegramClient) GetChatInfo(ctx context.Context, portal *bridgev2.Porta
 			return nil, err
 		}
 
-		chatInfo, err := t.getGroupChatInfo(ctx, fullChat, id)
+		chatInfo, isBroadcastChannel, err := t.getGroupChatInfo(ctx, fullChat, id)
 		if err != nil {
 			return nil, err
 		}
@@ -223,9 +225,15 @@ func (t *TelegramClient) GetChatInfo(ctx context.Context, portal *bridgev2.Porta
 		chatInfo.Members.IsFull = false
 
 		// Just return the current user as a member if we can't view the
-		// participants or the max initial sync is 0 or if channel member sync
-		// is disabled.
-		if t.main.Config.MemberList.MaxInitialSync == 0 || !t.main.Config.MemberList.SyncChannels || !channelFull.CanViewParticipants || channelFull.ParticipantsHidden {
+		// participants or the max initial sync is 0.
+		if t.main.Config.MemberList.MaxInitialSync == 0 || !channelFull.CanViewParticipants || channelFull.ParticipantsHidden {
+			return chatInfo, nil
+		}
+
+		// If this is a broadcast channel and we're not syncing broadcast
+		// channels, just return the chat info without all of the participant
+		// info.
+		if isBroadcastChannel && !t.main.Config.MemberList.SyncBroadcastChannels {
 			return chatInfo, nil
 		}
 

@@ -15,9 +15,9 @@ import (
 var _ bridgev2.ConfigValidatingNetwork = (*TelegramConnector)(nil)
 
 type MemberListConfig struct {
-	MaxInitialSync int  `yaml:"max_initial_sync"`
-	SyncChannels   bool `yaml:"sync_channels"`
-	SkipDeleted    bool `yaml:"skip_deleted"`
+	MaxInitialSync        int  `yaml:"max_initial_sync"`
+	SyncBroadcastChannels bool `yaml:"sync_broadcast_channels"`
+	SkipDeleted           bool `yaml:"skip_deleted"`
 }
 
 func (c MemberListConfig) NormalizedMaxInitialSync() int {
@@ -54,7 +54,7 @@ func upgradeConfig(helper up.Helper) {
 	helper.Copy(up.Int, "animated_sticker", "args", "height")
 	helper.Copy(up.Int, "animated_sticker", "args", "fps")
 	helper.Copy(up.Int, "member_list", "max_initial_sync")
-	helper.Copy(up.Bool, "member_list", "sync_channels")
+	helper.Copy(up.Bool, "member_list", "sync_broadcast_channels")
 	helper.Copy(up.Bool, "member_list", "skip_deleted")
 	helper.Copy(up.Int, "max_member_count")
 }
