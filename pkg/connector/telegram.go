@@ -493,6 +493,10 @@ func (t *TelegramClient) handleTelegramParsedReactionsLocked(ctx context.Context
 	}
 
 	for _, r := range removed {
+		senderID, err := ids.ParseUserID(r.SenderID)
+		if err != nil {
+			return err
+		}
 		evt := &bridgev2.SimpleRemoteEvent[any]{
 			Type: bridgev2.RemoteEventReactionRemove,
 			LogContext: func(c zerolog.Context) zerolog.Context {
@@ -503,7 +507,7 @@ func (t *TelegramClient) handleTelegramParsedReactionsLocked(ctx context.Context
 			},
 			Sender: bridgev2.EventSender{
 				IsFromMe:    t.userID == r.SenderID,
-				SenderLogin: t.loginID,
+				SenderLogin: ids.MakeUserLoginID(senderID),
 				Sender:      r.SenderID,
 			},
 			PortalKey:     msg.Room,
