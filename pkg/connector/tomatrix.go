@@ -130,6 +130,7 @@ func (c *TelegramClient) convertToMatrix(ctx context.Context, portal *bridgev2.P
 		}
 	}
 
+	var contentURI id.ContentURIString
 	mediaPart, disappearingSetting, mediaHashID, err := c.mediaToMatrix(ctx, portal, intent, msg)
 	if err != nil {
 		return nil, err
@@ -138,11 +139,19 @@ func (c *TelegramClient) convertToMatrix(ctx context.Context, portal *bridgev2.P
 		cm.Parts = append(cm.Parts, mediaPart)
 		cm.MergeCaption()
 
+		contentURI = mediaPart.Content.URL
+		if contentURI == "" {
+			contentURI = mediaPart.Content.File.URL
+		}
+
 		if disappearingSetting != nil {
 			cm.Disappear = *disappearingSetting
 		}
 	}
-	cm.Parts[0].DBMetadata = &MessageMetadata{ContentHash: hasher.Sum(nil)}
+	cm.Parts[0].DBMetadata = &MessageMetadata{
+		ContentHash: hasher.Sum(nil),
+		ContentURI:  contentURI,
+	}
 
 	return cm, nil
 }

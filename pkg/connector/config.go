@@ -8,6 +8,7 @@ import (
 	up "go.mau.fi/util/configupgrade"
 	"maunium.net/go/mautrix/bridgev2"
 	"maunium.net/go/mautrix/bridgev2/database"
+	"maunium.net/go/mautrix/id"
 
 	"go.mau.fi/mautrix-telegram/pkg/connector/media"
 )
@@ -92,7 +93,8 @@ type GhostMetadata struct {
 }
 
 type MessageMetadata struct {
-	ContentHash []byte `json:"content_hash,omitempty"`
+	ContentHash []byte              `json:"content_hash,omitempty"`
+	ContentURI  id.ContentURIString `json:"content_uri,omitempty"`
 }
 
 type UserLoginMetadata struct {
