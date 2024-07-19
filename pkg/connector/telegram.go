@@ -35,9 +35,7 @@ func (t *TelegramClient) onUpdateNewMessage(ctx context.Context, update IGetMess
 	case *tg.Message:
 		sender := t.getEventSender(msg)
 
-		if err := t.handleTelegramReactions(ctx, msg); err != nil {
-			return err
-		}
+		go t.handleTelegramReactions(ctx, msg)
 
 		if media, ok := msg.GetMedia(); ok && media.TypeID() == tg.MessageMediaContactTypeID {
 			contact := media.(*tg.MessageMediaContact)
@@ -215,10 +213,7 @@ func (t *TelegramClient) onMessageEdit(ctx context.Context, update IGetMessage) 
 		return fmt.Errorf("edit message is not *tg.Message")
 	}
 
-	// TODO do this async
-	if err := t.handleTelegramReactions(ctx, msg); err != nil {
-		return err
-	}
+	t.handleTelegramReactions(ctx, msg)
 
 	sender := t.getEventSender(msg)
 
@@ -263,10 +258,15 @@ func (t *TelegramClient) convertEdit(ctx context.Context, portal *bridgev2.Porta
 	return &ce, nil
 }
 
-func (t *TelegramClient) handleTelegramReactions(ctx context.Context, msg *tg.Message) error {
+func (t *TelegramClient) handleTelegramReactions(ctx context.Context, msg *tg.Message) {
+	log := zerolog.Ctx(ctx).With().
+		Str("handler", "handle_telegram_reactions").
+		Int("message_id", msg.ID).
+		Logger()
+
 	if _, set := msg.GetReactions(); !set {
-		// fmt.Printf("no reactions\n")
-		return nil
+		log.Debug().Msg("no reactions set on message")
+		return
 	}
 	var totalCount int
 	for _, r := range msg.Reactions.Results {
@@ -276,8 +276,8 @@ func (t *TelegramClient) handleTelegramReactions(ctx context.Context, msg *tg.Me
 	reactionsList := msg.Reactions.RecentReactions
 	if totalCount > 0 && len(reactionsList) == 0 && !msg.Reactions.CanSeeList {
 		// We don't know who reacted in a channel, so we can't bridge it properly either
-		zerolog.Ctx(ctx).Warn().Int("message_id", msg.ID).Msg("Can't see reaction list in channel")
-		return nil
+		log.Warn().Msg("Can't see reaction list in channel")
+		return
 	}
 
 	// TODO
@@ -288,9 +288,11 @@ func (t *TelegramClient) handleTelegramReactions(ctx context.Context, msg *tg.Me
 
 	dbMsg, err := t.main.Bridge.DB.Message.GetFirstPartByID(ctx, t.loginID, ids.MakeMessageID(msg.ID))
 	if err != nil {
-		return err
+		log.Err(err).Msg("failed to get message from database")
+		return
 	} else if dbMsg == nil {
-		return fmt.Errorf("no message found with ID %d", msg.ID)
+		log.Warn().Msg("no message found in database")
+		return
 	}
 
 	if len(reactionsList) < totalCount {
@@ -304,13 +306,15 @@ func (t *TelegramClient) handleTelegramReactions(ctx context.Context, msg *tg.Me
 
 			// TODO should calls to this be limited?
 		} else if peer, err := t.inputPeerForPortalID(ctx, ids.MakePortalKey(msg.PeerID).ID); err != nil {
-			return err
+			log.Err(err).Msg("failed to get input peer")
+			return
 		} else {
 			reactions, err := t.client.API().MessagesGetMessageReactionsList(ctx, &tg.MessagesGetMessageReactionsListRequest{
 				Peer: peer, ID: msg.ID, Limit: 100,
 			})
 			if err != nil {
-				return err
+				log.Err(err).Msg("failed to get reactions list")
+				return
 			}
 			reactionsList = reactions.Reactions
 		}
@@ -329,17 +333,22 @@ func (t *TelegramClient) handleTelegramReactions(ctx context.Context, msg *tg.Me
 		if e, ok := reaction.Reaction.(*tg.ReactionCustomEmoji); ok {
 			customEmojiIDs = append(customEmojiIDs, e.DocumentID)
 		} else if reaction.Reaction.TypeID() != tg.ReactionEmojiTypeID {
-			return fmt.Errorf("unknown reaction type %T", reaction.Reaction)
+			log.Error().Type("reaction", reaction.Reaction).Msg("unknown reaction type")
+			return
 		}
 
 		if p, ok := reaction.PeerID.(*tg.PeerUser); !ok {
-			return fmt.Errorf("reaction peer ID is not a user")
+			log.Error().Type("peer_id", reaction.PeerID).Msg("unknown peer type")
+			return
 		} else {
 			reactions[ids.MakeUserID(p.UserID)] = append(reactions[ids.MakeUserID(p.UserID)], reaction)
 		}
 	}
 
-	return t.handleTelegramParsedReactionsLocked(ctx, dbMsg, reactions, customEmojiIDs, isFull, nil, nil)
+	err = t.handleTelegramParsedReactionsLocked(ctx, dbMsg, reactions, customEmojiIDs, isFull, nil, nil)
+	if err != nil {
+		log.Err(err).Msg("failed to handle reactions")
+	}
 }
 
 func (t *TelegramClient) inputPeerForPortalID(ctx context.Context, portalID networkid.PortalID) (tg.InputPeerClass, error) {
