@@ -19,7 +19,6 @@ import (
 
 	"go.mau.fi/mautrix-telegram/pkg/connector/ids"
 	"go.mau.fi/mautrix-telegram/pkg/connector/media"
-	"go.mau.fi/mautrix-telegram/pkg/connector/msgconv"
 	"go.mau.fi/mautrix-telegram/pkg/connector/store"
 	"go.mau.fi/mautrix-telegram/pkg/connector/util"
 )
@@ -33,7 +32,6 @@ type TelegramClient struct {
 	userLogin      *bridgev2.UserLogin
 	client         *telegram.Client
 	clientCancel   context.CancelFunc
-	msgConv        *msgconv.MessageConverter
 
 	reactionMessageLocks map[int]*sync.Mutex
 
@@ -141,7 +139,6 @@ func NewTelegramClient(ctx context.Context, tc *TelegramConnector, login *bridge
 		Logger:         zaplog,
 		UpdateHandler:  updatesManager,
 	})
-	client.msgConv = msgconv.NewMessageConverter(client.client, tc.Bridge.Matrix, tc.Store, tc.Config.AnimatedSticker, tc.useDirectMedia)
 	client.clientCancel, err = connectTelegramClient(ctx, client.client)
 	client.reactionMessageLocks = map[int]*sync.Mutex{}
 	go func() {

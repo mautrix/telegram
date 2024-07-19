@@ -78,21 +78,21 @@ func (tg *TelegramConnector) ValidateConfig() error {
 
 func (tg *TelegramConnector) GetDBMetaTypes() database.MetaTypes {
 	return database.MetaTypes{
-		Ghost: func() any {
-			return &GhostMetadata{}
-		},
-		Portal:   nil,
-		Message:  nil,
-		Reaction: nil,
-		UserLogin: func() any {
-			return &UserLoginMetadata{}
-		},
+		Ghost:     func() any { return &GhostMetadata{} },
+		Portal:    nil,
+		Message:   func() any { return &MessageMetadata{} },
+		Reaction:  nil,
+		UserLogin: func() any { return &UserLoginMetadata{} },
 	}
 }
 
 type GhostMetadata struct {
 	IsPremium  bool  `json:"is_premium"`
 	AccessHash int64 `json:"access_hash"`
+}
+
+type MessageMetadata struct {
+	ContentHash []byte `json:"content_hash,omitempty"`
 }
 
 type UserLoginMetadata struct {

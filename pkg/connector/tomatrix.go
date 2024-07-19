@@ -1,7 +1,9 @@
-package msgconv
+package connector
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/binary"
 	"fmt"
 	"html"
 	"strings"
@@ -30,15 +32,81 @@ type ttlable interface {
 	GetTTLSeconds() (value int, ok bool)
 }
 
-func (mc *MessageConverter) ToMatrix(ctx context.Context, portal *bridgev2.Portal, intent bridgev2.MatrixAPI, msg *tg.Message) (*bridgev2.ConvertedMessage, error) {
+func mediaHashID(media tg.MessageMediaClass) []byte {
+	switch media := media.(type) {
+	case *tg.MessageMediaPhoto:
+		return binary.BigEndian.AppendUint64(nil, uint64(media.Photo.GetID()))
+	case *tg.MessageMediaDocument:
+		return binary.BigEndian.AppendUint64(nil, uint64(media.Document.GetID()))
+	}
+	return nil
+}
+
+func (c *TelegramClient) mediaToMatrix(ctx context.Context, portal *bridgev2.Portal, intent bridgev2.MatrixAPI, msg *tg.Message) (*bridgev2.ConvertedMessagePart, *database.DisappearingSetting, []byte, error) {
+	media, ok := msg.GetMedia()
+	if !ok {
+		return nil, nil, nil, nil
+	}
+
+	switch media.TypeID() {
+	case tg.MessageMediaWebPageTypeID:
+		// Already handled in the message handling
+		return nil, nil, nil, nil
+	case tg.MessageMediaUnsupportedTypeID:
+		return &bridgev2.ConvertedMessagePart{
+			ID:   networkid.PartID("unsupported_media"),
+			Type: event.EventMessage,
+			Content: &event.MessageEventContent{
+				MsgType: event.MsgNotice,
+				Body:    "This message is not supported on your version of Mautrix-Telegram. Please check https://github.com/mautrix/telegram or ask your bridge administrator about possible updates.",
+			},
+			Extra: map[string]any{
+				"fi.mau.telegram.unsupported": true,
+			},
+		}, nil, nil, nil
+	case tg.MessageMediaPhotoTypeID, tg.MessageMediaDocumentTypeID:
+		converted, disappearingSetting, err := c.convertMediaRequiringUpload(ctx, portal, intent, msg.ID, media)
+		return converted, disappearingSetting, mediaHashID(media), err
+	case tg.MessageMediaContactTypeID:
+		return c.convertContact(media), nil, nil, nil
+	case tg.MessageMediaGeoTypeID, tg.MessageMediaGeoLiveTypeID, tg.MessageMediaVenueTypeID:
+		location, err := convertLocation(media)
+		return location, nil, nil, err
+	case tg.MessageMediaPollTypeID:
+		return convertPoll(media), nil, nil, nil
+	case tg.MessageMediaDiceTypeID:
+		return convertDice(media), nil, nil, nil
+	case tg.MessageMediaGameTypeID:
+		return convertGame(media), nil, nil, nil
+	case tg.MessageMediaStoryTypeID, tg.MessageMediaInvoiceTypeID, tg.MessageMediaGiveawayTypeID, tg.MessageMediaGiveawayResultsTypeID:
+		// TODO: support these properly
+		return &bridgev2.ConvertedMessagePart{
+			ID:   networkid.PartID("story"),
+			Type: event.EventMessage,
+			Content: &event.MessageEventContent{
+				MsgType: event.MsgNotice,
+				Body:    fmt.Sprintf("%s are not yet supported. Open Telegram to view.", media.TypeName()),
+			},
+			Extra: map[string]any{
+				"fi.mau.telegram.unsupported": true,
+				"fi.mau.telegram.type_id":     media.TypeID(),
+			},
+		}, nil, nil, nil
+	default:
+		return nil, nil, nil, fmt.Errorf("unsupported media type %T", media)
+	}
+}
+
+func (c *TelegramClient) convertToMatrix(ctx context.Context, portal *bridgev2.Portal, intent bridgev2.MatrixAPI, msg *tg.Message) (*bridgev2.ConvertedMessage, error) {
 	log := zerolog.Ctx(ctx).With().Str("conversion_direction", "to_matrix").Logger()
 	ctx = log.WithContext(ctx)
 
 	cm := &bridgev2.ConvertedMessage{}
+	hasher := sha256.New()
 	if len(msg.Message) > 0 {
 		var linkPreviews []*event.BeeperLinkPreview
 		if media, ok := msg.GetMedia(); ok && media.TypeID() == tg.MessageMediaWebPageTypeID {
-			preview, err := mc.webpageToBeeperLinkPreview(ctx, intent, media)
+			preview, err := c.webpageToBeeperLinkPreview(ctx, intent, media)
 			if err != nil {
 				return nil, err
 			} else if preview != nil {
@@ -46,81 +114,40 @@ func (mc *MessageConverter) ToMatrix(ctx context.Context, portal *bridgev2.Porta
 			}
 		}
 
+		hasher.Write([]byte(msg.Message))
+
 		// TODO formatting
-		// TODO combine with other media
-		cm.Parts = append(cm.Parts, &bridgev2.ConvertedMessagePart{
-			ID:   networkid.PartID("caption"),
-			Type: event.EventMessage,
-			Content: &event.MessageEventContent{
-				MsgType:            event.MsgText,
-				Body:               msg.Message,
-				BeeperLinkPreviews: linkPreviews,
+		cm.Parts = []*bridgev2.ConvertedMessagePart{
+			{
+				ID:   networkid.PartID("caption"),
+				Type: event.EventMessage,
+				Content: &event.MessageEventContent{
+					MsgType:            event.MsgText,
+					Body:               msg.Message,
+					BeeperLinkPreviews: linkPreviews,
+				},
 			},
-		})
-	}
-
-	if media, ok := msg.GetMedia(); ok {
-		switch media.TypeID() {
-		case tg.MessageMediaWebPageTypeID:
-			// Already handled above
-		case tg.MessageMediaUnsupportedTypeID:
-			cm.Parts = append(cm.Parts, &bridgev2.ConvertedMessagePart{
-				ID:   networkid.PartID("unsupported_media"),
-				Type: event.EventMessage,
-				Content: &event.MessageEventContent{
-					MsgType: event.MsgNotice,
-					Body:    "This message is not supported on your version of Mautrix-Telegram. Please check https://github.com/mautrix/telegram or ask your bridge administrator about possible updates.",
-				},
-				Extra: map[string]any{
-					"fi.mau.telegram.unsupported": true,
-				},
-			})
-		case tg.MessageMediaPhotoTypeID, tg.MessageMediaDocumentTypeID:
-			mediaPart, disappearingSetting, err := mc.convertMediaRequiringUpload(ctx, portal, intent, msg.ID, media)
-			if err != nil {
-				return nil, err
-			}
-			if disappearingSetting != nil {
-				cm.Disappear = *disappearingSetting
-			}
-			cm.Parts = append(cm.Parts, mediaPart)
-		case tg.MessageMediaContactTypeID:
-			cm.Parts = append(cm.Parts, mc.convertContact(media))
-		case tg.MessageMediaGeoTypeID, tg.MessageMediaGeoLiveTypeID, tg.MessageMediaVenueTypeID:
-			location, err := mc.convertLocation(media)
-			if err != nil {
-				return nil, err
-			}
-			cm.Parts = append(cm.Parts, location)
-		case tg.MessageMediaPollTypeID:
-			cm.Parts = append(cm.Parts, mc.convertPoll(media))
-		case tg.MessageMediaDiceTypeID:
-			cm.Parts = append(cm.Parts, mc.convertDice(media))
-		case tg.MessageMediaGameTypeID:
-			cm.Parts = append(cm.Parts, mc.convertGame(media))
-
-		case tg.MessageMediaStoryTypeID, tg.MessageMediaInvoiceTypeID, tg.MessageMediaGiveawayTypeID, tg.MessageMediaGiveawayResultsTypeID:
-			// TODO: support these properly
-			cm.Parts = append(cm.Parts, &bridgev2.ConvertedMessagePart{
-				ID:   networkid.PartID("story"),
-				Type: event.EventMessage,
-				Content: &event.MessageEventContent{
-					MsgType: event.MsgNotice,
-					Body:    fmt.Sprintf("%s are not yet supported. Open Telegram to view.", media.TypeName()),
-				},
-				Extra: map[string]any{
-					"fi.mau.telegram.unsupported": true,
-					"fi.mau.telegram.type_id":     media.TypeID(),
-				},
-			})
-		default:
-			return nil, fmt.Errorf("unsupported media type %T", media)
 		}
 	}
+
+	mediaPart, disappearingSetting, mediaHashID, err := c.mediaToMatrix(ctx, portal, intent, msg)
+	if err != nil {
+		return nil, err
+	} else if mediaPart != nil {
+		hasher.Write(mediaHashID)
+		cm.Parts = append(cm.Parts, mediaPart)
+		cm.MergeCaption()
+
+		if disappearingSetting != nil {
+			cm.Disappear = *disappearingSetting
+		}
+	}
+	cm.Parts[0].DBMetadata = &MessageMetadata{ContentHash: hasher.Sum(nil)}
+
 	return cm, nil
 }
 
-func (mc *MessageConverter) webpageToBeeperLinkPreview(ctx context.Context, intent bridgev2.MatrixAPI, msgMedia tg.MessageMediaClass) (preview *event.BeeperLinkPreview, err error) {
+func (c *TelegramClient) webpageToBeeperLinkPreview(ctx context.Context, intent bridgev2.MatrixAPI, msgMedia tg.MessageMediaClass) (preview *event.BeeperLinkPreview, err error) {
 	webpage, ok := msgMedia.(*tg.MessageMediaWebPage).Webpage.(*tg.WebPage)
 	if !ok {
 		return nil, nil
@@ -136,9 +163,9 @@ func (mc *MessageConverter) webpageToBeeperLinkPreview(ctx context.Context, inte
 
 	if pc, ok := webpage.GetPhoto(); ok && pc.TypeID() == tg.PhotoTypeID {
 		var fileInfo *event.FileInfo
-		preview.ImageURL, preview.ImageEncryption, fileInfo, err = media.NewTransferer(mc.client.API()).
+		preview.ImageURL, preview.ImageEncryption, fileInfo, err = media.NewTransferer(c.client.API()).
 			WithPhoto(pc).
-			Transfer(ctx, mc.store, intent)
+			Transfer(ctx, c.main.Store, intent)
 		if err != nil {
 			return nil, err
 		}
@@ -148,7 +175,7 @@ func (mc *MessageConverter) webpageToBeeperLinkPreview(ctx context.Context, inte
 	return preview, nil
 }
 
-func (mc *MessageConverter) convertMediaRequiringUpload(ctx context.Context, portal *bridgev2.Portal, intent bridgev2.MatrixAPI, msgID int, msgMedia tg.MessageMediaClass) (*bridgev2.ConvertedMessagePart, *database.DisappearingSetting, error) {
+func (c *TelegramClient) convertMediaRequiringUpload(ctx context.Context, portal *bridgev2.Portal, intent bridgev2.MatrixAPI, msgID int, msgMedia tg.MessageMediaClass) (*bridgev2.ConvertedMessagePart, *database.DisappearingSetting, error) {
 	log := zerolog.Ctx(ctx).With().
 		Str("conversion_direction", "to_matrix").
 		Str("portal_id", string(portal.ID)).
@@ -157,10 +184,11 @@ func (mc *MessageConverter) convertMediaRequiringUpload(ctx context.Context, por
 	eventType := event.EventMessage
 	var partID networkid.PartID
 	var content event.MessageEventContent
+	var telegramMediaID int64
 	var isSticker, isAnimatedSticker bool
 	extra := map[string]any{}
 
-	transferer := media.NewTransferer(mc.client.API()).WithRoomID(portal.MXID)
+	transferer := media.NewTransferer(c.client.API()).WithRoomID(portal.MXID)
 	var mediaTransferer *media.ReadyTransferer
 
 	// Determine the filename and some other information
@@ -169,12 +197,14 @@ func (mc *MessageConverter) convertMediaRequiringUpload(ctx context.Context, por
 		partID = networkid.PartID("photo")
 		content.MsgType = event.MsgImage
 		content.Body = "image"
+		telegramMediaID = msgMedia.Photo.GetID()
 		mediaTransferer = transferer.WithPhoto(msgMedia.Photo)
 	case *tg.MessageMediaDocument:
 		document, ok := msgMedia.Document.(*tg.Document)
 		if !ok {
 			return nil, nil, fmt.Errorf("unrecognized document type %T", msgMedia.Document)
 		}
+		telegramMediaID = document.GetID()
 
 		partID = networkid.PartID("document")
 		content.MsgType = event.MsgFile
@@ -208,7 +238,7 @@ func (mc *MessageConverter) convertMediaRequiringUpload(ctx context.Context, por
 				transferer = transferer.WithImageSize(a)
 			case *tg.DocumentAttributeSticker:
 				isSticker = true
-				if mc.animatedStickerConfig.Target == "webm" {
+				if c.main.Config.AnimatedSticker.Target == "webm" {
 					content.MsgType = event.MsgVideo
 				} else {
 					eventType = event.EventSticker
@@ -238,13 +268,13 @@ func (mc *MessageConverter) convertMediaRequiringUpload(ctx context.Context, por
 				extraInfo["fi.mau.autoplay"] = true
 				extraInfo["fi.mau.hide_controls"] = true
 				extraInfo["fi.mau.no_audio"] = true
-				transferer = transferer.WithStickerConfig(mc.animatedStickerConfig)
+				transferer = transferer.WithStickerConfig(c.main.Config.AnimatedSticker)
 			case *tg.DocumentAttributeAnimated:
 				isAnimatedSticker = true
 			}
 		}
 
-		if isAnimatedSticker || (isSticker && mc.animatedStickerConfig.Target == "webm") {
+		if isAnimatedSticker || (isSticker && c.main.Config.AnimatedSticker.Target == "webm") {
 			if isAnimatedSticker {
 				extraInfo["fi.mau.telegram.gif"] = true
 			} else {
@@ -259,17 +289,17 @@ func (mc *MessageConverter) convertMediaRequiringUpload(ctx context.Context, por
 			var thumbnailInfo *event.FileInfo
 			var err error
 
-			thumbnailTransferer := media.NewTransferer(mc.client.API()).
+			thumbnailTransferer := media.NewTransferer(c.client.API()).
 				WithRoomID(portal.MXID).
 				WithDocument(document, true)
-			if mc.useDirectMedia {
-				thumbnailURL, thumbnailInfo, err = thumbnailTransferer.DirectDownloadURL(ctx, portal, msgID, true)
+			if c.main.useDirectMedia {
+				thumbnailURL, thumbnailInfo, err = thumbnailTransferer.DirectDownloadURL(ctx, portal, msgID, true, document.ID)
 				if err != nil {
 					log.Err(err).Msg("error getting direct download URL for thumbnail")
 				}
 			}
 			if thumbnailURL == "" {
-				thumbnailURL, thumbnailFile, thumbnailInfo, err = thumbnailTransferer.Transfer(ctx, mc.store, intent)
+				thumbnailURL, thumbnailFile, thumbnailInfo, err = thumbnailTransferer.Transfer(ctx, c.main.Store, intent)
 				if err != nil {
 					return nil, nil, fmt.Errorf("error transferring thumbnail: %w", err)
 				}
@@ -286,14 +316,14 @@ func (mc *MessageConverter) convertMediaRequiringUpload(ctx context.Context, por
 	}
 
 	var err error
-	if mc.useDirectMedia && (!isSticker || mc.animatedStickerConfig.Target == "disable") {
-		content.URL, content.Info, err = mediaTransferer.DirectDownloadURL(ctx, portal, msgID, false)
+	if c.main.useDirectMedia && (!isSticker || c.main.Config.AnimatedSticker.Target == "disable") {
+		content.URL, content.Info, err = mediaTransferer.DirectDownloadURL(ctx, portal, msgID, false, telegramMediaID)
 		if err != nil {
 			log.Err(err).Msg("error getting direct download URL for media")
 		}
 	}
 	if content.URL == "" {
-		content.URL, content.File, content.Info, err = mediaTransferer.Transfer(ctx, mc.store, intent)
+		content.URL, content.File, content.Info, err = mediaTransferer.Transfer(ctx, c.main.Store, intent)
 		if err != nil {
 			return nil, nil, fmt.Errorf("error transferring media: %w", err)
 		}
@@ -337,7 +367,7 @@ func (mc *MessageConverter) convertMediaRequiringUpload(ctx context.Context, por
 	}, disappearingSetting, nil
 }
 
-func (mc *MessageConverter) convertContact(media tg.MessageMediaClass) *bridgev2.ConvertedMessagePart {
+func (c *TelegramClient) convertContact(media tg.MessageMediaClass) *bridgev2.ConvertedMessagePart {
 	contact := media.(*tg.MessageMediaContact)
 	name := util.FormatFullName(contact.FirstName, contact.LastName)
 	formattedPhone := fmt.Sprintf("+%s", strings.TrimPrefix(contact.PhoneNumber, "+"))
@@ -350,7 +380,7 @@ func (mc *MessageConverter) convertContact(media tg.MessageMediaClass) *bridgev2
 		content.Format = event.FormatHTML
 		content.FormattedBody = fmt.Sprintf(
 			`Shared contact info for <a href="https://matrix.to/#/%s">%s</a>: %s`,
-			mc.connector.GhostIntent(ids.MakeUserID(contact.UserID)).GetMXID(),
+			c.main.Bridge.Matrix.GhostIntent(ids.MakeUserID(contact.UserID)).GetMXID(),
 			html.EscapeString(name),
 			html.EscapeString(formattedPhone),
 		)
@@ -376,7 +406,7 @@ type hasGeo interface {
 	GetGeo() tg.GeoPointClass
 }
 
-func (mc *MessageConverter) convertLocation(media tg.MessageMediaClass) (*bridgev2.ConvertedMessagePart, error) {
+func convertLocation(media tg.MessageMediaClass) (*bridgev2.ConvertedMessagePart, error) {
 	g, ok := media.(hasGeo)
 	if !ok || g.GetGeo().TypeID() != tg.GeoPointTypeID {
 		return nil, fmt.Errorf("location didn't have geo or geo is wrong type")
@@ -395,7 +425,7 @@ func (mc *MessageConverter) convertLocation(media tg.MessageMediaClass) (*bridge
 	}
 
 	geo := fmt.Sprintf("%f,%f", point.Lat, point.Long)
-	geoURI := GeoURIFromLatLong(point.Lat, point.Long)
+	geoURI := GeoURIFromLatLong(point.Lat, point.Long).URI()
 	body := fmt.Sprintf("%.4f° %s, %.4f° %s", point.Lat, latChar, point.Long, longChar)
 	url := fmt.Sprintf("https://maps.google.com/?q=%s", geo)
 
@@ -412,7 +442,7 @@ func (mc *MessageConverter) convertLocation(media tg.MessageMediaClass) (*bridge
 	}
 
 	extra["org.matrix.msc3488.location"] = map[string]any{
-		"uri":         geoURI.URI(),
+		"uri":         geoURI,
 		"description": note,
 	}
 
@@ -421,7 +451,7 @@ func (mc *MessageConverter) convertLocation(media tg.MessageMediaClass) (*bridge
 		Type: event.EventMessage,
 		Content: &event.MessageEventContent{
 			MsgType:       event.MsgLocation,
-			GeoURI:        geoURI.URI(),
+			GeoURI:        geoURI,
 			Body:          fmt.Sprintf("%s: %s\n%s", note, body, url),
 			Format:        event.FormatHTML,
 			FormattedBody: fmt.Sprintf(`%s: <a href="%s">%s</a>`, note, url, body),
@@ -430,7 +460,7 @@ func (mc *MessageConverter) convertLocation(media tg.MessageMediaClass) (*bridge
 	}, nil
 }
 
-func (mc *MessageConverter) convertPoll(media tg.MessageMediaClass) *bridgev2.ConvertedMessagePart {
+func convertPoll(media tg.MessageMediaClass) *bridgev2.ConvertedMessagePart {
 	// TODO (PLAT-25224) make this richer in the future once megabridge has support for polls
 
 	poll := media.(*tg.MessageMediaPoll)
@@ -453,7 +483,7 @@ func (mc *MessageConverter) convertPoll(media tg.MessageMediaClass) *bridgev2.Co
 	}
 }
 
-func (mc *MessageConverter) convertDice(media tg.MessageMediaClass) *bridgev2.ConvertedMessagePart {
+func convertDice(media tg.MessageMediaClass) *bridgev2.ConvertedMessagePart {
 	roll := media.(*tg.MessageMediaDice)
 
 	var result string
@@ -524,7 +554,7 @@ func (mc *MessageConverter) convertDice(media tg.MessageMediaClass) *bridgev2.Co
 	}
 }
 
-func (mc *MessageConverter) convertGame(media tg.MessageMediaClass) *bridgev2.ConvertedMessagePart {
+func convertGame(media tg.MessageMediaClass) *bridgev2.ConvertedMessagePart {
 	// TODO (PLAT-25562) provide a richer experience for the game
 	game := media.(*tg.MessageMediaGame)
 	return &bridgev2.ConvertedMessagePart{

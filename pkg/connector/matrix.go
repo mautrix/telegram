@@ -2,6 +2,7 @@ package connector
 
 import (
 	"context"
+	"crypto/sha256"
 	"fmt"
 	"strconv"
 	"strings"
@@ -21,7 +22,6 @@ import (
 
 	"go.mau.fi/mautrix-telegram/pkg/connector/emojis"
 	"go.mau.fi/mautrix-telegram/pkg/connector/ids"
-	"go.mau.fi/mautrix-telegram/pkg/connector/msgconv"
 	"go.mau.fi/mautrix-telegram/pkg/connector/waveform"
 )
 
@@ -105,8 +105,8 @@ func (t *TelegramClient) HandleMatrixMessage(ctx context.Context, msg *bridgev2.
 			updates, err = builder.Media(ctx, media)
 		}
 	case event.MsgLocation:
-		var uri msgconv.GeoURI
-		uri, err = msgconv.ParseGeoURI(msg.Content.GeoURI)
+		var uri GeoURI
+		uri, err = ParseGeoURI(msg.Content.GeoURI)
 		if err != nil {
 			return nil, err
 		}
@@ -131,6 +131,9 @@ func (t *TelegramClient) HandleMatrixMessage(ctx context.Context, msg *bridgev2.
 		return nil, err
 	}
 
+	hasher := sha256.New()
+	hasher.Write([]byte(msg.Content.Body))
+
 	var tgMessageID, tgDate int
 	switch sentMessage := updates.(type) {
 	case *tg.UpdateShortSentMessage:
@@ -139,9 +142,12 @@ func (t *TelegramClient) HandleMatrixMessage(ctx context.Context, msg *bridgev2.
 	case *tg.Updates:
 		tgDate = sentMessage.Date
 		for _, u := range sentMessage.Updates {
-			if update, ok := u.(*tg.UpdateMessageID); ok {
+			switch update := u.(type) {
+			case *tg.UpdateMessageID:
 				tgMessageID = update.ID
-				break
+			case *tg.UpdateNewMessage:
+				msg := update.Message.(*tg.Message)
+				hasher.Write(mediaHashID(msg.Media))
 			}
 		}
 		if tgMessageID == 0 {
@@ -158,6 +164,7 @@ func (t *TelegramClient) HandleMatrixMessage(ctx context.Context, msg *bridgev2.
 			Room:      networkid.PortalKey{ID: msg.Portal.ID},
 			SenderID:  t.userID,
 			Timestamp: time.Unix(int64(tgDate), 0),
+			Metadata:  &MessageMetadata{ContentHash: hasher.Sum(nil)},
 		},
 	}
 	return

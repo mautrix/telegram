@@ -1,6 +1,7 @@
 package connector
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"slices"
@@ -58,7 +59,7 @@ func (t *TelegramClient) onUpdateNewMessage(ctx context.Context, update IGetMess
 			PortalKey:          ids.MakePortalKey(msg.PeerID),
 			Data:               msg,
 			CreatePortal:       true,
-			ConvertMessageFunc: t.msgConv.ToMatrix,
+			ConvertMessageFunc: t.convertToMatrix,
 			Timestamp:          time.Unix(int64(msg.Date), 0),
 		})
 	case *tg.MessageService:
@@ -209,28 +210,57 @@ func (t *TelegramClient) onEntityUpdate(ctx context.Context, e tg.Entities) erro
 }
 
 func (t *TelegramClient) onMessageEdit(ctx context.Context, update IGetMessage) error {
-	// fmt.Printf("message edit %+v\n", update)
 	msg, ok := update.GetMessage().(*tg.Message)
 	if !ok {
 		return fmt.Errorf("edit message is not *tg.Message")
 	}
 
+	// TODO do this async
 	if err := t.handleTelegramReactions(ctx, msg); err != nil {
 		return err
 	}
 
-	// t.main.Bridge.QueueRemoteEvent(t.userLogin, &bridgev2.SimpleRemoteEvent[*tg.Message]{
-	// 	Type: bridgev2.RemoteEventEdit,
-	// 	LogContext: func(c zerolog.Context) zerolog.Context {
-	// 		return c.
-	// 			Str("action", "edit message").
-	// 			Int("message_id", message.ID)
-	// 	},
-	// 	Sender:    sender,
-	// 	PortalKey: ids.MakePortalID(message.PeerID),
-	// })
+	sender := t.getEventSender(msg)
+
+	t.main.Bridge.QueueRemoteEvent(t.userLogin, &bridgev2.SimpleRemoteEvent[*tg.Message]{
+		Type: bridgev2.RemoteEventEdit,
+		LogContext: func(c zerolog.Context) zerolog.Context {
+			return c.
+				Str("action", "edit_message").
+				Str("conversion_direction", "to_matrix").
+				Int("message_id", msg.ID)
+		},
+		ID:              ids.MakeMessageID(msg.ID),
+		Sender:          sender,
+		PortalKey:       ids.MakePortalKey(msg.PeerID),
+		TargetMessage:   ids.MakeMessageID(msg.ID),
+		Data:            msg,
+		ConvertEditFunc: t.convertEdit,
+		Timestamp:       time.Unix(int64(msg.EditDate), 0),
+	})
 
 	return nil
+}
+
+func (t *TelegramClient) convertEdit(ctx context.Context, portal *bridgev2.Portal, intent bridgev2.MatrixAPI, existing []*database.Message, msg *tg.Message) (*bridgev2.ConvertedEdit, error) {
+	converted, err := t.convertToMatrix(ctx, portal, intent, msg)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(existing) != len(converted.Parts) {
+		return nil, fmt.Errorf("parts were added or removed in edit")
+	}
+
+	var ce bridgev2.ConvertedEdit
+	for i, part := range converted.Parts {
+		if bytes.Equal(existing[i].Metadata.(*MessageMetadata).ContentHash, part.DBMetadata.(*MessageMetadata).ContentHash) {
+			continue
+		}
+
+		ce.ModifiedParts = append(ce.ModifiedParts, part.ToEditPart(existing[i]))
+	}
+	return &ce, nil
 }
 
 func (t *TelegramClient) handleTelegramReactions(ctx context.Context, msg *tg.Message) error {
