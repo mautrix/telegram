@@ -20,6 +20,7 @@ import (
 
 	"go.mau.fi/mautrix-telegram/pkg/connector/ids"
 	"go.mau.fi/mautrix-telegram/pkg/connector/media"
+	"go.mau.fi/mautrix-telegram/pkg/connector/telegramfmt"
 	"go.mau.fi/mautrix-telegram/pkg/connector/util"
 	"go.mau.fi/mautrix-telegram/pkg/connector/waveform"
 )
@@ -97,35 +98,33 @@ func (c *TelegramClient) mediaToMatrix(ctx context.Context, portal *bridgev2.Por
 	}
 }
 
-func (c *TelegramClient) convertToMatrix(ctx context.Context, portal *bridgev2.Portal, intent bridgev2.MatrixAPI, msg *tg.Message) (*bridgev2.ConvertedMessage, error) {
+func (c *TelegramClient) convertToMatrix(ctx context.Context, portal *bridgev2.Portal, intent bridgev2.MatrixAPI, msg *tg.Message) (cm *bridgev2.ConvertedMessage, err error) {
 	log := zerolog.Ctx(ctx).With().Str("conversion_direction", "to_matrix").Logger()
 	ctx = log.WithContext(ctx)
 
-	cm := &bridgev2.ConvertedMessage{}
+	cm = &bridgev2.ConvertedMessage{}
 	hasher := sha256.New()
 	if len(msg.Message) > 0 {
-		var linkPreviews []*event.BeeperLinkPreview
+		hasher.Write([]byte(msg.Message))
+
+		content, err := c.parseBodyAndHTML(ctx, msg.Message, msg.Entities)
+		if err != nil {
+			return nil, err
+		}
 		if media, ok := msg.GetMedia(); ok && media.TypeID() == tg.MessageMediaWebPageTypeID {
 			preview, err := c.webpageToBeeperLinkPreview(ctx, intent, media)
 			if err != nil {
-				return nil, err
+				log.Err(err).Msg("error converting webpage to link preview")
 			} else if preview != nil {
-				linkPreviews = append(linkPreviews, preview)
+				content.BeeperLinkPreviews = append(content.BeeperLinkPreviews, preview)
 			}
 		}
 
-		hasher.Write([]byte(msg.Message))
-
-		// TODO formatting
 		cm.Parts = []*bridgev2.ConvertedMessagePart{
 			{
-				ID:   networkid.PartID("caption"),
-				Type: event.EventMessage,
-				Content: &event.MessageEventContent{
-					MsgType:            event.MsgText,
-					Body:               msg.Message,
-					BeeperLinkPreviews: linkPreviews,
-				},
+				ID:      networkid.PartID("caption"),
+				Type:    event.EventMessage,
+				Content: content,
 			},
 		}
 	}
@@ -153,7 +152,38 @@ func (c *TelegramClient) convertToMatrix(ctx context.Context, portal *bridgev2.P
 		ContentURI:  contentURI,
 	}
 
-	return cm, nil
+	if replyTo, ok := msg.GetReplyTo(); ok {
+		switch replyTo := replyTo.(type) {
+		case *tg.MessageReplyHeader:
+			cm.ReplyTo = &networkid.MessageOptionalPartID{
+				MessageID: ids.MakeMessageID(replyTo.ReplyToMsgID),
+			}
+		default:
+			log.Warn().Type("reply_to", replyTo).Msg("unhandled reply to type")
+		}
+	}
+
+	return
+}
+
+func (t *TelegramClient) parseBodyAndHTML(ctx context.Context, message string, entities []tg.MessageEntityClass) (*event.MessageEventContent, error) {
+	if len(entities) == 0 {
+		return &event.MessageEventContent{MsgType: event.MsgText, Body: message}, nil
+	}
+
+	var customEmojiIDs []int64
+	for _, entity := range entities {
+		switch entity := entity.(type) {
+		case *tg.MessageEntityCustomEmoji:
+			customEmojiIDs = append(customEmojiIDs, entity.DocumentID)
+		}
+	}
+	customEmojis, err := t.transferEmojisToMatrix(ctx, customEmojiIDs)
+	if err != nil {
+		return nil, err
+	}
+	fmt.Printf("ce %+v\n", customEmojis) // TODO DEBUG
+	return telegramfmt.Parse(ctx, message, entities, t.telegramFmtParams.WithCustomEmojis(customEmojis))
 }
 
 func (c *TelegramClient) webpageToBeeperLinkPreview(ctx context.Context, intent bridgev2.MatrixAPI, msgMedia tg.MessageMediaClass) (preview *event.BeeperLinkPreview, err error) {

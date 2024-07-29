@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -20,6 +22,7 @@ import (
 	"go.mau.fi/mautrix-telegram/pkg/connector/ids"
 	"go.mau.fi/mautrix-telegram/pkg/connector/media"
 	"go.mau.fi/mautrix-telegram/pkg/connector/store"
+	"go.mau.fi/mautrix-telegram/pkg/connector/telegramfmt"
 	"go.mau.fi/mautrix-telegram/pkg/connector/util"
 )
 
@@ -37,6 +40,8 @@ type TelegramClient struct {
 
 	appConfig     map[string]any
 	appConfigHash int
+
+	telegramFmtParams *telegramfmt.FormatParams
 }
 
 var (
@@ -77,6 +82,8 @@ func (u UpdateDispatcher) Handle(ctx context.Context, updates tg.UpdatesClass) e
 
 	return u.UpdateDispatcher.Handle(ctx, updates)
 }
+
+var messageLinkRegex = regexp.MustCompile(`^https?:\/\/t(?:elegram)?\.(?:me|dog)\/([A-Za-z][A-Za-z0-9_]{3,31}[A-Za-z0-9]|[Cc]\/[0-9]{1,20})\/([0-9]{1,20})$`)
 
 func NewTelegramClient(ctx context.Context, tc *TelegramConnector, login *bridgev2.UserLogin) (*TelegramClient, error) {
 	telegramUserID, err := ids.ParseUserLoginID(login.ID)
@@ -141,6 +148,63 @@ func NewTelegramClient(ctx context.Context, tc *TelegramConnector, login *bridge
 	})
 	client.clientCancel, err = connectTelegramClient(ctx, client.client)
 	client.reactionMessageLocks = map[int]*sync.Mutex{}
+
+	client.telegramFmtParams = &telegramfmt.FormatParams{
+		GetUserInfo: func(ctx context.Context, id networkid.UserID) (telegramfmt.UserInfo, error) {
+			ghost, err := tc.Bridge.GetGhostByID(ctx, id)
+			if err != nil {
+				return telegramfmt.UserInfo{}, err
+			}
+			userInfo := telegramfmt.UserInfo{MXID: ghost.Intent.GetMXID(), Name: ghost.Name}
+			if id == client.userID {
+				userInfo.MXID = client.userLogin.UserMXID
+			}
+			return userInfo, nil
+		},
+		NormalizeURL: func(ctx context.Context, url string) string {
+			log := zerolog.Ctx(ctx).With().
+				Str("conversion_direction", "to_matrix").
+				Str("entity_type", "url").
+				Logger()
+
+			if !strings.HasPrefix(url, "https://") && !strings.HasPrefix(url, "http://") && !strings.HasPrefix(url, "ftp://") && !strings.HasPrefix(url, "magnet://") {
+				url = "http://" + url
+			}
+
+			submatches := messageLinkRegex.FindStringSubmatch(url)
+			if len(submatches) == 0 {
+				return url
+			}
+			group := submatches[1]
+			msgID, err := strconv.Atoi(submatches[2])
+			if err != nil {
+				log.Err(err).Msg("error parsing message ID")
+				return url
+			}
+
+			var portalKey networkid.PortalKey
+			if strings.HasPrefix(group, "C/") || strings.HasPrefix(group, "c/") {
+				portalKey = networkid.PortalKey{ID: networkid.PortalID(fmt.Sprintf("%s:%s", ids.PeerTypeChannel, group[2:]))}
+			} else {
+				portalKey = networkid.PortalKey{ID: networkid.PortalID(fmt.Sprintf("%s:%s", ids.PeerTypeUser, group))}
+			}
+
+			portal, err := tc.Bridge.DB.Portal.GetByKey(ctx, portalKey)
+			if err != nil {
+				log.Err(err).Msg("error getting portal")
+				return url
+			}
+
+			message, err := tc.Bridge.DB.Message.GetFirstPartByID(ctx, client.loginID, ids.MakeMessageID(msgID))
+			if err != nil {
+				log.Err(err).Msg("error getting message")
+				return url
+			}
+
+			return fmt.Sprintf("https://matrix.to/#/%s/%s", portal.MXID, message.MXID)
+		},
+	}
+
 	go func() {
 		err = updatesManager.Run(ctx, client.client.API(), telegramUserID, updates.AuthOptions{})
 		if err != nil {

@@ -225,37 +225,31 @@ func (t *TelegramClient) onMessageEdit(ctx context.Context, update IGetMessage) 
 				Str("conversion_direction", "to_matrix").
 				Int("message_id", msg.ID)
 		},
-		ID:              ids.MakeMessageID(msg.ID),
-		Sender:          sender,
-		PortalKey:       ids.MakePortalKey(msg.PeerID),
-		TargetMessage:   ids.MakeMessageID(msg.ID),
-		Data:            msg,
-		ConvertEditFunc: t.convertEdit,
-		Timestamp:       time.Unix(int64(msg.EditDate), 0),
+		ID:            ids.MakeMessageID(msg.ID),
+		Sender:        sender,
+		PortalKey:     ids.MakePortalKey(msg.PeerID),
+		TargetMessage: ids.MakeMessageID(msg.ID),
+		Data:          msg,
+		Timestamp:     time.Unix(int64(msg.EditDate), 0),
+		ConvertEditFunc: func(ctx context.Context, portal *bridgev2.Portal, intent bridgev2.MatrixAPI, existing []*database.Message, data *tg.Message) (*bridgev2.ConvertedEdit, error) {
+			converted, err := t.convertToMatrix(ctx, portal, intent, msg)
+			if err != nil {
+				return nil, err
+			} else if len(existing) != len(converted.Parts) {
+				return nil, fmt.Errorf("parts were added or removed in edit")
+			}
+
+			var ce bridgev2.ConvertedEdit
+			for i, part := range converted.Parts {
+				if !bytes.Equal(existing[i].Metadata.(*MessageMetadata).ContentHash, part.DBMetadata.(*MessageMetadata).ContentHash) {
+					ce.ModifiedParts = append(ce.ModifiedParts, part.ToEditPart(existing[i]))
+				}
+			}
+			return &ce, nil
+		},
 	})
 
 	return nil
-}
-
-func (t *TelegramClient) convertEdit(ctx context.Context, portal *bridgev2.Portal, intent bridgev2.MatrixAPI, existing []*database.Message, msg *tg.Message) (*bridgev2.ConvertedEdit, error) {
-	converted, err := t.convertToMatrix(ctx, portal, intent, msg)
-	if err != nil {
-		return nil, err
-	}
-
-	if len(existing) != len(converted.Parts) {
-		return nil, fmt.Errorf("parts were added or removed in edit")
-	}
-
-	var ce bridgev2.ConvertedEdit
-	for i, part := range converted.Parts {
-		if bytes.Equal(existing[i].Metadata.(*MessageMetadata).ContentHash, part.DBMetadata.(*MessageMetadata).ContentHash) {
-			continue
-		}
-
-		ce.ModifiedParts = append(ce.ModifiedParts, part.ToEditPart(existing[i]))
-	}
-	return &ce, nil
 }
 
 func (t *TelegramClient) handleTelegramReactions(ctx context.Context, msg *tg.Message) {
@@ -436,22 +430,24 @@ func (t *TelegramClient) getReactionLimit(ctx context.Context, sender networkid.
 func (t *TelegramClient) transferEmojisToMatrix(ctx context.Context, customEmojiIDs []int64) (result map[networkid.EmojiID]string, err error) {
 	result, customEmojiIDs = emojis.ConvertKnownEmojis(customEmojiIDs)
 
-	if len(customEmojiIDs) > 0 {
-		customEmojiDocuments, err := t.client.API().MessagesGetCustomEmojiDocuments(ctx, customEmojiIDs)
+	if len(customEmojiIDs) == 0 {
+		return
+	}
+
+	customEmojiDocuments, err := t.client.API().MessagesGetCustomEmojiDocuments(ctx, customEmojiIDs)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, customEmojiDocument := range customEmojiDocuments {
+		mxcURI, _, _, err := media.NewTransferer(t.client.API()).
+			WithStickerConfig(t.main.Config.AnimatedSticker).
+			WithDocument(customEmojiDocument, false).
+			Transfer(ctx, t.main.Store, t.main.Bridge.Bot)
 		if err != nil {
 			return nil, err
 		}
-
-		for _, customEmojiDocument := range customEmojiDocuments {
-			mxcURI, _, _, err := media.NewTransferer(t.client.API()).
-				WithStickerConfig(t.main.Config.AnimatedSticker).
-				WithDocument(customEmojiDocument, false).
-				Transfer(ctx, t.main.Store, t.main.Bridge.Bot)
-			if err != nil {
-				return nil, err
-			}
-			result[ids.MakeEmojiIDFromDocumentID(customEmojiDocument.GetID())] = string(mxcURI)
-		}
+		result[ids.MakeEmojiIDFromDocumentID(customEmojiDocument.GetID())] = string(mxcURI)
 	}
 	return
 }

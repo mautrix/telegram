@@ -9,6 +9,7 @@ require (
 	go.mau.fi/util v0.6.0
 	go.mau.fi/zerozap v0.1.1
 	go.uber.org/zap v1.27.0
+	golang.org/x/exp v0.0.0-20240716175740-e3f259677ff7
 	maunium.net/go/mautrix v0.19.1-0.20240719130542-cc5f225bc61c
 )
 
@@ -43,7 +44,6 @@ require (
 	go.uber.org/atomic v1.11.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	golang.org/x/crypto v0.25.0 // indirect
-	golang.org/x/exp v0.0.0-20240716175740-e3f259677ff7 // indirect
 	golang.org/x/net v0.27.0 // indirect
 	golang.org/x/sync v0.7.0 // indirect
 	golang.org/x/sys v0.22.0 // indirect
