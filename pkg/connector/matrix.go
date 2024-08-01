@@ -4,13 +4,12 @@ import (
 	"context"
 	"crypto/sha256"
 	"fmt"
+	"math/rand"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/gotd/td/telegram/message"
-	"github.com/gotd/td/telegram/message/html"
-	"github.com/gotd/td/telegram/message/styling"
 	"github.com/gotd/td/telegram/uploader"
 	"github.com/gotd/td/tg"
 	"github.com/rs/zerolog"
@@ -24,20 +23,57 @@ import (
 
 	"go.mau.fi/mautrix-telegram/pkg/connector/emojis"
 	"go.mau.fi/mautrix-telegram/pkg/connector/ids"
+	"go.mau.fi/mautrix-telegram/pkg/connector/matrixfmt"
 	"go.mau.fi/mautrix-telegram/pkg/connector/waveform"
 )
 
-func getMediaFilenameAndCaption(content *event.MessageEventContent) (filename, caption string) {
+func getMediaFilename(content *event.MessageEventContent) string {
 	if content.FileName != "" {
-		filename = content.FileName
-		caption = content.FormattedBody
-		if caption == "" {
-			caption = content.Body
-		}
+		return content.FileName
 	} else {
-		filename = content.Body
+		return content.Body
 	}
-	return
+}
+
+func (t *TelegramClient) transferMediaToTelegram(ctx context.Context, content *event.MessageEventContent) (tg.InputMediaClass, error) {
+	filename := getMediaFilename(content)
+	var fileData []byte
+	fileData, err := t.main.Bridge.Bot.DownloadMedia(ctx, content.URL, content.File)
+	if err != nil {
+		return nil, fmt.Errorf("failed to download media from Matrix: %w", err)
+	}
+	uploader := uploader.NewUploader(t.client.API())
+	var upload tg.InputFileClass
+	upload, err = uploader.FromBytes(ctx, filename, fileData)
+	if err != nil {
+		return nil, fmt.Errorf("failed to upload media to Telegram: %w", err)
+	}
+
+	if content.MsgType == event.MsgImage {
+		return &tg.InputMediaUploadedPhoto{File: upload}, nil
+	}
+
+	var attributes []tg.DocumentAttributeClass
+	attributes = append(attributes, &tg.DocumentAttributeFilename{FileName: filename})
+
+	if content.MsgType == event.MsgAudio {
+		audioAttr := tg.DocumentAttributeAudio{
+			Voice: content.MSC3245Voice != nil,
+		}
+		if content.MSC1767Audio != nil {
+			audioAttr.Duration = content.MSC1767Audio.Duration / 1000
+			if len(content.MSC1767Audio.Waveform) > 0 {
+				audioAttr.Waveform = waveform.Encode(content.MSC1767Audio.Waveform)
+			}
+		}
+		attributes = append(attributes, &audioAttr)
+	}
+
+	return &tg.InputMediaUploadedDocument{
+		File:       upload,
+		MimeType:   content.Info.MimeType,
+		Attributes: attributes,
+	}, nil
 }
 
 func (t *TelegramClient) HandleMatrixMessage(ctx context.Context, msg *bridgev2.MatrixMessage) (resp *bridgev2.MatrixMessageResponse, err error) {
@@ -45,94 +81,71 @@ func (t *TelegramClient) HandleMatrixMessage(ctx context.Context, msg *bridgev2.
 	if err != nil {
 		return nil, err
 	}
-	builder := message.NewSender(t.client.API()).To(peer)
 
 	var contentURI id.ContentURIString
 	// TODO handle sticker
 
+	noWebpage := msg.Content.BeeperLinkPreviews != nil && len(msg.Content.BeeperLinkPreviews) == 0
+
+	message, entities := matrixfmt.Parse(ctx, &matrixfmt.HTMLParser{
+		ParseGhostMXID: t.main.Bridge.Matrix.ParseGhostMXID,
+	}, msg.Content)
+
+	var replyTo tg.InputReplyToClass
+	if msg.ReplyTo != nil {
+		messageID, err := ids.ParseMessageID(msg.ReplyTo.ID)
+		if err != nil {
+			return nil, err
+		}
+		replyTo = &tg.InputReplyToMessage{ReplyToMsgID: messageID}
+	}
+
 	var updates tg.UpdatesClass
 	switch msg.Content.MsgType {
-	case event.MsgText:
-		// TODO unify with edits?
-		if msg.Content.BeeperLinkPreviews != nil && len(msg.Content.BeeperLinkPreviews) == 0 {
-			builder.NoWebpage()
-		}
-		updates, err = builder.Text(ctx, msg.Content.Body)
+	case event.MsgText, event.MsgNotice:
+		updates, err = t.client.API().MessagesSendMessage(ctx, &tg.MessagesSendMessageRequest{
+			Peer:      peer,
+			NoWebpage: noWebpage,
+			Message:   message,
+			Entities:  entities,
+			ReplyTo:   replyTo,
+			RandomID:  rand.Int63(),
+		})
 	case event.MsgImage, event.MsgFile, event.MsgAudio, event.MsgVideo:
-		filename, caption := getMediaFilenameAndCaption(msg.Content)
-
-		var fileData []byte
-		fileData, err = t.main.Bridge.Bot.DownloadMedia(ctx, msg.Content.URL, msg.Content.File)
+		var media tg.InputMediaClass
+		media, err = t.transferMediaToTelegram(ctx, msg.Content)
 		if err != nil {
-			return nil, fmt.Errorf("failed to download media from Matrix: %w", err)
+			return nil, err
 		}
-		contentURI = msg.Content.URL
-		if contentURI == "" {
-			contentURI = msg.Content.File.URL
-		}
-
-		uploader := uploader.NewUploader(t.client.API())
-		var upload tg.InputFileClass
-		upload, err = uploader.FromBytes(ctx, filename, fileData)
-		if err != nil {
-			return nil, fmt.Errorf("failed to upload media to Telegram: %w", err)
-		}
-		var styling []styling.StyledTextOption
-		if caption != "" {
-			// TODO resolver?
-			// TODO HTML
-			styling = append(styling, html.String(nil, caption))
-		}
-
-		if msg.Content.MsgType == event.MsgImage {
-			updates, err = builder.Media(ctx, message.UploadedPhoto(upload, styling...))
-			break
-		} else {
-			document := message.UploadedDocument(upload, styling...).Filename(filename)
-			if msg.Content.Info != nil {
-				document.MIME(msg.Content.Info.MimeType)
-			}
-
-			var media message.MediaOption
-
-			switch msg.Content.MsgType {
-			case event.MsgAudio:
-				audioBuilder := document.Audio()
-				if msg.Content.MSC1767Audio != nil {
-					audioBuilder.Duration(time.Duration(msg.Content.MSC1767Audio.Duration) * time.Millisecond)
-					if len(msg.Content.MSC1767Audio.Waveform) > 0 {
-						audioBuilder.Waveform(waveform.Encode(msg.Content.MSC1767Audio.Waveform))
-					}
-				}
-				if msg.Content.MSC3245Voice != nil {
-					audioBuilder.Voice()
-				}
-				media = audioBuilder
-			default:
-				media = document
-			}
-			updates, err = builder.Media(ctx, media)
-		}
+		updates, err = t.client.API().MessagesSendMedia(ctx, &tg.MessagesSendMediaRequest{
+			Peer:     peer,
+			Message:  message,
+			Entities: entities,
+			Media:    media,
+			ReplyTo:  replyTo,
+			RandomID: rand.Int63(),
+		})
 	case event.MsgLocation:
 		var uri GeoURI
 		uri, err = ParseGeoURI(msg.Content.GeoURI)
 		if err != nil {
 			return nil, err
 		}
-		var styling []styling.StyledTextOption
+		message = ""
 		if location, ok := msg.Event.Content.Raw["org.matrix.msc3488.location"].(map[string]any); ok {
 			if desc, ok := location["description"].(string); ok {
-				// TODO resolver?
-				// TODO HTML
-				styling = append(styling, html.String(nil, desc))
+				message = desc
 			}
 		}
-		updates, err = builder.Media(ctx, message.Media(&tg.InputMediaGeoPoint{
-			GeoPoint: &tg.InputGeoPoint{
-				Lat:  uri.Lat,
-				Long: uri.Long,
+		updates, err = t.client.API().MessagesSendMedia(ctx, &tg.MessagesSendMediaRequest{
+			Peer:    peer,
+			Message: message,
+			Media: &tg.InputMediaGeoPoint{
+				GeoPoint: &tg.InputGeoPoint{Lat: uri.Lat, Long: uri.Long},
 			},
-		}, styling...))
+			ReplyTo:  replyTo,
+			RandomID: rand.Int63(),
+		})
 	default:
 		return nil, fmt.Errorf("unsupported message type %s", msg.Content.MsgType)
 	}
@@ -194,88 +207,41 @@ func (t *TelegramClient) HandleMatrixEdit(ctx context.Context, msg *bridgev2.Mat
 		return err
 	}
 
-	b := message.NewSender(t.client.API()).To(peer)
-	if msg.Content.MsgType == event.MsgText && msg.Content.BeeperLinkPreviews != nil && len(msg.Content.BeeperLinkPreviews) == 0 {
-		b.NoWebpage()
-	}
-
 	targetID, err := ids.ParseMessageID(msg.EditTarget.ID)
 	if err != nil {
 		return err
 	}
-	builder := b.Edit(targetID)
+
+	message, entities := matrixfmt.Parse(ctx, &matrixfmt.HTMLParser{
+		ParseGhostMXID: t.main.Bridge.Matrix.ParseGhostMXID,
+	}, msg.Content)
 
 	var newContentURI id.ContentURIString
-	var updates tg.UpdatesClass
-	switch msg.Content.MsgType {
-	case event.MsgText:
-		updates, err = builder.Text(ctx, msg.Content.Body)
-	case event.MsgImage, event.MsgFile, event.MsgAudio, event.MsgVideo:
-		filename, caption := getMediaFilenameAndCaption(msg.Content)
-
-		var styling []styling.StyledTextOption
-		if caption != "" {
-			// TODO resolver?
-			// TODO HTML
-			styling = append(styling, html.String(nil, caption))
-		}
-
+	req := tg.MessagesEditMessageRequest{
+		Peer:      peer,
+		NoWebpage: msg.Content.BeeperLinkPreviews != nil && len(msg.Content.BeeperLinkPreviews) == 0,
+		Message:   message,
+		Entities:  entities,
+		ID:        targetID,
+	}
+	if msg.Content.MsgType.IsMedia() {
 		newContentURI = msg.Content.URL
 		if newContentURI == "" {
 			newContentURI = msg.Content.File.URL
 		}
 		if msg.EditTarget.Metadata.(*MessageMetadata).ContentURI == newContentURI {
 			log.Info().Msg("media URI unchanged, skipping re-upload, just editing text")
-			updates, err = builder.StyledText(ctx, styling...)
-			break
-		}
-
-		log.Info().Msg("media URI changed, re-uploading media")
-
-		var fileData []byte
-		fileData, err = t.main.Bridge.Bot.DownloadMedia(ctx, msg.Content.URL, msg.Content.File)
-		if err != nil {
-			return fmt.Errorf("failed to download media from Matrix: %w", err)
-		}
-		uploader := uploader.NewUploader(t.client.API())
-		var upload tg.InputFileClass
-		upload, err = uploader.FromBytes(ctx, filename, fileData)
-		if err != nil {
-			return fmt.Errorf("failed to upload media to Telegram: %w", err)
-		}
-
-		if msg.Content.MsgType == event.MsgImage {
-			updates, err = builder.Media(ctx, message.UploadedPhoto(upload, styling...))
-			break
 		} else {
-			document := message.UploadedDocument(upload, styling...).Filename(filename)
-			if msg.Content.Info != nil {
-				document.MIME(msg.Content.Info.MimeType)
+			log.Info().Msg("media URI changed, re-uploading media")
+			req.Media, err = t.transferMediaToTelegram(ctx, msg.Content)
+			if err != nil {
+				return err
 			}
-
-			var media message.MediaOption
-
-			switch msg.Content.MsgType {
-			case event.MsgAudio:
-				audioBuilder := document.Audio()
-				if msg.Content.MSC1767Audio != nil {
-					audioBuilder.Duration(time.Duration(msg.Content.MSC1767Audio.Duration) * time.Millisecond)
-					if len(msg.Content.MSC1767Audio.Waveform) > 0 {
-						audioBuilder.Waveform(waveform.Encode(msg.Content.MSC1767Audio.Waveform))
-					}
-				}
-				if msg.Content.MSC3245Voice != nil {
-					audioBuilder.Voice()
-				}
-				media = audioBuilder
-			default:
-				media = document
-			}
-			updates, err = builder.Media(ctx, media)
 		}
-	default:
-		return fmt.Errorf("unsupported message type %s", msg.Content.MsgType)
+	} else if !msg.Content.MsgType.IsText() {
+		return fmt.Errorf("editing message type %s is unsupported", msg.Content.MsgType)
 	}
+	updates, err := t.client.API().MessagesEditMessage(ctx, &req)
 	if err != nil {
 		return err
 	}
