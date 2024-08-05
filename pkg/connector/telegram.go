@@ -42,22 +42,24 @@ func (t *TelegramClient) onUpdateNewMessage(ctx context.Context, update IGetMess
 			log.Info().Int64("user_id", contact.UserID).Msg("received contact")
 		}
 
-		t.main.Bridge.QueueRemoteEvent(t.userLogin, &bridgev2.SimpleRemoteEvent[*tg.Message]{
-			Type: bridgev2.RemoteEventMessage,
-			LogContext: func(c zerolog.Context) zerolog.Context {
-				return c.
-					Int("message_id", msg.GetID()).
-					Str("sender", string(sender.Sender)).
-					Str("sender_login", string(sender.SenderLogin)).
-					Bool("is_from_me", sender.IsFromMe)
+		t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.Message[*tg.Message]{
+			EventMeta: simplevent.EventMeta{
+				Type: bridgev2.RemoteEventMessage,
+				LogContext: func(c zerolog.Context) zerolog.Context {
+					return c.
+						Int("message_id", msg.GetID()).
+						Str("sender", string(sender.Sender)).
+						Str("sender_login", string(sender.SenderLogin)).
+						Bool("is_from_me", sender.IsFromMe)
+				},
+				Sender:       sender,
+				PortalKey:    ids.MakePortalKey(msg.PeerID),
+				CreatePortal: true,
+				Timestamp:    time.Unix(int64(msg.Date), 0),
 			},
 			ID:                 ids.MakeMessageID(msg.ID),
-			Sender:             sender,
-			PortalKey:          ids.MakePortalKey(msg.PeerID),
 			Data:               msg,
-			CreatePortal:       true,
 			ConvertMessageFunc: t.convertToMatrix,
-			Timestamp:          time.Unix(int64(msg.Date), 0),
 		})
 	case *tg.MessageService:
 		// fmt.Printf("message service\n")
@@ -162,15 +164,17 @@ func (t *TelegramClient) onDeleteMessages(ctx context.Context, update IGetMessag
 		if len(parts) == 0 {
 			return fmt.Errorf("no parts found for message %d", messageID)
 		}
-		t.main.Bridge.QueueRemoteEvent(t.userLogin, &bridgev2.SimpleRemoteEvent[any]{
-			Type: bridgev2.RemoteEventMessageRemove,
-			LogContext: func(c zerolog.Context) zerolog.Context {
-				return c.
-					Str("action", "delete message").
-					Int("message_id", messageID)
+		t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.MessageRemove{
+			EventMeta: simplevent.EventMeta{
+				Type: bridgev2.RemoteEventMessageRemove,
+				LogContext: func(c zerolog.Context) zerolog.Context {
+					return c.
+						Str("action", "delete message").
+						Int("message_id", messageID)
+				},
+				PortalKey:    parts[0].Room,
+				CreatePortal: false,
 			},
-			PortalKey:     parts[0].Room,
-			CreatePortal:  false,
 			TargetMessage: ids.MakeMessageID(messageID),
 		})
 	}
@@ -216,20 +220,22 @@ func (t *TelegramClient) onMessageEdit(ctx context.Context, update IGetMessage) 
 
 	sender := t.getEventSender(msg)
 
-	t.main.Bridge.QueueRemoteEvent(t.userLogin, &bridgev2.SimpleRemoteEvent[*tg.Message]{
-		Type: bridgev2.RemoteEventEdit,
-		LogContext: func(c zerolog.Context) zerolog.Context {
-			return c.
-				Str("action", "edit_message").
-				Str("conversion_direction", "to_matrix").
-				Int("message_id", msg.ID)
+	t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.Message[*tg.Message]{
+		EventMeta: simplevent.EventMeta{
+			Type: bridgev2.RemoteEventEdit,
+			LogContext: func(c zerolog.Context) zerolog.Context {
+				return c.
+					Str("action", "edit_message").
+					Str("conversion_direction", "to_matrix").
+					Int("message_id", msg.ID)
+			},
+			Sender:    sender,
+			PortalKey: ids.MakePortalKey(msg.PeerID),
+			Timestamp: time.Unix(int64(msg.EditDate), 0),
 		},
 		ID:            ids.MakeMessageID(msg.ID),
-		Sender:        sender,
-		PortalKey:     ids.MakePortalKey(msg.PeerID),
 		TargetMessage: ids.MakeMessageID(msg.ID),
 		Data:          msg,
-		Timestamp:     time.Unix(int64(msg.EditDate), 0),
 		ConvertEditFunc: func(ctx context.Context, portal *bridgev2.Portal, intent bridgev2.MatrixAPI, existing []*database.Message, data *tg.Message) (*bridgev2.ConvertedEdit, error) {
 			converted, err := t.convertToMatrix(ctx, portal, intent, msg)
 			if err != nil {
@@ -376,7 +382,7 @@ func (t *TelegramClient) handleTelegramReactions(ctx context.Context, msg *tg.Me
 		EventMeta: simplevent.EventMeta{
 			Type: bridgev2.RemoteEventReactionSync,
 			LogContext: func(c zerolog.Context) zerolog.Context {
-				return c.Str("message_id", string(msg.ID))
+				return c.Int("message_id", msg.ID)
 			},
 			PortalKey: dbMsg.Room,
 		},
