@@ -1,4 +1,4 @@
--- v0 -> v1: Latest revision
+-- v0 -> v2: Latest revision
 
 CREATE TABLE telegram_session (
     user_id      INTEGER PRIMARY KEY,
@@ -37,3 +37,5 @@ CREATE TABLE telegram_file (
     mime_type TEXT,
     size      BIGINT
 );
+
+CREATE INDEX idx_ghost_username ON ghost ((metadata->>'username'));

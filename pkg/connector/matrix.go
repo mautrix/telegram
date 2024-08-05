@@ -87,9 +87,7 @@ func (t *TelegramClient) HandleMatrixMessage(ctx context.Context, msg *bridgev2.
 
 	noWebpage := msg.Content.BeeperLinkPreviews != nil && len(msg.Content.BeeperLinkPreviews) == 0
 
-	message, entities := matrixfmt.Parse(ctx, &matrixfmt.HTMLParser{
-		ParseGhostMXID: t.main.Bridge.Matrix.ParseGhostMXID,
-	}, msg.Content)
+	message, entities := matrixfmt.Parse(ctx, t.matrixParser, msg.Content)
 
 	var replyTo tg.InputReplyToClass
 	if msg.ReplyTo != nil {
@@ -212,9 +210,7 @@ func (t *TelegramClient) HandleMatrixEdit(ctx context.Context, msg *bridgev2.Mat
 		return err
 	}
 
-	message, entities := matrixfmt.Parse(ctx, &matrixfmt.HTMLParser{
-		ParseGhostMXID: t.main.Bridge.Matrix.ParseGhostMXID,
-	}, msg.Content)
+	message, entities := matrixfmt.Parse(ctx, t.matrixParser, msg.Content)
 
 	var newContentURI id.ContentURIString
 	req := tg.MessagesEditMessageRequest{

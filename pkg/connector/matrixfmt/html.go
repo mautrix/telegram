@@ -243,7 +243,7 @@ func (ctx Context) WithWhitespace() Context {
 
 // HTMLParser is a somewhat customizable Matrix HTML parser.
 type HTMLParser struct {
-	ParseGhostMXID func(id.UserID) (networkid.UserID, bool)
+	GetGhostDetails func(context.Context, id.UserID) (networkid.UserID, string, int64, bool)
 }
 
 // TaggedString is a string that also contains a HTML tag.
@@ -367,11 +367,14 @@ func (parser *HTMLParser) linkToString(node *html.Node, ctx Context) *EntityStri
 			// Mention not allowed, use name as-is
 			return str
 		}
-		userID, ok := parser.ParseGhostMXID(mxid)
+		userID, username, accessHash, ok := parser.GetGhostDetails(ctx.Ctx, mxid)
 		if !ok {
 			return str
+		} else if username == "" {
+			return ent.Format(telegramfmt.Mention{UserID: userID, AccessHash: accessHash})
+		} else {
+			return NewEntityString("@" + username).Format(telegramfmt.Mention{UserID: userID, Username: username})
 		}
-		return ent.Format(telegramfmt.Mention{UserID: userID})
 	}
 	if str.String.String() == href {
 		return ent.Format(telegramfmt.Style{Type: telegramfmt.StyleURL, URL: href})

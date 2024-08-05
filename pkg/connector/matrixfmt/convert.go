@@ -29,11 +29,15 @@ import (
 func toTelegramEntity(br telegramfmt.BodyRange) tg.MessageEntityClass {
 	switch val := br.Value.(type) {
 	case telegramfmt.Mention:
-		userID, _ := ids.ParseUserID(val.UserID)
-		return &tg.MessageEntityMentionName{
-			Offset: br.Start,
-			Length: br.Length,
-			UserID: userID,
+		if val.Username != "" {
+			return &tg.MessageEntityMention{Offset: br.Start, Length: br.Length}
+		} else {
+			userID, _ := ids.ParseUserID(val.UserID)
+			return &tg.InputMessageEntityMentionName{
+				Offset: br.Start,
+				Length: br.Length,
+				UserID: &tg.InputUser{UserID: userID, AccessHash: val.AccessHash},
+			}
 		}
 	case telegramfmt.Style:
 		switch val.Type {
@@ -92,12 +96,12 @@ func Parse(ctx context.Context, parser *HTMLParser, content *event.MessageEventC
 	if parsed == nil {
 		return "", nil
 	}
-	var bodyRanges []tg.MessageEntityClass
+	var entities []tg.MessageEntityClass
 	if len(parsed.Entities) > 0 {
-		bodyRanges = make([]tg.MessageEntityClass, len(parsed.Entities))
+		entities = make([]tg.MessageEntityClass, len(parsed.Entities))
 		for i, ent := range parsed.Entities {
-			bodyRanges[i] = toTelegramEntity(ent)
+			entities[i] = toTelegramEntity(ent)
 		}
 	}
-	return parsed.String.String(), bodyRanges
+	return parsed.String.String(), entities
 }

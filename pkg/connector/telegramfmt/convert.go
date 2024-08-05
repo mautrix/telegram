@@ -18,11 +18,11 @@ package telegramfmt
 
 import (
 	"context"
-	"fmt"
 	"html"
 	"strings"
 
 	"github.com/gotd/td/tg"
+	"github.com/rs/zerolog"
 	"golang.org/x/exp/maps"
 	"maunium.net/go/mautrix/bridgev2/networkid"
 	"maunium.net/go/mautrix/event"
@@ -37,9 +37,10 @@ type UserInfo struct {
 }
 
 type FormatParams struct {
-	CustomEmojis map[networkid.EmojiID]string
-	GetUserInfo  func(ctx context.Context, id networkid.UserID) (UserInfo, error)
-	NormalizeURL func(ctx context.Context, url string) string
+	CustomEmojis          map[networkid.EmojiID]string
+	GetUserInfoByUsername func(ctx context.Context, username string) (UserInfo, error)
+	GetUserInfoByID       func(ctx context.Context, id int64) (UserInfo, error)
+	NormalizeURL          func(ctx context.Context, url string) string
 }
 
 func (fp FormatParams) GetCustomEmoji(emojiID networkid.EmojiID) (string, id.ContentURIString) {
@@ -52,9 +53,10 @@ func (fp FormatParams) GetCustomEmoji(emojiID networkid.EmojiID) (string, id.Con
 
 func (fp FormatParams) WithCustomEmojis(emojis map[networkid.EmojiID]string) FormatParams {
 	return FormatParams{
-		CustomEmojis: emojis,
-		GetUserInfo:  fp.GetUserInfo,
-		NormalizeURL: fp.NormalizeURL,
+		CustomEmojis:          emojis,
+		GetUserInfoByUsername: fp.GetUserInfoByUsername,
+		GetUserInfoByID:       fp.GetUserInfoByID,
+		NormalizeURL:          fp.NormalizeURL,
 	}
 }
 
@@ -70,6 +72,7 @@ func (ctx formatContext) TextToHTML(text string) string {
 }
 
 func Parse(ctx context.Context, message string, entities []tg.MessageEntityClass, params FormatParams) (*event.MessageEventContent, error) {
+	log := zerolog.Ctx(ctx).With().Str("func", "Parse").Logger()
 	content := &event.MessageEventContent{
 		MsgType:  event.MsgText,
 		Body:     message,
@@ -90,8 +93,14 @@ func Parse(ctx context.Context, message string, entities []tg.MessageEntityClass
 		}.TruncateEnd(maxLength)
 		switch entity := e.(type) {
 		case *tg.MessageEntityMention:
-			// TODO
-			fmt.Printf("mention = %+v\n", entity)
+			username := utf16Message[e.GetOffset()+1 : e.GetOffset()+e.GetLength()].String()
+			userInfo, err := params.GetUserInfoByUsername(ctx, username)
+			if err != nil {
+				log.Warn().Err(err).Str("username", username).Msg("Failed to get user info for mention")
+				continue // Skip this mention
+			}
+			mentions[userInfo.MXID] = struct{}{}
+			br.Value = Mention{UserInfo: userInfo, Username: username}
 		case *tg.MessageEntityHashtag:
 			br.Value = Style{Type: StyleHashtag}
 		case *tg.MessageEntityBotCommand:
@@ -111,13 +120,13 @@ func Parse(ctx context.Context, message string, entities []tg.MessageEntityClass
 		case *tg.MessageEntityTextURL:
 			br.Value = Style{Type: StyleURL, URL: params.NormalizeURL(ctx, entity.URL)}
 		case *tg.MessageEntityMentionName:
-			userID := ids.MakeUserID(entity.UserID)
-			userInfo, err := params.GetUserInfo(ctx, userID)
+			userInfo, err := params.GetUserInfoByID(ctx, entity.UserID)
 			if err != nil {
-				return nil, err
+				log.Warn().Err(err).Int64("user_id", entity.UserID).Msg("Failed to get user info for mention")
+				continue // Skip this mention
 			}
 			mentions[userInfo.MXID] = struct{}{}
-			br.Value = Mention{UserInfo: userInfo, UserID: userID}
+			br.Value = Mention{UserInfo: userInfo}
 		case *tg.MessageEntityPhone:
 			br.Value = Style{Type: StylePhone}
 		case *tg.MessageEntityCashtag:

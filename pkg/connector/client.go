@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -18,8 +19,10 @@ import (
 	"maunium.net/go/mautrix/bridge/status"
 	"maunium.net/go/mautrix/bridgev2"
 	"maunium.net/go/mautrix/bridgev2/networkid"
+	"maunium.net/go/mautrix/id"
 
 	"go.mau.fi/mautrix-telegram/pkg/connector/ids"
+	"go.mau.fi/mautrix-telegram/pkg/connector/matrixfmt"
 	"go.mau.fi/mautrix-telegram/pkg/connector/media"
 	"go.mau.fi/mautrix-telegram/pkg/connector/store"
 	"go.mau.fi/mautrix-telegram/pkg/connector/telegramfmt"
@@ -42,6 +45,7 @@ type TelegramClient struct {
 	appConfigHash int
 
 	telegramFmtParams *telegramfmt.FormatParams
+	matrixParser      *matrixfmt.HTMLParser
 }
 
 var (
@@ -150,13 +154,31 @@ func NewTelegramClient(ctx context.Context, tc *TelegramConnector, login *bridge
 	client.reactionMessageLocks = map[int]*sync.Mutex{}
 
 	client.telegramFmtParams = &telegramfmt.FormatParams{
-		GetUserInfo: func(ctx context.Context, id networkid.UserID) (telegramfmt.UserInfo, error) {
-			ghost, err := tc.Bridge.GetGhostByID(ctx, id)
+		GetUserInfoByID: func(ctx context.Context, id int64) (telegramfmt.UserInfo, error) {
+			ghost, err := tc.Bridge.GetGhostByID(ctx, ids.MakeUserID(id))
 			if err != nil {
 				return telegramfmt.UserInfo{}, err
 			}
 			userInfo := telegramfmt.UserInfo{MXID: ghost.Intent.GetMXID(), Name: ghost.Name}
-			if id == client.userID {
+			if id == client.telegramUserID {
+				userInfo.MXID = client.userLogin.UserMXID
+			}
+			return userInfo, nil
+		},
+		GetUserInfoByUsername: func(ctx context.Context, username string) (telegramfmt.UserInfo, error) {
+			ghosts, err := tc.Bridge.DB.Ghost.GetByMetadata(ctx, "username", username)
+			if err != nil {
+				return telegramfmt.UserInfo{}, err
+			}
+			if len(ghosts) != 1 {
+				return telegramfmt.UserInfo{}, fmt.Errorf("username %s not found", username)
+			}
+			ghost, err := tc.Bridge.GetGhostByID(ctx, ghosts[0].ID)
+			if err != nil {
+				return telegramfmt.UserInfo{}, err
+			}
+			userInfo := telegramfmt.UserInfo{MXID: ghost.Intent.GetMXID(), Name: ghost.Name}
+			if ghosts[0].ID == client.userID {
 				userInfo.MXID = client.userLogin.UserMXID
 			}
 			return userInfo, nil
@@ -202,6 +224,17 @@ func NewTelegramClient(ctx context.Context, tc *TelegramConnector, login *bridge
 			}
 
 			return fmt.Sprintf("https://matrix.to/#/%s/%s", portal.MXID, message.MXID)
+		},
+	}
+	client.matrixParser = &matrixfmt.HTMLParser{
+		GetGhostDetails: func(ctx context.Context, ui id.UserID) (networkid.UserID, string, int64, bool) {
+			if userID, ok := tc.Bridge.Matrix.ParseGhostMXID(ui); !ok {
+				return "", "", 0, false
+			} else if ghost, err := tc.Bridge.GetGhostByID(ctx, userID); err != nil {
+				return "", "", 0, false
+			} else {
+				return userID, ghost.Metadata.(*GhostMetadata).Username, ghost.Metadata.(*GhostMetadata).AccessHash, true
+			}
 		},
 	}
 
@@ -302,6 +335,9 @@ func (t *TelegramClient) getUserInfoFromTelegramUser(u tg.UserClass) (*bridgev2.
 	}
 	var identifiers []string
 	if !user.Min {
+		if username, ok := user.GetUsername(); ok {
+			identifiers = append(identifiers, fmt.Sprintf("telegram:%s", username))
+		}
 		for _, username := range user.Usernames {
 			identifiers = append(identifiers, fmt.Sprintf("telegram:%s", username.Username))
 		}
@@ -309,6 +345,8 @@ func (t *TelegramClient) getUserInfoFromTelegramUser(u tg.UserClass) (*bridgev2.
 			identifiers = append(identifiers, fmt.Sprintf("tel:+%s", strings.TrimPrefix(phone, "+")))
 		}
 	}
+	slices.Sort(identifiers)
+	identifiers = slices.Compact(identifiers)
 
 	var avatar *bridgev2.Avatar
 	if p, ok := user.GetPhoto(); ok && p.TypeID() == tg.UserProfilePhotoTypeID {
@@ -331,9 +369,10 @@ func (t *TelegramClient) getUserInfoFromTelegramUser(u tg.UserClass) (*bridgev2.
 		ExtraUpdates: func(ctx context.Context, ghost *bridgev2.Ghost) (changed bool) {
 			meta := ghost.Metadata.(*GhostMetadata)
 			if !user.Min {
-				changed = changed || meta.IsPremium != user.Premium || meta.IsBot != user.Bot
+				changed = changed || meta.IsPremium != user.Premium || meta.IsBot != user.Bot || meta.Username != user.Username
 				meta.IsPremium = user.Premium
 				meta.IsBot = user.Bot
+				meta.Username = user.Username
 			}
 			changed = changed || meta.AccessHash != user.AccessHash
 			meta.AccessHash = user.AccessHash

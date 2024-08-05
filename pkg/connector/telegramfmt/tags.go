@@ -31,13 +31,15 @@ type BodyRangeValue interface {
 
 type Mention struct {
 	UserInfo
-	UserID networkid.UserID
+	UserID     networkid.UserID
+	AccessHash int64
+	Username   string
 }
 
 var _ BodyRangeValue = Mention{}
 
 func (m Mention) String() string {
-	return fmt.Sprintf("Mention{MXID: id.UserID(%q), Name: %q}", m.MXID, m.Name)
+	return fmt.Sprintf("Mention{MXID: id.UserID(%q), Username: %q, Name: %q}", m.MXID, m.Username, m.Name)
 }
 
 func (m Mention) IsCode() bool {

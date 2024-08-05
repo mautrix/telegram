@@ -24,7 +24,6 @@ import (
 	"github.com/gotd/td/tg"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"maunium.net/go/mautrix/bridgev2/networkid"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 
@@ -33,15 +32,15 @@ import (
 
 func TestParse(t *testing.T) {
 	formatParams := telegramfmt.FormatParams{
-		GetUserInfo: func(ctx context.Context, userID networkid.UserID) (telegramfmt.UserInfo, error) {
-			if userID == "real" {
+		GetUserInfoByID: func(ctx context.Context, userID int64) (telegramfmt.UserInfo, error) {
+			if userID == 1 {
 				return telegramfmt.UserInfo{
 					MXID: "@test:example.com",
 					Name: "Matrix User",
 				}, nil
 			} else {
 				return telegramfmt.UserInfo{
-					MXID: id.UserID(fmt.Sprintf("@telegram_%s:example.com", userID)),
+					MXID: id.UserID(fmt.Sprintf("@telegram_%d:example.com", userID)),
 					Name: "Signal User",
 				}, nil
 			}

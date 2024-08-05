@@ -182,7 +182,6 @@ func (t *TelegramClient) parseBodyAndHTML(ctx context.Context, message string, e
 	if err != nil {
 		return nil, err
 	}
-	fmt.Printf("ce %+v\n", customEmojis) // TODO DEBUG
 	return telegramfmt.Parse(ctx, message, entities, t.telegramFmtParams.WithCustomEmojis(customEmojis))
 }
 

@@ -23,7 +23,11 @@ import (
 )
 
 func (m Mention) Format(message string) string {
-	return fmt.Sprintf(`<a href="%s">%s</a>`, m.MXID.URI().MatrixToURL(), m.Name)
+	if m.Username != "" {
+		return fmt.Sprintf(`<a href="%s">@%s</a>`, m.MXID.URI().MatrixToURL(), m.Username)
+	} else {
+		return fmt.Sprintf(`<a href="%s">%s</a>`, m.MXID.URI().MatrixToURL(), m.Name)
+	}
 }
 
 func (s Style) Format(message string) string {
