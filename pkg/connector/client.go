@@ -301,11 +301,13 @@ func (t *TelegramClient) getUserInfoFromTelegramUser(u tg.UserClass) (*bridgev2.
 		return nil, fmt.Errorf("user is %T not *tg.User", user)
 	}
 	var identifiers []string
-	for _, username := range user.Usernames {
-		identifiers = append(identifiers, fmt.Sprintf("telegram:%s", username.Username))
-	}
-	if phone, ok := user.GetPhone(); ok {
-		identifiers = append(identifiers, fmt.Sprintf("tel:+%s", strings.TrimPrefix(phone, "+")))
+	if !user.Min {
+		for _, username := range user.Usernames {
+			identifiers = append(identifiers, fmt.Sprintf("telegram:%s", username.Username))
+		}
+		if phone, ok := user.GetPhone(); ok {
+			identifiers = append(identifiers, fmt.Sprintf("tel:+%s", strings.TrimPrefix(phone, "+")))
+		}
 	}
 
 	var avatar *bridgev2.Avatar
@@ -328,8 +330,12 @@ func (t *TelegramClient) getUserInfoFromTelegramUser(u tg.UserClass) (*bridgev2.
 		Identifiers: identifiers,
 		ExtraUpdates: func(ctx context.Context, ghost *bridgev2.Ghost) (changed bool) {
 			meta := ghost.Metadata.(*GhostMetadata)
-			changed = meta.IsPremium != user.Premium || meta.AccessHash != user.AccessHash
-			meta.IsPremium = user.Premium
+			if !user.Min {
+				changed = changed || meta.IsPremium != user.Premium || meta.IsBot != user.Bot
+				meta.IsPremium = user.Premium
+				meta.IsBot = user.Bot
+			}
+			changed = changed || meta.AccessHash != user.AccessHash
 			meta.AccessHash = user.AccessHash
 			return changed
 		},
