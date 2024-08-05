@@ -8,7 +8,6 @@ import (
 	"slices"
 	"strconv"
 	"strings"
-	"sync"
 
 	"github.com/gotd/td/telegram"
 	"github.com/gotd/td/telegram/updates"
@@ -38,8 +37,6 @@ type TelegramClient struct {
 	userLogin      *bridgev2.UserLogin
 	client         *telegram.Client
 	clientCancel   context.CancelFunc
-
-	reactionMessageLocks map[int]*sync.Mutex
 
 	appConfig     map[string]any
 	appConfigHash int
@@ -151,7 +148,6 @@ func NewTelegramClient(ctx context.Context, tc *TelegramConnector, login *bridge
 		UpdateHandler:  updatesManager,
 	})
 	client.clientCancel, err = connectTelegramClient(ctx, client.client)
-	client.reactionMessageLocks = map[int]*sync.Mutex{}
 
 	client.telegramFmtParams = &telegramfmt.FormatParams{
 		GetUserInfoByID: func(ctx context.Context, id int64) (telegramfmt.UserInfo, error) {
