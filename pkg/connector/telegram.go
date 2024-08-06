@@ -12,6 +12,7 @@ import (
 	"maunium.net/go/mautrix/bridgev2/database"
 	"maunium.net/go/mautrix/bridgev2/networkid"
 	"maunium.net/go/mautrix/bridgev2/simplevent"
+	"maunium.net/go/mautrix/event"
 
 	"go.mau.fi/mautrix-telegram/pkg/connector/emojis"
 	"go.mau.fi/mautrix-telegram/pkg/connector/ids"
@@ -50,7 +51,8 @@ func (t *TelegramClient) onUpdateNewMessage(ctx context.Context, update IGetMess
 						Int("message_id", msg.GetID()).
 						Str("sender", string(sender.Sender)).
 						Str("sender_login", string(sender.SenderLogin)).
-						Bool("is_from_me", sender.IsFromMe)
+						Bool("is_from_me", sender.IsFromMe).
+						Stringer("peer_id", msg.PeerID)
 				},
 				Sender:       sender,
 				PortalKey:    ids.MakePortalKey(msg.PeerID),
@@ -63,50 +65,63 @@ func (t *TelegramClient) onUpdateNewMessage(ctx context.Context, update IGetMess
 		})
 	case *tg.MessageService:
 		sender := t.getEventSender(msg)
-		portalKey := ids.MakePortalKey(msg.PeerID)
+
+		chatInfoChange := simplevent.ChatInfoChange{
+			EventMeta: simplevent.EventMeta{
+				Type:      bridgev2.RemoteEventChatInfoChange,
+				PortalKey: ids.MakePortalKey(msg.PeerID),
+				Sender:    sender,
+				Timestamp: time.Unix(int64(msg.Date), 0),
+				LogContext: func(c zerolog.Context) zerolog.Context {
+					return c.
+						Int("message_id", msg.GetID()).
+						Str("sender", string(sender.Sender)).
+						Str("sender_login", string(sender.SenderLogin)).
+						Bool("is_from_me", sender.IsFromMe).
+						Stringer("peer_id", msg.PeerID)
+				},
+			},
+			ChatInfoChange: &bridgev2.ChatInfoChange{},
+		}
+
 		switch action := msg.Action.(type) {
 		case *tg.MessageActionChatEditTitle:
-			t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.ChatInfoChange{
-				EventMeta: simplevent.EventMeta{
-					Type:      bridgev2.RemoteEventChatInfoChange,
-					PortalKey: portalKey,
-					Sender:    sender,
-					Timestamp: time.Unix(int64(msg.Date), 0),
-				},
-				ChatInfoChange: &bridgev2.ChatInfoChange{
-					ChatInfo: &bridgev2.ChatInfo{Name: &action.Title},
-				},
-			})
+			chatInfoChange.ChatInfoChange.ChatInfo = &bridgev2.ChatInfo{Name: &action.Title}
 		case *tg.MessageActionChatEditPhoto:
-			t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.ChatInfoChange{
-				EventMeta: simplevent.EventMeta{
-					Type:      bridgev2.RemoteEventChatInfoChange,
-					PortalKey: portalKey,
-					Sender:    sender,
-					Timestamp: time.Unix(int64(msg.Date), 0),
+			chatInfoChange.ChatInfoChange.ChatInfo = &bridgev2.ChatInfo{Avatar: t.avatarFromPhoto(action.Photo)}
+		case *tg.MessageActionChatDeletePhoto:
+			chatInfoChange.ChatInfoChange.ChatInfo = &bridgev2.ChatInfo{Avatar: &bridgev2.Avatar{Remove: true}}
+		case *tg.MessageActionChatAddUser:
+			var members []bridgev2.ChatMember
+			for _, userID := range action.Users {
+				members = append(members, bridgev2.ChatMember{
+					EventSender: bridgev2.EventSender{
+						SenderLogin: ids.MakeUserLoginID(userID),
+						Sender:      ids.MakeUserID(userID),
+					},
+					Membership: event.MembershipJoin,
+				})
+			}
+			chatInfoChange.ChatInfoChange.MemberChanges = &bridgev2.ChatMemberList{Members: members}
+		case *tg.MessageActionChatJoinedByLink:
+			chatInfoChange.ChatInfoChange.MemberChanges = &bridgev2.ChatMemberList{
+				Members: []bridgev2.ChatMember{
+					{EventSender: sender, Membership: event.MembershipJoin},
 				},
-				ChatInfoChange: &bridgev2.ChatInfoChange{
-					ChatInfo: &bridgev2.ChatInfo{
-						Avatar: t.avatarFromPhoto(action.Photo),
+			}
+		case *tg.MessageActionChatDeleteUser:
+			chatInfoChange.ChatInfoChange.MemberChanges = &bridgev2.ChatMemberList{
+				Members: []bridgev2.ChatMember{
+					{
+						EventSender: bridgev2.EventSender{
+							SenderLogin: ids.MakeUserLoginID(action.UserID),
+							Sender:      ids.MakeUserID(action.UserID),
+						},
+						Membership: event.MembershipLeave,
 					},
 				},
-			})
-		case *tg.MessageActionChatDeletePhoto:
-			t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.ChatInfoChange{
-				EventMeta: simplevent.EventMeta{
-					Type:      bridgev2.RemoteEventChatInfoChange,
-					PortalKey: portalKey,
-					Sender:    sender,
-					Timestamp: time.Unix(int64(msg.Date), 0),
-				},
-				ChatInfoChange: &bridgev2.ChatInfoChange{
-					ChatInfo: &bridgev2.ChatInfo{Avatar: &bridgev2.Avatar{Remove: true}},
-				},
-			})
+			}
 		// case *tg.MessageActionChatCreate:
-		// case *tg.MessageActionChatAddUser:
-		// case *tg.MessageActionChatDeleteUser:
-		// case *tg.MessageActionChatJoinedByLink:
 		// case *tg.MessageActionChannelCreate:
 		// case *tg.MessageActionChatMigrateTo:
 		// case *tg.MessageActionChannelMigrateFrom:
@@ -145,6 +160,7 @@ func (t *TelegramClient) onUpdateNewMessage(ctx context.Context, update IGetMess
 		default:
 			return fmt.Errorf("unknown action type %T", action)
 		}
+		t.main.Bridge.QueueRemoteEvent(t.userLogin, &chatInfoChange)
 
 	default:
 		return fmt.Errorf("unknown message type %T", msg)
