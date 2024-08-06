@@ -68,16 +68,28 @@ func (pt PeerType) AsByte() byte {
 	}
 }
 
-func (pt PeerType) AsPortalKey(chatID int64) networkid.PortalKey {
-	return networkid.PortalKey{ID: networkid.PortalID(fmt.Sprintf("%s:%d", pt, chatID))}
+func (pt PeerType) AsPortalKey(chatID int64, receiver networkid.UserLoginID) networkid.PortalKey {
+	portalKey := networkid.PortalKey{
+		ID: networkid.PortalID(fmt.Sprintf("%s:%d", pt, chatID)),
+	}
+	if pt == PeerTypeUser || pt == PeerTypeChat {
+		portalKey.Receiver = receiver
+	}
+	return portalKey
 }
 
-func MakePortalKey(peer tg.PeerClass) networkid.PortalKey {
+func MakePortalKey(peer tg.PeerClass, receiver networkid.UserLoginID) networkid.PortalKey {
 	switch v := peer.(type) {
 	case *tg.PeerUser:
-		return networkid.PortalKey{ID: networkid.PortalID(fmt.Sprintf("%s:%d", PeerTypeUser, v.UserID))}
+		return networkid.PortalKey{
+			ID:       networkid.PortalID(fmt.Sprintf("%s:%d", PeerTypeUser, v.UserID)),
+			Receiver: receiver,
+		}
 	case *tg.PeerChat:
-		return networkid.PortalKey{ID: networkid.PortalID(fmt.Sprintf("%s:%d", PeerTypeChat, v.ChatID))}
+		return networkid.PortalKey{
+			ID:       networkid.PortalID(fmt.Sprintf("%s:%d", PeerTypeChat, v.ChatID)),
+			Receiver: receiver,
+		}
 	case *tg.PeerChannel:
 		return networkid.PortalKey{ID: networkid.PortalID(fmt.Sprintf("%s:%d", PeerTypeChannel, v.ChannelID))}
 	default:

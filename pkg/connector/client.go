@@ -129,6 +129,19 @@ func NewTelegramClient(ctx context.Context, tc *TelegramConnector, login *bridge
 	dispatcher.OnEditChannelMessage(func(ctx context.Context, e tg.Entities, update *tg.UpdateEditChannelMessage) error {
 		return client.onMessageEdit(ctx, update)
 	})
+	dispatcher.OnUserTyping(func(ctx context.Context, e tg.Entities, update *tg.UpdateUserTyping) error {
+		return client.handleTyping(ids.PeerTypeUser.AsPortalKey(update.UserID, login.ID), update.UserID, update.Action)
+	})
+	dispatcher.OnChatUserTyping(func(ctx context.Context, e tg.Entities, update *tg.UpdateChatUserTyping) error {
+		if update.FromID.TypeID() != tg.PeerUserTypeID {
+			log.Warn().Str("from_id_type", update.FromID.TypeName()).Msg("unsupported from_id type")
+			return nil
+		}
+		return client.handleTyping(ids.PeerTypeChat.AsPortalKey(update.ChatID, login.ID), update.FromID.(*tg.PeerUser).UserID, update.Action)
+	})
+	dispatcher.OnChannelUserTyping(func(ctx context.Context, e tg.Entities, update *tg.UpdateChannelUserTyping) error {
+		return client.handleTyping(ids.PeerTypeChannel.AsPortalKey(update.ChannelID, ""), update.FromID.(*tg.PeerUser).UserID, update.Action)
+	})
 
 	client.ScopedStore = tc.Store.GetScopedStore(telegramUserID)
 
@@ -202,9 +215,19 @@ func NewTelegramClient(ctx context.Context, tc *TelegramConnector, login *bridge
 
 			var portalKey networkid.PortalKey
 			if strings.HasPrefix(group, "C/") || strings.HasPrefix(group, "c/") {
-				portalKey = networkid.PortalKey{ID: networkid.PortalID(fmt.Sprintf("%s:%s", ids.PeerTypeChannel, group[2:]))}
+				chatID, err := strconv.ParseInt(submatches[1][2:], 10, 64)
+				if err != nil {
+					log.Err(err).Msg("error parsing channel ID")
+					return url
+				}
+				portalKey = ids.PeerTypeChannel.AsPortalKey(chatID, "")
 			} else {
-				portalKey = networkid.PortalKey{ID: networkid.PortalID(fmt.Sprintf("%s:%s", ids.PeerTypeUser, group))}
+				userID, err := strconv.ParseInt(submatches[1], 10, 64)
+				if err != nil {
+					log.Err(err).Msg("error parsing user ID")
+					return url
+				}
+				portalKey = ids.PeerTypeUser.AsPortalKey(userID, login.ID)
 			}
 
 			portal, err := tc.Bridge.DB.Portal.GetByKey(ctx, portalKey)

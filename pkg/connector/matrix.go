@@ -182,7 +182,7 @@ func (t *TelegramClient) HandleMatrixMessage(ctx context.Context, msg *bridgev2.
 		DB: &database.Message{
 			ID:        ids.MakeMessageID(tgMessageID),
 			MXID:      msg.Event.ID,
-			Room:      networkid.PortalKey{ID: msg.Portal.ID},
+			Room:      msg.Portal.PortalKey,
 			SenderID:  t.userID,
 			Timestamp: time.Unix(int64(tgDate), 0),
 			Metadata: &MessageMetadata{
@@ -401,6 +401,13 @@ func (t *TelegramClient) HandleMatrixReadReceipt(ctx context.Context, msg *bridg
 }
 
 func (t *TelegramClient) HandleMatrixTyping(ctx context.Context, msg *bridgev2.MatrixTyping) error {
-	// TODO
-	return nil
+	inputPeer, err := t.inputPeerForPortalID(ctx, msg.Portal.ID)
+	if err != nil {
+		return err
+	}
+	_, err = t.client.API().MessagesSetTyping(ctx, &tg.MessagesSetTypingRequest{
+		Peer:   inputPeer,
+		Action: &tg.SendMessageTypingAction{},
+	})
+	return err
 }

@@ -34,7 +34,8 @@ func (tc *TelegramConnector) Download(ctx context.Context, mediaID networkid.Med
 	ctx = log.WithContext(ctx)
 	log.Info().Msg("handling direct download")
 
-	logins, err := tc.Bridge.GetUserLoginsInPortal(ctx, info.PeerType.AsPortalKey(info.ChatID))
+	// TODO fix this
+	logins, err := tc.Bridge.GetUserLoginsInPortal(ctx, info.PeerType.AsPortalKey(info.ChatID, ""))
 	if err != nil {
 		return nil, err
 	} else if len(logins) == 0 {

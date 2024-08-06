@@ -55,7 +55,7 @@ func (t *TelegramClient) onUpdateNewMessage(ctx context.Context, update IGetMess
 						Stringer("peer_id", msg.PeerID)
 				},
 				Sender:       sender,
-				PortalKey:    ids.MakePortalKey(msg.PeerID),
+				PortalKey:    ids.MakePortalKey(msg.PeerID, t.loginID),
 				CreatePortal: true,
 				Timestamp:    time.Unix(int64(msg.Date), 0),
 			},
@@ -69,7 +69,7 @@ func (t *TelegramClient) onUpdateNewMessage(ctx context.Context, update IGetMess
 		chatInfoChange := simplevent.ChatInfoChange{
 			EventMeta: simplevent.EventMeta{
 				Type:      bridgev2.RemoteEventChatInfoChange,
-				PortalKey: ids.MakePortalKey(msg.PeerID),
+				PortalKey: ids.MakePortalKey(msg.PeerID, t.loginID),
 				Sender:    sender,
 				Timestamp: time.Unix(int64(msg.Date), 0),
 				LogContext: func(c zerolog.Context) zerolog.Context {
@@ -279,7 +279,7 @@ func (t *TelegramClient) onMessageEdit(ctx context.Context, update IGetMessage) 
 					Int("message_id", msg.ID)
 			},
 			Sender:    sender,
-			PortalKey: ids.MakePortalKey(msg.PeerID),
+			PortalKey: ids.MakePortalKey(msg.PeerID, t.loginID),
 			Timestamp: time.Unix(int64(msg.EditDate), 0),
 		},
 		ID:            ids.MakeMessageID(msg.ID),
@@ -303,6 +303,27 @@ func (t *TelegramClient) onMessageEdit(ctx context.Context, update IGetMessage) 
 		},
 	})
 
+	return nil
+}
+func (t *TelegramClient) handleTyping(portal networkid.PortalKey, userID int64, action tg.SendMessageActionClass) error {
+	if userID == t.telegramUserID {
+		return nil
+	}
+	timeout := time.Duration(6) * time.Second
+	if action.TypeID() != tg.SendMessageTypingActionTypeID {
+		timeout = 0
+	}
+	t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.Typing{
+		EventMeta: simplevent.EventMeta{
+			Type:      bridgev2.RemoteEventTyping,
+			PortalKey: portal,
+			Sender: bridgev2.EventSender{
+				SenderLogin: ids.MakeUserLoginID(userID),
+				Sender:      ids.MakeUserID(userID),
+			},
+		},
+		Timeout: timeout,
+	})
 	return nil
 }
 
@@ -353,7 +374,7 @@ func (t *TelegramClient) handleTelegramReactions(ctx context.Context, msg *tg.Me
 			// 	return
 
 			// TODO should calls to this be limited?
-		} else if peer, err := t.inputPeerForPortalID(ctx, ids.MakePortalKey(msg.PeerID).ID); err != nil {
+		} else if peer, err := t.inputPeerForPortalID(ctx, ids.MakePortalKey(msg.PeerID, t.loginID).ID); err != nil {
 			log.Err(err).Msg("failed to get input peer")
 			return
 		} else {
@@ -447,7 +468,11 @@ func (t *TelegramClient) inputPeerForPortalID(ctx context.Context, portalID netw
 	}
 	switch peerType {
 	case ids.PeerTypeUser:
-		return &tg.InputPeerUser{UserID: id}, nil
+		if ghost, err := t.main.Bridge.DB.Ghost.GetByID(ctx, ids.MakeUserID(id)); err != nil {
+			return nil, err
+		} else {
+			return &tg.InputPeerUser{UserID: id, AccessHash: ghost.Metadata.(*GhostMetadata).AccessHash}, nil
+		}
 	case ids.PeerTypeChat:
 		return &tg.InputPeerChat{ChatID: id}, nil
 	case ids.PeerTypeChannel:
