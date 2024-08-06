@@ -62,15 +62,48 @@ func (t *TelegramClient) onUpdateNewMessage(ctx context.Context, update IGetMess
 			ConvertMessageFunc: t.convertToMatrix,
 		})
 	case *tg.MessageService:
-		// fmt.Printf("message service\n")
-		// fmt.Printf("%v\n", msg)
-
-		// sender := t.getEventSender(msg)
-		// switch action := msg.Action.(type) {
-		// case *tg.MessageActionChatEditTitle:
+		sender := t.getEventSender(msg)
+		portalKey := ids.MakePortalKey(msg.PeerID)
+		switch action := msg.Action.(type) {
+		case *tg.MessageActionChatEditTitle:
+			t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.ChatInfoChange{
+				EventMeta: simplevent.EventMeta{
+					Type:      bridgev2.RemoteEventChatInfoChange,
+					PortalKey: portalKey,
+					Sender:    sender,
+					Timestamp: time.Unix(int64(msg.Date), 0),
+				},
+				ChatInfoChange: &bridgev2.ChatInfoChange{
+					ChatInfo: &bridgev2.ChatInfo{Name: &action.Title},
+				},
+			})
+		case *tg.MessageActionChatEditPhoto:
+			t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.ChatInfoChange{
+				EventMeta: simplevent.EventMeta{
+					Type:      bridgev2.RemoteEventChatInfoChange,
+					PortalKey: portalKey,
+					Sender:    sender,
+					Timestamp: time.Unix(int64(msg.Date), 0),
+				},
+				ChatInfoChange: &bridgev2.ChatInfoChange{
+					ChatInfo: &bridgev2.ChatInfo{
+						Avatar: t.avatarFromPhoto(action.Photo),
+					},
+				},
+			})
+		case *tg.MessageActionChatDeletePhoto:
+			t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.ChatInfoChange{
+				EventMeta: simplevent.EventMeta{
+					Type:      bridgev2.RemoteEventChatInfoChange,
+					PortalKey: portalKey,
+					Sender:    sender,
+					Timestamp: time.Unix(int64(msg.Date), 0),
+				},
+				ChatInfoChange: &bridgev2.ChatInfoChange{
+					ChatInfo: &bridgev2.ChatInfo{Avatar: &bridgev2.Avatar{Remove: true}},
+				},
+			})
 		// case *tg.MessageActionChatCreate:
-		// case *tg.MessageActionChatEditPhoto:
-		// case *tg.MessageActionChatDeletePhoto:
 		// case *tg.MessageActionChatAddUser:
 		// case *tg.MessageActionChatDeleteUser:
 		// case *tg.MessageActionChatJoinedByLink:
@@ -109,9 +142,9 @@ func (t *TelegramClient) onUpdateNewMessage(ctx context.Context, update IGetMess
 		// case *tg.MessageActionGiveawayResults:
 		// case *tg.MessageActionBoostApply:
 		// case *tg.MessageActionRequestedPeerSentMe:
-		// default:
-		// 	return fmt.Errorf("unknown action type %T", action)
-		// }
+		default:
+			return fmt.Errorf("unknown action type %T", action)
+		}
 
 	default:
 		return fmt.Errorf("unknown message type %T", msg)

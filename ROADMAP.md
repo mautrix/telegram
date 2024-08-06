@@ -44,8 +44,8 @@
   * [ ] Supergroup/channel permissions (precise per-user permissions not supported in Matrix)
   * [ ] Membership actions (invite/kick/join/leave)
   * [ ] Chat metadata changes
-    * [ ] Title
-    * [ ] Avatar
+    * [x] Title
+    * [x] Avatar
     * [ ] † About text
     * [ ] † Public channel username
   * [x] Initial chat metadata (about text missing)
