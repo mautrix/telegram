@@ -1,10 +1,10 @@
 # Features & roadmap
 
 * Matrix → Telegram
-  * [ ] Message content (text, formatting, files, etc..)
-  * [ ] Message redactions
-  * [ ] Message reactions
-  * [ ] Message edits
+  * [x] Message content (text, formatting, files, etc..)
+  * [x] Message redactions
+  * [x] Message reactions
+  * [x] Message edits
   * [ ] ‡ Message history
   * [ ] Presence
   * [ ] Typing notifications
@@ -22,15 +22,15 @@
     * [ ] Initial displayname/username/avatar at register
     * [ ] ‡ Changes to displayname/avatar
 * Telegram → Matrix
-  * [ ] Message content (text, formatting, files, etc..)
+  * [x] Message content (text, formatting, files, etc..)
   * [ ] Advanced message content/media
-    * [ ] Custom emojis
+    * [x] Custom emojis
     * [ ] Polls
     * [ ] Games
     * [ ] Buttons
-  * [ ] Message deletions
-  * [ ] Message reactions
-  * [ ] Message edits
+  * [x] Message deletions
+  * [x] Message reactions
+  * [x] Message edits
   * [ ] Message history
     * [ ] Manually (`!tg backfill`)
     * [ ] Automatically when creating portal
