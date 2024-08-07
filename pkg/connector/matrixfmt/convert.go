@@ -82,7 +82,7 @@ func toTelegramEntity(br telegramfmt.BodyRange) tg.MessageEntityClass {
 }
 
 func Parse(ctx context.Context, parser *HTMLParser, content *event.MessageEventContent) (string, []tg.MessageEntityClass) {
-	if content.MsgType.IsMedia() && content.FileName == "" {
+	if content.MsgType.IsMedia() && (content.FileName == "" || content.FileName == content.Body) {
 		// The body is the filename.
 		return "", nil
 	}

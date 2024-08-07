@@ -49,7 +49,7 @@ func (t *TelegramClient) transferMediaToTelegram(ctx context.Context, content *e
 		return nil, fmt.Errorf("failed to upload media to Telegram: %w", err)
 	}
 
-	if content.MsgType == event.MsgImage {
+	if content.MsgType == event.MsgImage && (content.Info.MimeType == "image/jpeg" || content.Info.MimeType == "image/png") {
 		return &tg.InputMediaUploadedPhoto{File: upload}, nil
 	}
 
@@ -100,7 +100,7 @@ func (t *TelegramClient) HandleMatrixMessage(ctx context.Context, msg *bridgev2.
 
 	var updates tg.UpdatesClass
 	switch msg.Content.MsgType {
-	case event.MsgText, event.MsgNotice:
+	case event.MsgText, event.MsgNotice, event.MsgEmote:
 		updates, err = t.client.API().MessagesSendMessage(ctx, &tg.MessagesSendMessageRequest{
 			Peer:      peer,
 			NoWebpage: noWebpage,
