@@ -174,7 +174,7 @@ func (t *TelegramClient) getEventSender(msg interface {
 	GetPeerID() tg.PeerClass
 }) bridgev2.EventSender {
 	if msg.GetOut() {
-		return bridgev2.EventSender{IsFromMe: true, SenderLogin: t.loginID, Sender: t.userID}
+		return t.mySender()
 	} else if f, ok := msg.GetFromID(); ok && f.TypeID() == tg.PeerUserTypeID {
 		from := f.(*tg.PeerUser)
 		return bridgev2.EventSender{
@@ -305,6 +305,7 @@ func (t *TelegramClient) onMessageEdit(ctx context.Context, update IGetMessage) 
 
 	return nil
 }
+
 func (t *TelegramClient) handleTyping(portal networkid.PortalKey, userID int64, action tg.SendMessageActionClass) error {
 	if userID == t.telegramUserID {
 		return nil
@@ -323,6 +324,37 @@ func (t *TelegramClient) handleTyping(portal networkid.PortalKey, userID int64, 
 			},
 		},
 		Timeout: timeout,
+	})
+	return nil
+}
+
+func (t *TelegramClient) updateReadReceipt(update *tg.UpdateReadHistoryOutbox) error {
+	user, ok := update.Peer.(*tg.PeerUser)
+	if !ok {
+		return fmt.Errorf("unsupported peer type %T", update.Peer)
+	}
+	t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.Receipt{
+		EventMeta: simplevent.EventMeta{
+			Type:      bridgev2.RemoteEventReadReceipt,
+			PortalKey: ids.MakePortalKey(update.Peer, t.loginID),
+			Sender: bridgev2.EventSender{
+				SenderLogin: ids.MakeUserLoginID(user.UserID),
+				Sender:      ids.MakeUserID(user.UserID),
+			},
+		},
+		LastTarget: ids.MakeMessageID(update.MaxID),
+	})
+	return nil
+}
+
+func (t *TelegramClient) onOwnReadReceipt(portalKey networkid.PortalKey, maxID int) error {
+	t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.Receipt{
+		EventMeta: simplevent.EventMeta{
+			Type:      bridgev2.RemoteEventReadReceipt,
+			PortalKey: portalKey,
+			Sender:    t.mySender(),
+		},
+		LastTarget: ids.MakeMessageID(maxID),
 	})
 	return nil
 }

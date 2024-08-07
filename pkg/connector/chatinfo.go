@@ -38,13 +38,7 @@ func (t *TelegramClient) getDMChatInfo(ctx context.Context, userID int64) (*brid
 				},
 				UserInfo: userInfo,
 			},
-			{
-				EventSender: bridgev2.EventSender{
-					IsFromMe:    true,
-					SenderLogin: t.loginID,
-					Sender:      t.userID,
-				},
-			},
+			{EventSender: t.mySender()},
 		}
 	}
 	return &chatInfo, nil
@@ -58,16 +52,8 @@ func (t *TelegramClient) getGroupChatInfo(ctx context.Context, fullChat *tg.Mess
 	chatInfo := bridgev2.ChatInfo{
 		Type: ptr.Ptr(database.RoomTypeGroupDM), // TODO Is this correct for channels?
 		Members: &bridgev2.ChatMemberList{
-			IsFull: true,
-			Members: []bridgev2.ChatMember{
-				{
-					EventSender: bridgev2.EventSender{
-						IsFromMe:    true,
-						SenderLogin: t.loginID,
-						Sender:      t.userID,
-					},
-				},
-			},
+			IsFull:  true,
+			Members: []bridgev2.ChatMember{{EventSender: t.mySender()}},
 		},
 	}
 	var isBroadcastChannel bool

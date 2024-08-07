@@ -3,10 +3,12 @@ package connector
 import (
 	"context"
 	"crypto/sha256"
+	"errors"
 	"fmt"
 	"math/rand"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gotd/td/telegram/message"
@@ -396,8 +398,82 @@ func (t *TelegramClient) HandleMatrixReactionRemove(ctx context.Context, msg *br
 }
 
 func (t *TelegramClient) HandleMatrixReadReceipt(ctx context.Context, msg *bridgev2.MatrixReadReceipt) error {
-	// TODO
-	return nil
+	peerType, id, parseErr := ids.ParsePortalID(msg.Portal.ID)
+	if parseErr != nil {
+		return parseErr
+	}
+	inputPeer, parseErr := t.inputPeerForPortalID(ctx, msg.Portal.ID)
+	if parseErr != nil {
+		return parseErr
+	}
+
+	var readMentionsErr, readReactionsErr, readMessagesErr error
+	var wg sync.WaitGroup
+
+	// Read mentions
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		_, readMentionsErr = t.client.API().MessagesReadMentions(ctx, &tg.MessagesReadMentionsRequest{
+			Peer: inputPeer,
+		})
+	}()
+
+	// Read reactions
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		_, readMentionsErr = t.client.API().MessagesReadReactions(ctx, &tg.MessagesReadReactionsRequest{
+			Peer: inputPeer,
+		})
+	}()
+
+	// Read messages
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+
+		message := msg.ExactMessage
+		if message == nil {
+			message, readMessagesErr = t.main.Bridge.DB.Message.GetLastPartAtOrBeforeTime(ctx, msg.Portal.PortalKey, time.Now())
+			if readMessagesErr != nil {
+				return
+			}
+		}
+		var maxID int
+		maxID, readMessagesErr = ids.ParseMessageID(message.ID)
+		if readMessagesErr != nil {
+			return
+		}
+
+		switch peerType {
+		case ids.PeerTypeUser, ids.PeerTypeChat:
+			_, readMessagesErr = t.client.API().MessagesReadHistory(ctx, &tg.MessagesReadHistoryRequest{
+				Peer:  inputPeer,
+				MaxID: maxID,
+			})
+		case ids.PeerTypeChannel:
+			var accessHash int64
+			var found bool
+			accessHash, found, readMessagesErr = t.ScopedStore.GetChannelAccessHash(ctx, t.telegramUserID, id)
+			if readMessagesErr != nil {
+				return
+			} else if !found {
+				readMessagesErr = fmt.Errorf("channel access hash not found for %d", id)
+				return
+			}
+			_, readMessagesErr = t.client.API().ChannelsReadHistory(ctx, &tg.ChannelsReadHistoryRequest{
+				Channel: &tg.InputChannel{ChannelID: id, AccessHash: accessHash},
+			})
+		default:
+			readMessagesErr = fmt.Errorf("unknown peer type %s", peerType)
+		}
+	}()
+
+	// TODO handle sponsored message read receipts
+
+	wg.Wait()
+	return errors.Join(readMentionsErr, readReactionsErr, readMessagesErr)
 }
 
 func (t *TelegramClient) HandleMatrixTyping(ctx context.Context, msg *bridgev2.MatrixTyping) error {

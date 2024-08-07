@@ -142,6 +142,15 @@ func NewTelegramClient(ctx context.Context, tc *TelegramConnector, login *bridge
 	dispatcher.OnChannelUserTyping(func(ctx context.Context, e tg.Entities, update *tg.UpdateChannelUserTyping) error {
 		return client.handleTyping(ids.PeerTypeChannel.AsPortalKey(update.ChannelID, ""), update.FromID.(*tg.PeerUser).UserID, update.Action)
 	})
+	dispatcher.OnReadHistoryOutbox(func(ctx context.Context, e tg.Entities, update *tg.UpdateReadHistoryOutbox) error {
+		return client.updateReadReceipt(update)
+	})
+	dispatcher.OnReadHistoryInbox(func(ctx context.Context, e tg.Entities, update *tg.UpdateReadHistoryInbox) error {
+		return client.onOwnReadReceipt(ids.MakePortalKey(update.Peer, login.ID), update.MaxID)
+	})
+	dispatcher.OnReadChannelInbox(func(ctx context.Context, e tg.Entities, update *tg.UpdateReadChannelInbox) error {
+		return client.onOwnReadReceipt(ids.PeerTypeChannel.AsPortalKey(update.ChannelID, ""), update.MaxID)
+	})
 
 	client.ScopedStore = tc.Store.GetScopedStore(telegramUserID)
 
@@ -446,5 +455,13 @@ func (t *TelegramClient) GetCapabilities(ctx context.Context, portal *bridgev2.P
 		Deletes:          true,
 		ReadReceipts:     true,
 		Reactions:        true,
+	}
+}
+
+func (t *TelegramClient) mySender() bridgev2.EventSender {
+	return bridgev2.EventSender{
+		IsFromMe:    true,
+		SenderLogin: t.loginID,
+		Sender:      t.userID,
 	}
 }
