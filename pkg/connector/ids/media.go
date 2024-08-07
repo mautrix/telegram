@@ -13,20 +13,22 @@ import (
 // The format of the media ID is as follows (each character represents a single
 // byte, |'s added for clarity):
 //
-// v|p|cccccccc|mmmmmmmm|T|MMMMMMMM
+// v|p|cccccccc|rrrrrrrr|mmmmmmmm|T|MMMMMMMM
 //
 // v (int8) = binary encoding format version. Should be 0.
 // p (byte) = the peer type of the Telegram chat ID
 // cccccccc (int64) = the Telegram chat ID (big endian)
+// rrrrrrrr (int64) = the receiver ID (big endian)
 // mmmmmmmm (int64) = the Telegram message ID (big endian)
-// T (byte) = 0 or 1 depending on whether it's a thumbnail (optional)
-// MMMMMMMM (int64) = the Telegram media ID (big endian) (optional)
+// MMMMMMMM (int64) = the Telegram media ID (big endian)
+// T (byte) = 0 or 1 depending on whether it's a thumbnail
 type DirectMediaInfo struct {
 	PeerType        PeerType
 	ChatID          int64
+	ReceiverID      int64
 	MessageID       int64
-	Thumbnail       bool
 	TelegramMediaID int64
+	Thumbnail       bool
 }
 
 func (m DirectMediaInfo) AsMediaID() (networkid.MediaID, error) {
@@ -34,14 +36,15 @@ func (m DirectMediaInfo) AsMediaID() (networkid.MediaID, error) {
 		0x00,                // Version
 		m.PeerType.AsByte(), // Peer Type
 	}
-	mediaID = binary.BigEndian.AppendUint64(mediaID, uint64(m.ChatID))    // Telegram Chat ID
-	mediaID = binary.BigEndian.AppendUint64(mediaID, uint64(m.MessageID)) // Telegram Message ID
+	mediaID = binary.BigEndian.AppendUint64(mediaID, uint64(m.ChatID))          // Telegram Chat ID
+	mediaID = binary.BigEndian.AppendUint64(mediaID, uint64(m.ReceiverID))      // Telegram Chat ID
+	mediaID = binary.BigEndian.AppendUint64(mediaID, uint64(m.MessageID))       // Telegram Message ID
+	mediaID = binary.BigEndian.AppendUint64(mediaID, uint64(m.TelegramMediaID)) // Telegram Media ID
 	if m.Thumbnail {
 		mediaID = append(mediaID, 0x01)
 	} else {
 		mediaID = append(mediaID, 0x00)
 	}
-	mediaID = binary.BigEndian.AppendUint64(mediaID, uint64(m.TelegramMediaID)) // Telegram Message ID
 	return mediaID, nil
 }
 
@@ -54,24 +57,19 @@ func ParseDirectMediaInfo(mediaID networkid.MediaID) (info DirectMediaInfo, err 
 		err = fmt.Errorf("invalid version %d", mediaID[0])
 		return
 	}
-
-	// For compatibility with old media IDs that don't have the thumbnail flag
-	// and the Telegram media ID, we allow media IDs with 18, 19, or 27 bytes.
-	if len(mediaID) != 18 && len(mediaID) != 19 && len(mediaID) != 27 {
+	if len(mediaID) != 35 {
 		err = fmt.Errorf("invalid media ID")
 		return
 	}
+
 	info.PeerType, err = PeerTypeFromByte(mediaID[1])
 	if err != nil {
 		return
 	}
 	info.ChatID = int64(binary.BigEndian.Uint64(mediaID[2:]))
-	info.MessageID = int64(binary.BigEndian.Uint64(mediaID[10:]))
-	if len(mediaID) >= 19 {
-		info.Thumbnail = mediaID[18] == 1
-	}
-	if len(mediaID) >= 20 {
-		info.TelegramMediaID = int64(binary.BigEndian.Uint64(mediaID[19:]))
-	}
+	info.ReceiverID = int64(binary.BigEndian.Uint64(mediaID[10:]))
+	info.MessageID = int64(binary.BigEndian.Uint64(mediaID[18:]))
+	info.TelegramMediaID = int64(binary.BigEndian.Uint64(mediaID[26:]))
+	info.Thumbnail = mediaID[34] == 1
 	return
 }

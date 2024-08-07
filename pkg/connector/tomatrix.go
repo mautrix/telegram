@@ -331,7 +331,7 @@ func (c *TelegramClient) convertMediaRequiringUpload(ctx context.Context, portal
 				WithRoomID(portal.MXID).
 				WithDocument(document, true)
 			if c.main.useDirectMedia {
-				thumbnailURL, thumbnailInfo, err = thumbnailTransferer.DirectDownloadURL(ctx, portal, msgID, true, document.ID)
+				thumbnailURL, thumbnailInfo, err = thumbnailTransferer.DirectDownloadURL(ctx, c.telegramUserID, portal, msgID, true, document.ID)
 				if err != nil {
 					log.Err(err).Msg("error getting direct download URL for thumbnail")
 				}
@@ -355,7 +355,7 @@ func (c *TelegramClient) convertMediaRequiringUpload(ctx context.Context, portal
 
 	var err error
 	if c.main.useDirectMedia && (!isSticker || c.main.Config.AnimatedSticker.Target == "disable") {
-		content.URL, content.Info, err = mediaTransferer.DirectDownloadURL(ctx, portal, msgID, false, telegramMediaID)
+		content.URL, content.Info, err = mediaTransferer.DirectDownloadURL(ctx, c.telegramUserID, portal, msgID, false, telegramMediaID)
 		if err != nil {
 			log.Err(err).Msg("error getting direct download URL for media")
 		}

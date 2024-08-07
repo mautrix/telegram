@@ -34,15 +34,22 @@ func (tc *TelegramConnector) Download(ctx context.Context, mediaID networkid.Med
 	ctx = log.WithContext(ctx)
 	log.Info().Msg("handling direct download")
 
-	// TODO fix this
-	logins, err := tc.Bridge.GetUserLoginsInPortal(ctx, info.PeerType.AsPortalKey(info.ChatID, ""))
+	userLogin, err := tc.Bridge.GetExistingUserLoginByID(ctx, ids.MakeUserLoginID(info.ReceiverID))
 	if err != nil {
-		return nil, err
-	} else if len(logins) == 0 {
-		return nil, fmt.Errorf("no user logins in the portal (%s %d)", info.PeerType, info.ChatID)
+		if info.PeerType != ids.PeerTypeChannel {
+			return nil, fmt.Errorf("failed to get user login: %w", err)
+		}
+
+		logins, err := tc.Bridge.GetUserLoginsInPortal(ctx, ids.PeerTypeChannel.AsPortalKey(info.ChatID, ""))
+		if err != nil {
+			return nil, err
+		} else if len(logins) == 0 {
+			return nil, fmt.Errorf("no user logins in the portal (%s %d)", ids.PeerTypeChannel, info.ChatID)
+		}
+		userLogin = logins[0]
 	}
 
-	client := logins[0].Client.(*TelegramClient)
+	client := userLogin.Client.(*TelegramClient)
 	var messages tg.MessagesMessagesClass
 	switch info.PeerType {
 	case ids.PeerTypeUser, ids.PeerTypeChat:
