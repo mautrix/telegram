@@ -223,7 +223,7 @@ func (c *TelegramClient) convertMediaRequiringUpload(ctx context.Context, portal
 	var partID networkid.PartID
 	var content event.MessageEventContent
 	var telegramMediaID int64
-	var isSticker, isAnimatedSticker bool
+	var isSticker, isVideoGif bool
 	extra := map[string]any{}
 
 	transferer := media.NewTransferer(c.client.API()).WithRoomID(portal.MXID)
@@ -278,6 +278,8 @@ func (c *TelegramClient) convertMediaRequiringUpload(ctx context.Context, portal
 				isSticker = true
 				if c.main.Config.AnimatedSticker.Target == "webm" {
 					content.MsgType = event.MsgVideo
+					isVideoGif = true
+					extraInfo["fi.mau.telegram.animated_sticker"] = true
 				} else {
 					eventType = event.EventSticker
 					content.MsgType = ""
@@ -301,23 +303,19 @@ func (c *TelegramClient) convertMediaRequiringUpload(ctx context.Context, portal
 					}
 				}
 				extraInfo["fi.mau.telegram.sticker"] = stickerInfo
-				extraInfo["fi.mau.gif"] = true
-				extraInfo["fi.mau.loop"] = true
-				extraInfo["fi.mau.autoplay"] = true
-				extraInfo["fi.mau.hide_controls"] = true
-				extraInfo["fi.mau.no_audio"] = true
 				transferer = transferer.WithStickerConfig(c.main.Config.AnimatedSticker)
 			case *tg.DocumentAttributeAnimated:
-				isAnimatedSticker = true
+				isVideoGif = true
+				extraInfo["fi.mau.telegram.gif"] = true
 			}
 		}
 
-		if isAnimatedSticker || (isSticker && c.main.Config.AnimatedSticker.Target == "webm") {
-			if isAnimatedSticker {
-				extraInfo["fi.mau.telegram.gif"] = true
-			} else {
-				extraInfo["fi.mau.telegram.animated_sticker"] = true
-			}
+		if isVideoGif {
+			extraInfo["fi.mau.gif"] = true
+			extraInfo["fi.mau.loop"] = true
+			extraInfo["fi.mau.autoplay"] = true
+			extraInfo["fi.mau.hide_controls"] = true
+			extraInfo["fi.mau.no_audio"] = true
 		}
 		extra["info"] = extraInfo
 
