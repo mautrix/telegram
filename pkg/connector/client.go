@@ -247,13 +247,19 @@ func NewTelegramClient(ctx context.Context, tc *TelegramConnector, login *bridge
 	}
 	client.matrixParser = &matrixfmt.HTMLParser{
 		GetGhostDetails: func(ctx context.Context, ui id.UserID) (networkid.UserID, string, int64, bool) {
-			if userID, ok := tc.Bridge.Matrix.ParseGhostMXID(ui); !ok {
+			userID, ok := tc.Bridge.Matrix.ParseGhostMXID(ui)
+			if !ok {
 				return "", "", 0, false
-			} else if ghost, err := tc.Bridge.GetGhostByID(ctx, userID); err != nil {
-				return "", "", 0, false
-			} else {
-				return userID, ghost.Metadata.(*GhostMetadata).Username, ghost.Metadata.(*GhostMetadata).AccessHash, true
 			}
+			telegramUserID, err := ids.ParseUserID(userID)
+			if err != nil {
+				return "", "", 0, false
+			}
+			username, accessHash, found, err := tc.Store.GetScopedStore(telegramUserID).GetUserMetadata(ctx, telegramUserID)
+			if err != nil || !found {
+				return "", "", 0, false
+			}
+			return userID, username, accessHash, true
 		},
 	}
 
@@ -330,9 +336,15 @@ func (t *TelegramClient) GetUserInfo(ctx context.Context, ghost *bridgev2.Ghost)
 	if err != nil {
 		return nil, err
 	}
+	accessHash, found, err := t.ScopedStore.GetUserAccessHash(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get access hash for user %d: %w", id, err)
+	} else if !found {
+		return nil, fmt.Errorf("access hash not found for user %d", id)
+	}
 	users, err := t.client.API().UsersGetUsers(ctx, []tg.InputUserClass{&tg.InputUser{
 		UserID:     id,
-		AccessHash: ghost.Metadata.(*GhostMetadata).AccessHash,
+		AccessHash: accessHash,
 	}})
 	if err != nil {
 		return nil, err
@@ -340,20 +352,28 @@ func (t *TelegramClient) GetUserInfo(ctx context.Context, ghost *bridgev2.Ghost)
 	if len(users) == 0 {
 		return nil, fmt.Errorf("failed to get user info for user %d", id)
 	}
-	userInfo, err := t.getUserInfoFromTelegramUser(users[0])
+	userInfo, err := t.getUserInfoFromTelegramUser(ctx, users[0])
 	if err != nil {
 		return nil, err
 	}
 	return userInfo, t.updateGhostWithUserInfo(ctx, id, userInfo)
 }
 
-func (t *TelegramClient) getUserInfoFromTelegramUser(u tg.UserClass) (*bridgev2.UserInfo, error) {
+func (t *TelegramClient) getUserInfoFromTelegramUser(ctx context.Context, u tg.UserClass) (*bridgev2.UserInfo, error) {
 	user, ok := u.(*tg.User)
 	if !ok {
 		return nil, fmt.Errorf("user is %T not *tg.User", user)
 	}
 	var identifiers []string
-	if !user.Min {
+	if user.Min {
+		if err := t.ScopedStore.SetUserAccessHash(ctx, user.ID, user.AccessHash); err != nil {
+			return nil, err
+		}
+	} else {
+		if err := t.ScopedStore.SetUserMetadata(ctx, user.ID, user.Username, user.AccessHash); err != nil {
+			return nil, err
+		}
+
 		if username, ok := user.GetUsername(); ok {
 			identifiers = append(identifiers, fmt.Sprintf("telegram:%s", username))
 		}
@@ -388,13 +408,10 @@ func (t *TelegramClient) getUserInfoFromTelegramUser(u tg.UserClass) (*bridgev2.
 		ExtraUpdates: func(ctx context.Context, ghost *bridgev2.Ghost) (changed bool) {
 			meta := ghost.Metadata.(*GhostMetadata)
 			if !user.Min {
-				changed = changed || meta.IsPremium != user.Premium || meta.IsBot != user.Bot || meta.Username != user.Username
+				changed = changed || meta.IsPremium != user.Premium || meta.IsBot != user.Bot
 				meta.IsPremium = user.Premium
 				meta.IsBot = user.Bot
-				meta.Username = user.Username
 			}
-			changed = changed || meta.AccessHash != user.AccessHash
-			meta.AccessHash = user.AccessHash
 			return changed
 		},
 	}, nil

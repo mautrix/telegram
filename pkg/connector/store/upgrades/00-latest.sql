@@ -31,6 +31,16 @@ CREATE TABLE telegram_channel_access_hashes (
     PRIMARY KEY (user_id, channel_id)
 );
 
+CREATE TABLE telegram_user_metadata (
+    receiver_id INTEGER,
+    user_id     INTEGER,
+
+    access_hash INTEGER NOT NULL,
+    username    TEXT,
+
+    PRIMARY KEY (receiver_id, user_id)
+);
+
 CREATE TABLE telegram_file (
     id        TEXT PRIMARY KEY,
     mxc       TEXT NOT NULL,

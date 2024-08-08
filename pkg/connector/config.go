@@ -88,10 +88,8 @@ func (tg *TelegramConnector) GetDBMetaTypes() database.MetaTypes {
 }
 
 type GhostMetadata struct {
-	AccessHash int64  `json:"access_hash"`
-	IsPremium  bool   `json:"is_premium,omitempty"`
-	IsBot      bool   `json:"is_bot,omitempty"`
-	Username   string `json:"username,omitempty"`
+	IsPremium bool `json:"is_premium,omitempty"`
+	IsBot     bool `json:"is_bot,omitempty"`
 }
 
 type MessageMetadata struct {

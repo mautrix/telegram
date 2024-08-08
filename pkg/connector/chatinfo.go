@@ -25,7 +25,7 @@ func (t *TelegramClient) getDMChatInfo(ctx context.Context, userID int64) (*brid
 		return nil, err
 	} else if len(users) == 0 {
 		return nil, fmt.Errorf("failed to get user info for user %d", userID)
-	} else if userInfo, err := t.getUserInfoFromTelegramUser(users[0]); err != nil {
+	} else if userInfo, err := t.getUserInfoFromTelegramUser(ctx, users[0]); err != nil {
 		return nil, err
 	} else if err = t.updateGhostWithUserInfo(ctx, userID, userInfo); err != nil {
 		return nil, err

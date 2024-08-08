@@ -235,7 +235,7 @@ func (t *TelegramClient) updateGhost(ctx context.Context, userID int64, user *tg
 	if err != nil {
 		return err
 	}
-	userInfo, err := t.getUserInfoFromTelegramUser(user)
+	userInfo, err := t.getUserInfoFromTelegramUser(ctx, user)
 	if err != nil {
 		return err
 	}
@@ -468,10 +468,12 @@ func (t *TelegramClient) inputPeerForPortalID(ctx context.Context, portalID netw
 	}
 	switch peerType {
 	case ids.PeerTypeUser:
-		if ghost, err := t.main.Bridge.DB.Ghost.GetByID(ctx, ids.MakeUserID(id)); err != nil {
-			return nil, err
+		if accessHash, found, err := t.ScopedStore.GetUserAccessHash(ctx, id); err != nil {
+			return nil, fmt.Errorf("failed to get user access hash for %d: %w", id, err)
+		} else if !found {
+			return nil, fmt.Errorf("user access hash not found for %d", id)
 		} else {
-			return &tg.InputPeerUser{UserID: id, AccessHash: ghost.Metadata.(*GhostMetadata).AccessHash}, nil
+			return &tg.InputPeerUser{UserID: id, AccessHash: accessHash}, nil
 		}
 	case ids.PeerTypeChat:
 		return &tg.InputPeerChat{ChatID: id}, nil
