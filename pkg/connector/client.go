@@ -168,6 +168,15 @@ func NewTelegramClient(ctx context.Context, tc *TelegramConnector, login *bridge
 		SessionStorage: client.ScopedStore,
 		Logger:         zaplog,
 		UpdateHandler:  updatesManager,
+		OnDead: func() {
+			login.BridgeState.Send(status.BridgeState{
+				StateEvent: status.StateTransientDisconnect,
+				Message:    "Telegram client disconnected",
+			})
+		},
+		OnSession: func() {
+			login.BridgeState.Send(status.BridgeState{StateEvent: status.StateConnected})
+		},
 	})
 	client.clientCancel, err = connectTelegramClient(ctx, client.client)
 
@@ -317,7 +326,6 @@ func connectTelegramClient(ctx context.Context, client *telegram.Client) (contex
 
 func (t *TelegramClient) Connect(ctx context.Context) (err error) {
 	t.clientCancel, err = connectTelegramClient(ctx, t.client)
-	t.userLogin.BridgeState.Send(status.BridgeState{StateEvent: status.StateConnected})
 	return
 }
 
