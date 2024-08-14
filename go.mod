@@ -54,3 +54,5 @@ require (
 	nhooyr.io/websocket v1.8.11 // indirect
 	rsc.io/qr v0.2.0 // indirect
 )
+
+replace github.com/gotd/td => github.com/beeper/td v0.107.1-0.20240814184019-6dd52cc45f51
