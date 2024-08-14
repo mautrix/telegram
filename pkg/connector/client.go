@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/gotd/td/telegram"
 	"github.com/gotd/td/telegram/updates"
@@ -177,6 +178,8 @@ func NewTelegramClient(ctx context.Context, tc *TelegramConnector, login *bridge
 		OnSession: func() {
 			login.BridgeState.Send(status.BridgeState{StateEvent: status.StateConnected})
 		},
+		PingTimeout:  time.Duration(tc.Config.Ping.TimeoutSeconds) * time.Second,
+		PingInterval: time.Duration(tc.Config.Ping.IntervalSeconds) * time.Second,
 	})
 	client.clientCancel, err = connectTelegramClient(ctx, client.client)
 

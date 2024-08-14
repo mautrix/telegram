@@ -47,3 +47,10 @@ member_list:
 #
 # -1 means no limit (which means all chats can be bridged)
 max_member_count: -1
+
+# Settings for pings to the Telegram server.
+ping:
+    # The interval (in seconds) between pings.
+    interval_seconds: 30
+    # The timeout (in seconds) for a single ping.
+    timeout_seconds: 10

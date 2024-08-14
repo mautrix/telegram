@@ -37,6 +37,11 @@ type TelegramConfig struct {
 	MemberList MemberListConfig `yaml:"member_list"`
 
 	MaxMemberCount int `yaml:"max_member_count"`
+
+	Ping struct {
+		IntervalSeconds int `yaml:"interval_seconds"`
+		TimeoutSeconds  int `yaml:"timeout_seconds"`
+	} `yaml:"ping"`
 }
 
 func (c TelegramConfig) ShouldBridge(participantCount int) bool {
@@ -58,6 +63,8 @@ func upgradeConfig(helper up.Helper) {
 	helper.Copy(up.Bool, "member_list", "sync_broadcast_channels")
 	helper.Copy(up.Bool, "member_list", "skip_deleted")
 	helper.Copy(up.Int, "max_member_count")
+	helper.Copy(up.Int, "ping", "interval_seconds")
+	helper.Copy(up.Int, "ping", "timeout_seconds")
 }
 
 func (tg *TelegramConnector) GetConfig() (example string, data any, upgrader up.Upgrader) {
