@@ -438,6 +438,9 @@ func (t *TelegramClient) HandleMatrixReadReceipt(ctx context.Context, msg *bridg
 			message, readMessagesErr = t.main.Bridge.DB.Message.GetLastPartAtOrBeforeTime(ctx, msg.Portal.PortalKey, time.Now())
 			if readMessagesErr != nil {
 				return
+			} else if message == nil {
+				zerolog.Ctx(ctx).Warn().Msg("no message found to read")
+				return
 			}
 		}
 		var maxID int
