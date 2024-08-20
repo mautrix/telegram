@@ -170,39 +170,11 @@ func NewTelegramClient(ctx context.Context, tc *TelegramConnector, login *bridge
 		SessionStorage: client.ScopedStore,
 		Logger:         zaplog,
 		UpdateHandler:  client.updatesManager,
-		OnDead: func() {
-			login.BridgeState.Send(status.BridgeState{
-				StateEvent: status.StateTransientDisconnect,
-				Message:    "Telegram client disconnected",
-			})
-		},
-		OnSession: func() {
-			authStatus, err := client.client.Auth().Status(ctx)
-			if err != nil {
-				login.BridgeState.Send(status.BridgeState{
-					StateEvent: status.StateUnknownError,
-					Error:      "tg-not-authenticated",
-					Message:    err.Error(),
-				})
-			} else if authStatus.Authorized {
-				login.BridgeState.Send(status.BridgeState{StateEvent: status.StateConnected})
-			} else {
-				login.BridgeState.Send(status.BridgeState{
-					StateEvent: status.StateBadCredentials,
-					Error:      "tg-no-auth",
-					Message:    "You're not logged in",
-				})
-			}
-		},
-		OnAuthError: func(err error) {
-			login.BridgeState.Send(status.BridgeState{
-				StateEvent: status.StateBadCredentials,
-				Error:      "tg-no-auth",
-				Message:    err.Error(),
-			})
-		},
-		PingTimeout:  time.Duration(tc.Config.Ping.TimeoutSeconds) * time.Second,
-		PingInterval: time.Duration(tc.Config.Ping.IntervalSeconds) * time.Second,
+		OnDead:         client.onDead,
+		OnSession:      client.onSession,
+		OnAuthError:    client.onAuthError,
+		PingTimeout:    time.Duration(tc.Config.Ping.TimeoutSeconds) * time.Second,
+		PingInterval:   time.Duration(tc.Config.Ping.IntervalSeconds) * time.Second,
 	})
 
 	client.telegramFmtParams = &telegramfmt.FormatParams{
@@ -340,6 +312,40 @@ func connectTelegramClient(ctx context.Context, client *telegram.Client) (contex
 	}
 
 	return cancel, nil
+}
+
+func (t *TelegramClient) onDead() {
+	t.userLogin.BridgeState.Send(status.BridgeState{
+		StateEvent: status.StateTransientDisconnect,
+		Message:    "Telegram client disconnected",
+	})
+}
+
+func (t *TelegramClient) onSession() {
+	authStatus, err := t.client.Auth().Status(context.Background())
+	if err != nil {
+		t.userLogin.BridgeState.Send(status.BridgeState{
+			StateEvent: status.StateUnknownError,
+			Error:      "tg-not-authenticated",
+			Message:    err.Error(),
+		})
+	} else if authStatus.Authorized {
+		t.userLogin.BridgeState.Send(status.BridgeState{StateEvent: status.StateConnected})
+	} else {
+		t.userLogin.BridgeState.Send(status.BridgeState{
+			StateEvent: status.StateBadCredentials,
+			Error:      "tg-no-auth",
+			Message:    "You're not logged in",
+		})
+	}
+}
+
+func (t *TelegramClient) onAuthError(err error) {
+	t.userLogin.BridgeState.Send(status.BridgeState{
+		StateEvent: status.StateBadCredentials,
+		Error:      "tg-no-auth",
+		Message:    err.Error(),
+	})
 }
 
 func (t *TelegramClient) Connect(ctx context.Context) (err error) {
