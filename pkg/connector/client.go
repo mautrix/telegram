@@ -444,7 +444,11 @@ func (t *TelegramClient) getUserInfoFromTelegramUser(ctx context.Context, u tg.U
 		avatar = &bridgev2.Avatar{
 			ID: ids.MakeAvatarID(photo.PhotoID),
 			Get: func(ctx context.Context) (data []byte, err error) {
-				data, _, err = media.NewTransferer(t.client.API()).WithUserPhoto(user, photo.PhotoID).Download(ctx)
+				transferer, err := media.NewTransferer(t.client.API()).WithUserPhoto(ctx, t.ScopedStore, user, photo.PhotoID)
+				if err != nil {
+					return nil, err
+				}
+				data, _, err = transferer.Download(ctx)
 				return
 			},
 		}

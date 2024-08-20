@@ -193,14 +193,20 @@ func (t *Transferer) WithPhoto(pc tg.PhotoClass) *ReadyTransferer {
 // WithUser transforms a [Transferer] to a [ReadyTransferer] by setting the
 // given user's photo as the location that will be downloaded by the
 // [ReadyTransferer].
-func (t *Transferer) WithUserPhoto(user *tg.User, photoID int64) *ReadyTransferer {
-	return &ReadyTransferer{
-		inner: t,
-		loc: &tg.InputPeerPhotoFileLocation{
-			Peer:    &tg.InputPeerUser{UserID: user.GetID()},
-			PhotoID: photoID,
-			Big:     true,
-		},
+func (t *Transferer) WithUserPhoto(ctx context.Context, store *store.ScopedStore, user *tg.User, photoID int64) (*ReadyTransferer, error) {
+	if accessHash, found, err := store.GetUserAccessHash(ctx, user.GetID()); err != nil {
+		return nil, fmt.Errorf("failed to get user access hash for %d: %w", user.GetID(), err)
+	} else if !found {
+		return nil, fmt.Errorf("user access hash not found for %d", user.GetID())
+	} else {
+		return &ReadyTransferer{
+			inner: t,
+			loc: &tg.InputPeerPhotoFileLocation{
+				Peer:    &tg.InputPeerUser{UserID: user.GetID(), AccessHash: accessHash},
+				PhotoID: photoID,
+				Big:     true,
+			},
+		}, nil
 	}
 }
 
