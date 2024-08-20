@@ -30,6 +30,10 @@ func MakeMessageID(messageID int) networkid.MessageID {
 	return networkid.MessageID(strconv.Itoa(messageID))
 }
 
+func MakePaginationCursorID(messageID int) networkid.PaginationCursor {
+	return networkid.PaginationCursor(strconv.Itoa(messageID))
+}
+
 func ParseMessageID(messageID networkid.MessageID) (int, error) {
 	return strconv.Atoi(string(messageID))
 }

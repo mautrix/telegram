@@ -16,8 +16,9 @@ import (
 
 func (t *TelegramClient) getDMChatInfo(ctx context.Context, userID int64) (*bridgev2.ChatInfo, error) {
 	chatInfo := bridgev2.ChatInfo{
-		Type:    ptr.Ptr(database.RoomTypeDM),
-		Members: &bridgev2.ChatMemberList{IsFull: true},
+		Type:        ptr.Ptr(database.RoomTypeDM),
+		Members:     &bridgev2.ChatMemberList{IsFull: true},
+		CanBackfill: true,
 	}
 	accessHash, found, err := t.ScopedStore.GetUserAccessHash(ctx, userID)
 	if err != nil {
@@ -57,25 +58,36 @@ func (t *TelegramClient) getGroupChatInfo(ctx context.Context, fullChat *tg.Mess
 		return nil, false, err
 	}
 
+	var name *string
+	var isBroadcastChannel, isMegagroup bool
+	for _, c := range fullChat.GetChats() {
+		if c.GetID() == chatID {
+			switch chat := c.(type) {
+			case *tg.Chat:
+				name = &chat.Title
+			case *tg.Channel:
+				name = &chat.Title
+				isBroadcastChannel = chat.Broadcast
+				isMegagroup = chat.Megagroup
+			}
+			break
+		}
+	}
+
 	chatInfo := bridgev2.ChatInfo{
+		Name: name,
 		Type: ptr.Ptr(database.RoomTypeGroupDM), // TODO Is this correct for channels?
 		Members: &bridgev2.ChatMemberList{
 			IsFull:  true,
 			Members: []bridgev2.ChatMember{{EventSender: t.mySender()}},
 		},
-	}
-	var isBroadcastChannel bool
-	for _, c := range fullChat.GetChats() {
-		if c.GetID() == chatID {
-			switch chat := c.(type) {
-			case *tg.Chat:
-				chatInfo.Name = &chat.Title
-			case *tg.Channel:
-				chatInfo.Name = &chat.Title
-				isBroadcastChannel = chat.Broadcast
-			}
-			break
-		}
+		CanBackfill: true,
+		ExtraUpdates: func(ctx context.Context, p *bridgev2.Portal) bool {
+			meta := p.Metadata.(*PortalMetadata)
+			changed := meta.IsSuperGroup != isMegagroup
+			meta.IsSuperGroup = isMegagroup
+			return changed
+		},
 	}
 
 	if ttl, ok := fullChat.FullChat.GetTTLPeriod(); ok {

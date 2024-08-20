@@ -87,7 +87,7 @@ func (tg *TelegramConnector) ValidateConfig() error {
 func (tg *TelegramConnector) GetDBMetaTypes() database.MetaTypes {
 	return database.MetaTypes{
 		Ghost:     func() any { return &GhostMetadata{} },
-		Portal:    nil,
+		Portal:    func() any { return &PortalMetadata{} },
 		Message:   func() any { return &MessageMetadata{} },
 		Reaction:  nil,
 		UserLogin: func() any { return &UserLoginMetadata{} },
@@ -97,6 +97,10 @@ func (tg *TelegramConnector) GetDBMetaTypes() database.MetaTypes {
 type GhostMetadata struct {
 	IsPremium bool `json:"is_premium,omitempty"`
 	IsBot     bool `json:"is_bot,omitempty"`
+}
+
+type PortalMetadata struct {
+	IsSuperGroup bool `json:"is_supergroup,omitempty"`
 }
 
 type MessageMetadata struct {

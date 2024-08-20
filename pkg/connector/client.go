@@ -48,13 +48,15 @@ type TelegramClient struct {
 }
 
 var (
-	_ bridgev2.NetworkAPI                    = (*TelegramClient)(nil)
-	_ bridgev2.EditHandlingNetworkAPI        = (*TelegramClient)(nil)
-	_ bridgev2.ReactionHandlingNetworkAPI    = (*TelegramClient)(nil)
-	_ bridgev2.RedactionHandlingNetworkAPI   = (*TelegramClient)(nil)
-	_ bridgev2.ReadReceiptHandlingNetworkAPI = (*TelegramClient)(nil)
-	_ bridgev2.ReadReceiptHandlingNetworkAPI = (*TelegramClient)(nil)
-	_ bridgev2.TypingHandlingNetworkAPI      = (*TelegramClient)(nil)
+	_ bridgev2.NetworkAPI                      = (*TelegramClient)(nil)
+	_ bridgev2.EditHandlingNetworkAPI          = (*TelegramClient)(nil)
+	_ bridgev2.ReactionHandlingNetworkAPI      = (*TelegramClient)(nil)
+	_ bridgev2.RedactionHandlingNetworkAPI     = (*TelegramClient)(nil)
+	_ bridgev2.ReadReceiptHandlingNetworkAPI   = (*TelegramClient)(nil)
+	_ bridgev2.ReadReceiptHandlingNetworkAPI   = (*TelegramClient)(nil)
+	_ bridgev2.TypingHandlingNetworkAPI        = (*TelegramClient)(nil)
+	_ bridgev2.BackfillingNetworkAPI           = (*TelegramClient)(nil)
+	_ bridgev2.BackfillingNetworkAPIWithLimits = (*TelegramClient)(nil)
 	// _ bridgev2.IdentifierResolvingNetworkAPI = (*TelegramClient)(nil)
 	// _ bridgev2.GroupCreatingNetworkAPI       = (*TelegramClient)(nil)
 	// _ bridgev2.ContactListingNetworkAPI      = (*TelegramClient)(nil)

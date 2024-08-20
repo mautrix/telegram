@@ -359,140 +359,6 @@ func (t *TelegramClient) onOwnReadReceipt(portalKey networkid.PortalKey, maxID i
 	return nil
 }
 
-func (t *TelegramClient) handleTelegramReactions(ctx context.Context, msg *tg.Message) {
-	log := zerolog.Ctx(ctx).With().
-		Str("handler", "handle_telegram_reactions").
-		Int("message_id", msg.ID).
-		Logger()
-
-	if _, set := msg.GetReactions(); !set {
-		log.Debug().Msg("no reactions set on message")
-		return
-	}
-	var totalCount int
-	for _, r := range msg.Reactions.Results {
-		totalCount += r.Count
-	}
-
-	reactionsList := msg.Reactions.RecentReactions
-	if totalCount > 0 && len(reactionsList) == 0 && !msg.Reactions.CanSeeList {
-		// We don't know who reacted in a channel, so we can't bridge it properly either
-		log.Warn().Msg("Can't see reaction list in channel")
-		return
-	}
-
-	// TODO
-	// if self.peer_type == "channel" and not self.megagroup:
-	//     # This should never happen with the previous if
-	//     self.log.warning(f"Can see reaction list in channel ({data!s})")
-	//     # return
-
-	dbMsg, err := t.main.Bridge.DB.Message.GetFirstPartByID(ctx, t.loginID, ids.MakeMessageID(msg.ID))
-	if err != nil {
-		log.Err(err).Msg("failed to get message from database")
-		return
-	} else if dbMsg == nil {
-		log.Warn().Msg("no message found in database")
-		return
-	}
-
-	if len(reactionsList) < totalCount {
-		if user, ok := msg.PeerID.(*tg.PeerUser); ok {
-			reactionsList = splitDMReactionCounts(msg.Reactions.Results, user.UserID, t.telegramUserID)
-
-			// TODO
-			// } else if t.isBot {
-			// 	// Can't fetch exact reaction senders as a bot
-			// 	return
-
-			// TODO should calls to this be limited?
-		} else if peer, err := t.inputPeerForPortalID(ctx, ids.MakePortalKey(msg.PeerID, t.loginID).ID); err != nil {
-			log.Err(err).Msg("failed to get input peer")
-			return
-		} else {
-			reactions, err := t.client.API().MessagesGetMessageReactionsList(ctx, &tg.MessagesGetMessageReactionsListRequest{
-				Peer: peer, ID: msg.ID, Limit: 100,
-			})
-			if err != nil {
-				log.Err(err).Msg("failed to get reactions list")
-				return
-			}
-			reactionsList = reactions.Reactions
-		}
-	}
-
-	var customEmojiIDs []int64
-	for _, reaction := range reactionsList {
-		if e, ok := reaction.Reaction.(*tg.ReactionCustomEmoji); ok {
-			customEmojiIDs = append(customEmojiIDs, e.DocumentID)
-		} else if reaction.Reaction.TypeID() != tg.ReactionEmojiTypeID {
-			log.Error().Type("reaction", reaction.Reaction).Msg("unknown reaction type")
-			return
-		}
-	}
-
-	customEmojis, err := t.transferEmojisToMatrix(ctx, customEmojiIDs)
-	if err != nil {
-		log.Err(err).Msg("failed to transfer emojis")
-		return
-	}
-
-	isFull := len(reactionsList) == totalCount
-	users := map[networkid.UserID]*bridgev2.ReactionSyncUser{}
-	for _, reaction := range reactionsList {
-		peer, ok := reaction.PeerID.(*tg.PeerUser)
-		if !ok {
-			log.Error().Type("peer_id", reaction.PeerID).Msg("unknown peer type")
-			return
-		}
-		userID := ids.MakeUserID(peer.UserID)
-		reactionLimit, err := t.getReactionLimit(ctx, userID)
-		if err != nil {
-			reactionLimit = 1
-			log.Err(err).Int64("id", peer.UserID).Msg("failed to get reaction limit")
-		}
-		if _, ok := users[userID]; !ok {
-			users[userID] = &bridgev2.ReactionSyncUser{HasAllReactions: isFull, MaxCount: reactionLimit}
-		}
-
-		var emojiID networkid.EmojiID
-		var emoji string
-		if r, ok := reaction.Reaction.(*tg.ReactionCustomEmoji); ok {
-			emojiID = ids.MakeEmojiIDFromDocumentID(r.DocumentID)
-			emoji = customEmojis[emojiID]
-		} else if r, ok := reaction.Reaction.(*tg.ReactionEmoji); ok {
-			emojiID = ids.MakeEmojiIDFromEmoticon(r.Emoticon)
-			emoji = r.Emoticon
-		} else {
-			log.Error().Type("reaction_type", reaction.Reaction).Msg("invalid reaction type")
-			return
-		}
-
-		users[userID].Reactions = append(users[userID].Reactions, &bridgev2.BackfillReaction{
-			Timestamp: time.Unix(int64(reaction.Date), 0),
-			Sender: bridgev2.EventSender{
-				IsFromMe:    reaction.My,
-				SenderLogin: ids.MakeUserLoginID(peer.UserID),
-				Sender:      userID,
-			},
-			EmojiID: emojiID,
-			Emoji:   emoji,
-		})
-	}
-
-	t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.ReactionSync{
-		EventMeta: simplevent.EventMeta{
-			Type: bridgev2.RemoteEventReactionSync,
-			LogContext: func(c zerolog.Context) zerolog.Context {
-				return c.Int("message_id", msg.ID)
-			},
-			PortalKey: dbMsg.Room,
-		},
-		TargetMessage: dbMsg.ID,
-		Reactions:     &bridgev2.ReactionSyncData{Users: users, HasAllUsers: isFull},
-	})
-}
-
 func (t *TelegramClient) inputPeerForPortalID(ctx context.Context, portalID networkid.PortalID) (tg.InputPeerClass, error) {
 	peerType, id, err := ids.ParsePortalID(portalID)
 	if err != nil {
@@ -522,25 +388,6 @@ func (t *TelegramClient) inputPeerForPortalID(ctx context.Context, portalID netw
 	}
 }
 
-func splitDMReactionCounts(res []tg.ReactionCount, theirUserID, myUserID int64) (reactions []tg.MessagePeerReaction) {
-	for _, item := range res {
-		if item.Count == 2 || item.ChosenOrder > 0 {
-			reactions = append(reactions, tg.MessagePeerReaction{
-				Reaction: item.Reaction,
-				PeerID:   &tg.PeerUser{UserID: myUserID},
-			})
-		}
-
-		if item.Count == 2 {
-			reactions = append(reactions, tg.MessagePeerReaction{
-				Reaction: item.Reaction,
-				PeerID:   &tg.PeerUser{UserID: theirUserID},
-			})
-		}
-	}
-	return
-}
-
 func (t *TelegramClient) getAppConfigCached(ctx context.Context) (map[string]any, error) {
 	if t.appConfig == nil {
 		cfg, err := t.client.API().HelpGetAppConfig(ctx, t.appConfigHash)
@@ -562,23 +409,6 @@ func (t *TelegramClient) getAppConfigCached(ctx context.Context) (map[string]any
 		t.appConfigHash = appConfig.Hash
 	}
 	return t.appConfig, nil
-}
-
-func (t *TelegramClient) getReactionLimit(ctx context.Context, sender networkid.UserID) (limit int, err error) {
-	config, err := t.getAppConfigCached(ctx)
-	if err != nil {
-		return 0, err
-	}
-
-	ghost, err := t.main.Bridge.GetGhostByID(ctx, sender)
-	if err != nil {
-		return 0, err
-	}
-	if ghost.Metadata.(*GhostMetadata).IsPremium {
-		return int(config["reactions_user_max_premium"].(float64)), nil
-	} else {
-		return int(config["reactions_user_max_default"].(float64)), nil
-	}
 }
 
 func (t *TelegramClient) transferEmojisToMatrix(ctx context.Context, customEmojiIDs []int64) (result map[networkid.EmojiID]string, err error) {
