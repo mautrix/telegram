@@ -19,8 +19,16 @@ func (t *TelegramClient) getDMChatInfo(ctx context.Context, userID int64) (*brid
 		Type:    ptr.Ptr(database.RoomTypeDM),
 		Members: &bridgev2.ChatMemberList{IsFull: true},
 	}
-	// TODO need access hash here
-	users, err := t.client.API().UsersGetUsers(ctx, []tg.InputUserClass{&tg.InputUser{UserID: userID}})
+	accessHash, found, err := t.ScopedStore.GetUserAccessHash(ctx, userID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get access hash for user %d: %w", userID, err)
+	} else if !found {
+		return nil, fmt.Errorf("access hash not found for user %d", userID)
+	}
+	users, err := t.client.API().UsersGetUsers(ctx, []tg.InputUserClass{&tg.InputUser{
+		UserID:     userID,
+		AccessHash: accessHash,
+	}})
 	if err != nil {
 		return nil, err
 	} else if len(users) == 0 {
