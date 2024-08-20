@@ -37,6 +37,7 @@ type TelegramClient struct {
 	userID         networkid.UserID
 	userLogin      *bridgev2.UserLogin
 	client         *telegram.Client
+	updatesManager *updates.Manager
 	clientCancel   context.CancelFunc
 
 	appConfig     map[string]any
@@ -155,7 +156,7 @@ func NewTelegramClient(ctx context.Context, tc *TelegramConnector, login *bridge
 
 	client.ScopedStore = tc.Store.GetScopedStore(telegramUserID)
 
-	updatesManager := updates.New(updates.Config{
+	client.updatesManager = updates.New(updates.Config{
 		OnChannelTooLong: func(channelID int64) {
 			log.Warn().Int64("channel_id", channelID).Msg("channel too long")
 		},
@@ -168,7 +169,7 @@ func NewTelegramClient(ctx context.Context, tc *TelegramConnector, login *bridge
 	client.client = telegram.NewClient(tc.Config.AppID, tc.Config.AppHash, telegram.Options{
 		SessionStorage: client.ScopedStore,
 		Logger:         zaplog,
-		UpdateHandler:  updatesManager,
+		UpdateHandler:  client.updatesManager,
 		OnDead: func() {
 			login.BridgeState.Send(status.BridgeState{
 				StateEvent: status.StateTransientDisconnect,
@@ -176,12 +177,33 @@ func NewTelegramClient(ctx context.Context, tc *TelegramConnector, login *bridge
 			})
 		},
 		OnSession: func() {
-			login.BridgeState.Send(status.BridgeState{StateEvent: status.StateConnected})
+			authStatus, err := client.client.Auth().Status(ctx)
+			if err != nil {
+				login.BridgeState.Send(status.BridgeState{
+					StateEvent: status.StateUnknownError,
+					Error:      "tg-not-authenticated",
+					Message:    err.Error(),
+				})
+			} else if authStatus.Authorized {
+				login.BridgeState.Send(status.BridgeState{StateEvent: status.StateConnected})
+			} else {
+				login.BridgeState.Send(status.BridgeState{
+					StateEvent: status.StateBadCredentials,
+					Error:      "tg-no-auth",
+					Message:    "You're not logged in",
+				})
+			}
+		},
+		OnAuthError: func(err error) {
+			login.BridgeState.Send(status.BridgeState{
+				StateEvent: status.StateBadCredentials,
+				Error:      "tg-no-auth",
+				Message:    err.Error(),
+			})
 		},
 		PingTimeout:  time.Duration(tc.Config.Ping.TimeoutSeconds) * time.Second,
 		PingInterval: time.Duration(tc.Config.Ping.IntervalSeconds) * time.Second,
 	})
-	client.clientCancel, err = connectTelegramClient(ctx, client.client)
 
 	client.telegramFmtParams = &telegramfmt.FormatParams{
 		GetUserInfoByID: func(ctx context.Context, id int64) (telegramfmt.UserInfo, error) {
@@ -284,13 +306,6 @@ func NewTelegramClient(ctx context.Context, tc *TelegramConnector, login *bridge
 		},
 	}
 
-	go func() {
-		err = updatesManager.Run(ctx, client.client.API(), telegramUserID, updates.AuthOptions{})
-		if err != nil {
-			log.Err(err).Msg("updates manager error")
-			client.clientCancel()
-		}
-	}()
 	return &client, err
 }
 
@@ -329,6 +344,16 @@ func connectTelegramClient(ctx context.Context, client *telegram.Client) (contex
 
 func (t *TelegramClient) Connect(ctx context.Context) (err error) {
 	t.clientCancel, err = connectTelegramClient(ctx, t.client)
+	if err != nil {
+		return err
+	}
+	go func() {
+		err = t.updatesManager.Run(ctx, t.client.API(), t.telegramUserID, updates.AuthOptions{})
+		if err != nil {
+			zerolog.Ctx(ctx).Err(err).Msg("failed to run updates manager")
+			t.clientCancel()
+		}
+	}()
 	return
 }
 
