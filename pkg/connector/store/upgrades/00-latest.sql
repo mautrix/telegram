@@ -1,4 +1,4 @@
--- v0 -> v2: Latest revision
+-- v0 -> v3: Latest revision
 
 CREATE TABLE telegram_session (
     user_id      INTEGER PRIMARY KEY,
