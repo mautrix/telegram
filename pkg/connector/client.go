@@ -18,7 +18,9 @@ import (
 	"go.uber.org/zap"
 	"maunium.net/go/mautrix/bridge/status"
 	"maunium.net/go/mautrix/bridgev2"
+	"maunium.net/go/mautrix/bridgev2/database"
 	"maunium.net/go/mautrix/bridgev2/networkid"
+	"maunium.net/go/mautrix/bridgev2/simplevent"
 	"maunium.net/go/mautrix/id"
 
 	"go.mau.fi/mautrix-telegram/pkg/connector/ids"
@@ -160,7 +162,16 @@ func NewTelegramClient(ctx context.Context, tc *TelegramConnector, login *bridge
 
 	client.updatesManager = updates.New(updates.Config{
 		OnChannelTooLong: func(channelID int64) {
-			log.Warn().Int64("channel_id", channelID).Msg("channel too long")
+			tc.Bridge.QueueRemoteEvent(login, &simplevent.ChatResync{
+				EventMeta: simplevent.EventMeta{
+					Type: bridgev2.RemoteEventChatResync,
+					LogContext: func(c zerolog.Context) zerolog.Context {
+						return c.Str("update", "channel_too_long").Int64("channel_id", channelID)
+					},
+					PortalKey: ids.PeerTypeChannel.AsPortalKey(channelID, login.ID),
+				},
+				CheckNeedsBackfillFunc: func(ctx context.Context, latestMessage *database.Message) (bool, error) { return true, nil },
+			})
 		},
 		Handler:      dispatcher,
 		Logger:       zaplog.Named("gaps"),
@@ -250,6 +261,9 @@ func NewTelegramClient(ctx context.Context, tc *TelegramConnector, login *bridge
 			portal, err := tc.Bridge.DB.Portal.GetByKey(ctx, portalKey)
 			if err != nil {
 				log.Err(err).Msg("error getting portal")
+				return url
+			} else if portal == nil {
+				log.Warn().Msg("portal not found")
 				return url
 			}
 
