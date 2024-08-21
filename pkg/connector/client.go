@@ -55,11 +55,11 @@ var (
 	_ bridgev2.ReactionHandlingNetworkAPI      = (*TelegramClient)(nil)
 	_ bridgev2.RedactionHandlingNetworkAPI     = (*TelegramClient)(nil)
 	_ bridgev2.ReadReceiptHandlingNetworkAPI   = (*TelegramClient)(nil)
-	_ bridgev2.ReadReceiptHandlingNetworkAPI   = (*TelegramClient)(nil)
 	_ bridgev2.TypingHandlingNetworkAPI        = (*TelegramClient)(nil)
 	_ bridgev2.BackfillingNetworkAPI           = (*TelegramClient)(nil)
 	_ bridgev2.BackfillingNetworkAPIWithLimits = (*TelegramClient)(nil)
-	// _ bridgev2.IdentifierResolvingNetworkAPI = (*TelegramClient)(nil)
+	_ bridgev2.IdentifierResolvingNetworkAPI   = (*TelegramClient)(nil)
+	_ bridgev2.UserSearchingNetworkAPI         = (*TelegramClient)(nil)
 	// _ bridgev2.GroupCreatingNetworkAPI       = (*TelegramClient)(nil)
 	// _ bridgev2.ContactListingNetworkAPI      = (*TelegramClient)(nil)
 )
@@ -390,30 +390,38 @@ func (t *TelegramClient) Disconnect() {
 	t.clientCancel()
 }
 
+func (t *TelegramClient) getInputUser(ctx context.Context, id int64) (*tg.InputUser, error) {
+	accessHash, err := t.ScopedStore.GetAccessHash(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get access hash for user %d: %w", id, err)
+	}
+	return &tg.InputUser{UserID: id, AccessHash: accessHash}, nil
+}
+
+func (t *TelegramClient) getSingleUser(ctx context.Context, id int64) (tg.UserClass, error) {
+	if inputUser, err := t.getInputUser(ctx, id); err != nil {
+		return nil, err
+	} else if users, err := t.client.API().UsersGetUsers(ctx, []tg.InputUserClass{inputUser}); err != nil {
+		return nil, err
+	} else if len(users) == 0 {
+		return nil, fmt.Errorf("failed to get user info for user %d", id)
+	} else {
+		return users[0], nil
+	}
+}
+
 func (t *TelegramClient) GetUserInfo(ctx context.Context, ghost *bridgev2.Ghost) (*bridgev2.UserInfo, error) {
 	id, err := ids.ParseUserID(ghost.ID)
 	if err != nil {
 		return nil, err
 	}
-	accessHash, err := t.ScopedStore.GetAccessHash(ctx, id)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get access hash for user %d: %w", id, err)
-	}
-	users, err := t.client.API().UsersGetUsers(ctx, []tg.InputUserClass{&tg.InputUser{
-		UserID:     id,
-		AccessHash: accessHash,
-	}})
-	if err != nil {
+	if user, err := t.getSingleUser(ctx, id); err != nil {
+		return nil, fmt.Errorf("failed to get user %d: %w", id, err)
+	} else if userInfo, err := t.getUserInfoFromTelegramUser(ctx, user); err != nil {
 		return nil, err
+	} else {
+		return userInfo, t.updateGhostWithUserInfo(ctx, id, userInfo)
 	}
-	if len(users) == 0 {
-		return nil, fmt.Errorf("failed to get user info for user %d", id)
-	}
-	userInfo, err := t.getUserInfoFromTelegramUser(ctx, users[0])
-	if err != nil {
-		return nil, err
-	}
-	return userInfo, t.updateGhostWithUserInfo(ctx, id, userInfo)
 }
 
 func (t *TelegramClient) getUserInfoFromTelegramUser(ctx context.Context, u tg.UserClass) (*bridgev2.UserInfo, error) {
@@ -437,7 +445,11 @@ func (t *TelegramClient) getUserInfoFromTelegramUser(ctx context.Context, u tg.U
 			identifiers = append(identifiers, fmt.Sprintf("telegram:%s", username.Username))
 		}
 		if phone, ok := user.GetPhone(); ok {
-			identifiers = append(identifiers, fmt.Sprintf("tel:+%s", strings.TrimPrefix(phone, "+")))
+			normalized := strings.TrimPrefix(phone, "+")
+			identifiers = append(identifiers, fmt.Sprintf("tel:+%s", normalized))
+			if err := t.ScopedStore.SetPhoneNumber(ctx, user.ID, normalized); err != nil {
+				return nil, err
+			}
 		}
 	}
 	slices.Sort(identifiers)

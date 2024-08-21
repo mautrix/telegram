@@ -15,41 +15,23 @@ import (
 	"go.mau.fi/mautrix-telegram/pkg/connector/media"
 )
 
-func (t *TelegramClient) getDMChatInfo(ctx context.Context, userID int64) (*bridgev2.ChatInfo, error) {
-	// FIXME there's no reason for this function to fetch the user info
+func (t *TelegramClient) getDMChatInfo(userID int64) (*bridgev2.ChatInfo, error) {
+	networkUserID := ids.MakeUserID(userID)
 	chatInfo := bridgev2.ChatInfo{
-		Type:        ptr.Ptr(database.RoomTypeDM),
-		Members:     &bridgev2.ChatMemberList{IsFull: true},
-		CanBackfill: true,
-	}
-	accessHash, err := t.ScopedStore.GetAccessHash(ctx, userID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get access hash for user %d: %w", userID, err)
-	}
-	users, err := t.client.API().UsersGetUsers(ctx, []tg.InputUserClass{&tg.InputUser{
-		UserID:     userID,
-		AccessHash: accessHash,
-	}})
-	if err != nil {
-		return nil, err
-	} else if len(users) == 0 {
-		return nil, fmt.Errorf("failed to get user info for user %d", userID)
-	} else if userInfo, err := t.getUserInfoFromTelegramUser(ctx, users[0]); err != nil {
-		return nil, err
-	} else if err = t.updateGhostWithUserInfo(ctx, userID, userInfo); err != nil {
-		return nil, err
-	} else {
-		networkUserID := ids.MakeUserID(userID)
-		chatInfo.Members.MemberMap = map[networkid.UserID]bridgev2.ChatMember{
-			networkUserID: {
-				EventSender: bridgev2.EventSender{
-					SenderLogin: ids.MakeUserLoginID(userID),
-					Sender:      ids.MakeUserID(userID),
+		Type: ptr.Ptr(database.RoomTypeDM),
+		Members: &bridgev2.ChatMemberList{
+			IsFull: true,
+			MemberMap: map[networkid.UserID]bridgev2.ChatMember{
+				networkUserID: {
+					EventSender: bridgev2.EventSender{
+						SenderLogin: ids.MakeUserLoginID(userID),
+						Sender:      networkUserID,
+					},
 				},
-				UserInfo: userInfo,
+				t.userID: {EventSender: t.mySender()},
 			},
-			t.userID: {EventSender: t.mySender()},
-		}
+		},
+		CanBackfill: true,
 	}
 	if userID == t.telegramUserID {
 		// TODO also hardcode the avatar used by telegram?
@@ -150,7 +132,7 @@ func (t *TelegramClient) GetChatInfo(ctx context.Context, portal *bridgev2.Porta
 
 	switch peerType {
 	case ids.PeerTypeUser:
-		return t.getDMChatInfo(ctx, id)
+		return t.getDMChatInfo(id)
 	case ids.PeerTypeChat:
 		fullChat, err := APICallWithUpdates(ctx, t, func() (*tg.MessagesChatFull, error) {
 			return t.client.API().MessagesGetFullChat(ctx, id)

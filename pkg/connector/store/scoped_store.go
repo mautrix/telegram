@@ -57,6 +57,15 @@ const (
 		ON CONFLICT (username) DO UPDATE SET entity_id=excluded.entity_id
 	`
 	clearUsernameQuery = `DELETE FROM telegram_username WHERE entity_id=$1`
+
+	// User Phone Number Queries
+	getEntityIDForPhoneNumber = "SELECT entity_id FROM telegram_phone_number WHERE phone_number=$1"
+	setPhoneNumberQuery       = `
+		INSERT INTO telegram_phone_number (phone_number, entity_id)
+		VALUES ($1, $2)
+		ON CONFLICT (phone_number) DO UPDATE SET entity_id=excluded.entity_id
+	`
+	clearPhoneNumberQuery = "DELETE FROM telegram_phone_number WHERE entity_id=$1"
 )
 
 var _ updates.StateStorage = (*ScopedStore)(nil)
@@ -183,6 +192,23 @@ func (s *ScopedStore) SetUsername(ctx context.Context, userID int64, username st
 		_, err = s.db.Exec(ctx, clearUsernameQuery, userID)
 	} else {
 		_, err = s.db.Exec(ctx, setUsernameQuery, username, userID)
+	}
+	return
+}
+
+func (s *ScopedStore) GetUserIDByPhoneNumber(ctx context.Context, phoneNumber string) (userID int64, err error) {
+	err = s.db.QueryRow(ctx, getEntityIDForPhoneNumber, phoneNumber).Scan(&userID)
+	if errors.Is(err, sql.ErrNoRows) {
+		err = nil
+	}
+	return
+}
+
+func (s *ScopedStore) SetPhoneNumber(ctx context.Context, userID int64, phoneNumber string) (err error) {
+	if phoneNumber == "" {
+		_, err = s.db.Exec(ctx, clearPhoneNumberQuery, userID)
+	} else {
+		_, err = s.db.Exec(ctx, setPhoneNumberQuery, phoneNumber, userID)
 	}
 	return
 }

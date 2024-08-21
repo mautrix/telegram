@@ -35,6 +35,15 @@ CREATE TABLE telegram_username (
 
 CREATE INDEX telegram_username_entity_idx ON telegram_username (entity_id);
 
+CREATE TABLE telegram_phone_number (
+    phone_number  TEXT   NOT NULL,
+    entity_id     BIGINT NOT NULL,
+
+    PRIMARY KEY (phone_number)
+);
+
+CREATE INDEX telegram_phone_number_entity_idx ON telegram_phone_number (entity_id);
+
 CREATE TABLE telegram_file (
     id        TEXT PRIMARY KEY,
     mxc       TEXT NOT NULL,
