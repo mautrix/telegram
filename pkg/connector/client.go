@@ -383,21 +383,6 @@ func (t *TelegramClient) Disconnect() {
 	t.clientCancel()
 }
 
-func (t *TelegramClient) updateUsersFromResponse(ctx context.Context, resp interface{ GetUsers() []tg.UserClass }) error {
-	// TODO table for the access hashes?
-	for _, user := range resp.GetUsers() {
-		user, ok := user.(*tg.User)
-		if !ok {
-			return fmt.Errorf("user is %T not *tg.User", user)
-		}
-		err := t.updateGhost(ctx, user.ID, user)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 func (t *TelegramClient) GetUserInfo(ctx context.Context, ghost *bridgev2.Ghost) (*bridgev2.UserInfo, error) {
 	id, err := ids.ParseUserID(ghost.ID)
 	if err != nil {

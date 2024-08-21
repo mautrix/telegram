@@ -53,11 +53,7 @@ func (t *TelegramClient) getDMChatInfo(ctx context.Context, userID int64) (*brid
 	return &chatInfo, nil
 }
 
-func (t *TelegramClient) getGroupChatInfo(ctx context.Context, fullChat *tg.MessagesChatFull, chatID int64) (*bridgev2.ChatInfo, bool, error) {
-	if err := t.updateUsersFromResponse(ctx, fullChat); err != nil {
-		return nil, false, err
-	}
-
+func (t *TelegramClient) getGroupChatInfo(fullChat *tg.MessagesChatFull, chatID int64) (*bridgev2.ChatInfo, bool, error) {
 	var name *string
 	var isBroadcastChannel, isMegagroup bool
 	for _, c := range fullChat.GetChats() {
@@ -140,7 +136,6 @@ func (t *TelegramClient) filterChannelParticipants(chatParticipants []tg.Channel
 }
 
 func (t *TelegramClient) GetChatInfo(ctx context.Context, portal *bridgev2.Portal) (*bridgev2.ChatInfo, error) {
-	// fmt.Printf("get chat info %+v\n", portal)
 	peerType, id, err := ids.ParsePortalID(portal.ID)
 	if err != nil {
 		return nil, err
@@ -150,11 +145,13 @@ func (t *TelegramClient) GetChatInfo(ctx context.Context, portal *bridgev2.Porta
 	case ids.PeerTypeUser:
 		return t.getDMChatInfo(ctx, id)
 	case ids.PeerTypeChat:
-		fullChat, err := t.client.API().MessagesGetFullChat(ctx, id)
+		fullChat, err := APICallWithUpdates(ctx, t, func() (*tg.MessagesChatFull, error) {
+			return t.client.API().MessagesGetFullChat(ctx, id)
+		})
 		if err != nil {
 			return nil, err
 		}
-		chatInfo, _, err := t.getGroupChatInfo(ctx, fullChat, id)
+		chatInfo, _, err := t.getGroupChatInfo(fullChat, id)
 		if err != nil {
 			return nil, err
 		}
@@ -202,12 +199,14 @@ func (t *TelegramClient) GetChatInfo(ctx context.Context, portal *bridgev2.Porta
 			return nil, fmt.Errorf("channel access hash not found for %d", id)
 		}
 		inputChannel := &tg.InputChannel{ChannelID: id, AccessHash: accessHash}
-		fullChat, err := t.client.API().ChannelsGetFullChannel(ctx, inputChannel)
+		fullChat, err := APICallWithUpdates(ctx, t, func() (*tg.MessagesChatFull, error) {
+			return t.client.API().ChannelsGetFullChannel(ctx, inputChannel)
+		})
 		if err != nil {
 			return nil, err
 		}
 
-		chatInfo, isBroadcastChannel, err := t.getGroupChatInfo(ctx, fullChat, id)
+		chatInfo, isBroadcastChannel, err := t.getGroupChatInfo(fullChat, id)
 		if err != nil {
 			return nil, err
 		}
@@ -245,32 +244,47 @@ func (t *TelegramClient) GetChatInfo(ctx context.Context, portal *bridgev2.Porta
 
 		limit := t.main.Config.MemberList.NormalizedMaxInitialSync()
 		if limit <= 200 {
-			p, err := t.client.API().ChannelsGetParticipants(ctx, &tg.ChannelsGetParticipantsRequest{
-				Channel: inputChannel,
-				Filter:  &tg.ChannelParticipantsRecent{},
-				Limit:   limit,
+			participants, err := APICallWithUpdates(ctx, t, func() (*tg.ChannelsChannelParticipants, error) {
+				p, err := t.client.API().ChannelsGetParticipants(ctx, &tg.ChannelsGetParticipantsRequest{
+					Channel: inputChannel,
+					Filter:  &tg.ChannelParticipantsRecent{},
+					Limit:   limit,
+				})
+				if err != nil {
+					return nil, err
+				}
+				participants, ok := p.(*tg.ChannelsChannelParticipants)
+				if !ok {
+					return nil, fmt.Errorf("returned participants is %T not *tg.ChannelsChannelParticipants", p)
+				} else {
+					return participants, nil
+				}
 			})
 			if err != nil {
 				return nil, err
 			}
-			participants, ok := p.(*tg.ChannelsChannelParticipants)
-			if !ok {
-				return nil, fmt.Errorf("returned participants is %T not *tg.ChannelsChannelParticipants", p)
-			}
 			chatInfo.Members.IsFull = len(participants.Participants) < limit
-			if err := t.updateUsersFromResponse(ctx, participants); err != nil {
-				return nil, err
-			}
 			chatInfo.Members.Members = append(chatInfo.Members.Members, t.filterChannelParticipants(participants.Participants, limit)...)
 		} else {
 			remaining := t.main.Config.MemberList.NormalizedMaxInitialSync()
 			var offset int
 			for remaining > 0 {
-				p, err := t.client.API().ChannelsGetParticipants(ctx, &tg.ChannelsGetParticipantsRequest{
-					Channel: inputChannel,
-					Filter:  &tg.ChannelParticipantsSearch{},
-					Limit:   min(remaining, 200),
-					Offset:  offset,
+				participants, err := APICallWithUpdates(ctx, t, func() (*tg.ChannelsChannelParticipants, error) {
+					p, err := t.client.API().ChannelsGetParticipants(ctx, &tg.ChannelsGetParticipantsRequest{
+						Channel: inputChannel,
+						Filter:  &tg.ChannelParticipantsSearch{},
+						Limit:   min(remaining, 200),
+						Offset:  offset,
+					})
+					if err != nil {
+						return nil, err
+					}
+					participants, ok := p.(*tg.ChannelsChannelParticipants)
+					if !ok {
+						return nil, fmt.Errorf("returned participants is %T not *tg.ChannelsChannelParticipants", p)
+					} else {
+						return participants, nil
+					}
 				})
 				if err != nil {
 					return nil, err
@@ -282,10 +296,6 @@ func (t *TelegramClient) GetChatInfo(ctx context.Context, portal *bridgev2.Porta
 				if len(participants.Participants) == 0 {
 					chatInfo.Members.IsFull = true
 					break
-				}
-
-				if err := t.updateUsersFromResponse(ctx, participants); err != nil {
-					return nil, err
 				}
 				chatInfo.Members.Members = append(chatInfo.Members.Members, t.filterChannelParticipants(participants.Participants, limit)...)
 

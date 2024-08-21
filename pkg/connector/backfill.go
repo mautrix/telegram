@@ -36,13 +36,19 @@ func (t *TelegramClient) FetchMessages(ctx context.Context, fetchParams bridgev2
 			return nil, err
 		}
 	}
-	rawMsgs, err := t.client.API().MessagesGetHistory(ctx, &req)
+	msgs, err := APICallWithUpdates(ctx, t, func() (tg.ModifiedMessagesMessages, error) {
+		rawMsgs, err := t.client.API().MessagesGetHistory(ctx, &req)
+		if err != nil {
+			return nil, err
+		}
+		msgs, ok := rawMsgs.(tg.ModifiedMessagesMessages)
+		if !ok {
+			return nil, fmt.Errorf("unsupported messages type %T", rawMsgs)
+		}
+		return msgs, nil
+	})
 	if err != nil {
 		return nil, err
-	}
-	msgs, ok := rawMsgs.(interface{ GetMessages() []tg.MessageClass })
-	if !ok {
-		return nil, fmt.Errorf("unsupported messages type %T", rawMsgs)
 	}
 
 	var markRead bool // TODO implement

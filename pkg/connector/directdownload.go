@@ -50,11 +50,20 @@ func (tc *TelegramConnector) Download(ctx context.Context, mediaID networkid.Med
 	}
 
 	client := userLogin.Client.(*TelegramClient)
-	var messages tg.MessagesMessagesClass
+	var messages tg.ModifiedMessagesMessages
 	switch info.PeerType {
 	case ids.PeerTypeUser, ids.PeerTypeChat:
-		messages, err = client.client.API().MessagesGetMessages(ctx, []tg.InputMessageClass{
-			&tg.InputMessageID{ID: int(info.MessageID)},
+		messages, err = APICallWithUpdates(ctx, client, func() (tg.ModifiedMessagesMessages, error) {
+			m, err := client.client.API().MessagesGetMessages(ctx, []tg.InputMessageClass{
+				&tg.InputMessageID{ID: int(info.MessageID)},
+			})
+			if err != nil {
+				return nil, err
+			} else if messages, ok := m.(tg.ModifiedMessagesMessages); !ok {
+				return nil, fmt.Errorf("unsupported messages type %T", messages)
+			} else {
+				return messages, nil
+			}
 		})
 	case ids.PeerTypeChannel:
 		var accessHash int64
@@ -65,11 +74,20 @@ func (tc *TelegramConnector) Download(ctx context.Context, mediaID networkid.Med
 		} else if !found {
 			return nil, fmt.Errorf("channel access hash not found for %d", info.ChatID)
 		} else {
-			messages, err = client.client.API().ChannelsGetMessages(ctx, &tg.ChannelsGetMessagesRequest{
-				Channel: &tg.InputChannel{ChannelID: info.ChatID, AccessHash: accessHash},
-				ID: []tg.InputMessageClass{
-					&tg.InputMessageID{ID: int(info.MessageID)},
-				},
+			messages, err = APICallWithUpdates(ctx, client, func() (tg.ModifiedMessagesMessages, error) {
+				m, err := client.client.API().ChannelsGetMessages(ctx, &tg.ChannelsGetMessagesRequest{
+					Channel: &tg.InputChannel{ChannelID: info.ChatID, AccessHash: accessHash},
+					ID: []tg.InputMessageClass{
+						&tg.InputMessageID{ID: int(info.MessageID)},
+					},
+				})
+				if err != nil {
+					return nil, err
+				} else if messages, ok := m.(tg.ModifiedMessagesMessages); !ok {
+					return nil, fmt.Errorf("unsupported messages type %T", messages)
+				} else {
+					return messages, nil
+				}
 			})
 		}
 	default:
@@ -80,20 +98,16 @@ func (tc *TelegramConnector) Download(ctx context.Context, mediaID networkid.Med
 	}
 
 	var msgMedia tg.MessageMediaClass
-	if m, ok := messages.(getMessages); !ok {
-		return nil, fmt.Errorf("unknown message type %T", messages)
-	} else {
-		var found bool
-		for _, message := range m.GetMessages() {
-			if msg, ok := message.(*tg.Message); ok && msg.ID == int(info.MessageID) {
-				msgMedia = msg.Media
-				found = true
-				break
-			}
+	var found bool
+	for _, message := range messages.GetMessages() {
+		if msg, ok := message.(*tg.Message); ok && msg.ID == int(info.MessageID) {
+			msgMedia = msg.Media
+			found = true
+			break
 		}
-		if !found {
-			return nil, fmt.Errorf("no media found with ID %d", info.MessageID)
-		}
+	}
+	if !found {
+		return nil, fmt.Errorf("no media found with ID %d", info.MessageID)
 	}
 
 	transferer := media.NewTransferer(client.client.API())
