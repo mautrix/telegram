@@ -56,6 +56,7 @@ const (
 		VALUES ($1, $2)
 		ON CONFLICT (username) DO UPDATE SET entity_id=excluded.entity_id
 	`
+	getByUsernameQuery = "SELECT entity_id FROM telegram_username WHERE LOWER(username)=$1"
 	clearUsernameQuery = `DELETE FROM telegram_username WHERE entity_id=$1`
 
 	// User Phone Number Queries
@@ -192,6 +193,14 @@ func (s *ScopedStore) SetUsername(ctx context.Context, userID int64, username st
 		_, err = s.db.Exec(ctx, clearUsernameQuery, userID)
 	} else {
 		_, err = s.db.Exec(ctx, setUsernameQuery, username, userID)
+	}
+	return
+}
+
+func (s *ScopedStore) GetUserIDByUsername(ctx context.Context, username string) (userID int64, err error) {
+	err = s.db.QueryRow(ctx, getByUsernameQuery, username).Scan(&userID)
+	if errors.Is(err, sql.ErrNoRows) {
+		err = nil
 	}
 	return
 }

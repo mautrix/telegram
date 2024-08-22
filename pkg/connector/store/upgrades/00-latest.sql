@@ -34,6 +34,7 @@ CREATE TABLE telegram_username (
 );
 
 CREATE INDEX telegram_username_entity_idx ON telegram_username (entity_id);
+CREATE INDEX telegram_username_username_idx ON telegram_username (LOWER(username));
 
 CREATE TABLE telegram_phone_number (
     phone_number  TEXT   NOT NULL,
