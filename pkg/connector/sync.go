@@ -9,6 +9,7 @@ import (
 	"github.com/rs/zerolog"
 	"maunium.net/go/mautrix/bridgev2"
 	"maunium.net/go/mautrix/bridgev2/database"
+	"maunium.net/go/mautrix/bridgev2/networkid"
 	"maunium.net/go/mautrix/bridgev2/simplevent"
 
 	"go.mau.fi/mautrix-telegram/pkg/connector/ids"
@@ -39,6 +40,15 @@ func (t *TelegramClient) SyncChats(ctx context.Context) error {
 		return err
 	}
 
+	users := map[networkid.UserID]tg.UserClass{}
+	for _, user := range dialogs.GetUsers() {
+		users[ids.MakeUserID(user.GetID())] = user
+	}
+	messages := map[networkid.MessageID]tg.MessageClass{}
+	for _, message := range dialogs.GetMessages() {
+		messages[ids.MakeMessageID(message.GetID())] = message
+	}
+
 	var created int
 	for _, d := range dialogs.GetDialogs() {
 		if d.TypeID() != tg.DialogTypeID {
@@ -50,6 +60,7 @@ func (t *TelegramClient) SyncChats(ctx context.Context) error {
 			Stringer("peer", dialog.Peer).
 			Int("top_message", dialog.TopMessage).
 			Logger()
+		log.Debug().Msg("Syncing dialog")
 
 		portalKey := ids.MakePortalKey(dialog.GetPeer(), t.loginID)
 		portal, err := t.main.Bridge.GetPortalByKey(ctx, portalKey)
@@ -58,51 +69,17 @@ func (t *TelegramClient) SyncChats(ctx context.Context) error {
 			continue
 		}
 
-		// TODO make sure that the user isn't deleted.
+		// If this is a DM, make sure that the user isn't deleted.
+		if user, ok := dialog.Peer.(*tg.PeerUser); ok {
+			if users[ids.MakeUserID(user.UserID)].(*tg.User).GetDeleted() {
+				log.Debug().Msg("Not syncing portal because user is deleted")
+				continue
+			}
+		}
 
 		if portal == nil || portal.MXID == "" {
 			// Check what the latest message is
-			messages, err := APICallWithUpdates(ctx, t, func() (tg.ModifiedMessagesMessages, error) {
-				inputMessages := []tg.InputMessageClass{
-					&tg.InputMessageID{ID: dialog.TopMessage},
-				}
-				var msgs tg.MessagesMessagesClass
-				switch v := dialog.Peer.(type) {
-				case *tg.PeerUser, *tg.PeerChat:
-					msgs, err = t.client.API().MessagesGetMessages(ctx, inputMessages)
-				case *tg.PeerChannel:
-					var accessHash int64
-					var found bool
-					accessHash, found, err = t.ScopedStore.GetChannelAccessHash(ctx, t.telegramUserID, v.ChannelID)
-					if err != nil {
-						return nil, fmt.Errorf("failed to get channel access hash: %w", err)
-					} else if !found {
-						return nil, fmt.Errorf("channel access hash for %d not found", v.ChannelID)
-					} else {
-						msgs, err = t.client.API().ChannelsGetMessages(ctx, &tg.ChannelsGetMessagesRequest{
-							Channel: &tg.InputChannel{ChannelID: v.ChannelID, AccessHash: accessHash},
-							ID:      inputMessages,
-						})
-					}
-				default:
-					return nil, fmt.Errorf("unknown peer type %T", dialog.Peer)
-				}
-				if err != nil {
-					return nil, err
-				} else if messages, ok := msgs.(tg.ModifiedMessagesMessages); !ok {
-					return nil, fmt.Errorf("unsupported messages type %T", messages)
-				} else {
-					return messages, nil
-				}
-			})
-			if err != nil {
-				log.Err(err).Msg("Failed to get latest message for portal")
-				continue
-			} else if len(messages.GetMessages()) == 0 {
-				log.Warn().Msg("No messages found for portal")
-				continue
-			}
-			topMessage := messages.GetMessages()[0]
+			topMessage := messages[ids.MakeMessageID(dialog.TopMessage)]
 			if topMessage.TypeID() == tg.MessageServiceTypeID {
 				action := topMessage.(*tg.MessageService).Action
 				if action.TypeID() == tg.MessageActionContactSignUpTypeID || action.TypeID() == tg.MessageActionHistoryClearTypeID {
@@ -117,7 +94,6 @@ func (t *TelegramClient) SyncChats(ctx context.Context) error {
 			}
 		}
 
-		// TODO use the bundled backfill data?
 		t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.ChatResync{
 			EventMeta: simplevent.EventMeta{
 				Type: bridgev2.RemoteEventChatResync,
