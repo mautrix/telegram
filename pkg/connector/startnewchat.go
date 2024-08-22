@@ -10,6 +10,7 @@ import (
 	"github.com/gotd/td/telegram/query/hasher"
 	"github.com/gotd/td/tg"
 	"maunium.net/go/mautrix/bridgev2"
+	"maunium.net/go/mautrix/bridgev2/networkid"
 
 	"go.mau.fi/mautrix-telegram/pkg/connector/ids"
 )
@@ -191,4 +192,47 @@ func (t *TelegramClient) GetContactList(ctx context.Context) (resp []*bridgev2.R
 		}
 	}
 	return resp, nil
+}
+
+// TODO support channels
+func (t *TelegramClient) CreateGroup(ctx context.Context, name string, users ...networkid.UserID) (*bridgev2.CreateChatResponse, error) {
+	if len(users) == 0 {
+		return nil, fmt.Errorf("no users provided")
+	} else if len(users) > 200 {
+		return nil, fmt.Errorf("too many users provided: %d (max 200)", len(users))
+	}
+	req := tg.MessagesCreateChatRequest{
+		Title: name,
+	}
+	for _, networkUserID := range users {
+		if userID, err := ids.ParseUserID(networkUserID); err != nil {
+			return nil, fmt.Errorf("failed to parse user ID: %w", err)
+		} else if inputUser, err := t.getInputUser(ctx, userID); err != nil {
+			return nil, fmt.Errorf("failed to get input user: %w", err)
+		} else {
+			req.Users = append(req.Users, inputUser)
+		}
+	}
+	invitedUsers, err := t.client.API().MessagesCreateChat(ctx, &req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create chat: %w", err)
+	}
+	invited, ok := invitedUsers.Updates.(interface {
+		GetChats() (value []tg.ChatClass)
+	})
+	if !ok {
+		return nil, fmt.Errorf("unexpected response type: %T", invitedUsers.Updates)
+	}
+
+	// TODO notify about users that couldn't be invited
+
+	if chats := invited.GetChats(); len(chats) != 1 {
+		return nil, fmt.Errorf("unexpected number of chats: %d", len(chats))
+	} else if chat, ok := chats[0].(*tg.Chat); !ok {
+		return nil, fmt.Errorf("unexpected chat type: %T", chats[0])
+	} else {
+		return &bridgev2.CreateChatResponse{
+			PortalKey: ids.PeerTypeChat.AsPortalKey(chat.ID, t.loginID),
+		}, nil
+	}
 }
