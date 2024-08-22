@@ -139,7 +139,7 @@ func (c *TelegramClient) convertToMatrix(ctx context.Context, portal *bridgev2.P
 		cm.MergeCaption()
 
 		contentURI = mediaPart.Content.URL
-		if contentURI == "" {
+		if contentURI == "" && mediaPart.Content.File != nil {
 			contentURI = mediaPart.Content.File.URL
 		}
 
