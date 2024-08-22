@@ -47,6 +47,9 @@ type TelegramClient struct {
 
 	telegramFmtParams *telegramfmt.FormatParams
 	matrixParser      *matrixfmt.HTMLParser
+
+	cachedContacts     *tg.ContactsContacts
+	cachedContactsHash int64
 }
 
 var (
@@ -60,8 +63,8 @@ var (
 	_ bridgev2.BackfillingNetworkAPIWithLimits = (*TelegramClient)(nil)
 	_ bridgev2.IdentifierResolvingNetworkAPI   = (*TelegramClient)(nil)
 	_ bridgev2.UserSearchingNetworkAPI         = (*TelegramClient)(nil)
+	_ bridgev2.ContactListingNetworkAPI        = (*TelegramClient)(nil)
 	// _ bridgev2.GroupCreatingNetworkAPI       = (*TelegramClient)(nil)
-	// _ bridgev2.ContactListingNetworkAPI      = (*TelegramClient)(nil)
 )
 
 type UpdateDispatcher struct {

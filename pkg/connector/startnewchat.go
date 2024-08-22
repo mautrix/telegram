@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/gotd/td/telegram/query/hasher"
 	"github.com/gotd/td/tg"
 	"maunium.net/go/mautrix/bridgev2"
 
@@ -126,6 +127,46 @@ func (t *TelegramClient) SearchUsers(ctx context.Context, query string) (resp []
 	for _, p := range contactsFound.Results {
 		if err := addResult(p); err != nil {
 			return nil, err
+		}
+	}
+	return resp, nil
+}
+
+func (t *TelegramClient) GetContactList(ctx context.Context) (resp []*bridgev2.ResolveIdentifierResponse, err error) {
+	contacts, err := APICallWithUpdates(ctx, t, func() (*tg.ContactsContacts, error) {
+		c, err := t.client.API().ContactsGetContacts(ctx, t.cachedContactsHash)
+		if err != nil {
+			return nil, err
+		}
+		if c.TypeID() == tg.ContactsContactsTypeID {
+			t.cachedContacts = c.(*tg.ContactsContacts)
+			var h hasher.Hasher
+			for _, contact := range t.cachedContacts.Contacts {
+				h.Update(uint32(contact.UserID))
+			}
+			t.cachedContactsHash = h.Sum()
+		} else if c.TypeID() != tg.ContactsContactsNotModifiedTypeID {
+			return nil, fmt.Errorf("unexpected contacts type: %T", c)
+		}
+		return t.cachedContacts, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	users := map[int64]tg.UserClass{}
+	for _, user := range contacts.GetUsers() {
+		users[user.GetID()] = user
+	}
+
+	for _, contact := range contacts.Contacts {
+		if user, ok := users[contact.UserID]; ok {
+			if r, err := t.getResolveIdentifierResponseForUserID(ctx, user); err != nil {
+				return nil, err
+			} else {
+				resp = append(resp, r)
+			}
+		} else {
+			return nil, fmt.Errorf("contact user not found in contact list response")
 		}
 	}
 	return resp, nil
