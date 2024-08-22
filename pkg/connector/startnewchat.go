@@ -13,9 +13,22 @@ import (
 	"go.mau.fi/mautrix-telegram/pkg/connector/ids"
 )
 
-func (t *TelegramClient) SearchUsers(ctx context.Context, query string) ([]*bridgev2.ResolveIdentifierResponse, error) {
-	// t.client.API().ContactsSearch()
-	panic("unimplemented")
+func (t *TelegramClient) getResolveIdentifierResponseForUserID(ctx context.Context, user tg.UserClass) (*bridgev2.ResolveIdentifierResponse, error) {
+	networkUserID := ids.MakeUserID(user.GetID())
+	if userInfo, err := t.getUserInfoFromTelegramUser(ctx, user); err != nil {
+		return nil, fmt.Errorf("failed to get user info: %w", err)
+	} else if ghost, err := t.main.Bridge.GetGhostByID(ctx, networkUserID); err != nil {
+		return nil, fmt.Errorf("failed to get ghost: %w", err)
+	} else {
+		return &bridgev2.ResolveIdentifierResponse{
+			Ghost:    ghost,
+			UserID:   networkUserID,
+			UserInfo: userInfo,
+			Chat: &bridgev2.CreateChatResponse{
+				PortalKey: ids.PeerTypeUser.AsPortalKey(user.GetID(), t.loginID),
+			},
+		}, nil
+	}
 }
 
 // Parses usernames with or without the @ sign in front of the username.
@@ -76,20 +89,44 @@ func (t *TelegramClient) ResolveIdentifier(ctx context.Context, identifier strin
 	}
 }
 
-func (t *TelegramClient) getResolveIdentifierResponseForUserID(ctx context.Context, user tg.UserClass) (*bridgev2.ResolveIdentifierResponse, error) {
-	networkUserID := ids.MakeUserID(user.GetID())
-	if userInfo, err := t.getUserInfoFromTelegramUser(ctx, user); err != nil {
-		return nil, fmt.Errorf("failed to get user info: %w", err)
-	} else if ghost, err := t.main.Bridge.GetGhostByID(ctx, networkUserID); err != nil {
-		return nil, fmt.Errorf("failed to get ghost: %w", err)
-	} else {
-		return &bridgev2.ResolveIdentifierResponse{
-			Ghost:    ghost,
-			UserID:   networkUserID,
-			UserInfo: userInfo,
-			Chat: &bridgev2.CreateChatResponse{
-				PortalKey: ids.PeerTypeUser.AsPortalKey(user.GetID(), t.loginID),
-			},
-		}, nil
+func (t *TelegramClient) SearchUsers(ctx context.Context, query string) (resp []*bridgev2.ResolveIdentifierResponse, err error) {
+	contactsFound, err := APICallWithUpdates(ctx, t, func() (*tg.ContactsFound, error) {
+		return t.client.API().ContactsSearch(ctx, &tg.ContactsSearchRequest{Q: query})
+	})
+	if err != nil {
+		return nil, err
 	}
+	users := map[int64]tg.UserClass{}
+	for _, user := range contactsFound.GetUsers() {
+		users[user.GetID()] = user
+	}
+
+	addResult := func(p tg.PeerClass) error {
+		peer, ok := p.(*tg.PeerUser)
+		if !ok {
+			return nil
+		}
+		if user, ok := users[peer.GetUserID()]; ok {
+			if r, err := t.getResolveIdentifierResponseForUserID(ctx, user); err != nil {
+				return err
+			} else {
+				resp = append(resp, r)
+			}
+		} else {
+			return fmt.Errorf("peer user not found in contact search response")
+		}
+		return nil
+	}
+
+	for _, p := range contactsFound.MyResults {
+		if err := addResult(p); err != nil {
+			return nil, err
+		}
+	}
+	for _, p := range contactsFound.Results {
+		if err := addResult(p); err != nil {
+			return nil, err
+		}
+	}
+	return resp, nil
 }
