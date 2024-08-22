@@ -200,19 +200,21 @@ func (p *PhoneLogin) handleAuthSuccess(ctx context.Context, authorization *tg.Au
 	if err != nil {
 		return nil, fmt.Errorf("failed to save new login: %w", err)
 	}
-	backgroundCtx := ul.Log.WithContext(context.Background())
-	err = p.main.LoadUserLogin(backgroundCtx, ul)
-	if err != nil {
-		return nil, fmt.Errorf("failed to prepare connection after login: %w", err)
-	}
-	err = ul.Client.Connect(backgroundCtx)
+	err = ul.Client.Connect(ul.Log.WithContext(context.Background()))
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect after login: %w", err)
 	}
-	user, err := ul.Client.(*TelegramClient).client.Self(ctx)
+	client := ul.Client.(*TelegramClient)
+	user, err := client.client.Self(ctx)
 	if err != nil {
 		return nil, err
 	}
+	go func() {
+		log := ul.Log.With().Str("component", "login_sync_chats").Logger()
+		if err := client.SyncChats(log.WithContext(context.Background())); err != nil {
+			log.Err(err).Msg("Failed to sync chats")
+		}
+	}()
 	return &bridgev2.LoginStep{
 		Type:         bridgev2.LoginStepTypeComplete,
 		StepID:       completeStep,
