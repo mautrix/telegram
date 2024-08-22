@@ -65,12 +65,13 @@ func (tc *TelegramConnector) LoadUserLogin(ctx context.Context, login *bridgev2.
 
 func (tg *TelegramConnector) GetName() bridgev2.BridgeName {
 	return bridgev2.BridgeName{
-		DisplayName:      "Telegram",
-		NetworkURL:       "https://telegram.org/",
-		NetworkIcon:      "mxc://maunium.net/tJCRmUyJDsgRNgqhOgoiHWbX",
-		NetworkID:        "telegram",
-		BeeperBridgeType: "telegram",
-		DefaultPort:      29317,
+		DisplayName:          "Telegram",
+		NetworkURL:           "https://telegram.org/",
+		NetworkIcon:          "mxc://maunium.net/tJCRmUyJDsgRNgqhOgoiHWbX",
+		NetworkID:            "telegram",
+		BeeperBridgeType:     "telegram",
+		DefaultPort:          29317,
+		DefaultCommandPrefix: "!tg",
 	}
 }
 

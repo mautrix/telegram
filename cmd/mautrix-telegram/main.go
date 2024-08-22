@@ -17,7 +17,6 @@
 package main
 
 import (
-	_ "go.mau.fi/util/dbutil/litestream"
 	"maunium.net/go/mautrix/bridgev2/matrix/mxmain"
 
 	"go.mau.fi/mautrix-telegram/pkg/connector"

@@ -317,6 +317,7 @@ func (t *TelegramClient) handleTyping(portal networkid.PortalKey, userID int64, 
 	if action.TypeID() != tg.SendMessageTypingActionTypeID {
 		timeout = 0
 	}
+	// TODO send proper TypingTypes
 	t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.Typing{
 		EventMeta: simplevent.EventMeta{
 			Type:      bridgev2.RemoteEventTyping,

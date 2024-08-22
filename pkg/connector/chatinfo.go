@@ -16,6 +16,7 @@ import (
 )
 
 func (t *TelegramClient) getDMChatInfo(ctx context.Context, userID int64) (*bridgev2.ChatInfo, error) {
+	// FIXME there's no reason for this function to fetch the user info
 	chatInfo := bridgev2.ChatInfo{
 		Type:        ptr.Ptr(database.RoomTypeDM),
 		Members:     &bridgev2.ChatMemberList{IsFull: true},
@@ -74,7 +75,7 @@ func (t *TelegramClient) getGroupChatInfo(fullChat *tg.MessagesChatFull, chatID 
 
 	chatInfo := bridgev2.ChatInfo{
 		Name: name,
-		Type: ptr.Ptr(database.RoomTypeGroupDM), // TODO Is this correct for channels?
+		Type: ptr.Ptr(database.RoomTypeDefault),
 		Members: &bridgev2.ChatMemberList{
 			IsFull:    true,
 			MemberMap: map[networkid.UserID]bridgev2.ChatMember{},
@@ -138,6 +139,8 @@ func (t *TelegramClient) filterChannelParticipants(chatParticipants []tg.Channel
 }
 
 func (t *TelegramClient) GetChatInfo(ctx context.Context, portal *bridgev2.Portal) (*bridgev2.ChatInfo, error) {
+	// FIXME GetFullChat should be avoided. Using only bundled info should be preferred whenever possible
+	//       (e.g. when syncing dialogs, only use the data in the dialog list, don't fetch each chat info separately).
 	peerType, id, err := ids.ParsePortalID(portal.ID)
 	if err != nil {
 		return nil, err

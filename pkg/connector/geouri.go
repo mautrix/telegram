@@ -6,6 +6,8 @@ import (
 	"strings"
 )
 
+// TODO this should probably be moved to mautrix-go
+
 type GeoURI struct {
 	Lat  float64
 	Long float64

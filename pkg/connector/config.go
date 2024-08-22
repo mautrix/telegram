@@ -29,6 +29,7 @@ func (c MemberListConfig) NormalizedMaxInitialSync() int {
 }
 
 type TelegramConfig struct {
+	// FIXME these should be called api_id and api_hash
 	AppID   int    `yaml:"app_id"`
 	AppHash string `yaml:"app_hash"`
 

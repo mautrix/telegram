@@ -35,6 +35,8 @@ import (
 	"go.mau.fi/mautrix-telegram/pkg/connector/util"
 )
 
+// TODO QR login support
+
 const LoginFlowIDPhone = "phone"
 
 func (tg *TelegramConnector) GetLoginFlows() []bridgev2.LoginFlow {

@@ -25,7 +25,6 @@ func MakeUserLoginID(userID int64) networkid.UserLoginID {
 	return networkid.UserLoginID(strconv.FormatInt(userID, 10))
 }
 
-// TODO: add space ID
 func MakeMessageID(messageID int) networkid.MessageID {
 	return networkid.MessageID(strconv.Itoa(messageID))
 }

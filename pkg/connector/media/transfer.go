@@ -29,6 +29,7 @@ func getLargestPhotoSize(sizes []tg.PhotoSizeClass) (width, height int, largest 
 		panic("cannot get largest size from empty list of sizes")
 	}
 
+	// FIXME this max size seems to be confusing bytes and dimensions.
 	var maxSize int
 	for _, s := range sizes {
 		var currentSize int

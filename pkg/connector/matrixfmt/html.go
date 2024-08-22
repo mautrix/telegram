@@ -367,6 +367,7 @@ func (parser *HTMLParser) linkToString(node *html.Node, ctx Context) *EntityStri
 			// Mention not allowed, use name as-is
 			return str
 		}
+		// FIXME this or GetGhostDetails needs to support non-ghost users too
 		userID, username, accessHash, ok := parser.GetGhostDetails(ctx.Ctx, mxid)
 		if !ok {
 			return str

@@ -30,6 +30,8 @@ func (tc *TelegramConnector) Download(ctx context.Context, mediaID networkid.Med
 	ctx = log.WithContext(ctx)
 	log.Info().Msg("handling direct download")
 
+	// TODO have an in-memory cache for media references?
+
 	userLogin, err := tc.Bridge.GetExistingUserLoginByID(ctx, ids.MakeUserLoginID(info.ReceiverID))
 	if err != nil {
 		if info.PeerType != ids.PeerTypeChannel {

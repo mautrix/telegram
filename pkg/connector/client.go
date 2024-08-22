@@ -90,7 +90,7 @@ func (u UpdateDispatcher) Handle(ctx context.Context, updates tg.UpdatesClass) e
 	return u.UpdateDispatcher.Handle(ctx, updates)
 }
 
-var messageLinkRegex = regexp.MustCompile(`^https?:\/\/t(?:elegram)?\.(?:me|dog)\/([A-Za-z][A-Za-z0-9_]{3,31}[A-Za-z0-9]|[Cc]\/[0-9]{1,20})\/([0-9]{1,20})$`)
+var messageLinkRegex = regexp.MustCompile(`^https?://t(?:elegram)?\.(?:me|dog)/([A-Za-z][A-Za-z0-9_]{3,31}[A-Za-z0-9]|[Cc]/[0-9]{1,20})/([0-9]{1,20})$`)
 
 func NewTelegramClient(ctx context.Context, tc *TelegramConnector, login *bridgev2.UserLogin) (*TelegramClient, error) {
 	telegramUserID, err := ids.ParseUserLoginID(login.ID)
@@ -197,12 +197,14 @@ func NewTelegramClient(ctx context.Context, tc *TelegramConnector, login *bridge
 				return telegramfmt.UserInfo{}, err
 			}
 			userInfo := telegramfmt.UserInfo{MXID: ghost.Intent.GetMXID(), Name: ghost.Name}
+			// FIXME this should look for user logins by ID, not hardcode the current user
 			if id == client.telegramUserID {
 				userInfo.MXID = client.userLogin.UserMXID
 			}
 			return userInfo, nil
 		},
 		GetUserInfoByUsername: func(ctx context.Context, username string) (telegramfmt.UserInfo, error) {
+			// FIXME this should just query telegram_user_metadata by username
 			ghosts, err := tc.Bridge.DB.Ghost.GetByMetadata(ctx, "username", username)
 			if err != nil {
 				return telegramfmt.UserInfo{}, err
