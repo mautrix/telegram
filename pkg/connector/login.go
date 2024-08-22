@@ -21,7 +21,6 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/gotd/td/session"
 	"github.com/gotd/td/telegram"
 	"github.com/gotd/td/telegram/auth"
 	"github.com/gotd/td/tg"
@@ -64,7 +63,7 @@ const (
 type PhoneLogin struct {
 	user         *bridgev2.User
 	main         *TelegramConnector
-	storage      *session.StorageMemory
+	authData     UserLoginSession
 	client       *telegram.Client
 	clientCancel context.CancelFunc
 
@@ -99,10 +98,9 @@ func (p *PhoneLogin) Start(ctx context.Context) (*bridgev2.LoginStep, error) {
 func (p *PhoneLogin) SubmitUserInput(ctx context.Context, input map[string]string) (*bridgev2.LoginStep, error) {
 	if phone, ok := input[phoneNumberStep]; ok {
 		p.phone = phone
-		p.storage = &session.StorageMemory{}
 		p.client = telegram.NewClient(p.main.Config.AppID, p.main.Config.AppHash, telegram.Options{
-			SessionStorage: p.storage,
-			Logger:         zap.New(zerozap.New(zerolog.Ctx(ctx).With().Str("component", "telegram_login_client").Logger())),
+			CustomSessionStorage: &p.authData,
+			Logger:               zap.New(zerozap.New(zerolog.Ctx(ctx).With().Str("component", "telegram_login_client").Logger())),
 		})
 		var err error
 		p.clientCancel, err = connectTelegramClient(context.Background(), p.client)
@@ -180,23 +178,14 @@ func (p *PhoneLogin) SubmitUserInput(ctx context.Context, input map[string]strin
 func (p *PhoneLogin) handleAuthSuccess(ctx context.Context, authorization *tg.AuthAuthorization) (*bridgev2.LoginStep, error) {
 	// Now that we have the Telegram user ID, store it in the database and
 	// close the login client.
-	sessionStore := p.main.Store.GetScopedStore(authorization.User.GetID())
-	var sessionData []byte
-	sessionData, err := p.storage.Bytes(sessionData)
-	if err != nil {
-		return nil, err
-	}
-	err = sessionStore.StoreSession(ctx, sessionData)
-	if err != nil {
-		return nil, err
-	}
 	p.clientCancel()
 
 	userLoginID := ids.MakeUserLoginID(authorization.User.GetID())
 	ul, err := p.user.NewLogin(ctx, &database.UserLogin{
 		ID: userLoginID,
 		Metadata: UserLoginMetadata{
-			Phone: p.phone,
+			Phone:   p.phone,
+			Session: p.authData,
 		},
 	}, nil)
 	if err != nil {

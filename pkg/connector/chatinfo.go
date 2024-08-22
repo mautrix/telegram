@@ -22,11 +22,9 @@ func (t *TelegramClient) getDMChatInfo(ctx context.Context, userID int64) (*brid
 		Members:     &bridgev2.ChatMemberList{IsFull: true},
 		CanBackfill: true,
 	}
-	accessHash, found, err := t.ScopedStore.GetUserAccessHash(ctx, userID)
+	accessHash, err := t.ScopedStore.GetAccessHash(ctx, userID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get access hash for user %d: %w", userID, err)
-	} else if !found {
-		return nil, fmt.Errorf("access hash not found for user %d", userID)
 	}
 	users, err := t.client.API().UsersGetUsers(ctx, []tg.InputUserClass{&tg.InputUser{
 		UserID:     userID,
@@ -198,11 +196,9 @@ func (t *TelegramClient) GetChatInfo(ctx context.Context, portal *bridgev2.Porta
 		}
 		return chatInfo, nil
 	case ids.PeerTypeChannel:
-		accessHash, found, err := t.ScopedStore.GetChannelAccessHash(ctx, t.telegramUserID, id)
+		accessHash, err := t.ScopedStore.GetAccessHash(ctx, id)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get channel access hash: %w", err)
-		} else if !found {
-			return nil, fmt.Errorf("channel access hash not found for %d", id)
 		}
 		inputChannel := &tg.InputChannel{ChannelID: id, AccessHash: accessHash}
 		fullChat, err := APICallWithUpdates(ctx, t, func() (*tg.MessagesChatFull, error) {

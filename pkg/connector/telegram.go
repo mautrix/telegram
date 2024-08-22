@@ -370,23 +370,19 @@ func (t *TelegramClient) inputPeerForPortalID(ctx context.Context, portalID netw
 	}
 	switch peerType {
 	case ids.PeerTypeUser:
-		if accessHash, found, err := t.ScopedStore.GetUserAccessHash(ctx, id); err != nil {
+		if accessHash, err := t.ScopedStore.GetAccessHash(ctx, id); err != nil {
 			return nil, fmt.Errorf("failed to get user access hash for %d: %w", id, err)
-		} else if !found {
-			return nil, fmt.Errorf("user access hash not found for %d", id)
 		} else {
 			return &tg.InputPeerUser{UserID: id, AccessHash: accessHash}, nil
 		}
 	case ids.PeerTypeChat:
 		return &tg.InputPeerChat{ChatID: id}, nil
 	case ids.PeerTypeChannel:
-		accessHash, found, err := t.ScopedStore.GetChannelAccessHash(ctx, t.telegramUserID, id)
-		if err != nil {
+		if accessHash, err := t.ScopedStore.GetAccessHash(ctx, id); err != nil {
 			return nil, err
-		} else if !found {
-			return nil, fmt.Errorf("channel access hash not found for %d", id)
+		} else {
+			return &tg.InputPeerChannel{ChannelID: id, AccessHash: accessHash}, nil
 		}
-		return &tg.InputPeerChannel{ChannelID: id, AccessHash: accessHash}, nil
 	default:
 		panic("invalid peer type")
 	}

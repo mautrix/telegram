@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/gotd/td/session"
 	"github.com/gotd/td/telegram/updates"
 	"go.mau.fi/util/dbutil"
 )
@@ -19,14 +18,6 @@ type ScopedStore struct {
 }
 
 const (
-	// Session Storage Queries
-	loadSessionQuery  = `SELECT session_data FROM telegram_session WHERE user_id=$1`
-	storeSessionQuery = `
-		INSERT INTO telegram_session (user_id, session_data)
-		VALUES ($1, $2)
-		ON CONFLICT (user_id) DO UPDATE SET session_data=excluded.session_data
-	`
-
 	// State Storage Queries
 	allChannelsQuery   = "SELECT channel_id, pts FROM telegram_channel_state WHERE user_id=$1"
 	getChannelPtsQuery = "SELECT pts FROM telegram_channel_state WHERE user_id=$1 AND channel_id=$2"
@@ -51,53 +42,22 @@ const (
 	setSeqQuery     = "UPDATE telegram_user_state SET seq=$1 WHERE user_id=$2"
 	setDateSeqQuery = "UPDATE telegram_user_state SET date=$1, seq=$2 WHERE user_id=$3"
 
-	// Channel Access Hasher Queries
-	getChannelAccessHashQuery = "SELECT access_hash FROM telegram_channel_access_hashes WHERE user_id=$1 AND channel_id=$2"
-	setChannelAccessHashQuery = `
-		INSERT INTO telegram_channel_access_hashes (user_id, channel_id, access_hash)
+	getAccessHashQuery = "SELECT access_hash FROM telegram_access_hash WHERE user_id=$1 AND entity_id=$2"
+	setAccessHashQuery = `
+		INSERT INTO telegram_access_hash (user_id, entity_id, access_hash)
 		VALUES ($1, $2, $3)
-		ON CONFLICT (user_id, channel_id) DO UPDATE SET access_hash=excluded.access_hash
-	`
-
-	// User Access Hash Queries
-	getUserAccessHashQuery = "SELECT access_hash FROM telegram_user_metadata WHERE receiver_id=$1 AND user_id=$2"
-	setUserAccessHashQuery = `
-		INSERT INTO telegram_user_metadata (receiver_id, user_id, access_hash)
-		VALUES ($1, $2, $3)
-		ON CONFLICT (receiver_id, user_id) DO UPDATE SET access_hash=excluded.access_hash
+		ON CONFLICT (user_id, entity_id) DO UPDATE SET access_hash=excluded.access_hash
 	`
 
 	// User Username Queries
-	getUserUsernameQuery = "SELECT username FROM telegram_user_metadata WHERE receiver_id=$1 AND user_id=$2"
-	setUserUsernameQuery = `
-		INSERT INTO telegram_user_metadata (receiver_id, user_id, username)
-		VALUES ($1, $2, $3)
-		ON CONFLICT (receiver_id, user_id) DO UPDATE SET username=excluded.username
+	getUsernameQuery = "SELECT username FROM telegram_username WHERE entity_id=$1"
+	setUsernameQuery = `
+		INSERT INTO telegram_username (username, entity_id)
+		VALUES ($1, $2)
+		ON CONFLICT (username) DO UPDATE SET entity_id=excluded.entity_id
 	`
-
-	// User Metadata Queries
-	getUserMetadataQuery = "SELECT username, access_hash FROM telegram_user_metadata WHERE receiver_id=$1 AND user_id=$2"
-	setUserMetadataQuery = `
-		INSERT INTO telegram_user_metadata (receiver_id, user_id, username, access_hash)
-		VALUES ($1, $2, $3, $4)
-		ON CONFLICT (receiver_id, user_id) DO UPDATE SET
-			username=excluded.username,
-			access_hash=excluded.access_hash
-	`
+	clearUsernameQuery = `DELETE FROM telegram_username WHERE entity_id=$1`
 )
-
-var _ session.Storage = (*ScopedStore)(nil)
-
-func (s *ScopedStore) LoadSession(ctx context.Context) (sessionData []byte, err error) {
-	row := s.db.QueryRow(ctx, loadSessionQuery, s.telegramUserID)
-	err = row.Scan(&sessionData)
-	return
-}
-
-func (s *ScopedStore) StoreSession(ctx context.Context, data []byte) error {
-	_, err := s.db.Exec(ctx, storeSessionQuery, s.telegramUserID, data)
-	return err
-}
 
 var _ updates.StateStorage = (*ScopedStore)(nil)
 
@@ -181,57 +141,49 @@ func (s *ScopedStore) SetDateSeq(ctx context.Context, userID int64, date int, se
 
 var _ updates.ChannelAccessHasher = (*ScopedStore)(nil)
 
-func (s *ScopedStore) GetChannelAccessHash(ctx context.Context, userID int64, channelID int64) (accessHash int64, found bool, err error) {
+// Deprecated: only for interface, don't use directly. Use GetAccessHash instead
+func (s *ScopedStore) GetChannelAccessHash(ctx context.Context, userID, channelID int64) (accessHash int64, found bool, err error) {
 	s.assertUserIDMatches(userID)
-	err = s.db.QueryRow(ctx, getChannelAccessHashQuery, userID, channelID).Scan(&accessHash)
-	if errors.Is(err, sql.ErrNoRows) {
-		return 0, false, nil
-	}
-	return accessHash, err == nil, err
+	accessHash, err = s.GetAccessHash(ctx, channelID)
+	found = accessHash != 0
+	return
 }
 
-func (s *ScopedStore) SetChannelAccessHash(ctx context.Context, userID int64, channelID int64, accessHash int64) (err error) {
+// Deprecated: only for interface, don't use directly. Use SetAccessHash instead
+func (s *ScopedStore) SetChannelAccessHash(ctx context.Context, userID, channelID, accessHash int64) (err error) {
 	s.assertUserIDMatches(userID)
-	_, err = s.db.Exec(ctx, setChannelAccessHashQuery, userID, channelID, accessHash)
+	return s.SetAccessHash(ctx, channelID, accessHash)
+}
+
+var ErrNoAccessHash = errors.New("access hash not found")
+
+func (s *ScopedStore) GetAccessHash(ctx context.Context, userID int64) (accessHash int64, err error) {
+	err = s.db.QueryRow(ctx, getAccessHashQuery, s.telegramUserID, userID).Scan(&accessHash)
+	if errors.Is(err, sql.ErrNoRows) {
+		err = ErrNoAccessHash
+	}
 	return
 }
 
-func (s *ScopedStore) GetUserAccessHash(ctx context.Context, userID int64) (accessHash int64, found bool, err error) {
-	err = s.db.QueryRow(ctx, getUserAccessHashQuery, s.telegramUserID, userID).Scan(&accessHash)
-	if errors.Is(err, sql.ErrNoRows) {
-		return 0, false, nil
-	}
-	return accessHash, err == nil, err
-}
-
-func (s *ScopedStore) SetUserAccessHash(ctx context.Context, userID, accessHash int64) (err error) {
-	_, err = s.db.Exec(ctx, setUserAccessHashQuery, s.telegramUserID, userID, accessHash)
+func (s *ScopedStore) SetAccessHash(ctx context.Context, userID, accessHash int64) (err error) {
+	_, err = s.db.Exec(ctx, setAccessHashQuery, s.telegramUserID, userID, accessHash)
 	return
 }
 
-func (s *ScopedStore) GetUserUsername(ctx context.Context, userID int64) (username string, found bool, err error) {
-	err = s.db.QueryRow(ctx, getUserUsernameQuery, s.telegramUserID, userID).Scan(&username)
+func (s *ScopedStore) GetUsername(ctx context.Context, userID int64) (username string, err error) {
+	err = s.db.QueryRow(ctx, getUsernameQuery, userID).Scan(&username)
 	if errors.Is(err, sql.ErrNoRows) {
-		return "", false, nil
+		err = nil
 	}
-	return username, err == nil, err
-}
-
-func (s *ScopedStore) SetUserUsername(ctx context.Context, userID int64, username string) (err error) {
-	_, err = s.db.Exec(ctx, setUserUsernameQuery, s.telegramUserID, userID, username)
 	return
 }
 
-func (s *ScopedStore) GetUserMetadata(ctx context.Context, userID int64) (username string, accessHash int64, found bool, err error) {
-	err = s.db.QueryRow(ctx, getUserMetadataQuery, s.telegramUserID, userID).Scan(&username, &accessHash)
-	if errors.Is(err, sql.ErrNoRows) {
-		return "", 0, false, nil
+func (s *ScopedStore) SetUsername(ctx context.Context, userID int64, username string) (err error) {
+	if username == "" {
+		_, err = s.db.Exec(ctx, clearUsernameQuery, userID)
+	} else {
+		_, err = s.db.Exec(ctx, setUsernameQuery, username, userID)
 	}
-	return username, accessHash, err == nil, err
-}
-
-func (s *ScopedStore) SetUserMetadata(ctx context.Context, userID int64, username string, accessHash int64) (err error) {
-	_, err = s.db.Exec(ctx, setUserMetadataQuery, s.telegramUserID, userID, username, accessHash)
 	return
 }
 

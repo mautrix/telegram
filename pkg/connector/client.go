@@ -180,14 +180,14 @@ func NewTelegramClient(ctx context.Context, tc *TelegramConnector, login *bridge
 	})
 
 	client.client = telegram.NewClient(tc.Config.AppID, tc.Config.AppHash, telegram.Options{
-		SessionStorage: client.ScopedStore,
-		Logger:         zaplog,
-		UpdateHandler:  client.updatesManager,
-		OnDead:         client.onDead,
-		OnSession:      client.onSession,
-		OnAuthError:    client.onAuthError,
-		PingTimeout:    time.Duration(tc.Config.Ping.TimeoutSeconds) * time.Second,
-		PingInterval:   time.Duration(tc.Config.Ping.IntervalSeconds) * time.Second,
+		CustomSessionStorage: &login.Metadata.(*UserLoginMetadata).Session,
+		Logger:               zaplog,
+		UpdateHandler:        client.updatesManager,
+		OnDead:               client.onDead,
+		OnSession:            client.onSession,
+		OnAuthError:          client.onAuthError,
+		PingTimeout:          time.Duration(tc.Config.Ping.TimeoutSeconds) * time.Second,
+		PingInterval:         time.Duration(tc.Config.Ping.IntervalSeconds) * time.Second,
 	})
 
 	client.telegramFmtParams = &telegramfmt.FormatParams{
@@ -288,8 +288,13 @@ func NewTelegramClient(ctx context.Context, tc *TelegramConnector, login *bridge
 			if err != nil {
 				return "", "", 0, false
 			}
-			username, accessHash, found, err := tc.Store.GetScopedStore(telegramUserID).GetUserMetadata(ctx, telegramUserID)
-			if err != nil || !found {
+			ss := tc.Store.GetScopedStore(telegramUserID)
+			accessHash, err := ss.GetAccessHash(ctx, telegramUserID)
+			if err != nil || accessHash == 0 {
+				return "", "", 0, false
+			}
+			username, err := ss.GetUsername(ctx, telegramUserID)
+			if err != nil {
 				return "", "", 0, false
 			}
 			return userID, username, accessHash, true
@@ -390,11 +395,9 @@ func (t *TelegramClient) GetUserInfo(ctx context.Context, ghost *bridgev2.Ghost)
 	if err != nil {
 		return nil, err
 	}
-	accessHash, found, err := t.ScopedStore.GetUserAccessHash(ctx, id)
+	accessHash, err := t.ScopedStore.GetAccessHash(ctx, id)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get access hash for user %d: %w", id, err)
-	} else if !found {
-		return nil, fmt.Errorf("access hash not found for user %d", id)
 	}
 	users, err := t.client.API().UsersGetUsers(ctx, []tg.InputUserClass{&tg.InputUser{
 		UserID:     id,
@@ -419,17 +422,16 @@ func (t *TelegramClient) getUserInfoFromTelegramUser(ctx context.Context, u tg.U
 		return nil, fmt.Errorf("user is %T not *tg.User", user)
 	}
 	var identifiers []string
-	if user.Min {
-		if err := t.ScopedStore.SetUserAccessHash(ctx, user.ID, user.AccessHash); err != nil {
-			return nil, err
-		}
-	} else {
-		if err := t.ScopedStore.SetUserMetadata(ctx, user.ID, user.Username, user.AccessHash); err != nil {
+	if err := t.ScopedStore.SetAccessHash(ctx, user.ID, user.AccessHash); err != nil {
+		return nil, err
+	}
+	if !user.Min {
+		if err := t.ScopedStore.SetUsername(ctx, user.ID, user.Username); err != nil {
 			return nil, err
 		}
 
-		if username, ok := user.GetUsername(); ok {
-			identifiers = append(identifiers, fmt.Sprintf("telegram:%s", username))
+		if user.Username != "" {
+			identifiers = append(identifiers, fmt.Sprintf("telegram:%s", user.Username))
 		}
 		for _, username := range user.Usernames {
 			identifiers = append(identifiers, fmt.Sprintf("telegram:%s", username.Username))

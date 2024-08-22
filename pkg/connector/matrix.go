@@ -457,12 +457,8 @@ func (t *TelegramClient) HandleMatrixReadReceipt(ctx context.Context, msg *bridg
 			})
 		case ids.PeerTypeChannel:
 			var accessHash int64
-			var found bool
-			accessHash, found, readMessagesErr = t.ScopedStore.GetChannelAccessHash(ctx, t.telegramUserID, id)
+			accessHash, readMessagesErr = t.ScopedStore.GetAccessHash(ctx, id)
 			if readMessagesErr != nil {
-				return
-			} else if !found {
-				readMessagesErr = fmt.Errorf("channel access hash not found for %d", id)
 				return
 			}
 			_, readMessagesErr = t.client.API().ChannelsReadHistory(ctx, &tg.ChannelsReadHistoryRequest{

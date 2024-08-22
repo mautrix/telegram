@@ -1,10 +1,13 @@
 package connector
 
 import (
+	"context"
 	_ "embed"
 	"fmt"
 	"slices"
 
+	"github.com/gotd/td/crypto"
+	"github.com/gotd/td/session"
 	up "go.mau.fi/util/configupgrade"
 	"maunium.net/go/mautrix/bridgev2"
 	"maunium.net/go/mautrix/bridgev2/database"
@@ -118,6 +121,38 @@ type MessageMetadata struct {
 	ContentURI  id.ContentURIString `json:"content_uri,omitempty"`
 }
 
+type UserLoginSession struct {
+	AuthKey       []byte `json:"auth_key,omitempty"`
+	Datacenter    int    `json:"dc_id,omitempty"`
+	ServerAddress string `json:"server_address,omitempty"`
+	ServerPort    int    `json:"port,omitempty"`
+	Salt          int64  `json:"salt,omitempty"`
+}
+
 type UserLoginMetadata struct {
-	Phone string `json:"phone"`
+	Phone   string           `json:"phone"`
+	Session UserLoginSession `json:"session"`
+}
+
+func (s *UserLoginSession) Load(_ context.Context) (*session.Data, error) {
+	if len(s.AuthKey) != 256 {
+		return nil, nil
+	}
+	keyID := crypto.Key(s.AuthKey).ID()
+	return &session.Data{
+		DC:        s.Datacenter,
+		Addr:      s.ServerAddress,
+		AuthKey:   s.AuthKey,
+		AuthKeyID: keyID[:],
+		Salt:      s.Salt,
+	}, nil
+}
+
+func (s *UserLoginSession) Save(ctx context.Context, data *session.Data) error {
+	s.Datacenter = data.DC
+	s.ServerAddress = data.Addr
+	s.AuthKey = data.AuthKey
+	s.Salt = data.Salt
+	// TODO save UserLogin to database?
+	return nil
 }
