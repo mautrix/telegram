@@ -54,3 +54,14 @@ ping:
     interval_seconds: 30
     # The timeout (in seconds) for a single ping.
     timeout_seconds: 10
+
+sync:
+    # Number of most recently active dialogs to check when syncing chats.
+    # Set to 0 to remove limit.
+    update_limit: 0
+    # Number of most recently active dialogs to create portals for when syncing
+    # chats.
+    # Set to 0 to remove limit.
+    create_limit: 15
+    # Whether or not to sync and create portals for direct chats at startup.
+    direct_chats: false

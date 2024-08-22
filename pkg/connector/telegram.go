@@ -92,30 +92,33 @@ func (t *TelegramClient) onUpdateNewMessage(ctx context.Context, update IGetMess
 		case *tg.MessageActionChatDeletePhoto:
 			chatInfoChange.ChatInfoChange.ChatInfo = &bridgev2.ChatInfo{Avatar: &bridgev2.Avatar{Remove: true}}
 		case *tg.MessageActionChatAddUser:
-			var members []bridgev2.ChatMember
+			chatInfoChange.ChatInfoChange.MemberChanges = &bridgev2.ChatMemberList{
+				MemberMap: map[networkid.UserID]bridgev2.ChatMember{},
+			}
 			for _, userID := range action.Users {
-				members = append(members, bridgev2.ChatMember{
+				sender := ids.MakeUserID(userID)
+				chatInfoChange.ChatInfoChange.MemberChanges.MemberMap[sender] = bridgev2.ChatMember{
 					EventSender: bridgev2.EventSender{
 						SenderLogin: ids.MakeUserLoginID(userID),
-						Sender:      ids.MakeUserID(userID),
+						Sender:      sender,
 					},
 					Membership: event.MembershipJoin,
-				})
+				}
 			}
-			chatInfoChange.ChatInfoChange.MemberChanges = &bridgev2.ChatMemberList{Members: members}
 		case *tg.MessageActionChatJoinedByLink:
 			chatInfoChange.ChatInfoChange.MemberChanges = &bridgev2.ChatMemberList{
-				Members: []bridgev2.ChatMember{
-					{EventSender: sender, Membership: event.MembershipJoin},
+				MemberMap: map[networkid.UserID]bridgev2.ChatMember{
+					sender.Sender: {EventSender: sender, Membership: event.MembershipJoin},
 				},
 			}
 		case *tg.MessageActionChatDeleteUser:
+			sender := ids.MakeUserID(action.UserID)
 			chatInfoChange.ChatInfoChange.MemberChanges = &bridgev2.ChatMemberList{
-				Members: []bridgev2.ChatMember{
-					{
+				MemberMap: map[networkid.UserID]bridgev2.ChatMember{
+					sender: {
 						EventSender: bridgev2.EventSender{
 							SenderLogin: ids.MakeUserLoginID(action.UserID),
-							Sender:      ids.MakeUserID(action.UserID),
+							Sender:      sender,
 						},
 						Membership: event.MembershipLeave,
 					},

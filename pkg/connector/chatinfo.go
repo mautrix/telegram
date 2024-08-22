@@ -9,6 +9,7 @@ import (
 	"go.mau.fi/util/ptr"
 	"maunium.net/go/mautrix/bridgev2"
 	"maunium.net/go/mautrix/bridgev2/database"
+	"maunium.net/go/mautrix/bridgev2/networkid"
 
 	"go.mau.fi/mautrix-telegram/pkg/connector/ids"
 	"go.mau.fi/mautrix-telegram/pkg/connector/media"
@@ -39,15 +40,16 @@ func (t *TelegramClient) getDMChatInfo(ctx context.Context, userID int64) (*brid
 	} else if err = t.updateGhostWithUserInfo(ctx, userID, userInfo); err != nil {
 		return nil, err
 	} else {
-		chatInfo.Members.Members = []bridgev2.ChatMember{
-			{
+		networkUserID := ids.MakeUserID(userID)
+		chatInfo.Members.MemberMap = map[networkid.UserID]bridgev2.ChatMember{
+			networkUserID: {
 				EventSender: bridgev2.EventSender{
 					SenderLogin: ids.MakeUserLoginID(userID),
 					Sender:      ids.MakeUserID(userID),
 				},
 				UserInfo: userInfo,
 			},
-			{EventSender: t.mySender()},
+			t.userID: {EventSender: t.mySender()},
 		}
 	}
 	return &chatInfo, nil
@@ -74,8 +76,8 @@ func (t *TelegramClient) getGroupChatInfo(fullChat *tg.MessagesChatFull, chatID 
 		Name: name,
 		Type: ptr.Ptr(database.RoomTypeGroupDM), // TODO Is this correct for channels?
 		Members: &bridgev2.ChatMemberList{
-			IsFull:  true,
-			Members: []bridgev2.ChatMember{{EventSender: t.mySender()}},
+			IsFull:    true,
+			MemberMap: map[networkid.UserID]bridgev2.ChatMember{},
 		},
 		CanBackfill: true,
 		ExtraUpdates: func(ctx context.Context, p *bridgev2.Portal) bool {
@@ -178,15 +180,16 @@ func (t *TelegramClient) GetChatInfo(ctx context.Context, portal *bridgev2.Porta
 				continue
 			}
 
-			chatInfo.Members.Members = append(chatInfo.Members.Members, bridgev2.ChatMember{
+			sender := ids.MakeUserID(user.GetUserID())
+			chatInfo.Members.MemberMap[sender] = bridgev2.ChatMember{
 				EventSender: bridgev2.EventSender{
 					IsFromMe:    user.GetUserID() == t.telegramUserID,
 					SenderLogin: ids.MakeUserLoginID(user.GetUserID()),
-					Sender:      ids.MakeUserID(user.GetUserID()),
+					Sender:      sender,
 				},
-			})
+			}
 
-			if len(chatInfo.Members.Members) >= t.main.Config.MemberList.NormalizedMaxInitialSync() {
+			if len(chatInfo.Members.MemberMap) >= t.main.Config.MemberList.NormalizedMaxInitialSync() {
 				break
 			}
 		}
@@ -264,7 +267,9 @@ func (t *TelegramClient) GetChatInfo(ctx context.Context, portal *bridgev2.Porta
 				return nil, err
 			}
 			chatInfo.Members.IsFull = len(participants.Participants) < limit
-			chatInfo.Members.Members = append(chatInfo.Members.Members, t.filterChannelParticipants(participants.Participants, limit)...)
+			for _, participant := range t.filterChannelParticipants(participants.Participants, limit) {
+				chatInfo.Members.MemberMap[participant.Sender] = participant
+			}
 		} else {
 			remaining := t.main.Config.MemberList.NormalizedMaxInitialSync()
 			var offset int
@@ -289,15 +294,14 @@ func (t *TelegramClient) GetChatInfo(ctx context.Context, portal *bridgev2.Porta
 				if err != nil {
 					return nil, err
 				}
-				participants, ok := p.(*tg.ChannelsChannelParticipants)
-				if !ok {
-					return nil, fmt.Errorf("returned participants is %T not *tg.ChannelsChannelParticipants", p)
-				}
 				if len(participants.Participants) == 0 {
 					chatInfo.Members.IsFull = true
 					break
 				}
-				chatInfo.Members.Members = append(chatInfo.Members.Members, t.filterChannelParticipants(participants.Participants, limit)...)
+
+				for _, participant := range t.filterChannelParticipants(participants.Participants, limit) {
+					chatInfo.Members.MemberMap[participant.Sender] = participant
+				}
 
 				offset += len(participants.Participants)
 				remaining -= len(participants.Participants)

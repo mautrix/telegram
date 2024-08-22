@@ -21,6 +21,7 @@ import (
 
 	"go.mau.fi/util/dbutil"
 	"maunium.net/go/mautrix/bridgev2"
+	"maunium.net/go/mautrix/bridgev2/commands"
 
 	"go.mau.fi/mautrix-telegram/pkg/connector/store"
 )
@@ -46,6 +47,7 @@ func NewConnector() *TelegramConnector {
 func (tg *TelegramConnector) Init(bridge *bridgev2.Bridge) {
 	tg.Store = store.NewStore(bridge.DB.Database, dbutil.ZeroLogger(bridge.Log.With().Str("db_section", "telegram").Logger()))
 	tg.Bridge = bridge
+	tg.Bridge.Commands.(*commands.Processor).AddHandlers(cmdSync)
 }
 
 func (tg *TelegramConnector) Start(ctx context.Context) error {

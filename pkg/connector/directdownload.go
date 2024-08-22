@@ -18,10 +18,6 @@ import (
 
 var _ bridgev2.DirectMediableNetwork = (*TelegramConnector)(nil)
 
-type getMessages interface {
-	GetMessages() []tg.MessageClass
-}
-
 func (tc *TelegramConnector) Download(ctx context.Context, mediaID networkid.MediaID) (mediaproxy.GetMediaResponse, error) {
 	info, err := ids.ParseDirectMediaInfo(mediaID)
 	if err != nil {
