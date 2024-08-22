@@ -136,7 +136,7 @@ type UserLoginMetadata struct {
 
 func (s *UserLoginSession) Load(_ context.Context) (*session.Data, error) {
 	if len(s.AuthKey) != 256 {
-		return nil, nil
+		return nil, session.ErrNotFound
 	}
 	keyID := crypto.Key(s.AuthKey).ID()
 	return &session.Data{
