@@ -51,6 +51,10 @@ func (t *TelegramClient) getDMChatInfo(ctx context.Context, userID int64) (*brid
 			t.userID: {EventSender: t.mySender()},
 		}
 	}
+	if userID == t.telegramUserID {
+		// TODO also hardcode the avatar used by telegram?
+		chatInfo.Name = ptr.Ptr("Saved Messages")
+	}
 	return &chatInfo, nil
 }
 
