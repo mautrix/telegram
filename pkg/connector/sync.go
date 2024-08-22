@@ -127,7 +127,13 @@ func (t *TelegramClient) SyncChats(ctx context.Context) error {
 				PortalKey:    portalKey,
 				CreatePortal: true,
 			},
-			CheckNeedsBackfillFunc: func(ctx context.Context, latestMessage *database.Message) (bool, error) { return true, nil },
+			CheckNeedsBackfillFunc: func(ctx context.Context, latestMessage *database.Message) (bool, error) {
+				latestMessageID, err := ids.ParseMessageID(latestMessage.ID)
+				if err != nil {
+					return false, err
+				}
+				return dialog.TopMessage > latestMessageID, nil
+			},
 		})
 	}
 	return nil
