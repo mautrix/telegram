@@ -11,10 +11,11 @@ require (
 	go.uber.org/zap v1.27.0
 	golang.org/x/exp v0.0.0-20240808152545-0cdaa3abc0fa
 	golang.org/x/net v0.28.0
-	maunium.net/go/mautrix v0.20.1-0.20240822145834-afc796861a44
+	maunium.net/go/mautrix v0.20.1-0.20240826145415-7e7cb57ee770
 )
 
 require (
+	filippo.io/edwards25519 v1.1.0 // indirect
 	github.com/cenkalti/backoff/v4 v4.3.0 // indirect
 	github.com/coreos/go-systemd/v22 v22.5.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
