@@ -95,7 +95,7 @@ func (t *TelegramClient) handleTelegramReactions(ctx context.Context, msg *tg.Me
 		Int("message_id", msg.ID).
 		Logger()
 
-	dbMsg, err := t.main.Bridge.DB.Message.GetFirstPartByID(ctx, t.loginID, ids.MakeMessageID(msg.ID))
+	dbMsg, err := t.main.Bridge.DB.Message.GetFirstPartByID(ctx, t.loginID, ids.GetMessageIDFromMessage(msg))
 	if err != nil {
 		log.Err(err).Msg("failed to get message from database")
 		return

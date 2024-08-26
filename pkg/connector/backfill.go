@@ -31,7 +31,7 @@ func (t *TelegramClient) FetchMessages(ctx context.Context, fetchParams bridgev2
 		Limit: fetchParams.Count,
 	}
 	if fetchParams.AnchorMessage != nil && !fetchParams.Forward {
-		req.MaxID, err = ids.ParseMessageID(fetchParams.AnchorMessage.ID)
+		_, req.MaxID, err = ids.ParseMessageID(fetchParams.AnchorMessage.ID)
 		if err != nil {
 			return nil, err
 		}
@@ -61,7 +61,7 @@ func (t *TelegramClient) FetchMessages(ctx context.Context, fetchParams bridgev2
 
 	var stopAt int
 	if fetchParams.AnchorMessage != nil && fetchParams.Forward {
-		stopAt, err = ids.ParseMessageID(fetchParams.AnchorMessage.ID)
+		_, stopAt, err = ids.ParseMessageID(fetchParams.AnchorMessage.ID)
 		if err != nil {
 			return nil, err
 		}
@@ -100,7 +100,7 @@ func (t *TelegramClient) FetchMessages(ctx context.Context, fetchParams bridgev2
 		backfillMessage := bridgev2.BackfillMessage{
 			ConvertedMessage: converted,
 			Sender:           sender,
-			ID:               ids.MakeMessageID(message.ID),
+			ID:               ids.GetMessageIDFromMessage(message),
 			Timestamp:        time.Unix(int64(message.Date), 0),
 		}
 

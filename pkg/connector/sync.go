@@ -46,7 +46,7 @@ func (t *TelegramClient) SyncChats(ctx context.Context) error {
 	}
 	messages := map[networkid.MessageID]tg.MessageClass{}
 	for _, message := range dialogs.GetMessages() {
-		messages[ids.MakeMessageID(message.GetID())] = message
+		messages[ids.GetMessageIDFromMessage(message)] = message
 	}
 
 	var created int
@@ -79,7 +79,7 @@ func (t *TelegramClient) SyncChats(ctx context.Context) error {
 
 		if portal == nil || portal.MXID == "" {
 			// Check what the latest message is
-			topMessage := messages[ids.MakeMessageID(dialog.TopMessage)]
+			topMessage := messages[ids.MakeMessageID(dialog.Peer, dialog.TopMessage)]
 			if topMessage.TypeID() == tg.MessageServiceTypeID {
 				action := topMessage.(*tg.MessageService).Action
 				if action.TypeID() == tg.MessageActionContactSignUpTypeID || action.TypeID() == tg.MessageActionHistoryClearTypeID {
@@ -104,7 +104,7 @@ func (t *TelegramClient) SyncChats(ctx context.Context) error {
 				CreatePortal: true,
 			},
 			CheckNeedsBackfillFunc: func(ctx context.Context, latestMessage *database.Message) (bool, error) {
-				latestMessageID, err := ids.ParseMessageID(latestMessage.ID)
+				_, latestMessageID, err := ids.ParseMessageID(latestMessage.ID)
 				if err != nil {
 					return false, err
 				}

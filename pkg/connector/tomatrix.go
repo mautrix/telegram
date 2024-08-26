@@ -156,7 +156,7 @@ func (c *TelegramClient) convertToMatrix(ctx context.Context, portal *bridgev2.P
 		switch replyTo := replyTo.(type) {
 		case *tg.MessageReplyHeader:
 			cm.ReplyTo = &networkid.MessageOptionalPartID{
-				MessageID: ids.MakeMessageID(replyTo.ReplyToMsgID),
+				MessageID: ids.MakeMessageID(replyTo.ReplyToPeerID, replyTo.ReplyToMsgID),
 			}
 		default:
 			log.Warn().Type("reply_to", replyTo).Msg("unhandled reply to type")
@@ -415,8 +415,8 @@ func (c *TelegramClient) convertContact(media tg.MessageMediaClass) *bridgev2.Co
 	if contact.UserID > 0 {
 		content.Format = event.FormatHTML
 		content.FormattedBody = fmt.Sprintf(
-			`Shared contact info for <a href="https://matrix.to/#/%s">%s</a>: %s`,
-			c.main.Bridge.Matrix.GhostIntent(ids.MakeUserID(contact.UserID)).GetMXID(),
+			`Shared contact info for <a href="%s">%s</a>: %s`,
+			c.main.Bridge.Matrix.GhostIntent(ids.MakeUserID(contact.UserID)).GetMXID().URI().MatrixToURL(),
 			html.EscapeString(name),
 			html.EscapeString(formattedPhone),
 		)

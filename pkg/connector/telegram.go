@@ -59,7 +59,7 @@ func (t *TelegramClient) onUpdateNewMessage(ctx context.Context, update IGetMess
 				CreatePortal: true,
 				Timestamp:    time.Unix(int64(msg.Date), 0),
 			},
-			ID:                 ids.MakeMessageID(msg.ID),
+			ID:                 ids.GetMessageIDFromMessage(msg),
 			Data:               msg,
 			ConvertMessageFunc: t.convertToMatrix,
 		})
@@ -207,14 +207,22 @@ func (t *TelegramClient) onUserName(ctx context.Context, e tg.Entities, update *
 	return nil
 }
 
-func (t *TelegramClient) onDeleteMessages(ctx context.Context, update IGetMessages) error {
+func (t *TelegramClient) onDeleteMessages(ctx context.Context, channelID int64, update IGetMessages) error {
 	for _, messageID := range update.GetMessages() {
-		parts, err := t.main.Bridge.DB.Message.GetAllPartsByID(ctx, t.loginID, ids.MakeMessageID(messageID))
-		if err != nil {
-			return err
-		}
-		if len(parts) == 0 {
-			return fmt.Errorf("no parts found for message %d", messageID)
+		var portalKey networkid.PortalKey
+		if channelID == 0 {
+			// TODO have mautrix-go do this part too?
+			parts, err := t.main.Bridge.DB.Message.GetAllPartsByID(ctx, t.loginID, ids.MakeMessageID(channelID, messageID))
+			if err != nil {
+				return err
+			}
+			if len(parts) == 0 {
+				return fmt.Errorf("no parts found for message %d", messageID)
+			}
+			// TODO can deletes happen across rooms?
+			portalKey = parts[0].Room
+		} else {
+			portalKey = ids.MakePortalKey(&tg.PeerChannel{ChannelID: channelID}, t.loginID)
 		}
 		t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.MessageRemove{
 			EventMeta: simplevent.EventMeta{
@@ -224,10 +232,10 @@ func (t *TelegramClient) onDeleteMessages(ctx context.Context, update IGetMessag
 						Str("action", "delete message").
 						Int("message_id", messageID)
 				},
-				PortalKey:    parts[0].Room,
+				PortalKey:    portalKey,
 				CreatePortal: false,
 			},
-			TargetMessage: ids.MakeMessageID(messageID),
+			TargetMessage: ids.MakeMessageID(channelID, messageID),
 		})
 	}
 	return nil
@@ -285,8 +293,8 @@ func (t *TelegramClient) onMessageEdit(ctx context.Context, update IGetMessage) 
 			PortalKey: ids.MakePortalKey(msg.PeerID, t.loginID),
 			Timestamp: time.Unix(int64(msg.EditDate), 0),
 		},
-		ID:            ids.MakeMessageID(msg.ID),
-		TargetMessage: ids.MakeMessageID(msg.ID),
+		ID:            ids.GetMessageIDFromMessage(msg),
+		TargetMessage: ids.GetMessageIDFromMessage(msg),
 		Data:          msg,
 		ConvertEditFunc: func(ctx context.Context, portal *bridgev2.Portal, intent bridgev2.MatrixAPI, existing []*database.Message, data *tg.Message) (*bridgev2.ConvertedEdit, error) {
 			converted, err := t.convertToMatrix(ctx, portal, intent, msg)
@@ -335,7 +343,9 @@ func (t *TelegramClient) handleTyping(portal networkid.PortalKey, userID int64, 
 func (t *TelegramClient) updateReadReceipt(update *tg.UpdateReadHistoryOutbox) error {
 	user, ok := update.Peer.(*tg.PeerUser)
 	if !ok {
-		return fmt.Errorf("unsupported peer type %T", update.Peer)
+		// Read receipts from other users are meaningless in chats/channels
+		// (they only say "someone read the message" and not who)
+		return nil
 	}
 	t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.Receipt{
 		EventMeta: simplevent.EventMeta{
@@ -346,7 +356,7 @@ func (t *TelegramClient) updateReadReceipt(update *tg.UpdateReadHistoryOutbox) e
 				Sender:      ids.MakeUserID(user.UserID),
 			},
 		},
-		LastTarget: ids.MakeMessageID(update.MaxID),
+		LastTarget: ids.MakeMessageID(update.Peer, update.MaxID),
 	})
 	return nil
 }
@@ -358,7 +368,7 @@ func (t *TelegramClient) onOwnReadReceipt(portalKey networkid.PortalKey, maxID i
 			PortalKey: portalKey,
 			Sender:    t.mySender(),
 		},
-		LastTarget: ids.MakeMessageID(maxID),
+		LastTarget: ids.MakeMessageID(portalKey, maxID),
 	})
 	return nil
 }

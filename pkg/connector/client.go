@@ -127,10 +127,10 @@ func NewTelegramClient(ctx context.Context, tc *TelegramConnector, login *bridge
 	})
 	dispatcher.OnUserName(client.onUserName)
 	dispatcher.OnDeleteMessages(func(ctx context.Context, e tg.Entities, update *tg.UpdateDeleteMessages) error {
-		return client.onDeleteMessages(ctx, update)
+		return client.onDeleteMessages(ctx, 0, update)
 	})
 	dispatcher.OnDeleteChannelMessages(func(ctx context.Context, e tg.Entities, update *tg.UpdateDeleteChannelMessages) error {
-		return client.onDeleteMessages(ctx, update)
+		return client.onDeleteMessages(ctx, update.ChannelID, update)
 	})
 	dispatcher.OnEditMessage(func(ctx context.Context, e tg.Entities, update *tg.UpdateEditMessage) error {
 		return client.onMessageEdit(ctx, update)
@@ -272,13 +272,13 @@ func NewTelegramClient(ctx context.Context, tc *TelegramConnector, login *bridge
 				return url
 			}
 
-			message, err := tc.Bridge.DB.Message.GetFirstPartByID(ctx, client.loginID, ids.MakeMessageID(msgID))
+			message, err := tc.Bridge.DB.Message.GetFirstPartByID(ctx, client.loginID, ids.MakeMessageID(portalKey, msgID))
 			if err != nil {
 				log.Err(err).Msg("error getting message")
 				return url
 			}
 
-			return fmt.Sprintf("https://matrix.to/#/%s/%s", portal.MXID, message.MXID)
+			return portal.MXID.EventURI(message.MXID, tc.Bridge.Matrix.ServerName()).MatrixToURL()
 		},
 	}
 	client.matrixParser = &matrixfmt.HTMLParser{

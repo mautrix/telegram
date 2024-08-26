@@ -93,7 +93,7 @@ func (t *TelegramClient) HandleMatrixMessage(ctx context.Context, msg *bridgev2.
 
 	var replyTo tg.InputReplyToClass
 	if msg.ReplyTo != nil {
-		messageID, err := ids.ParseMessageID(msg.ReplyTo.ID)
+		_, messageID, err := ids.ParseMessageID(msg.ReplyTo.ID)
 		if err != nil {
 			return nil, err
 		}
@@ -182,7 +182,7 @@ func (t *TelegramClient) HandleMatrixMessage(ctx context.Context, msg *bridgev2.
 
 	resp = &bridgev2.MatrixMessageResponse{
 		DB: &database.Message{
-			ID:        ids.MakeMessageID(tgMessageID),
+			ID:        ids.MakeMessageID(msg.Portal, tgMessageID),
 			MXID:      msg.Event.ID,
 			Room:      msg.Portal.PortalKey,
 			SenderID:  t.userID,
@@ -207,7 +207,7 @@ func (t *TelegramClient) HandleMatrixEdit(ctx context.Context, msg *bridgev2.Mat
 		return err
 	}
 
-	targetID, err := ids.ParseMessageID(msg.EditTarget.ID)
+	_, targetID, err := ids.ParseMessageID(msg.EditTarget.ID)
 	if err != nil {
 		return err
 	}
@@ -271,7 +271,7 @@ func (t *TelegramClient) HandleMatrixEdit(ctx context.Context, msg *bridgev2.Mat
 func (t *TelegramClient) HandleMatrixMessageRemove(ctx context.Context, msg *bridgev2.MatrixMessageRemove) error {
 	if dbMsg, err := t.main.Bridge.DB.Message.GetPartByMXID(ctx, msg.TargetMessage.MXID); err != nil {
 		return err
-	} else if messageID, err := ids.ParseMessageID(dbMsg.ID); err != nil {
+	} else if _, messageID, err := ids.ParseMessageID(dbMsg.ID); err != nil {
 		return err
 	} else if peer, err := t.inputPeerForPortalID(ctx, msg.Portal.ID); err != nil {
 		return err
@@ -333,7 +333,7 @@ func (t *TelegramClient) HandleMatrixReaction(ctx context.Context, msg *bridgev2
 	if err != nil {
 		return nil, err
 	}
-	targetMessageID, err := ids.ParseMessageID(msg.TargetMessage.ID)
+	_, targetMessageID, err := ids.ParseMessageID(msg.TargetMessage.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -384,7 +384,7 @@ func (t *TelegramClient) HandleMatrixReactionRemove(ctx context.Context, msg *br
 		}
 	}
 
-	messageID, err := ids.ParseMessageID(msg.TargetReaction.MessageID)
+	_, messageID, err := ids.ParseMessageID(msg.TargetReaction.MessageID)
 	if err != nil {
 		return err
 	}
@@ -444,7 +444,7 @@ func (t *TelegramClient) HandleMatrixReadReceipt(ctx context.Context, msg *bridg
 			}
 		}
 		var maxID int
-		maxID, readMessagesErr = ids.ParseMessageID(message.ID)
+		_, maxID, readMessagesErr = ids.ParseMessageID(message.ID)
 		if readMessagesErr != nil {
 			return
 		}
