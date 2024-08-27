@@ -6,7 +6,7 @@ require (
 	github.com/gotd/td v0.105.0
 	github.com/rs/zerolog v1.33.0
 	github.com/stretchr/testify v1.9.0
-	go.mau.fi/util v0.7.1-0.20240827120252-821b350d3b0b
+	go.mau.fi/util v0.7.1-0.20240827213018-b75de7efab85
 	go.mau.fi/zerozap v0.1.1
 	go.uber.org/zap v1.27.0
 	golang.org/x/exp v0.0.0-20240808152545-0cdaa3abc0fa

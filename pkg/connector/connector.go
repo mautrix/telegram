@@ -38,12 +38,6 @@ var _ bridgev2.NetworkConnector = (*TelegramConnector)(nil)
 
 // var _ bridgev2.MaxFileSizeingNetwork = (*TelegramConnector)(nil)
 
-func NewConnector() *TelegramConnector {
-	return &TelegramConnector{
-		Config: &TelegramConfig{},
-	}
-}
-
 func (tg *TelegramConnector) Init(bridge *bridgev2.Bridge) {
 	tg.Store = store.NewStore(bridge.DB.Database, dbutil.ZeroLogger(bridge.Log.With().Str("db_section", "telegram").Logger()))
 	tg.Bridge = bridge

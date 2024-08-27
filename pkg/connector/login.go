@@ -54,10 +54,10 @@ func (tg *TelegramConnector) CreateLogin(ctx context.Context, user *bridgev2.Use
 }
 
 const (
-	phoneNumberStep = "fi.mau.telegram.phone_number"
-	codeStep        = "fi.mau.telegram.code"
-	passwordStep    = "fi.mau.telegram.password"
-	completeStep    = "fi.mau.telegram.complete"
+	LoginStepIDPhoneNumber = "fi.mau.telegram.phone_number"
+	LoginStepIDCode        = "fi.mau.telegram.code"
+	LoginStepIDPassword    = "fi.mau.telegram.password"
+	LoginStepIDComplete    = "fi.mau.telegram.complete"
 )
 
 type PhoneLogin struct {
@@ -80,13 +80,13 @@ func (p *PhoneLogin) Cancel() {
 func (p *PhoneLogin) Start(ctx context.Context) (*bridgev2.LoginStep, error) {
 	return &bridgev2.LoginStep{
 		Type:         bridgev2.LoginStepTypeUserInput,
-		StepID:       phoneNumberStep,
+		StepID:       LoginStepIDPhoneNumber,
 		Instructions: "Please enter your phone number",
 		UserInputParams: &bridgev2.LoginUserInputParams{
 			Fields: []bridgev2.LoginInputDataField{
 				{
 					Type:        bridgev2.LoginInputFieldTypePhoneNumber,
-					ID:          phoneNumberStep,
+					ID:          LoginStepIDPhoneNumber,
 					Name:        "Phone Number",
 					Description: "Include the country code with +",
 				},
@@ -96,7 +96,7 @@ func (p *PhoneLogin) Start(ctx context.Context) (*bridgev2.LoginStep, error) {
 }
 
 func (p *PhoneLogin) SubmitUserInput(ctx context.Context, input map[string]string) (*bridgev2.LoginStep, error) {
-	if phone, ok := input[phoneNumberStep]; ok {
+	if phone, ok := input[LoginStepIDPhoneNumber]; ok {
 		p.phone = phone
 		p.client = telegram.NewClient(p.main.Config.APIID, p.main.Config.APIHash, telegram.Options{
 			CustomSessionStorage: &p.authData,
@@ -116,13 +116,13 @@ func (p *PhoneLogin) SubmitUserInput(ctx context.Context, input map[string]strin
 			p.hash = s.PhoneCodeHash
 			return &bridgev2.LoginStep{
 				Type:         bridgev2.LoginStepTypeUserInput,
-				StepID:       codeStep,
+				StepID:       LoginStepIDCode,
 				Instructions: "Please enter the code sent to your phone",
 				UserInputParams: &bridgev2.LoginUserInputParams{
 					Fields: []bridgev2.LoginInputDataField{
 						{
 							Type: bridgev2.LoginInputFieldType2FACode,
-							ID:   codeStep,
+							ID:   LoginStepIDCode,
 							Name: "Code",
 						},
 					},
@@ -141,18 +141,18 @@ func (p *PhoneLogin) SubmitUserInput(ctx context.Context, input map[string]strin
 		default:
 			return nil, fmt.Errorf("unexpected sent code type: %T", sentCode)
 		}
-	} else if code, ok := input[codeStep]; ok {
+	} else if code, ok := input[LoginStepIDCode]; ok {
 		authorization, err := p.client.Auth().SignIn(ctx, p.phone, code, p.hash)
 		if errors.Is(err, auth.ErrPasswordAuthNeeded) {
 			return &bridgev2.LoginStep{
 				Type:         bridgev2.LoginStepTypeUserInput,
-				StepID:       passwordStep,
+				StepID:       LoginStepIDPassword,
 				Instructions: "Please enter your password",
 				UserInputParams: &bridgev2.LoginUserInputParams{
 					Fields: []bridgev2.LoginInputDataField{
 						{
 							Type: bridgev2.LoginInputFieldTypePassword,
-							ID:   passwordStep,
+							ID:   LoginStepIDPassword,
 							Name: "Password",
 						},
 					},
@@ -164,7 +164,7 @@ func (p *PhoneLogin) SubmitUserInput(ctx context.Context, input map[string]strin
 			return nil, fmt.Errorf("failed to submit code: %w", err)
 		}
 		return p.handleAuthSuccess(ctx, authorization)
-	} else if password, ok := input[passwordStep]; ok {
+	} else if password, ok := input[LoginStepIDPassword]; ok {
 		authorization, err := p.client.Auth().Password(ctx, password)
 		if err != nil {
 			return nil, fmt.Errorf("failed to submit password: %w", err)
@@ -208,7 +208,7 @@ func (p *PhoneLogin) handleAuthSuccess(ctx context.Context, authorization *tg.Au
 	}()
 	return &bridgev2.LoginStep{
 		Type:         bridgev2.LoginStepTypeComplete,
-		StepID:       completeStep,
+		StepID:       LoginStepIDComplete,
 		Instructions: fmt.Sprintf("Successfully logged in as %d / +%s (%s)", user.ID, user.Phone, util.FormatFullName(user.FirstName, user.LastName)),
 		CompleteParams: &bridgev2.LoginCompleteParams{
 			UserLoginID: ul.ID,

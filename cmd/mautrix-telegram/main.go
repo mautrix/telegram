@@ -36,7 +36,7 @@ var (
 	BuildTime = "unknown"
 )
 
-var c = connector.NewConnector()
+var c = &connector.TelegramConnector{Config: &connector.TelegramConfig{}}
 var m = mxmain.BridgeMain{
 	Name:        "mautrix-telegram",
 	URL:         "https://github.com/mautrix/telegram",
@@ -58,6 +58,15 @@ func init() {
 func main() {
 	bridgeconfig.HackyMigrateLegacyNetworkConfig = migrateLegacyConfig
 	versionWithoutCommit := m.Version
+	m.PostStart = func() {
+		if m.Matrix.Provisioning != nil {
+			// m.Matrix.Provisioning.Router.HandleFunc("/v1/user/{userID}/login/qr", legacyProvLoginQR)
+			m.Matrix.Provisioning.Router.HandleFunc("/v1/user/{userID}/login/request_code", legacyProvLoginRequestCode)
+			m.Matrix.Provisioning.Router.HandleFunc("/v1/user/{userID}/login/send_code", legacyProvLoginSendCode)
+			m.Matrix.Provisioning.Router.HandleFunc("/v1/user/{userID}/login/send_password", legacyProvLoginSendPassword)
+			m.Matrix.Provisioning.Router.HandleFunc("/v1/user/{userID}/logout", legacyProvLogout)
+		}
+	}
 	m.PostInit = func() {
 		if c.Config.DeviceInfo.AppVersion == "auto" {
 			c.Config.DeviceInfo.AppVersion = versionWithoutCommit
