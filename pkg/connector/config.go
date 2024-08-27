@@ -10,6 +10,7 @@ import (
 	"github.com/gotd/td/session"
 	up "go.mau.fi/util/configupgrade"
 	"maunium.net/go/mautrix/bridgev2"
+	"maunium.net/go/mautrix/bridgev2/bridgeconfig"
 	"maunium.net/go/mautrix/bridgev2/database"
 	"maunium.net/go/mautrix/id"
 
@@ -31,10 +32,19 @@ func (c MemberListConfig) NormalizedMaxInitialSync() int {
 	return c.MaxInitialSync
 }
 
+type DeviceInfo struct {
+	DeviceModel    string `yaml:"device_model"`
+	SystemVersion  string `yaml:"system_version"`
+	AppVersion     string `yaml:"app_version"`
+	SystemLangCode string `yaml:"system_lang_code"`
+	LangCode       string `yaml:"lang_code"`
+}
+
 type TelegramConfig struct {
-	// FIXME these should be called api_id and api_hash
-	AppID   int    `yaml:"app_id"`
-	AppHash string `yaml:"app_hash"`
+	APIID   int    `yaml:"api_id"`
+	APIHash string `yaml:"api_hash"`
+
+	DeviceInfo DeviceInfo `yaml:"device_info"`
 
 	AnimatedSticker media.AnimatedStickerConfig `yaml:"animated_sticker"`
 
@@ -62,8 +72,15 @@ func (c TelegramConfig) ShouldBridge(participantCount int) bool {
 var ExampleConfig string
 
 func upgradeConfig(helper up.Helper) {
-	helper.Copy(up.Int, "app_id")
-	helper.Copy(up.Str, "app_hash")
+	bridgeconfig.CopyToOtherLocation(helper, up.Int, []string{"app_id"}, []string{"api_id"})
+	bridgeconfig.CopyToOtherLocation(helper, up.Str, []string{"app_hash"}, []string{"api_hash"})
+	helper.Copy(up.Int, "api_id")
+	helper.Copy(up.Str, "api_hash")
+	helper.Copy(up.Str|up.Null, "device_info", "device_model")
+	helper.Copy(up.Str|up.Null, "device_info", "system_version")
+	helper.Copy(up.Str|up.Null, "device_info", "app_version")
+	helper.Copy(up.Str|up.Null, "device_info", "system_lang_code")
+	helper.Copy(up.Str|up.Null, "device_info", "lang_code")
 	helper.Copy(up.Str, "animated_sticker", "target")
 	helper.Copy(up.Bool, "animated_sticker", "convert_from_webm")
 	helper.Copy(up.Int, "animated_sticker", "args", "width")
@@ -85,11 +102,11 @@ func (tg *TelegramConnector) GetConfig() (example string, data any, upgrader up.
 }
 
 func (tg *TelegramConnector) ValidateConfig() error {
-	if tg.Config.AppID == 0 {
-		return fmt.Errorf("app_id is required")
+	if tg.Config.APIID == 0 {
+		return fmt.Errorf("api_id is required")
 	}
-	if tg.Config.AppHash == "" {
-		return fmt.Errorf("app_hash is required")
+	if tg.Config.APIHash == "" || tg.Config.APIHash == "tjyd5yge35lbodk1xwzw2jstp90k55qz" {
+		return fmt.Errorf("api_hash is required")
 	}
 	if !slices.Contains([]string{"disable", "gif", "png", "webp", "webm"}, tg.Config.AnimatedSticker.Target) {
 		return fmt.Errorf("unsupported animated sticker target: %s", tg.Config.AnimatedSticker.Target)

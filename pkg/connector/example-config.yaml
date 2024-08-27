@@ -1,6 +1,13 @@
 # Get your own API keys at https://my.telegram.org/apps
-app_id: 12345
-app_hash: tjyd5yge35lbodk1xwzw2jstp90k55qz
+api_id: 12345
+api_hash: tjyd5yge35lbodk1xwzw2jstp90k55qz
+
+device_info:
+    device_model: mautrix-telegram
+    system_version:
+    app_version: auto
+    lang_code: en
+    system_lang_code: en
 
 # Settings for converting animated stickers.
 animated_sticker:

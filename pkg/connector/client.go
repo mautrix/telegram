@@ -182,7 +182,7 @@ func NewTelegramClient(ctx context.Context, tc *TelegramConnector, login *bridge
 		AccessHasher: client.ScopedStore,
 	})
 
-	client.client = telegram.NewClient(tc.Config.AppID, tc.Config.AppHash, telegram.Options{
+	client.client = telegram.NewClient(tc.Config.APIID, tc.Config.APIHash, telegram.Options{
 		CustomSessionStorage: &login.Metadata.(*UserLoginMetadata).Session,
 		Logger:               zaplog,
 		UpdateHandler:        client.updatesManager,
@@ -191,6 +191,13 @@ func NewTelegramClient(ctx context.Context, tc *TelegramConnector, login *bridge
 		OnAuthError:          client.onAuthError,
 		PingTimeout:          time.Duration(tc.Config.Ping.TimeoutSeconds) * time.Second,
 		PingInterval:         time.Duration(tc.Config.Ping.IntervalSeconds) * time.Second,
+		Device: telegram.DeviceConfig{
+			DeviceModel:    tc.Config.DeviceInfo.DeviceModel,
+			SystemVersion:  tc.Config.DeviceInfo.SystemVersion,
+			AppVersion:     tc.Config.DeviceInfo.AppVersion,
+			SystemLangCode: tc.Config.DeviceInfo.SystemLangCode,
+			LangCode:       tc.Config.DeviceInfo.LangCode,
+		},
 	})
 
 	client.telegramFmtParams = &telegramfmt.FormatParams{

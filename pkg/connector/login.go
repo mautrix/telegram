@@ -98,7 +98,7 @@ func (p *PhoneLogin) Start(ctx context.Context) (*bridgev2.LoginStep, error) {
 func (p *PhoneLogin) SubmitUserInput(ctx context.Context, input map[string]string) (*bridgev2.LoginStep, error) {
 	if phone, ok := input[phoneNumberStep]; ok {
 		p.phone = phone
-		p.client = telegram.NewClient(p.main.Config.AppID, p.main.Config.AppHash, telegram.Options{
+		p.client = telegram.NewClient(p.main.Config.APIID, p.main.Config.APIHash, telegram.Options{
 			CustomSessionStorage: &p.authData,
 			Logger:               zap.New(zerozap.New(zerolog.Ctx(ctx).With().Str("component", "telegram_login_client").Logger())),
 		})
