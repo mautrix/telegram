@@ -2,6 +2,7 @@
 api_id: 12345
 api_hash: tjyd5yge35lbodk1xwzw2jstp90k55qz
 
+# Device info shown in the Telegram device list.
 device_info:
     device_model: mautrix-telegram
     system_version:
@@ -37,17 +38,14 @@ member_list:
     #
     # -1 means no limit (which means it's limited to 10000 by the server)
     max_initial_sync: 100
-
     # Whether or not to sync the member list in broadcast channels. If
     # disabled, members will still be synced when they send messages.
     #
     # If no channel admins have logged into the bridge, the bridge won't be
     # able to sync the member list regardless of this setting.
     sync_broadcast_channels: false
-
     # Whether or not to skip deleted members when syncing members.
     skip_deleted: true
-
 # Maximum number of participants in chats to bridge. Only applies when the
 # portal is being created. If there are more members when trying to create a
 # room, the room creation will be cancelled.
