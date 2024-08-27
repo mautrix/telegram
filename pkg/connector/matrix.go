@@ -182,7 +182,7 @@ func (t *TelegramClient) HandleMatrixMessage(ctx context.Context, msg *bridgev2.
 
 	resp = &bridgev2.MatrixMessageResponse{
 		DB: &database.Message{
-			ID:        ids.MakeMessageID(msg.Portal, tgMessageID),
+			ID:        ids.MakeMessageID(msg.Portal.PortalKey, tgMessageID),
 			MXID:      msg.Event.ID,
 			Room:      msg.Portal.PortalKey,
 			SenderID:  t.userID,
