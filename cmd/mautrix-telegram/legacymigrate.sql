@@ -27,7 +27,7 @@ SELECT
     -- only: sqlite (line commented)
 --  json_object
     (
-        'phone', COALESCE(tg_phone, ''),
+        'phone', COALESCE('+' || tg_phone, ''),
         'session', json((SELECT json_data FROM telethon_sessions_old WHERE session_id=mxid))
     ) -- metadata
 FROM user_old
@@ -56,7 +56,7 @@ SELECT
     (
         'is_premium', is_premium,
         'is_channel', is_channel,
-        'phone', phone,
+        'phone', '+' || phone,
         'name_source', displayname_source,
         'name_quality', displayname_quality,
         'name_not_contact', CASE WHEN displayname_contact THEN json('false') ELSE json('true') END
@@ -83,8 +83,8 @@ INSERT INTO portal (
 )
 SELECT
     '', -- bridge_id
-    CAST(tgid AS TEXT), -- id
-    CAST(tg_receiver AS TEXT), -- receiver
+    peer_type || ':' || CAST(tgid AS TEXT), -- id
+    CASE WHEN peer_type='channel' THEN '' ELSE CAST(tg_receiver AS TEXT) END, -- receiver
     mxid, -- mxid
     CASE WHEN peer_type='user' THEN CAST(tgid AS TEXT) END, -- other_user_id
     COALESCE(title, ''), -- name
@@ -112,19 +112,20 @@ SELECT
     '', -- bridge_id
     user_old.mxid, -- user_mxid
     CAST(user_portal_old.user AS TEXT), -- login_id
-    CAST(user_portal_old.portal AS TEXT), -- portal_id
-    CAST(user_portal_old.portal_receiver AS TEXT), -- portal_receiver
+    portal_old.peer_type || ':' || CAST(user_portal_old.portal AS TEXT), -- portal_id
+    CASE WHEN peer_type='channel' THEN '' ELSE CAST(user_portal_old.portal_receiver AS TEXT) END, -- portal_receiver
     false, -- in_space
     false -- preferred
 FROM user_portal_old
-INNER JOIN user_old ON user_portal_old."user" = user_old.tgid;
+INNER JOIN user_old ON user_portal_old."user" = user_old.tgid
+INNER JOIN portal_old ON user_portal_old.portal = portal_old.tgid and user_portal_old.portal_receiver = portal_old.tg_receiver;
 
 INSERT INTO user_portal (bridge_id, user_mxid, login_id, portal_id, portal_receiver, in_space, preferred)
 SELECT
     '', -- bridge_id
     user_old.mxid, -- user_mxid
     CAST(portal_old.tg_receiver AS TEXT), -- login_id
-    CAST(portal_old.tgid AS TEXT), -- portal_id
+    portal_old.peer_type || ':' || CAST(portal_old.tgid AS TEXT), -- portal_id
     CAST(portal_old.tg_receiver AS TEXT), -- portal_receiver
     false, -- in_space
     false -- preferred
@@ -144,8 +145,8 @@ SELECT
     CASE WHEN tg_space=portal_old.tgid THEN (CAST(tg_space AS TEXT) || '.') ELSE '' END || CAST(message_old.tgid AS TEXT), -- id
     '', -- part_id
     message_old.mxid, -- mxid
-    CAST(portal_old.tgid AS TEXT), -- room_id
-    CAST(portal_old.tg_receiver AS TEXT), -- room_receiver
+    portal_old.peer_type || ':' || CAST(portal_old.tgid AS TEXT), -- room_id
+    CASE WHEN portal_old.peer_type='channel' THEN '' ELSE CAST(portal_old.tg_receiver AS TEXT) END, -- room_receiver
     COALESCE(CAST(sender AS TEXT), ''), -- sender_id
     COALESCE(sender_mxid, ''),
     0, -- timestamp
@@ -175,7 +176,10 @@ FROM reaction_old
 INNER JOIN message ON reaction_old.msg_mxid=message.mxid;
 
 INSERT INTO telegram_access_hash (user_id, entity_id, access_hash)
-SELECT user_old.tgid, id, hash
+SELECT
+    user_old.tgid,
+    CASE WHEN id < 0 THEN -id - 1000000000000 ELSE id END,
+    hash
 FROM telethon_entities_old
 LEFT JOIN user_old ON user_old.mxid=session_id
 WHERE user_old.tgid IS NOT NULL AND hash<>0;
@@ -193,9 +197,15 @@ LEFT JOIN user_old ON user_old.mxid=session_id
 WHERE entity_id<>0 AND user_old.tgid IS NOT NULL;
 
 INSERT INTO telegram_username (username, entity_id)
-SELECT username, id
+SELECT username, CASE WHEN id < 0 THEN -id - 1000000000000 ELSE id END
 FROM telethon_entities_old
 WHERE username<>''
+ON CONFLICT DO NOTHING;
+
+INSERT INTO telegram_phone_number (phone_number, entity_id)
+SELECT phone, id
+FROM telethon_entities_old
+WHERE phone<>''
 ON CONFLICT DO NOTHING;
 
 INSERT INTO telegram_file (id, mxc, mime_type, size)
