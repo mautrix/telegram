@@ -317,7 +317,7 @@ func NewTelegramClient(ctx context.Context, tc *TelegramConnector, login *bridge
 // connectTelegramClient blocks until client is connected, calling Run
 // internally.
 // Technique from: https://github.com/gotd/contrib/blob/master/bg/connect.go
-func connectTelegramClient(ctx context.Context, client *telegram.Client) (context.CancelFunc, error) {
+func connectTelegramClient(ctx context.Context, client *telegram.Client) (context.Context, context.CancelFunc, error) {
 	ctx, cancel := context.WithCancel(ctx)
 
 	errC := make(chan error, 1)
@@ -337,14 +337,14 @@ func connectTelegramClient(ctx context.Context, client *telegram.Client) (contex
 	select {
 	case <-ctx.Done(): // context canceled
 		cancel()
-		return func() {}, ctx.Err()
+		return nil, func() {}, ctx.Err()
 	case err := <-errC: // startup timeout
 		cancel()
-		return func() {}, err
+		return nil, func() {}, err
 	case <-initDone: // init done
 	}
 
-	return cancel, nil
+	return ctx, cancel, nil
 }
 
 func (t *TelegramClient) onDead() {
@@ -382,7 +382,7 @@ func (t *TelegramClient) onAuthError(err error) {
 }
 
 func (t *TelegramClient) Connect(ctx context.Context) (err error) {
-	t.clientCancel, err = connectTelegramClient(ctx, t.client)
+	ctx, t.clientCancel, err = connectTelegramClient(ctx, t.client)
 	if err != nil {
 		return err
 	}
