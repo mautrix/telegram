@@ -103,7 +103,7 @@ SELECT
     -- only: sqlite (line commented)
 --  json_object
     (
-        -- TODO
+        'is_supergroup', CASE WHEN megagroup THEN json('true') ELSE json('false') END
     ) -- metadata
 FROM portal_old;
 
@@ -151,7 +151,13 @@ SELECT
     COALESCE(sender_mxid, ''),
     0, -- timestamp
     0, -- edit_count
-    '{}' -- metadata
+    -- only: postgres
+    jsonb_build_object
+    -- only: sqlite (line commented)
+--  json_object
+    (
+        'content_hash', encode(content_hash, 'base64')
+    ) -- metadata
 FROM message_old
 INNER JOIN portal_old ON mx_room=portal_old.mxid
 WHERE (tg_space=portal_old.tgid OR tg_space=portal_old.tg_receiver) AND edit_index=0;
