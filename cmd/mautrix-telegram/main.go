@@ -19,6 +19,8 @@ package main
 import (
 	"encoding/base64"
 	"fmt"
+	"net/http"
+	"strings"
 
 	"go.mau.fi/util/dbutil/litestream"
 	"maunium.net/go/mautrix/bridgev2/bridgeconfig"
@@ -60,7 +62,20 @@ func main() {
 	versionWithoutCommit := m.Version
 	m.PostStart = func() {
 		if m.Matrix.Provisioning != nil {
-			// m.Matrix.Provisioning.Router.HandleFunc("/v1/user/{userID}/login/qr", legacyProvLoginQR)
+			m.Matrix.Provisioning.GetAuthFromRequest = func(r *http.Request) string {
+				if !strings.HasSuffix(r.URL.Path, "/login/qr") {
+					return ""
+				}
+				authParts := strings.Split(r.Header.Get("Sec-WebSocket-Protocol"), ",")
+				for _, part := range authParts {
+					part = strings.TrimSpace(part)
+					if strings.HasPrefix(part, "net.maunium.telegram.auth-") {
+						return strings.TrimPrefix(part, "net.maunium.telegram.auth-")
+					}
+				}
+				return ""
+			}
+			m.Matrix.Provisioning.Router.HandleFunc("/v1/user/{userID}/login/qr", legacyProvLoginQR)
 			m.Matrix.Provisioning.Router.HandleFunc("/v1/user/{userID}/login/request_code", legacyProvLoginRequestCode)
 			m.Matrix.Provisioning.Router.HandleFunc("/v1/user/{userID}/login/send_code", legacyProvLoginSendCode)
 			m.Matrix.Provisioning.Router.HandleFunc("/v1/user/{userID}/login/send_password", legacyProvLoginSendPassword)

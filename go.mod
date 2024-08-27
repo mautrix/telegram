@@ -3,6 +3,7 @@ module go.mau.fi/mautrix-telegram
 go 1.22
 
 require (
+	github.com/gorilla/websocket v1.5.3
 	github.com/gotd/td v0.105.0
 	github.com/rs/zerolog v1.33.0
 	github.com/stretchr/testify v1.9.0
@@ -11,7 +12,7 @@ require (
 	go.uber.org/zap v1.27.0
 	golang.org/x/exp v0.0.0-20240808152545-0cdaa3abc0fa
 	golang.org/x/net v0.28.0
-	maunium.net/go/mautrix v0.20.1-0.20240827134950-e3eb2953ddda
+	maunium.net/go/mautrix v0.20.1-0.20240827221252-892e5cf01fc8
 )
 
 require (
@@ -23,7 +24,6 @@ require (
 	github.com/go-faster/jx v1.1.0 // indirect
 	github.com/go-faster/xor v1.0.0 // indirect
 	github.com/gorilla/mux v1.8.1 // indirect
-	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/gotd/ige v0.2.2 // indirect
 	github.com/gotd/neo v0.1.5 // indirect
 	github.com/klauspost/compress v1.17.9 // indirect
