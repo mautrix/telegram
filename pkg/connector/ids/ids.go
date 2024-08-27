@@ -173,21 +173,27 @@ func MakeAvatarID(photoID int64) networkid.AvatarID {
 }
 
 func MakeEmojiIDFromDocumentID(documentID int64) networkid.EmojiID {
-	return networkid.EmojiID(fmt.Sprintf("d%d", documentID))
+	return networkid.EmojiID(strconv.FormatInt(documentID, 10))
 }
 
-func MakeEmojiIDFromEmoticon(emoticon string) networkid.EmojiID {
-	return networkid.EmojiID(fmt.Sprintf("e%s", emoticon))
+func MakeEmojiIDFromEmoticon(emoji string) networkid.EmojiID {
+	return networkid.EmojiID(emoji)
 }
 
-func ParseEmojiID(emojiID networkid.EmojiID) (documentID int64, emoticon string, err error) {
-	switch emojiID[0] {
-	case 'd':
-		documentID, err = strconv.ParseInt(string(emojiID[1:]), 10, 64)
-	case 'e':
-		emoticon = string(emojiID[1:])
-	default:
-		err = fmt.Errorf("invalid emoji ID type %s", string(emojiID[0]))
+func isNumbers(s string) bool {
+	for _, r := range s {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return true
+}
+
+func ParseEmojiID(emojiID networkid.EmojiID) (documentID int64, emoji string, err error) {
+	if isNumbers(string(emojiID)) {
+		documentID, err = strconv.ParseInt(string(emojiID), 10, 64)
+	} else {
+		emoji = string(emojiID)
 	}
 	return
 }
