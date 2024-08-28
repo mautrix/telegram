@@ -54,8 +54,8 @@ SELECT
     -- only: sqlite (line commented)
 --  json_object
     (
-        'is_premium', is_premium,
-        'is_channel', is_channel,
+        'is_premium', CASE WHEN is_premium THEN json('true') ELSE json('false') END,
+        'is_channel', CASE WHEN is_channel THEN json('true') ELSE json('false') END,
         'phone', '+' || phone,
         'name_source', displayname_source,
         'name_quality', displayname_quality,
