@@ -393,6 +393,14 @@ func (t *TelegramClient) Connect(ctx context.Context) (err error) {
 			t.clientCancel()
 		}
 	}()
+
+	// Update the logged-in user's ghost info (this also updates the user
+	// login's remote name and profile).
+	if me, err := t.client.Self(ctx); err != nil {
+		return fmt.Errorf("failed to get self: %w", err)
+	} else if _, err := t.updateGhost(ctx, t.telegramUserID, me); err != nil {
+		return fmt.Errorf("failed to update ghost: %w", err)
+	}
 	return
 }
 
@@ -427,10 +435,10 @@ func (t *TelegramClient) GetUserInfo(ctx context.Context, ghost *bridgev2.Ghost)
 	}
 	if user, err := t.getSingleUser(ctx, id); err != nil {
 		return nil, fmt.Errorf("failed to get user %d: %w", id, err)
-	} else if userInfo, err := t.getUserInfoFromTelegramUser(ctx, user); err != nil {
+	} else if user.TypeID() != tg.UserTypeID {
 		return nil, err
 	} else {
-		return userInfo, t.updateGhostWithUserInfo(ctx, id, userInfo)
+		return t.updateGhost(ctx, id, user.(*tg.User))
 	}
 }
 

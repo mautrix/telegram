@@ -60,9 +60,9 @@ func fnSync(ce *commands.Event) {
 					ce.Reply("Failed to get your info for %s: %v", login.ID, err)
 				} else if len(users) == 0 {
 					ce.Reply("Failed to get your info for %s: no users returned", login.ID)
-				} else if userInfo, err := client.getUserInfoFromTelegramUser(ce.Ctx, users[0]); err != nil {
-					ce.Reply("Failed to get your info for %s: %v", login.ID, err)
-				} else if err = client.updateGhostWithUserInfo(ce.Ctx, client.telegramUserID, userInfo); err != nil {
+				} else if users[0].TypeID() != tg.UserTypeID {
+					ce.Reply("Unexpected user type %s", users[0].TypeName())
+				} else if _, err = client.updateGhost(ce.Ctx, client.telegramUserID, users[0].(*tg.User)); err != nil {
 					ce.Reply("Failed to update your info for %s: %v", login.ID, err)
 				}
 			}()

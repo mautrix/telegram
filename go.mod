@@ -12,7 +12,7 @@ require (
 	go.uber.org/zap v1.27.0
 	golang.org/x/exp v0.0.0-20240808152545-0cdaa3abc0fa
 	golang.org/x/net v0.28.0
-	maunium.net/go/mautrix v0.20.1-0.20240827221252-892e5cf01fc8
+	maunium.net/go/mautrix v0.20.1-0.20240828181422-5f49ca683a3d
 )
 
 require (

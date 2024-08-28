@@ -4,10 +4,13 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"slices"
+	"strings"
 	"time"
 
 	"github.com/gotd/td/tg"
 	"github.com/rs/zerolog"
+	"maunium.net/go/mautrix/bridge/status"
 	"maunium.net/go/mautrix/bridgev2"
 	"maunium.net/go/mautrix/bridgev2/database"
 	"maunium.net/go/mautrix/bridgev2/networkid"
@@ -194,6 +197,52 @@ func (t *TelegramClient) getEventSender(msg interface {
 	}
 }
 
+func (t *TelegramClient) maybeUpdateRemoteProfile(ctx context.Context, ghost *bridgev2.Ghost, user *tg.User) error {
+	if ghost.ID != t.userID {
+		return nil
+	}
+
+	var changed bool
+	if user != nil {
+		fullName := util.FormatFullName(user.FirstName, user.LastName)
+		username := user.Username
+		if username == "" && len(user.Usernames) > 0 {
+			username = user.Usernames[0].Username
+		}
+
+		normalizedPhone := "+" + strings.TrimPrefix(user.Phone, "+")
+		remoteName := username
+		if remoteName == "" {
+			remoteName = normalizedPhone
+		}
+		if remoteName == "" {
+			remoteName = fullName
+		}
+
+		changed = t.userLogin.RemoteName != remoteName ||
+			t.userLogin.RemoteProfile.Phone != normalizedPhone ||
+			t.userLogin.RemoteProfile.Username != username ||
+			t.userLogin.RemoteProfile.Name != fullName
+		t.userLogin.RemoteName = remoteName
+		t.userLogin.RemoteProfile.Phone = normalizedPhone
+		t.userLogin.RemoteProfile.Username = username
+		t.userLogin.RemoteProfile.Name = fullName
+	} else {
+		changed = t.userLogin.RemoteName != ghost.Name
+		t.userLogin.RemoteProfile.Name = ghost.Name
+	}
+
+	changed = changed || t.userLogin.RemoteProfile.Avatar != ghost.AvatarMXC
+	t.userLogin.RemoteProfile.Avatar = ghost.AvatarMXC
+	if changed {
+		if err := t.userLogin.Save(ctx); err != nil {
+			return err
+		}
+		t.userLogin.BridgeState.Send(status.BridgeState{StateEvent: status.StateConnected})
+	}
+	return nil
+}
+
 func (t *TelegramClient) onUserName(ctx context.Context, e tg.Entities, update *tg.UpdateUserName) error {
 	ghost, err := t.main.Bridge.GetGhostByID(ctx, ids.MakeUserID(update.UserID))
 	if err != nil {
@@ -201,10 +250,25 @@ func (t *TelegramClient) onUserName(ctx context.Context, e tg.Entities, update *
 	}
 
 	name := util.FormatFullName(update.FirstName, update.LastName)
+	userInfo := bridgev2.UserInfo{Name: &name}
 
-	// TODO update identifiers?
-	ghost.UpdateInfo(ctx, &bridgev2.UserInfo{Name: &name})
-	return nil
+	if len(update.Usernames) > 0 {
+		for _, ident := range ghost.Identifiers {
+			if !strings.HasPrefix(ident, "telegram:") {
+				userInfo.Identifiers = append(userInfo.Identifiers, ident)
+			}
+		}
+
+		for _, username := range update.Usernames {
+			userInfo.Identifiers = append(userInfo.Identifiers, fmt.Sprintf("telegram:%s", username.Username))
+		}
+
+		slices.Sort(userInfo.Identifiers)
+		userInfo.Identifiers = slices.Compact(userInfo.Identifiers)
+	}
+
+	ghost.UpdateInfo(ctx, &userInfo)
+	return t.maybeUpdateRemoteProfile(ctx, ghost, nil)
 }
 
 func (t *TelegramClient) onDeleteMessages(ctx context.Context, channelID int64, update IGetMessages) error {
@@ -241,26 +305,17 @@ func (t *TelegramClient) onDeleteMessages(ctx context.Context, channelID int64, 
 	return nil
 }
 
-func (t *TelegramClient) updateGhost(ctx context.Context, userID int64, user *tg.User) error {
+func (t *TelegramClient) updateGhost(ctx context.Context, userID int64, user *tg.User) (*bridgev2.UserInfo, error) {
 	ghost, err := t.main.Bridge.GetGhostByID(ctx, ids.MakeUserID(userID))
 	if err != nil {
-		return err
+		return nil, err
 	}
 	userInfo, err := t.getUserInfoFromTelegramUser(ctx, user)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	ghost.UpdateInfo(ctx, userInfo)
-	return nil
-}
-
-func (t *TelegramClient) updateGhostWithUserInfo(ctx context.Context, userID int64, userInfo *bridgev2.UserInfo) error {
-	ghost, err := t.main.Bridge.GetGhostByID(ctx, ids.MakeUserID(userID))
-	if err != nil {
-		return err
-	}
-	ghost.UpdateInfo(ctx, userInfo)
-	return nil
+	return userInfo, t.maybeUpdateRemoteProfile(ctx, ghost, user)
 }
 
 func (t *TelegramClient) onEntityUpdate(ctx context.Context, e tg.Entities) error {

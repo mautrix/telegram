@@ -24,7 +24,7 @@ func APICallWithUpdates[U hasUpdates](ctx context.Context, t *TelegramClient, fn
 		if !ok {
 			return resp, fmt.Errorf("user is %T not *tg.User", user)
 		}
-		err := t.updateGhost(ctx, user.ID, user)
+		_, err := t.updateGhost(ctx, user.ID, user)
 		if err != nil {
 			return resp, err
 		}

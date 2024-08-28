@@ -21,6 +21,7 @@ import (
 	"fmt"
 
 	"github.com/gotd/td/tg"
+	"maunium.net/go/mautrix/bridge/status"
 	"maunium.net/go/mautrix/bridgev2"
 	"maunium.net/go/mautrix/bridgev2/database"
 
@@ -85,10 +86,34 @@ func finalizeLogin(ctx context.Context, user *bridgev2.User, authorization *tg.A
 			log.Err(err).Msg("Failed to sync chats")
 		}
 	}()
+
+	fullName := util.FormatFullName(me.FirstName, me.LastName)
+	username := me.Username
+	if username == "" && len(me.Usernames) > 0 {
+		username = me.Usernames[0].Username
+	}
+	remoteName := username
+	if remoteName == "" {
+		remoteName = me.Phone
+	}
+	if remoteName == "" {
+		remoteName = fullName
+	}
+	ul.RemoteName = remoteName
+	ul.RemoteProfile = status.RemoteProfile{
+		Phone:    me.Phone,
+		Username: username,
+		Name:     fullName,
+	}
+	err = ul.Save(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to save login: %w", err)
+	}
+
 	return &bridgev2.LoginStep{
 		Type:         bridgev2.LoginStepTypeComplete,
 		StepID:       LoginStepIDComplete,
-		Instructions: fmt.Sprintf("Successfully logged in as %d / +%s (%s)", me.ID, me.Phone, util.FormatFullName(me.FirstName, me.LastName)),
+		Instructions: fmt.Sprintf("Successfully logged in as %d / +%s (%s)", me.ID, me.Phone, remoteName),
 		CompleteParams: &bridgev2.LoginCompleteParams{
 			UserLoginID: ul.ID,
 		},
