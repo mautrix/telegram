@@ -120,6 +120,7 @@ func legacyProvLoginQR(w http.ResponseWriter, r *http.Request) {
 	for {
 		switch nextStep.StepID {
 		case connector.LoginStepIDShowQR:
+			ws.WriteJSON(map[string]any{"code": nextStep.DisplayAndWaitParams.Data})
 			nextStep, err = loginProcess.(bridgev2.LoginProcessDisplayAndWait).Wait(ctx)
 			if err != nil {
 				ws.WriteJSON(map[string]any{
@@ -129,7 +130,6 @@ func legacyProvLoginQR(w http.ResponseWriter, r *http.Request) {
 				})
 				return
 			}
-			ws.WriteJSON(map[string]any{"code": nextStep.DisplayAndWaitParams.Data})
 		case connector.LoginStepIDComplete:
 			ws.WriteJSON(map[string]any{"success": true})
 			return
