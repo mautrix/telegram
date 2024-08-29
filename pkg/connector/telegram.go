@@ -320,7 +320,14 @@ func (t *TelegramClient) updateGhost(ctx context.Context, userID int64, user *tg
 
 func (t *TelegramClient) onEntityUpdate(ctx context.Context, e tg.Entities) error {
 	for userID, user := range e.Users {
-		t.updateGhost(ctx, userID, user)
+		if _, err := t.updateGhost(ctx, userID, user); err != nil {
+			return err
+		}
+	}
+	for channelID, channel := range e.Channels {
+		if err := t.ScopedStore.SetAccessHash(ctx, channelID, channel.AccessHash); err != nil {
+			return err
+		}
 	}
 	return nil
 }

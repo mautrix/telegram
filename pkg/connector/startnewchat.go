@@ -155,7 +155,7 @@ func (t *TelegramClient) SearchUsers(ctx context.Context, query string) (resp []
 }
 
 func (t *TelegramClient) GetContactList(ctx context.Context) (resp []*bridgev2.ResolveIdentifierResponse, err error) {
-	contacts, err := APICallWithUpdates(ctx, t, func() (*tg.ContactsContacts, error) {
+	contacts, err := APICallWithOnlyUserUpdates(ctx, t, func() (*tg.ContactsContacts, error) {
 		c, err := t.client.API().ContactsGetContacts(ctx, t.cachedContactsHash)
 		if err != nil {
 			return nil, err

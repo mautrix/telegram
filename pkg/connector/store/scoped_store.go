@@ -167,16 +167,16 @@ func (s *ScopedStore) SetChannelAccessHash(ctx context.Context, userID, channelI
 
 var ErrNoAccessHash = errors.New("access hash not found")
 
-func (s *ScopedStore) GetAccessHash(ctx context.Context, userID int64) (accessHash int64, err error) {
-	err = s.db.QueryRow(ctx, getAccessHashQuery, s.telegramUserID, userID).Scan(&accessHash)
+func (s *ScopedStore) GetAccessHash(ctx context.Context, entityID int64) (accessHash int64, err error) {
+	err = s.db.QueryRow(ctx, getAccessHashQuery, s.telegramUserID, entityID).Scan(&accessHash)
 	if errors.Is(err, sql.ErrNoRows) {
 		err = ErrNoAccessHash
 	}
 	return
 }
 
-func (s *ScopedStore) SetAccessHash(ctx context.Context, userID, accessHash int64) (err error) {
-	_, err = s.db.Exec(ctx, setAccessHashQuery, s.telegramUserID, userID, accessHash)
+func (s *ScopedStore) SetAccessHash(ctx context.Context, entityID, accessHash int64) (err error) {
+	_, err = s.db.Exec(ctx, setAccessHashQuery, s.telegramUserID, entityID, accessHash)
 	return
 }
 
