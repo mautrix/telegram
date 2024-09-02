@@ -17,12 +17,14 @@
 package main
 
 import (
+	"context"
 	"encoding/base64"
 	"fmt"
 	"net/http"
 	"strings"
 
 	"go.mau.fi/util/dbutil/litestream"
+	"go.mau.fi/util/exerrors"
 	"maunium.net/go/mautrix/bridgev2/bridgeconfig"
 	"maunium.net/go/mautrix/bridgev2/matrix/mxmain"
 
@@ -102,6 +104,15 @@ func main() {
 			),
 			true,
 		)
+		ctx := context.TODO()
+		if exists, _ := m.DB.TableExists(ctx, "telegram_file_old"); exists {
+			exerrors.Must(m.DB.Exec(ctx, `
+				PRAGMA foreign_keys = 'OFF';
+				DROP TABLE telegram_file_old;
+				PRAGMA foreign_key_check;
+				PRAGMA foreign_keys = 'ON';
+			`))
+		}
 	}
 	m.InitVersion(Tag, Commit, BuildTime)
 	m.Run()

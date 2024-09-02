@@ -265,6 +265,7 @@ DROP TABLE reaction_old;
 DROP TABLE portal_old;
 DROP TABLE puppet_old;
 DROP TABLE user_old;
+-- only: postgres (this is deleted separately for sqlite)
 DROP TABLE telegram_file_old;
 DROP TABLE telethon_entities_old;
 DROP TABLE telethon_sent_files_old;
