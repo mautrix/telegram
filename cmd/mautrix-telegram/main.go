@@ -23,10 +23,12 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/gorilla/mux"
 	"go.mau.fi/util/dbutil/litestream"
 	"go.mau.fi/util/exerrors"
 	"maunium.net/go/mautrix/bridgev2/bridgeconfig"
 	"maunium.net/go/mautrix/bridgev2/matrix/mxmain"
+	"maunium.net/go/mautrix/id"
 
 	"go.mau.fi/mautrix-telegram/pkg/connector"
 	"go.mau.fi/mautrix-telegram/pkg/connector/store/upgrades"
@@ -76,6 +78,9 @@ func main() {
 					}
 				}
 				return ""
+			}
+			m.Matrix.Provisioning.GetUserIDFromRequest = func(r *http.Request) id.UserID {
+				return id.UserID(mux.Vars(r)["userID"])
 			}
 			m.Matrix.Provisioning.Router.HandleFunc("/v1/user/{userID}/login/qr", legacyProvLoginQR)
 			m.Matrix.Provisioning.Router.HandleFunc("/v1/user/{userID}/login/request_code", legacyProvLoginRequestCode)

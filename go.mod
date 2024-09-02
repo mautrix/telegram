@@ -3,16 +3,17 @@ module go.mau.fi/mautrix-telegram
 go 1.22
 
 require (
+	github.com/gorilla/mux v1.8.1
 	github.com/gorilla/websocket v1.5.3
 	github.com/gotd/td v0.105.0
 	github.com/rs/zerolog v1.33.0
 	github.com/stretchr/testify v1.9.0
-	go.mau.fi/util v0.7.1-0.20240827213018-b75de7efab85
+	go.mau.fi/util v0.7.1-0.20240901193650-bf007b10eaf6
 	go.mau.fi/zerozap v0.1.1
 	go.uber.org/zap v1.27.0
-	golang.org/x/exp v0.0.0-20240808152545-0cdaa3abc0fa
+	golang.org/x/exp v0.0.0-20240823005443-9b4947da3948
 	golang.org/x/net v0.28.0
-	maunium.net/go/mautrix v0.20.1-0.20240828181422-5f49ca683a3d
+	maunium.net/go/mautrix v0.20.1-0.20240902225357-a17dc5867e37
 )
 
 require (
@@ -23,7 +24,6 @@ require (
 	github.com/go-faster/errors v0.7.1 // indirect
 	github.com/go-faster/jx v1.1.0 // indirect
 	github.com/go-faster/xor v1.0.0 // indirect
-	github.com/gorilla/mux v1.8.1 // indirect
 	github.com/gotd/ige v0.2.2 // indirect
 	github.com/gotd/neo v0.1.5 // indirect
 	github.com/klauspost/compress v1.17.9 // indirect
@@ -33,7 +33,7 @@ require (
 	github.com/mattn/go-sqlite3 v1.14.22 // indirect
 	github.com/petermattis/goid v0.0.0-20240813172612-4fcff4a6cae7 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
-	github.com/rs/xid v1.5.0 // indirect
+	github.com/rs/xid v1.6.0 // indirect
 	github.com/segmentio/asm v1.2.0 // indirect
 	github.com/skip2/go-qrcode v0.0.0-20200617195104-da1b6568686e // indirect
 	github.com/tidwall/gjson v1.17.3 // indirect

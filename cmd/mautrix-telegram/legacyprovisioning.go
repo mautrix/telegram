@@ -174,10 +174,7 @@ func legacyProvLoginRequestCode(w http.ResponseWriter, r *http.Request) {
 		exhttp.WriteJSONResponse(w, http.StatusInternalServerError, resp.WithError("unexpected_step", fmt.Sprintf("Unexpected step %s", nextStep.StepID)))
 	} else {
 		inflightLegacyLoginsLock.Lock()
-		inflightLegacyLogins[user.MXID] = &legacyLogin{
-			Process:  loginProcess,
-			NextStep: nextStep,
-		}
+		inflightLegacyLogins[user.MXID] = &legacyLogin{Process: loginProcess, NextStep: nextStep}
 		inflightLegacyLoginsLock.Unlock()
 		exhttp.WriteJSONResponse(w, http.StatusOK, resp.
 			WithState("code").
@@ -207,10 +204,7 @@ func legacyProvLoginSendCode(w http.ResponseWriter, r *http.Request) {
 	} else if nextStep.StepID == connector.LoginStepIDPassword {
 		inflightLegacyLoginsLock.Lock()
 		defer inflightLegacyLoginsLock.Unlock()
-		inflightLegacyLogins[user.MXID] = &legacyLogin{
-			Process:  inflightLogin.Process,
-			NextStep: nextStep,
-		}
+		inflightLegacyLogins[user.MXID].NextStep = nextStep
 		exhttp.WriteJSONResponse(w, http.StatusAccepted, resp.
 			WithState("password").
 			WithMessage("Code accepted, but you have 2-factor authentication enabled. Please enter your password."),
@@ -248,7 +242,7 @@ func legacyProvLoginSendPassword(w http.ResponseWriter, r *http.Request) {
 	} else if nextStep, err := inflightLogin.Process.(bridgev2.LoginProcessUserInput).SubmitUserInput(ctx, map[string]string{connector.LoginStepIDPassword: password}); err != nil {
 		exhttp.WriteJSONResponse(w, http.StatusBadRequest, resp.WithError("send_password_failed", fmt.Sprintf("Failed to send password: %s", err.Error())))
 	} else if nextStep.StepID == connector.LoginStepIDComplete {
-		exhttp.WriteJSONResponse(w, http.StatusOK, resp.WithState("logged-in"))
+		exhttp.WriteJSONResponse(w, http.StatusOK, resp.WithState("logged-in").WithMessage(nextStep.Instructions))
 	} else {
 		exhttp.WriteJSONResponse(w, http.StatusInternalServerError, resp.WithError("unexpected_step", fmt.Sprintf("Unexpected step %s", nextStep.StepID)))
 	}
