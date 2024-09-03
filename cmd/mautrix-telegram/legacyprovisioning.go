@@ -21,15 +21,19 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"sync"
 
+	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
 	"github.com/rs/zerolog"
 	"go.mau.fi/util/exhttp"
+	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/bridgev2"
 	"maunium.net/go/mautrix/id"
 
 	"go.mau.fi/mautrix-telegram/pkg/connector"
+	"go.mau.fi/mautrix-telegram/pkg/connector/ids"
 )
 
 type response struct {
@@ -261,4 +265,142 @@ func legacyProvLogout(w http.ResponseWriter, r *http.Request) {
 		login.Logout(r.Context())
 	}
 	exhttp.WriteEmptyJSONResponse(w, http.StatusOK)
+}
+
+func legacyProvContacts(w http.ResponseWriter, r *http.Request) {
+	log := zerolog.Ctx(r.Context()).With().
+		Str("prov_method", "contacts").
+		Logger()
+	ctx := log.WithContext(r.Context())
+
+	var resp response
+	login := m.Matrix.Provisioning.GetLoginForRequest(w, r)
+	if login == nil {
+		exhttp.WriteJSONResponse(w, http.StatusNotFound, resp.WithError(mautrix.MNotFound.ErrCode, "No login found"))
+		return
+	}
+	api := login.Client.(bridgev2.ContactListingNetworkAPI)
+	contacts, err := api.GetContactList(ctx)
+	if err != nil {
+		log.Err(err).Msg("Failed to get contacts")
+		exhttp.WriteJSONResponse(w, http.StatusInternalServerError, resp.WithError("M_UNKNOWN", fmt.Sprintf("Failed to get contacts: %v", err)))
+		return
+	}
+
+	contactsMap := map[int64]*legacyContactInfo{}
+	for _, contact := range contacts {
+		id, err := ids.ParseUserID(contact.UserID)
+		if err != nil {
+			log.Err(err).Msg("Failed to parse user id")
+			exhttp.WriteJSONResponse(w, http.StatusInternalServerError, resp.WithError("M_UNKNOWN", fmt.Sprintf("Failed to parse user id: %v", err)))
+			return
+		}
+		if contact.UserInfo != nil {
+			contact.Ghost.UpdateInfo(ctx, contact.UserInfo)
+		}
+		contactsMap[id] = legacyContactInfoFromGhost(contact.Ghost)
+	}
+
+	exhttp.WriteJSONResponse(w, http.StatusOK, contactsMap)
+}
+
+func legacyProvResolveIdentifier(w http.ResponseWriter, r *http.Request) {
+	legacyResolveIdentifierOrStartChat(w, r, false)
+}
+
+func legacyProvPM(w http.ResponseWriter, r *http.Request) {
+	legacyResolveIdentifierOrStartChat(w, r, true)
+}
+
+type legacyResolveIdentifierResponse struct {
+	RoomID      id.RoomID          `json:"room_id,omitempty"`
+	JustCreated bool               `json:"just_created,omitempty"`
+	ID          int                `json:"id,omitempty"`
+	ContactInfo *legacyContactInfo `json:"contact_info,omitempty"`
+}
+
+type legacyContactInfo struct {
+	Name      string              `json:"name,omitempty"`
+	Username  string              `json:"username,omitempty"`
+	Phone     string              `json:"phone,omitempty"`
+	IsBot     bool                `json:"is_bot,omitempty"`
+	AvatarURL id.ContentURIString `json:"avatar_url,omitempty"`
+}
+
+func legacyContactInfoFromGhost(ghost *bridgev2.Ghost) *legacyContactInfo {
+	var username, phone string
+	for _, id := range ghost.Identifiers {
+		if strings.HasPrefix(id, "telegram:") {
+			username = strings.TrimPrefix(id, "telegram:")
+		} else if strings.HasPrefix(id, "tel:") {
+			phone = strings.TrimPrefix(id, "tel:")
+		}
+	}
+
+	return &legacyContactInfo{
+		Name:      ghost.Name,
+		Username:  username,
+		Phone:     phone,
+		IsBot:     ghost.Metadata.(*connector.GhostMetadata).IsBot,
+		AvatarURL: ghost.AvatarMXC,
+	}
+}
+
+func legacyResolveIdentifierOrStartChat(w http.ResponseWriter, r *http.Request, create bool) {
+	log := zerolog.Ctx(r.Context()).With().
+		Str("prov_method", "resolve_identifier").
+		Bool("create", create).
+		Logger()
+	ctx := log.WithContext(r.Context())
+
+	var resp response
+	login := m.Matrix.Provisioning.GetLoginForRequest(w, r)
+	if login == nil {
+		exhttp.WriteJSONResponse(w, http.StatusNotFound, resp.WithError(mautrix.MNotFound.ErrCode, "No login found"))
+		return
+	}
+	api := login.Client.(bridgev2.IdentifierResolvingNetworkAPI)
+	identResp, err := api.ResolveIdentifier(ctx, mux.Vars(r)["identifier"], create)
+	if err != nil {
+		log.Err(err).Msg("Failed to resolve identifier")
+		exhttp.WriteJSONResponse(w, http.StatusInternalServerError,
+			resp.WithError("M_UNKNOWN", fmt.Sprintf("Failed to resolve identifier: %v", err)))
+		return
+	} else if identResp == nil {
+		exhttp.WriteJSONResponse(w, http.StatusNotFound,
+			resp.WithError(mautrix.MNotFound.ErrCode, "User not found on Telegram"))
+		return
+	}
+	status := http.StatusOK
+	var apiResp legacyResolveIdentifierResponse
+	if identResp.Ghost != nil {
+		if identResp.UserInfo != nil {
+			identResp.Ghost.UpdateInfo(ctx, identResp.UserInfo)
+		}
+		apiResp.ContactInfo = legacyContactInfoFromGhost(identResp.Ghost)
+	}
+	if identResp.Chat != nil {
+		if identResp.Chat.Portal == nil {
+			identResp.Chat.Portal, err = m.Bridge.GetPortalByKey(ctx, identResp.Chat.PortalKey)
+			if err != nil {
+				log.Err(err).Msg("Failed to get portal")
+				exhttp.WriteJSONResponse(w, http.StatusInternalServerError,
+					resp.WithError("M_UNKNOWN", "Failed to get portal"))
+				return
+			}
+		}
+		if create && identResp.Chat.Portal.MXID == "" {
+			apiResp.JustCreated = true
+			status = http.StatusCreated
+			err = identResp.Chat.Portal.CreateMatrixRoom(ctx, login, identResp.Chat.PortalInfo)
+			if err != nil {
+				log.Err(err).Msg("Failed to create portal room")
+				exhttp.WriteJSONResponse(w, http.StatusInternalServerError,
+					resp.WithError("M_UNKNOWN", "Failed to create portal room"))
+				return
+			}
+		}
+		apiResp.RoomID = identResp.Chat.Portal.MXID
+	}
+	exhttp.WriteJSONResponse(w, status, &apiResp)
 }

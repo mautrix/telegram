@@ -87,6 +87,9 @@ func main() {
 			m.Matrix.Provisioning.Router.HandleFunc("/v1/user/{userID}/login/send_code", legacyProvLoginSendCode)
 			m.Matrix.Provisioning.Router.HandleFunc("/v1/user/{userID}/login/send_password", legacyProvLoginSendPassword)
 			m.Matrix.Provisioning.Router.HandleFunc("/v1/user/{userID}/logout", legacyProvLogout)
+			m.Matrix.Provisioning.Router.HandleFunc("/v1/user/{userID}/contacts", legacyProvContacts)
+			m.Matrix.Provisioning.Router.HandleFunc("/v1/user/{userID}/resolve_identifier/{identifier}", legacyProvResolveIdentifier)
+			m.Matrix.Provisioning.Router.HandleFunc("/v1/user/{userID}/pm/{identifier}", legacyProvPM)
 		}
 	}
 	m.PostInit = func() {
