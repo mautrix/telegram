@@ -209,6 +209,20 @@ func (t *Transferer) WithUserPhoto(ctx context.Context, store *store.ScopedStore
 	}
 }
 
+// WithChannelPhoto transforms a [Transferer] to a [ReadyTransferer] by setting
+// the given chat photo as the location that will be downloaded by the
+// [ReadyTransferer].
+func (t *Transferer) WithChannelPhoto(channelID, accessHash, photoID int64) *ReadyTransferer {
+	return &ReadyTransferer{
+		inner: t,
+		loc: &tg.InputPeerPhotoFileLocation{
+			Peer:    &tg.InputPeerChannel{ChannelID: channelID, AccessHash: accessHash},
+			PhotoID: photoID,
+			Big:     true,
+		},
+	}
+}
+
 // Transfer downloads the media from Telegram and uploads it to Matrix.
 //
 // If the file is already in the database, the MXC URI will be reused. The

@@ -181,19 +181,25 @@ func (t *TelegramClient) getEventSender(msg interface {
 }) bridgev2.EventSender {
 	if msg.GetOut() {
 		return t.mySender()
-	} else if f, ok := msg.GetFromID(); ok && f.TypeID() == tg.PeerUserTypeID {
-		from := f.(*tg.PeerUser)
+	}
+
+	peer, ok := msg.GetFromID()
+	if !ok {
+		peer = msg.GetPeerID()
+	}
+	switch from := peer.(type) {
+	case *tg.PeerUser:
 		return bridgev2.EventSender{
 			SenderLogin: ids.MakeUserLoginID(from.UserID),
 			Sender:      ids.MakeUserID(from.UserID),
 		}
-	} else if peer, ok := msg.GetPeerID().(*tg.PeerUser); ok {
+	case *tg.PeerChannel:
 		return bridgev2.EventSender{
-			SenderLogin: ids.MakeUserLoginID(peer.UserID),
-			Sender:      ids.MakeUserID(peer.UserID),
+			Sender: ids.MakeUserID(from.ChannelID),
 		}
-	} else {
-		panic(fmt.Sprintf("couldn't determine sender (from: %+v) (peer: %+v)", f, msg.GetPeerID()))
+	default:
+		fromID, _ := msg.GetFromID()
+		panic(fmt.Sprintf("couldn't determine sender (from: %+v) (peer: %+v)", fromID, msg.GetPeerID()))
 	}
 }
 
@@ -318,14 +324,52 @@ func (t *TelegramClient) updateGhost(ctx context.Context, userID int64, user *tg
 	return userInfo, t.maybeUpdateRemoteProfile(ctx, ghost, user)
 }
 
+func (t *TelegramClient) updateChannel(ctx context.Context, channel *tg.Channel) error {
+	if err := t.ScopedStore.SetAccessHash(ctx, channel.ID, channel.AccessHash); err != nil {
+		return err
+	}
+
+	if !channel.Broadcast {
+		return nil
+	}
+
+	// Update the channel ghost if this is a broadcast channel.
+	ghost, err := t.main.Bridge.GetGhostByID(ctx, ids.MakeUserID(channel.ID))
+	if err != nil {
+		return err
+	}
+
+	var avatar *bridgev2.Avatar
+	if photo, ok := channel.GetPhoto().(*tg.ChatPhoto); ok {
+		avatar = &bridgev2.Avatar{
+			ID: ids.MakeAvatarID(photo.PhotoID),
+			Get: func(ctx context.Context) (data []byte, err error) {
+				data, _, err = media.NewTransferer(t.client.API()).WithChannelPhoto(channel.ID, channel.AccessHash, photo.PhotoID).Download(ctx)
+				return
+			},
+		}
+	}
+
+	ghost.UpdateInfo(ctx, &bridgev2.UserInfo{
+		Name:   &channel.Title,
+		Avatar: avatar,
+		ExtraUpdates: func(ctx context.Context, g *bridgev2.Ghost) bool {
+			updated := !g.Metadata.(*GhostMetadata).IsChannel
+			g.Metadata.(*GhostMetadata).IsChannel = true
+			return updated
+		},
+	})
+	return nil
+}
+
 func (t *TelegramClient) onEntityUpdate(ctx context.Context, e tg.Entities) error {
 	for userID, user := range e.Users {
 		if _, err := t.updateGhost(ctx, userID, user); err != nil {
 			return err
 		}
 	}
-	for channelID, channel := range e.Channels {
-		if err := t.ScopedStore.SetAccessHash(ctx, channelID, channel.AccessHash); err != nil {
+	for _, channel := range e.Channels {
+		if err := t.updateChannel(ctx, channel); err != nil {
 			return err
 		}
 	}

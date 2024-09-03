@@ -137,6 +137,7 @@ func (tg *TelegramConnector) GetDBMetaTypes() database.MetaTypes {
 type GhostMetadata struct {
 	IsPremium bool `json:"is_premium,omitempty"`
 	IsBot     bool `json:"is_bot,omitempty"`
+	IsChannel bool `json:"is_channel,omitempty"`
 }
 
 type PortalMetadata struct {

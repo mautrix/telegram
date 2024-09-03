@@ -45,7 +45,7 @@ func APICallWithUpdates[U hasUpdates](ctx context.Context, t *TelegramClient, fn
 
 	for _, c := range resp.GetChats() {
 		if channel, ok := c.(*tg.Channel); ok {
-			if err := t.ScopedStore.SetAccessHash(ctx, channel.ID, channel.AccessHash); err != nil {
+			if err := t.updateChannel(ctx, channel); err != nil {
 				return *new(U), err
 			}
 		}

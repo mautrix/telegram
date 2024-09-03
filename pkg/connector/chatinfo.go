@@ -216,6 +216,15 @@ func (t *TelegramClient) GetChatInfo(ctx context.Context, portal *bridgev2.Porta
 		// TODO save emojiset?
 
 		chatInfo.Members.IsFull = false
+		if !portal.Metadata.(*PortalMetadata).IsSuperGroup {
+			// Add the channel user
+			chatInfo.Members.MemberMap[ids.MakeUserID(id)] = bridgev2.ChatMember{
+				EventSender: bridgev2.EventSender{
+					SenderLogin: ids.MakeUserLoginID(id),
+					Sender:      ids.MakeUserID(id),
+				},
+			}
+		}
 
 		// Just return the current user as a member if we can't view the
 		// participants or the max initial sync is 0.
