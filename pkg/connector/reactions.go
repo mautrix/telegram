@@ -136,7 +136,7 @@ func (t *TelegramClient) handleTelegramReactions(ctx context.Context, msg *tg.Me
 		users[userID].Reactions = append(users[userID].Reactions, &bridgev2.BackfillReaction{
 			Timestamp: time.Unix(int64(reaction.Date), 0),
 			Sender: bridgev2.EventSender{
-				IsFromMe:    reaction.My,
+				IsFromMe:    peer.UserID == t.telegramUserID,
 				SenderLogin: ids.MakeUserLoginID(peer.UserID),
 				Sender:      userID,
 			},
