@@ -156,7 +156,7 @@ SELECT
     -- only: sqlite (line commented)
 --  json_object
     (
-        'content_hash', encode(content_hash, 'base64')
+        'content_hash', CASE WHEN content_hash IS NULL THEN '' ELSE encode(content_hash, 'base64') END
     ) -- metadata
 FROM message_old
 INNER JOIN portal_old ON mx_room=portal_old.mxid
