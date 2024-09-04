@@ -158,8 +158,9 @@ type UserLoginSession struct {
 }
 
 type UserLoginMetadata struct {
-	Phone   string           `json:"phone"`
-	Session UserLoginSession `json:"session"`
+	Phone     string           `json:"phone"`
+	Session   UserLoginSession `json:"session"`
+	TakeoutID int64            `json:"takeout_id,omitempty"`
 }
 
 func (s *UserLoginSession) Load(_ context.Context) (*session.Data, error) {

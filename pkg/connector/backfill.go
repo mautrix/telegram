@@ -4,9 +4,11 @@ import (
 	"context"
 	"fmt"
 	"slices"
+	"sync"
 	"time"
 
 	"github.com/gotd/td/tg"
+	"github.com/gotd/td/tgerr"
 	"github.com/rs/zerolog"
 	"maunium.net/go/mautrix/bridgev2"
 	"maunium.net/go/mautrix/bridgev2/database"
@@ -15,11 +17,74 @@ import (
 	"go.mau.fi/mautrix-telegram/pkg/connector/ids"
 )
 
+// getTakeoutID blocks until the takeout ID is available.
+func (t *TelegramClient) getTakeoutID(ctx context.Context) (takeoutID int64, err error) {
+	log := zerolog.Ctx(ctx).With().Str("function", "getTakeoutID").Logger()
+	if t.userLogin.Metadata.(*UserLoginMetadata).TakeoutID != 0 {
+		return t.userLogin.Metadata.(*UserLoginMetadata).TakeoutID, nil
+	}
+
+	for {
+		t.takeoutAccepted.Clear()
+
+		accountTakeout, err := t.client.API().AccountInitTakeoutSession(ctx, &tg.AccountInitTakeoutSessionRequest{
+			MessageUsers:      true,
+			MessageChats:      true,
+			MessageMegagroups: true,
+			MessageChannels:   true,
+			Files:             true,
+			FileMaxSize:       min(t.main.maxFileSize, 2000*1024*1024),
+		})
+		if rpcErr, ok := tgerr.As(err); ok && rpcErr.IsOneOf(tg.ErrTakeoutInitDelay) {
+			log.Warn().
+				Err(err).
+				Int("delay", rpcErr.Argument).
+				Msg("Takeout requested, will wait for retry request or delay")
+			t.takeoutAccepted.WaitTimeout(time.Duration(rpcErr.Argument) * time.Second)
+			continue
+		} else if err != nil {
+			return 0, err
+		}
+
+		if t.stopTakeoutTimer != nil {
+			t.stopTakeoutTimer.Stop()
+		}
+		t.stopTakeoutTimer = time.AfterFunc(max(time.Hour, time.Duration(t.main.Bridge.Config.Backfill.Queue.BatchDelay*2)), sync.OnceFunc(func() { t.stopTakeout(ctx) }))
+
+		t.userLogin.Metadata.(*UserLoginMetadata).TakeoutID = accountTakeout.ID
+		return accountTakeout.ID, t.userLogin.Save(ctx)
+	}
+}
+
+func (t *TelegramClient) stopTakeout(ctx context.Context) error {
+	t.takeoutLock.Lock()
+	defer t.takeoutLock.Unlock()
+
+	_, err := t.client.API().AccountFinishTakeoutSession(ctx, &tg.AccountFinishTakeoutSessionRequest{Success: true})
+	if err != nil {
+		return err
+	}
+	t.userLogin.Metadata.(*UserLoginMetadata).TakeoutID = 0
+	return t.userLogin.Save(ctx)
+}
+
 func (t *TelegramClient) FetchMessages(ctx context.Context, fetchParams bridgev2.FetchMessagesParams) (*bridgev2.FetchMessagesResponse, error) {
-	log := zerolog.Ctx(ctx).With().
-		Str("method", "FetchMessages").
-		Logger()
+	log := zerolog.Ctx(ctx).With().Str("method", "FetchMessages").Logger()
 	ctx = log.WithContext(ctx)
+
+	var takeoutID int64
+	var err error
+	if !fetchParams.Forward { // Backwards
+		t.takeoutLock.Lock()
+		defer t.takeoutLock.Unlock()
+		takeoutID, err = t.getTakeoutID(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		t.stopTakeoutTimer.Stop()
+		defer t.stopTakeoutTimer.Reset(max(time.Hour, time.Duration(t.main.Bridge.Config.Backfill.Queue.BatchDelay*2)))
+	}
 
 	peer, err := t.inputPeerForPortalID(ctx, fetchParams.Portal.ID)
 	if err != nil {
@@ -37,7 +102,16 @@ func (t *TelegramClient) FetchMessages(ctx context.Context, fetchParams bridgev2
 		}
 	}
 	msgs, err := APICallWithUpdates(ctx, t, func() (tg.ModifiedMessagesMessages, error) {
-		rawMsgs, err := t.client.API().MessagesGetHistory(ctx, &req)
+		var rawMsgs tg.MessagesMessagesClass
+		if fetchParams.Forward {
+			rawMsgs, err = t.client.API().MessagesGetHistory(ctx, &req)
+		} else {
+			var messages tg.MessagesMessagesBox
+			err = t.client.Invoke(ctx,
+				&tg.InvokeWithTakeoutRequest{TakeoutID: takeoutID, Query: &req},
+				&messages)
+			rawMsgs = messages.Messages
+		}
 		if err != nil {
 			return nil, err
 		}

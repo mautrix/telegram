@@ -386,6 +386,16 @@ func (t *TelegramClient) onMessageEdit(ctx context.Context, update IGetMessage) 
 
 	sender := t.getEventSender(msg)
 
+	// Check if this edit was a data export request acceptance message
+	if sender.Sender == networkid.UserID("777000") {
+		if strings.Contains(msg.Message, "Data export request") && strings.Contains(msg.Message, "Accepted") {
+			zerolog.Ctx(ctx).Info().
+				Int("message_id", msg.ID).
+				Msg("Received an edit to message that looks like the data export was accepted, marking takeout as retriable")
+			t.takeoutAccepted.Set()
+		}
+	}
+
 	t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.Message[*tg.Message]{
 		EventMeta: simplevent.EventMeta{
 			Type: bridgev2.RemoteEventEdit,

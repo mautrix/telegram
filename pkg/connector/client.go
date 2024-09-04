@@ -8,12 +8,14 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gotd/td/telegram"
 	"github.com/gotd/td/telegram/updates"
 	"github.com/gotd/td/tg"
 	"github.com/rs/zerolog"
+	"go.mau.fi/util/exsync"
 	"go.mau.fi/zerozap"
 	"go.uber.org/zap"
 	"maunium.net/go/mautrix/bridge/status"
@@ -50,6 +52,10 @@ type TelegramClient struct {
 
 	cachedContacts     *tg.ContactsContacts
 	cachedContactsHash int64
+
+	takeoutLock      sync.Mutex
+	takeoutAccepted  *exsync.Event
+	stopTakeoutTimer *time.Timer
 }
 
 var (
@@ -114,6 +120,8 @@ func NewTelegramClient(ctx context.Context, tc *TelegramConnector, login *bridge
 		loginID:        login.ID,
 		userID:         networkid.UserID(login.ID),
 		userLogin:      login,
+
+		takeoutAccepted: exsync.NewEvent(),
 	}
 	dispatcher := UpdateDispatcher{
 		UpdateDispatcher: tg.NewUpdateDispatcher(),
