@@ -63,6 +63,8 @@ type TelegramClient struct {
 	takeoutAccepted    *exsync.Event
 	stopTakeoutTimer   *time.Timer
 	takeoutDialogsOnce sync.Once
+
+	activeCalls map[int64]networkid.PortalKey
 }
 
 var (
@@ -193,6 +195,8 @@ func NewTelegramClient(ctx context.Context, tc *TelegramConnector, login *bridge
 		return client.onPeerBlocked(ctx, update)
 	})
 	dispatcher.OnChat(client.onChat)
+	dispatcher.OnPhoneCall(client.onPhoneCall)
+	dispatcher.OnGroupCall(client.onGroupCall)
 
 	client.ScopedStore = tc.Store.GetScopedStore(telegramUserID)
 

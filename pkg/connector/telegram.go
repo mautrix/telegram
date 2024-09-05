@@ -11,7 +11,9 @@ import (
 	"github.com/gotd/td/tg"
 	"github.com/gotd/td/tgerr"
 	"github.com/rs/zerolog"
+	"go.mau.fi/util/exfmt"
 	"go.mau.fi/util/ptr"
+	"go.mau.fi/util/random"
 	"golang.org/x/exp/maps"
 	"maunium.net/go/mautrix/bridge/status"
 	"maunium.net/go/mautrix/bridgev2"
@@ -245,23 +247,6 @@ func (t *TelegramClient) onUpdateNewMessage(ctx context.Context, channels map[in
 					CanBackfill: true,
 				},
 			})
-		// case *tg.MessageActionChatMigrateTo:
-		// case *tg.MessageActionChannelMigrateFrom:
-		// case *tg.MessageActionPinMessage:
-		// case *tg.MessageActionHistoryClear:
-		// case *tg.MessageActionGameScore:
-		// case *tg.MessageActionPaymentSentMe:
-		// case *tg.MessageActionPaymentSent:
-		// case *tg.MessageActionPhoneCall:
-		// case *tg.MessageActionScreenshotTaken:
-		// case *tg.MessageActionCustomAction:
-		// case *tg.MessageActionBotAllowed:
-		// case *tg.MessageActionSecureValuesSentMe:
-		// case *tg.MessageActionSecureValuesSent:
-		// case *tg.MessageActionContactSignUp:
-		// case *tg.MessageActionGeoProximityReached:
-		// case *tg.MessageActionGroupCall:
-		// case *tg.MessageActionInviteToGroupCall:
 		case *tg.MessageActionSetMessagesTTL:
 			eventMeta.Type = bridgev2.RemoteEventChatResync
 			t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.ChatResync{
@@ -274,7 +259,26 @@ func (t *TelegramClient) onUpdateNewMessage(ctx context.Context, channels map[in
 					},
 				},
 			})
-		// case *tg.MessageActionGroupCallScheduled:
+		case *tg.MessageActionPhoneCall:
+			// Nothing to do, will be handled by OnPhoneCall callback
+		case *tg.MessageActionGroupCall:
+			// Nothing to do, will be handled by OnGroupCall callback
+		case *tg.MessageActionInviteToGroupCall, *tg.MessageActionGroupCallScheduled:
+			// Ignore
+		// case *tg.MessageActionChatMigrateTo:
+		// case *tg.MessageActionChannelMigrateFrom:
+		// case *tg.MessageActionPinMessage:
+		// case *tg.MessageActionHistoryClear:
+		// case *tg.MessageActionGameScore:
+		// case *tg.MessageActionPaymentSentMe:
+		// case *tg.MessageActionPaymentSent:
+		// case *tg.MessageActionScreenshotTaken:
+		// case *tg.MessageActionCustomAction:
+		// case *tg.MessageActionBotAllowed:
+		// case *tg.MessageActionSecureValuesSentMe:
+		// case *tg.MessageActionSecureValuesSent:
+		// case *tg.MessageActionContactSignUp:
+		// case *tg.MessageActionGeoProximityReached:
 		// case *tg.MessageActionSetChatTheme:
 		// case *tg.MessageActionChatJoinedByRequest:
 		// case *tg.MessageActionWebViewDataSentMe:
@@ -913,5 +917,127 @@ func (t *TelegramClient) onChat(ctx context.Context, e tg.Entities, update *tg.U
 			},
 		})
 	}
+	return nil
+}
+
+func (t *TelegramClient) onPhoneCall(ctx context.Context, e tg.Entities, update *tg.UpdatePhoneCall) error {
+	log := zerolog.Ctx(ctx).With().Str("action", "on_phone_call").Logger()
+	var body strings.Builder
+	var portalKey networkid.PortalKey
+	switch call := update.PhoneCall.(type) {
+	case *tg.PhoneCallRequested:
+		body.WriteString("Started a ")
+		if call.Video {
+			body.WriteString("video call")
+		} else {
+			body.WriteString("call")
+		}
+		portalKey = t.makePortalKeyFromID(ids.PeerTypeUser, call.ParticipantID)
+		t.activeCalls[call.ID] = portalKey
+	case *tg.PhoneCallDiscarded:
+		var found bool
+		portalKey, found = t.activeCalls[call.ID]
+		if !found {
+			log.Info().Msg("Unknown call ID, ignoring")
+			return nil
+		}
+
+		if call.Video {
+			body.WriteString("Video call ")
+		} else {
+			body.WriteString("Call ")
+		}
+		switch call.Reason.TypeID() {
+		case tg.PhoneCallDiscardReasonMissedTypeID:
+			body.WriteString("missed")
+		case tg.PhoneCallDiscardReasonDisconnectTypeID:
+			body.WriteString("disconnected")
+		case tg.PhoneCallDiscardReasonHangupTypeID:
+			body.WriteString("ended")
+		case tg.PhoneCallDiscardReasonBusyTypeID:
+			body.WriteString("rejected")
+		default:
+			return fmt.Errorf("unknown call end reason %T", call.Reason)
+		}
+
+		if call.Duration > 0 {
+			body.WriteString(" (")
+			body.WriteString(exfmt.Duration(time.Duration(call.Duration) * time.Second))
+			body.WriteString(")")
+		}
+	default:
+		log.Info().Type("type", update.PhoneCall).Msg("Unhandled phone call class")
+		return nil
+	}
+
+	t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.Message[any]{
+		EventMeta: simplevent.EventMeta{
+			Type:         bridgev2.RemoteEventMessage,
+			PortalKey:    portalKey,
+			CreatePortal: true,
+		},
+		ID: networkid.MessageID(random.String(10)),
+		ConvertMessageFunc: func(ctx context.Context, portal *bridgev2.Portal, intent bridgev2.MatrixAPI, data any) (*bridgev2.ConvertedMessage, error) {
+			return &bridgev2.ConvertedMessage{
+				Parts: []*bridgev2.ConvertedMessagePart{
+					{
+						ID:      networkid.PartID("call"),
+						Type:    event.EventMessage,
+						Content: &event.MessageEventContent{MsgType: event.MsgNotice, Body: body.String()},
+					},
+				},
+			}, nil
+		},
+	})
+	return nil
+}
+
+func (t *TelegramClient) onGroupCall(ctx context.Context, e tg.Entities, update *tg.UpdateGroupCall) error {
+	var actionDescription, msgID strings.Builder
+	actionDescription.WriteString("Group ")
+
+	switch call := update.Call.(type) {
+	case *tg.GroupCall:
+		msgID.WriteString(fmt.Sprintf("%d-%d-start", call.ID, call.AccessHash))
+		if call.Version != 1 {
+			zerolog.Ctx(ctx).Debug().Int("version", call.Version).Msg("Call version != 1, won't send message")
+			return nil
+		}
+
+		if call.CanStartVideo {
+			actionDescription.WriteString("video ")
+		}
+		actionDescription.WriteString("call ")
+		if _, ok := call.GetScheduleDate(); ok {
+			actionDescription.WriteString("scheduled")
+		} else {
+			actionDescription.WriteString("started")
+		}
+
+	case *tg.GroupCallDiscarded:
+		msgID.WriteString(fmt.Sprintf("%d-%d-end", call.ID, call.AccessHash))
+		actionDescription.WriteString(fmt.Sprintf("call ended (%s)", exfmt.Duration(time.Duration(call.Duration)*time.Second)))
+	}
+
+	t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.Message[any]{
+		EventMeta: simplevent.EventMeta{
+			Type:         bridgev2.RemoteEventMessage,
+			PortalKey:    t.makePortalKeyFromID(ids.PeerTypeChat, update.ChatID),
+			CreatePortal: true,
+		},
+		ID: networkid.MessageID(msgID.String()),
+		ConvertMessageFunc: func(ctx context.Context, portal *bridgev2.Portal, intent bridgev2.MatrixAPI, data any) (*bridgev2.ConvertedMessage, error) {
+			return &bridgev2.ConvertedMessage{
+				Parts: []*bridgev2.ConvertedMessagePart{
+					{
+						ID:      networkid.PartID("call"),
+						Type:    event.EventMessage,
+						Content: &event.MessageEventContent{MsgType: event.MsgNotice, Body: actionDescription.String()},
+					},
+				},
+			}, nil
+		},
+	})
+
 	return nil
 }
