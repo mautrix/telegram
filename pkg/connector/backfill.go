@@ -10,6 +10,7 @@ import (
 	"github.com/gotd/td/tg"
 	"github.com/gotd/td/tgerr"
 	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 	"maunium.net/go/mautrix/bridgev2"
 	"maunium.net/go/mautrix/bridgev2/database"
 	"maunium.net/go/mautrix/bridgev2/networkid"
@@ -19,11 +20,25 @@ import (
 
 // getTakeoutID blocks until the takeout ID is available.
 func (t *TelegramClient) getTakeoutID(ctx context.Context) (takeoutID int64, err error) {
-	log := zerolog.Ctx(ctx).With().Str("function", "getTakeoutID").Logger()
+	// Always stop the takeout timeout timer
+	if t.stopTakeoutTimer != nil {
+		t.stopTakeoutTimer.Stop()
+	}
+
 	if t.userLogin.Metadata.(*UserLoginMetadata).TakeoutID != 0 {
+		// Resume fetching dialogs using takeout and enqueueing them for
+		// backfill.
+		go t.takeoutDialogsOnce.Do(func() {
+			if err = t.takeoutDialogs(ctx, takeoutID); err != nil {
+				log.Err(err).Msg("Failed to takeout dialogs")
+			}
+		})
 		return t.userLogin.Metadata.(*UserLoginMetadata).TakeoutID, nil
 	}
 
+	t.stopTakeoutTimer = time.AfterFunc(max(time.Hour, time.Duration(t.main.Bridge.Config.Backfill.Queue.BatchDelay*2)), sync.OnceFunc(func() { t.stopTakeout(ctx) }))
+
+	log := zerolog.Ctx(ctx).With().Str("function", "getTakeoutID").Logger()
 	for {
 		t.takeoutAccepted.Clear()
 
@@ -46,13 +61,78 @@ func (t *TelegramClient) getTakeoutID(ctx context.Context) (takeoutID int64, err
 			return 0, err
 		}
 
-		if t.stopTakeoutTimer != nil {
-			t.stopTakeoutTimer.Stop()
-		}
-		t.stopTakeoutTimer = time.AfterFunc(max(time.Hour, time.Duration(t.main.Bridge.Config.Backfill.Queue.BatchDelay*2)), sync.OnceFunc(func() { t.stopTakeout(ctx) }))
+		// Fetch all dialogs using takeout and enqueue them for backfill.
+		go t.takeoutDialogsOnce.Do(func() {
+			if err = t.takeoutDialogs(ctx, takeoutID); err != nil {
+				log.Err(err).Msg("Failed to takeout dialogs")
+			}
+		})
 
 		t.userLogin.Metadata.(*UserLoginMetadata).TakeoutID = accountTakeout.ID
 		return accountTakeout.ID, t.userLogin.Save(ctx)
+	}
+}
+
+func (t *TelegramClient) takeoutDialogs(ctx context.Context, takeoutID int64) error {
+	log := zerolog.Ctx(ctx).With().Str("loop", "chat_fetch").Logger()
+	if t.userLogin.Metadata.(*UserLoginMetadata).TakeoutDialogCrawlDone {
+		log.Debug().Msg("Dialogs already crawled")
+		return nil
+	}
+
+	req := tg.MessagesGetDialogsRequest{
+		Limit:      100,
+		OffsetPeer: &tg.InputPeerEmpty{},
+	}
+	if t.userLogin.Metadata.(*UserLoginMetadata).TakeoutDialogCrawlCursor != "" {
+		var err error
+		req.OffsetPeer, err = t.inputPeerForPortalID(ctx, t.userLogin.Metadata.(*UserLoginMetadata).TakeoutDialogCrawlCursor)
+		if err != nil {
+			return fmt.Errorf("failed to get input peer for pagination: %w", err)
+		}
+	}
+	for {
+		log.Info().Stringer("cursor", req.OffsetPeer).Msg("Fetching dialogs")
+		dialogs, err := APICallWithUpdates(ctx, t, func() (*tg.MessagesDialogs, error) {
+			var dialogs tg.MessagesDialogs
+			return &dialogs, t.client.Invoke(ctx,
+				&tg.InvokeWithTakeoutRequest{TakeoutID: takeoutID, Query: &req},
+				&dialogs)
+		})
+		if err != nil {
+			return fmt.Errorf("failed to get dialogs: %w", err)
+		} else if len(dialogs.GetDialogs()) == 0 {
+			t.userLogin.Metadata.(*UserLoginMetadata).TakeoutDialogCrawlDone = true
+			if err = t.userLogin.Save(ctx); err != nil {
+				return fmt.Errorf("failed to save user login: %w", err)
+			}
+			log.Debug().Msg("No more dialogs found")
+			return nil
+		}
+
+		err = t.handleDialogs(ctx, dialogs, -1)
+		if err != nil {
+			return fmt.Errorf("failed to handle dialogs: %w", err)
+		}
+
+		portalKey := ids.MakePortalKey(dialogs.GetDialogs()[len(dialogs.GetDialogs())-1].GetPeer(), t.userLogin.ID)
+
+		if t.userLogin.Metadata.(*UserLoginMetadata).TakeoutDialogCrawlCursor == portalKey.ID {
+			t.userLogin.Metadata.(*UserLoginMetadata).TakeoutDialogCrawlDone = true
+			t.userLogin.Metadata.(*UserLoginMetadata).TakeoutDialogCrawlCursor = ""
+			log.Debug().Msg("No more dialogs found")
+			return nil
+		} else {
+			t.userLogin.Metadata.(*UserLoginMetadata).TakeoutDialogCrawlCursor = portalKey.ID
+		}
+		if err = t.userLogin.Save(ctx); err != nil {
+			return fmt.Errorf("failed to save user login: %w", err)
+		}
+
+		req.OffsetPeer, err = t.inputPeerForPortalID(ctx, portalKey.ID)
+		if err != nil {
+			return fmt.Errorf("failed to get input peer for pagination: %w", err)
+		}
 	}
 }
 
@@ -82,7 +162,6 @@ func (t *TelegramClient) FetchMessages(ctx context.Context, fetchParams bridgev2
 			return nil, err
 		}
 
-		t.stopTakeoutTimer.Stop()
 		defer t.stopTakeoutTimer.Reset(max(time.Hour, time.Duration(t.main.Bridge.Config.Backfill.Queue.BatchDelay*2)))
 	}
 

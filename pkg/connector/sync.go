@@ -16,8 +16,6 @@ import (
 )
 
 func (t *TelegramClient) SyncChats(ctx context.Context) error {
-	log := zerolog.Ctx(ctx)
-
 	limit := t.main.Config.Sync.UpdateLimit
 	if limit <= 0 {
 		limit = math.MaxInt32
@@ -39,6 +37,12 @@ func (t *TelegramClient) SyncChats(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+
+	return t.handleDialogs(ctx, dialogs, t.main.Config.Sync.CreateLimit)
+}
+
+func (t *TelegramClient) handleDialogs(ctx context.Context, dialogs tg.ModifiedMessagesDialogs, createLimit int) error {
+	log := zerolog.Ctx(ctx)
 
 	users := map[networkid.UserID]tg.UserClass{}
 	for _, user := range dialogs.GetUsers() {
@@ -89,7 +93,7 @@ func (t *TelegramClient) SyncChats(ctx context.Context) error {
 			}
 
 			created++ // The portal will have to be created
-			if created > t.main.Config.Sync.CreateLimit {
+			if createLimit >= 0 && created > createLimit {
 				break
 			}
 		}

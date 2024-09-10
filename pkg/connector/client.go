@@ -53,9 +53,10 @@ type TelegramClient struct {
 	cachedContacts     *tg.ContactsContacts
 	cachedContactsHash int64
 
-	takeoutLock      sync.Mutex
-	takeoutAccepted  *exsync.Event
-	stopTakeoutTimer *time.Timer
+	takeoutLock        sync.Mutex
+	takeoutAccepted    *exsync.Event
+	stopTakeoutTimer   *time.Timer
+	takeoutDialogsOnce sync.Once
 }
 
 var (
@@ -418,6 +419,7 @@ func (t *TelegramClient) getSingleUser(ctx context.Context, id int64) (tg.UserCl
 	} else if users, err := t.client.API().UsersGetUsers(ctx, []tg.InputUserClass{inputUser}); err != nil {
 		return nil, err
 	} else if len(users) == 0 {
+		// TODO does this mean the user is deleted? Need to handle this a bit better
 		return nil, fmt.Errorf("failed to get user info for user %d", id)
 	} else {
 		return users[0], nil

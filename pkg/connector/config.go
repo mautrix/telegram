@@ -12,6 +12,7 @@ import (
 	"maunium.net/go/mautrix/bridgev2"
 	"maunium.net/go/mautrix/bridgev2/bridgeconfig"
 	"maunium.net/go/mautrix/bridgev2/database"
+	"maunium.net/go/mautrix/bridgev2/networkid"
 	"maunium.net/go/mautrix/id"
 
 	"go.mau.fi/mautrix-telegram/pkg/connector/media"
@@ -161,6 +162,9 @@ type UserLoginMetadata struct {
 	Phone     string           `json:"phone"`
 	Session   UserLoginSession `json:"session"`
 	TakeoutID int64            `json:"takeout_id,omitempty"`
+
+	TakeoutDialogCrawlDone   bool               `json:"takeout_portal_crawl_done,omitempty"`
+	TakeoutDialogCrawlCursor networkid.PortalID `json:"takeout_portal_crawl_cursor,omitempty"`
 }
 
 func (s *UserLoginSession) Load(_ context.Context) (*session.Data, error) {
