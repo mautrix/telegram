@@ -28,7 +28,7 @@ import (
 
 type TelegramConnector struct {
 	Bridge *bridgev2.Bridge
-	Config *TelegramConfig
+	Config TelegramConfig
 	Store  *store.Container
 
 	useDirectMedia bool

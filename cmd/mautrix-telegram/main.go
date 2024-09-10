@@ -42,7 +42,7 @@ var (
 	BuildTime = "unknown"
 )
 
-var c = &connector.TelegramConnector{Config: &connector.TelegramConfig{}}
+var c = &connector.TelegramConnector{}
 var m = mxmain.BridgeMain{
 	Name:        "mautrix-telegram",
 	URL:         "https://github.com/mautrix/telegram",

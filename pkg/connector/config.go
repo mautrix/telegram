@@ -99,7 +99,7 @@ func upgradeConfig(helper up.Helper) {
 }
 
 func (tg *TelegramConnector) GetConfig() (example string, data any, upgrader up.Upgrader) {
-	return ExampleConfig, tg.Config, &up.StructUpgrader{
+	return ExampleConfig, &tg.Config, &up.StructUpgrader{
 		SimpleUpgrader: up.SimpleUpgrader(upgradeConfig),
 		Blocks: [][]string{
 			{"device_info"},
