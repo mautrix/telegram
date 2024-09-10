@@ -40,7 +40,9 @@ var _ bridgev2.LoginProcessDisplayAndWait = (*QRLogin)(nil) // For showing QR co
 var _ bridgev2.LoginProcessUserInput = (*QRLogin)(nil)      // For asking for password
 
 func (q *QRLogin) Cancel() {
-	q.authClientCancel()
+	if q.authClientCancel != nil {
+		q.authClientCancel()
+	}
 }
 
 func (q *QRLogin) Start(ctx context.Context) (*bridgev2.LoginStep, error) {

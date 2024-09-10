@@ -34,7 +34,9 @@ type PhoneLogin struct {
 var _ bridgev2.LoginProcessUserInput = (*PhoneLogin)(nil)
 
 func (p *PhoneLogin) Cancel() {
-	p.authClientCancel()
+	if p.authClientCancel != nil {
+		p.authClientCancel()
+	}
 }
 
 func (p *PhoneLogin) Start(ctx context.Context) (*bridgev2.LoginStep, error) {
