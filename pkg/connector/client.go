@@ -195,7 +195,7 @@ func NewTelegramClient(ctx context.Context, tc *TelegramConnector, login *bridge
 		Logger:               zaplog,
 		UpdateHandler:        client.updatesManager,
 		OnDead:               client.onDead,
-		OnSession:            client.onSession,
+		OnConnected:          client.onConnected,
 		OnAuthError:          client.onAuthError,
 		PingTimeout:          time.Duration(tc.Config.Ping.TimeoutSeconds) * time.Second,
 		PingInterval:         time.Duration(tc.Config.Ping.IntervalSeconds) * time.Second,
@@ -362,7 +362,7 @@ func (t *TelegramClient) onDead() {
 	})
 }
 
-func (t *TelegramClient) onSession() {
+func (t *TelegramClient) onConnected() {
 	authStatus, err := t.client.Auth().Status(context.Background())
 	if err != nil {
 		t.userLogin.BridgeState.Send(status.BridgeState{
