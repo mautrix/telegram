@@ -222,23 +222,17 @@ func NewTelegramClient(ctx context.Context, tc *TelegramConnector, login *bridge
 			return userInfo, nil
 		},
 		GetUserInfoByUsername: func(ctx context.Context, username string) (telegramfmt.UserInfo, error) {
-			// FIXME this should just query telegram_user_metadata by username
-			ghosts, err := tc.Bridge.DB.Ghost.GetByMetadata(ctx, "username", username)
-			if err != nil {
+			if userID, err := client.ScopedStore.GetUserIDByUsername(ctx, username); err != nil {
 				return telegramfmt.UserInfo{}, err
-			}
-			if len(ghosts) != 1 {
-				return telegramfmt.UserInfo{}, fmt.Errorf("username %s not found", username)
-			}
-			ghost, err := tc.Bridge.GetGhostByID(ctx, ghosts[0].ID)
-			if err != nil {
+			} else if ghost, err := tc.Bridge.GetGhostByID(ctx, ids.MakeUserID(userID)); err != nil {
 				return telegramfmt.UserInfo{}, err
+			} else {
+				userInfo := telegramfmt.UserInfo{MXID: ghost.Intent.GetMXID(), Name: ghost.Name}
+				if ghost.ID == client.userID {
+					userInfo.MXID = client.userLogin.UserMXID
+				}
+				return userInfo, nil
 			}
-			userInfo := telegramfmt.UserInfo{MXID: ghost.Intent.GetMXID(), Name: ghost.Name}
-			if ghosts[0].ID == client.userID {
-				userInfo.MXID = client.userLogin.UserMXID
-			}
-			return userInfo, nil
 		},
 		NormalizeURL: func(ctx context.Context, url string) string {
 			log := zerolog.Ctx(ctx).With().
@@ -298,24 +292,17 @@ func NewTelegramClient(ctx context.Context, tc *TelegramConnector, login *bridge
 	}
 	client.matrixParser = &matrixfmt.HTMLParser{
 		GetGhostDetails: func(ctx context.Context, ui id.UserID) (networkid.UserID, string, int64, bool) {
-			userID, ok := tc.Bridge.Matrix.ParseGhostMXID(ui)
-			if !ok {
+			if userID, ok := tc.Bridge.Matrix.ParseGhostMXID(ui); !ok {
 				return "", "", 0, false
-			}
-			telegramUserID, err := ids.ParseUserID(userID)
-			if err != nil {
+			} else if telegramUserID, err := ids.ParseUserID(userID); err != nil {
 				return "", "", 0, false
-			}
-			ss := tc.Store.GetScopedStore(telegramUserID)
-			accessHash, err := ss.GetAccessHash(ctx, telegramUserID)
-			if err != nil || accessHash == 0 {
+			} else if accessHash, err := client.ScopedStore.GetAccessHash(ctx, telegramUserID); err != nil || accessHash == 0 {
 				return "", "", 0, false
-			}
-			username, err := ss.GetUsername(ctx, telegramUserID)
-			if err != nil {
+			} else if username, err := client.ScopedStore.GetUsername(ctx, telegramUserID); err != nil {
 				return "", "", 0, false
+			} else {
+				return userID, username, accessHash, true
 			}
-			return userID, username, accessHash, true
 		},
 	}
 
