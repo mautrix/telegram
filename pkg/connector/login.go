@@ -19,6 +19,7 @@ package connector
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/gotd/td/tg"
 	"maunium.net/go/mautrix/bridge/status"
@@ -92,9 +93,10 @@ func finalizeLogin(ctx context.Context, user *bridgev2.User, authorization *tg.A
 	if username == "" && len(me.Usernames) > 0 {
 		username = me.Usernames[0].Username
 	}
+	normalizedPhone := "+" + strings.TrimPrefix(me.Phone, "+")
 	remoteName := username
 	if remoteName == "" {
-		remoteName = me.Phone
+		remoteName = normalizedPhone
 	}
 	if remoteName == "" {
 		remoteName = fullName
