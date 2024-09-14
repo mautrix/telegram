@@ -58,7 +58,7 @@ func (t *TelegramClient) onUpdateNewMessage(ctx context.Context, update IGetMess
 						Stringer("peer_id", msg.PeerID)
 				},
 				Sender:       sender,
-				PortalKey:    ids.MakePortalKey(msg.PeerID, t.loginID),
+				PortalKey:    t.makePortalKeyFromPeer(msg.PeerID),
 				CreatePortal: true,
 				Timestamp:    time.Unix(int64(msg.Date), 0),
 			},
@@ -72,7 +72,7 @@ func (t *TelegramClient) onUpdateNewMessage(ctx context.Context, update IGetMess
 		chatInfoChange := simplevent.ChatInfoChange{
 			EventMeta: simplevent.EventMeta{
 				Type:      bridgev2.RemoteEventChatInfoChange,
-				PortalKey: ids.MakePortalKey(msg.PeerID, t.loginID),
+				PortalKey: t.makePortalKeyFromPeer(msg.PeerID),
 				Sender:    sender,
 				Timestamp: time.Unix(int64(msg.Date), 0),
 				LogContext: func(c zerolog.Context) zerolog.Context {
@@ -292,7 +292,7 @@ func (t *TelegramClient) onDeleteMessages(ctx context.Context, channelID int64, 
 			// TODO can deletes happen across rooms?
 			portalKey = parts[0].Room
 		} else {
-			portalKey = ids.MakePortalKey(&tg.PeerChannel{ChannelID: channelID}, t.loginID)
+			portalKey = t.makePortalKeyFromPeer(&tg.PeerChannel{ChannelID: channelID})
 		}
 		t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.MessageRemove{
 			EventMeta: simplevent.EventMeta{
@@ -406,7 +406,7 @@ func (t *TelegramClient) onMessageEdit(ctx context.Context, update IGetMessage) 
 					Int("message_id", msg.ID)
 			},
 			Sender:    sender,
-			PortalKey: ids.MakePortalKey(msg.PeerID, t.loginID),
+			PortalKey: t.makePortalKeyFromPeer(msg.PeerID),
 			Timestamp: time.Unix(int64(msg.EditDate), 0),
 		},
 		ID:            ids.GetMessageIDFromMessage(msg),
@@ -466,7 +466,7 @@ func (t *TelegramClient) updateReadReceipt(update *tg.UpdateReadHistoryOutbox) e
 	t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.Receipt{
 		EventMeta: simplevent.EventMeta{
 			Type:      bridgev2.RemoteEventReadReceipt,
-			PortalKey: ids.MakePortalKey(update.Peer, t.loginID),
+			PortalKey: t.makePortalKeyFromPeer(update.Peer),
 			Sender: bridgev2.EventSender{
 				SenderLogin: ids.MakeUserLoginID(user.UserID),
 				Sender:      ids.MakeUserID(user.UserID),

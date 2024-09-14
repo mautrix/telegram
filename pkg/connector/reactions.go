@@ -48,7 +48,7 @@ func (t *TelegramClient) computeReactionsList(ctx context.Context, msg *tg.Messa
 			// 	return
 
 			// TODO should calls to this be limited?
-		} else if peer, err := t.inputPeerForPortalID(ctx, ids.MakePortalKey(msg.PeerID, t.loginID).ID); err != nil {
+		} else if peer, err := t.inputPeerForPortalID(ctx, t.makePortalKeyFromPeer(msg.PeerID).ID); err != nil {
 			return nil, false, nil, fmt.Errorf("failed to get input peer: %w", err)
 		} else {
 			reactions, err := APICallWithUpdates(ctx, t, func() (*tg.MessagesMessageReactionsList, error) {

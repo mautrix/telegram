@@ -27,7 +27,7 @@ func (t *TelegramClient) getResolveIdentifierResponseForUser(ctx context.Context
 			UserID:   networkUserID,
 			UserInfo: userInfo,
 			Chat: &bridgev2.CreateChatResponse{
-				PortalKey: ids.PeerTypeUser.AsPortalKey(user.GetID(), t.loginID),
+				PortalKey: t.makePortalKeyFromID(ids.PeerTypeUser, user.GetID()),
 			},
 		}, nil
 	}
@@ -38,7 +38,7 @@ func (t *TelegramClient) getResolveIdentifierResponseForUserID(ctx context.Conte
 	resp = &bridgev2.ResolveIdentifierResponse{
 		UserID: networkUserID,
 		Chat: &bridgev2.CreateChatResponse{
-			PortalKey: ids.PeerTypeUser.AsPortalKey(userID, t.loginID),
+			PortalKey: t.makePortalKeyFromID(ids.PeerTypeUser, userID),
 		},
 	}
 	resp.Ghost, err = t.main.Bridge.GetExistingGhostByID(ctx, networkUserID)
@@ -232,7 +232,7 @@ func (t *TelegramClient) CreateGroup(ctx context.Context, name string, users ...
 		return nil, fmt.Errorf("unexpected chat type: %T", chats[0])
 	} else {
 		return &bridgev2.CreateChatResponse{
-			PortalKey: ids.PeerTypeChat.AsPortalKey(chat.ID, t.loginID),
+			PortalKey: t.makePortalKeyFromID(ids.PeerTypeChat, chat.ID),
 		}, nil
 	}
 }

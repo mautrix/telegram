@@ -148,26 +148,26 @@ func NewTelegramClient(ctx context.Context, tc *TelegramConnector, login *bridge
 		return client.onMessageEdit(ctx, update)
 	})
 	dispatcher.OnUserTyping(func(ctx context.Context, e tg.Entities, update *tg.UpdateUserTyping) error {
-		return client.handleTyping(ids.PeerTypeUser.AsPortalKey(update.UserID, login.ID), update.UserID, update.Action)
+		return client.handleTyping(client.makePortalKeyFromID(ids.PeerTypeUser, update.UserID), update.UserID, update.Action)
 	})
 	dispatcher.OnChatUserTyping(func(ctx context.Context, e tg.Entities, update *tg.UpdateChatUserTyping) error {
 		if update.FromID.TypeID() != tg.PeerUserTypeID {
 			log.Warn().Str("from_id_type", update.FromID.TypeName()).Msg("unsupported from_id type")
 			return nil
 		}
-		return client.handleTyping(ids.PeerTypeChat.AsPortalKey(update.ChatID, login.ID), update.FromID.(*tg.PeerUser).UserID, update.Action)
+		return client.handleTyping(client.makePortalKeyFromID(ids.PeerTypeChat, update.ChatID), update.FromID.(*tg.PeerUser).UserID, update.Action)
 	})
 	dispatcher.OnChannelUserTyping(func(ctx context.Context, e tg.Entities, update *tg.UpdateChannelUserTyping) error {
-		return client.handleTyping(ids.PeerTypeChannel.AsPortalKey(update.ChannelID, ""), update.FromID.(*tg.PeerUser).UserID, update.Action)
+		return client.handleTyping(client.makePortalKeyFromID(ids.PeerTypeChannel, update.ChannelID), update.FromID.(*tg.PeerUser).UserID, update.Action)
 	})
 	dispatcher.OnReadHistoryOutbox(func(ctx context.Context, e tg.Entities, update *tg.UpdateReadHistoryOutbox) error {
 		return client.updateReadReceipt(update)
 	})
 	dispatcher.OnReadHistoryInbox(func(ctx context.Context, e tg.Entities, update *tg.UpdateReadHistoryInbox) error {
-		return client.onOwnReadReceipt(ids.MakePortalKey(update.Peer, login.ID), update.MaxID)
+		return client.onOwnReadReceipt(client.makePortalKeyFromPeer(update.Peer), update.MaxID)
 	})
 	dispatcher.OnReadChannelInbox(func(ctx context.Context, e tg.Entities, update *tg.UpdateReadChannelInbox) error {
-		return client.onOwnReadReceipt(ids.PeerTypeChannel.AsPortalKey(update.ChannelID, ""), update.MaxID)
+		return client.onOwnReadReceipt(client.makePortalKeyFromID(ids.PeerTypeChannel, update.ChannelID), update.MaxID)
 	})
 
 	client.ScopedStore = tc.Store.GetScopedStore(telegramUserID)
@@ -180,7 +180,7 @@ func NewTelegramClient(ctx context.Context, tc *TelegramConnector, login *bridge
 					LogContext: func(c zerolog.Context) zerolog.Context {
 						return c.Str("update", "channel_too_long").Int64("channel_id", channelID)
 					},
-					PortalKey: ids.PeerTypeChannel.AsPortalKey(channelID, login.ID),
+					PortalKey: client.makePortalKeyFromID(ids.PeerTypeChannel, channelID),
 				},
 				CheckNeedsBackfillFunc: func(ctx context.Context, latestMessage *database.Message) (bool, error) { return true, nil },
 			})
@@ -264,14 +264,14 @@ func NewTelegramClient(ctx context.Context, tc *TelegramConnector, login *bridge
 					log.Err(err).Msg("error parsing channel ID")
 					return url
 				}
-				portalKey = ids.PeerTypeChannel.AsPortalKey(chatID, "")
+				portalKey = client.makePortalKeyFromID(ids.PeerTypeChannel, chatID)
 			} else {
 				userID, err := strconv.ParseInt(submatches[1], 10, 64)
 				if err != nil {
 					log.Err(err).Msg("error parsing user ID")
 					return url
 				}
-				portalKey = ids.PeerTypeUser.AsPortalKey(userID, login.ID)
+				portalKey = client.makePortalKeyFromID(ids.PeerTypeUser, userID)
 			}
 
 			portal, err := tc.Bridge.DB.Portal.GetByKey(ctx, portalKey)

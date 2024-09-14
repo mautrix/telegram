@@ -119,7 +119,7 @@ func (pt PeerType) AsByte() byte {
 	}
 }
 
-func (pt PeerType) AsPortalKey(chatID int64, receiver networkid.UserLoginID) networkid.PortalKey {
+func (pt PeerType) InternalAsPortalKey(chatID int64, receiver networkid.UserLoginID) networkid.PortalKey {
 	portalKey := networkid.PortalKey{
 		ID: networkid.PortalID(fmt.Sprintf("%s:%d", pt, chatID)),
 	}
@@ -142,7 +142,7 @@ func GetChatID(peer tg.PeerClass) int64 {
 	}
 }
 
-func MakePortalKey(peer tg.PeerClass, receiver networkid.UserLoginID) networkid.PortalKey {
+func InternalMakePortalKey(peer tg.PeerClass, receiver networkid.UserLoginID) networkid.PortalKey {
 	switch v := peer.(type) {
 	case *tg.PeerUser:
 		return networkid.PortalKey{

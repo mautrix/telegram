@@ -115,7 +115,7 @@ func (t *TelegramClient) takeoutDialogs(ctx context.Context, takeoutID int64) er
 			return fmt.Errorf("failed to handle dialogs: %w", err)
 		}
 
-		portalKey := ids.MakePortalKey(dialogs.GetDialogs()[len(dialogs.GetDialogs())-1].GetPeer(), t.userLogin.ID)
+		portalKey := t.makePortalKeyFromPeer(dialogs.GetDialogs()[len(dialogs.GetDialogs())-1].GetPeer())
 
 		if t.userLogin.Metadata.(*UserLoginMetadata).TakeoutDialogCrawlCursor == portalKey.ID {
 			t.userLogin.Metadata.(*UserLoginMetadata).TakeoutDialogCrawlDone = true

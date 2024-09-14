@@ -66,7 +66,7 @@ func (t *TelegramClient) handleDialogs(ctx context.Context, dialogs tg.ModifiedM
 			Logger()
 		log.Debug().Msg("Syncing dialog")
 
-		portalKey := ids.MakePortalKey(dialog.GetPeer(), t.loginID)
+		portalKey := t.makePortalKeyFromPeer(dialog.GetPeer())
 		portal, err := t.main.Bridge.GetPortalByKey(ctx, portalKey)
 		if err != nil {
 			log.Err(err).Msg("Failed to get portal")
