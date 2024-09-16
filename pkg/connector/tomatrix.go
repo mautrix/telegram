@@ -155,8 +155,11 @@ func (c *TelegramClient) convertToMatrix(ctx context.Context, portal *bridgev2.P
 	if replyTo, ok := msg.GetReplyTo(); ok {
 		switch replyTo := replyTo.(type) {
 		case *tg.MessageReplyHeader:
-			cm.ReplyTo = &networkid.MessageOptionalPartID{
-				MessageID: ids.MakeMessageID(replyTo.ReplyToPeerID, replyTo.ReplyToMsgID),
+			cm.ReplyTo = &networkid.MessageOptionalPartID{}
+			if peerID, present := replyTo.GetReplyToPeerID(); present {
+				cm.ReplyTo.MessageID = ids.MakeMessageID(peerID, replyTo.ReplyToMsgID)
+			} else {
+				cm.ReplyTo.MessageID = ids.MakeMessageID(portal.PortalKey, replyTo.ReplyToMsgID)
 			}
 		default:
 			log.Warn().Type("reply_to", replyTo).Msg("unhandled reply to type")
