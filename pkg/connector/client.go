@@ -198,6 +198,7 @@ func NewTelegramClient(ctx context.Context, tc *TelegramConnector, login *bridge
 		OnDead:               client.onDead,
 		OnSession:            client.onConnectionStateChange,
 		OnConnected:          client.onConnectionStateChange,
+		PingCallback:         client.onConnectionStateChange,
 		OnAuthError:          client.onAuthError,
 		PingTimeout:          time.Duration(tc.Config.Ping.TimeoutSeconds) * time.Second,
 		PingInterval:         time.Duration(tc.Config.Ping.IntervalSeconds) * time.Second,
