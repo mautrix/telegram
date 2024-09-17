@@ -59,4 +59,4 @@ require (
 	rsc.io/qr v0.2.0 // indirect
 )
 
-replace github.com/gotd/td => github.com/beeper/td v0.107.1-0.20240916201701-2f46d8b14694
+replace github.com/gotd/td => github.com/beeper/td v0.107.1-0.20240917163738-403ce97cfad2
