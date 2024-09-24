@@ -289,10 +289,14 @@ func legacyProvContacts(w http.ResponseWriter, r *http.Request) {
 
 	contactsMap := map[int64]*legacyContactInfo{}
 	for _, contact := range contacts {
-		id, err := ids.ParseUserID(contact.UserID)
+		peerType, id, err := ids.ParseUserID(contact.UserID)
 		if err != nil {
 			log.Err(err).Msg("Failed to parse user id")
 			exhttp.WriteJSONResponse(w, http.StatusInternalServerError, resp.WithError("M_UNKNOWN", fmt.Sprintf("Failed to parse user id: %v", err)))
+			return
+		} else if peerType != ids.PeerTypeUser {
+			log.Err(err).Msg("Unexpected peer type")
+			exhttp.WriteJSONResponse(w, http.StatusInternalServerError, resp.WithError("M_UNKNOWN", fmt.Sprintf("Unexpected peer type: %s", peerType)))
 			return
 		}
 		if contact.UserInfo != nil {

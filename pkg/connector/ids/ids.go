@@ -13,8 +13,19 @@ func MakeUserID(userID int64) networkid.UserID {
 	return networkid.UserID(strconv.FormatInt(userID, 10))
 }
 
-func ParseUserID(userID networkid.UserID) (int64, error) {
-	return strconv.ParseInt(string(userID), 10, 64)
+func MakeChannelUserID(channelID int64) networkid.UserID {
+	return networkid.UserID("channel-" + strconv.FormatInt(channelID, 10))
+}
+
+func ParseUserID(userID networkid.UserID) (PeerType, int64, error) {
+	peerType := PeerTypeUser
+	rawUserID := string(userID)
+	if strings.HasPrefix(string(userID), "channel-") {
+		peerType = PeerTypeChannel
+		rawUserID = strings.TrimPrefix(rawUserID, "channel-")
+	}
+	id, err := strconv.ParseInt(rawUserID, 10, 64)
+	return peerType, id, err
 }
 
 func ParseUserLoginID(userID networkid.UserLoginID) (int64, error) {

@@ -457,7 +457,7 @@ func (t *TelegramClient) HandleMatrixReadReceipt(ctx context.Context, msg *bridg
 			})
 		case ids.PeerTypeChannel:
 			var accessHash int64
-			accessHash, readMessagesErr = t.ScopedStore.GetAccessHash(ctx, id)
+			accessHash, readMessagesErr = t.ScopedStore.GetAccessHash(ctx, ids.PeerTypeChannel, id)
 			if readMessagesErr != nil {
 				return
 			}

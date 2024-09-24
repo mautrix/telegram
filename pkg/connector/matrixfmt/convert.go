@@ -18,6 +18,7 @@ package matrixfmt
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/gotd/td/tg"
 	"maunium.net/go/mautrix/event"
@@ -32,7 +33,10 @@ func toTelegramEntity(br telegramfmt.BodyRange) tg.MessageEntityClass {
 		if val.Username != "" {
 			return &tg.MessageEntityMention{Offset: br.Start, Length: br.Length}
 		} else {
-			userID, _ := ids.ParseUserID(val.UserID)
+			peerType, userID, _ := ids.ParseUserID(val.UserID)
+			if peerType != ids.PeerTypeUser {
+				panic(fmt.Errorf("unexpected peer type in mention %T", peerType))
+			}
 			return &tg.InputMessageEntityMentionName{
 				Offset: br.Start,
 				Length: br.Length,

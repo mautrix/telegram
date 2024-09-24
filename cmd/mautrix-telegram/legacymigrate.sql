@@ -181,9 +181,10 @@ SELECT
 FROM reaction_old
 INNER JOIN message ON reaction_old.msg_mxid=message.mxid;
 
-INSERT INTO telegram_access_hash (user_id, entity_id, access_hash)
+INSERT INTO telegram_access_hash (user_id, entity_type, entity_id, access_hash)
 SELECT
     user_old.tgid,
+    CASE WHEN id < 0 THEN 'channel' ELSE 'user' END,
     CASE WHEN id < 0 THEN -id - 1000000000000 ELSE id END,
     hash
 FROM telethon_entities_old
@@ -202,8 +203,11 @@ FROM telethon_update_state_old
 LEFT JOIN user_old ON user_old.mxid=session_id
 WHERE entity_id<>0 AND user_old.tgid IS NOT NULL;
 
-INSERT INTO telegram_username (username, entity_id)
-SELECT username, CASE WHEN id < 0 THEN -id - 1000000000000 ELSE id END
+INSERT INTO telegram_username (username, entity_type, entity_id)
+SELECT
+    username,
+    CASE WHEN id < 0 THEN 'channel' ELSE 'user' END,
+    CASE WHEN id < 0 THEN -id - 1000000000000 ELSE id END
 FROM telethon_entities_old
 WHERE username<>''
 ON CONFLICT DO NOTHING;

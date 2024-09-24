@@ -195,7 +195,7 @@ func (t *Transferer) WithPhoto(pc tg.PhotoClass) *ReadyTransferer {
 // given user's photo as the location that will be downloaded by the
 // [ReadyTransferer].
 func (t *Transferer) WithUserPhoto(ctx context.Context, store *store.ScopedStore, user *tg.User, photoID int64) (*ReadyTransferer, error) {
-	if accessHash, err := store.GetAccessHash(ctx, user.GetID()); err != nil {
+	if accessHash, err := store.GetAccessHash(ctx, ids.PeerTypeUser, user.GetID()); err != nil {
 		return nil, fmt.Errorf("failed to get user access hash for %d: %w", user.GetID(), err)
 	} else {
 		return &ReadyTransferer{

@@ -1,4 +1,4 @@
--- v0 -> v1: Latest revision
+-- v0 -> v2: Latest revision
 
 CREATE TABLE telegram_user_state (
     user_id BIGINT NOT NULL PRIMARY KEY,
@@ -20,15 +20,17 @@ CREATE INDEX telegram_channel_state_user_id_idx ON telegram_channel_state (user_
 
 CREATE TABLE telegram_access_hash (
     user_id     BIGINT NOT NULL,
+    entity_type TEXT   NOT NULL,
     entity_id   BIGINT NOT NULL,
     access_hash BIGINT NOT NULL,
 
-    PRIMARY KEY (user_id, entity_id)
+    PRIMARY KEY (user_id, entity_type, entity_id)
 );
 
 CREATE TABLE telegram_username (
-    username  TEXT   NOT NULL,
-    entity_id BIGINT NOT NULL,
+    username    TEXT   NOT NULL,
+    entity_type TEXT   NOT NULL,
+    entity_id   BIGINT NOT NULL,
 
     PRIMARY KEY (username)
 );

@@ -225,8 +225,10 @@ func NewTelegramClient(ctx context.Context, tc *TelegramConnector, login *bridge
 			return userInfo, nil
 		},
 		GetUserInfoByUsername: func(ctx context.Context, username string) (telegramfmt.UserInfo, error) {
-			if userID, err := client.ScopedStore.GetUserIDByUsername(ctx, username); err != nil {
+			if peerType, userID, err := client.ScopedStore.GetUserIDByUsername(ctx, username); err != nil {
 				return telegramfmt.UserInfo{}, err
+			} else if peerType != ids.PeerTypeUser {
+				return telegramfmt.UserInfo{}, fmt.Errorf("unexpected peer type: %s", peerType)
 			} else if ghost, err := tc.Bridge.GetGhostByID(ctx, ids.MakeUserID(userID)); err != nil {
 				return telegramfmt.UserInfo{}, err
 			} else {
@@ -297,11 +299,11 @@ func NewTelegramClient(ctx context.Context, tc *TelegramConnector, login *bridge
 		GetGhostDetails: func(ctx context.Context, ui id.UserID) (networkid.UserID, string, int64, bool) {
 			if userID, ok := tc.Bridge.Matrix.ParseGhostMXID(ui); !ok {
 				return "", "", 0, false
-			} else if telegramUserID, err := ids.ParseUserID(userID); err != nil {
+			} else if peerType, telegramUserID, err := ids.ParseUserID(userID); err != nil {
 				return "", "", 0, false
-			} else if accessHash, err := client.ScopedStore.GetAccessHash(ctx, telegramUserID); err != nil || accessHash == 0 {
+			} else if accessHash, err := client.ScopedStore.GetAccessHash(ctx, peerType, telegramUserID); err != nil || accessHash == 0 {
 				return "", "", 0, false
-			} else if username, err := client.ScopedStore.GetUsername(ctx, telegramUserID); err != nil {
+			} else if username, err := client.ScopedStore.GetUsername(ctx, peerType, telegramUserID); err != nil {
 				return "", "", 0, false
 			} else {
 				return userID, username, accessHash, true
@@ -407,7 +409,7 @@ func (t *TelegramClient) Disconnect() {
 }
 
 func (t *TelegramClient) getInputUser(ctx context.Context, id int64) (*tg.InputUser, error) {
-	accessHash, err := t.ScopedStore.GetAccessHash(ctx, id)
+	accessHash, err := t.ScopedStore.GetAccessHash(ctx, ids.PeerTypeUser, id)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get access hash for user %d: %w", id, err)
 	}
@@ -428,11 +430,11 @@ func (t *TelegramClient) getSingleUser(ctx context.Context, id int64) (tg.UserCl
 }
 
 func (t *TelegramClient) GetUserInfo(ctx context.Context, ghost *bridgev2.Ghost) (*bridgev2.UserInfo, error) {
-	id, err := ids.ParseUserID(ghost.ID)
-	if err != nil {
+	if peerType, id, err := ids.ParseUserID(ghost.ID); err != nil {
 		return nil, err
-	}
-	if user, err := t.getSingleUser(ctx, id); err != nil {
+	} else if peerType != ids.PeerTypeUser {
+		return nil, fmt.Errorf("unexpected peer type: %s", peerType)
+	} else if user, err := t.getSingleUser(ctx, id); err != nil {
 		return nil, fmt.Errorf("failed to get user %d: %w", id, err)
 	} else if user.TypeID() != tg.UserTypeID {
 		return nil, err
@@ -447,11 +449,11 @@ func (t *TelegramClient) getUserInfoFromTelegramUser(ctx context.Context, u tg.U
 		return nil, fmt.Errorf("user is %T not *tg.User", user)
 	}
 	var identifiers []string
-	if err := t.ScopedStore.SetAccessHash(ctx, user.ID, user.AccessHash); err != nil {
+	if err := t.ScopedStore.SetAccessHash(ctx, ids.PeerTypeUser, user.ID, user.AccessHash); err != nil {
 		return nil, err
 	}
 	if !user.Min {
-		if err := t.ScopedStore.SetUsername(ctx, user.ID, user.Username); err != nil {
+		if err := t.ScopedStore.SetUsername(ctx, ids.PeerTypeUser, user.ID, user.Username); err != nil {
 			return nil, err
 		}
 

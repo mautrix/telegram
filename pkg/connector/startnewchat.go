@@ -81,10 +81,12 @@ func (t *TelegramClient) ResolveIdentifier(ctx context.Context, identifier strin
 		return t.getResolveIdentifierResponseForUserID(ctx, userID)
 	} else if match := usernameRe.FindStringSubmatch(identifier); match != nil && !strings.Contains(identifier, "__") {
 		// This is a username
-		userID, err := t.ScopedStore.GetUserIDByUsername(ctx, match[1])
-		if err == nil || userID != 0 {
+		entityType, userID, err := t.ScopedStore.GetUserIDByUsername(ctx, match[1])
+		if entityType == ids.PeerTypeUser && (err == nil || userID != 0) {
 			// We know this username.
 			return t.getResolveIdentifierResponseForUserID(ctx, userID)
+		} else if entityType != ids.PeerTypeUser {
+			return nil, fmt.Errorf("unexpected peer type: %s", entityType)
 		} else {
 			// We don't know this username, try to resolve the username from
 			// Telegram.
@@ -205,8 +207,10 @@ func (t *TelegramClient) CreateGroup(ctx context.Context, name string, users ...
 		Title: name,
 	}
 	for _, networkUserID := range users {
-		if userID, err := ids.ParseUserID(networkUserID); err != nil {
+		if peerType, userID, err := ids.ParseUserID(networkUserID); err != nil {
 			return nil, fmt.Errorf("failed to parse user ID: %w", err)
+		} else if peerType != ids.PeerTypeUser {
+			return nil, fmt.Errorf("unexpected peer type: %s", peerType)
 		} else if inputUser, err := t.getInputUser(ctx, userID); err != nil {
 			return nil, fmt.Errorf("failed to get input user: %w", err)
 		} else {

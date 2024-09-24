@@ -195,7 +195,7 @@ func (t *TelegramClient) getEventSender(msg interface {
 		}
 	case *tg.PeerChannel:
 		return bridgev2.EventSender{
-			Sender: ids.MakeUserID(from.ChannelID),
+			Sender: ids.MakeChannelUserID(from.ChannelID),
 		}
 	default:
 		fromID, _ := msg.GetFromID()
@@ -325,7 +325,7 @@ func (t *TelegramClient) updateGhost(ctx context.Context, userID int64, user *tg
 }
 
 func (t *TelegramClient) updateChannel(ctx context.Context, channel *tg.Channel) error {
-	if err := t.ScopedStore.SetAccessHash(ctx, channel.ID, channel.AccessHash); err != nil {
+	if err := t.ScopedStore.SetAccessHash(ctx, ids.PeerTypeChannel, channel.ID, channel.AccessHash); err != nil {
 		return err
 	}
 
@@ -334,7 +334,7 @@ func (t *TelegramClient) updateChannel(ctx context.Context, channel *tg.Channel)
 	}
 
 	// Update the channel ghost if this is a broadcast channel.
-	ghost, err := t.main.Bridge.GetGhostByID(ctx, ids.MakeUserID(channel.ID))
+	ghost, err := t.main.Bridge.GetGhostByID(ctx, ids.MakeChannelUserID(channel.ID))
 	if err != nil {
 		return err
 	}
@@ -496,7 +496,7 @@ func (t *TelegramClient) inputPeerForPortalID(ctx context.Context, portalID netw
 	}
 	switch peerType {
 	case ids.PeerTypeUser:
-		if accessHash, err := t.ScopedStore.GetAccessHash(ctx, id); err != nil {
+		if accessHash, err := t.ScopedStore.GetAccessHash(ctx, ids.PeerTypeUser, id); err != nil {
 			return nil, fmt.Errorf("failed to get user access hash for %d: %w", id, err)
 		} else {
 			return &tg.InputPeerUser{UserID: id, AccessHash: accessHash}, nil
@@ -504,7 +504,7 @@ func (t *TelegramClient) inputPeerForPortalID(ctx context.Context, portalID netw
 	case ids.PeerTypeChat:
 		return &tg.InputPeerChat{ChatID: id}, nil
 	case ids.PeerTypeChannel:
-		if accessHash, err := t.ScopedStore.GetAccessHash(ctx, id); err != nil {
+		if accessHash, err := t.ScopedStore.GetAccessHash(ctx, ids.PeerTypeChannel, id); err != nil {
 			return nil, err
 		} else {
 			return &tg.InputPeerChannel{ChannelID: id, AccessHash: accessHash}, nil

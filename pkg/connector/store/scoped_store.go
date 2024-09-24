@@ -8,6 +8,8 @@ import (
 
 	"github.com/gotd/td/telegram/updates"
 	"go.mau.fi/util/dbutil"
+
+	"go.mau.fi/mautrix-telegram/pkg/connector/ids"
 )
 
 // ScopedStore is a wrapper around a database that implements
@@ -42,22 +44,24 @@ const (
 	setSeqQuery     = "UPDATE telegram_user_state SET seq=$1 WHERE user_id=$2"
 	setDateSeqQuery = "UPDATE telegram_user_state SET date=$1, seq=$2 WHERE user_id=$3"
 
-	getAccessHashQuery = "SELECT access_hash FROM telegram_access_hash WHERE user_id=$1 AND entity_id=$2"
+	getAccessHashQuery = "SELECT access_hash FROM telegram_access_hash WHERE user_id=$1 AND entity_type=$2 AND entity_id=$3"
 	setAccessHashQuery = `
-		INSERT INTO telegram_access_hash (user_id, entity_id, access_hash)
-		VALUES ($1, $2, $3)
-		ON CONFLICT (user_id, entity_id) DO UPDATE SET access_hash=excluded.access_hash
+		INSERT INTO telegram_access_hash (user_id, entity_type, entity_id, access_hash)
+		VALUES ($1, $2, $3, $4)
+		ON CONFLICT (user_id, entity_type, entity_id) DO UPDATE SET access_hash=excluded.access_hash
 	`
 
 	// User Username Queries
-	getUsernameQuery = "SELECT username FROM telegram_username WHERE entity_id=$1"
+	getUsernameQuery = "SELECT username FROM telegram_username WHERE entity_type=$1 AND entity_id=$2"
 	setUsernameQuery = `
-		INSERT INTO telegram_username (username, entity_id)
-		VALUES ($1, $2)
-		ON CONFLICT (username) DO UPDATE SET entity_id=excluded.entity_id
+		INSERT INTO telegram_username (username, entity_type, entity_id)
+		VALUES ($1, $2, $3)
+		ON CONFLICT (username) DO UPDATE SET
+			entity_type=excluded.entity_type,
+			entity_id=excluded.entity_id
 	`
-	getByUsernameQuery = "SELECT entity_id FROM telegram_username WHERE LOWER(username)=$1"
-	clearUsernameQuery = `DELETE FROM telegram_username WHERE entity_id=$1`
+	getByUsernameQuery = "SELECT entity_type, entity_id FROM telegram_username WHERE LOWER(username)=$1"
+	clearUsernameQuery = `DELETE FROM telegram_username WHERE entity_type=$1 AND entity_id=$2`
 
 	// User Phone Number Queries
 	getEntityIDForPhoneNumber = "SELECT entity_id FROM telegram_phone_number WHERE phone_number=$1"
@@ -154,7 +158,7 @@ var _ updates.ChannelAccessHasher = (*ScopedStore)(nil)
 // Deprecated: only for interface, don't use directly. Use GetAccessHash instead
 func (s *ScopedStore) GetChannelAccessHash(ctx context.Context, userID, channelID int64) (accessHash int64, found bool, err error) {
 	s.assertUserIDMatches(userID)
-	accessHash, err = s.GetAccessHash(ctx, channelID)
+	accessHash, err = s.GetAccessHash(ctx, ids.PeerTypeChannel, channelID)
 	found = accessHash != 0
 	return
 }
@@ -162,43 +166,43 @@ func (s *ScopedStore) GetChannelAccessHash(ctx context.Context, userID, channelI
 // Deprecated: only for interface, don't use directly. Use SetAccessHash instead
 func (s *ScopedStore) SetChannelAccessHash(ctx context.Context, userID, channelID, accessHash int64) (err error) {
 	s.assertUserIDMatches(userID)
-	return s.SetAccessHash(ctx, channelID, accessHash)
+	return s.SetAccessHash(ctx, ids.PeerTypeChannel, channelID, accessHash)
 }
 
 var ErrNoAccessHash = errors.New("access hash not found")
 
-func (s *ScopedStore) GetAccessHash(ctx context.Context, entityID int64) (accessHash int64, err error) {
-	err = s.db.QueryRow(ctx, getAccessHashQuery, s.telegramUserID, entityID).Scan(&accessHash)
+func (s *ScopedStore) GetAccessHash(ctx context.Context, entityType ids.PeerType, entityID int64) (accessHash int64, err error) {
+	err = s.db.QueryRow(ctx, getAccessHashQuery, s.telegramUserID, entityType, entityID).Scan(&accessHash)
 	if errors.Is(err, sql.ErrNoRows) {
 		err = ErrNoAccessHash
 	}
 	return
 }
 
-func (s *ScopedStore) SetAccessHash(ctx context.Context, entityID, accessHash int64) (err error) {
-	_, err = s.db.Exec(ctx, setAccessHashQuery, s.telegramUserID, entityID, accessHash)
+func (s *ScopedStore) SetAccessHash(ctx context.Context, entityType ids.PeerType, entityID, accessHash int64) (err error) {
+	_, err = s.db.Exec(ctx, setAccessHashQuery, s.telegramUserID, entityType, entityID, accessHash)
 	return
 }
 
-func (s *ScopedStore) GetUsername(ctx context.Context, userID int64) (username string, err error) {
-	err = s.db.QueryRow(ctx, getUsernameQuery, userID).Scan(&username)
+func (s *ScopedStore) GetUsername(ctx context.Context, entityType ids.PeerType, userID int64) (username string, err error) {
+	err = s.db.QueryRow(ctx, getUsernameQuery, entityType, userID).Scan(&username)
 	if errors.Is(err, sql.ErrNoRows) {
 		err = nil
 	}
 	return
 }
 
-func (s *ScopedStore) SetUsername(ctx context.Context, userID int64, username string) (err error) {
+func (s *ScopedStore) SetUsername(ctx context.Context, entityType ids.PeerType, userID int64, username string) (err error) {
 	if username == "" {
-		_, err = s.db.Exec(ctx, clearUsernameQuery, userID)
+		_, err = s.db.Exec(ctx, clearUsernameQuery, entityType, userID)
 	} else {
-		_, err = s.db.Exec(ctx, setUsernameQuery, username, userID)
+		_, err = s.db.Exec(ctx, setUsernameQuery, username, entityType, userID)
 	}
 	return
 }
 
-func (s *ScopedStore) GetUserIDByUsername(ctx context.Context, username string) (userID int64, err error) {
-	err = s.db.QueryRow(ctx, getByUsernameQuery, username).Scan(&userID)
+func (s *ScopedStore) GetUserIDByUsername(ctx context.Context, username string) (entityType ids.PeerType, userID int64, err error) {
+	err = s.db.QueryRow(ctx, getByUsernameQuery, username).Scan(&entityType, &userID)
 	if errors.Is(err, sql.ErrNoRows) {
 		err = nil
 	}

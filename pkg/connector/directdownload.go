@@ -65,7 +65,7 @@ func (tc *TelegramConnector) Download(ctx context.Context, mediaID networkid.Med
 		})
 	case ids.PeerTypeChannel:
 		var accessHash int64
-		accessHash, err = client.ScopedStore.GetAccessHash(ctx, info.ChatID)
+		accessHash, err = client.ScopedStore.GetAccessHash(ctx, ids.PeerTypeChannel, info.ChatID)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get channel access hash: %w", err)
 		} else {

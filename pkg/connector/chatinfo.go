@@ -182,7 +182,7 @@ func (t *TelegramClient) GetChatInfo(ctx context.Context, portal *bridgev2.Porta
 		}
 		return chatInfo, nil
 	case ids.PeerTypeChannel:
-		accessHash, err := t.ScopedStore.GetAccessHash(ctx, id)
+		accessHash, err := t.ScopedStore.GetAccessHash(ctx, ids.PeerTypeChannel, id)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get channel access hash: %w", err)
 		}
@@ -218,10 +218,11 @@ func (t *TelegramClient) GetChatInfo(ctx context.Context, portal *bridgev2.Porta
 		chatInfo.Members.IsFull = false
 		if !portal.Metadata.(*PortalMetadata).IsSuperGroup {
 			// Add the channel user
-			chatInfo.Members.MemberMap[ids.MakeUserID(id)] = bridgev2.ChatMember{
+			sender := ids.MakeUserID(id)
+			chatInfo.Members.MemberMap[sender] = bridgev2.ChatMember{
 				EventSender: bridgev2.EventSender{
 					SenderLogin: ids.MakeUserLoginID(id),
-					Sender:      ids.MakeUserID(id),
+					Sender:      sender,
 				},
 			}
 		}
