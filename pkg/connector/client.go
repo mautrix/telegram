@@ -196,9 +196,9 @@ func NewTelegramClient(ctx context.Context, tc *TelegramConnector, login *bridge
 		Logger:               zaplog,
 		UpdateHandler:        client.updatesManager,
 		OnDead:               client.onDead,
-		OnSession:            client.onConnectionStateChange,
-		OnConnected:          client.onConnectionStateChange,
-		PingCallback:         client.onConnectionStateChange,
+		OnSession:            client.onConnectionStateChange("session"),
+		OnConnected:          client.onConnectionStateChange("connected"),
+		PingCallback:         client.onConnectionStateChange("ping"),
 		OnAuthError:          client.onAuthError,
 		PingTimeout:          time.Duration(tc.Config.Ping.TimeoutSeconds) * time.Second,
 		PingInterval:         time.Duration(tc.Config.Ping.IntervalSeconds) * time.Second,
@@ -354,22 +354,30 @@ func (t *TelegramClient) onDead() {
 	})
 }
 
-func (t *TelegramClient) onConnectionStateChange() {
-	authStatus, err := t.client.Auth().Status(context.Background())
-	if err != nil {
-		t.userLogin.BridgeState.Send(status.BridgeState{
-			StateEvent: status.StateUnknownError,
-			Error:      "tg-not-authenticated",
-			Message:    err.Error(),
-		})
-	} else if authStatus.Authorized {
-		t.userLogin.BridgeState.Send(status.BridgeState{StateEvent: status.StateConnected})
-	} else {
-		t.userLogin.BridgeState.Send(status.BridgeState{
-			StateEvent: status.StateBadCredentials,
-			Error:      "tg-no-auth",
-			Message:    "You're not logged in",
-		})
+func (t *TelegramClient) onConnectionStateChange(reason string) func() {
+	return func() {
+		t.main.Bridge.Log.Info().
+			Str("component", "telegram_client").
+			Str("user_login_id", string(t.userLogin.ID)).
+			Str("reason", reason).
+			Msg("Connection state changed")
+
+		authStatus, err := t.client.Auth().Status(context.Background())
+		if err != nil {
+			t.userLogin.BridgeState.Send(status.BridgeState{
+				StateEvent: status.StateUnknownError,
+				Error:      "tg-not-authenticated",
+				Message:    err.Error(),
+			})
+		} else if authStatus.Authorized {
+			t.userLogin.BridgeState.Send(status.BridgeState{StateEvent: status.StateConnected})
+		} else {
+			t.userLogin.BridgeState.Send(status.BridgeState{
+				StateEvent: status.StateBadCredentials,
+				Error:      "tg-no-auth",
+				Message:    "You're not logged in",
+			})
+		}
 	}
 }
 
