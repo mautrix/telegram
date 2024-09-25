@@ -44,8 +44,14 @@ type TelegramClient struct {
 	updatesManager *updates.Manager
 	clientCancel   context.CancelFunc
 
+	appConfigLock sync.Mutex
 	appConfig     map[string]any
 	appConfigHash int
+
+	availableReactionsLock    sync.Mutex
+	availableReactions        map[string]struct{}
+	availableReactionsHash    int
+	availableReactionsFetched time.Time
 
 	telegramFmtParams *telegramfmt.FormatParams
 	matrixParser      *matrixfmt.HTMLParser

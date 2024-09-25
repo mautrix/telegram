@@ -285,6 +285,11 @@ func (t *TelegramClient) HandleMatrixMessageRemove(ctx context.Context, msg *bri
 }
 
 func (t *TelegramClient) PreHandleMatrixReaction(ctx context.Context, msg *bridgev2.MatrixReaction) (bridgev2.MatrixReactionPreResponse, error) {
+	log := zerolog.Ctx(ctx).With().
+		Str("conversion_direction", "to_telegram").
+		Str("handler", "pre_handle_matrix_reaction").
+		Str("key", msg.Content.RelatesTo.Key).
+		Logger()
 	var resp bridgev2.MatrixReactionPreResponse
 
 	var maxReactions int
@@ -293,7 +298,8 @@ func (t *TelegramClient) PreHandleMatrixReaction(ctx context.Context, msg *bridg
 		return resp, err
 	}
 
-	var emojiID networkid.EmojiID
+	keyNoVariation := variationselector.Remove(msg.Content.RelatesTo.Key)
+	emojiID := ids.MakeEmojiIDFromEmoticon(msg.Content.RelatesTo.Key)
 	if strings.HasPrefix(msg.Content.RelatesTo.Key, "mxc://") {
 		if file, err := t.main.Store.TelegramFile.GetByMXC(ctx, msg.Content.RelatesTo.Key); err != nil {
 			return resp, err
@@ -304,11 +310,24 @@ func (t *TelegramClient) PreHandleMatrixReaction(ctx context.Context, msg *bridg
 		} else {
 			emojiID = ids.MakeEmojiIDFromDocumentID(documentID)
 		}
-	} else if documentID, ok := emojis.GetEmojiDocumentID(msg.Content.RelatesTo.Key); ok {
-		emojiID = ids.MakeEmojiIDFromDocumentID(documentID)
+	} else if t.main.Config.AlwaysCustomEmojiReaction {
+		// Always use the unicodemoji reaction if available
+		if documentID, ok := emojis.GetEmojiDocumentID(keyNoVariation); ok {
+			log.Debug().Msg("Using custom emoji reaction")
+			emojiID = ids.MakeEmojiIDFromDocumentID(documentID)
+		}
+	} else if availableReactions, err := t.getAvailableReactions(ctx); err != nil {
+		return resp, fmt.Errorf("failed to get available reactions: %w", err)
+	} else if _, ok := availableReactions[keyNoVariation]; ok {
+		log.Debug().Msg("Not using custom emoji reaction since the emoji is available")
 	} else {
-		emojiID = ids.MakeEmojiIDFromEmoticon(msg.Content.RelatesTo.Key)
+		if documentID, ok := emojis.GetEmojiDocumentID(keyNoVariation); ok {
+			log.Debug().Msg("Using custom emoji reaction")
+			emojiID = ids.MakeEmojiIDFromDocumentID(documentID)
+		}
 	}
+
+	log.Debug().Str("emoji_id", string(emojiID)).Msg("Pre-handled reaction")
 
 	return bridgev2.MatrixReactionPreResponse{
 		SenderID:     t.userID,

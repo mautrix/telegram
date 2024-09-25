@@ -49,4 +49,5 @@ func migrateLegacyConfig(helper up.Helper) {
 	bridgeconfig.CopyToOtherLocation(helper, up.Int, []string{"bridge", "sync_update_limit"}, []string{"network", "sync", "update_limit"})
 	bridgeconfig.CopyToOtherLocation(helper, up.Int, []string{"bridge", "sync_create_limit"}, []string{"network", "sync", "create_limit"})
 	bridgeconfig.CopyToOtherLocation(helper, up.Bool, []string{"bridge", "sync_direct_chats"}, []string{"network", "sync", "direct_chats"})
+	bridgeconfig.CopyToOtherLocation(helper, up.Bool, []string{"bridge", "always_custom_emoji_reaction"}, []string{"network", "always_custom_emoji_reaction"})
 }

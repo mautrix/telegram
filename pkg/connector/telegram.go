@@ -515,6 +515,8 @@ func (t *TelegramClient) inputPeerForPortalID(ctx context.Context, portalID netw
 }
 
 func (t *TelegramClient) getAppConfigCached(ctx context.Context) (map[string]any, error) {
+	t.appConfigLock.Lock()
+	defer t.appConfigLock.Unlock()
 	if t.appConfig == nil {
 		cfg, err := t.client.API().HelpGetAppConfig(ctx, t.appConfigHash)
 		if err != nil {
@@ -535,6 +537,46 @@ func (t *TelegramClient) getAppConfigCached(ctx context.Context) (map[string]any
 		t.appConfigHash = appConfig.Hash
 	}
 	return t.appConfig, nil
+}
+
+func (t *TelegramClient) getAvailableReactions(ctx context.Context) (map[string]struct{}, error) {
+	log := zerolog.Ctx(ctx).With().Str("handler", "get_available_reactions").Logger()
+	t.availableReactionsLock.Lock()
+	defer t.availableReactionsLock.Unlock()
+	if t.availableReactions == nil || time.Since(t.availableReactionsFetched) > 12*time.Hour {
+		cfg, err := t.client.API().MessagesGetAvailableReactions(ctx, t.availableReactionsHash)
+		if err != nil {
+			return nil, err
+		}
+		t.availableReactionsFetched = time.Now()
+		switch v := cfg.(type) {
+		case *tg.MessagesAvailableReactions:
+			availableReactions, ok := cfg.(*tg.MessagesAvailableReactions)
+			if !ok {
+				return nil, fmt.Errorf("failed to get app config: unexpected type %T", availableReactions)
+			}
+
+			log.Debug().Msg("Fetched new available reactions")
+
+			myGhost, err := t.main.Bridge.GetGhostByID(ctx, t.userID)
+			if err != nil {
+				log.Err(err).Msg("failed to get own ghost")
+			}
+			t.availableReactions = make(map[string]struct{}, len(availableReactions.Reactions))
+			for _, reaction := range availableReactions.Reactions {
+				if !reaction.Inactive && (myGhost.Metadata.(*GhostMetadata).IsPremium || !reaction.Premium) {
+					t.availableReactions[reaction.Reaction] = struct{}{}
+				}
+			}
+
+			t.availableReactionsHash = availableReactions.Hash
+		case *tg.MessagesAvailableReactionsNotModified:
+			log.Debug().Msg("Available reactions not modified")
+		default:
+			log.Error().Type("reaction_type", v).Msg("failed to get available reactions: unexpected type")
+		}
+	}
+	return t.availableReactions, nil
 }
 
 func (t *TelegramClient) transferEmojisToMatrix(ctx context.Context, customEmojiIDs []int64) (result map[networkid.EmojiID]string, err error) {
