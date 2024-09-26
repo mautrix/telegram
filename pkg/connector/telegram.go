@@ -69,21 +69,22 @@ func (t *TelegramClient) onUpdateNewMessage(ctx context.Context, update IGetMess
 	case *tg.MessageService:
 		sender := t.getEventSender(msg)
 
-		chatInfoChange := simplevent.ChatInfoChange{
-			EventMeta: simplevent.EventMeta{
-				Type:      bridgev2.RemoteEventChatInfoChange,
-				PortalKey: t.makePortalKeyFromPeer(msg.PeerID),
-				Sender:    sender,
-				Timestamp: time.Unix(int64(msg.Date), 0),
-				LogContext: func(c zerolog.Context) zerolog.Context {
-					return c.
-						Int("message_id", msg.GetID()).
-						Str("sender", string(sender.Sender)).
-						Str("sender_login", string(sender.SenderLogin)).
-						Bool("is_from_me", sender.IsFromMe).
-						Stringer("peer_id", msg.PeerID)
-				},
+		eventMeta := simplevent.EventMeta{
+			Type:      bridgev2.RemoteEventChatInfoChange,
+			PortalKey: t.makePortalKeyFromPeer(msg.PeerID),
+			Sender:    sender,
+			Timestamp: time.Unix(int64(msg.Date), 0),
+			LogContext: func(c zerolog.Context) zerolog.Context {
+				return c.
+					Int("message_id", msg.GetID()).
+					Str("sender", string(sender.Sender)).
+					Str("sender_login", string(sender.SenderLogin)).
+					Bool("is_from_me", sender.IsFromMe).
+					Stringer("peer_id", msg.PeerID)
 			},
+		}
+		chatInfoChange := simplevent.ChatInfoChange{
+			EventMeta:      eventMeta,
 			ChatInfoChange: &bridgev2.ChatInfoChange{},
 		}
 
@@ -116,6 +117,14 @@ func (t *TelegramClient) onUpdateNewMessage(ctx context.Context, update IGetMess
 			}
 		case *tg.MessageActionChatDeleteUser:
 			sender := ids.MakeUserID(action.UserID)
+			if action.UserID == t.telegramUserID {
+				eventMeta.Type = bridgev2.RemoteEventChatDelete
+				t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.ChatDelete{
+					EventMeta: eventMeta,
+					OnlyForMe: true,
+				})
+				return nil
+			}
 			chatInfoChange.ChatInfoChange.MemberChanges = &bridgev2.ChatMemberList{
 				MemberMap: map[networkid.UserID]bridgev2.ChatMember{
 					sender: {
