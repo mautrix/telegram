@@ -162,7 +162,13 @@ func (t *TelegramClient) FetchMessages(ctx context.Context, fetchParams bridgev2
 			return nil, err
 		}
 
-		defer t.stopTakeoutTimer.Reset(max(time.Hour, time.Duration(t.main.Bridge.Config.Backfill.Queue.BatchDelay*2)))
+		defer func() {
+			if t.stopTakeoutTimer == nil {
+				t.stopTakeoutTimer = time.AfterFunc(max(time.Hour, time.Duration(t.main.Bridge.Config.Backfill.Queue.BatchDelay*2)), sync.OnceFunc(func() { t.stopTakeout(ctx) }))
+			} else {
+				t.stopTakeoutTimer.Reset(max(time.Hour, time.Duration(t.main.Bridge.Config.Backfill.Queue.BatchDelay*2)))
+			}
+		}()
 	}
 
 	peer, err := t.inputPeerForPortalID(ctx, fetchParams.Portal.ID)
