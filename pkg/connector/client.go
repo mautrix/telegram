@@ -137,6 +137,9 @@ func NewTelegramClient(ctx context.Context, tc *TelegramConnector, login *bridge
 	dispatcher.OnNewMessage(func(ctx context.Context, e tg.Entities, update *tg.UpdateNewMessage) error {
 		return client.onUpdateNewMessage(ctx, update)
 	})
+	dispatcher.OnChannel(func(ctx context.Context, e tg.Entities, update *tg.UpdateChannel) error {
+		return client.onUpdateChannel(ctx, update)
+	})
 	dispatcher.OnNewChannelMessage(func(ctx context.Context, e tg.Entities, update *tg.UpdateNewChannelMessage) error {
 		return client.onUpdateNewMessage(ctx, update)
 	})

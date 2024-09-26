@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/gotd/td/tg"
+	"github.com/gotd/td/tgerr"
 	"github.com/rs/zerolog"
 	"maunium.net/go/mautrix/bridge/status"
 	"maunium.net/go/mautrix/bridgev2"
@@ -30,6 +31,54 @@ type IGetMessage interface {
 
 type IGetMessages interface {
 	GetMessages() []int
+}
+
+func (t *TelegramClient) onUpdateChannel(ctx context.Context, update *tg.UpdateChannel) error {
+	log := zerolog.Ctx(ctx).With().
+		Str("handler", "on_update_channel").
+		Int64("channel_id", update.ChannelID).
+		Logger()
+	log.Debug().Msg("Fetching channel due to UpdateChannel event")
+
+	leave := func() {
+		t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.ChatDelete{
+			EventMeta: simplevent.EventMeta{
+				Type: bridgev2.RemoteEventChatDelete,
+				LogContext: func(c zerolog.Context) zerolog.Context {
+					return c.Int64("channel_id", update.ChannelID)
+				},
+				PortalKey: t.makePortalKeyFromID(ids.PeerTypeChannel, update.ChannelID),
+				Sender:    t.mySender(),
+			},
+			OnlyForMe: true,
+		})
+	}
+
+	chats, err := APICallWithOnlyChatUpdates(ctx, t, func() (tg.MessagesChatsClass, error) {
+		if accessHash, err := t.ScopedStore.GetAccessHash(ctx, ids.PeerTypeChannel, update.ChannelID); err != nil {
+			return nil, err
+		} else {
+			return t.client.API().ChannelsGetChannels(ctx, []tg.InputChannelClass{
+				&tg.InputChannel{ChannelID: update.ChannelID, AccessHash: accessHash},
+			})
+		}
+	})
+	if err != nil {
+		if tgerr.Is(err, tg.ErrChannelInvalid, tg.ErrChannelPrivate) {
+			leave()
+			return nil
+		}
+		return fmt.Errorf("failed to get channel: %w", err)
+	} else if len(chats.GetChats()) != 1 {
+		return fmt.Errorf("expected 1 chat, got %d", len(chats.GetChats()))
+	} else if channel, ok := chats.GetChats()[0].(*tg.Channel); !ok {
+		log.Error().Type("chat_type", chats.GetChats()[0]).Msg("Expected channel, got something else. Leaving the channel.")
+		leave()
+	} else if channel.Left {
+		log.Error().Msg("Update was for a left channel. Leaving the channel.")
+		leave()
+	}
+	return nil
 }
 
 func (t *TelegramClient) onUpdateNewMessage(ctx context.Context, update IGetMessage) error {
