@@ -234,7 +234,7 @@ func NewTelegramClient(ctx context.Context, tc *TelegramConnector, login *bridge
 			return userInfo, nil
 		},
 		GetUserInfoByUsername: func(ctx context.Context, username string) (telegramfmt.UserInfo, error) {
-			if peerType, userID, err := client.ScopedStore.GetUserIDByUsername(ctx, username); err != nil {
+			if peerType, userID, err := client.ScopedStore.GetEntityIDByUsername(ctx, username); err != nil {
 				return telegramfmt.UserInfo{}, err
 			} else if peerType != ids.PeerTypeUser {
 				return telegramfmt.UserInfo{}, fmt.Errorf("unexpected peer type: %s", peerType)

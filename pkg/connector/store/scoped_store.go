@@ -192,17 +192,17 @@ func (s *ScopedStore) GetUsername(ctx context.Context, entityType ids.PeerType, 
 	return
 }
 
-func (s *ScopedStore) SetUsername(ctx context.Context, entityType ids.PeerType, userID int64, username string) (err error) {
+func (s *ScopedStore) SetUsername(ctx context.Context, entityType ids.PeerType, entityID int64, username string) (err error) {
 	if username == "" {
-		_, err = s.db.Exec(ctx, clearUsernameQuery, entityType, userID)
+		_, err = s.db.Exec(ctx, clearUsernameQuery, entityType, entityID)
 	} else {
-		_, err = s.db.Exec(ctx, setUsernameQuery, username, entityType, userID)
+		_, err = s.db.Exec(ctx, setUsernameQuery, username, entityType, entityID)
 	}
 	return
 }
 
-func (s *ScopedStore) GetUserIDByUsername(ctx context.Context, username string) (entityType ids.PeerType, userID int64, err error) {
-	err = s.db.QueryRow(ctx, getByUsernameQuery, username).Scan(&entityType, &userID)
+func (s *ScopedStore) GetEntityIDByUsername(ctx context.Context, username string) (entityType ids.PeerType, entityID int64, err error) {
+	err = s.db.QueryRow(ctx, getByUsernameQuery, username).Scan(&entityType, &entityID)
 	if errors.Is(err, sql.ErrNoRows) {
 		err = nil
 	}

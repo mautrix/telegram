@@ -81,7 +81,7 @@ func (t *TelegramClient) ResolveIdentifier(ctx context.Context, identifier strin
 		return t.getResolveIdentifierResponseForUserID(ctx, userID)
 	} else if match := usernameRe.FindStringSubmatch(identifier); match != nil && !strings.Contains(identifier, "__") {
 		// This is a username
-		entityType, userID, err := t.ScopedStore.GetUserIDByUsername(ctx, match[1])
+		entityType, userID, err := t.ScopedStore.GetEntityIDByUsername(ctx, match[1])
 		if entityType == ids.PeerTypeUser && (err == nil || userID != 0) {
 			// We know this username.
 			return t.getResolveIdentifierResponseForUserID(ctx, userID)

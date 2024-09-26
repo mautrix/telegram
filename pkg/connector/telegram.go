@@ -77,6 +77,8 @@ func (t *TelegramClient) onUpdateChannel(ctx context.Context, update *tg.UpdateC
 	} else if channel.Left {
 		log.Error().Msg("Update was for a left channel. Leaving the channel.")
 		leave()
+	} else {
+		// TODO update the channel info
 	}
 	return nil
 }
@@ -405,6 +407,13 @@ func (t *TelegramClient) updateChannel(ctx context.Context, channel *tg.Channel)
 				data, _, err = media.NewTransferer(t.client.API()).WithChannelPhoto(channel.ID, channel.AccessHash, photo.PhotoID).Download(ctx)
 				return
 			},
+		}
+	}
+
+	if username, set := channel.GetUsername(); set {
+		err := t.ScopedStore.SetUsername(ctx, ids.PeerTypeChannel, channel.ID, username)
+		if err != nil {
+			return err
 		}
 	}
 
