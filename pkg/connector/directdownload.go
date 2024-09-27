@@ -93,34 +93,41 @@ func (tc *TelegramConnector) Download(ctx context.Context, mediaID networkid.Med
 	}
 
 	var msgMedia tg.MessageMediaClass
-	var found bool
-	for _, message := range messages.GetMessages() {
-		if msg, ok := message.(*tg.Message); ok && msg.ID == int(info.MessageID) {
-			msgMedia = msg.Media
-			found = true
-			break
-		}
-	}
-	if !found {
+	if len(messages.GetMessages()) != 1 {
+		return nil, fmt.Errorf("wrong number of messages retrieved %d", len(messages.GetMessages()))
+	} else if msg, ok := messages.GetMessages()[0].(*tg.Message); !ok {
+		return nil, fmt.Errorf("message was of the wrong type %s", messages.GetMessages()[0].TypeName())
+	} else if msg.ID != int(info.MessageID) {
 		return nil, fmt.Errorf("no media found with ID %d", info.MessageID)
+	} else {
+		msgMedia = msg.Media
 	}
 
 	transferer := media.NewTransferer(client.client.API())
 	var readyTransferer *media.ReadyTransferer
 	switch msgMedia := msgMedia.(type) {
 	case *tg.MessageMediaPhoto:
+		log.Debug().
+			Int64("photo_id", msgMedia.Photo.GetID()).
+			Msg("downloading photo")
 		readyTransferer = transferer.WithPhoto(msgMedia.Photo)
 	case *tg.MessageMediaDocument:
 		document, ok := msgMedia.Document.(*tg.Document)
 		if !ok {
 			return nil, fmt.Errorf("unknown document type %T", msgMedia.Document)
 		}
+		var isSticker bool
 		for _, attr := range document.GetAttributes() {
 			if attr.TypeID() == tg.DocumentAttributeStickerTypeID {
 				transferer = transferer.WithStickerConfig(tc.Config.AnimatedSticker)
+				isSticker = true
 			}
 		}
 
+		log.Debug().
+			Int64("document_id", msgMedia.Document.GetID()).
+			Bool("is_sticker", isSticker).
+			Msg("downloading photo")
 		readyTransferer = transferer.WithDocument(msgMedia.Document, info.Thumbnail)
 	default:
 		return nil, fmt.Errorf("unhandled media type %T", msgMedia)
@@ -131,6 +138,11 @@ func (tc *TelegramConnector) Download(ctx context.Context, mediaID networkid.Med
 		log.Err(err).Msg("failed to download media")
 		return nil, err
 	}
+
+	log.Debug().
+		Str("mime_type", fileInfo.MimeType).
+		Int("size", fileInfo.Size).
+		Msg("Downloaded media successfully")
 
 	return &mediaproxy.GetMediaResponseData{
 		Reader:        io.NopCloser(bytes.NewBuffer(data)),

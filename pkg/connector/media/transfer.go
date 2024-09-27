@@ -362,5 +362,8 @@ func (t *ReadyTransferer) DirectDownloadURL(ctx context.Context, loggedInUserID 
 		return "", nil, err
 	}
 	mxc, err := portal.Bridge.Matrix.GenerateContentURI(ctx, mediaID)
+	if t.inner.fileInfo.MimeType == "" {
+		t.inner.fileInfo.MimeType = "image/jpeg"
+	}
 	return mxc, &t.inner.fileInfo, err
 }
