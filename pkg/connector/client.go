@@ -135,13 +135,13 @@ func NewTelegramClient(ctx context.Context, tc *TelegramConnector, login *bridge
 		EntityHandler:    client.onEntityUpdate,
 	}
 	dispatcher.OnNewMessage(func(ctx context.Context, e tg.Entities, update *tg.UpdateNewMessage) error {
-		return client.onUpdateNewMessage(ctx, update)
+		return client.onUpdateNewMessage(ctx, e.Channels, update)
 	})
 	dispatcher.OnChannel(func(ctx context.Context, e tg.Entities, update *tg.UpdateChannel) error {
 		return client.onUpdateChannel(ctx, update)
 	})
 	dispatcher.OnNewChannelMessage(func(ctx context.Context, e tg.Entities, update *tg.UpdateNewChannelMessage) error {
-		return client.onUpdateNewMessage(ctx, update)
+		return client.onUpdateNewMessage(ctx, e.Channels, update)
 	})
 	dispatcher.OnUserName(client.onUserName)
 	dispatcher.OnDeleteMessages(func(ctx context.Context, e tg.Entities, update *tg.UpdateDeleteMessages) error {
@@ -446,6 +446,7 @@ func (t *TelegramClient) getSingleUser(ctx context.Context, id int64) (tg.UserCl
 	}
 }
 
+// TODO make work for channel peers (necessary for forward backfill)
 func (t *TelegramClient) GetUserInfo(ctx context.Context, ghost *bridgev2.Ghost) (*bridgev2.UserInfo, error) {
 	if peerType, id, err := ids.ParseUserID(ghost.ID); err != nil {
 		return nil, err

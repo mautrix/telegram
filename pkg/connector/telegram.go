@@ -83,11 +83,20 @@ func (t *TelegramClient) onUpdateChannel(ctx context.Context, update *tg.UpdateC
 	return nil
 }
 
-func (t *TelegramClient) onUpdateNewMessage(ctx context.Context, update IGetMessage) error {
+func (t *TelegramClient) onUpdateNewMessage(ctx context.Context, channels map[int64]*tg.Channel, update IGetMessage) error {
 	log := zerolog.Ctx(ctx)
 	switch msg := update.GetMessage().(type) {
 	case *tg.Message:
 		sender := t.getEventSender(msg)
+
+		if channel, ok := msg.PeerID.(*tg.PeerChannel); ok {
+			if c, ok := channels[channel.ChannelID]; ok && c.Left {
+				log.Debug().
+					Int64("channel_id", channel.ChannelID).
+					Msg("Received message in left channel, ignoring")
+				return nil
+			}
+		}
 
 		go t.handleTelegramReactions(ctx, msg)
 
