@@ -178,6 +178,9 @@ func NewTelegramClient(ctx context.Context, tc *TelegramConnector, login *bridge
 	dispatcher.OnReadChannelInbox(func(ctx context.Context, e tg.Entities, update *tg.UpdateReadChannelInbox) error {
 		return client.onOwnReadReceipt(client.makePortalKeyFromID(ids.PeerTypeChannel, update.ChannelID), update.MaxID)
 	})
+	dispatcher.OnNotifySettings(func(ctx context.Context, e tg.Entities, update *tg.UpdateNotifySettings) error {
+		return client.onNotifySettings(ctx, update)
+	})
 
 	client.ScopedStore = tc.Store.GetScopedStore(telegramUserID)
 

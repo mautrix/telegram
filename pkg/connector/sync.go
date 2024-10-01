@@ -4,9 +4,11 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"time"
 
 	"github.com/gotd/td/tg"
 	"github.com/rs/zerolog"
+	"go.mau.fi/util/ptr"
 	"maunium.net/go/mautrix/bridgev2"
 	"maunium.net/go/mautrix/bridgev2/database"
 	"maunium.net/go/mautrix/bridgev2/networkid"
@@ -98,7 +100,15 @@ func (t *TelegramClient) handleDialogs(ctx context.Context, dialogs tg.ModifiedM
 			}
 		}
 
+		var userLocalInfo bridgev2.UserLocalPortalInfo
+		if mu, ok := dialog.NotifySettings.GetMuteUntil(); ok {
+			userLocalInfo.MutedUntil = ptr.Ptr(time.Unix(int64(mu), 0))
+		} else {
+			userLocalInfo.MutedUntil = &bridgev2.Unmuted
+		}
+
 		t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.ChatResync{
+			ChatInfo: &bridgev2.ChatInfo{Name: &portal.Name, UserLocal: &userLocalInfo},
 			EventMeta: simplevent.EventMeta{
 				Type: bridgev2.RemoteEventChatResync,
 				LogContext: func(c zerolog.Context) zerolog.Context {

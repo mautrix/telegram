@@ -11,6 +11,7 @@ import (
 	"github.com/gotd/td/tg"
 	"github.com/gotd/td/tgerr"
 	"github.com/rs/zerolog"
+	"go.mau.fi/util/ptr"
 	"maunium.net/go/mautrix/bridge/status"
 	"maunium.net/go/mautrix/bridgev2"
 	"maunium.net/go/mautrix/bridgev2/database"
@@ -716,4 +717,28 @@ func (t *TelegramClient) transferEmojisToMatrix(ctx context.Context, customEmoji
 		result[ids.MakeEmojiIDFromDocumentID(customEmojiDocument.GetID())] = string(mxcURI)
 	}
 	return
+}
+
+func (t *TelegramClient) onNotifySettings(ctx context.Context, update *tg.UpdateNotifySettings) error {
+	if update.Peer.TypeID() != tg.NotifyPeerTypeID {
+		return fmt.Errorf("unsupported peer type %s", update.Peer.TypeName())
+	}
+
+	var mutedUntil *time.Time
+	if mu, ok := update.NotifySettings.GetMuteUntil(); ok {
+		mutedUntil = ptr.Ptr(time.Unix(int64(mu), 0))
+	} else {
+		mutedUntil = &bridgev2.Unmuted
+	}
+
+	t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.ChatResync{
+		ChatInfo: &bridgev2.ChatInfo{UserLocal: &bridgev2.UserLocalPortalInfo{
+			MutedUntil: mutedUntil,
+		}},
+		EventMeta: simplevent.EventMeta{
+			Type:      bridgev2.RemoteEventChatResync,
+			PortalKey: t.makePortalKeyFromPeer(update.Peer.(*tg.NotifyPeer).Peer),
+		},
+	})
+	return nil
 }
