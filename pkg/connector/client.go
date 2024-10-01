@@ -565,3 +565,11 @@ func (t *TelegramClient) mySender() bridgev2.EventSender {
 		Sender:      t.userID,
 	}
 }
+
+func (t *TelegramClient) senderForUserID(userID int64) bridgev2.EventSender {
+	return bridgev2.EventSender{
+		IsFromMe:    userID == t.telegramUserID,
+		SenderLogin: ids.MakeUserLoginID(userID),
+		Sender:      ids.MakeUserID(userID),
+	}
+}

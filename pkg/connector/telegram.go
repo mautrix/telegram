@@ -196,8 +196,46 @@ func (t *TelegramClient) onUpdateNewMessage(ctx context.Context, channels map[in
 					},
 				},
 			}
-		// case *tg.MessageActionChatCreate:
-		// case *tg.MessageActionChannelCreate:
+		case *tg.MessageActionChatCreate:
+			memberMap := map[networkid.UserID]bridgev2.ChatMember{}
+			for _, userID := range action.Users {
+				memberMap[ids.MakeUserID(userID)] = bridgev2.ChatMember{
+					EventSender: t.senderForUserID(userID),
+					Membership:  event.MembershipJoin,
+				}
+			}
+
+			eventMeta.Type = bridgev2.RemoteEventChatResync
+			eventMeta.CreatePortal = true
+			t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.ChatResync{
+				EventMeta: eventMeta,
+				ChatInfo: &bridgev2.ChatInfo{
+					Name: &action.Title,
+					Members: &bridgev2.ChatMemberList{
+						IsFull:           true,
+						TotalMemberCount: len(action.Users),
+						MemberMap:        memberMap,
+					},
+				},
+			})
+
+		case *tg.MessageActionChannelCreate:
+			eventMeta.Type = bridgev2.RemoteEventChatResync
+			eventMeta.CreatePortal = true
+			t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.ChatResync{
+				EventMeta: eventMeta,
+				ChatInfo: &bridgev2.ChatInfo{
+					Name: &action.Title,
+					Members: &bridgev2.ChatMemberList{
+						MemberMap: map[networkid.UserID]bridgev2.ChatMember{
+							t.userID: {
+								EventSender: t.mySender(),
+								Membership:  event.MembershipJoin,
+							},
+						},
+					},
+				},
+			})
 		// case *tg.MessageActionChatMigrateTo:
 		// case *tg.MessageActionChannelMigrateFrom:
 		// case *tg.MessageActionPinMessage:

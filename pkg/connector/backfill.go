@@ -276,13 +276,9 @@ func (t *TelegramClient) FetchMessages(ctx context.Context, fetchParams bridgev2
 
 			backfillMessage.Reactions = append(backfillMessage.Reactions, &bridgev2.BackfillReaction{
 				Timestamp: time.Unix(int64(reaction.Date), 0),
-				Sender: bridgev2.EventSender{
-					IsFromMe:    peer.UserID == t.telegramUserID,
-					SenderLogin: ids.MakeUserLoginID(peer.UserID),
-					Sender:      ids.MakeUserID(peer.UserID),
-				},
-				EmojiID: emojiID,
-				Emoji:   emoji,
+				Sender:    t.senderForUserID(peer.UserID),
+				EmojiID:   emojiID,
+				Emoji:     emoji,
 			})
 		}
 

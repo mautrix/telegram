@@ -108,11 +108,7 @@ func (t *TelegramClient) filterChannelParticipants(chatParticipants []tg.Channel
 		}
 
 		members = append(members, bridgev2.ChatMember{
-			EventSender: bridgev2.EventSender{
-				IsFromMe:    userIDable.GetUserID() == t.telegramUserID,
-				SenderLogin: ids.MakeUserLoginID(userIDable.GetUserID()),
-				Sender:      ids.MakeUserID(userIDable.GetUserID()),
-			},
+			EventSender: t.senderForUserID(userIDable.GetUserID()),
 		})
 
 		if len(members) >= limit {
@@ -167,13 +163,8 @@ func (t *TelegramClient) GetChatInfo(ctx context.Context, portal *bridgev2.Porta
 				continue
 			}
 
-			sender := ids.MakeUserID(user.GetUserID())
-			chatInfo.Members.MemberMap[sender] = bridgev2.ChatMember{
-				EventSender: bridgev2.EventSender{
-					IsFromMe:    user.GetUserID() == t.telegramUserID,
-					SenderLogin: ids.MakeUserLoginID(user.GetUserID()),
-					Sender:      sender,
-				},
+			chatInfo.Members.MemberMap[ids.MakeUserID(user.GetUserID())] = bridgev2.ChatMember{
+				EventSender: t.senderForUserID(user.GetUserID()),
 			}
 
 			if len(chatInfo.Members.MemberMap) >= t.main.Config.MemberList.NormalizedMaxInitialSync() {
