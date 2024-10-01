@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"os"
 	"strconv"
 
 	"github.com/rs/zerolog"
@@ -46,21 +47,29 @@ func (c AnimatedStickerConfig) convert(ctx context.Context, data []byte) Convert
 	}
 
 	input := bytes.NewBuffer(data)
-	outputWriter := new(bytes.Buffer)
-	var thumbnailData []byte
+	var convertedData, thumbnailData []byte
 	var mimeType, thumbnailMIMEType string
 
 	var err error
 	switch c.Target {
 	case "png":
 		mimeType = "image/png"
+		outputWriter := new(bytes.Buffer)
 		err = lottie.Convert(ctx, input, "", outputWriter, c.Target, c.Args.Width, c.Args.Height, "1")
+		convertedData = outputWriter.Bytes()
 	case "gif":
 		mimeType = "image/gif"
+		outputWriter := new(bytes.Buffer)
 		err = lottie.Convert(ctx, input, "", outputWriter, c.Target, c.Args.Width, c.Args.Height, strconv.Itoa(c.Args.FPS))
+		convertedData = outputWriter.Bytes()
 	case "webm", "webp":
 		thumbnailMIMEType = "image/png"
-		outputWriter, mimeType, thumbnailData, err = lottie.FfmpegConvert(ctx, input, c.Target, c.Args.Width, c.Args.Height, c.Args.FPS)
+		mimeType = "image/" + c.Target
+		thumbnailData, err = lottie.FFmpegConvert(ctx, input, c.Target, c.Args.Width, c.Args.Height, c.Args.FPS)
+		if err != nil {
+			break
+		}
+		convertedData, err = os.ReadFile(c.Target)
 	default:
 		err = fmt.Errorf("unsupported target format %s", c.Target)
 	}
@@ -74,7 +83,7 @@ func (c AnimatedStickerConfig) convert(ctx context.Context, data []byte) Convert
 	}
 
 	return ConvertedSticker{
-		Data:              outputWriter.Bytes(),
+		Data:              convertedData,
 		MIMEType:          mimeType,
 		ThumbnailData:     thumbnailData,
 		ThumbnailMIMEType: thumbnailMIMEType,

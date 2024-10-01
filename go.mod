@@ -10,12 +10,12 @@ require (
 	github.com/gotd/td v0.105.0
 	github.com/rs/zerolog v1.33.0
 	github.com/stretchr/testify v1.9.0
-	go.mau.fi/util v0.7.1-0.20240913102754-33e004cf1e96
+	go.mau.fi/util v0.8.1-0.20240927174413-000d30f9a02a
 	go.mau.fi/zerozap v0.1.1
 	go.uber.org/zap v1.27.0
 	golang.org/x/exp v0.0.0-20240909161429-701f63a606c0
 	golang.org/x/net v0.29.0
-	maunium.net/go/mautrix v0.20.1-0.20240914094516-d89dac594db0
+	maunium.net/go/mautrix v0.21.1-0.20241001164151-c27b62aa24ed
 )
 
 require (
