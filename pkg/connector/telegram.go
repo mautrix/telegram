@@ -742,3 +742,17 @@ func (t *TelegramClient) onNotifySettings(ctx context.Context, update *tg.Update
 	})
 	return nil
 }
+
+func (t *TelegramClient) HandleMute(ctx context.Context, msg *bridgev2.MatrixMute) error {
+	inputPeer, err := t.inputPeerForPortalID(ctx, msg.Portal.ID)
+	if err != nil {
+		return err
+	}
+	_, err = t.client.API().AccountUpdateNotifySettings(ctx, &tg.AccountUpdateNotifySettingsRequest{
+		Peer: &tg.InputNotifyPeer{Peer: inputPeer},
+		Settings: tg.InputPeerNotifySettings{
+			MuteUntil: int(msg.Content.GetMutedUntilTime().Unix()),
+		},
+	})
+	return err
+}
