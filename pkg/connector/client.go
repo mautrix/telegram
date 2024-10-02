@@ -79,6 +79,7 @@ var (
 	_ bridgev2.UserSearchingNetworkAPI         = (*TelegramClient)(nil)
 	_ bridgev2.GroupCreatingNetworkAPI         = (*TelegramClient)(nil)
 	_ bridgev2.MuteHandlingNetworkAPI          = (*TelegramClient)(nil)
+	_ bridgev2.TagHandlingNetworkAPI           = (*TelegramClient)(nil)
 )
 
 type UpdateDispatcher struct {

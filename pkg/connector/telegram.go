@@ -12,6 +12,7 @@ import (
 	"github.com/gotd/td/tgerr"
 	"github.com/rs/zerolog"
 	"go.mau.fi/util/ptr"
+	"golang.org/x/exp/maps"
 	"maunium.net/go/mautrix/bridge/status"
 	"maunium.net/go/mautrix/bridgev2"
 	"maunium.net/go/mautrix/bridgev2/database"
@@ -753,6 +754,19 @@ func (t *TelegramClient) HandleMute(ctx context.Context, msg *bridgev2.MatrixMut
 		Settings: tg.InputPeerNotifySettings{
 			MuteUntil: int(msg.Content.GetMutedUntilTime().Unix()),
 		},
+	})
+	return err
+}
+
+func (t *TelegramClient) HandleRoomTag(ctx context.Context, msg *bridgev2.MatrixRoomTag) error {
+	inputPeer, err := t.inputPeerForPortalID(ctx, msg.Portal.ID)
+	if err != nil {
+		return err
+	}
+
+	_, err = t.client.API().MessagesToggleDialogPin(ctx, &tg.MessagesToggleDialogPinRequest{
+		Pinned: slices.Contains(maps.Keys(msg.Content.Tags), event.RoomTagFavourite),
+		Peer:   &tg.InputDialogPeer{Peer: inputPeer},
 	})
 	return err
 }
