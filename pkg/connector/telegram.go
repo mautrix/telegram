@@ -758,6 +758,53 @@ func (t *TelegramClient) HandleMute(ctx context.Context, msg *bridgev2.MatrixMut
 	return err
 }
 
+func (t *TelegramClient) onPinnedDialogs(ctx context.Context, msg *tg.UpdatePinnedDialogs) error {
+	needsUnpinning := map[networkid.PortalKey]struct{}{}
+	for _, portalID := range t.userLogin.Metadata.(*UserLoginMetadata).PinnedDialogs {
+		pt, id, err := ids.ParsePortalID(portalID)
+		if err != nil {
+			return err
+		}
+		needsUnpinning[t.makePortalKeyFromID(pt, id)] = struct{}{}
+	}
+	t.userLogin.Metadata.(*UserLoginMetadata).PinnedDialogs = nil
+
+	for _, d := range msg.Order {
+		dialog, ok := d.(*tg.DialogPeer)
+		if !ok {
+			continue
+		}
+		portalKey := t.makePortalKeyFromPeer(dialog.Peer)
+		delete(needsUnpinning, portalKey)
+		t.userLogin.Metadata.(*UserLoginMetadata).PinnedDialogs = append(t.userLogin.Metadata.(*UserLoginMetadata).PinnedDialogs, portalKey.ID)
+
+		t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.ChatResync{
+			ChatInfo: &bridgev2.ChatInfo{UserLocal: &bridgev2.UserLocalPortalInfo{
+				Tag: ptr.Ptr(event.RoomTagFavourite),
+			}},
+			EventMeta: simplevent.EventMeta{
+				Type:      bridgev2.RemoteEventChatResync,
+				PortalKey: portalKey,
+			},
+		})
+	}
+
+	var empty event.RoomTag
+	for portalKey := range needsUnpinning {
+		t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.ChatResync{
+			ChatInfo: &bridgev2.ChatInfo{UserLocal: &bridgev2.UserLocalPortalInfo{
+				Tag: &empty,
+			}},
+			EventMeta: simplevent.EventMeta{
+				Type:      bridgev2.RemoteEventChatResync,
+				PortalKey: portalKey,
+			},
+		})
+	}
+
+	return t.userLogin.Save(ctx)
+}
+
 func (t *TelegramClient) HandleRoomTag(ctx context.Context, msg *bridgev2.MatrixRoomTag) error {
 	inputPeer, err := t.inputPeerForPortalID(ctx, msg.Portal.ID)
 	if err != nil {

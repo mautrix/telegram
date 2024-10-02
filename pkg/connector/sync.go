@@ -13,6 +13,7 @@ import (
 	"maunium.net/go/mautrix/bridgev2/database"
 	"maunium.net/go/mautrix/bridgev2/networkid"
 	"maunium.net/go/mautrix/bridgev2/simplevent"
+	"maunium.net/go/mautrix/event"
 
 	"go.mau.fi/mautrix-telegram/pkg/connector/ids"
 )
@@ -40,7 +41,22 @@ func (t *TelegramClient) SyncChats(ctx context.Context) error {
 		return err
 	}
 
+	if err := t.resetPinnedDialogs(ctx, dialogs.GetDialogs()); err != nil {
+		return err
+	}
+
 	return t.handleDialogs(ctx, dialogs, t.main.Config.Sync.CreateLimit)
+}
+
+func (t *TelegramClient) resetPinnedDialogs(ctx context.Context, dialogs []tg.DialogClass) error {
+	t.userLogin.Metadata.(*UserLoginMetadata).PinnedDialogs = nil
+	for _, dialog := range dialogs {
+		if dialog.GetPinned() {
+			portalKey := t.makePortalKeyFromPeer(dialog.GetPeer())
+			t.userLogin.Metadata.(*UserLoginMetadata).PinnedDialogs = append(t.userLogin.Metadata.(*UserLoginMetadata).PinnedDialogs, portalKey.ID)
+		}
+	}
+	return t.userLogin.Save(ctx)
 }
 
 func (t *TelegramClient) handleDialogs(ctx context.Context, dialogs tg.ModifiedMessagesDialogs, createLimit int) error {
@@ -105,6 +121,9 @@ func (t *TelegramClient) handleDialogs(ctx context.Context, dialogs tg.ModifiedM
 			userLocalInfo.MutedUntil = ptr.Ptr(time.Unix(int64(mu), 0))
 		} else {
 			userLocalInfo.MutedUntil = &bridgev2.Unmuted
+		}
+		if dialog.Pinned {
+			userLocalInfo.Tag = ptr.Ptr(event.RoomTagFavourite)
 		}
 
 		t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.ChatResync{

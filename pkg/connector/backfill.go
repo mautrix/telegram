@@ -110,6 +110,14 @@ func (t *TelegramClient) takeoutDialogs(ctx context.Context, takeoutID int64) er
 			return nil
 		}
 
+		if req.OffsetPeer.TypeID() == tg.InputPeerEmptyTypeID {
+			// This is the first fetch of dialogs, reset the pinned dialogs
+			// based on the list.
+			if err := t.resetPinnedDialogs(ctx, dialogs.GetDialogs()); err != nil {
+				return err
+			}
+		}
+
 		err = t.handleDialogs(ctx, dialogs, -1)
 		if err != nil {
 			return fmt.Errorf("failed to handle dialogs: %w", err)

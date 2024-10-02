@@ -168,6 +168,8 @@ type UserLoginMetadata struct {
 
 	TakeoutDialogCrawlDone   bool               `json:"takeout_portal_crawl_done,omitempty"`
 	TakeoutDialogCrawlCursor networkid.PortalID `json:"takeout_portal_crawl_cursor,omitempty"`
+
+	PinnedDialogs []networkid.PortalID `json:"pinned_dialogs,omitempty"`
 }
 
 func (s *UserLoginSession) Load(_ context.Context) (*session.Data, error) {

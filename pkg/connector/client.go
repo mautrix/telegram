@@ -183,6 +183,9 @@ func NewTelegramClient(ctx context.Context, tc *TelegramConnector, login *bridge
 	dispatcher.OnNotifySettings(func(ctx context.Context, e tg.Entities, update *tg.UpdateNotifySettings) error {
 		return client.onNotifySettings(ctx, update)
 	})
+	dispatcher.OnPinnedDialogs(func(ctx context.Context, e tg.Entities, update *tg.UpdatePinnedDialogs) error {
+		return client.onPinnedDialogs(ctx, update)
+	})
 
 	client.ScopedStore = tc.Store.GetScopedStore(telegramUserID)
 
