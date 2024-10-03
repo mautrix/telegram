@@ -224,6 +224,7 @@ func (t *TelegramClient) onUpdateNewMessage(ctx context.Context, channels map[in
 		case *tg.MessageActionChannelCreate:
 			eventMeta.Type = bridgev2.RemoteEventChatResync
 			eventMeta.CreatePortal = true
+			modLevel := 50
 			t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.ChatResync{
 				EventMeta: eventMeta,
 				ChatInfo: &bridgev2.ChatInfo{
@@ -233,7 +234,11 @@ func (t *TelegramClient) onUpdateNewMessage(ctx context.Context, channels map[in
 							t.userID: {
 								EventSender: t.mySender(),
 								Membership:  event.MembershipJoin,
+								PowerLevel:  &modLevel,
 							},
+						},
+						PowerLevels: &bridgev2.PowerLevelOverrides{
+							EventsDefault: &modLevel,
 						},
 					},
 				},
@@ -816,4 +821,19 @@ func (t *TelegramClient) HandleRoomTag(ctx context.Context, msg *bridgev2.Matrix
 		Peer:   &tg.InputDialogPeer{Peer: inputPeer},
 	})
 	return err
+}
+
+func (t *TelegramClient) onChatDefaultBannedRights(ctx context.Context, entities tg.Entities, update *tg.UpdateChatDefaultBannedRights) error {
+	t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.ChatResync{
+		ChatInfo: &bridgev2.ChatInfo{
+			Members: &bridgev2.ChatMemberList{
+				PowerLevels: t.getPowerLevelOverridesFromBannedRights(entities.Chats[0], update.DefaultBannedRights),
+			},
+		},
+		EventMeta: simplevent.EventMeta{
+			Type:      bridgev2.RemoteEventChatResync,
+			PortalKey: t.makePortalKeyFromPeer(update.Peer),
+		},
+	})
+	return nil
 }

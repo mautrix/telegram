@@ -186,6 +186,9 @@ func NewTelegramClient(ctx context.Context, tc *TelegramConnector, login *bridge
 	dispatcher.OnPinnedDialogs(func(ctx context.Context, e tg.Entities, update *tg.UpdatePinnedDialogs) error {
 		return client.onPinnedDialogs(ctx, update)
 	})
+	dispatcher.OnChatDefaultBannedRights(func(ctx context.Context, e tg.Entities, update *tg.UpdateChatDefaultBannedRights) error {
+		return client.onChatDefaultBannedRights(ctx, e, update)
+	})
 
 	client.ScopedStore = tc.Store.GetScopedStore(telegramUserID)
 

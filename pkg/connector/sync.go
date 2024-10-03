@@ -66,6 +66,10 @@ func (t *TelegramClient) handleDialogs(ctx context.Context, dialogs tg.ModifiedM
 	for _, user := range dialogs.GetUsers() {
 		users[ids.MakeUserID(user.GetID())] = user
 	}
+	chats := map[int64]tg.ChatClass{}
+	for _, chat := range dialogs.GetChats() {
+		chats[chat.GetID()] = chat
+	}
 	messages := map[networkid.MessageID]tg.MessageClass{}
 	for _, message := range dialogs.GetMessages() {
 		messages[ids.GetMessageIDFromMessage(message)] = message
@@ -99,6 +103,38 @@ func (t *TelegramClient) handleDialogs(ctx context.Context, dialogs tg.ModifiedM
 			}
 		}
 
+		var members bridgev2.ChatMemberList
+		switch peer := dialog.Peer.(type) {
+		case *tg.PeerUser:
+			if users[ids.MakeUserID(peer.UserID)].(*tg.User).GetDeleted() {
+				log.Debug().Msg("Not syncing portal because user is deleted")
+				continue
+			}
+		case *tg.PeerChat:
+			members.PowerLevels = t.getGroupChatPowerLevels(chats[peer.ChatID])
+		case *tg.PeerChannel:
+			members.PowerLevels = t.getGroupChatPowerLevels(chats[peer.ChannelID])
+			if !portal.Metadata.(*PortalMetadata).IsSuperGroup {
+				// Add the channel user
+				sender := ids.MakeChannelUserID(peer.ChannelID)
+				members.MemberMap = map[networkid.UserID]bridgev2.ChatMember{
+					sender: bridgev2.ChatMember{
+						EventSender: bridgev2.EventSender{Sender: sender},
+						PowerLevel:  modPowerLevel,
+					},
+				}
+				if chats[peer.ChannelID].(*tg.Channel).AdminRights.PostMessages {
+					members.MemberMap = map[networkid.UserID]bridgev2.ChatMember{
+						t.userID: bridgev2.ChatMember{
+							EventSender: t.mySender(),
+							PowerLevel:  modPowerLevel,
+						},
+					}
+				}
+			}
+
+		}
+
 		if portal == nil || portal.MXID == "" {
 			// Check what the latest message is
 			topMessage := messages[ids.MakeMessageID(dialog.Peer, dialog.TopMessage)]
@@ -127,7 +163,11 @@ func (t *TelegramClient) handleDialogs(ctx context.Context, dialogs tg.ModifiedM
 		}
 
 		t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.ChatResync{
-			ChatInfo: &bridgev2.ChatInfo{Name: &portal.Name, UserLocal: &userLocalInfo},
+			ChatInfo: &bridgev2.ChatInfo{
+				Name:      &portal.Name,
+				UserLocal: &userLocalInfo,
+				Members:   &members,
+			},
 			EventMeta: simplevent.EventMeta{
 				Type: bridgev2.RemoteEventChatResync,
 				LogContext: func(c zerolog.Context) zerolog.Context {

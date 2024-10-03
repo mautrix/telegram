@@ -10,10 +10,67 @@ import (
 	"maunium.net/go/mautrix/bridgev2"
 	"maunium.net/go/mautrix/bridgev2/database"
 	"maunium.net/go/mautrix/bridgev2/networkid"
+	"maunium.net/go/mautrix/event"
 
 	"go.mau.fi/mautrix-telegram/pkg/connector/ids"
 	"go.mau.fi/mautrix-telegram/pkg/connector/media"
 )
+
+var (
+	anyonePowerLevel     = ptr.Ptr(0)
+	modPowerLevel        = ptr.Ptr(50)
+	superadminPowerLevel = ptr.Ptr(75)
+	creatorPowerLevel    = ptr.Ptr(95)
+
+	otherPowerLevel          = ptr.Ptr(40)
+	anonymousPowerLevel      = ptr.Ptr(41)
+	postMessagesPowerLevel   = ptr.Ptr(42)
+	editMessagesPowerLevel   = ptr.Ptr(43)
+	deleteMessagesPowerLevel = ptr.Ptr(44)
+	postStoriesPowerLevel    = ptr.Ptr(45)
+	editStoriesPowerLevel    = ptr.Ptr(46)
+	deleteStoriesPowerLevel  = ptr.Ptr(47)
+	changeInfoPowerLevel     = ptr.Ptr(50)
+	inviteUsersPowerLevel    = ptr.Ptr(51)
+	manageCallPowerLevel     = ptr.Ptr(52)
+	pinMessagesPowerLevel    = ptr.Ptr(53)
+	manageTopicsPowerLevel   = ptr.Ptr(54)
+	banUsersPowerLevel       = ptr.Ptr(55)
+	addAdminsPowerLevel      = ptr.Ptr(60)
+)
+
+func adminRightsToPowerLevel(rights tg.ChatAdminRights) *int {
+	if rights.AddAdmins {
+		return addAdminsPowerLevel
+	} else if rights.BanUsers {
+		return banUsersPowerLevel
+	} else if rights.ManageTopics {
+		return manageTopicsPowerLevel
+	} else if rights.PinMessages {
+		return pinMessagesPowerLevel
+	} else if rights.ManageCall {
+		return manageCallPowerLevel
+	} else if rights.InviteUsers {
+		return inviteUsersPowerLevel
+	} else if rights.ChangeInfo {
+		return changeInfoPowerLevel
+	} else if rights.DeleteStories {
+		return deleteStoriesPowerLevel
+	} else if rights.EditStories {
+		return editStoriesPowerLevel
+	} else if rights.PostStories {
+		return postStoriesPowerLevel
+	} else if rights.DeleteMessages {
+		return deleteMessagesPowerLevel
+	} else if rights.EditMessages {
+		return editMessagesPowerLevel
+	} else if rights.PostMessages {
+		return postMessagesPowerLevel
+	} else if rights.Anonymous {
+		return anonymousPowerLevel
+	}
+	return otherPowerLevel
+}
 
 func (t *TelegramClient) getDMChatInfo(userID int64) (*bridgev2.ChatInfo, error) {
 	networkUserID := ids.MakeUserID(userID)
@@ -100,15 +157,28 @@ func (t *TelegramClient) avatarFromPhoto(photo tg.PhotoClass) *bridgev2.Avatar {
 	}
 }
 
-func (t *TelegramClient) filterChannelParticipants(chatParticipants []tg.ChannelParticipantClass, limit int) (members []bridgev2.ChatMember) {
-	for _, u := range chatParticipants {
-		userIDable, ok := u.(interface{ GetUserID() int64 })
-		if !ok {
+func (t *TelegramClient) filterChannelParticipants(participants []tg.ChannelParticipantClass, limit int) (members []bridgev2.ChatMember) {
+	for _, u := range participants {
+		var userID int64
+		var powerLevel *int
+		switch participant := u.(type) {
+		case *tg.ChannelParticipant:
+			userID = participant.GetUserID()
+		case *tg.ChannelParticipantSelf:
+			userID = participant.GetUserID()
+		case *tg.ChannelParticipantCreator:
+			userID = participant.GetUserID()
+			powerLevel = creatorPowerLevel
+		case *tg.ChannelParticipantAdmin:
+			userID = participant.GetUserID()
+			powerLevel = adminRightsToPowerLevel(participant.AdminRights)
+		default:
 			continue
 		}
 
 		members = append(members, bridgev2.ChatMember{
-			EventSender: t.senderForUserID(userIDable.GetUserID()),
+			EventSender: t.senderForUserID(userID),
+			PowerLevel:  powerLevel,
 		})
 
 		if len(members) >= limit {
@@ -163,8 +233,17 @@ func (t *TelegramClient) GetChatInfo(ctx context.Context, portal *bridgev2.Porta
 				continue
 			}
 
+			var powerLevel *int
+			switch user.(type) {
+			case *tg.ChatParticipantCreator:
+				powerLevel = creatorPowerLevel
+			case *tg.ChatParticipantAdmin:
+				powerLevel = modPowerLevel
+			}
+
 			chatInfo.Members.MemberMap[ids.MakeUserID(user.GetUserID())] = bridgev2.ChatMember{
 				EventSender: t.senderForUserID(user.GetUserID()),
+				PowerLevel:  powerLevel,
 			}
 
 			if len(chatInfo.Members.MemberMap) >= t.main.Config.MemberList.NormalizedMaxInitialSync() {
@@ -207,14 +286,13 @@ func (t *TelegramClient) GetChatInfo(ctx context.Context, portal *bridgev2.Porta
 		// TODO save emojiset?
 
 		chatInfo.Members.IsFull = false
+		chatInfo.Members.PowerLevels = t.getGroupChatPowerLevels(fullChat.GetChats()[0])
 		if !portal.Metadata.(*PortalMetadata).IsSuperGroup {
 			// Add the channel user
-			sender := ids.MakeUserID(id)
+			sender := ids.MakeChannelUserID(id)
 			chatInfo.Members.MemberMap[sender] = bridgev2.ChatMember{
-				EventSender: bridgev2.EventSender{
-					SenderLogin: ids.MakeUserLoginID(id),
-					Sender:      sender,
-				},
+				EventSender: bridgev2.EventSender{Sender: sender},
+				PowerLevel:  superadminPowerLevel,
 			}
 		}
 
@@ -297,4 +375,67 @@ func (t *TelegramClient) GetChatInfo(ctx context.Context, portal *bridgev2.Porta
 	default:
 		panic(fmt.Sprintf("unsupported peer type %s", peerType))
 	}
+}
+
+func (t *TelegramClient) getGroupChatPowerLevels(entity tg.ChatClass) *bridgev2.PowerLevelOverrides {
+	dbrAble, ok := entity.(interface {
+		GetDefaultBannedRights() (tg.ChatBannedRights, bool)
+	})
+	if !ok {
+		panic(fmt.Sprintf("unsupported chat type %T", entity))
+	}
+	dbr, ok := dbrAble.GetDefaultBannedRights()
+	if !ok {
+		dbr = tg.ChatBannedRights{
+			InviteUsers:  true,
+			ChangeInfo:   true,
+			PinMessages:  true,
+			SendStickers: false,
+			SendMessages: false,
+		}
+	}
+	return t.getPowerLevelOverridesFromBannedRights(entity, dbr)
+}
+
+func (t *TelegramClient) getPowerLevelOverridesFromBannedRights(entity tg.ChatClass, dbr tg.ChatBannedRights) *bridgev2.PowerLevelOverrides {
+	var plo bridgev2.PowerLevelOverrides
+	plo.Ban = banUsersPowerLevel
+	plo.Kick = banUsersPowerLevel
+	plo.Redact = deleteMessagesPowerLevel
+	if dbr.InviteUsers {
+		plo.Invite = inviteUsersPowerLevel
+	} else {
+		plo.Invite = anyonePowerLevel
+	}
+	plo.StateDefault = superadminPowerLevel
+	plo.UsersDefault = anyonePowerLevel
+	if c, ok := entity.(*tg.Channel); (ok && !c.Megagroup) || dbr.SendMessages {
+		plo.EventsDefault = postMessagesPowerLevel
+	} else {
+		plo.EventsDefault = anyonePowerLevel
+	}
+
+	plo.Events = map[event.Type]int{
+		event.StateEncryption:        99,
+		event.StateTombstone:         99,
+		event.StatePowerLevels:       85,
+		event.StateHistoryVisibility: 85,
+	}
+
+	if dbr.ChangeInfo {
+		plo.Events[event.StateRoomName] = *changeInfoPowerLevel
+		plo.Events[event.StateRoomAvatar] = *changeInfoPowerLevel
+		plo.Events[event.StateTopic] = *changeInfoPowerLevel
+	}
+
+	if dbr.PinMessages {
+		plo.Events[event.StatePinnedEvents] = *pinMessagesPowerLevel
+	} else {
+		plo.Events[event.StatePinnedEvents] = 0
+	}
+
+	if dbr.SendStickers {
+		plo.Events[event.EventSticker] = *postMessagesPowerLevel
+	}
+	return &plo
 }
