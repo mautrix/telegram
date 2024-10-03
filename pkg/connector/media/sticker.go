@@ -5,11 +5,13 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
 
 	"github.com/rs/zerolog"
 	"go.mau.fi/util/ffmpeg"
 	"go.mau.fi/util/lottie"
+	"go.mau.fi/util/random"
 )
 
 type AnimatedStickerConfig struct {
@@ -63,13 +65,17 @@ func (c AnimatedStickerConfig) convert(ctx context.Context, data []byte) Convert
 		err = lottie.Convert(ctx, input, "", outputWriter, c.Target, c.Args.Width, c.Args.Height, strconv.Itoa(c.Args.FPS))
 		convertedData = outputWriter.Bytes()
 	case "webm", "webp":
+		tmpFile := filepath.Join(os.TempDir(), fmt.Sprintf("mautrix-telegram-lottieconverter-%s.%s", random.String(10), c.Target))
+		defer func() {
+			_ = os.Remove(tmpFile)
+		}()
 		thumbnailMIMEType = "image/png"
 		mimeType = "image/" + c.Target
-		thumbnailData, err = lottie.FFmpegConvert(ctx, input, c.Target, c.Args.Width, c.Args.Height, c.Args.FPS)
+		thumbnailData, err = lottie.FFmpegConvert(ctx, input, tmpFile, c.Args.Width, c.Args.Height, c.Args.FPS)
 		if err != nil {
 			break
 		}
-		convertedData, err = os.ReadFile(c.Target)
+		convertedData, err = os.ReadFile(tmpFile)
 	default:
 		err = fmt.Errorf("unsupported target format %s", c.Target)
 	}
