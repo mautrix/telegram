@@ -146,6 +146,7 @@ type GhostMetadata struct {
 
 type PortalMetadata struct {
 	IsSuperGroup bool `json:"is_supergroup,omitempty"`
+	ReadUpTo     int  `json:"read_up_to,omitempty"`
 }
 
 type MessageMetadata struct {

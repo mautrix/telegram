@@ -94,6 +94,9 @@ func (t *TelegramClient) handleDialogs(ctx context.Context, dialogs tg.ModifiedM
 			log.Err(err).Msg("Failed to get portal")
 			continue
 		}
+		if dialog.UnreadCount == 0 && !dialog.UnreadMark {
+			portal.Metadata.(*PortalMetadata).ReadUpTo = dialog.TopMessage
+		}
 
 		// If this is a DM, make sure that the user isn't deleted.
 		if user, ok := dialog.Peer.(*tg.PeerUser); ok {

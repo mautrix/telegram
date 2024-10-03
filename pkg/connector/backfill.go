@@ -218,8 +218,16 @@ func (t *TelegramClient) FetchMessages(ctx context.Context, fetchParams bridgev2
 		return nil, err
 	}
 
-	var markRead bool // TODO implement
 	messages := msgs.GetMessages()
+
+	portal, err := t.main.Bridge.GetPortalByKey(ctx, fetchParams.Portal.PortalKey)
+	if err != nil {
+		return nil, err
+	}
+
+	// If the first message is the last read message, mark the chat as read
+	// during backfill.
+	markRead := fetchParams.Forward && portal.Metadata.(*PortalMetadata).ReadUpTo == messages[0].GetID()
 
 	var cursor networkid.PaginationCursor
 	if len(messages) > 0 {
@@ -247,11 +255,6 @@ func (t *TelegramClient) FetchMessages(ctx context.Context, fetchParams bridgev2
 			continue
 		}
 		message := msg.(*tg.Message)
-
-		portal, err := t.main.Bridge.GetPortalByKey(ctx, fetchParams.Portal.PortalKey)
-		if err != nil {
-			return nil, err
-		}
 
 		sender := t.getEventSender(message)
 		intent := portal.GetIntentFor(ctx, sender, t.userLogin, bridgev2.RemoteEventBackfill)
