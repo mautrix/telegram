@@ -46,6 +46,10 @@ func (t *TelegramClient) getResolveIdentifierResponseForUserID(ctx context.Conte
 		// Try to fetch the user from Telegram
 		if user, err := t.getSingleUser(ctx, userID); err != nil {
 			return nil, fmt.Errorf("failed to get user with ID %d: %w", userID, err)
+		} else if user.TypeID() != tg.UserTypeID {
+			return nil, err
+		} else if _, err := t.updateGhost(ctx, userID, user.(*tg.User)); err != nil {
+			return nil, fmt.Errorf("failed to update ghost: %w", err)
 		} else {
 			return t.getResolveIdentifierResponseForUser(ctx, user)
 		}

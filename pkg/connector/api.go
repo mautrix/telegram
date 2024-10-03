@@ -37,7 +37,7 @@ func handleUserUpdates[U hasUserUpdates](ctx context.Context, t *TelegramClient,
 func handleChatUpdates[U hasChatUpdates](ctx context.Context, t *TelegramClient, resp hasChatUpdates) error {
 	for _, c := range resp.GetChats() {
 		if channel, ok := c.(*tg.Channel); ok {
-			if err := t.updateChannel(ctx, channel); err != nil {
+			if _, err := t.updateChannel(ctx, channel); err != nil {
 				return err
 			}
 		}

@@ -457,18 +457,51 @@ func (t *TelegramClient) getSingleUser(ctx context.Context, id int64) (tg.UserCl
 	}
 }
 
-// TODO make work for channel peers (necessary for forward backfill)
-func (t *TelegramClient) GetUserInfo(ctx context.Context, ghost *bridgev2.Ghost) (*bridgev2.UserInfo, error) {
-	if peerType, id, err := ids.ParseUserID(ghost.ID); err != nil {
+func (t *TelegramClient) getSingleChannel(ctx context.Context, id int64) (*tg.Channel, error) {
+	accessHash, err := t.ScopedStore.GetAccessHash(ctx, ids.PeerTypeChannel, id)
+	if err != nil {
 		return nil, err
-	} else if peerType != ids.PeerTypeUser {
-		return nil, fmt.Errorf("unexpected peer type: %s", peerType)
-	} else if user, err := t.getSingleUser(ctx, id); err != nil {
-		return nil, fmt.Errorf("failed to get user %d: %w", id, err)
-	} else if user.TypeID() != tg.UserTypeID {
+	}
+	chats, err := APICallWithOnlyChatUpdates(ctx, t, func() (tg.MessagesChatsClass, error) {
+		return t.client.API().ChannelsGetChannels(ctx, []tg.InputChannelClass{
+			&tg.InputChannel{ChannelID: id, AccessHash: accessHash},
+		})
+	})
+	if err != nil {
 		return nil, err
+	} else if len(chats.GetChats()) == 0 {
+		return nil, fmt.Errorf("failed to get channel info for channel %d", id)
+	} else if channel, ok := chats.GetChats()[0].(*tg.Channel); !ok {
+		return nil, fmt.Errorf("unexpected channel type %T", chats.GetChats()[id])
 	} else {
-		return t.updateGhost(ctx, id, user.(*tg.User))
+		return channel, nil
+	}
+}
+
+func (t *TelegramClient) GetUserInfo(ctx context.Context, ghost *bridgev2.Ghost) (*bridgev2.UserInfo, error) {
+	peerType, id, err := ids.ParseUserID(ghost.ID)
+	if err != nil {
+		return nil, err
+	}
+	switch peerType {
+	case ids.PeerTypeUser:
+		if user, err := t.getSingleUser(ctx, id); err != nil {
+			return nil, fmt.Errorf("failed to get user %d: %w", id, err)
+		} else if user.TypeID() != tg.UserTypeID {
+			return nil, err
+		} else {
+			return t.updateGhost(ctx, id, user.(*tg.User))
+		}
+	case ids.PeerTypeChannel:
+		if channel, err := t.getSingleChannel(ctx, id); err != nil {
+			return nil, fmt.Errorf("failed to get channel %d: %w", id, err)
+		} else if channel.TypeID() != tg.ChannelTypeID {
+			return nil, err
+		} else {
+			return t.updateChannel(ctx, channel)
+		}
+	default:
+		return nil, fmt.Errorf("unexpected peer type: %s", peerType)
 	}
 }
 
