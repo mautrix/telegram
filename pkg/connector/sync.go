@@ -104,37 +104,50 @@ func (t *TelegramClient) handleDialogs(ctx context.Context, dialogs tg.ModifiedM
 		}
 		chatInfo := bridgev2.ChatInfo{
 			UserLocal: &bridgev2.UserLocalPortalInfo{},
-			Members:   &bridgev2.ChatMemberList{},
+			Members: &bridgev2.ChatMemberList{
+				MemberMap: map[networkid.UserID]bridgev2.ChatMember{
+					t.userID: bridgev2.ChatMember{
+						EventSender: t.mySender(),
+						Membership:  event.MembershipJoin,
+					},
+				},
+			},
 		}
 
 		switch peer := dialog.Peer.(type) {
 		case *tg.PeerUser:
-			if users[ids.MakeUserID(peer.UserID)].(*tg.User).GetDeleted() {
+			userID := ids.MakeUserID(peer.UserID)
+			if users[userID].(*tg.User).GetDeleted() {
 				log.Debug().Msg("Not syncing portal because user is deleted")
 				continue
+			}
+			chatInfo.Members.MemberMap[userID] = bridgev2.ChatMember{
+				EventSender: t.senderForUserID(peer.UserID),
+				Membership:  event.MembershipJoin,
 			}
 		case *tg.PeerChat:
 			chatInfo.Members.PowerLevels = t.getGroupChatPowerLevels(chats[peer.ChatID])
 			chatInfo.Name = &chats[peer.ChatID].(*tg.Chat).Title
 		case *tg.PeerChannel:
-			chatInfo.Name = &chats[peer.ChannelID].(*tg.Channel).Title
-			chatInfo.Members.PowerLevels = t.getGroupChatPowerLevels(chats[peer.ChannelID])
+			channel := chats[peer.ChannelID].(*tg.Channel)
+			chatInfo.Name = &channel.Title
+			chatInfo.Members.PowerLevels = t.getGroupChatPowerLevels(channel)
 			if !portal.Metadata.(*PortalMetadata).IsSuperGroup {
 				// Add the channel user
 				sender := ids.MakeChannelUserID(peer.ChannelID)
 				chatInfo.Members.MemberMap = map[networkid.UserID]bridgev2.ChatMember{
 					sender: bridgev2.ChatMember{
 						EventSender: bridgev2.EventSender{Sender: sender},
-						PowerLevel:  modPowerLevel,
+						Membership:  event.MembershipJoin,
+						PowerLevel:  superadminPowerLevel,
 					},
 				}
-				if chats[peer.ChannelID].(*tg.Channel).AdminRights.PostMessages {
-					chatInfo.Members.MemberMap = map[networkid.UserID]bridgev2.ChatMember{
-						t.userID: bridgev2.ChatMember{
-							EventSender: t.mySender(),
-							PowerLevel:  modPowerLevel,
-						},
-					}
+				chatInfo.Members.MemberMap = map[networkid.UserID]bridgev2.ChatMember{
+					t.userID: bridgev2.ChatMember{
+						EventSender: t.mySender(),
+						Membership:  event.MembershipJoin,
+						PowerLevel:  adminRightsToPowerLevel(channel.AdminRights),
+					},
 				}
 			}
 
