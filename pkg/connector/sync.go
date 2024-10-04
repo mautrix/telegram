@@ -102,8 +102,11 @@ func (t *TelegramClient) handleDialogs(ctx context.Context, dialogs tg.ModifiedM
 				continue
 			}
 		}
+		chatInfo := bridgev2.ChatInfo{
+			UserLocal: &bridgev2.UserLocalPortalInfo{},
+			Members:   &bridgev2.ChatMemberList{},
+		}
 
-		var members bridgev2.ChatMemberList
 		switch peer := dialog.Peer.(type) {
 		case *tg.PeerUser:
 			if users[ids.MakeUserID(peer.UserID)].(*tg.User).GetDeleted() {
@@ -111,20 +114,22 @@ func (t *TelegramClient) handleDialogs(ctx context.Context, dialogs tg.ModifiedM
 				continue
 			}
 		case *tg.PeerChat:
-			members.PowerLevels = t.getGroupChatPowerLevels(chats[peer.ChatID])
+			chatInfo.Members.PowerLevels = t.getGroupChatPowerLevels(chats[peer.ChatID])
+			chatInfo.Name = &chats[peer.ChatID].(*tg.Chat).Title
 		case *tg.PeerChannel:
-			members.PowerLevels = t.getGroupChatPowerLevels(chats[peer.ChannelID])
+			chatInfo.Name = &chats[peer.ChannelID].(*tg.Channel).Title
+			chatInfo.Members.PowerLevels = t.getGroupChatPowerLevels(chats[peer.ChannelID])
 			if !portal.Metadata.(*PortalMetadata).IsSuperGroup {
 				// Add the channel user
 				sender := ids.MakeChannelUserID(peer.ChannelID)
-				members.MemberMap = map[networkid.UserID]bridgev2.ChatMember{
+				chatInfo.Members.MemberMap = map[networkid.UserID]bridgev2.ChatMember{
 					sender: bridgev2.ChatMember{
 						EventSender: bridgev2.EventSender{Sender: sender},
 						PowerLevel:  modPowerLevel,
 					},
 				}
 				if chats[peer.ChannelID].(*tg.Channel).AdminRights.PostMessages {
-					members.MemberMap = map[networkid.UserID]bridgev2.ChatMember{
+					chatInfo.Members.MemberMap = map[networkid.UserID]bridgev2.ChatMember{
 						t.userID: bridgev2.ChatMember{
 							EventSender: t.mySender(),
 							PowerLevel:  modPowerLevel,
@@ -152,22 +157,17 @@ func (t *TelegramClient) handleDialogs(ctx context.Context, dialogs tg.ModifiedM
 			}
 		}
 
-		var userLocalInfo bridgev2.UserLocalPortalInfo
 		if mu, ok := dialog.NotifySettings.GetMuteUntil(); ok {
-			userLocalInfo.MutedUntil = ptr.Ptr(time.Unix(int64(mu), 0))
+			chatInfo.UserLocal.MutedUntil = ptr.Ptr(time.Unix(int64(mu), 0))
 		} else {
-			userLocalInfo.MutedUntil = &bridgev2.Unmuted
+			chatInfo.UserLocal.MutedUntil = &bridgev2.Unmuted
 		}
 		if dialog.Pinned {
-			userLocalInfo.Tag = ptr.Ptr(event.RoomTagFavourite)
+			chatInfo.UserLocal.Tag = ptr.Ptr(event.RoomTagFavourite)
 		}
 
 		t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.ChatResync{
-			ChatInfo: &bridgev2.ChatInfo{
-				Name:      &portal.Name,
-				UserLocal: &userLocalInfo,
-				Members:   &members,
-			},
+			ChatInfo: &chatInfo,
 			EventMeta: simplevent.EventMeta{
 				Type: bridgev2.RemoteEventChatResync,
 				LogContext: func(c zerolog.Context) zerolog.Context {
@@ -179,7 +179,7 @@ func (t *TelegramClient) handleDialogs(ctx context.Context, dialogs tg.ModifiedM
 			CheckNeedsBackfillFunc: func(ctx context.Context, latestMessage *database.Message) (bool, error) {
 				_, latestMessageID, err := ids.ParseMessageID(latestMessage.ID)
 				if err != nil {
-					return false, err
+					panic(err)
 				}
 				return dialog.TopMessage > latestMessageID, nil
 			},
