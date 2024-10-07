@@ -89,8 +89,6 @@ func (t *TelegramClient) ResolveIdentifier(ctx context.Context, identifier strin
 		if entityType == ids.PeerTypeUser && (err == nil || userID != 0) {
 			// We know this username.
 			return t.getResolveIdentifierResponseForUserID(ctx, userID)
-		} else if entityType != ids.PeerTypeUser {
-			return nil, fmt.Errorf("unexpected peer type: %s", entityType)
 		} else {
 			// We don't know this username, try to resolve the username from
 			// Telegram.
