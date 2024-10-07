@@ -106,7 +106,8 @@ func (t *TelegramClient) handleDialogs(ctx context.Context, dialogs tg.ModifiedM
 			}
 		}
 		chatInfo := bridgev2.ChatInfo{
-			UserLocal: &bridgev2.UserLocalPortalInfo{},
+			CanBackfill: true,
+			UserLocal:   &bridgev2.UserLocalPortalInfo{},
 			Members: &bridgev2.ChatMemberList{
 				MemberMap: map[networkid.UserID]bridgev2.ChatMember{
 					t.userID: bridgev2.ChatMember{

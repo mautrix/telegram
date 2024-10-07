@@ -218,6 +218,7 @@ func (t *TelegramClient) onUpdateNewMessage(ctx context.Context, channels map[in
 						TotalMemberCount: len(action.Users),
 						MemberMap:        memberMap,
 					},
+					CanBackfill: true,
 				},
 			})
 
@@ -241,6 +242,7 @@ func (t *TelegramClient) onUpdateNewMessage(ctx context.Context, channels map[in
 							EventsDefault: &modLevel,
 						},
 					},
+					CanBackfill: true,
 				},
 			})
 		// case *tg.MessageActionChatMigrateTo:
@@ -739,9 +741,12 @@ func (t *TelegramClient) onNotifySettings(ctx context.Context, update *tg.Update
 	}
 
 	t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.ChatResync{
-		ChatInfo: &bridgev2.ChatInfo{UserLocal: &bridgev2.UserLocalPortalInfo{
-			MutedUntil: mutedUntil,
-		}},
+		ChatInfo: &bridgev2.ChatInfo{
+			UserLocal: &bridgev2.UserLocalPortalInfo{
+				MutedUntil: mutedUntil,
+			},
+			CanBackfill: true,
+		},
 		EventMeta: simplevent.EventMeta{
 			Type:      bridgev2.RemoteEventChatResync,
 			PortalKey: t.makePortalKeyFromPeer(update.Peer.(*tg.NotifyPeer).Peer),
@@ -785,9 +790,12 @@ func (t *TelegramClient) onPinnedDialogs(ctx context.Context, msg *tg.UpdatePinn
 		t.userLogin.Metadata.(*UserLoginMetadata).PinnedDialogs = append(t.userLogin.Metadata.(*UserLoginMetadata).PinnedDialogs, portalKey.ID)
 
 		t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.ChatResync{
-			ChatInfo: &bridgev2.ChatInfo{UserLocal: &bridgev2.UserLocalPortalInfo{
-				Tag: ptr.Ptr(event.RoomTagFavourite),
-			}},
+			ChatInfo: &bridgev2.ChatInfo{
+				UserLocal: &bridgev2.UserLocalPortalInfo{
+					Tag: ptr.Ptr(event.RoomTagFavourite),
+				},
+				CanBackfill: true,
+			},
 			EventMeta: simplevent.EventMeta{
 				Type:      bridgev2.RemoteEventChatResync,
 				PortalKey: portalKey,
@@ -798,9 +806,12 @@ func (t *TelegramClient) onPinnedDialogs(ctx context.Context, msg *tg.UpdatePinn
 	var empty event.RoomTag
 	for portalKey := range needsUnpinning {
 		t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.ChatResync{
-			ChatInfo: &bridgev2.ChatInfo{UserLocal: &bridgev2.UserLocalPortalInfo{
-				Tag: &empty,
-			}},
+			ChatInfo: &bridgev2.ChatInfo{
+				UserLocal: &bridgev2.UserLocalPortalInfo{
+					Tag: &empty,
+				},
+				CanBackfill: true,
+			},
 			EventMeta: simplevent.EventMeta{
 				Type:      bridgev2.RemoteEventChatResync,
 				PortalKey: portalKey,
@@ -830,6 +841,7 @@ func (t *TelegramClient) onChatDefaultBannedRights(ctx context.Context, entities
 			Members: &bridgev2.ChatMemberList{
 				PowerLevels: t.getPowerLevelOverridesFromBannedRights(entities.Chats[0], update.DefaultBannedRights),
 			},
+			CanBackfill: true,
 		},
 		EventMeta: simplevent.EventMeta{
 			Type:      bridgev2.RemoteEventChatResync,
