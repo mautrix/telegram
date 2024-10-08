@@ -30,6 +30,11 @@ animated_sticker:
         height: 256
         fps: 25 # only for webm, webp and gif (2, 5, 10, 20 or 25 recommended)
 
+# Should view-once messages be disabled entirely?
+disable_view_once: false
+# Should disappearing messages be disabled entirely?
+disable_disappearing: false
+
 # Settings for syncing the member list for portals.
 member_list:
     # Maximum number of members to sync per portal when starting up. Other
