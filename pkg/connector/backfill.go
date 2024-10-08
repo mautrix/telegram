@@ -195,12 +195,17 @@ func (t *TelegramClient) FetchMessages(ctx context.Context, fetchParams bridgev2
 		Peer:  peer,
 		Limit: fetchParams.Count,
 	}
-	if fetchParams.AnchorMessage != nil && !fetchParams.Forward {
-		_, req.MaxID, err = ids.ParseMessageID(fetchParams.AnchorMessage.ID)
+	if fetchParams.AnchorMessage != nil {
+		if fetchParams.Forward {
+			_, req.MinID, err = ids.ParseMessageID(fetchParams.AnchorMessage.ID)
+		} else {
+			_, req.MaxID, err = ids.ParseMessageID(fetchParams.AnchorMessage.ID)
+		}
 		if err != nil {
 			return nil, err
 		}
 	}
+	log.Info().Any("req", req).Msg("Fetching messages")
 	msgs, err := APICallWithUpdates(ctx, t, func() (tg.ModifiedMessagesMessages, error) {
 		var rawMsgs tg.MessagesMessagesClass
 		if fetchParams.Forward {
@@ -254,6 +259,7 @@ func (t *TelegramClient) FetchMessages(ctx context.Context, fetchParams bridgev2
 		// If we are doing forward backfill and we get to the anchor message,
 		// don't convert any more messages.
 		if stopAt > 0 && msg.GetID() <= stopAt {
+			log.Debug().Int("stop_at", stopAt).Int("message_id", msg.GetID()).Msg("stopping at anchor message")
 			break
 		}
 
