@@ -313,6 +313,11 @@ func (c *TelegramClient) convertMediaRequiringUpload(ctx context.Context, portal
 			}
 		}
 
+		// Strip filename if it's a sticker
+		if isSticker {
+			content.FileName = ""
+		}
+
 		if isVideoGif {
 			extraInfo["fi.mau.gif"] = true
 			extraInfo["fi.mau.loop"] = true
