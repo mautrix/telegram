@@ -166,6 +166,22 @@ func (c *TelegramClient) convertToMatrix(ctx context.Context, portal *bridgev2.P
 		}
 	}
 
+	if disappearingSetting == nil {
+		// The TTL is either included in the message, or it's on the portal's
+		// metadata.
+		if ttl, ok := msg.GetTTLPeriod(); ok {
+			cm.Disappear = database.DisappearingSetting{
+				Type:  database.DisappearingTypeAfterSend,
+				Timer: time.Duration(ttl) * time.Second,
+			}
+		} else if portal.Metadata.(*PortalMetadata).MessagesTTL > 0 {
+			cm.Disappear = database.DisappearingSetting{
+				Type:  database.DisappearingTypeAfterSend,
+				Timer: time.Duration(ttl) * time.Second,
+			}
+		}
+	}
+
 	return
 }
 

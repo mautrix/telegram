@@ -262,7 +262,18 @@ func (t *TelegramClient) onUpdateNewMessage(ctx context.Context, channels map[in
 		// case *tg.MessageActionGeoProximityReached:
 		// case *tg.MessageActionGroupCall:
 		// case *tg.MessageActionInviteToGroupCall:
-		// case *tg.MessageActionSetMessagesTTL:
+		case *tg.MessageActionSetMessagesTTL:
+			eventMeta.Type = bridgev2.RemoteEventChatResync
+			t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.ChatResync{
+				EventMeta: eventMeta,
+				ChatInfo: &bridgev2.ChatInfo{
+					ExtraUpdates: func(ctx context.Context, p *bridgev2.Portal) bool {
+						updated := p.Portal.Metadata.(*PortalMetadata).MessagesTTL != action.Period
+						p.Portal.Metadata.(*PortalMetadata).MessagesTTL = action.Period
+						return updated
+					},
+				},
+			})
 		// case *tg.MessageActionGroupCallScheduled:
 		// case *tg.MessageActionSetChatTheme:
 		// case *tg.MessageActionChatJoinedByRequest:
