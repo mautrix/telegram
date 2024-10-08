@@ -93,11 +93,18 @@ func (t *TelegramClient) takeoutDialogs(ctx context.Context, takeoutID int64) er
 	}
 	for {
 		log.Info().Stringer("cursor", req.OffsetPeer).Msg("Fetching dialogs")
-		dialogs, err := APICallWithUpdates(ctx, t, func() (*tg.MessagesDialogs, error) {
-			var dialogs tg.MessagesDialogs
-			return &dialogs, t.client.Invoke(ctx,
+		dialogs, err := APICallWithUpdates(ctx, t, func() (tg.ModifiedMessagesDialogs, error) {
+			var dialogs tg.MessagesDialogsBox
+			err := t.client.Invoke(ctx,
 				&tg.InvokeWithTakeoutRequest{TakeoutID: takeoutID, Query: &req},
 				&dialogs)
+			if err != nil {
+				return nil, err
+			} else if modified, ok := dialogs.Dialogs.AsModified(); !ok {
+				return nil, fmt.Errorf("unexpected response type: %T", dialogs.Dialogs)
+			} else {
+				return modified, nil
+			}
 		})
 		if err != nil {
 			return fmt.Errorf("failed to get dialogs: %w", err)
@@ -302,7 +309,7 @@ func (t *TelegramClient) FetchMessages(ctx context.Context, fetchParams bridgev2
 	return &bridgev2.FetchMessagesResponse{
 		Messages: backfillMessages,
 		Cursor:   cursor,
-		HasMore:  len(messages) == fetchParams.Count,
+		HasMore:  len(backfillMessages) > 0,
 		Forward:  fetchParams.Forward,
 		MarkRead: markRead,
 	}, nil

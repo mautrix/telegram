@@ -133,7 +133,11 @@ func (t *TelegramClient) handleDialogs(ctx context.Context, dialogs tg.ModifiedM
 			chatInfo.Members.PowerLevels = t.getGroupChatPowerLevels(chats[peer.ChatID])
 			chatInfo.Name = &chats[peer.ChatID].(*tg.Chat).Title
 		case *tg.PeerChannel:
-			channel := chats[peer.ChannelID].(*tg.Channel)
+			channel, ok := chats[peer.ChannelID].(*tg.Channel)
+			if !ok {
+				log.Error().Type("channel", chats[peer.ChannelID]).Msg("Failed to cast chat to channel")
+				continue
+			}
 			chatInfo.Name = &channel.Title
 			chatInfo.Members.PowerLevels = t.getGroupChatPowerLevels(channel)
 			if !portal.Metadata.(*PortalMetadata).IsSuperGroup {
