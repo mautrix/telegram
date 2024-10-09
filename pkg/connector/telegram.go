@@ -887,3 +887,18 @@ func (t *TelegramClient) onPeerBlocked(ctx context.Context, update *tg.UpdatePee
 	})
 	return nil
 }
+
+func (t *TelegramClient) onChat(ctx context.Context, e tg.Entities, update *tg.UpdateChat) error {
+	if _, ok := e.ChatsForbidden[update.ChatID]; ok {
+		// The chat is now forbidden, we should leave it.
+		t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.ChatDelete{
+			OnlyForMe: true,
+			EventMeta: simplevent.EventMeta{
+				Type:      bridgev2.RemoteEventChatDelete,
+				PortalKey: t.makePortalKeyFromID(ids.PeerTypeChat, update.ChatID),
+				Sender:    t.mySender(),
+			},
+		})
+	}
+	return nil
+}
