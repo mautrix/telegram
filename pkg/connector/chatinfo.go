@@ -377,6 +377,17 @@ func (t *TelegramClient) GetChatInfo(ctx context.Context, portal *bridgev2.Porta
 	}
 }
 
+func (t *TelegramClient) getDMPowerLevels(ghost *bridgev2.Ghost) *bridgev2.PowerLevelOverrides {
+	var plo bridgev2.PowerLevelOverrides
+	if ghost.Metadata.(*GhostMetadata).Blocked {
+		// Don't allow sending messages to blocked users
+		plo.EventsDefault = superadminPowerLevel
+	} else {
+		plo.EventsDefault = anyonePowerLevel
+	}
+	return &plo
+}
+
 func (t *TelegramClient) getGroupChatPowerLevels(entity tg.ChatClass) *bridgev2.PowerLevelOverrides {
 	dbrAble, ok := entity.(interface {
 		GetDefaultBannedRights() (tg.ChatBannedRights, bool)

@@ -850,3 +850,40 @@ func (t *TelegramClient) onChatDefaultBannedRights(ctx context.Context, entities
 	})
 	return nil
 }
+
+func (t *TelegramClient) onPeerBlocked(ctx context.Context, update *tg.UpdatePeerBlocked) error {
+	var userID networkid.UserID
+	if peer, ok := update.PeerID.(*tg.PeerUser); ok {
+		userID = ids.MakeUserID(peer.UserID)
+	} else {
+		return fmt.Errorf("unexpected peer type in peer blocked update %T", update.PeerID)
+	}
+
+	// Update the ghost
+	ghost, err := t.main.Bridge.GetGhostByID(ctx, userID)
+	if err != nil {
+		return err
+	}
+	ghost.UpdateInfo(ctx, &bridgev2.UserInfo{
+		ExtraUpdates: func(ctx context.Context, g *bridgev2.Ghost) bool {
+			updated := g.Metadata.(*GhostMetadata).Blocked != update.Blocked
+			g.Metadata.(*GhostMetadata).Blocked = update.Blocked
+			return updated
+		},
+	})
+
+	// Find portals that are DMs with the user
+	t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.ChatResync{
+		ChatInfo: &bridgev2.ChatInfo{
+			Members: &bridgev2.ChatMemberList{
+				PowerLevels: t.getDMPowerLevels(ghost),
+			},
+			CanBackfill: true,
+		},
+		EventMeta: simplevent.EventMeta{
+			Type:      bridgev2.RemoteEventChatResync,
+			PortalKey: t.makePortalKeyFromPeer(update.PeerID),
+		},
+	})
+	return nil
+}

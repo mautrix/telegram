@@ -189,6 +189,9 @@ func NewTelegramClient(ctx context.Context, tc *TelegramConnector, login *bridge
 	dispatcher.OnChatDefaultBannedRights(func(ctx context.Context, e tg.Entities, update *tg.UpdateChatDefaultBannedRights) error {
 		return client.onChatDefaultBannedRights(ctx, e, update)
 	})
+	dispatcher.OnPeerBlocked(func(ctx context.Context, e tg.Entities, update *tg.UpdatePeerBlocked) error {
+		return client.onPeerBlocked(ctx, update)
+	})
 
 	client.ScopedStore = tc.Store.GetScopedStore(telegramUserID)
 
