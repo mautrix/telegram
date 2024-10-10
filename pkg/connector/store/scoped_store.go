@@ -44,12 +44,16 @@ const (
 	setSeqQuery     = "UPDATE telegram_user_state SET seq=$1 WHERE user_id=$2"
 	setDateSeqQuery = "UPDATE telegram_user_state SET date=$1, seq=$2 WHERE user_id=$3"
 
+	deleteChannelStateForUserQuery = "DELETE FROM telegram_channel_state WHERE user_id=$1"
+	deleteUserStateForUserQuery    = "DELETE FROM telegram_user_state WHERE user_id=$1"
+
 	getAccessHashQuery = "SELECT access_hash FROM telegram_access_hash WHERE user_id=$1 AND entity_type=$2 AND entity_id=$3"
 	setAccessHashQuery = `
 		INSERT INTO telegram_access_hash (user_id, entity_type, entity_id, access_hash)
 		VALUES ($1, $2, $3, $4)
 		ON CONFLICT (user_id, entity_type, entity_id) DO UPDATE SET access_hash=excluded.access_hash
 	`
+	deleteAccessHashesForUserQuery = "DELETE FROM telegram_access_hash WHERE user_id=$1"
 
 	// User Username Queries
 	getUsernameQuery = "SELECT username FROM telegram_username WHERE entity_type=$1 AND entity_id=$2"
@@ -153,6 +157,16 @@ func (s *ScopedStore) SetDateSeq(ctx context.Context, userID int64, date int, se
 	return
 }
 
+func (s *ScopedStore) DeleteUserState(ctx context.Context) (err error) {
+	_, err = s.db.Exec(ctx, deleteUserStateForUserQuery, s.telegramUserID)
+	return
+}
+
+func (s *ScopedStore) DeleteChannelStateForUser(ctx context.Context) (err error) {
+	_, err = s.db.Exec(ctx, deleteChannelStateForUserQuery, s.telegramUserID)
+	return
+}
+
 var _ updates.ChannelAccessHasher = (*ScopedStore)(nil)
 
 // Deprecated: only for interface, don't use directly. Use GetAccessHash instead
@@ -181,6 +195,11 @@ func (s *ScopedStore) GetAccessHash(ctx context.Context, entityType ids.PeerType
 
 func (s *ScopedStore) SetAccessHash(ctx context.Context, entityType ids.PeerType, entityID, accessHash int64) (err error) {
 	_, err = s.db.Exec(ctx, setAccessHashQuery, s.telegramUserID, entityType, entityID, accessHash)
+	return
+}
+
+func (s *ScopedStore) DeleteAccessHashesForUser(ctx context.Context) (err error) {
+	_, err = s.db.Exec(ctx, deleteAccessHashesForUserQuery, s.telegramUserID)
 	return
 }
 

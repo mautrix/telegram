@@ -580,10 +580,32 @@ func (t *TelegramClient) IsLoggedIn() bool {
 }
 
 func (t *TelegramClient) LogoutRemote(ctx context.Context) {
-	_, err := t.client.API().AuthLogOut(ctx)
+	log := zerolog.Ctx(ctx).With().
+		Str("action", "logout_remote").
+		Int64("user_id", t.telegramUserID).
+		Logger()
+
+	err := t.ScopedStore.DeleteUserState(ctx)
 	if err != nil {
-		zerolog.Ctx(ctx).Err(err).Msg("failed to logout on Telegram")
+		log.Err(err).Msg("failed to delete user state")
 	}
+
+	err = t.ScopedStore.DeleteChannelStateForUser(ctx)
+	if err != nil {
+		log.Err(err).Msg("failed to delete channel state for user")
+	}
+
+	err = t.ScopedStore.DeleteAccessHashesForUser(ctx)
+	if err != nil {
+		log.Err(err).Msg("failed to delete access hashes for user")
+	}
+
+	_, err = t.client.API().AuthLogOut(ctx)
+	if err != nil {
+		log.Err(err).Msg("failed to logout on Telegram")
+	}
+
+	log.Info().Msg("successfully logged out and deleted user state")
 }
 
 func (t *TelegramClient) IsThisUser(ctx context.Context, userID networkid.UserID) bool {
