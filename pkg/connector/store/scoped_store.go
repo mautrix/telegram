@@ -167,20 +167,44 @@ func (s *ScopedStore) DeleteChannelStateForUser(ctx context.Context) (err error)
 	return
 }
 
-var _ updates.ChannelAccessHasher = (*ScopedStore)(nil)
+var _ updates.AccessHasher = (*ScopedStore)(nil)
 
-// Deprecated: only for interface, don't use directly. Use GetAccessHash instead
-func (s *ScopedStore) GetChannelAccessHash(ctx context.Context, userID, channelID int64) (accessHash int64, found bool, err error) {
-	s.assertUserIDMatches(userID)
+// Deprecated: only for interface, don't use directly. Use [GetAccessHash]
+// instead.
+func (s *ScopedStore) GetChannelAccessHash(ctx context.Context, forUserID, channelID int64) (accessHash int64, found bool, err error) {
+	s.assertUserIDMatches(forUserID)
 	accessHash, err = s.GetAccessHash(ctx, ids.PeerTypeChannel, channelID)
-	found = accessHash != 0
+	if errors.Is(err, ErrNoAccessHash) {
+		err = nil
+		found = false
+	}
 	return
 }
 
-// Deprecated: only for interface, don't use directly. Use SetAccessHash instead
-func (s *ScopedStore) SetChannelAccessHash(ctx context.Context, userID, channelID, accessHash int64) (err error) {
-	s.assertUserIDMatches(userID)
+// Deprecated: only for interface, don't use directly. Use [SetAccessHash]
+// instead.
+func (s *ScopedStore) SetChannelAccessHash(ctx context.Context, forUserID, channelID, accessHash int64) (err error) {
+	s.assertUserIDMatches(forUserID)
 	return s.SetAccessHash(ctx, ids.PeerTypeChannel, channelID, accessHash)
+}
+
+// Deprecated: only for interface, don't use directly. Use [GetAccessHash]
+// instead.
+func (s *ScopedStore) GetUserAccessHash(ctx context.Context, forUserID int64, userID int64) (accessHash int64, found bool, err error) {
+	s.assertUserIDMatches(forUserID)
+	accessHash, err = s.GetAccessHash(ctx, ids.PeerTypeUser, userID)
+	if errors.Is(err, ErrNoAccessHash) {
+		err = nil
+		found = false
+	}
+	return
+}
+
+// Deprecated: only for interface, don't use directly. Use [SetAccessHash]
+// instead.
+func (s *ScopedStore) SetUserAccessHash(ctx context.Context, forUserID int64, userID int64, accessHash int64) error {
+	s.assertUserIDMatches(forUserID)
+	return s.SetAccessHash(ctx, ids.PeerTypeUser, userID, accessHash)
 }
 
 var ErrNoAccessHash = errors.New("access hash not found")

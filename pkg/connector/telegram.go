@@ -441,8 +441,10 @@ func (t *TelegramClient) updateGhost(ctx context.Context, userID int64, user *tg
 }
 
 func (t *TelegramClient) updateChannel(ctx context.Context, channel *tg.Channel) (*bridgev2.UserInfo, error) {
-	if err := t.ScopedStore.SetAccessHash(ctx, ids.PeerTypeChannel, channel.ID, channel.AccessHash); err != nil {
-		return nil, err
+	if accessHash, ok := channel.GetAccessHash(); ok {
+		if err := t.ScopedStore.SetAccessHash(ctx, ids.PeerTypeChannel, channel.ID, accessHash); err != nil {
+			return nil, err
+		}
 	}
 
 	if !channel.Broadcast {

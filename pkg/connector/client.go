@@ -515,8 +515,10 @@ func (t *TelegramClient) getUserInfoFromTelegramUser(ctx context.Context, u tg.U
 		return nil, fmt.Errorf("user is %T not *tg.User", user)
 	}
 	var identifiers []string
-	if err := t.ScopedStore.SetAccessHash(ctx, ids.PeerTypeUser, user.ID, user.AccessHash); err != nil {
-		return nil, err
+	if accessHash, ok := user.GetAccessHash(); ok {
+		if err := t.ScopedStore.SetAccessHash(ctx, ids.PeerTypeUser, user.ID, accessHash); err != nil {
+			return nil, err
+		}
 	}
 	if !user.Min {
 		if err := t.ScopedStore.SetUsername(ctx, ids.PeerTypeUser, user.ID, user.Username); err != nil {
