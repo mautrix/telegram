@@ -443,7 +443,7 @@ func (c *TelegramClient) convertMediaRequiringUpload(ctx context.Context, portal
 
 func (c *TelegramClient) convertContact(media tg.MessageMediaClass) *bridgev2.ConvertedMessagePart {
 	contact := media.(*tg.MessageMediaContact)
-	name := util.FormatFullName(contact.FirstName, contact.LastName)
+	name := util.FormatFullName(contact.FirstName, contact.LastName, false, contact.UserID)
 	formattedPhone := fmt.Sprintf("+%s", strings.TrimPrefix(contact.PhoneNumber, "+"))
 
 	content := event.MessageEventContent{

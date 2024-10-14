@@ -558,7 +558,7 @@ func (t *TelegramClient) getUserInfoFromTelegramUser(ctx context.Context, u tg.U
 		}
 	}
 
-	name := util.FormatFullName(user.FirstName, user.LastName)
+	name := util.FormatFullName(user.FirstName, user.LastName, user.Deleted, user.ID)
 	return &bridgev2.UserInfo{
 		IsBot:       &user.Bot,
 		Name:        &name,
@@ -570,6 +570,7 @@ func (t *TelegramClient) getUserInfoFromTelegramUser(ctx context.Context, u tg.U
 				changed = changed || meta.IsPremium != user.Premium || meta.IsBot != user.Bot
 				meta.IsPremium = user.Premium
 				meta.IsBot = user.Bot
+				meta.Deleted = user.Deleted
 			}
 			return changed
 		},

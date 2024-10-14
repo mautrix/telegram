@@ -88,7 +88,7 @@ func finalizeLogin(ctx context.Context, user *bridgev2.User, authorization *tg.A
 		}
 	}()
 
-	fullName := util.FormatFullName(me.FirstName, me.LastName)
+	fullName := util.FormatFullName(me.FirstName, me.LastName, me.Deleted, me.ID)
 	username := me.Username
 	if username == "" && len(me.Usernames) > 0 {
 		username = me.Usernames[0].Username

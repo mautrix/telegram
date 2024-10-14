@@ -326,7 +326,7 @@ func (t *TelegramClient) maybeUpdateRemoteProfile(ctx context.Context, ghost *br
 
 	var changed bool
 	if user != nil {
-		fullName := util.FormatFullName(user.FirstName, user.LastName)
+		fullName := util.FormatFullName(user.FirstName, user.LastName, user.Deleted, user.ID)
 		username := user.Username
 		if username == "" && len(user.Usernames) > 0 {
 			username = user.Usernames[0].Username
@@ -371,7 +371,7 @@ func (t *TelegramClient) onUserName(ctx context.Context, e tg.Entities, update *
 		return err
 	}
 
-	name := util.FormatFullName(update.FirstName, update.LastName)
+	name := util.FormatFullName(update.FirstName, update.LastName, false, update.UserID)
 	userInfo := bridgev2.UserInfo{Name: &name}
 
 	if len(update.Usernames) > 0 {

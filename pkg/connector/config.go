@@ -148,6 +148,7 @@ type GhostMetadata struct {
 	IsBot     bool `json:"is_bot,omitempty"`
 	IsChannel bool `json:"is_channel,omitempty"`
 	Blocked   bool `json:"blocked,omitempty"`
+	Deleted   bool `json:"deleted,omitempty"`
 }
 
 type PortalMetadata struct {
