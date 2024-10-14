@@ -199,7 +199,7 @@ func (t *TelegramClient) FetchMessages(ctx context.Context, fetchParams bridgev2
 		if fetchParams.Forward {
 			_, req.MinID, err = ids.ParseMessageID(fetchParams.AnchorMessage.ID)
 		} else {
-			_, req.MaxID, err = ids.ParseMessageID(fetchParams.AnchorMessage.ID)
+			_, req.OffsetID, err = ids.ParseMessageID(fetchParams.AnchorMessage.ID)
 		}
 		if err != nil {
 			return nil, err
