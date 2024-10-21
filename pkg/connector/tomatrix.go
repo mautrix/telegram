@@ -322,8 +322,14 @@ func (c *TelegramClient) convertMediaRequiringUpload(ctx context.Context, portal
 			case *tg.DocumentAttributeVideo:
 				content.MsgType = event.MsgVideo
 				transferer = transferer.WithVideo(a)
+
+				extraInfo["fi.mau.telegram.round_message"] = true
+				extraInfo["duration"] = int(a.Duration * 1000)
 			case *tg.DocumentAttributeAudio:
-				content.MsgType = event.MsgAudio
+				if content.MsgType != event.MsgVideo {
+					content.MsgType = event.MsgAudio
+					extraInfo["duration"] = int(a.Duration * 1000) // only set the duration is not already set by the video handling logic
+				}
 				content.MSC1767Audio = &event.MSC1767Audio{
 					Duration: a.Duration * 1000,
 				}
