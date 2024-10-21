@@ -15,13 +15,13 @@ import (
 	"github.com/gotd/td/telegram/uploader"
 	"github.com/gotd/td/tg"
 	"github.com/rs/zerolog"
+	"go.mau.fi/util/ffmpeg"
+	"go.mau.fi/util/variationselector"
 	"maunium.net/go/mautrix/bridgev2"
 	"maunium.net/go/mautrix/bridgev2/database"
 	"maunium.net/go/mautrix/bridgev2/networkid"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
-
-	"go.mau.fi/util/variationselector"
 
 	"go.mau.fi/mautrix-telegram/pkg/connector/emojis"
 	"go.mau.fi/mautrix-telegram/pkg/connector/ids"
@@ -37,13 +37,22 @@ func getMediaFilename(content *event.MessageEventContent) string {
 	}
 }
 
-func (t *TelegramClient) transferMediaToTelegram(ctx context.Context, content *event.MessageEventContent) (tg.InputMediaClass, error) {
+func (t *TelegramClient) transferMediaToTelegram(ctx context.Context, content *event.MessageEventContent, sticker bool) (tg.InputMediaClass, error) {
 	filename := getMediaFilename(content)
 	var fileData []byte
 	fileData, err := t.main.Bridge.Bot.DownloadMedia(ctx, content.URL, content.File)
 	if err != nil {
 		return nil, fmt.Errorf("failed to download media from Matrix: %w", err)
 	}
+
+	if sticker && content.Info != nil && (content.Info.MimeType != "video/webm" && content.Info.MimeType != "application/x-tgsticker") {
+		fileData, err = ffmpeg.ConvertBytes(ctx, fileData, ".webp", []string{}, []string{}, content.Info.MimeType)
+		if err != nil {
+			return nil, fmt.Errorf("failed to convert sticker to webm: %+w", err)
+		}
+		content.Info.MimeType = "image/webp"
+	}
+
 	uploader := uploader.NewUploader(t.client.API())
 	var upload tg.InputFileClass
 	upload, err = uploader.FromBytes(ctx, filename, fileData)
@@ -51,14 +60,23 @@ func (t *TelegramClient) transferMediaToTelegram(ctx context.Context, content *e
 		return nil, fmt.Errorf("failed to upload media to Telegram: %w", err)
 	}
 
-	if content.MsgType == event.MsgImage && (content.Info.MimeType == "image/jpeg" || content.Info.MimeType == "image/png") {
+	if content.MsgType == event.MsgImage && content.Info != nil && (content.Info.MimeType == "image/jpeg" || content.Info.MimeType == "image/png") {
 		return &tg.InputMediaUploadedPhoto{File: upload}, nil
 	}
 
 	var attributes []tg.DocumentAttributeClass
 	attributes = append(attributes, &tg.DocumentAttributeFilename{FileName: filename})
 
-	if content.MsgType == event.MsgAudio {
+	if content.Info != nil && content.Info.Width != 0 && content.Info.Height != 0 {
+		attributes = append(attributes, &tg.DocumentAttributeImageSize{W: content.Info.Width, H: content.Info.Height})
+	}
+
+	if sticker {
+		attributes = append(attributes, &tg.DocumentAttributeSticker{
+			Alt:        content.Body,
+			Stickerset: &tg.InputStickerSetEmpty{},
+		})
+	} else if content.MsgType == event.MsgAudio {
 		audioAttr := tg.DocumentAttributeAudio{
 			Voice: content.MSC3245Voice != nil,
 		}
@@ -71,9 +89,13 @@ func (t *TelegramClient) transferMediaToTelegram(ctx context.Context, content *e
 		attributes = append(attributes, &audioAttr)
 	}
 
+	mimeType := "application/octet-stream"
+	if content.Info != nil && content.Info.MimeType != "" {
+		mimeType = content.Info.MimeType
+	}
 	return &tg.InputMediaUploadedDocument{
 		File:       upload,
-		MimeType:   content.Info.MimeType,
+		MimeType:   mimeType,
 		Attributes: attributes,
 	}, nil
 }
@@ -85,7 +107,6 @@ func (t *TelegramClient) HandleMatrixMessage(ctx context.Context, msg *bridgev2.
 	}
 
 	var contentURI id.ContentURIString
-	// TODO handle sticker
 
 	noWebpage := msg.Content.BeeperLinkPreviews != nil && len(msg.Content.BeeperLinkPreviews) == 0
 
@@ -100,20 +121,11 @@ func (t *TelegramClient) HandleMatrixMessage(ctx context.Context, msg *bridgev2.
 		replyTo = &tg.InputReplyToMessage{ReplyToMsgID: messageID}
 	}
 
+	// TODO handle sticker
 	var updates tg.UpdatesClass
-	switch msg.Content.MsgType {
-	case event.MsgText, event.MsgNotice, event.MsgEmote:
-		updates, err = t.client.API().MessagesSendMessage(ctx, &tg.MessagesSendMessageRequest{
-			Peer:      peer,
-			NoWebpage: noWebpage,
-			Message:   message,
-			Entities:  entities,
-			ReplyTo:   replyTo,
-			RandomID:  rand.Int63(),
-		})
-	case event.MsgImage, event.MsgFile, event.MsgAudio, event.MsgVideo:
+	if msg.Event.Type == event.EventSticker {
 		var media tg.InputMediaClass
-		media, err = t.transferMediaToTelegram(ctx, msg.Content)
+		media, err = t.transferMediaToTelegram(ctx, msg.Content, true)
 		if err != nil {
 			return nil, err
 		}
@@ -125,29 +137,55 @@ func (t *TelegramClient) HandleMatrixMessage(ctx context.Context, msg *bridgev2.
 			ReplyTo:  replyTo,
 			RandomID: rand.Int63(),
 		})
-	case event.MsgLocation:
-		var uri GeoURI
-		uri, err = ParseGeoURI(msg.Content.GeoURI)
-		if err != nil {
-			return nil, err
-		}
-		message = ""
-		if location, ok := msg.Event.Content.Raw["org.matrix.msc3488.location"].(map[string]any); ok {
-			if desc, ok := location["description"].(string); ok {
-				message = desc
+	} else {
+		switch msg.Content.MsgType {
+		case event.MsgText, event.MsgNotice, event.MsgEmote:
+			updates, err = t.client.API().MessagesSendMessage(ctx, &tg.MessagesSendMessageRequest{
+				Peer:      peer,
+				NoWebpage: noWebpage,
+				Message:   message,
+				Entities:  entities,
+				ReplyTo:   replyTo,
+				RandomID:  rand.Int63(),
+			})
+		case event.MsgImage, event.MsgFile, event.MsgAudio, event.MsgVideo:
+			var media tg.InputMediaClass
+			media, err = t.transferMediaToTelegram(ctx, msg.Content, false)
+			if err != nil {
+				return nil, err
 			}
+			updates, err = t.client.API().MessagesSendMedia(ctx, &tg.MessagesSendMediaRequest{
+				Peer:     peer,
+				Message:  message,
+				Entities: entities,
+				Media:    media,
+				ReplyTo:  replyTo,
+				RandomID: rand.Int63(),
+			})
+		case event.MsgLocation:
+			var uri GeoURI
+			uri, err = ParseGeoURI(msg.Content.GeoURI)
+			if err != nil {
+				return nil, err
+			}
+			message = ""
+			if location, ok := msg.Event.Content.Raw["org.matrix.msc3488.location"].(map[string]any); ok {
+				if desc, ok := location["description"].(string); ok {
+					message = desc
+				}
+			}
+			updates, err = t.client.API().MessagesSendMedia(ctx, &tg.MessagesSendMediaRequest{
+				Peer:    peer,
+				Message: message,
+				Media: &tg.InputMediaGeoPoint{
+					GeoPoint: &tg.InputGeoPoint{Lat: uri.Lat, Long: uri.Long},
+				},
+				ReplyTo:  replyTo,
+				RandomID: rand.Int63(),
+			})
+		default:
+			return nil, fmt.Errorf("unsupported message type %s", msg.Content.MsgType)
 		}
-		updates, err = t.client.API().MessagesSendMedia(ctx, &tg.MessagesSendMediaRequest{
-			Peer:    peer,
-			Message: message,
-			Media: &tg.InputMediaGeoPoint{
-				GeoPoint: &tg.InputGeoPoint{Lat: uri.Lat, Long: uri.Long},
-			},
-			ReplyTo:  replyTo,
-			RandomID: rand.Int63(),
-		})
-	default:
-		return nil, fmt.Errorf("unsupported message type %s", msg.Content.MsgType)
 	}
 	if err != nil {
 		return nil, err
@@ -231,7 +269,7 @@ func (t *TelegramClient) HandleMatrixEdit(ctx context.Context, msg *bridgev2.Mat
 			log.Info().Msg("media URI unchanged, skipping re-upload, just editing text")
 		} else {
 			log.Info().Msg("media URI changed, re-uploading media")
-			req.Media, err = t.transferMediaToTelegram(ctx, msg.Content)
+			req.Media, err = t.transferMediaToTelegram(ctx, msg.Content, false)
 			if err != nil {
 				return err
 			}
