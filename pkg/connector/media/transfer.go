@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 
 	"github.com/gotd/td/telegram/downloader"
@@ -24,30 +25,32 @@ type dimensionable interface {
 	GetH() int
 }
 
-func getLargestPhotoSize(sizes []tg.PhotoSizeClass) (width, height int, largest tg.PhotoSizeClass) {
+func getLargestPhotoSize(sizes []tg.PhotoSizeClass) (width, height, fileSize int, largest tg.PhotoSizeClass) {
 	if len(sizes) == 0 {
 		panic("cannot get largest size from empty list of sizes")
 	}
 
 	// FIXME this max size seems to be confusing bytes and dimensions.
-	var maxSize int
 	for _, s := range sizes {
 		var currentSize int
 		switch size := s.(type) {
 		case *tg.PhotoSize:
 			currentSize = size.GetSize()
 		case *tg.PhotoCachedSize:
-			currentSize = max(size.GetW(), size.GetH())
+			currentSize = max(size.W, size.H, len(size.Bytes))
 		case *tg.PhotoSizeProgressive:
-			currentSize = max(size.GetW(), size.GetH())
+			currentSize = max(size.W, size.H)
+			for _, sz := range size.Sizes {
+				currentSize = max(currentSize, sz)
+			}
 		case *tg.PhotoPathSize:
 			currentSize = len(size.GetBytes())
 		case *tg.PhotoStrippedSize:
 			currentSize = len(size.GetBytes())
 		}
 
-		if currentSize > maxSize {
-			maxSize = currentSize
+		if currentSize > fileSize {
+			fileSize = currentSize
 			largest = s
 			if d, ok := s.(dimensionable); ok {
 				width = d.GetW()
@@ -161,7 +164,7 @@ func (t *Transferer) WithDocument(doc tg.DocumentClass, thumbnail bool) *ReadyTr
 		FileReference: document.GetFileReference(),
 	}
 	if thumbnail {
-		_, _, largestThumbnail := getLargestPhotoSize(document.Thumbs)
+		_, _, _, largestThumbnail := getLargestPhotoSize(document.Thumbs)
 		documentFileLocation.ThumbSize = largestThumbnail.GetType()
 	} else {
 		t.fileInfo.Size = int(document.Size)
@@ -178,7 +181,7 @@ func (t *Transferer) WithDocument(doc tg.DocumentClass, thumbnail bool) *ReadyTr
 func (t *Transferer) WithPhoto(pc tg.PhotoClass) *ReadyTransferer {
 	photo := pc.(*tg.Photo)
 	var largest tg.PhotoSizeClass
-	t.fileInfo.Width, t.fileInfo.Height, largest = getLargestPhotoSize(photo.GetSizes())
+	t.fileInfo.Width, t.fileInfo.Height, t.fileInfo.Size, largest = getLargestPhotoSize(photo.GetSizes())
 	return &ReadyTransferer{
 		inner: t,
 		loc: &tg.InputPhotoFileLocation{
@@ -246,18 +249,23 @@ func (t *ReadyTransferer) Transfer(ctx context.Context, store *store.Container, 
 		return file.MXC, nil, &t.inner.fileInfo, nil
 	}
 
-	data, err := t.DownloadBytes(ctx)
+	var reader io.Reader
+	reader, t.inner.fileInfo.MimeType, t.inner.fileInfo.Size, err = t.Stream(ctx)
 	if err != nil {
 		return "", nil, nil, fmt.Errorf("downloading file failed: %w", err)
 	}
 
 	if t.inner.animatedStickerConfig != nil && t.inner.fileInfo.MimeType == "application/x-tgsticker" {
+		data, err := io.ReadAll(reader)
+		if err != nil {
+			return "", nil, nil, fmt.Errorf("reading sticker data failed: %w", err)
+		}
 		converted := t.inner.animatedStickerConfig.convert(ctx, data)
-		data = converted.Data
+		reader = converted.DataWriter
 		t.inner.fileInfo.MimeType = converted.MIMEType
 		t.inner.fileInfo.Width = converted.Width
 		t.inner.fileInfo.Height = converted.Height
-		t.inner.fileInfo.Size = len(data)
+		t.inner.fileInfo.Size = converted.Size
 
 		if len(converted.ThumbnailData) > 0 {
 			thumbnailMXC, thumbnailFileInfo, err := intent.UploadMedia(ctx, t.inner.roomID, converted.ThumbnailData, t.inner.filename, converted.ThumbnailMIMEType)
@@ -274,7 +282,13 @@ func (t *ReadyTransferer) Transfer(ctx context.Context, store *store.Container, 
 		}
 	}
 
-	mxc, encryptedFileInfo, err = intent.UploadMedia(ctx, t.inner.roomID, data, t.inner.filename, t.inner.fileInfo.MimeType)
+	mxc, encryptedFileInfo, err = intent.UploadMediaStream(ctx, t.inner.roomID, int64(t.inner.fileInfo.Size), false, func(file io.Writer) (*bridgev2.FileStreamResult, error) {
+		_, err := io.Copy(file, reader)
+		return &bridgev2.FileStreamResult{
+			FileName: t.inner.filename,
+			MimeType: t.inner.fileInfo.MimeType,
+		}, err
+	})
 	if err != nil {
 		return "", nil, nil, fmt.Errorf("failed to upload media to Matrix: %w", err)
 	}
@@ -294,13 +308,12 @@ func (t *ReadyTransferer) Transfer(ctx context.Context, store *store.Container, 
 	return mxc, encryptedFileInfo, &t.inner.fileInfo, nil
 }
 
-// Download downloads the media from Telegram.
-func (t *ReadyTransferer) Download(ctx context.Context) ([]byte, *event.FileInfo, error) {
-	// TODO convert entire function to streaming? Maybe at least stream to file?
-	var buf bytes.Buffer
-	storageFileTypeClass, err := downloader.NewDownloader().Download(t.inner.client, t.loc).Stream(ctx, &buf)
+// Stream streams the media from Telegram to an [io.Reader].
+func (t *ReadyTransferer) Stream(ctx context.Context) (r io.Reader, mimeType string, fileSize int, err error) {
+	var storageFileTypeClass tg.StorageFileTypeClass
+	storageFileTypeClass, r, err = downloader.NewDownloader().Download(t.inner.client, t.loc).StreamToReader(ctx)
 	if err != nil {
-		return nil, nil, err
+		return nil, "", 0, err
 	}
 	if t.inner.fileInfo.MimeType == "" {
 		switch storageFileTypeClass.(type) {
@@ -321,26 +334,29 @@ func (t *ReadyTransferer) Download(ctx context.Context) ([]byte, *event.FileInfo
 		case *tg.StorageFileWebp:
 			t.inner.fileInfo.MimeType = "image/webp"
 		default:
-			t.inner.fileInfo.MimeType = http.DetectContentType(buf.Bytes())
+			// Just guess it's a JPEG. All documents should have specified the
+			// MIME type, and all photos are JPEG.
+			t.inner.fileInfo.MimeType = "image/jpeg"
 		}
 	}
-	t.inner.fileInfo.Size = buf.Len()
 
 	if t.inner.animatedStickerConfig != nil {
-		detected := http.DetectContentType(buf.Bytes())
-		if detected == "application/x-tgsticker" || detected == "application/x-gzip" {
-			if unzipped, err := gnuzip.MaybeGUnzip(buf.Bytes()); err != nil {
+		data, err := io.ReadAll(r)
+		if err != nil {
+			return nil, "", 0, fmt.Errorf("failed to read animated sticker data: %w", err)
+		} else if detected := http.DetectContentType(data); detected == "application/x-tgsticker" || detected == "application/x-gzip" {
+			if unzipped, err := gnuzip.MaybeGUnzip(data); err != nil {
 				zerolog.Ctx(ctx).Err(err).Msg("failed to unzip animated sticker")
 			} else {
 				converted := t.inner.animatedStickerConfig.convert(ctx, unzipped)
 				t.inner.fileInfo.MimeType = converted.MIMEType
-				t.inner.fileInfo.Size = len(converted.Data)
-				return converted.Data, &t.inner.fileInfo, nil
+				t.inner.fileInfo.Size = converted.Size
+				return converted.DataWriter, t.inner.fileInfo.MimeType, t.inner.fileInfo.Size, nil
 			}
 		}
 	}
 
-	return buf.Bytes(), &t.inner.fileInfo, nil
+	return r, t.inner.fileInfo.MimeType, t.inner.fileInfo.Size, nil
 }
 
 // DownloadBytes downloads the media from Telegram to a byte buffer.

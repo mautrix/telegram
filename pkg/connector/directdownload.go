@@ -1,7 +1,6 @@
 package connector
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -133,21 +132,21 @@ func (tc *TelegramConnector) Download(ctx context.Context, mediaID networkid.Med
 		return nil, fmt.Errorf("unhandled media type %T", msgMedia)
 	}
 
-	data, fileInfo, err := readyTransferer.Download(ctx)
+	r, mimeType, size, err := readyTransferer.Stream(ctx)
 	if err != nil {
 		log.Err(err).Msg("failed to download media")
 		return nil, err
 	}
 
 	log.Debug().
-		Str("mime_type", fileInfo.MimeType).
-		Int("size", fileInfo.Size).
+		Str("mime_type", mimeType).
+		Int("size", size).
 		Msg("Downloaded media successfully")
 
 	return &mediaproxy.GetMediaResponseData{
-		Reader:        io.NopCloser(bytes.NewBuffer(data)),
-		ContentType:   fileInfo.MimeType,
-		ContentLength: int64(fileInfo.Size),
+		Reader:        io.NopCloser(r),
+		ContentType:   mimeType,
+		ContentLength: int64(size),
 	}, nil
 }
 
