@@ -10,12 +10,12 @@ require (
 	github.com/gotd/td v0.111.0
 	github.com/rs/zerolog v1.33.0
 	github.com/stretchr/testify v1.9.0
-	go.mau.fi/util v0.8.1-0.20241003092848-3b49d3e0b9ee
+	go.mau.fi/util v0.8.1
 	go.mau.fi/zerozap v0.1.1
 	go.uber.org/zap v1.27.0
-	golang.org/x/exp v0.0.0-20241004190924-225e2abe05e6
+	golang.org/x/exp v0.0.0-20241009180824-f66d83c29e7c
 	golang.org/x/net v0.30.0
-	maunium.net/go/mautrix v0.21.1-0.20241007131243-7a9269e8ff9f
+	maunium.net/go/mautrix v0.21.2-0.20241022095053-8a8163106d95
 )
 
 require (
@@ -42,7 +42,7 @@ require (
 	github.com/tidwall/match v1.1.1 // indirect
 	github.com/tidwall/pretty v1.2.1 // indirect
 	github.com/tidwall/sjson v1.2.5 // indirect
-	github.com/yuin/goldmark v1.7.4 // indirect
+	github.com/yuin/goldmark v1.7.7 // indirect
 	go.mau.fi/zeroconfig v0.1.3 // indirect
 	go.opentelemetry.io/otel v1.30.0 // indirect
 	go.opentelemetry.io/otel/trace v1.30.0 // indirect
