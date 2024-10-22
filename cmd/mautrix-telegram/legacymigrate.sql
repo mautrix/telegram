@@ -238,6 +238,7 @@ WHERE expiration_ts<9999999999999 AND expiration_seconds<999999;
 -- Python -> Go mx_ table migration
 ALTER TABLE mx_room_state DROP COLUMN is_encrypted;
 ALTER TABLE mx_room_state RENAME COLUMN has_full_member_list TO members_fetched;
+UPDATE mx_room_state SET members_fetched=false WHERE members_fetched IS NULL;
 
 -- only: postgres until "end only"
 ALTER TABLE mx_room_state ALTER COLUMN power_levels TYPE jsonb USING power_levels::jsonb;
