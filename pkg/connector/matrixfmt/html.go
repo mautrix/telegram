@@ -222,6 +222,7 @@ type Context struct {
 	AllowedMentions    *event.Mentions
 	TagStack           TagStack
 	PreserveWhitespace bool
+	ListDepth          int
 }
 
 func NewContext(ctx context.Context) Context {
@@ -238,6 +239,11 @@ func (ctx Context) WithTag(tag string) Context {
 
 func (ctx Context) WithWhitespace() Context {
 	ctx.PreserveWhitespace = true
+	return ctx
+}
+
+func (ctx Context) WithIncrementedListDepth() Context {
+	ctx.ListDepth++
 	return ctx
 }
 
@@ -276,8 +282,13 @@ func Digits(num int) int {
 	return int(math.Floor(math.Log10(float64(num))) + 1)
 }
 
+var listBullets = []string{"●", "○", "■", "‣"}
+
 func (parser *HTMLParser) listToString(node *html.Node, ctx Context) *EntityString {
 	ordered := node.Data == "ol"
+	if !ordered {
+		ctx = ctx.WithIncrementedListDepth()
+	}
 	taggedChildren := parser.nodeToTaggedStrings(node.FirstChild, ctx)
 	counter := 1
 	indentLength := 0
@@ -305,7 +316,7 @@ func (parser *HTMLParser) listToString(node *html.Node, ctx Context) *EntityStri
 			}
 			prefix = fmt.Sprintf("%d. %s", counter, strings.Repeat(" ", indexPadding))
 		} else {
-			prefix = "* "
+			prefix = fmt.Sprintf("%s ", listBullets[(ctx.ListDepth-1)%len(listBullets)])
 		}
 		es := NewEntityString(prefix).Append(child.EntityString)
 		counter++
