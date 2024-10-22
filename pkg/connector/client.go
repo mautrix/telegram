@@ -556,8 +556,7 @@ func (t *TelegramClient) getUserInfoFromTelegramUser(ctx context.Context, u tg.U
 				if err != nil {
 					return nil, err
 				}
-				data, _, err = transferer.Download(ctx)
-				return
+				return transferer.DownloadBytes(ctx)
 			},
 		}
 	}

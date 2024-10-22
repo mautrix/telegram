@@ -477,8 +477,7 @@ func (t *TelegramClient) updateChannel(ctx context.Context, channel *tg.Channel)
 		avatar = &bridgev2.Avatar{
 			ID: ids.MakeAvatarID(photo.PhotoID),
 			Get: func(ctx context.Context) (data []byte, err error) {
-				data, _, err = media.NewTransferer(t.client.API()).WithChannelPhoto(channel.ID, channel.AccessHash, photo.PhotoID).Download(ctx)
-				return
+				return media.NewTransferer(t.client.API()).WithChannelPhoto(channel.ID, channel.AccessHash, photo.PhotoID).DownloadBytes(ctx)
 			},
 		}
 	}

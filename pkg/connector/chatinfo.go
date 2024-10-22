@@ -151,8 +151,7 @@ func (t *TelegramClient) avatarFromPhoto(photo tg.PhotoClass) *bridgev2.Avatar {
 	return &bridgev2.Avatar{
 		ID: ids.MakeAvatarID(photo.GetID()),
 		Get: func(ctx context.Context) (data []byte, err error) {
-			data, _, err = media.NewTransferer(t.client.API()).WithPhoto(photo).Download(ctx)
-			return
+			return media.NewTransferer(t.client.API()).WithPhoto(photo).DownloadBytes(ctx)
 		},
 	}
 }

@@ -83,7 +83,6 @@ func getLocationID(loc any) (locID store.TelegramFileLocationID) {
 
 // Transferer is a utility for downloading media from Telegram and uploading it
 // to Matrix.
-// TODO better name?
 type Transferer struct {
 	client downloader.Client
 
@@ -247,7 +246,7 @@ func (t *ReadyTransferer) Transfer(ctx context.Context, store *store.Container, 
 		return file.MXC, nil, &t.inner.fileInfo, nil
 	}
 
-	data, _, err := t.Download(ctx)
+	data, err := t.DownloadBytes(ctx)
 	if err != nil {
 		return "", nil, nil, fmt.Errorf("downloading file failed: %w", err)
 	}
@@ -342,6 +341,13 @@ func (t *ReadyTransferer) Download(ctx context.Context) ([]byte, *event.FileInfo
 	}
 
 	return buf.Bytes(), &t.inner.fileInfo, nil
+}
+
+// DownloadBytes downloads the media from Telegram to a byte buffer.
+func (t *ReadyTransferer) DownloadBytes(ctx context.Context) ([]byte, error) {
+	var buf bytes.Buffer
+	_, err := downloader.NewDownloader().Download(t.inner.client, t.loc).Stream(ctx, &buf)
+	return buf.Bytes(), err
 }
 
 // DirectDownloadURL returns the direct download URL for the media.
