@@ -259,6 +259,21 @@ func (t *TelegramClient) onUpdateNewMessage(ctx context.Context, channels map[in
 					},
 				},
 			})
+
+			// Send a notice about the TTL change
+			content := bridgev2.DisappearingMessageNotice(time.Duration(action.Period)*time.Second, false)
+			eventMeta.Type = bridgev2.RemoteEventMessage
+			t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.Message[any]{
+				EventMeta: eventMeta,
+				ID:        ids.GetMessageIDFromMessage(msg),
+				ConvertMessageFunc: func(ctx context.Context, portal *bridgev2.Portal, intent bridgev2.MatrixAPI, data any) (*bridgev2.ConvertedMessage, error) {
+					return &bridgev2.ConvertedMessage{
+						Parts: []*bridgev2.ConvertedMessagePart{
+							{ID: networkid.PartID("ttl-change"), Type: event.EventMessage, Content: content},
+						},
+					}, nil
+				},
+			})
 		case *tg.MessageActionPhoneCall:
 			// Nothing to do, will be handled by OnPhoneCall callback
 		case *tg.MessageActionGroupCall:
