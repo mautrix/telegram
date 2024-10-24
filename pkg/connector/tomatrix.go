@@ -33,12 +33,14 @@ type ttlable interface {
 	GetTTLSeconds() (value int, ok bool)
 }
 
-func mediaHashID(media tg.MessageMediaClass) []byte {
-	switch media := media.(type) {
+func mediaHashID(ctx context.Context, m tg.MessageMediaClass) []byte {
+	switch media := m.(type) {
 	case *tg.MessageMediaPhoto:
 		return binary.BigEndian.AppendUint64(nil, uint64(media.Photo.GetID()))
 	case *tg.MessageMediaDocument:
 		return binary.BigEndian.AppendUint64(nil, uint64(media.Document.GetID()))
+	default:
+		zerolog.Ctx(ctx).Error().Type("media_type", m).Msg("Attempted to get hash for unsupported media type ID")
 	}
 	return nil
 }
@@ -67,7 +69,7 @@ func (c *TelegramClient) mediaToMatrix(ctx context.Context, portal *bridgev2.Por
 		}, nil, nil, nil
 	case tg.MessageMediaPhotoTypeID, tg.MessageMediaDocumentTypeID:
 		converted, disappearingSetting, err := c.convertMediaRequiringUpload(ctx, portal, intent, msg.ID, media)
-		return converted, disappearingSetting, mediaHashID(media), err
+		return converted, disappearingSetting, mediaHashID(ctx, media), err
 	case tg.MessageMediaContactTypeID:
 		return c.convertContact(media), nil, nil, nil
 	case tg.MessageMediaGeoTypeID, tg.MessageMediaGeoLiveTypeID, tg.MessageMediaVenueTypeID:

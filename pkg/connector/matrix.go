@@ -208,7 +208,7 @@ func (t *TelegramClient) HandleMatrixMessage(ctx context.Context, msg *bridgev2.
 			case *tg.UpdateNewMessage:
 				msg := update.Message.(*tg.Message)
 				hasher.Write([]byte(msg.Message))
-				hasher.Write(mediaHashID(msg.Media))
+				hasher.Write(mediaHashID(ctx, msg.Media))
 			}
 		}
 		if tgMessageID == 0 {
@@ -293,7 +293,7 @@ func (t *TelegramClient) HandleMatrixEdit(ctx context.Context, msg *bridgev2.Mat
 			case *tg.UpdateNewMessage:
 				msg := update.Message.(*tg.Message)
 				hasher.Write([]byte(msg.Message))
-				hasher.Write(mediaHashID(msg.Media))
+				hasher.Write(mediaHashID(ctx, msg.Media))
 			}
 		}
 	default:
