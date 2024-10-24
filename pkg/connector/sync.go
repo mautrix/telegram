@@ -219,6 +219,9 @@ func (t *TelegramClient) handleDialogs(ctx context.Context, dialogs tg.ModifiedM
 				CreatePortal: true,
 			},
 			CheckNeedsBackfillFunc: func(ctx context.Context, latestMessage *database.Message) (bool, error) {
+				if latestMessage == nil {
+					return true, nil
+				}
 				_, latestMessageID, err := ids.ParseMessageID(latestMessage.ID)
 				if err != nil {
 					panic(err)
