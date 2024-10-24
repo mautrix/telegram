@@ -584,6 +584,9 @@ func (t *TelegramClient) onMessageEdit(ctx context.Context, update IGetMessage) 
 					ce.ModifiedParts = append(ce.ModifiedParts, part.ToEditPart(existing[i]))
 				}
 			}
+			if len(ce.ModifiedParts) == 0 {
+				return nil, bridgev2.ErrIgnoringRemoteEvent
+			}
 			return &ce, nil
 		},
 	})

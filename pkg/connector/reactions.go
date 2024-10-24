@@ -14,19 +14,15 @@ import (
 	"go.mau.fi/mautrix-telegram/pkg/connector/ids"
 )
 
-func (t *TelegramClient) computeReactionsList(ctx context.Context, msg *tg.Message) (reactions []tg.MessagePeerReaction, isFull bool, customEmojis map[networkid.EmojiID]string, err error) {
+func (t *TelegramClient) computeReactionsList(ctx context.Context, peer tg.PeerClass, msgID int, msgReactions tg.MessageReactions) (reactions []tg.MessagePeerReaction, isFull bool, customEmojis map[networkid.EmojiID]string, err error) {
 	log := zerolog.Ctx(ctx).With().Str("fn", "computeReactionsList").Logger()
-	if _, set := msg.GetReactions(); !set {
-		return
-	}
-
 	var totalCount int
-	for _, r := range msg.Reactions.Results {
+	for _, r := range msgReactions.Results {
 		totalCount += r.Count
 	}
 
-	reactionsList := msg.Reactions.RecentReactions
-	if totalCount > 0 && len(reactionsList) == 0 && !msg.Reactions.CanSeeList {
+	reactionsList := msgReactions.RecentReactions
+	if totalCount > 0 && len(reactionsList) == 0 && !msgReactions.CanSeeList {
 		// We don't know who reacted in a channel, so we can't bridge it properly either
 		log.Warn().Msg("Can't see reaction list in channel")
 		return
@@ -39,8 +35,8 @@ func (t *TelegramClient) computeReactionsList(ctx context.Context, msg *tg.Messa
 	//     # return
 
 	if len(reactionsList) < totalCount {
-		if user, ok := msg.PeerID.(*tg.PeerUser); ok {
-			reactionsList = splitDMReactionCounts(msg.Reactions.Results, user.UserID, t.telegramUserID)
+		if user, ok := peer.(*tg.PeerUser); ok {
+			reactionsList = splitDMReactionCounts(msgReactions.Results, user.UserID, t.telegramUserID)
 
 			// TODO
 			// } else if t.isBot {
@@ -48,12 +44,12 @@ func (t *TelegramClient) computeReactionsList(ctx context.Context, msg *tg.Messa
 			// 	return
 
 			// TODO should calls to this be limited?
-		} else if peer, err := t.inputPeerForPortalID(ctx, t.makePortalKeyFromPeer(msg.PeerID).ID); err != nil {
+		} else if peer, err := t.inputPeerForPortalID(ctx, t.makePortalKeyFromPeer(peer).ID); err != nil {
 			return nil, false, nil, fmt.Errorf("failed to get input peer: %w", err)
 		} else {
 			reactions, err := APICallWithUpdates(ctx, t, func() (*tg.MessagesMessageReactionsList, error) {
 				return t.client.API().MessagesGetMessageReactionsList(ctx, &tg.MessagesGetMessageReactionsListRequest{
-					Peer: peer, ID: msg.ID, Limit: 100,
+					Peer: peer, ID: msgID, Limit: 100,
 				})
 			})
 			if err != nil {
@@ -104,7 +100,7 @@ func (t *TelegramClient) handleTelegramReactions(ctx context.Context, msg *tg.Me
 		return
 	}
 
-	reactionsList, isFull, customEmojis, err := t.computeReactionsList(ctx, msg)
+	reactionsList, isFull, customEmojis, err := t.computeReactionsList(ctx, msg.PeerID, msg.ID, msg.Reactions)
 	if err != nil {
 		log.Err(err).Msg("failed to compute reactions list")
 		return
@@ -196,4 +192,103 @@ func (t *TelegramClient) getReactionLimit(ctx context.Context, sender networkid.
 			return 1, nil
 		}
 	}
+}
+
+func (t *TelegramClient) pollForReactions(ctx context.Context, portalKey networkid.PortalKey, inputPeer tg.InputPeerClass) error {
+	log := zerolog.Ctx(ctx).With().
+		Stringer("portal_key", portalKey).
+		Str("action", "poll_for_reactions").
+		Logger()
+
+	log.Debug().Msg("Polling reactions for recent messages")
+
+	messages, err := t.main.Bridge.DB.Message.GetLastNInPortal(ctx, portalKey, 20)
+	if err != nil {
+		return err
+	}
+
+	messageIDs := make([]int, len(messages))
+	for i, msg := range messages {
+		_, messageIDs[i], err = ids.ParseMessageID(msg.ID)
+		if err != nil {
+			return err
+		}
+	}
+
+	updates, err := APICallWithUpdates(ctx, t, func() (*tg.Updates, error) {
+		u, err := t.client.API().MessagesGetMessagesReactions(ctx, &tg.MessagesGetMessagesReactionsRequest{
+			Peer: inputPeer,
+			ID:   messageIDs,
+		})
+		if err != nil {
+			return nil, err
+		}
+		if updates, ok := u.(*tg.Updates); ok {
+			return updates, nil
+		} else {
+			return nil, fmt.Errorf("unexpected updates type %T", u)
+		}
+	})
+	if err != nil {
+		return fmt.Errorf("failed to get messages reactions: %w", err)
+	}
+
+	for _, update := range updates.Updates {
+		if reaction, ok := update.(*tg.UpdateMessageReactions); ok {
+			dbMsg, err := t.main.Bridge.DB.Message.GetFirstPartByID(ctx, t.loginID, ids.MakeMessageID(portalKey, reaction.MsgID))
+			if err != nil {
+				return fmt.Errorf("failed to get message from database: %w", err)
+			} else if dbMsg == nil {
+				return fmt.Errorf("message not found in database: %w", err)
+			}
+
+			reactionsList, isFull, customEmojis, err := t.computeReactionsList(ctx, reaction.Peer, reaction.MsgID, reaction.Reactions)
+			if err != nil {
+				return fmt.Errorf("failed to compute reactions list: %w", err)
+			}
+
+			users := map[networkid.UserID]*bridgev2.ReactionSyncUser{}
+			for _, reaction := range reactionsList {
+				peer, ok := reaction.PeerID.(*tg.PeerUser)
+				if !ok {
+					return fmt.Errorf("unknown peer type %T", reaction.PeerID)
+				}
+				userID := ids.MakeUserID(peer.UserID)
+				reactionLimit, err := t.getReactionLimit(ctx, userID)
+				if err != nil {
+					reactionLimit = 1
+					log.Err(err).Int64("id", peer.UserID).Msg("failed to get reaction limit")
+				}
+				if _, ok := users[userID]; !ok {
+					users[userID] = &bridgev2.ReactionSyncUser{HasAllReactions: isFull, MaxCount: reactionLimit}
+				}
+
+				emojiID, emoji, err := computeEmojiAndID(reaction.Reaction, customEmojis)
+				if err != nil {
+					return fmt.Errorf("failed to compute emoji and ID: %w", err)
+				}
+
+				users[userID].Reactions = append(users[userID].Reactions, &bridgev2.BackfillReaction{
+					Timestamp: time.Unix(int64(reaction.Date), 0),
+					Sender:    t.senderForUserID(peer.UserID),
+					EmojiID:   emojiID,
+					Emoji:     emoji,
+				})
+			}
+			t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.ReactionSync{
+				EventMeta: simplevent.EventMeta{
+					Type: bridgev2.RemoteEventReactionSync,
+					LogContext: func(c zerolog.Context) zerolog.Context {
+						return c.Int("message_id", reaction.MsgID)
+					},
+					PortalKey: dbMsg.Room,
+				},
+				TargetMessage: dbMsg.ID,
+				Reactions:     &bridgev2.ReactionSyncData{Users: users, HasAllUsers: isFull},
+			})
+		} else {
+			log.Warn().Type("update_type", update).Msg("Unexpected update type in get reactions response")
+		}
+	}
+	return nil
 }

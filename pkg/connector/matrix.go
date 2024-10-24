@@ -455,7 +455,12 @@ func (t *TelegramClient) HandleMatrixReactionRemove(ctx context.Context, msg *br
 }
 
 func (t *TelegramClient) HandleMatrixReadReceipt(ctx context.Context, msg *bridgev2.MatrixReadReceipt) error {
-	peerType, id, parseErr := ids.ParsePortalID(msg.Portal.ID)
+	log := zerolog.Ctx(ctx).With().
+		Str("action", "handle_matrix_read_receipt").
+		Str("portal_id", string(msg.Portal.ID)).
+		Bool("is_supergroup", msg.Portal.Metadata.(*PortalMetadata).IsSuperGroup).
+		Logger()
+	peerType, portalID, parseErr := ids.ParsePortalID(msg.Portal.ID)
 	if parseErr != nil {
 		return parseErr
 	}
@@ -464,7 +469,7 @@ func (t *TelegramClient) HandleMatrixReadReceipt(ctx context.Context, msg *bridg
 		return parseErr
 	}
 
-	var readMentionsErr, readReactionsErr, readMessagesErr error
+	var readMentionsErr, readReactionsErr, readMessagesErr, reactionPollErr error
 	var wg sync.WaitGroup
 
 	// Read mentions
@@ -514,22 +519,44 @@ func (t *TelegramClient) HandleMatrixReadReceipt(ctx context.Context, msg *bridg
 			})
 		case ids.PeerTypeChannel:
 			var accessHash int64
-			accessHash, readMessagesErr = t.ScopedStore.GetAccessHash(ctx, ids.PeerTypeChannel, id)
+			accessHash, readMessagesErr = t.ScopedStore.GetAccessHash(ctx, ids.PeerTypeChannel, portalID)
 			if readMessagesErr != nil {
 				return
 			}
 			_, readMessagesErr = t.client.API().ChannelsReadHistory(ctx, &tg.ChannelsReadHistoryRequest{
-				Channel: &tg.InputChannel{ChannelID: id, AccessHash: accessHash},
+				Channel: &tg.InputChannel{ChannelID: portalID, AccessHash: accessHash},
 			})
+
+			if !msg.Portal.Metadata.(*PortalMetadata).IsSuperGroup {
+				// TODO handle sponsored message read receipts
+			}
 		default:
 			readMessagesErr = fmt.Errorf("unknown peer type %s", peerType)
 		}
 	}()
 
-	// TODO handle sponsored message read receipts
+	// Poll for reactions
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		if peerType != ids.PeerTypeChannel || msg.Portal.Metadata.(*PortalMetadata).IsSuperGroup {
+			log.Debug().Msg("Not polling reactions because peer is not a channel or is a super-group")
+			return
+		}
+
+		// If it hasn't been 20 seconds since the last poll, skip
+		now := time.Now()
+		if prev, ok := t.prevReactionPoll[msg.Portal.PortalKey]; ok && now.Before(prev.Add(20*time.Second)) {
+			log.Debug().Msg("Not polling reactions because last poll was less than 20 seconds ago")
+			return
+		}
+		t.prevReactionPoll[msg.Portal.PortalKey] = now
+
+		reactionPollErr = t.pollForReactions(ctx, msg.Portal.PortalKey, inputPeer)
+	}()
 
 	wg.Wait()
-	return errors.Join(readMentionsErr, readReactionsErr, readMessagesErr)
+	return errors.Join(readMentionsErr, readReactionsErr, readMessagesErr, reactionPollErr)
 }
 
 func (t *TelegramClient) HandleMatrixTyping(ctx context.Context, msg *bridgev2.MatrixTyping) error {

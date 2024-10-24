@@ -263,19 +263,15 @@ func (t *TelegramClient) FetchMessages(ctx context.Context, fetchParams bridgev2
 			break
 		}
 
-		if msg.TypeID() != tg.MessageTypeID {
+		message, ok := msg.(*tg.Message)
+		if !ok {
 			log.Warn().Str("type", msg.TypeName()).Msg("skipping backfilling unsupported message type")
 			continue
 		}
-		message := msg.(*tg.Message)
 
 		sender := t.getEventSender(message)
 		intent := portal.GetIntentFor(ctx, sender, t.userLogin, bridgev2.RemoteEventBackfill)
 		converted, err := t.convertToMatrix(ctx, portal, intent, message)
-		if err != nil {
-			return nil, err
-		}
-		reactionsList, _, customEmojis, err := t.computeReactionsList(ctx, message)
 		if err != nil {
 			return nil, err
 		}
@@ -287,23 +283,30 @@ func (t *TelegramClient) FetchMessages(ctx context.Context, fetchParams bridgev2
 			Timestamp:        time.Unix(int64(message.Date), 0),
 		}
 
-		for _, reaction := range reactionsList {
-			peer, ok := reaction.PeerID.(*tg.PeerUser)
-			if !ok {
-				return nil, fmt.Errorf("unknown peer type %T", reaction.PeerID)
-			}
-
-			emojiID, emoji, err := computeEmojiAndID(reaction.Reaction, customEmojis)
+		if reactions, ok := message.GetReactions(); ok {
+			reactionsList, _, customEmojis, err := t.computeReactionsList(ctx, message.PeerID, message.ID, reactions)
 			if err != nil {
-				return nil, fmt.Errorf("failed to compute emoji and ID: %w", err)
+				return nil, err
 			}
 
-			backfillMessage.Reactions = append(backfillMessage.Reactions, &bridgev2.BackfillReaction{
-				Timestamp: time.Unix(int64(reaction.Date), 0),
-				Sender:    t.senderForUserID(peer.UserID),
-				EmojiID:   emojiID,
-				Emoji:     emoji,
-			})
+			for _, reaction := range reactionsList {
+				peer, ok := reaction.PeerID.(*tg.PeerUser)
+				if !ok {
+					return nil, fmt.Errorf("unknown peer type %T", reaction.PeerID)
+				}
+
+				emojiID, emoji, err := computeEmojiAndID(reaction.Reaction, customEmojis)
+				if err != nil {
+					return nil, fmt.Errorf("failed to compute emoji and ID: %w", err)
+				}
+
+				backfillMessage.Reactions = append(backfillMessage.Reactions, &bridgev2.BackfillReaction{
+					Timestamp: time.Unix(int64(reaction.Date), 0),
+					Sender:    t.senderForUserID(peer.UserID),
+					EmojiID:   emojiID,
+					Emoji:     emoji,
+				})
+			}
 		}
 
 		backfillMessages = append(backfillMessages, &backfillMessage)

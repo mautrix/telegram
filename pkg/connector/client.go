@@ -65,6 +65,8 @@ type TelegramClient struct {
 	takeoutDialogsOnce sync.Once
 
 	activeCalls map[int64]networkid.PortalKey
+
+	prevReactionPoll map[networkid.PortalKey]time.Time
 }
 
 var (
@@ -133,6 +135,9 @@ func NewTelegramClient(ctx context.Context, tc *TelegramConnector, login *bridge
 		userLogin:      login,
 
 		takeoutAccepted: exsync.NewEvent(),
+
+		activeCalls:      map[int64]networkid.PortalKey{},
+		prevReactionPoll: map[networkid.PortalKey]time.Time{},
 	}
 	dispatcher := UpdateDispatcher{
 		UpdateDispatcher: tg.NewUpdateDispatcher(),
