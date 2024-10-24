@@ -333,6 +333,10 @@ func (t *TelegramClient) getEventSender(msg interface {
 	if !ok {
 		peer = msg.GetPeerID()
 	}
+	return t.getPeerSender(peer)
+}
+
+func (t *TelegramClient) getPeerSender(peer tg.PeerClass) bridgev2.EventSender {
 	switch from := peer.(type) {
 	case *tg.PeerUser:
 		return bridgev2.EventSender{
@@ -344,8 +348,7 @@ func (t *TelegramClient) getEventSender(msg interface {
 			Sender: ids.MakeChannelUserID(from.ChannelID),
 		}
 	default:
-		fromID, _ := msg.GetFromID()
-		panic(fmt.Sprintf("couldn't determine sender (from: %+v) (peer: %+v)", fromID, msg.GetPeerID()))
+		panic(fmt.Sprintf("couldn't determine sender (peer: %+v)", peer))
 	}
 }
 
@@ -588,8 +591,8 @@ func (t *TelegramClient) onMessageEdit(ctx context.Context, update IGetMessage) 
 	return nil
 }
 
-func (t *TelegramClient) handleTyping(portal networkid.PortalKey, userID int64, action tg.SendMessageActionClass) error {
-	if userID == t.telegramUserID {
+func (t *TelegramClient) handleTyping(portal networkid.PortalKey, sender bridgev2.EventSender, action tg.SendMessageActionClass) error {
+	if sender.IsFromMe || (sender.Sender == t.userID && sender.SenderLogin == t.userLogin.ID) {
 		return nil
 	}
 	timeout := time.Duration(6) * time.Second
@@ -601,10 +604,7 @@ func (t *TelegramClient) handleTyping(portal networkid.PortalKey, userID int64, 
 		EventMeta: simplevent.EventMeta{
 			Type:      bridgev2.RemoteEventTyping,
 			PortalKey: portal,
-			Sender: bridgev2.EventSender{
-				SenderLogin: ids.MakeUserLoginID(userID),
-				Sender:      ids.MakeUserID(userID),
-			},
+			Sender:    sender,
 		},
 		Timeout: timeout,
 	})

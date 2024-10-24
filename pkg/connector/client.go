@@ -161,17 +161,17 @@ func NewTelegramClient(ctx context.Context, tc *TelegramConnector, login *bridge
 		return client.onMessageEdit(ctx, update)
 	})
 	dispatcher.OnUserTyping(func(ctx context.Context, e tg.Entities, update *tg.UpdateUserTyping) error {
-		return client.handleTyping(client.makePortalKeyFromID(ids.PeerTypeUser, update.UserID), update.UserID, update.Action)
+		return client.handleTyping(client.makePortalKeyFromID(ids.PeerTypeUser, update.UserID), client.senderForUserID(update.UserID), update.Action)
 	})
 	dispatcher.OnChatUserTyping(func(ctx context.Context, e tg.Entities, update *tg.UpdateChatUserTyping) error {
 		if update.FromID.TypeID() != tg.PeerUserTypeID {
 			log.Warn().Str("from_id_type", update.FromID.TypeName()).Msg("unsupported from_id type")
 			return nil
 		}
-		return client.handleTyping(client.makePortalKeyFromID(ids.PeerTypeChat, update.ChatID), update.FromID.(*tg.PeerUser).UserID, update.Action)
+		return client.handleTyping(client.makePortalKeyFromID(ids.PeerTypeChat, update.ChatID), client.getPeerSender(update.FromID), update.Action)
 	})
 	dispatcher.OnChannelUserTyping(func(ctx context.Context, e tg.Entities, update *tg.UpdateChannelUserTyping) error {
-		return client.handleTyping(client.makePortalKeyFromID(ids.PeerTypeChannel, update.ChannelID), update.FromID.(*tg.PeerUser).UserID, update.Action)
+		return client.handleTyping(client.makePortalKeyFromID(ids.PeerTypeChannel, update.ChannelID), client.getPeerSender(update.FromID), update.Action)
 	})
 	dispatcher.OnReadHistoryOutbox(func(ctx context.Context, e tg.Entities, update *tg.UpdateReadHistoryOutbox) error {
 		return client.updateReadReceipt(update)
