@@ -110,7 +110,7 @@ func (t *TelegramClient) handleDialogs(ctx context.Context, dialogs tg.ModifiedM
 			UserLocal:   &bridgev2.UserLocalPortalInfo{},
 			Members: &bridgev2.ChatMemberList{
 				MemberMap: map[networkid.UserID]bridgev2.ChatMember{
-					t.userID: bridgev2.ChatMember{
+					t.userID: {
 						EventSender: t.mySender(),
 						Membership:  event.MembershipJoin,
 					},
@@ -122,7 +122,7 @@ func (t *TelegramClient) handleDialogs(ctx context.Context, dialogs tg.ModifiedM
 		case *tg.PeerUser:
 			userID := ids.MakeUserID(peer.UserID)
 			if users[userID].(*tg.User).GetDeleted() {
-				log.Debug().Msg("Not syncing portal because user is deleted")
+				log.Debug().Int64("user_id", peer.UserID).Msg("Not syncing portal because user is deleted")
 				continue
 			}
 			chatInfo.Members.MemberMap[userID] = bridgev2.ChatMember{
@@ -130,31 +130,52 @@ func (t *TelegramClient) handleDialogs(ctx context.Context, dialogs tg.ModifiedM
 				Membership:  event.MembershipJoin,
 			}
 		case *tg.PeerChat:
-			chatInfo.Members.PowerLevels = t.getGroupChatPowerLevels(chats[peer.ChatID])
-			chatInfo.Name = &chats[peer.ChatID].(*tg.Chat).Title
-		case *tg.PeerChannel:
-			channel, ok := chats[peer.ChannelID].(*tg.Channel)
-			if !ok {
-				log.Error().Type("channel", chats[peer.ChannelID]).Msg("Failed to cast chat to channel")
+			chat := chats[peer.ChatID]
+			if chat.TypeID() == tg.ChatForbiddenTypeID {
+				log.Debug().
+					Int64("chat_id", peer.ChatID).
+					Msg("Not syncing portal because chat is forbidden")
+				continue
+			} else if chat.TypeID() != tg.ChatTypeID {
+				log.Debug().
+					Int64("chat_id", peer.ChatID).
+					Type("chat_type", chat).
+					Msg("Not syncing portal because chat type is unsupported")
 				continue
 			}
-			chatInfo.Name = &channel.Title
-			chatInfo.Members.PowerLevels = t.getGroupChatPowerLevels(channel)
+			chatInfo.Members.PowerLevels = t.getGroupChatPowerLevels(ctx, chat)
+			chatInfo.Name = &chat.(*tg.Chat).Title
+		case *tg.PeerChannel:
+			channel := chats[peer.ChannelID]
+			if channel.TypeID() == tg.ChannelForbiddenTypeID {
+				log.Debug().
+					Int64("channel_id", peer.ChannelID).
+					Msg("Not syncing portal because channel is forbidden")
+				continue
+			} else if channel.TypeID() != tg.ChannelTypeID {
+				log.Debug().
+					Int64("channel_id", peer.ChannelID).
+					Type("channel_type", channel).
+					Msg("Not syncing portal because channel type is unsupported")
+				continue
+			}
+			chatInfo.Name = &channel.(*tg.Channel).Title
+			chatInfo.Members.PowerLevels = t.getGroupChatPowerLevels(ctx, channel)
 			if !portal.Metadata.(*PortalMetadata).IsSuperGroup {
 				// Add the channel user
 				sender := ids.MakeChannelUserID(peer.ChannelID)
 				chatInfo.Members.MemberMap = map[networkid.UserID]bridgev2.ChatMember{
-					sender: bridgev2.ChatMember{
+					sender: {
 						EventSender: bridgev2.EventSender{Sender: sender},
 						Membership:  event.MembershipJoin,
 						PowerLevel:  superadminPowerLevel,
 					},
 				}
 				chatInfo.Members.MemberMap = map[networkid.UserID]bridgev2.ChatMember{
-					t.userID: bridgev2.ChatMember{
+					t.userID: {
 						EventSender: t.mySender(),
 						Membership:  event.MembershipJoin,
-						PowerLevel:  adminRightsToPowerLevel(channel.AdminRights),
+						PowerLevel:  adminRightsToPowerLevel(channel.(*tg.Channel).AdminRights),
 					},
 				}
 			}

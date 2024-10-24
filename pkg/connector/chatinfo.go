@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/gotd/td/tg"
+	"github.com/rs/zerolog"
 	"go.mau.fi/util/ptr"
 	"maunium.net/go/mautrix/bridgev2"
 	"maunium.net/go/mautrix/bridgev2/database"
@@ -285,7 +286,7 @@ func (t *TelegramClient) GetChatInfo(ctx context.Context, portal *bridgev2.Porta
 		// TODO save emojiset?
 
 		chatInfo.Members.IsFull = false
-		chatInfo.Members.PowerLevels = t.getGroupChatPowerLevels(fullChat.GetChats()[0])
+		chatInfo.Members.PowerLevels = t.getGroupChatPowerLevels(ctx, fullChat.GetChats()[0])
 		if !portal.Metadata.(*PortalMetadata).IsSuperGroup {
 			// Add the channel user
 			sender := ids.MakeChannelUserID(id)
@@ -387,22 +388,30 @@ func (t *TelegramClient) getDMPowerLevels(ghost *bridgev2.Ghost) *bridgev2.Power
 	return &plo
 }
 
-func (t *TelegramClient) getGroupChatPowerLevels(entity tg.ChatClass) *bridgev2.PowerLevelOverrides {
+func (t *TelegramClient) getGroupChatPowerLevels(ctx context.Context, entity tg.ChatClass) *bridgev2.PowerLevelOverrides {
+	log := zerolog.Ctx(ctx).With().
+		Str("action", "get_group_chat_power_levels").
+		Logger()
+
 	dbrAble, ok := entity.(interface {
 		GetDefaultBannedRights() (tg.ChatBannedRights, bool)
 	})
-	if !ok {
-		panic(fmt.Sprintf("unsupported chat type %T", entity))
-	}
-	dbr, ok := dbrAble.GetDefaultBannedRights()
-	if !ok {
-		dbr = tg.ChatBannedRights{
-			InviteUsers:  true,
-			ChangeInfo:   true,
-			PinMessages:  true,
-			SendStickers: false,
-			SendMessages: false,
+	var dbr tg.ChatBannedRights
+	if ok {
+		dbr, ok = dbrAble.GetDefaultBannedRights()
+		if !ok {
+			dbr = tg.ChatBannedRights{
+				InviteUsers:  true,
+				ChangeInfo:   true,
+				PinMessages:  true,
+				SendStickers: false,
+				SendMessages: false,
+			}
 		}
+	} else {
+		log.Error().
+			Type("entity_type", entity).
+			Msg("couldn't get default banned rights from entity, assuming you don't have any rights")
 	}
 	return t.getPowerLevelOverridesFromBannedRights(entity, dbr)
 }
