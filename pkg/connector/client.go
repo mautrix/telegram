@@ -64,8 +64,6 @@ type TelegramClient struct {
 	stopTakeoutTimer   *time.Timer
 	takeoutDialogsOnce sync.Once
 
-	activeCalls map[int64]networkid.PortalKey
-
 	prevReactionPoll map[networkid.PortalKey]time.Time
 }
 
@@ -136,7 +134,6 @@ func NewTelegramClient(ctx context.Context, tc *TelegramConnector, login *bridge
 
 		takeoutAccepted: exsync.NewEvent(),
 
-		activeCalls:      map[int64]networkid.PortalKey{},
 		prevReactionPoll: map[networkid.PortalKey]time.Time{},
 	}
 	dispatcher := UpdateDispatcher{
@@ -201,7 +198,6 @@ func NewTelegramClient(ctx context.Context, tc *TelegramConnector, login *bridge
 	})
 	dispatcher.OnChat(client.onChat)
 	dispatcher.OnPhoneCall(client.onPhoneCall)
-	dispatcher.OnGroupCall(client.onGroupCall)
 
 	client.ScopedStore = tc.Store.GetScopedStore(telegramUserID)
 
