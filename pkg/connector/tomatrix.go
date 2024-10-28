@@ -39,6 +39,8 @@ func mediaHashID(ctx context.Context, m tg.MessageMediaClass) []byte {
 		return binary.BigEndian.AppendUint64(nil, uint64(media.Photo.GetID()))
 	case *tg.MessageMediaDocument:
 		return binary.BigEndian.AppendUint64(nil, uint64(media.Document.GetID()))
+	case nil:
+		return nil
 	default:
 		zerolog.Ctx(ctx).Error().Type("media_type", m).Msg("Attempted to get hash for unsupported media type ID")
 	}
