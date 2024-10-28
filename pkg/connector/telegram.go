@@ -222,6 +222,22 @@ func (t *TelegramClient) onUpdateNewMessage(ctx context.Context, channels map[in
 					CanBackfill: true,
 				},
 			})
+			eventMeta.Type = bridgev2.RemoteEventMessage
+			t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.Message[any]{
+				EventMeta: eventMeta,
+				ID:        ids.GetMessageIDFromMessage(msg),
+				ConvertMessageFunc: func(ctx context.Context, portal *bridgev2.Portal, intent bridgev2.MatrixAPI, data any) (*bridgev2.ConvertedMessage, error) {
+					return &bridgev2.ConvertedMessage{
+						Parts: []*bridgev2.ConvertedMessagePart{
+							{
+								ID:      networkid.PartID("create-notice"),
+								Type:    event.EventMessage,
+								Content: &event.MessageEventContent{MsgType: event.MsgNotice, Body: "Created the group"},
+							},
+						},
+					}, nil
+				},
+			})
 
 		case *tg.MessageActionChannelCreate:
 			eventMeta.Type = bridgev2.RemoteEventChatResync
@@ -244,6 +260,22 @@ func (t *TelegramClient) onUpdateNewMessage(ctx context.Context, channels map[in
 						},
 					},
 					CanBackfill: true,
+				},
+			})
+			eventMeta.Type = bridgev2.RemoteEventMessage
+			t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.Message[any]{
+				EventMeta: eventMeta,
+				ID:        ids.GetMessageIDFromMessage(msg),
+				ConvertMessageFunc: func(ctx context.Context, portal *bridgev2.Portal, intent bridgev2.MatrixAPI, data any) (*bridgev2.ConvertedMessage, error) {
+					return &bridgev2.ConvertedMessage{
+						Parts: []*bridgev2.ConvertedMessagePart{
+							{
+								ID:      networkid.PartID("create-notice"),
+								Type:    event.EventMessage,
+								Content: &event.MessageEventContent{MsgType: event.MsgNotice, Body: "Created the group"},
+							},
+						},
+					}, nil
 				},
 			})
 		case *tg.MessageActionSetMessagesTTL:
