@@ -1,6 +1,7 @@
 INSERT INTO "user" (bridge_id, mxid)
 SELECT '', mxid FROM user_old;
 
+DELETE FROM telethon_sessions_old WHERE auth_key IS NULL;
 ALTER TABLE telethon_sessions_old ADD COLUMN json_data jsonb;
 UPDATE telethon_sessions_old SET json_data=
     -- only: postgres
