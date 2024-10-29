@@ -164,19 +164,10 @@ func (t *TelegramClient) handleDialogs(ctx context.Context, dialogs tg.ModifiedM
 			if !portal.Metadata.(*PortalMetadata).IsSuperGroup {
 				// Add the channel user
 				sender := ids.MakeChannelUserID(peer.ChannelID)
-				chatInfo.Members.MemberMap = map[networkid.UserID]bridgev2.ChatMember{
-					sender: {
-						EventSender: bridgev2.EventSender{Sender: sender},
-						Membership:  event.MembershipJoin,
-						PowerLevel:  superadminPowerLevel,
-					},
-				}
-				chatInfo.Members.MemberMap = map[networkid.UserID]bridgev2.ChatMember{
-					t.userID: {
-						EventSender: t.mySender(),
-						Membership:  event.MembershipJoin,
-						PowerLevel:  adminRightsToPowerLevel(channel.(*tg.Channel).AdminRights),
-					},
+				chatInfo.Members.MemberMap[sender] = bridgev2.ChatMember{
+					EventSender: bridgev2.EventSender{Sender: sender},
+					Membership:  event.MembershipJoin,
+					PowerLevel:  superadminPowerLevel,
 				}
 			}
 
