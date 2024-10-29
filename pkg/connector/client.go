@@ -15,6 +15,7 @@ import (
 	"github.com/gotd/td/telegram/updates"
 	"github.com/gotd/td/tg"
 	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 	"go.mau.fi/util/exsync"
 	"go.mau.fi/zerozap"
 	"go.uber.org/zap"
@@ -385,19 +386,25 @@ func (t *TelegramClient) onDead() {
 
 func (t *TelegramClient) onConnectionStateChange(reason string) func() {
 	return func() {
-		t.main.Bridge.Log.Info().
+		log := t.main.Bridge.Log.With().
 			Str("component", "telegram_client").
 			Str("user_login_id", string(t.userLogin.ID)).
 			Str("reason", reason).
-			Msg("Connection state changed")
+			Logger()
+		log.Info().Msg("Connection state changed")
+		ctx := log.WithContext(context.Background())
 
-		authStatus, err := t.client.Auth().Status(context.Background())
+		authStatus, err := t.client.Auth().Status(ctx)
 		if err != nil {
 			t.userLogin.BridgeState.Send(status.BridgeState{
 				StateEvent: status.StateUnknownError,
 				Error:      "tg-not-authenticated",
 				Message:    err.Error(),
 			})
+			t.userLogin.Metadata.(*UserLoginMetadata).Session.AuthKey = nil
+			if err := t.userLogin.Save(ctx); err != nil {
+				log.Err(err).Msg("failed to save user login")
+			}
 		} else if authStatus.Authorized {
 			t.userLogin.BridgeState.Send(status.BridgeState{StateEvent: status.StateConnected})
 		} else {
@@ -406,6 +413,10 @@ func (t *TelegramClient) onConnectionStateChange(reason string) func() {
 				Error:      "tg-no-auth",
 				Message:    "You're not logged in",
 			})
+			t.userLogin.Metadata.(*UserLoginMetadata).Session.AuthKey = nil
+			if err := t.userLogin.Save(ctx); err != nil {
+				log.Err(err).Msg("failed to save user login")
+			}
 		}
 	}
 }
@@ -416,9 +427,17 @@ func (t *TelegramClient) onAuthError(err error) {
 		Error:      "tg-no-auth",
 		Message:    err.Error(),
 	})
+	t.userLogin.Metadata.(*UserLoginMetadata).Session.AuthKey = nil
+	if err := t.userLogin.Save(context.Background()); err != nil {
+		log.Err(err).Msg("failed to save user login")
+	}
 }
 
 func (t *TelegramClient) Connect(ctx context.Context) (err error) {
+	if len(t.userLogin.Metadata.(*UserLoginMetadata).Session.AuthKey) != 256 {
+		return errors.New("user does not have an auth key")
+	}
+
 	ctx, t.clientCancel, err = connectTelegramClient(ctx, t.client)
 	if err != nil {
 		return err
@@ -583,8 +602,7 @@ func (t *TelegramClient) getUserInfoFromTelegramUser(ctx context.Context, u tg.U
 }
 
 func (t *TelegramClient) IsLoggedIn() bool {
-	_, err := t.client.Self(context.TODO())
-	return err == nil
+	return t.client != nil && t.userLogin.Metadata.(*UserLoginMetadata).Session.AuthKey == nil
 }
 
 func (t *TelegramClient) LogoutRemote(ctx context.Context) {
