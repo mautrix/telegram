@@ -137,6 +137,8 @@ ON CONFLICT (bridge_id, user_mxid, login_id, portal_id, portal_receiver) DO NOTH
 INSERT INTO ghost (bridge_id, id, name, avatar_id, avatar_hash, avatar_mxc, name_set, avatar_set, contact_info_set, is_bot, identifiers, metadata)
 VALUES ('', '', '', '', '', '', false, false, false, false, '[]', '{}');
 
+UPDATE message_old SET sender=NULL WHERE sender IS NOT NULL AND NOT EXISTS(SELECT 1 FROM puppet_old WHERE id=sender);
+
 INSERT INTO message (
     bridge_id, id, part_id, mxid, room_id, room_receiver, sender_id, sender_mxid, timestamp, edit_count, metadata
 )
