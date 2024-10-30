@@ -274,7 +274,7 @@ func (t *TelegramClient) GetChatInfo(ctx context.Context, portal *bridgev2.Porta
 			return nil, fmt.Errorf("full chat is %T not *tg.ChannelFull", fullChat.FullChat)
 		}
 
-		if !t.main.Config.ShouldBridge(channelFull.ParticipantsCount) {
+		if portal.Metadata.(*PortalMetadata).IsSuperGroup && !t.main.Config.ShouldBridge(channelFull.ParticipantsCount) {
 			// TODO change this to a better error whenever that is implemented in mautrix-go
 			return nil, fmt.Errorf("too many participants (%d) in chat %d", channelFull.ParticipantsCount, id)
 		}
