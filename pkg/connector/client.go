@@ -391,6 +391,14 @@ func (t *TelegramClient) sendBadCredentials(message string) {
 	})
 }
 
+func (t *TelegramClient) sendUnknownError(message string) {
+	t.userLogin.BridgeState.Send(status.BridgeState{
+		StateEvent: status.StateUnknownError,
+		Error:      "tg-not-authenticated",
+		Message:    message,
+	})
+}
+
 func (t *TelegramClient) onConnectionStateChange(reason string) func() {
 	return func() {
 		log := t.main.Bridge.Log.With().
@@ -403,11 +411,7 @@ func (t *TelegramClient) onConnectionStateChange(reason string) func() {
 
 		authStatus, err := t.client.Auth().Status(ctx)
 		if err != nil {
-			t.userLogin.BridgeState.Send(status.BridgeState{
-				StateEvent: status.StateUnknownError,
-				Error:      "tg-not-authenticated",
-				Message:    err.Error(),
-			})
+			t.sendUnknownError(err.Error())
 			t.userLogin.Metadata.(*UserLoginMetadata).Session.AuthKey = nil
 			if err := t.userLogin.Save(ctx); err != nil {
 				log.Err(err).Msg("failed to save user login")
@@ -441,7 +445,7 @@ func (t *TelegramClient) Connect(ctx context.Context) error {
 	var err error
 	ctx, t.clientCancel, err = connectTelegramClient(ctx, t.client)
 	if err != nil {
-		t.sendBadCredentials(err.Error())
+		t.sendUnknownError(err.Error())
 		return nil
 	}
 	go func() {
@@ -455,9 +459,9 @@ func (t *TelegramClient) Connect(ctx context.Context) error {
 	// Update the logged-in user's ghost info (this also updates the user
 	// login's remote name and profile).
 	if me, err := t.client.Self(ctx); err != nil {
-		t.sendBadCredentials(fmt.Sprintf("failed to get self: %v", err))
+		t.sendUnknownError(fmt.Sprintf("failed to get self: %v", err))
 	} else if _, err := t.updateGhost(ctx, t.telegramUserID, me); err != nil {
-		t.sendBadCredentials(fmt.Sprintf("failed to update own ghost: %v", err))
+		t.sendUnknownError(fmt.Sprintf("failed to update own ghost: %v", err))
 	} else {
 		t.userLogin.BridgeState.Send(status.BridgeState{StateEvent: status.StateConnected})
 	}
