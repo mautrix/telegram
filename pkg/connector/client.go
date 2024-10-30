@@ -15,7 +15,6 @@ import (
 	"github.com/gotd/td/telegram/updates"
 	"github.com/gotd/td/tg"
 	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
 	"go.mau.fi/util/exsync"
 	"go.mau.fi/zerozap"
 	"go.uber.org/zap"
@@ -429,7 +428,7 @@ func (t *TelegramClient) onAuthError(err error) {
 	})
 	t.userLogin.Metadata.(*UserLoginMetadata).Session.AuthKey = nil
 	if err := t.userLogin.Save(context.Background()); err != nil {
-		log.Err(err).Msg("failed to save user login")
+		t.main.Bridge.Log.Err(err).Msg("failed to save user login")
 	}
 }
 

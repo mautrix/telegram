@@ -10,7 +10,6 @@ import (
 	"github.com/gotd/td/tg"
 	"github.com/gotd/td/tgerr"
 	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
 	"maunium.net/go/mautrix/bridgev2"
 	"maunium.net/go/mautrix/bridgev2/database"
 	"maunium.net/go/mautrix/bridgev2/networkid"
@@ -24,6 +23,7 @@ func (t *TelegramClient) getTakeoutID(ctx context.Context) (takeoutID int64, err
 	if t.stopTakeoutTimer != nil {
 		t.stopTakeoutTimer.Stop()
 	}
+	log := zerolog.Ctx(ctx).With().Str("function", "getTakeoutID").Logger()
 
 	if t.userLogin.Metadata.(*UserLoginMetadata).TakeoutID != 0 {
 		// Resume fetching dialogs using takeout and enqueueing them for
@@ -38,7 +38,6 @@ func (t *TelegramClient) getTakeoutID(ctx context.Context) (takeoutID int64, err
 
 	t.stopTakeoutTimer = time.AfterFunc(max(time.Hour, time.Duration(t.main.Bridge.Config.Backfill.Queue.BatchDelay*2)), sync.OnceFunc(func() { t.stopTakeout(ctx) }))
 
-	log := zerolog.Ctx(ctx).With().Str("function", "getTakeoutID").Logger()
 	for {
 		t.takeoutAccepted.Clear()
 
