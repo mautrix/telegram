@@ -68,6 +68,8 @@ type TelegramConfig struct {
 	} `yaml:"sync"`
 
 	AlwaysCustomEmojiReaction bool `yaml:"always_custom_emoji_reaction"`
+
+	SavedMessagesAvatar id.ContentURIString `yaml:"saved_message_avatar"`
 }
 
 func (c TelegramConfig) ShouldBridge(participantCount int) bool {
@@ -104,6 +106,7 @@ func upgradeConfig(helper up.Helper) {
 	helper.Copy(up.Int, "sync", "create_limit")
 	helper.Copy(up.Bool, "sync", "direct_chats")
 	helper.Copy(up.Bool, "always_custom_emoji_reaction")
+	helper.Copy(up.Str, "saved_message_avatar")
 }
 
 func (tg *TelegramConnector) GetConfig() (example string, data any, upgrader up.Upgrader) {

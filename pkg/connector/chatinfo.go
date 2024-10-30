@@ -2,6 +2,7 @@ package connector
 
 import (
 	"context"
+	"crypto/sha256"
 	"fmt"
 	"time"
 
@@ -73,29 +74,28 @@ func adminRightsToPowerLevel(rights tg.ChatAdminRights) *int {
 	return otherPowerLevel
 }
 
-func (t *TelegramClient) getDMChatInfo(userID int64) (*bridgev2.ChatInfo, error) {
-	networkUserID := ids.MakeUserID(userID)
+func (t *TelegramClient) getDMChatInfo(userID int64) *bridgev2.ChatInfo {
 	chatInfo := bridgev2.ChatInfo{
 		Type: ptr.Ptr(database.RoomTypeDM),
 		Members: &bridgev2.ChatMemberList{
-			IsFull: true,
-			MemberMap: map[networkid.UserID]bridgev2.ChatMember{
-				networkUserID: {
-					EventSender: bridgev2.EventSender{
-						SenderLogin: ids.MakeUserLoginID(userID),
-						Sender:      networkUserID,
-					},
-				},
-				t.userID: {EventSender: t.mySender()},
-			},
+			IsFull:    true,
+			MemberMap: map[networkid.UserID]bridgev2.ChatMember{},
 		},
 		CanBackfill: true,
 	}
+	chatInfo.Members.MemberMap[ids.MakeUserID(userID)] = bridgev2.ChatMember{EventSender: t.senderForUserID(userID)}
+	chatInfo.Members.MemberMap[t.userID] = bridgev2.ChatMember{EventSender: t.mySender()}
 	if userID == t.telegramUserID {
-		// TODO also hardcode the avatar used by telegram?
-		chatInfo.Name = ptr.Ptr("Saved Messages")
+		chatInfo.Avatar = &bridgev2.Avatar{
+			ID:     networkid.AvatarID(t.main.Config.SavedMessagesAvatar),
+			Remove: len(t.main.Config.SavedMessagesAvatar) == 0,
+			MXC:    t.main.Config.SavedMessagesAvatar,
+			Hash:   sha256.Sum256([]byte(t.main.Config.SavedMessagesAvatar)),
+		}
+		chatInfo.Name = ptr.Ptr("Telegram Saved Messages")
+		chatInfo.Topic = ptr.Ptr("Your Telegram cloud storage chat")
 	}
-	return &chatInfo, nil
+	return &chatInfo
 }
 
 func (t *TelegramClient) getGroupChatInfo(fullChat *tg.MessagesChatFull, chatID int64) (*bridgev2.ChatInfo, bool, error) {
@@ -198,7 +198,7 @@ func (t *TelegramClient) GetChatInfo(ctx context.Context, portal *bridgev2.Porta
 
 	switch peerType {
 	case ids.PeerTypeUser:
-		return t.getDMChatInfo(id)
+		return t.getDMChatInfo(id), nil
 	case ids.PeerTypeChat:
 		fullChat, err := APICallWithUpdates(ctx, t, func() (*tg.MessagesChatFull, error) {
 			return t.client.API().MessagesGetFullChat(ctx, id)

@@ -105,19 +105,8 @@ func (t *TelegramClient) handleDialogs(ctx context.Context, dialogs tg.ModifiedM
 				continue
 			}
 		}
-		chatInfo := bridgev2.ChatInfo{
-			CanBackfill: true,
-			UserLocal:   &bridgev2.UserLocalPortalInfo{},
-			Members: &bridgev2.ChatMemberList{
-				MemberMap: map[networkid.UserID]bridgev2.ChatMember{
-					t.userID: {
-						EventSender: t.mySender(),
-						Membership:  event.MembershipJoin,
-					},
-				},
-			},
-		}
 
+		var chatInfo *bridgev2.ChatInfo
 		switch peer := dialog.Peer.(type) {
 		case *tg.PeerUser:
 			userID := ids.MakeUserID(peer.UserID)
@@ -125,10 +114,7 @@ func (t *TelegramClient) handleDialogs(ctx context.Context, dialogs tg.ModifiedM
 				log.Debug().Int64("user_id", peer.UserID).Msg("Not syncing portal because user is deleted")
 				continue
 			}
-			chatInfo.Members.MemberMap[userID] = bridgev2.ChatMember{
-				EventSender: t.senderForUserID(peer.UserID),
-				Membership:  event.MembershipJoin,
-			}
+			chatInfo = t.getDMChatInfo(peer.UserID)
 		case *tg.PeerChat:
 			chat := chats[peer.ChatID]
 			if chat.TypeID() == tg.ChatForbiddenTypeID {
@@ -143,8 +129,19 @@ func (t *TelegramClient) handleDialogs(ctx context.Context, dialogs tg.ModifiedM
 					Msg("Not syncing portal because chat type is unsupported")
 				continue
 			}
-			chatInfo.Members.PowerLevels = t.getGroupChatPowerLevels(ctx, chat)
-			chatInfo.Name = &chat.(*tg.Chat).Title
+			chatInfo = &bridgev2.ChatInfo{
+				CanBackfill: true,
+				Name:        &chat.(*tg.Chat).Title,
+				Members: &bridgev2.ChatMemberList{
+					PowerLevels: t.getGroupChatPowerLevels(ctx, chat),
+					MemberMap: map[networkid.UserID]bridgev2.ChatMember{
+						t.userID: {
+							EventSender: t.mySender(),
+							Membership:  event.MembershipJoin,
+						},
+					},
+				},
+			}
 		case *tg.PeerChannel:
 			channel := chats[peer.ChannelID]
 			if channel.TypeID() == tg.ChannelForbiddenTypeID {
@@ -159,8 +156,19 @@ func (t *TelegramClient) handleDialogs(ctx context.Context, dialogs tg.ModifiedM
 					Msg("Not syncing portal because channel type is unsupported")
 				continue
 			}
-			chatInfo.Name = &channel.(*tg.Channel).Title
-			chatInfo.Members.PowerLevels = t.getGroupChatPowerLevels(ctx, channel)
+			chatInfo = &bridgev2.ChatInfo{
+				CanBackfill: true,
+				Name:        &channel.(*tg.Channel).Title,
+				Members: &bridgev2.ChatMemberList{
+					PowerLevels: t.getGroupChatPowerLevels(ctx, channel),
+					MemberMap: map[networkid.UserID]bridgev2.ChatMember{
+						t.userID: {
+							EventSender: t.mySender(),
+							Membership:  event.MembershipJoin,
+						},
+					},
+				},
+			}
 			if !portal.Metadata.(*PortalMetadata).IsSuperGroup {
 				// Add the channel user
 				sender := ids.MakeChannelUserID(peer.ChannelID)
@@ -170,7 +178,6 @@ func (t *TelegramClient) handleDialogs(ctx context.Context, dialogs tg.ModifiedM
 					PowerLevel:  superadminPowerLevel,
 				}
 			}
-
 		}
 
 		if portal == nil || portal.MXID == "" {
@@ -191,16 +198,16 @@ func (t *TelegramClient) handleDialogs(ctx context.Context, dialogs tg.ModifiedM
 		}
 
 		if mu, ok := dialog.NotifySettings.GetMuteUntil(); ok {
-			chatInfo.UserLocal.MutedUntil = ptr.Ptr(time.Unix(int64(mu), 0))
+			chatInfo.UserLocal = &bridgev2.UserLocalPortalInfo{MutedUntil: ptr.Ptr(time.Unix(int64(mu), 0))}
 		} else {
-			chatInfo.UserLocal.MutedUntil = &bridgev2.Unmuted
+			chatInfo.UserLocal = &bridgev2.UserLocalPortalInfo{MutedUntil: &bridgev2.Unmuted}
 		}
 		if dialog.Pinned {
 			chatInfo.UserLocal.Tag = ptr.Ptr(event.RoomTagFavourite)
 		}
 
 		t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.ChatResync{
-			ChatInfo: &chatInfo,
+			ChatInfo: chatInfo,
 			EventMeta: simplevent.EventMeta{
 				Type: bridgev2.RemoteEventChatResync,
 				LogContext: func(c zerolog.Context) zerolog.Context {

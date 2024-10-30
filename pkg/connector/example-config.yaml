@@ -81,3 +81,6 @@ sync:
 # Telegram? By default, the bridge only uses custom emojis for unicode emojis
 # that aren't allowed in reactions.
 always_custom_emoji_reaction: false
+
+# The avatar to use for the Telegram Saved Messages chat
+saved_message_avatar: mxc://nevarro.space/ZzzyOSDZfyGjKRRbyDPTweAA

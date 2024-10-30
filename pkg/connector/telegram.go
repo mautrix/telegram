@@ -506,10 +506,7 @@ func (t *TelegramClient) getEventSender(msg interface {
 func (t *TelegramClient) getPeerSender(peer tg.PeerClass) bridgev2.EventSender {
 	switch from := peer.(type) {
 	case *tg.PeerUser:
-		return bridgev2.EventSender{
-			SenderLogin: ids.MakeUserLoginID(from.UserID),
-			Sender:      ids.MakeUserID(from.UserID),
-		}
+		return t.senderForUserID(from.UserID)
 	case *tg.PeerChannel:
 		return bridgev2.EventSender{
 			Sender: ids.MakeChannelUserID(from.ChannelID),

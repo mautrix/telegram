@@ -465,6 +465,16 @@ func (t *TelegramClient) Connect(ctx context.Context) error {
 	} else {
 		t.userLogin.BridgeState.Send(status.BridgeState{StateEvent: status.StateConnected})
 	}
+
+	// Fix the "Telegram Saved Messages" chat
+	t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.ChatResync{
+		ChatInfo: t.getDMChatInfo(t.telegramUserID),
+		EventMeta: simplevent.EventMeta{
+			Type:         bridgev2.RemoteEventChatResync,
+			PortalKey:    t.makePortalKeyFromID(ids.PeerTypeUser, t.telegramUserID),
+			CreatePortal: false, // Do not create the portal if it doesn't already exist
+		},
+	})
 	return nil
 }
 
