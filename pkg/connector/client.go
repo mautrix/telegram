@@ -625,7 +625,7 @@ func (t *TelegramClient) getUserInfoFromTelegramUser(ctx context.Context, u tg.U
 }
 
 func (t *TelegramClient) IsLoggedIn() bool {
-	return t.client != nil && t.userLogin.Metadata.(*UserLoginMetadata).Session.AuthKey == nil
+	return t.client != nil && t.userLogin.Metadata.(*UserLoginMetadata).Session.AuthKey != nil
 }
 
 func (t *TelegramClient) LogoutRemote(ctx context.Context) {
