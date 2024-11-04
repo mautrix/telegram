@@ -652,6 +652,7 @@ func (t *TelegramClient) LogoutRemote(ctx context.Context) {
 
 	if !t.userLogin.Metadata.(*UserLoginMetadata).Session.HasAuthKey() {
 		log.Info().Msg("User does not have an auth key, not logging out")
+		return
 	}
 
 	_, err = t.client.API().AuthLogOut(ctx)
