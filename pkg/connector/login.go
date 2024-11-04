@@ -68,7 +68,9 @@ func finalizeLogin(ctx context.Context, user *bridgev2.User, authorization *tg.A
 	ul, err := user.NewLogin(ctx, &database.UserLogin{
 		ID:       userLoginID,
 		Metadata: &metadata,
-	}, nil)
+	}, &bridgev2.NewLoginParams{
+		DeleteOnConflict: true,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to save new login: %w", err)
 	}
@@ -118,6 +120,7 @@ func finalizeLogin(ctx context.Context, user *bridgev2.User, authorization *tg.A
 		Instructions: fmt.Sprintf("Successfully logged in as %d / +%s (%s)", me.ID, me.Phone, remoteName),
 		CompleteParams: &bridgev2.LoginCompleteParams{
 			UserLoginID: ul.ID,
+			UserLogin:   ul,
 		},
 	}, nil
 }

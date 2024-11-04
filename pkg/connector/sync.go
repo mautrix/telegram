@@ -23,6 +23,10 @@ func (t *TelegramClient) SyncChats(ctx context.Context) error {
 	if limit <= 0 {
 		limit = math.MaxInt32
 	}
+	zerolog.Ctx(ctx).Info().
+		Int("update_limit", limit).
+		Int("create_limit", t.main.Config.Sync.CreateLimit).
+		Msg("syncing chats")
 
 	dialogs, err := APICallWithUpdates(ctx, t, func() (tg.ModifiedMessagesDialogs, error) {
 		d, err := t.client.API().MessagesGetDialogs(ctx, &tg.MessagesGetDialogsRequest{
