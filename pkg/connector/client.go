@@ -126,6 +126,8 @@ func NewTelegramClient(ctx context.Context, tc *TelegramConnector, login *bridge
 	zaplog := zap.New(zerozap.New(log))
 
 	client := TelegramClient{
+		ScopedStore: tc.Store.GetScopedStore(telegramUserID),
+
 		main:           tc,
 		telegramUserID: telegramUserID,
 		loginID:        login.ID,
@@ -203,8 +205,6 @@ func NewTelegramClient(ctx context.Context, tc *TelegramConnector, login *bridge
 	})
 	dispatcher.OnChat(client.onChat)
 	dispatcher.OnPhoneCall(client.onPhoneCall)
-
-	client.ScopedStore = tc.Store.GetScopedStore(telegramUserID)
 
 	client.updatesManager = updates.New(updates.Config{
 		OnChannelTooLong: func(channelID int64) {
