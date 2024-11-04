@@ -412,10 +412,6 @@ func (t *TelegramClient) onConnectionStateChange(reason string) func() {
 		authStatus, err := t.client.Auth().Status(ctx)
 		if err != nil {
 			t.sendUnknownError(err.Error())
-			t.userLogin.Metadata.(*UserLoginMetadata).Session.AuthKey = nil
-			if err := t.userLogin.Save(ctx); err != nil {
-				log.Err(err).Msg("failed to save user login")
-			}
 		} else if authStatus.Authorized {
 			t.userLogin.BridgeState.Send(status.BridgeState{StateEvent: status.StateConnected})
 		} else {
