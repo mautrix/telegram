@@ -29,6 +29,7 @@ import (
 	"github.com/rs/zerolog"
 	"go.mau.fi/util/exhttp"
 	"maunium.net/go/mautrix"
+	"maunium.net/go/mautrix/bridge/status"
 	"maunium.net/go/mautrix/bridgev2"
 	"maunium.net/go/mautrix/id"
 
@@ -136,6 +137,7 @@ func legacyProvLoginQR(w http.ResponseWriter, r *http.Request) {
 			}
 		case connector.LoginStepIDComplete:
 			ws.WriteJSON(map[string]any{"success": true})
+			go handleLoginComplete(ctx, user, nextStep.CompleteParams.UserLogin)
 			return
 		case connector.LoginStepIDPassword:
 			inflightLegacyLoginsLock.Lock()
@@ -216,6 +218,7 @@ func legacyProvLoginSendCode(w http.ResponseWriter, r *http.Request) {
 		return // Don't delete the inflight login yet, we need to submit the password.
 	} else if nextStep.StepID == connector.LoginStepIDComplete {
 		exhttp.WriteJSONResponse(w, http.StatusOK, resp.WithState("logged-in"))
+		go handleLoginComplete(ctx, user, nextStep.CompleteParams.UserLogin)
 	} else {
 		exhttp.WriteJSONResponse(w, http.StatusInternalServerError, resp.WithError("unexpected_step", fmt.Sprintf("Unexpected step %s", nextStep.StepID)))
 	}
@@ -247,6 +250,7 @@ func legacyProvLoginSendPassword(w http.ResponseWriter, r *http.Request) {
 		exhttp.WriteJSONResponse(w, http.StatusBadRequest, resp.WithError("send_password_failed", fmt.Sprintf("Failed to send password: %s", err.Error())))
 	} else if nextStep.StepID == connector.LoginStepIDComplete {
 		exhttp.WriteJSONResponse(w, http.StatusOK, resp.WithState("logged-in").WithMessage(nextStep.Instructions))
+		go handleLoginComplete(ctx, user, nextStep.CompleteParams.UserLogin)
 	} else {
 		exhttp.WriteJSONResponse(w, http.StatusInternalServerError, resp.WithError("unexpected_step", fmt.Sprintf("Unexpected step %s", nextStep.StepID)))
 	}
@@ -260,11 +264,25 @@ func legacyProvLoginSendPassword(w http.ResponseWriter, r *http.Request) {
 
 func legacyProvLogout(w http.ResponseWriter, r *http.Request) {
 	user := m.Matrix.Provisioning.GetUser(r)
+	resp := response{Username: user.MXID}
 	logins := user.GetUserLogins()
+	if len(logins) == 0 {
+		exhttp.WriteJSONResponse(w, http.StatusOK, resp.WithError("not logged in", "You're not logged in"))
+		return
+	}
 	for _, login := range logins {
-		login.Logout(r.Context())
+		login.Client.(*connector.TelegramClient).LogoutRemote(r.Context())
 	}
 	exhttp.WriteEmptyJSONResponse(w, http.StatusOK)
+}
+
+func handleLoginComplete(ctx context.Context, user *bridgev2.User, newLogin *bridgev2.UserLogin) {
+	allLogins := user.GetUserLogins()
+	for _, login := range allLogins {
+		if login.ID != newLogin.ID {
+			login.Delete(ctx, status.BridgeState{StateEvent: status.StateLoggedOut, Reason: "LOGIN_OVERRIDDEN"}, bridgev2.DeleteOpts{})
+		}
+	}
 }
 
 func legacyProvContacts(w http.ResponseWriter, r *http.Request) {
