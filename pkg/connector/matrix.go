@@ -5,7 +5,11 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
+	"image"
+	_ "image/jpeg"
+	_ "image/png"
 	"math/rand"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -38,34 +42,45 @@ func getMediaFilename(content *event.MessageEventContent) string {
 }
 
 func (t *TelegramClient) transferMediaToTelegram(ctx context.Context, content *event.MessageEventContent, sticker bool) (tg.InputMediaClass, error) {
-	filename := getMediaFilename(content)
-	var fileData []byte
-	fileData, err := t.main.Bridge.Bot.DownloadMedia(ctx, content.URL, content.File)
-	if err != nil {
-		return nil, fmt.Errorf("failed to download media from Matrix: %w", err)
-	}
-
-	if sticker && content.Info != nil && (content.Info.MimeType != "video/webm" && content.Info.MimeType != "application/x-tgsticker") {
-		fileData, err = ffmpeg.ConvertBytes(ctx, fileData, ".webp", []string{}, []string{}, content.Info.MimeType)
-		if err != nil {
-			return nil, fmt.Errorf("failed to convert sticker to webm: %+w", err)
-		}
-		content.Info.MimeType = "image/webp"
-	}
-
-	uploader := uploader.NewUploader(t.client.API())
 	var upload tg.InputFileClass
-	upload, err = uploader.FromBytes(ctx, filename, fileData)
+	var forceDocument bool
+	err := t.main.Bridge.Bot.DownloadMediaToFile(ctx, content.URL, content.File, false, func(f *os.File) (err error) {
+		uploadFilename := f.Name()
+		if sticker && content.Info != nil && (content.Info.MimeType != "video/webm" && content.Info.MimeType != "application/x-tgsticker") {
+			uploadFilename, err = ffmpeg.ConvertPath(ctx, uploadFilename, ".webp", []string{}, []string{}, false)
+			if err != nil {
+				return fmt.Errorf("failed to convert sticker to webm: %+w", err)
+			}
+			defer os.Remove(uploadFilename)
+			content.Info.MimeType = "image/webp"
+		} else {
+			cfg, _, err := image.DecodeConfig(f)
+			if err != nil {
+				return err
+			}
+			info, err := f.Stat()
+			if err != nil {
+				return err
+			}
+
+			forceDocument = cfg.Height*cfg.Width > t.main.Config.ImageAsFilePixels ||
+				info.Size() > int64(t.main.Config.ImageAsFileSize*1024*1024)
+		}
+
+		uploader := uploader.NewUploader(t.client.API())
+		upload, err = uploader.FromPath(ctx, uploadFilename)
+		return
+	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to upload media to Telegram: %w", err)
+		return nil, fmt.Errorf("failed to download media from Matrix and upload media to Telegram: %w", err)
 	}
 
-	if content.MsgType == event.MsgImage && content.Info != nil && (content.Info.MimeType == "image/jpeg" || content.Info.MimeType == "image/png") {
+	if !forceDocument && content.MsgType == event.MsgImage && content.Info != nil && (content.Info.MimeType == "image/jpeg" || content.Info.MimeType == "image/png") {
 		return &tg.InputMediaUploadedPhoto{File: upload}, nil
 	}
 
 	var attributes []tg.DocumentAttributeClass
-	attributes = append(attributes, &tg.DocumentAttributeFilename{FileName: filename})
+	attributes = append(attributes, &tg.DocumentAttributeFilename{FileName: getMediaFilename(content)})
 
 	if content.Info != nil && content.Info.Width != 0 && content.Info.Height != 0 {
 		attributes = append(attributes, &tg.DocumentAttributeImageSize{W: content.Info.Width, H: content.Info.Height})
