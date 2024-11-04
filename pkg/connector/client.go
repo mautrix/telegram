@@ -136,6 +136,11 @@ func NewTelegramClient(ctx context.Context, tc *TelegramConnector, login *bridge
 
 		prevReactionPoll: map[networkid.PortalKey]time.Time{},
 	}
+
+	if !login.Metadata.(*UserLoginMetadata).Session.HasAuthKey() {
+		return &client, nil
+	}
+
 	dispatcher := UpdateDispatcher{
 		UpdateDispatcher: tg.NewUpdateDispatcher(),
 		EntityHandler:    client.onEntityUpdate,
@@ -417,6 +422,7 @@ func (t *TelegramClient) onConnectionStateChange(reason string) func() {
 		} else {
 			t.sendBadCredentials("You're not logged in")
 			t.userLogin.Metadata.(*UserLoginMetadata).Session.AuthKey = nil
+			t.client = nil
 			if err := t.userLogin.Save(ctx); err != nil {
 				log.Err(err).Msg("failed to save user login")
 			}
@@ -427,13 +433,14 @@ func (t *TelegramClient) onConnectionStateChange(reason string) func() {
 func (t *TelegramClient) onAuthError(err error) {
 	t.sendBadCredentials(err.Error())
 	t.userLogin.Metadata.(*UserLoginMetadata).Session.AuthKey = nil
+	t.client = nil
 	if err := t.userLogin.Save(context.Background()); err != nil {
 		t.main.Bridge.Log.Err(err).Msg("failed to save user login")
 	}
 }
 
 func (t *TelegramClient) Connect(ctx context.Context) error {
-	if len(t.userLogin.Metadata.(*UserLoginMetadata).Session.AuthKey) != 256 {
+	if !t.userLogin.Metadata.(*UserLoginMetadata).Session.HasAuthKey() {
 		t.sendBadCredentials("User does not have an auth key")
 		return nil
 	}
@@ -626,6 +633,7 @@ func (t *TelegramClient) LogoutRemote(ctx context.Context) {
 		Str("action", "logout_remote").
 		Int64("user_id", t.telegramUserID).
 		Logger()
+	log.Info().Msg("Logging out")
 
 	err := t.ScopedStore.DeleteUserState(ctx)
 	if err != nil {
@@ -640,6 +648,10 @@ func (t *TelegramClient) LogoutRemote(ctx context.Context) {
 	err = t.ScopedStore.DeleteAccessHashesForUser(ctx)
 	if err != nil {
 		log.Err(err).Msg("failed to delete access hashes for user")
+	}
+
+	if !t.userLogin.Metadata.(*UserLoginMetadata).Session.HasAuthKey() {
+		log.Info().Msg("User does not have an auth key, not logging out")
 	}
 
 	_, err = t.client.API().AuthLogOut(ctx)

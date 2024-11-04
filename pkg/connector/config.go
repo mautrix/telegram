@@ -173,6 +173,10 @@ type UserLoginSession struct {
 	Salt          int64  `json:"salt,omitempty"`
 }
 
+func (u UserLoginSession) HasAuthKey() bool {
+	return len(u.AuthKey) == 256
+}
+
 type UserLoginMetadata struct {
 	Phone     string           `json:"phone"`
 	Session   UserLoginSession `json:"session"`
@@ -185,7 +189,7 @@ type UserLoginMetadata struct {
 }
 
 func (s *UserLoginSession) Load(_ context.Context) (*session.Data, error) {
-	if len(s.AuthKey) != 256 {
+	if !s.HasAuthKey() {
 		return nil, session.ErrNotFound
 	}
 	keyID := crypto.Key(s.AuthKey).ID()
