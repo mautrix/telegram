@@ -54,16 +54,11 @@ func (t *TelegramClient) transferMediaToTelegram(ctx context.Context, content *e
 			}
 			defer os.Remove(uploadFilename)
 			content.Info.MimeType = "image/webp"
+		} else if cfg, _, err := image.DecodeConfig(f); err != nil {
+			forceDocument = true
+		} else if info, err := f.Stat(); err != nil {
+			return err
 		} else {
-			cfg, _, err := image.DecodeConfig(f)
-			if err != nil {
-				return err
-			}
-			info, err := f.Stat()
-			if err != nil {
-				return err
-			}
-
 			// Telegram restricts photos in the following ways according to:
 			// https://core.telegram.org/tdlib/docs/classtd_1_1td__api_1_1input_message_photo.html#ae1229ec5026a0b29dc398d87211bf572
 			//
