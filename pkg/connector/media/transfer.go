@@ -241,6 +241,7 @@ func (t *ReadyTransferer) Transfer(ctx context.Context, store *store.Container, 
 		Str("location_id", string(locationID)).
 		Logger()
 	ctx = log.WithContext(ctx)
+	log.Info().Msg("Transferring file from Telegram to Matrix")
 
 	if file, err := store.TelegramFile.GetByLocationID(ctx, locationID); err != nil {
 		return "", nil, nil, fmt.Errorf("failed to search for Telegram file by location ID: %w", err)
@@ -354,6 +355,7 @@ func (t *ReadyTransferer) Stream(ctx context.Context) (r io.Reader, mimeType str
 				return converted.DataWriter, t.inner.fileInfo.MimeType, t.inner.fileInfo.Size, nil
 			}
 		}
+		return bytes.NewReader(data), t.inner.fileInfo.MimeType, t.inner.fileInfo.Size, nil
 	}
 
 	return r, t.inner.fileInfo.MimeType, t.inner.fileInfo.Size, nil
