@@ -30,8 +30,6 @@ animated_sticker:
         height: 256
         fps: 25 # only for webm, webp and gif (2, 5, 10, 20 or 25 recommended)
 
-# Maximum size of image in megabytes before sending to Telegram as a document.
-image_as_file_size: 10
 # Maximum number of pixels in an image before sending to Telegram as a
 # document. Defaults to 4096x4096 = 16777216.
 image_as_file_pixels: 16777216

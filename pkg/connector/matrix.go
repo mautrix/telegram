@@ -64,8 +64,20 @@ func (t *TelegramClient) transferMediaToTelegram(ctx context.Context, content *e
 				return err
 			}
 
+			// Telegram restricts photos in the following ways according to:
+			// https://core.telegram.org/tdlib/docs/classtd_1_1td__api_1_1input_message_photo.html#ae1229ec5026a0b29dc398d87211bf572
+			//
+			// * The photo must be at most 10 MB in size.
+			// * The photo's width and height must not exceed 10,000 in total
+			// * Width and height ratio must be at most 20.
+			//
+			// We also have the image_as_file_pixels configuration threshold to
+			// prevent Telegram from compressing the file.
+			aspectRatio := float64(max(cfg.Height, cfg.Width)) / float64(min(cfg.Height, cfg.Width))
 			forceDocument = cfg.Height*cfg.Width > t.main.Config.ImageAsFilePixels ||
-				info.Size() > int64(t.main.Config.ImageAsFileSize*1024*1024)
+				info.Size() > int64(10*1024*1024) ||
+				aspectRatio > 20 ||
+				cfg.Height+cfg.Width > 10000
 		}
 
 		uploader := uploader.NewUploader(t.client.API())
