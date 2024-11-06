@@ -44,6 +44,7 @@ func getMediaFilename(content *event.MessageEventContent) string {
 func (t *TelegramClient) transferMediaToTelegram(ctx context.Context, content *event.MessageEventContent, sticker bool) (tg.InputMediaClass, error) {
 	var upload tg.InputFileClass
 	var forceDocument bool
+	filename := getMediaFilename(content)
 	err := t.main.Bridge.Bot.DownloadMediaToFile(ctx, content.URL, content.File, false, func(f *os.File) (err error) {
 		uploadFilename := f.Name()
 		if sticker && content.Info != nil && (content.Info.MimeType != "video/webm" && content.Info.MimeType != "application/x-tgsticker") {
@@ -68,7 +69,7 @@ func (t *TelegramClient) transferMediaToTelegram(ctx context.Context, content *e
 		}
 
 		uploader := uploader.NewUploader(t.client.API())
-		upload, err = uploader.FromPath(ctx, uploadFilename)
+		upload, err = uploader.FromPath(ctx, uploadFilename, filename)
 		return
 	})
 	if err != nil {
@@ -80,7 +81,7 @@ func (t *TelegramClient) transferMediaToTelegram(ctx context.Context, content *e
 	}
 
 	var attributes []tg.DocumentAttributeClass
-	attributes = append(attributes, &tg.DocumentAttributeFilename{FileName: getMediaFilename(content)})
+	attributes = append(attributes, &tg.DocumentAttributeFilename{FileName: filename})
 
 	if content.Info != nil && content.Info.Width != 0 && content.Info.Height != 0 {
 		attributes = append(attributes, &tg.DocumentAttributeImageSize{W: content.Info.Width, H: content.Info.Height})
