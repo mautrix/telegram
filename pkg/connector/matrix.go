@@ -428,6 +428,12 @@ func (t *TelegramClient) HandleMatrixReaction(ctx context.Context, msg *bridgev2
 		MsgID:       targetMessageID,
 		Reaction:    newReactions,
 	})
+	if tg.IsReactionInvalid(err) {
+		return nil, bridgev2.WrapErrorInStatus(err).
+			WithErrorReason(event.MessageStatusUnsupported).
+			WithIsCertain(true).
+			WithMessage("Unsupported reaction")
+	}
 	return &database.Reaction{}, err
 }
 
