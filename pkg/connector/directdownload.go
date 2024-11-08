@@ -7,6 +7,7 @@ import (
 
 	"github.com/gotd/td/tg"
 	"github.com/rs/zerolog"
+	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/bridgev2"
 	"maunium.net/go/mautrix/bridgev2/networkid"
 	"maunium.net/go/mautrix/mediaproxy"
@@ -47,6 +48,12 @@ func (tc *TelegramConnector) Download(ctx context.Context, mediaID networkid.Med
 	}
 
 	client := userLogin.Client.(*TelegramClient)
+
+	if !client.IsLoggedIn() {
+		log.Error().Msg("User is not logged in, returning media proxy error")
+		return nil, mautrix.MForbidden.WithMessage("User not logged in")
+	}
+
 	var messages tg.ModifiedMessagesMessages
 	switch info.PeerType {
 	case ids.PeerTypeUser, ids.PeerTypeChat:
