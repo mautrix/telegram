@@ -456,7 +456,7 @@ func (t *TelegramClient) HandleMatrixReactionRemove(ctx context.Context, msg *br
 	if maxReactions, err := t.getReactionLimit(ctx, t.userID); err != nil {
 		return err
 	} else if maxReactions > 1 {
-		existing, err := t.main.Bridge.DB.Reaction.GetAllToMessageBySender(ctx, msg.TargetReaction.MessageID, msg.TargetReaction.SenderID)
+		existing, err := t.main.Bridge.DB.Reaction.GetAllToMessageBySender(ctx, msg.Portal.Receiver, msg.TargetReaction.MessageID, msg.TargetReaction.SenderID)
 		if err != nil {
 			return err
 		}
