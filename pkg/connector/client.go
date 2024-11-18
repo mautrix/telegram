@@ -324,6 +324,9 @@ func NewTelegramClient(ctx context.Context, tc *TelegramConnector, login *bridge
 			if err != nil {
 				log.Err(err).Msg("error getting message")
 				return url
+			} else if message == nil {
+				log.Err(err).Msg("message not found")
+				return url
 			}
 
 			return portal.MXID.EventURI(message.MXID, tc.Bridge.Matrix.ServerName()).MatrixToURL()
