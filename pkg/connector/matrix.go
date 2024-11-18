@@ -123,6 +123,52 @@ func (t *TelegramClient) transferMediaToTelegram(ctx context.Context, content *e
 	}, nil
 }
 
+func (t *TelegramClient) humanizeSendError(err error) bridgev2.MessageStatus {
+	status := bridgev2.WrapErrorInStatus(err).
+		WithErrorReason(event.MessageStatusNetworkError)
+	switch {
+	case tg.IsYouBlockedUser(err):
+		status = status.WithMessage("You blocked this user").
+			WithErrorReason(event.MessageStatusNoPermission)
+	case tg.IsUserIsBlocked(err), tg.IsUserBlocked(err):
+		status = status.WithMessage("You were blocked by this user").
+			WithErrorReason(event.MessageStatusNoPermission)
+	case tg.IsUserBannedInChannel(err):
+		status = status.WithMessage("You're banned from sending messages in supergroups/channels").
+			WithErrorReason(event.MessageStatusNoPermission)
+	case tg.IsInputUserDeactivated(err):
+		status = status.WithMessage("This user was deleted")
+	case tg.IsChatAdminRequired(err):
+		status = status.WithMessage("Only admins can do that").
+			WithErrorReason(event.MessageStatusNoPermission)
+	case tg.IsChatRestricted(err), tg.IsChatWriteForbidden(err):
+		status = status.WithMessage("You can't send messages in this chat").
+			WithErrorReason(event.MessageStatusNoPermission)
+	case tg.IsSlowmodeWait(err):
+		// TODO tell user how long to wait (need to extract it from the error somehow)
+		status = status.WithMessage("Slow mode enabled, wait before sending")
+	case tg.IsMessageEmpty(err):
+		status = status.WithMessage("Message is empty").
+			WithErrorReason(event.MessageStatusUnsupported)
+	case tg.IsMessageTooLong(err):
+		status = status.WithMessage("Message is too long").
+			WithErrorReason(event.MessageStatusUnsupported)
+	case tg.IsEntitiesTooLong(err):
+		status = status.WithMessage("Message has too many formatting entities").
+			WithErrorReason(event.MessageStatusUnsupported)
+	case tg.IsEntityBoundsInvalid(err):
+		status = status.WithMessage("Message formatting entities are malformed").
+			WithErrorReason(event.MessageStatusUnsupported)
+	case tg.IsEntityMentionUserInvalid(err):
+		status = status.WithMessage("You mentioned an invalid user").
+			WithErrorReason(event.MessageStatusUnsupported)
+	default:
+		return status
+	}
+	return status.WithIsCertain(true).
+		WithStatus(event.MessageStatusFail)
+}
+
 func (t *TelegramClient) HandleMatrixMessage(ctx context.Context, msg *bridgev2.MatrixMessage) (resp *bridgev2.MatrixMessageResponse, err error) {
 	peer, err := t.inputPeerForPortalID(ctx, msg.Portal.ID)
 	if err != nil {
@@ -211,7 +257,7 @@ func (t *TelegramClient) HandleMatrixMessage(ctx context.Context, msg *bridgev2.
 		}
 	}
 	if err != nil {
-		return nil, err
+		return nil, t.humanizeSendError(err)
 	}
 
 	hasher := sha256.New()
