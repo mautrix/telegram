@@ -3,6 +3,7 @@ package connector
 import (
 	"context"
 	"crypto/sha256"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"image"
@@ -184,6 +185,8 @@ func (t *TelegramClient) HandleMatrixMessage(ctx context.Context, msg *bridgev2.
 	if err != nil {
 		return nil, err
 	}
+	log := zerolog.Ctx(ctx).With().Stringer("portal_key", msg.Portal.PortalKey).Any("peer_id", peer).Logger()
+	ctx = log.WithContext(ctx)
 
 	var contentURI id.ContentURIString
 
@@ -195,12 +198,12 @@ func (t *TelegramClient) HandleMatrixMessage(ctx context.Context, msg *bridgev2.
 	if msg.ReplyTo != nil {
 		_, messageID, err := ids.ParseMessageID(msg.ReplyTo.ID)
 		if err != nil {
+			log.Warn().Msg("failed to parse replied-to message ID")
 			return nil, err
 		}
 		replyTo = &tg.InputReplyToMessage{ReplyToMsgID: messageID}
 	}
 
-	// TODO handle sticker
 	var updates tg.UpdatesClass
 	if msg.Event.Type == event.EventSticker {
 		var media tg.InputMediaClass
@@ -267,6 +270,7 @@ func (t *TelegramClient) HandleMatrixMessage(ctx context.Context, msg *bridgev2.
 		}
 	}
 	if err != nil {
+		log.Err(err).Msg("failed to send message to Telegram")
 		return nil, t.humanizeSendError(err)
 	}
 
@@ -297,15 +301,25 @@ func (t *TelegramClient) HandleMatrixMessage(ctx context.Context, msg *bridgev2.
 		return nil, fmt.Errorf("unknown update from message response %T", updates)
 	}
 
+	messageID := ids.MakeMessageID(msg.Portal.PortalKey, tgMessageID)
+	timestamp := time.Unix(int64(tgDate), 0)
+	hash := hasher.Sum(nil)
+	log.Info().
+		Int("tg_message_id", tgMessageID).
+		Str("message_id", string(messageID)).
+		Time("timestamp", timestamp).
+		Str("content_hash", base64.StdEncoding.EncodeToString(hash)).
+		Msg("sent message successfully")
+
 	resp = &bridgev2.MatrixMessageResponse{
 		DB: &database.Message{
-			ID:        ids.MakeMessageID(msg.Portal.PortalKey, tgMessageID),
+			ID:        messageID,
 			MXID:      msg.Event.ID,
 			Room:      msg.Portal.PortalKey,
 			SenderID:  t.userID,
-			Timestamp: time.Unix(int64(tgDate), 0),
+			Timestamp: timestamp,
 			Metadata: &MessageMetadata{
-				ContentHash: hasher.Sum(nil),
+				ContentHash: hash,
 				ContentURI:  contentURI,
 			},
 		},
