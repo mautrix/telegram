@@ -5,12 +5,21 @@ import (
 	"fmt"
 
 	"github.com/gotd/td/tg"
+	"go.mau.fi/util/random"
 	"maunium.net/go/mautrix/bridgev2"
 )
 
 var _ bridgev2.PushableNetworkAPI = (*TelegramClient)(nil)
 
 func (t *TelegramClient) RegisterPushNotifications(ctx context.Context, pushType bridgev2.PushType, token string) error {
+	meta := t.userLogin.Metadata.(*UserLoginMetadata)
+	if meta.PushEncryptionKey == nil {
+		meta.PushEncryptionKey = random.Bytes(256)
+		err := t.userLogin.Save(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to save push encryption key: %w", err)
+		}
+	}
 	var tokenType int
 	switch pushType {
 	case bridgev2.PushTypeWeb:
@@ -27,12 +36,12 @@ func (t *TelegramClient) RegisterPushNotifications(ctx context.Context, pushType
 		TokenType:  tokenType,
 		Token:      token,
 		AppSandbox: false,
-		Secret:     nil,
+		Secret:     meta.PushEncryptionKey,
 		OtherUIDs:  nil, // TODO set properly
 	})
 	return err
 }
 
 func (t *TelegramClient) GetPushConfigs() *bridgev2.PushConfig {
-	return &bridgev2.PushConfig{}
+	return &bridgev2.PushConfig{Native: true}
 }
