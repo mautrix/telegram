@@ -417,6 +417,10 @@ func (t *TelegramClient) onConnectionStateChange(reason string) func() {
 		log.Info().Msg("Connection state changed")
 		ctx := log.WithContext(context.Background())
 
+		if t.client == nil {
+			return
+		}
+
 		authStatus, err := t.client.Auth().Status(ctx)
 		if err != nil {
 			t.sendUnknownError(err.Error())
