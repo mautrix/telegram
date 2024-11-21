@@ -55,8 +55,9 @@ func MakeMessageID(rawChatID any, messageID int) networkid.MessageID {
 	var channelID int64
 	switch typedChatID := rawChatID.(type) {
 	case networkid.PortalKey:
-		if typedChatID.Receiver == "" {
-			_, channelID, _ = ParsePortalID(typedChatID.ID)
+		peerType, entityID, _ := ParsePortalID(typedChatID.ID)
+		if peerType == PeerTypeChannel {
+			channelID = entityID
 		}
 	case *tg.PeerChannel:
 		channelID = typedChatID.ChannelID
