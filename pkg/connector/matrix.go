@@ -173,7 +173,10 @@ func (t *TelegramClient) humanizeSendError(err error) bridgev2.MessageStatus {
 	case tg.IsEntityMentionUserInvalid(err):
 		status = status.WithMessage("You mentioned an invalid user").
 			WithErrorReason(event.MessageStatusUnsupported)
+	case tg.IsMessageEditTimeExpired(err):
+		status = status.WithMessage("You can't edit this message anymore, too much time has passed since its creation.")
 	default:
+		// Return a normal status with the default retriable status
 		return status
 	}
 	return status.WithIsCertain(true).
@@ -372,7 +375,7 @@ func (t *TelegramClient) HandleMatrixEdit(ctx context.Context, msg *bridgev2.Mat
 	}
 	updates, err := t.client.API().MessagesEditMessage(ctx, &req)
 	if err != nil {
-		return err
+		return t.humanizeSendError(err)
 	}
 
 	hasher := sha256.New()
