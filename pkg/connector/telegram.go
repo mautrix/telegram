@@ -238,7 +238,6 @@ func (t *TelegramClient) onUpdateNewMessage(ctx context.Context, channels map[in
 					return &bridgev2.ConvertedMessage{
 						Parts: []*bridgev2.ConvertedMessagePart{
 							{
-								ID:      networkid.PartID("create-notice"),
 								Type:    event.EventMessage,
 								Content: &event.MessageEventContent{MsgType: event.MsgNotice, Body: "Created the group"},
 							},
@@ -277,7 +276,6 @@ func (t *TelegramClient) onUpdateNewMessage(ctx context.Context, channels map[in
 					return &bridgev2.ConvertedMessage{
 						Parts: []*bridgev2.ConvertedMessagePart{
 							{
-								ID:      networkid.PartID("create-notice"),
 								Type:    event.EventMessage,
 								Content: &event.MessageEventContent{MsgType: event.MsgNotice, Body: "Created the group"},
 							},
@@ -305,7 +303,7 @@ func (t *TelegramClient) onUpdateNewMessage(ctx context.Context, channels map[in
 				ConvertMessageFunc: func(ctx context.Context, portal *bridgev2.Portal, intent bridgev2.MatrixAPI, data any) (*bridgev2.ConvertedMessage, error) {
 					return &bridgev2.ConvertedMessage{
 						Parts: []*bridgev2.ConvertedMessagePart{
-							{ID: networkid.PartID("ttl-change"), Type: event.EventMessage, Content: content},
+							{Type: event.EventMessage, Content: content},
 						},
 					}, nil
 				},
@@ -343,7 +341,6 @@ func (t *TelegramClient) onUpdateNewMessage(ctx context.Context, channels map[in
 					return &bridgev2.ConvertedMessage{
 						Parts: []*bridgev2.ConvertedMessagePart{
 							{
-								ID:      networkid.PartID("call"),
 								Type:    event.EventMessage,
 								Content: &event.MessageEventContent{MsgType: event.MsgNotice, Body: body.String()},
 							},
@@ -369,7 +366,6 @@ func (t *TelegramClient) onUpdateNewMessage(ctx context.Context, channels map[in
 					return &bridgev2.ConvertedMessage{
 						Parts: []*bridgev2.ConvertedMessagePart{
 							{
-								ID:      networkid.PartID("call"),
 								Type:    event.EventMessage,
 								Content: &event.MessageEventContent{MsgType: event.MsgNotice, Body: body.String()},
 							},
@@ -411,7 +407,6 @@ func (t *TelegramClient) onUpdateNewMessage(ctx context.Context, channels map[in
 					return &bridgev2.ConvertedMessage{
 						Parts: []*bridgev2.ConvertedMessagePart{
 							{
-								ID:   networkid.PartID("call-invite"),
 								Type: event.EventMessage,
 								Content: &event.MessageEventContent{
 									MsgType:       event.MsgNotice,
@@ -436,7 +431,6 @@ func (t *TelegramClient) onUpdateNewMessage(ctx context.Context, channels map[in
 					return &bridgev2.ConvertedMessage{
 						Parts: []*bridgev2.ConvertedMessagePart{
 							{
-								ID:   networkid.PartID("call-scheduled"),
 								Type: event.EventMessage,
 								Content: &event.MessageEventContent{
 									MsgType: event.MsgNotice,
@@ -1130,7 +1124,6 @@ func (t *TelegramClient) onPhoneCall(ctx context.Context, e tg.Entities, update 
 			return &bridgev2.ConvertedMessage{
 				Parts: []*bridgev2.ConvertedMessagePart{
 					{
-						ID:      networkid.PartID("call"),
 						Type:    event.EventMessage,
 						Content: &event.MessageEventContent{MsgType: event.MsgNotice, Body: body.String()},
 					},

@@ -59,7 +59,6 @@ func (c *TelegramClient) mediaToMatrix(ctx context.Context, portal *bridgev2.Por
 		return nil, nil, nil, nil
 	case tg.MessageMediaUnsupportedTypeID:
 		return &bridgev2.ConvertedMessagePart{
-			ID:   networkid.PartID("unsupported_media"),
 			Type: event.EventMessage,
 			Content: &event.MessageEventContent{
 				MsgType: event.MsgNotice,
@@ -86,7 +85,6 @@ func (c *TelegramClient) mediaToMatrix(ctx context.Context, portal *bridgev2.Por
 	case tg.MessageMediaStoryTypeID, tg.MessageMediaInvoiceTypeID, tg.MessageMediaGiveawayTypeID, tg.MessageMediaGiveawayResultsTypeID:
 		// TODO: support these properly
 		return &bridgev2.ConvertedMessagePart{
-			ID:   networkid.PartID("story"),
 			Type: event.EventMessage,
 			Content: &event.MessageEventContent{
 				MsgType: event.MsgNotice,
@@ -126,7 +124,6 @@ func (c *TelegramClient) convertToMatrix(ctx context.Context, portal *bridgev2.P
 
 		cm.Parts = []*bridgev2.ConvertedMessagePart{
 			{
-				ID:      networkid.PartID("caption"),
 				Type:    event.EventMessage,
 				Content: content,
 			},
@@ -243,7 +240,6 @@ func (c *TelegramClient) convertMediaRequiringUpload(ctx context.Context, portal
 		Int("msg_id", msgID).
 		Logger()
 	eventType := event.EventMessage
-	var partID networkid.PartID
 	var content event.MessageEventContent
 	var telegramMediaID int64
 	var isSticker, isVideoGif bool
@@ -295,7 +291,6 @@ func (c *TelegramClient) convertMediaRequiringUpload(ctx context.Context, portal
 	// Determine the filename and some other information
 	switch msgMedia := msgMedia.(type) {
 	case *tg.MessageMediaPhoto:
-		partID = networkid.PartID("photo")
 		content.MsgType = event.MsgImage
 		if disappearingSetting != nil {
 			content.Body = "disappearing_image"
@@ -311,7 +306,6 @@ func (c *TelegramClient) convertMediaRequiringUpload(ctx context.Context, portal
 		}
 		telegramMediaID = document.GetID()
 
-		partID = networkid.PartID("document")
 		content.MsgType = event.MsgFile
 
 		extraInfo := map[string]any{}
@@ -466,7 +460,6 @@ func (c *TelegramClient) convertMediaRequiringUpload(ctx context.Context, portal
 	}
 
 	return &bridgev2.ConvertedMessagePart{
-		ID:      partID,
 		Type:    eventType,
 		Content: &content,
 		Extra:   extra,
@@ -493,7 +486,6 @@ func (c *TelegramClient) convertContact(media tg.MessageMediaClass) *bridgev2.Co
 	}
 
 	return &bridgev2.ConvertedMessagePart{
-		ID:      networkid.PartID("contact"),
 		Type:    event.EventMessage,
 		Content: &content,
 		Extra: map[string]any{
@@ -553,7 +545,6 @@ func convertLocation(media tg.MessageMediaClass) (*bridgev2.ConvertedMessagePart
 	}
 
 	return &bridgev2.ConvertedMessagePart{
-		ID:   networkid.PartID("location"),
 		Type: event.EventMessage,
 		Content: &event.MessageEventContent{
 			MsgType:       event.MsgLocation,
@@ -578,7 +569,6 @@ func convertPoll(media tg.MessageMediaClass) *bridgev2.ConvertedMessagePart {
 	}
 
 	return &bridgev2.ConvertedMessagePart{
-		ID:   networkid.PartID("poll"),
 		Type: event.EventMessage,
 		Content: &event.MessageEventContent{
 			MsgType:       event.MsgText,
@@ -643,7 +633,6 @@ func convertDice(media tg.MessageMediaClass) *bridgev2.ConvertedMessagePart {
 	}
 
 	return &bridgev2.ConvertedMessagePart{
-		ID:   networkid.PartID("dice"),
 		Type: event.EventMessage,
 		Content: &event.MessageEventContent{
 			MsgType:       event.MsgText,
@@ -664,7 +653,6 @@ func convertGame(media tg.MessageMediaClass) *bridgev2.ConvertedMessagePart {
 	// TODO (PLAT-25562) provide a richer experience for the game
 	game := media.(*tg.MessageMediaGame)
 	return &bridgev2.ConvertedMessagePart{
-		ID:   networkid.PartID("game"),
 		Type: event.EventMessage,
 		Content: &event.MessageEventContent{
 			MsgType: event.MsgText,
