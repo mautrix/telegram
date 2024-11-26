@@ -25,6 +25,7 @@ import (
 	"maunium.net/go/mautrix/bridgev2/simplevent"
 	"maunium.net/go/mautrix/id"
 
+	"go.mau.fi/mautrix-telegram/pkg/connector/humanise"
 	"go.mau.fi/mautrix-telegram/pkg/connector/ids"
 	"go.mau.fi/mautrix-telegram/pkg/connector/matrixfmt"
 	"go.mau.fi/mautrix-telegram/pkg/connector/media"
@@ -399,11 +400,11 @@ func (t *TelegramClient) sendBadCredentials(message string) {
 	})
 }
 
-func (t *TelegramClient) sendUnknownError(message string) {
+func (t *TelegramClient) sendUnknownError(err error) {
 	t.userLogin.BridgeState.Send(status.BridgeState{
 		StateEvent: status.StateUnknownError,
-		Error:      "tg-not-authenticated",
-		Message:    message,
+		Error:      "tg-unknown-error",
+		Message:    humanise.Error(err),
 	})
 }
 
@@ -423,7 +424,7 @@ func (t *TelegramClient) onConnectionStateChange(reason string) func() {
 
 		authStatus, err := t.client.Auth().Status(ctx)
 		if err != nil {
-			t.sendUnknownError(err.Error())
+			t.sendUnknownError(err)
 		} else if authStatus.Authorized {
 			t.userLogin.BridgeState.Send(status.BridgeState{StateEvent: status.StateConnected})
 		} else {
@@ -455,7 +456,7 @@ func (t *TelegramClient) Connect(ctx context.Context) error {
 	var err error
 	ctx, t.clientCancel, err = connectTelegramClient(ctx, t.client)
 	if err != nil {
-		t.sendUnknownError(err.Error())
+		t.sendUnknownError(err)
 		return nil
 	}
 	go func() {
@@ -469,9 +470,9 @@ func (t *TelegramClient) Connect(ctx context.Context) error {
 	// Update the logged-in user's ghost info (this also updates the user
 	// login's remote name and profile).
 	if me, err := t.client.Self(ctx); err != nil {
-		t.sendUnknownError(fmt.Sprintf("failed to get self: %v", err))
+		t.sendUnknownError(err)
 	} else if _, err := t.updateGhost(ctx, t.telegramUserID, me); err != nil {
-		t.sendUnknownError(fmt.Sprintf("failed to update own ghost: %v", err))
+		t.sendUnknownError(err)
 	} else {
 		t.userLogin.BridgeState.Send(status.BridgeState{StateEvent: status.StateConnected})
 	}
