@@ -29,6 +29,7 @@ import (
 	"maunium.net/go/mautrix/id"
 
 	"go.mau.fi/mautrix-telegram/pkg/connector/emojis"
+	"go.mau.fi/mautrix-telegram/pkg/connector/humanise"
 	"go.mau.fi/mautrix-telegram/pkg/connector/ids"
 	"go.mau.fi/mautrix-telegram/pkg/connector/matrixfmt"
 	"go.mau.fi/mautrix-telegram/pkg/connector/waveform"
@@ -134,47 +135,30 @@ func (t *TelegramClient) transferMediaToTelegram(ctx context.Context, content *e
 	}, nil
 }
 
-func (t *TelegramClient) humanizeSendError(err error) bridgev2.MessageStatus {
+func (t *TelegramClient) humaniseSendError(err error) bridgev2.MessageStatus {
 	status := bridgev2.WrapErrorInStatus(err).
-		WithErrorReason(event.MessageStatusNetworkError)
+		WithErrorReason(event.MessageStatusNetworkError).
+		WithMessage(humanise.Error(err))
+
 	switch {
-	case tg.IsYouBlockedUser(err):
-		status = status.WithMessage("You blocked this user").
-			WithErrorReason(event.MessageStatusNoPermission)
-	case tg.IsUserIsBlocked(err), tg.IsUserBlocked(err):
-		status = status.WithMessage("You were blocked by this user").
-			WithErrorReason(event.MessageStatusNoPermission)
-	case tg.IsUserBannedInChannel(err):
-		status = status.WithMessage("You're banned from sending messages in supergroups/channels").
-			WithErrorReason(event.MessageStatusNoPermission)
-	case tg.IsInputUserDeactivated(err):
-		status = status.WithMessage("This user was deleted")
-	case tg.IsChatAdminRequired(err):
-		status = status.WithMessage("Only admins can do that").
-			WithErrorReason(event.MessageStatusNoPermission)
-	case tg.IsChatRestricted(err), tg.IsChatWriteForbidden(err):
-		status = status.WithMessage("You can't send messages in this chat").
-			WithErrorReason(event.MessageStatusNoPermission)
-	case tg.IsSlowmodeWait(err):
-		// TODO tell user how long to wait (need to extract it from the error somehow)
-		status = status.WithMessage("Slow mode enabled, wait before sending")
-	case tg.IsMessageEmpty(err):
-		status = status.WithMessage("Message is empty").
-			WithErrorReason(event.MessageStatusUnsupported)
-	case tg.IsMessageTooLong(err):
-		status = status.WithMessage("Message is too long").
-			WithErrorReason(event.MessageStatusUnsupported)
-	case tg.IsEntitiesTooLong(err):
-		status = status.WithMessage("Message has too many formatting entities").
-			WithErrorReason(event.MessageStatusUnsupported)
-	case tg.IsEntityBoundsInvalid(err):
-		status = status.WithMessage("Message formatting entities are malformed").
-			WithErrorReason(event.MessageStatusUnsupported)
-	case tg.IsEntityMentionUserInvalid(err):
-		status = status.WithMessage("You mentioned an invalid user").
-			WithErrorReason(event.MessageStatusUnsupported)
+	case tg.IsYouBlockedUser(err),
+		tg.IsUserIsBlocked(err),
+		tg.IsUserBlocked(err),
+		tg.IsUserBannedInChannel(err),
+		tg.IsChatAdminRequired(err),
+		tg.IsChatRestricted(err),
+		tg.IsChatWriteForbidden(err):
+		status = status.WithErrorReason(event.MessageStatusNoPermission)
+	case tg.IsMessageEmpty(err),
+		tg.IsMessageTooLong(err),
+		tg.IsEntitiesTooLong(err),
+		tg.IsEntityBoundsInvalid(err),
+		tg.IsEntityMentionUserInvalid(err):
+		status = status.WithErrorReason(event.MessageStatusUnsupported)
 	case tg.IsMessageEditTimeExpired(err):
-		status = status.WithMessage("You can't edit this message anymore, too much time has passed since its creation.")
+		return status.WithErrorReason(event.MessageStatusUnsupported)
+	case tg.IsMessageNotModified(err):
+		status = status.WithErrorReason(event.MessageStatusNetworkError)
 	default:
 		// Return a normal status with the default retriable status
 		return status
@@ -274,7 +258,7 @@ func (t *TelegramClient) HandleMatrixMessage(ctx context.Context, msg *bridgev2.
 	}
 	if err != nil {
 		log.Err(err).Msg("failed to send message to Telegram")
-		return nil, t.humanizeSendError(err)
+		return nil, t.humaniseSendError(err)
 	}
 
 	hasher := sha256.New()
@@ -375,7 +359,7 @@ func (t *TelegramClient) HandleMatrixEdit(ctx context.Context, msg *bridgev2.Mat
 	}
 	updates, err := t.client.API().MessagesEditMessage(ctx, &req)
 	if err != nil {
-		return t.humanizeSendError(err)
+		return t.humaniseSendError(err)
 	}
 
 	hasher := sha256.New()
