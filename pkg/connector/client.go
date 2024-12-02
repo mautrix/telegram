@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/gotd/td/telegram"
@@ -425,6 +426,11 @@ func (t *TelegramClient) onConnectionStateChange(reason string) func() {
 		authStatus, err := t.client.Auth().Status(ctx)
 		if err != nil {
 			t.sendUnknownError(err)
+			if errors.Is(err, syscall.EPIPE) {
+				// This is a pipe error, try reconnecting
+				t.Disconnect()
+				t.Connect(ctx)
+			}
 		} else if authStatus.Authorized {
 			t.userLogin.BridgeState.Send(status.BridgeState{StateEvent: status.StateConnected})
 		} else {
@@ -437,6 +443,7 @@ func (t *TelegramClient) onAuthError(ctx context.Context, err error) {
 	t.sendBadCredentials(humanise.Error(err))
 	t.userLogin.Metadata.(*UserLoginMetadata).ResetOnLogout()
 	t.client = nil
+	t.updatesManager.Reset()
 	if err := t.userLogin.Save(ctx); err != nil {
 		t.main.Bridge.Log.Err(err).Msg("failed to save user login")
 	}
