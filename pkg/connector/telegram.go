@@ -50,7 +50,7 @@ func (t *TelegramClient) selfLeaveChat(portalKey networkid.PortalKey) {
 	})
 }
 
-func (t *TelegramClient) onUpdateChannel(ctx context.Context, update *tg.UpdateChannel) error {
+func (t *TelegramClient) onUpdateChannel(ctx context.Context, e tg.Entities, update *tg.UpdateChannel) error {
 	log := zerolog.Ctx(ctx).With().
 		Str("handler", "on_update_channel").
 		Int64("channel_id", update.ChannelID).
@@ -779,7 +779,7 @@ func (t *TelegramClient) handleTyping(portal networkid.PortalKey, sender bridgev
 	return nil
 }
 
-func (t *TelegramClient) updateReadReceipt(update *tg.UpdateReadHistoryOutbox) error {
+func (t *TelegramClient) updateReadReceipt(ctx context.Context, e tg.Entities, update *tg.UpdateReadHistoryOutbox) error {
 	user, ok := update.Peer.(*tg.PeerUser)
 	if !ok {
 		// Read receipts from other users are meaningless in chats/channels
@@ -927,7 +927,7 @@ func (t *TelegramClient) transferEmojisToMatrix(ctx context.Context, customEmoji
 	return
 }
 
-func (t *TelegramClient) onNotifySettings(ctx context.Context, update *tg.UpdateNotifySettings) error {
+func (t *TelegramClient) onNotifySettings(ctx context.Context, e tg.Entities, update *tg.UpdateNotifySettings) error {
 	if update.Peer.TypeID() != tg.NotifyPeerTypeID {
 		return fmt.Errorf("unsupported peer type %s", update.Peer.TypeName())
 	}
@@ -968,7 +968,7 @@ func (t *TelegramClient) HandleMute(ctx context.Context, msg *bridgev2.MatrixMut
 	return err
 }
 
-func (t *TelegramClient) onPinnedDialogs(ctx context.Context, msg *tg.UpdatePinnedDialogs) error {
+func (t *TelegramClient) onPinnedDialogs(ctx context.Context, e tg.Entities, msg *tg.UpdatePinnedDialogs) error {
 	needsUnpinning := map[networkid.PortalKey]struct{}{}
 	for _, portalID := range t.userLogin.Metadata.(*UserLoginMetadata).PinnedDialogs {
 		pt, id, err := ids.ParsePortalID(portalID)
@@ -1050,7 +1050,7 @@ func (t *TelegramClient) onChatDefaultBannedRights(ctx context.Context, entities
 	return nil
 }
 
-func (t *TelegramClient) onPeerBlocked(ctx context.Context, update *tg.UpdatePeerBlocked) error {
+func (t *TelegramClient) onPeerBlocked(ctx context.Context, e tg.Entities, update *tg.UpdatePeerBlocked) error {
 	var userID networkid.UserID
 	if peer, ok := update.PeerID.(*tg.PeerUser); ok {
 		userID = ids.MakeUserID(peer.UserID)

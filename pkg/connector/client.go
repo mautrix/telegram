@@ -152,12 +152,10 @@ func NewTelegramClient(ctx context.Context, tc *TelegramConnector, login *bridge
 	dispatcher.OnNewMessage(func(ctx context.Context, e tg.Entities, update *tg.UpdateNewMessage) error {
 		return client.onUpdateNewMessage(ctx, e.Channels, update)
 	})
-	dispatcher.OnChannel(func(ctx context.Context, e tg.Entities, update *tg.UpdateChannel) error {
-		return client.onUpdateChannel(ctx, update)
-	})
 	dispatcher.OnNewChannelMessage(func(ctx context.Context, e tg.Entities, update *tg.UpdateNewChannelMessage) error {
 		return client.onUpdateNewMessage(ctx, e.Channels, update)
 	})
+	dispatcher.OnChannel(client.onUpdateChannel)
 	dispatcher.OnUserName(client.onUserName)
 	dispatcher.OnDeleteMessages(func(ctx context.Context, e tg.Entities, update *tg.UpdateDeleteMessages) error {
 		return client.onDeleteMessages(ctx, 0, update)
@@ -184,27 +182,17 @@ func NewTelegramClient(ctx context.Context, tc *TelegramConnector, login *bridge
 	dispatcher.OnChannelUserTyping(func(ctx context.Context, e tg.Entities, update *tg.UpdateChannelUserTyping) error {
 		return client.handleTyping(client.makePortalKeyFromID(ids.PeerTypeChannel, update.ChannelID), client.getPeerSender(update.FromID), update.Action)
 	})
-	dispatcher.OnReadHistoryOutbox(func(ctx context.Context, e tg.Entities, update *tg.UpdateReadHistoryOutbox) error {
-		return client.updateReadReceipt(update)
-	})
+	dispatcher.OnReadHistoryOutbox(client.updateReadReceipt)
 	dispatcher.OnReadHistoryInbox(func(ctx context.Context, e tg.Entities, update *tg.UpdateReadHistoryInbox) error {
 		return client.onOwnReadReceipt(client.makePortalKeyFromPeer(update.Peer), update.MaxID)
 	})
 	dispatcher.OnReadChannelInbox(func(ctx context.Context, e tg.Entities, update *tg.UpdateReadChannelInbox) error {
 		return client.onOwnReadReceipt(client.makePortalKeyFromID(ids.PeerTypeChannel, update.ChannelID), update.MaxID)
 	})
-	dispatcher.OnNotifySettings(func(ctx context.Context, e tg.Entities, update *tg.UpdateNotifySettings) error {
-		return client.onNotifySettings(ctx, update)
-	})
-	dispatcher.OnPinnedDialogs(func(ctx context.Context, e tg.Entities, update *tg.UpdatePinnedDialogs) error {
-		return client.onPinnedDialogs(ctx, update)
-	})
-	dispatcher.OnChatDefaultBannedRights(func(ctx context.Context, e tg.Entities, update *tg.UpdateChatDefaultBannedRights) error {
-		return client.onChatDefaultBannedRights(ctx, e, update)
-	})
-	dispatcher.OnPeerBlocked(func(ctx context.Context, e tg.Entities, update *tg.UpdatePeerBlocked) error {
-		return client.onPeerBlocked(ctx, update)
-	})
+	dispatcher.OnNotifySettings(client.onNotifySettings)
+	dispatcher.OnPinnedDialogs(client.onPinnedDialogs)
+	dispatcher.OnChatDefaultBannedRights(client.onChatDefaultBannedRights)
+	dispatcher.OnPeerBlocked(client.onPeerBlocked)
 	dispatcher.OnChat(client.onChat)
 	dispatcher.OnPhoneCall(client.onPhoneCall)
 
