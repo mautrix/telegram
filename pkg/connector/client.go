@@ -450,17 +450,17 @@ func (t *TelegramClient) onAuthError(ctx context.Context, err error) {
 	}
 }
 
-func (t *TelegramClient) Connect(ctx context.Context) error {
+func (t *TelegramClient) Connect(ctx context.Context) {
 	if !t.userLogin.Metadata.(*UserLoginMetadata).Session.HasAuthKey() {
 		t.sendBadCredentials("User does not have an auth key")
-		return nil
+		return
 	}
 
 	var err error
 	ctx, t.clientCancel, err = connectTelegramClient(ctx, t.client)
 	if err != nil {
 		t.sendUnknownError(err)
-		return nil
+		return
 	}
 	go func() {
 		err = t.updatesManager.Run(ctx, t.client.API(), t.telegramUserID, updates.AuthOptions{})
@@ -489,7 +489,6 @@ func (t *TelegramClient) Connect(ctx context.Context) error {
 			CreatePortal: false, // Do not create the portal if it doesn't already exist
 		},
 	})
-	return nil
 }
 
 func (t *TelegramClient) Disconnect() {

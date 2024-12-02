@@ -74,10 +74,7 @@ func finalizeLogin(ctx context.Context, user *bridgev2.User, authorization *tg.A
 	if err != nil {
 		return nil, fmt.Errorf("failed to save new login: %w", err)
 	}
-	err = ul.Client.Connect(ul.Log.WithContext(context.Background()))
-	if err != nil {
-		return nil, fmt.Errorf("failed to connect after login: %w", err)
-	}
+	ul.Client.Connect(ul.Log.WithContext(context.Background()))
 	client := ul.Client.(*TelegramClient)
 	me, err := client.client.Self(ctx)
 	if err != nil {
