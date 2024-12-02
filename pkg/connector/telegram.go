@@ -36,6 +36,20 @@ type IGetMessages interface {
 	GetMessages() []int
 }
 
+func (t *TelegramClient) selfLeaveChat(portalKey networkid.PortalKey) {
+	t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.ChatDelete{
+		EventMeta: simplevent.EventMeta{
+			Type: bridgev2.RemoteEventChatDelete,
+			LogContext: func(c zerolog.Context) zerolog.Context {
+				return c.Stringer("portal_key", portalKey)
+			},
+			PortalKey: portalKey,
+			Sender:    t.mySender(),
+		},
+		OnlyForMe: true,
+	})
+}
+
 func (t *TelegramClient) onUpdateChannel(ctx context.Context, update *tg.UpdateChannel) error {
 	log := zerolog.Ctx(ctx).With().
 		Str("handler", "on_update_channel").
@@ -43,19 +57,7 @@ func (t *TelegramClient) onUpdateChannel(ctx context.Context, update *tg.UpdateC
 		Logger()
 	log.Debug().Msg("Fetching channel due to UpdateChannel event")
 
-	leave := func() {
-		t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.ChatDelete{
-			EventMeta: simplevent.EventMeta{
-				Type: bridgev2.RemoteEventChatDelete,
-				LogContext: func(c zerolog.Context) zerolog.Context {
-					return c.Int64("channel_id", update.ChannelID)
-				},
-				PortalKey: t.makePortalKeyFromID(ids.PeerTypeChannel, update.ChannelID),
-				Sender:    t.mySender(),
-			},
-			OnlyForMe: true,
-		})
-	}
+	portalKey := t.makePortalKeyFromID(ids.PeerTypeChannel, update.ChannelID)
 
 	chats, err := APICallWithOnlyChatUpdates(ctx, t, func() (tg.MessagesChatsClass, error) {
 		if accessHash, err := t.ScopedStore.GetAccessHash(ctx, ids.PeerTypeChannel, update.ChannelID); err != nil {
@@ -68,7 +70,7 @@ func (t *TelegramClient) onUpdateChannel(ctx context.Context, update *tg.UpdateC
 	})
 	if err != nil {
 		if tgerr.Is(err, tg.ErrChannelInvalid, tg.ErrChannelPrivate) {
-			leave()
+			t.selfLeaveChat(portalKey)
 			return nil
 		}
 		return fmt.Errorf("failed to get channel: %w", err)
@@ -76,10 +78,10 @@ func (t *TelegramClient) onUpdateChannel(ctx context.Context, update *tg.UpdateC
 		return fmt.Errorf("expected 1 chat, got %d", len(chats.GetChats()))
 	} else if channel, ok := chats.GetChats()[0].(*tg.Channel); !ok {
 		log.Error().Type("chat_type", chats.GetChats()[0]).Msg("Expected channel, got something else. Leaving the channel.")
-		leave()
+		t.selfLeaveChat(portalKey)
 	} else if channel.Left {
 		log.Error().Msg("Update was for a left channel. Leaving the channel.")
-		leave()
+		t.selfLeaveChat(portalKey)
 	} else {
 		// TODO update the channel info
 	}
@@ -189,10 +191,7 @@ func (t *TelegramClient) onUpdateNewMessage(ctx context.Context, channels map[in
 			})
 		case *tg.MessageActionChatDeleteUser:
 			if action.UserID == t.telegramUserID {
-				t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.ChatDelete{
-					EventMeta: eventMeta.WithType(bridgev2.RemoteEventChatDelete),
-					OnlyForMe: true,
-				})
+				t.selfLeaveChat(eventMeta.PortalKey)
 				return nil
 			}
 			t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.ChatInfoChange{
@@ -684,10 +683,18 @@ func (t *TelegramClient) onEntityUpdate(ctx context.Context, e tg.Entities) erro
 			return err
 		}
 	}
+	for chatID, chat := range e.Chats {
+		if chat.GetLeft() {
+			t.selfLeaveChat(t.makePortalKeyFromID(ids.PeerTypeChat, chatID))
+		}
+	}
 	for _, channel := range e.Channels {
 		if _, err := t.updateChannel(ctx, channel); err != nil {
 			return err
 		}
+	}
+	for channelID := range e.ChannelsForbidden {
+		t.selfLeaveChat(t.makePortalKeyFromID(ids.PeerTypeChannel, channelID))
 	}
 	return nil
 }
@@ -1083,14 +1090,7 @@ func (t *TelegramClient) onPeerBlocked(ctx context.Context, update *tg.UpdatePee
 func (t *TelegramClient) onChat(ctx context.Context, e tg.Entities, update *tg.UpdateChat) error {
 	if _, ok := e.ChatsForbidden[update.ChatID]; ok {
 		// The chat is now forbidden, we should leave it.
-		t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.ChatDelete{
-			OnlyForMe: true,
-			EventMeta: simplevent.EventMeta{
-				Type:      bridgev2.RemoteEventChatDelete,
-				PortalKey: t.makePortalKeyFromID(ids.PeerTypeChat, update.ChatID),
-				Sender:    t.mySender(),
-			},
-		})
+		t.selfLeaveChat(t.makePortalKeyFromID(ids.PeerTypeChat, update.ChatID))
 	}
 	return nil
 }
