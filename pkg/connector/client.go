@@ -234,7 +234,7 @@ func NewTelegramClient(ctx context.Context, tc *TelegramConnector, login *bridge
 		OnSession:            client.onConnectionStateChange("session"),
 		OnConnected:          client.onConnectionStateChange("connected"),
 		PingCallback:         client.onConnectionStateChange("ping"),
-		OnAuthError:          client.onAuthError,
+		OnAuthError:          func(err error) { client.onAuthError(context.Background(), err) },
 		PingTimeout:          time.Duration(tc.Config.Ping.TimeoutSeconds) * time.Second,
 		PingInterval:         time.Duration(tc.Config.Ping.IntervalSeconds) * time.Second,
 		Device: telegram.DeviceConfig{
@@ -428,21 +428,16 @@ func (t *TelegramClient) onConnectionStateChange(reason string) func() {
 		} else if authStatus.Authorized {
 			t.userLogin.BridgeState.Send(status.BridgeState{StateEvent: status.StateConnected})
 		} else {
-			t.sendBadCredentials("You're not logged in")
-			t.userLogin.Metadata.(*UserLoginMetadata).Session.AuthKey = nil
-			t.client = nil
-			if err := t.userLogin.Save(ctx); err != nil {
-				log.Err(err).Msg("failed to save user login")
-			}
+			t.onAuthError(ctx, fmt.Errorf("not logged in"))
 		}
 	}
 }
 
-func (t *TelegramClient) onAuthError(err error) {
-	t.sendBadCredentials(err.Error())
-	t.userLogin.Metadata.(*UserLoginMetadata).Session.AuthKey = nil
+func (t *TelegramClient) onAuthError(ctx context.Context, err error) {
+	t.sendBadCredentials(humanise.Error(err))
+	t.userLogin.Metadata.(*UserLoginMetadata).ResetOnLogout()
 	t.client = nil
-	if err := t.userLogin.Save(context.Background()); err != nil {
+	if err := t.userLogin.Save(ctx); err != nil {
 		t.main.Bridge.Log.Err(err).Msg("failed to save user login")
 	}
 }
