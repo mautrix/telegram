@@ -425,11 +425,12 @@ func (t *TelegramClient) onConnectionStateChange(reason string) func() {
 
 		authStatus, err := t.client.Auth().Status(ctx)
 		if err != nil {
-			t.sendUnknownError(err)
 			if errors.Is(err, syscall.EPIPE) {
 				// This is a pipe error, try reconnecting
 				t.Disconnect()
 				t.Connect(ctx)
+			} else {
+				t.sendUnknownError(err)
 			}
 		} else if authStatus.Authorized {
 			t.userLogin.BridgeState.Send(status.BridgeState{StateEvent: status.StateConnected})
