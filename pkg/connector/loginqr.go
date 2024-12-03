@@ -2,7 +2,9 @@ package connector
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"time"
 
 	"github.com/gotd/td/telegram"
 	"github.com/gotd/td/telegram/auth/qrlogin"
@@ -66,7 +68,8 @@ func (q *QRLogin) Start(ctx context.Context) (*bridgev2.LoginStep, error) {
 	})
 
 	var err error
-	q.authClientCtx, q.authClientCancel, err = connectTelegramClient(log.WithContext(context.Background()), q.authClient)
+	authClientContext, _ := context.WithTimeoutCause(log.WithContext(context.Background()), time.Hour, errors.New("phone login took over one hour"))
+	q.authClientCtx, q.authClientCancel, err = connectTelegramClient(authClientContext, q.authClient)
 	if err != nil {
 		return nil, err
 	}

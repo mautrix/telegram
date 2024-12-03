@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/gotd/td/telegram"
 	"github.com/gotd/td/telegram/auth"
@@ -58,6 +59,7 @@ func (p *PhoneLogin) Start(ctx context.Context) (*bridgev2.LoginStep, error) {
 }
 
 func (p *PhoneLogin) SubmitUserInput(ctx context.Context, input map[string]string) (*bridgev2.LoginStep, error) {
+	log := zerolog.Ctx(ctx).With().Str("component", "telegram_phone_login").Logger()
 	if phone, ok := input[LoginStepIDPhoneNumber]; ok {
 		p.phone = phone
 		p.authClient = telegram.NewClient(p.main.Config.APIID, p.main.Config.APIHash, telegram.Options{
@@ -65,7 +67,8 @@ func (p *PhoneLogin) SubmitUserInput(ctx context.Context, input map[string]strin
 			Logger:               zap.New(zerozap.New(zerolog.Ctx(ctx).With().Str("component", "telegram_phone_login_client").Logger())),
 		})
 		var err error
-		_, p.authClientCancel, err = connectTelegramClient(context.Background(), p.authClient)
+		authClientContext, _ := context.WithTimeoutCause(log.WithContext(context.Background()), time.Hour, errors.New("phone login took over one hour"))
+		_, p.authClientCancel, err = connectTelegramClient(authClientContext, p.authClient)
 		if err != nil {
 			return nil, err
 		}
