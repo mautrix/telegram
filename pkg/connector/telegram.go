@@ -752,7 +752,7 @@ func (t *TelegramClient) onMessageEdit(ctx context.Context, update IGetMessage) 
 			if err != nil {
 				return nil, err
 			} else if len(existing) != len(converted.Parts) {
-				return nil, fmt.Errorf("parts were added or removed in edit")
+				return nil, fmt.Errorf("parts were added or removed in edit (had %d, got %d)", len(existing), len(converted.Parts))
 			}
 
 			var ce bridgev2.ConvertedEdit
