@@ -150,10 +150,10 @@ func NewTelegramClient(ctx context.Context, tc *TelegramConnector, login *bridge
 		EntityHandler:    client.onEntityUpdate,
 	}
 	dispatcher.OnNewMessage(func(ctx context.Context, e tg.Entities, update *tg.UpdateNewMessage) error {
-		return client.onUpdateNewMessage(ctx, e.Channels, update)
+		return client.onUpdateNewMessage(ctx, e, update)
 	})
 	dispatcher.OnNewChannelMessage(func(ctx context.Context, e tg.Entities, update *tg.UpdateNewChannelMessage) error {
-		return client.onUpdateNewMessage(ctx, e.Channels, update)
+		return client.onUpdateNewMessage(ctx, e, update)
 	})
 	dispatcher.OnChannel(client.onUpdateChannel)
 	dispatcher.OnUserName(client.onUserName)

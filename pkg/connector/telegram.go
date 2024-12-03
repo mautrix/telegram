@@ -88,17 +88,29 @@ func (t *TelegramClient) onUpdateChannel(ctx context.Context, e tg.Entities, upd
 	return nil
 }
 
-func (t *TelegramClient) onUpdateNewMessage(ctx context.Context, channels map[int64]*tg.Channel, update IGetMessage) error {
+func (t *TelegramClient) onUpdateNewMessage(ctx context.Context, entities tg.Entities, update IGetMessage) error {
 	log := zerolog.Ctx(ctx)
 	switch msg := update.GetMessage().(type) {
 	case *tg.Message:
 		sender := t.getEventSender(msg)
 
-		if channel, ok := msg.PeerID.(*tg.PeerChannel); ok {
-			if c, ok := channels[channel.ChannelID]; ok && c.Left {
-				log.Debug().
-					Int64("channel_id", channel.ChannelID).
-					Msg("Received message in left channel, ignoring")
+		switch peer := msg.PeerID.(type) {
+		case *tg.PeerChannel:
+			log := log.With().Int64("channel_id", peer.ChannelID).Logger()
+			if _, ok := entities.ChannelsForbidden[peer.ChannelID]; ok {
+				log.Debug().Msg("Received message in forbidden channel, ignoring")
+				return nil
+			} else if c, ok := entities.Channels[peer.ChannelID]; ok && c.Left {
+				log.Debug().Msg("Received message in left channel, ignoring")
+				return nil
+			}
+		case *tg.PeerChat:
+			log := log.With().Int64("chat_id", peer.ChatID).Logger()
+			if _, ok := entities.ChatsForbidden[peer.ChatID]; ok {
+				log.Debug().Msg("Received message in forbidden chat, ignoring")
+				return nil
+			} else if c, ok := entities.Chats[peer.ChatID]; ok && c.Left {
+				log.Debug().Msg("Received message in left chat, ignoring")
 				return nil
 			}
 		}
