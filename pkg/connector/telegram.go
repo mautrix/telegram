@@ -748,18 +748,26 @@ func (t *TelegramClient) onMessageEdit(ctx context.Context, update IGetMessage) 
 		TargetMessage: ids.GetMessageIDFromMessage(msg),
 		Data:          msg,
 		ConvertEditFunc: func(ctx context.Context, portal *bridgev2.Portal, intent bridgev2.MatrixAPI, existing []*database.Message, data *tg.Message) (*bridgev2.ConvertedEdit, error) {
+			log := zerolog.Ctx(ctx)
 			converted, err := t.convertToMatrix(ctx, portal, intent, msg)
 			if err != nil {
 				return nil, err
-			} else if len(existing) != len(converted.Parts) {
-				return nil, fmt.Errorf("parts were added or removed in edit (had %d, got %d)", len(existing), len(converted.Parts))
+			}
+
+			existingPart := existing[0]
+			if len(existing) > 1 {
+				log.Warn().Msg("Multiple parts found, using the first one that has a nonzero timestamp")
+				for _, e := range existing {
+					if !e.Timestamp.IsZero() {
+						existingPart = e
+						break
+					}
+				}
 			}
 
 			var ce bridgev2.ConvertedEdit
-			for i, part := range converted.Parts {
-				if !bytes.Equal(existing[i].Metadata.(*MessageMetadata).ContentHash, part.DBMetadata.(*MessageMetadata).ContentHash) {
-					ce.ModifiedParts = append(ce.ModifiedParts, part.ToEditPart(existing[i]))
-				}
+			if !bytes.Equal(existingPart.Metadata.(*MessageMetadata).ContentHash, converted.Parts[0].DBMetadata.(*MessageMetadata).ContentHash) {
+				ce.ModifiedParts = append(ce.ModifiedParts, converted.Parts[0].ToEditPart(existingPart))
 			}
 			if len(ce.ModifiedParts) == 0 {
 				return nil, bridgev2.ErrIgnoringRemoteEvent
