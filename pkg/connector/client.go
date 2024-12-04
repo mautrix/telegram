@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/gotd/td/telegram"
+	"github.com/gotd/td/telegram/auth"
 	"github.com/gotd/td/telegram/updates"
 	"github.com/gotd/td/tg"
 	"github.com/rs/zerolog"
@@ -454,6 +455,11 @@ func (t *TelegramClient) Connect(ctx context.Context) {
 		err = t.updatesManager.Run(ctx, t.client.API(), t.telegramUserID, updates.AuthOptions{})
 		if err != nil {
 			zerolog.Ctx(ctx).Err(err).Msg("failed to run updates manager")
+			if auth.IsUnauthorized(err) {
+				t.sendBadCredentials(err.Error())
+			} else {
+				t.sendUnknownError(err)
+			}
 			t.clientCancel()
 		}
 	}()
