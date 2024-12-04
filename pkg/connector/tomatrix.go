@@ -105,6 +105,10 @@ func (c *TelegramClient) convertToMatrix(ctx context.Context, portal *bridgev2.P
 	log := zerolog.Ctx(ctx).With().Str("conversion_direction", "to_matrix").Logger()
 	ctx = log.WithContext(ctx)
 
+	if c.client == nil {
+		return nil, fmt.Errorf("telegram client is nil, we are likely logged out")
+	}
+
 	cm = &bridgev2.ConvertedMessage{}
 	hasher := sha256.New()
 	if len(msg.Message) > 0 {
