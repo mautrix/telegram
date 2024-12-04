@@ -47,6 +47,11 @@ func (tc *TelegramConnector) Download(ctx context.Context, mediaID networkid.Med
 		userLogin = logins[0]
 	}
 
+	if userLogin == nil || userLogin.Client == nil {
+		log.Error().Msg("User does not have a login or client")
+		return nil, mautrix.MForbidden.WithMessage("User not logged in")
+	}
+
 	client := userLogin.Client.(*TelegramClient)
 
 	if !client.IsLoggedIn() {
