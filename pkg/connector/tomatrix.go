@@ -34,9 +34,10 @@ type ttlable interface {
 }
 
 func mediaHashID(ctx context.Context, m tg.MessageMediaClass) []byte {
-	switch media := m.(type) {
-	case nil:
+	if m == nil {
 		return nil
+	}
+	switch media := m.(type) {
 	case *tg.MessageMediaPhoto:
 		return binary.BigEndian.AppendUint64(nil, uint64(media.Photo.GetID()))
 	case *tg.MessageMediaDocument:
