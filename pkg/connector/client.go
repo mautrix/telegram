@@ -376,26 +376,38 @@ func connectTelegramClient(ctx context.Context, client *telegram.Client) (contex
 }
 
 func (t *TelegramClient) onDead() {
+	prevState := t.userLogin.BridgeState.GetPrev().StateEvent
+	if slices.Contains([]status.BridgeStateEvent{
+		status.StateTransientDisconnect,
+		status.StateBadCredentials,
+		status.StateLoggedOut,
+		status.StateUnknownError,
+	}, prevState) {
+		t.userLogin.Log.Warn().
+			Str("prev_state", string(prevState)).
+			Msg("client is dead, not sending transient disconnect, because already in an error state")
+		return
+	}
 	t.userLogin.BridgeState.Send(status.BridgeState{
 		StateEvent: status.StateTransientDisconnect,
 		Message:    "Telegram client disconnected",
 	})
 }
 
-func (t *TelegramClient) sendBadCredentials(message string) {
-	t.userLogin.BridgeState.Send(status.BridgeState{
-		StateEvent: status.StateBadCredentials,
-		Error:      "tg-no-auth",
-		Message:    message,
-	})
-}
-
-func (t *TelegramClient) sendUnknownError(err error) {
-	t.userLogin.BridgeState.Send(status.BridgeState{
-		StateEvent: status.StateUnknownError,
-		Error:      "tg-unknown-error",
-		Message:    humanise.Error(err),
-	})
+func (t *TelegramClient) sendBadCredentialsOrUnknownError(err error) {
+	if auth.IsUnauthorized(err) {
+		t.userLogin.BridgeState.Send(status.BridgeState{
+			StateEvent: status.StateBadCredentials,
+			Error:      "tg-no-auth",
+			Message:    humanise.Error(err),
+		})
+	} else {
+		t.userLogin.BridgeState.Send(status.BridgeState{
+			StateEvent: status.StateUnknownError,
+			Error:      "tg-unknown-error",
+			Message:    humanise.Error(err),
+		})
+	}
 }
 
 func (t *TelegramClient) onConnectionStateChange(reason string) func() {
@@ -419,7 +431,7 @@ func (t *TelegramClient) onConnectionStateChange(reason string) func() {
 				t.Disconnect()
 				t.Connect(ctx)
 			} else {
-				t.sendUnknownError(err)
+				t.sendBadCredentialsOrUnknownError(err)
 			}
 		} else if authStatus.Authorized {
 			t.userLogin.BridgeState.Send(status.BridgeState{StateEvent: status.StateConnected})
@@ -430,7 +442,7 @@ func (t *TelegramClient) onConnectionStateChange(reason string) func() {
 }
 
 func (t *TelegramClient) onAuthError(ctx context.Context, err error) {
-	t.sendBadCredentials(humanise.Error(err))
+	t.sendBadCredentialsOrUnknownError(err)
 	t.userLogin.Metadata.(*UserLoginMetadata).ResetOnLogout()
 	t.client = nil
 	t.updatesManager.Reset()
@@ -441,25 +453,21 @@ func (t *TelegramClient) onAuthError(ctx context.Context, err error) {
 
 func (t *TelegramClient) Connect(ctx context.Context) {
 	if !t.userLogin.Metadata.(*UserLoginMetadata).Session.HasAuthKey() {
-		t.sendBadCredentials("User does not have an auth key")
+		t.sendBadCredentialsOrUnknownError(errors.New("user does not have an auth key"))
 		return
 	}
 
 	var err error
 	ctx, t.clientCancel, err = connectTelegramClient(ctx, t.client)
 	if err != nil {
-		t.sendUnknownError(err)
+		t.sendBadCredentialsOrUnknownError(err)
 		return
 	}
 	go func() {
 		err = t.updatesManager.Run(ctx, t.client.API(), t.telegramUserID, updates.AuthOptions{})
 		if err != nil {
 			zerolog.Ctx(ctx).Err(err).Msg("failed to run updates manager")
-			if auth.IsUnauthorized(err) {
-				t.sendBadCredentials(err.Error())
-			} else {
-				t.sendUnknownError(err)
-			}
+			t.sendBadCredentialsOrUnknownError(err)
 			t.clientCancel()
 		}
 	}()
@@ -467,9 +475,9 @@ func (t *TelegramClient) Connect(ctx context.Context) {
 	// Update the logged-in user's ghost info (this also updates the user
 	// login's remote name and profile).
 	if me, err := t.client.Self(ctx); err != nil {
-		t.sendUnknownError(err)
+		t.sendBadCredentialsOrUnknownError(err)
 	} else if _, err := t.updateGhost(ctx, t.telegramUserID, me); err != nil {
-		t.sendUnknownError(err)
+		t.sendBadCredentialsOrUnknownError(err)
 	} else {
 		t.userLogin.BridgeState.Send(status.BridgeState{StateEvent: status.StateConnected})
 	}
