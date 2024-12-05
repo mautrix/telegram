@@ -367,10 +367,10 @@ func connectTelegramClient(ctx context.Context, client *telegram.Client) (contex
 	select {
 	case <-ctx.Done(): // context canceled
 		cancel()
-		return nil, func() {}, ctx.Err()
+		return nil, func() {}, fmt.Errorf("context cancelled before init done: %w", ctx.Err())
 	case err := <-errC: // startup timeout
 		cancel()
-		return nil, func() {}, err
+		return nil, func() {}, fmt.Errorf("client connection timeout: %w", err)
 	case <-initDone: // init done
 	}
 
@@ -431,7 +431,7 @@ func (t *TelegramClient) onConnectionStateChange(reason string) func() {
 			if errors.Is(err, syscall.EPIPE) {
 				// This is a pipe error, try reconnecting
 				t.Disconnect()
-				t.Connect(ctx)
+				t.Connect(t.main.Bridge.Log.WithContext(context.Background()))
 			} else {
 				t.sendBadCredentialsOrUnknownError(err)
 			}
@@ -470,7 +470,8 @@ func (t *TelegramClient) Connect(ctx context.Context) {
 		if err != nil {
 			zerolog.Ctx(ctx).Err(err).Msg("failed to run updates manager")
 			t.sendBadCredentialsOrUnknownError(err)
-			t.clientCancel()
+			t.Disconnect()
+			t.Connect(t.main.Bridge.Log.WithContext(context.Background()))
 		}
 	}()
 
