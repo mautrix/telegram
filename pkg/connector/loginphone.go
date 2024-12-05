@@ -68,7 +68,7 @@ func (p *PhoneLogin) SubmitUserInput(ctx context.Context, input map[string]strin
 		})
 		var err error
 		authClientContext, _ := context.WithTimeoutCause(log.WithContext(context.Background()), time.Hour, errors.New("phone login took over one hour"))
-		_, p.authClientCancel, err = connectTelegramClient(authClientContext, p.authClient)
+		ctx, p.authClientCancel, err = connectTelegramClient(authClientContext, p.authClient)
 		if err != nil {
 			return nil, err
 		}

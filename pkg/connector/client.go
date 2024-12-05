@@ -47,6 +47,7 @@ type TelegramClient struct {
 	userLogin      *bridgev2.UserLogin
 	client         *telegram.Client
 	updatesManager *updates.Manager
+	clientCtx      context.Context
 	clientCancel   context.CancelFunc
 
 	appConfigLock sync.Mutex
@@ -225,7 +226,7 @@ func NewTelegramClient(ctx context.Context, tc *TelegramConnector, login *bridge
 		OnDead:               client.onDead,
 		OnSession:            client.onConnectionStateChange("session"),
 		OnConnected:          client.onConnectionStateChange("connected"),
-		PingCallback:         client.onConnectionStateChange("ping"),
+		PingCallback:         client.onPing,
 		OnAuthError:          func(err error) { client.onAuthError(context.Background(), err) },
 		PingTimeout:          time.Duration(tc.Config.Ping.TimeoutSeconds) * time.Second,
 		PingInterval:         time.Duration(tc.Config.Ping.IntervalSeconds) * time.Second,
@@ -412,6 +413,14 @@ func (t *TelegramClient) sendBadCredentialsOrUnknownError(err error) {
 	}
 }
 
+func (t *TelegramClient) onPing() {
+	if t.userLogin.BridgeState.GetPrev().StateEvent == status.StateConnected {
+		t.main.Bridge.Log.Info().Msg("Got ping, not checking connectivity because we are already connected")
+	} else {
+		t.onConnectionStateChange("ping while not connected")
+	}
+}
+
 func (t *TelegramClient) onConnectionStateChange(reason string) func() {
 	return func() {
 		log := t.main.Bridge.Log.With().
@@ -423,15 +432,21 @@ func (t *TelegramClient) onConnectionStateChange(reason string) func() {
 		ctx := log.WithContext(context.Background())
 
 		if t.client == nil {
+			log.Warn().Msg("client is nil")
 			return
 		}
 
 		authStatus, err := t.client.Auth().Status(ctx)
 		if err != nil {
 			if errors.Is(err, syscall.EPIPE) {
-				// This is a pipe error, try reconnecting
+				// This is a pipe error, try disconnecting which will force the
+				// updatesManager to fail and cause the client to reconnect.
+				t.userLogin.BridgeState.Send(status.BridgeState{
+					StateEvent: status.StateTransientDisconnect,
+					Error:      "pipe-error",
+					Message:    humanise.Error(err),
+				})
 				t.Disconnect()
-				t.Connect(t.main.Bridge.Log.WithContext(context.Background()))
 			} else {
 				t.sendBadCredentialsOrUnknownError(err)
 			}
@@ -460,15 +475,15 @@ func (t *TelegramClient) Connect(ctx context.Context) {
 	}
 
 	var err error
-	ctx, t.clientCancel, err = connectTelegramClient(ctx, t.client)
+	t.clientCtx, t.clientCancel, err = connectTelegramClient(ctx, t.client)
 	if err != nil {
 		t.sendBadCredentialsOrUnknownError(err)
 		return
 	}
 	go func() {
-		err = t.updatesManager.Run(ctx, t.client.API(), t.telegramUserID, updates.AuthOptions{})
+		err = t.updatesManager.Run(t.clientCtx, t.client.API(), t.telegramUserID, updates.AuthOptions{})
 		if err != nil {
-			zerolog.Ctx(ctx).Err(err).Msg("failed to run updates manager")
+			zerolog.Ctx(t.clientCtx).Err(err).Msg("failed to run updates manager")
 			t.Disconnect()
 			t.Connect(t.main.Bridge.Log.WithContext(context.Background()))
 		}
@@ -476,9 +491,9 @@ func (t *TelegramClient) Connect(ctx context.Context) {
 
 	// Update the logged-in user's ghost info (this also updates the user
 	// login's remote name and profile).
-	if me, err := t.client.Self(ctx); err != nil {
+	if me, err := t.client.Self(t.clientCtx); err != nil {
 		t.sendBadCredentialsOrUnknownError(err)
-	} else if _, err := t.updateGhost(ctx, t.telegramUserID, me); err != nil {
+	} else if _, err := t.updateGhost(t.clientCtx, t.telegramUserID, me); err != nil {
 		t.sendBadCredentialsOrUnknownError(err)
 	} else {
 		t.userLogin.BridgeState.Send(status.BridgeState{StateEvent: status.StateConnected})
@@ -496,6 +511,7 @@ func (t *TelegramClient) Connect(ctx context.Context) {
 }
 
 func (t *TelegramClient) Disconnect() {
+	t.userLogin.Log.Info().Msg("disconnecting client")
 	if t.clientCancel != nil {
 		t.clientCancel()
 	}
@@ -642,11 +658,19 @@ func (t *TelegramClient) IsLoggedIn() bool {
 	if t == nil {
 		return false
 	}
-	t.main.Bridge.Log.Debug().
-		Bool("has_client", t.client != nil).
-		Bool("has_auth_key", t.userLogin.Metadata.(*UserLoginMetadata).Session.HasAuthKey()).
-		Msg("Checking if user is logged in")
-	return t.client != nil && t.userLogin.Metadata.(*UserLoginMetadata).Session.HasAuthKey()
+	select {
+	case <-t.clientCtx.Done():
+		t.main.Bridge.Log.Debug().
+			Bool("client_context_done", true).
+			Msg("Checking if user is logged in")
+		return false
+	default:
+		t.main.Bridge.Log.Debug().
+			Bool("has_client", t.client != nil).
+			Bool("has_auth_key", t.userLogin.Metadata.(*UserLoginMetadata).Session.HasAuthKey()).
+			Msg("Checking if user is logged in")
+		return t.client != nil && t.userLogin.Metadata.(*UserLoginMetadata).Session.HasAuthKey()
+	}
 }
 
 func (t *TelegramClient) LogoutRemote(ctx context.Context) {
