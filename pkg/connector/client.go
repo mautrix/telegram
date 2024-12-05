@@ -469,7 +469,6 @@ func (t *TelegramClient) Connect(ctx context.Context) {
 		err = t.updatesManager.Run(ctx, t.client.API(), t.telegramUserID, updates.AuthOptions{})
 		if err != nil {
 			zerolog.Ctx(ctx).Err(err).Msg("failed to run updates manager")
-			t.sendBadCredentialsOrUnknownError(err)
 			t.Disconnect()
 			t.Connect(t.main.Bridge.Log.WithContext(context.Background()))
 		}
