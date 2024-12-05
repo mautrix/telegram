@@ -36,6 +36,8 @@ import (
 	"go.mau.fi/mautrix-telegram/pkg/connector/util"
 )
 
+var ErrNoAuthKey = errors.New("user does not have auth key")
+
 type TelegramClient struct {
 	main           *TelegramConnector
 	ScopedStore    *store.ScopedStore
@@ -395,7 +397,7 @@ func (t *TelegramClient) onDead() {
 }
 
 func (t *TelegramClient) sendBadCredentialsOrUnknownError(err error) {
-	if auth.IsUnauthorized(err) {
+	if auth.IsUnauthorized(err) || errors.Is(err, ErrNoAuthKey) {
 		t.userLogin.BridgeState.Send(status.BridgeState{
 			StateEvent: status.StateBadCredentials,
 			Error:      "tg-no-auth",
@@ -453,7 +455,7 @@ func (t *TelegramClient) onAuthError(ctx context.Context, err error) {
 
 func (t *TelegramClient) Connect(ctx context.Context) {
 	if !t.userLogin.Metadata.(*UserLoginMetadata).Session.HasAuthKey() {
-		t.sendBadCredentialsOrUnknownError(errors.New("user does not have an auth key"))
+		t.sendBadCredentialsOrUnknownError(ErrNoAuthKey)
 		return
 	}
 
