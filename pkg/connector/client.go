@@ -655,7 +655,7 @@ func (t *TelegramClient) getUserInfoFromTelegramUser(ctx context.Context, u tg.U
 }
 
 func (t *TelegramClient) IsLoggedIn() bool {
-	if t == nil {
+	if t == nil || t.clientCtx == nil {
 		return false
 	}
 	select {
