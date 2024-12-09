@@ -470,9 +470,12 @@ func (t *TelegramClient) onAuthError(ctx context.Context, err error) {
 
 func (t *TelegramClient) Connect(ctx context.Context) {
 	if !t.userLogin.Metadata.(*UserLoginMetadata).Session.HasAuthKey() {
+		zerolog.Ctx(ctx).Warn().Msg("user does not have an auth key, sending bad credentials state")
 		t.sendBadCredentialsOrUnknownError(ErrNoAuthKey)
 		return
 	}
+
+	zerolog.Ctx(ctx).Info().Int64("user_id", t.telegramUserID).Msg("Connecting client")
 
 	var err error
 	t.clientCtx, t.clientCancel, err = connectTelegramClient(ctx, t.client)
