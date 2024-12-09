@@ -446,7 +446,6 @@ func (t *TelegramClient) onConnectionStateChange(reason string) func() {
 					Error:      "pipe-error",
 					Message:    humanise.Error(err),
 				})
-				t.Disconnect()
 			} else {
 				t.sendBadCredentialsOrUnknownError(err)
 			}
