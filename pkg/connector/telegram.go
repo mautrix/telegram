@@ -138,6 +138,7 @@ func (t *TelegramClient) onUpdateNewMessage(ctx context.Context, entities tg.Ent
 				PortalKey:    t.makePortalKeyFromPeer(msg.PeerID),
 				CreatePortal: true,
 				Timestamp:    time.Unix(int64(msg.Date), 0),
+				StreamOrder:  int64(msg.GetID()),
 			},
 			ID:                 ids.GetMessageIDFromMessage(msg),
 			Data:               msg,
@@ -158,6 +159,7 @@ func (t *TelegramClient) onUpdateNewMessage(ctx context.Context, entities tg.Ent
 					Bool("is_from_me", sender.IsFromMe).
 					Stringer("peer_id", msg.PeerID)
 			},
+			StreamOrder: int64(msg.GetID()),
 		}
 
 		switch action := msg.Action.(type) {
