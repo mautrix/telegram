@@ -386,15 +386,16 @@ func (c *TelegramClient) convertMediaRequiringUpload(ctx context.Context, portal
 		}
 
 		if isSticker {
+			// Strip filename so that we never render the caption
+			content.FileName = ""
+
 			if c.main.Config.AnimatedSticker.Target == "webm" || (isVideo && !c.main.Config.AnimatedSticker.ConvertFromWebm) {
 				isVideoGif = true
 				extraInfo["fi.mau.telegram.animated_sticker"] = true
 				transferer.WithMIMEType("video/webm")
 			} else {
 				eventType = event.EventSticker
-				// Strip filename and msgtype if it's an actual m.sticker
-				content.FileName = ""
-				content.MsgType = ""
+				content.MsgType = "" // Strip the msgtype since that doesn't apply for stickers
 			}
 		}
 
