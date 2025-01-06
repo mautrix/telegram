@@ -247,7 +247,7 @@ func (c *TelegramClient) convertMediaRequiringUpload(ctx context.Context, portal
 	eventType := event.EventMessage
 	var content event.MessageEventContent
 	var telegramMediaID int64
-	var isSticker, isVideoGif bool
+	var isSticker, isVideo, isVideoGif bool
 	extra := map[string]any{}
 
 	transferer := media.NewTransferer(c.client.API()).WithRoomID(portal.MXID)
@@ -323,10 +323,13 @@ func (c *TelegramClient) convertMediaRequiringUpload(ctx context.Context, portal
 					content.FileName = a.GetFileName()
 				}
 			case *tg.DocumentAttributeVideo:
+				isVideo = true
 				content.MsgType = event.MsgVideo
 				transferer = transferer.WithVideo(a)
 
-				extraInfo["fi.mau.telegram.round_message"] = true
+				if a.RoundMessage {
+					extraInfo["fi.mau.telegram.round_message"] = a.RoundMessage
+				}
 				extraInfo["duration"] = int(a.Duration * 1000)
 			case *tg.DocumentAttributeAudio:
 				if content.MsgType != event.MsgVideo {
@@ -348,14 +351,6 @@ func (c *TelegramClient) convertMediaRequiringUpload(ctx context.Context, portal
 				transferer = transferer.WithImageSize(a)
 			case *tg.DocumentAttributeSticker:
 				isSticker = true
-				if c.main.Config.AnimatedSticker.Target == "webm" {
-					content.MsgType = event.MsgVideo
-					isVideoGif = true
-					extraInfo["fi.mau.telegram.animated_sticker"] = true
-				} else {
-					eventType = event.EventSticker
-					content.MsgType = ""
-				}
 				if content.Body == "" {
 					content.Body = a.Alt
 				} else {
@@ -382,14 +377,24 @@ func (c *TelegramClient) convertMediaRequiringUpload(ctx context.Context, portal
 			}
 		}
 
-		// Strip filename if it's a sticker
-		if isSticker {
-			content.FileName = ""
-		} else if content.FileName == "" {
+		if content.FileName == "" {
 			if content.Body != "" {
 				content.FileName = content.Body
 			} else {
 				content.Body = "file"
+			}
+		}
+
+		if isSticker {
+			if c.main.Config.AnimatedSticker.Target == "webm" || (isVideo && !c.main.Config.AnimatedSticker.ConvertFromWebm) {
+				isVideoGif = true
+				extraInfo["fi.mau.telegram.animated_sticker"] = true
+				transferer.WithMIMEType("video/webm")
+			} else {
+				eventType = event.EventSticker
+				// Strip filename and msgtype if it's an actual m.sticker
+				content.FileName = ""
+				content.MsgType = ""
 			}
 		}
 

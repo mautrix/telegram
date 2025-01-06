@@ -135,6 +135,11 @@ func (t *Transferer) WithStickerConfig(cfg AnimatedStickerConfig) *Transferer {
 	return t
 }
 
+func (t *Transferer) WithMIMEType(mimeType string) *Transferer {
+	t.fileInfo.MimeType = mimeType
+	return t
+}
+
 func (t *Transferer) WithThumbnail(uri id.ContentURIString, file *event.EncryptedFileInfo, info *event.FileInfo) *Transferer {
 	t.fileInfo.ThumbnailURL = uri
 	t.fileInfo.ThumbnailFile = file
