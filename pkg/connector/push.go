@@ -11,6 +11,8 @@ import (
 
 var _ bridgev2.PushableNetworkAPI = (*TelegramClient)(nil)
 
+var PushAppSandbox = false
+
 func (t *TelegramClient) RegisterPushNotifications(ctx context.Context, pushType bridgev2.PushType, token string) error {
 	meta := t.userLogin.Metadata.(*UserLoginMetadata)
 	if meta.PushEncryptionKey == nil {
@@ -35,7 +37,7 @@ func (t *TelegramClient) RegisterPushNotifications(ctx context.Context, pushType
 		NoMuted:    false,
 		TokenType:  tokenType,
 		Token:      token,
-		AppSandbox: false,
+		AppSandbox: PushAppSandbox,
 		Secret:     meta.PushEncryptionKey,
 		OtherUIDs:  nil, // TODO set properly
 	})
