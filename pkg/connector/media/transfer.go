@@ -198,8 +198,8 @@ func (t *Transferer) WithPhoto(pc tg.PhotoClass) *ReadyTransferer {
 	}
 }
 
-// WithUser transforms a [Transferer] to a [ReadyTransferer] by setting the
-// given user's photo as the location that will be downloaded by the
+// WithUserPhoto transforms a [Transferer] to a [ReadyTransferer] by setting
+// the given user's photo as the location that will be downloaded by the
 // [ReadyTransferer].
 func (t *Transferer) WithUserPhoto(ctx context.Context, store *store.ScopedStore, user *tg.User, photoID int64) (*ReadyTransferer, error) {
 	if accessHash, err := store.GetAccessHash(ctx, ids.PeerTypeUser, user.GetID()); err != nil {
