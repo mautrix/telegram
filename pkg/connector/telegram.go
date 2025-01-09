@@ -92,8 +92,7 @@ func (t *TelegramClient) onUpdateNewMessage(ctx context.Context, entities tg.Ent
 	log := zerolog.Ctx(ctx)
 	switch msg := update.GetMessage().(type) {
 	case *tg.Message:
-		sender := t.getEventSender(msg)
-
+		var isBroadcastChannel bool
 		switch peer := msg.PeerID.(type) {
 		case *tg.PeerChannel:
 			log := log.With().Int64("channel_id", peer.ChannelID).Logger()
@@ -103,6 +102,8 @@ func (t *TelegramClient) onUpdateNewMessage(ctx context.Context, entities tg.Ent
 			} else if c, ok := entities.Channels[peer.ChannelID]; ok && c.Left {
 				log.Debug().Msg("Received message in left channel, ignoring")
 				return nil
+			} else if ok && !c.GetMegagroup() {
+				isBroadcastChannel = true
 			}
 		case *tg.PeerChat:
 			log := log.With().Int64("chat_id", peer.ChatID).Logger()
@@ -114,6 +115,8 @@ func (t *TelegramClient) onUpdateNewMessage(ctx context.Context, entities tg.Ent
 				return nil
 			}
 		}
+
+		sender := t.getEventSender(msg, isBroadcastChannel)
 
 		go t.handleTelegramReactions(ctx, msg)
 
@@ -145,7 +148,7 @@ func (t *TelegramClient) onUpdateNewMessage(ctx context.Context, entities tg.Ent
 			ConvertMessageFunc: t.convertToMatrix,
 		})
 	case *tg.MessageService:
-		sender := t.getEventSender(msg)
+		sender := t.getEventSender(msg, false)
 
 		eventMeta := simplevent.EventMeta{
 			PortalKey: t.makePortalKeyFromPeer(msg.PeerID),
@@ -498,7 +501,13 @@ func (t *TelegramClient) getEventSender(msg interface {
 	GetOut() bool
 	GetFromID() (tg.PeerClass, bool)
 	GetPeerID() tg.PeerClass
-}) bridgev2.EventSender {
+}, isBroadcastChannel bool) bridgev2.EventSender {
+	if isBroadcastChannel && msg.GetPeerID().TypeID() == tg.PeerChannelTypeID {
+		// Always send as the channel in broadcast channels. We set a
+		// per-message profile to indicate the actual user it was from.
+		return t.getPeerSender(msg.GetPeerID())
+	}
+
 	if msg.GetOut() {
 		return t.mySender()
 	}
@@ -721,7 +730,12 @@ func (t *TelegramClient) onMessageEdit(ctx context.Context, update IGetMessage) 
 
 	t.handleTelegramReactions(ctx, msg)
 
-	sender := t.getEventSender(msg)
+	portalKey := t.makePortalKeyFromPeer(msg.PeerID)
+	portal, err := t.main.Bridge.GetPortalByKey(ctx, portalKey)
+	if err != nil {
+		return err
+	}
+	sender := t.getEventSender(msg, !portal.Metadata.(*PortalMetadata).IsSuperGroup)
 
 	// Check if this edit was a data export request acceptance message
 	if sender.Sender == networkid.UserID("777000") {
@@ -743,7 +757,7 @@ func (t *TelegramClient) onMessageEdit(ctx context.Context, update IGetMessage) 
 					Int("message_id", msg.ID)
 			},
 			Sender:    sender,
-			PortalKey: t.makePortalKeyFromPeer(msg.PeerID),
+			PortalKey: portalKey,
 			Timestamp: time.Unix(int64(msg.EditDate), 0),
 		},
 		ID:            ids.GetMessageIDFromMessage(msg),

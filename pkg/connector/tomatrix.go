@@ -109,6 +109,22 @@ func (c *TelegramClient) convertToMatrix(ctx context.Context, portal *bridgev2.P
 		return nil, fmt.Errorf("telegram client is nil, we are likely logged out")
 	}
 
+	var perMessageProfile *event.BeeperPerMessageProfile
+	if peerType, _, err := ids.ParsePortalID(portal.ID); err != nil {
+		return nil, err
+	} else if peerType == ids.PeerTypeChannel && !portal.Metadata.(*PortalMetadata).IsSuperGroup {
+		var profile event.BeeperPerMessageProfile
+		if msg.Out {
+			profile, err = portal.PerMessageProfileForSender(ctx, c.userID)
+		} else {
+			profile, err = portal.PerMessageProfileForSender(ctx, c.getPeerSender(msg.FromID).Sender)
+		}
+		if err != nil {
+			return nil, err
+		}
+		perMessageProfile = &profile
+	}
+
 	cm = &bridgev2.ConvertedMessage{}
 	hasher := sha256.New()
 	if len(msg.Message) > 0 {
@@ -153,6 +169,7 @@ func (c *TelegramClient) convertToMatrix(ctx context.Context, portal *bridgev2.P
 			cm.Disappear = *disappearingSetting
 		}
 	}
+	cm.Parts[0].Content.BeeperPerMessageProfile = perMessageProfile
 	cm.Parts[0].DBMetadata = &MessageMetadata{
 		ContentHash: hasher.Sum(nil),
 		ContentURI:  contentURI,
