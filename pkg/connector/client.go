@@ -287,6 +287,7 @@ func NewTelegramClient(ctx context.Context, tc *TelegramConnector, login *bridge
 				log.Err(err).Msg("error parsing message ID")
 				return url
 			}
+			log = log.With().Str("group", group).Int("msg_id", msgID).Logger()
 
 			var portalKey networkid.PortalKey
 			if strings.HasPrefix(group, "C/") || strings.HasPrefix(group, "c/") {
@@ -296,10 +297,12 @@ func NewTelegramClient(ctx context.Context, tc *TelegramConnector, login *bridge
 					return url
 				}
 				portalKey = client.makePortalKeyFromID(ids.PeerTypeChannel, chatID)
+			} else if submatches[1] == "premium" {
+				portalKey = client.makePortalKeyFromID(ids.PeerTypeUser, 777000)
 			} else {
 				userID, err := strconv.ParseInt(submatches[1], 10, 64)
 				if err != nil {
-					log.Err(err).Msg("error parsing user ID")
+					log.Warn().Err(err).Msg("error parsing user ID")
 					return url
 				}
 				portalKey = client.makePortalKeyFromID(ids.PeerTypeUser, userID)
@@ -316,10 +319,10 @@ func NewTelegramClient(ctx context.Context, tc *TelegramConnector, login *bridge
 
 			message, err := tc.Bridge.DB.Message.GetFirstPartByID(ctx, client.loginID, ids.MakeMessageID(portalKey, msgID))
 			if err != nil {
-				log.Err(err).Msg("error getting message")
+				log.Err(err).Msg("error getting referenced message")
 				return url
 			} else if message == nil {
-				log.Err(err).Msg("message not found")
+				log.Warn().Err(err).Msg("message not found")
 				return url
 			}
 
