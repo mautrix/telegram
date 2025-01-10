@@ -12,6 +12,7 @@ import (
 	"github.com/gotd/td/tg"
 	"github.com/rs/zerolog"
 	"go.mau.fi/util/exmime"
+	"go.mau.fi/util/ptr"
 	"maunium.net/go/mautrix/bridgev2"
 	"maunium.net/go/mautrix/bridgev2/database"
 	"maunium.net/go/mautrix/bridgev2/networkid"
@@ -113,16 +114,19 @@ func (c *TelegramClient) convertToMatrix(ctx context.Context, portal *bridgev2.P
 	if peerType, _, err := ids.ParsePortalID(portal.ID); err != nil {
 		return nil, err
 	} else if peerType == ids.PeerTypeChannel && !portal.Metadata.(*PortalMetadata).IsSuperGroup {
-		var profile event.BeeperPerMessageProfile
+		var sender *networkid.UserID
 		if msg.Out {
-			profile, err = portal.PerMessageProfileForSender(ctx, c.userID)
-		} else {
-			profile, err = portal.PerMessageProfileForSender(ctx, c.getPeerSender(msg.FromID).Sender)
+			sender = &c.userID
+		} else if fromID, ok := msg.GetFromID(); ok {
+			sender = ptr.Ptr(c.getPeerSender(fromID).Sender)
 		}
-		if err != nil {
-			return nil, err
+		if sender != nil {
+			profile, err := portal.PerMessageProfileForSender(ctx, *sender)
+			if err != nil {
+				return nil, err
+			}
+			perMessageProfile = &profile
 		}
-		perMessageProfile = &profile
 	}
 
 	cm = &bridgev2.ConvertedMessage{}
