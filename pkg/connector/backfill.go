@@ -246,20 +246,29 @@ func (t *TelegramClient) FetchMessages(ctx context.Context, fetchParams bridgev2
 	}
 
 	var stopAt int
-	if fetchParams.AnchorMessage != nil && fetchParams.Forward {
+	if fetchParams.AnchorMessage != nil {
 		_, stopAt, err = ids.ParseMessageID(fetchParams.AnchorMessage.ID)
 		if err != nil {
 			return nil, err
 		}
+		log = log.With().Int("stop_at", stopAt).Logger()
 	}
 
 	var backfillMessages []*bridgev2.BackfillMessage
 	for _, msg := range messages {
-		// If we are doing forward backfill and we get to the anchor message,
-		// don't convert any more messages.
-		if stopAt > 0 && msg.GetID() <= stopAt {
-			log.Debug().Int("stop_at", stopAt).Int("message_id", msg.GetID()).Msg("stopping at anchor message")
-			break
+		log := log.With().Int("message_id", msg.GetID()).Logger()
+		if stopAt > 0 {
+			if fetchParams.Forward && msg.GetID() <= stopAt {
+				// If we are doing forward backfill and we get to the anchor
+				// message, don't convert any more messages.
+				log.Debug().Msg("stopping at anchor message")
+				break
+			} else if msg.GetID() >= stopAt {
+				// If we are doing backwards backfill and we get a message more
+				// recent than the anchor message, skip it.
+				log.Debug().Msg("skipping message past anchor message")
+				continue
+			}
 		}
 
 		message, ok := msg.(*tg.Message)
