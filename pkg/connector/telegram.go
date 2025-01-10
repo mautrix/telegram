@@ -898,6 +898,14 @@ func (t *TelegramClient) getAppConfigCached(ctx context.Context) (map[string]any
 	return t.appConfig, nil
 }
 
+func (t *TelegramClient) getAvailableReactionsForCapability(ctx context.Context) ([]string, bool) {
+	_, err := t.getAvailableReactions(ctx)
+	if err != nil {
+		zerolog.Ctx(ctx).Warn().Err(err).Msg("Failed to get available reactions for capability listing")
+	}
+	return t.availableReactionsList, t.isPremiumCache.Load()
+}
+
 func (t *TelegramClient) getAvailableReactions(ctx context.Context) (map[string]struct{}, error) {
 	log := zerolog.Ctx(ctx).With().Str("handler", "get_available_reactions").Logger()
 	t.availableReactionsLock.Lock()
@@ -929,6 +937,15 @@ func (t *TelegramClient) getAvailableReactions(ctx context.Context) (map[string]
 			}
 
 			t.availableReactionsHash = availableReactions.Hash
+			if myGhost.Metadata.(*GhostMetadata).IsPremium {
+				// All reactions are allowed via the unicodemojipack feature
+				t.availableReactionsList = nil
+				t.isPremiumCache.Store(true)
+			} else {
+				t.availableReactionsList = maps.Keys(t.availableReactions)
+				t.isPremiumCache.Store(false)
+				slices.Sort(t.availableReactionsList)
+			}
 		case *tg.MessagesAvailableReactionsNotModified:
 			log.Debug().Msg("Available reactions not modified")
 		default:

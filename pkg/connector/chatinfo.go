@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/gotd/td/tg"
@@ -124,7 +125,34 @@ func (t *TelegramClient) getGroupChatInfo(fullChat *tg.MessagesChatFull, chatID 
 		},
 		CanBackfill: true,
 		ExtraUpdates: func(ctx context.Context, p *bridgev2.Portal) bool {
-			return p.Metadata.(*PortalMetadata).SetIsSuperGroup(isMegagroup)
+			meta := p.Metadata.(*PortalMetadata)
+			changed := meta.SetIsSuperGroup(isMegagroup)
+
+			if reactions, ok := fullChat.FullChat.GetAvailableReactions(); ok {
+				switch typedReactions := reactions.(type) {
+				case *tg.ChatReactionsAll:
+					changed = meta.AllowedReactions != nil
+					meta.AllowedReactions = nil
+				case *tg.ChatReactionsNone:
+					changed = meta.AllowedReactions == nil || len(meta.AllowedReactions) > 0
+					meta.AllowedReactions = []string{}
+				case *tg.ChatReactionsSome:
+					allowedReactions := make([]string, 0, len(typedReactions.Reactions))
+					for _, react := range typedReactions.Reactions {
+						emoji, ok := react.(*tg.ReactionEmoji)
+						if ok {
+							allowedReactions = append(allowedReactions, emoji.Emoticon)
+						}
+					}
+					slices.Sort(allowedReactions)
+					if !slices.Equal(meta.AllowedReactions, allowedReactions) {
+						changed = true
+						meta.AllowedReactions = allowedReactions
+					}
+				}
+			}
+
+			return changed
 		},
 	}
 

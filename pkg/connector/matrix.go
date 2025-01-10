@@ -106,6 +106,10 @@ func (t *TelegramClient) transferMediaToTelegram(ctx context.Context, content *e
 		attributes = append(attributes, &tg.DocumentAttributeImageSize{W: content.Info.Width, H: content.Info.Height})
 	}
 
+	if content.Info != nil && content.Info.MauGIF {
+		attributes = append(attributes, &tg.DocumentAttributeAnimated{})
+	}
+
 	if sticker {
 		attributes = append(attributes, &tg.DocumentAttributeSticker{
 			Alt:        content.Body,

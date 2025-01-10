@@ -2,7 +2,7 @@ module go.mau.fi/mautrix-telegram
 
 go 1.22.0
 
-toolchain go1.23.3
+toolchain go1.23.4
 
 require (
 	github.com/gorilla/mux v1.8.0
@@ -10,12 +10,12 @@ require (
 	github.com/gotd/td v0.111.0
 	github.com/rs/zerolog v1.33.0
 	github.com/stretchr/testify v1.10.0
-	go.mau.fi/util v0.8.4-0.20250106152331-30b8c95e7d7a
+	go.mau.fi/util v0.8.4-0.20250110124612-64d4dbbec957
 	go.mau.fi/zerozap v0.1.1
 	go.uber.org/zap v1.27.0
 	golang.org/x/exp v0.0.0-20250103183323-7d7fa50e5329
-	golang.org/x/net v0.33.0
-	maunium.net/go/mautrix v0.22.2-0.20250109192415-9748015309bd
+	golang.org/x/net v0.34.0
+	maunium.net/go/mautrix v0.22.2-0.20250110154103-bbcb1904e268
 )
 
 require (

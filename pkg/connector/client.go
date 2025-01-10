@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -58,6 +59,8 @@ type TelegramClient struct {
 	availableReactions        map[string]struct{}
 	availableReactionsHash    int
 	availableReactionsFetched time.Time
+	availableReactionsList    []string
+	isPremiumCache            atomic.Bool
 
 	telegramFmtParams *telegramfmt.FormatParams
 	matrixParser      *matrixfmt.HTMLParser
@@ -715,22 +718,6 @@ func (t *TelegramClient) LogoutRemote(ctx context.Context) {
 
 func (t *TelegramClient) IsThisUser(ctx context.Context, userID networkid.UserID) bool {
 	return userID == networkid.UserID(t.userLogin.ID)
-}
-
-func (t *TelegramClient) GetCapabilities(ctx context.Context, portal *bridgev2.Portal) *bridgev2.NetworkRoomCapabilities {
-	return &bridgev2.NetworkRoomCapabilities{
-		FormattedText:    true,
-		UserMentions:     true,
-		RoomMentions:     true, // TODO?
-		LocationMessages: true,
-		Captions:         true,
-		Threads:          false, // TODO
-		Replies:          true,
-		Edits:            true,
-		Deletes:          true,
-		ReadReceipts:     true,
-		Reactions:        true,
-	}
 }
 
 func (t *TelegramClient) mySender() bridgev2.EventSender {
