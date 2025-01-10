@@ -172,6 +172,9 @@ func (t *TelegramClient) handleDialogs(ctx context.Context, dialogs tg.ModifiedM
 						},
 					},
 				},
+				ExtraUpdates: func(ctx context.Context, p *bridgev2.Portal) bool {
+					return p.Metadata.(*PortalMetadata).SetIsSuperGroup(channel.(*tg.Channel).GetMegagroup())
+				},
 			}
 			if !portal.Metadata.(*PortalMetadata).IsSuperGroup {
 				// Add the channel user

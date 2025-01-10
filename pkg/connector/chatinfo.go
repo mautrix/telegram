@@ -124,10 +124,7 @@ func (t *TelegramClient) getGroupChatInfo(fullChat *tg.MessagesChatFull, chatID 
 		},
 		CanBackfill: true,
 		ExtraUpdates: func(ctx context.Context, p *bridgev2.Portal) bool {
-			meta := p.Metadata.(*PortalMetadata)
-			changed := meta.IsSuperGroup != isMegagroup
-			meta.IsSuperGroup = isMegagroup
-			return changed
+			return p.Metadata.(*PortalMetadata).SetIsSuperGroup(isMegagroup)
 		},
 	}
 

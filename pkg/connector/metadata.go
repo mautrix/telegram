@@ -34,6 +34,12 @@ type PortalMetadata struct {
 	MessagesTTL  int  `json:"messages_ttl,omitempty"`
 }
 
+func (pm *PortalMetadata) SetIsSuperGroup(isSupergroup bool) (changed bool) {
+	changed = pm.IsSuperGroup != isSupergroup
+	pm.IsSuperGroup = isSupergroup
+	return changed
+}
+
 type MessageMetadata struct {
 	ContentHash []byte              `json:"content_hash,omitempty"`
 	ContentURI  id.ContentURIString `json:"content_uri,omitempty"`
