@@ -139,7 +139,9 @@ func (c *TelegramClient) convertToMatrix(ctx context.Context, portal *bridgev2.P
 			return nil, err
 		}
 		if media, ok := msg.GetMedia(); ok && media.TypeID() == tg.MessageMediaWebPageTypeID {
-			preview, err := c.webpageToBeeperLinkPreview(ctx, intent, media)
+			webpageCtx, webpageCtxCancel := context.WithTimeout(ctx, time.Second*5)
+			defer webpageCtxCancel()
+			preview, err := c.webpageToBeeperLinkPreview(webpageCtx, intent, media)
 			if err != nil {
 				log.Err(err).Msg("error converting webpage to link preview")
 			} else if preview != nil {
