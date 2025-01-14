@@ -22,6 +22,7 @@ import (
 	"encoding/hex"
 
 	"go.mau.fi/util/ptr"
+	"go.mau.fi/util/variationselector"
 	"maunium.net/go/mautrix/bridgev2"
 	"maunium.net/go/mautrix/event"
 )
@@ -152,7 +153,7 @@ func hashEmojiList(emojis []string) string {
 }
 
 func (t *TelegramClient) GetCapabilities(ctx context.Context, portal *bridgev2.Portal) *event.RoomFeatures {
-	baseID := "fi.mau.telegram.capabilities.2025_01_10"
+	baseID := "fi.mau.telegram.capabilities.2025_01_14"
 	feat := &event.RoomFeatures{
 		Formatting:          formattingCaps,
 		File:                fileCaps,
@@ -162,6 +163,7 @@ func (t *TelegramClient) GetCapabilities(ctx context.Context, portal *bridgev2.P
 		Edit:                event.CapLevelFullySupported,
 		Delete:              event.CapLevelFullySupported,
 		Reaction:            event.CapLevelFullySupported,
+		ReactionCount:       1,
 		ReadReceipts:        true,
 		TypingNotifications: true,
 	}
@@ -178,9 +180,13 @@ func (t *TelegramClient) GetCapabilities(ctx context.Context, portal *bridgev2.P
 		baseID += "+reactions_" + hashEmojiList(reactions)
 		feat.AllowedReactions = reactions
 	}
+	for i, react := range feat.AllowedReactions {
+		feat.AllowedReactions[i] = variationselector.Add(react)
+	}
 	if t.isPremiumCache.Load() {
 		baseID += "+premium"
 		feat.File = premiumFileCaps
+		feat.ReactionCount = 3
 	}
 	feat.ID = baseID
 	return feat
