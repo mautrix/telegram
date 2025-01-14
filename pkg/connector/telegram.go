@@ -3,6 +3,7 @@ package connector
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -907,6 +908,10 @@ func (t *TelegramClient) getAvailableReactionsForCapability(ctx context.Context)
 }
 
 func (t *TelegramClient) getAvailableReactions(ctx context.Context) (map[string]struct{}, error) {
+	if !t.IsLoggedIn() {
+		return nil, errors.New("you must be logged in to get available reactions")
+	}
+
 	log := zerolog.Ctx(ctx).With().Str("handler", "get_available_reactions").Logger()
 	t.availableReactionsLock.Lock()
 	defer t.availableReactionsLock.Unlock()
