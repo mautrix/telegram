@@ -173,6 +173,9 @@ func (t *TelegramClient) GetCapabilities(ctx context.Context, portal *bridgev2.P
 	if reactions == nil {
 		baseID += "+reactions_any"
 		feat.AllowedReactions, feat.CustomEmojiReactions = t.getAvailableReactionsForCapability(ctx)
+		if len(feat.AllowedReactions) > 0 {
+			baseID += "+any_list_" + hashEmojiList(feat.AllowedReactions)
+		}
 	} else if len(reactions) == 0 {
 		baseID += "+reactions_none"
 		feat.Reaction = event.CapLevelRejected
