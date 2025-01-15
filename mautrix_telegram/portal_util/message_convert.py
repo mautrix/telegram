@@ -282,7 +282,7 @@ class TelegramMessageConverter:
         elif isinstance(evt.reply_to, MessageReplyStoryHeader):
             return
 
-        if evt.reply_to.quote and content.msgtype.is_text:
+        if evt.reply_to.quote and content.msgtype and content.msgtype.is_text:
             content.ensure_has_html()
             quote_html = await formatter.telegram_text_to_matrix_html(
                 source, evt.reply_to.quote_text, evt.reply_to.quote_entities
