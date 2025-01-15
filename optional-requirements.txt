@@ -7,8 +7,8 @@ aiodns
 brotli
 
 #/qr_login
-pillow>=10.0.1,<11
-qrcode>=6,<8
+pillow>=10.0.1,<12
+qrcode>=6,<9
 
 #/formattednumbers
 phonenumbers>=8,<9
