@@ -1200,7 +1200,7 @@ class Portal(DBPortal, BasePortal):
                     continue
                 if mx_user.is_bot:
                     await mx_user.unregister_portal(*self.tgid_full)
-                if not self.has_bot:
+                if not self.has_bot and mx_user.tgid:
                     try:
                         await self.main_intent.kick_user(
                             self.mxid, mx_user.mxid, "You had left this Telegram chat."
