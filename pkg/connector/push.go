@@ -11,6 +11,7 @@ import (
 	"github.com/gotd/td/bin"
 	"github.com/gotd/td/crypto"
 	"github.com/gotd/td/tg"
+	"github.com/rs/zerolog"
 	"github.com/tidwall/gjson"
 	"go.mau.fi/util/exslices"
 	"go.mau.fi/util/random"
@@ -339,6 +340,7 @@ UserLoop:
 	var pmd PushNotificationData
 	err = json.Unmarshal(plaintext, &pmd)
 	if err != nil {
+		zerolog.Ctx(ctx).Debug().Str("raw_data", base64.StdEncoding.EncodeToString(plaintext)).Msg("Decrypted non-JSON push data")
 		return userLoginID, nil, fmt.Errorf("failed to unmarshal decrypted payload: %w", err)
 	}
 	return userLoginID, &pmd, nil
