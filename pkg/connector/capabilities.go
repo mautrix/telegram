@@ -34,7 +34,7 @@ func (tg *TelegramConnector) GetCapabilities() *bridgev2.NetworkGeneralCapabilit
 }
 
 func (tg *TelegramConnector) GetBridgeInfoVersion() (info, capabilities int) {
-	return 1, 1
+	return 1, 2
 }
 
 // TODO get these from getConfig instead of hardcoding?
@@ -71,6 +71,7 @@ var fileCaps = event.FileFeatureMap{
 		MimeTypes: map[string]event.CapabilitySupportLevel{
 			"image/jpeg": event.CapLevelFullySupported,
 			"image/png":  event.CapLevelPartialSupport,
+			"image/gif":  event.CapLevelPartialSupport,
 		},
 		Caption:          event.CapLevelFullySupported,
 		MaxCaptionLength: MaxCaptionLength,
@@ -153,7 +154,7 @@ func hashEmojiList(emojis []string) string {
 }
 
 func (t *TelegramClient) GetCapabilities(ctx context.Context, portal *bridgev2.Portal) *event.RoomFeatures {
-	baseID := "fi.mau.telegram.capabilities.2025_01_14"
+	baseID := "fi.mau.telegram.capabilities.2025_02_04"
 	feat := &event.RoomFeatures{
 		Formatting:          formattingCaps,
 		File:                fileCaps,
