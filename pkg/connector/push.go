@@ -30,15 +30,15 @@ var (
 var PushAppSandbox = false
 
 type PushCustomData struct {
-	MessageID int `json:"msg_id"`
+	MessageID int `json:"msg_id,string"`
 
-	ChannelID int64 `json:"channel_id"`
-	ChatID    int64 `json:"chat_id"`
-	FromID    int64 `json:"from_id"`
+	ChannelID int64 `json:"channel_id,string"`
+	ChatID    int64 `json:"chat_id,string"`
+	FromID    int64 `json:"from_id,string"`
 
-	ChatFromBroadcastID int64 `json:"chat_from_broadcast_id"`
-	ChatFromGroupID     int64 `json:"chat_from_group_id"`
-	ChatFromID          int64 `json:"chat_from_id"`
+	ChatFromBroadcastID int64 `json:"chat_from_broadcast_id,string"`
+	ChatFromGroupID     int64 `json:"chat_from_group_id,string"`
+	ChatFromID          int64 `json:"chat_from_id,string"`
 }
 
 type PushNotificationData struct {
@@ -46,7 +46,7 @@ type PushNotificationData struct {
 	LocArgs []string       `json:"loc_args"`
 	Custom  PushCustomData `json:"custom"`
 	Sound   string         `json:"sound"`
-	UserID  int            `json:"user_id"`
+	UserID  int            `json:"user_id,string"`
 }
 
 var PushMessageFormats = map[string]string{
