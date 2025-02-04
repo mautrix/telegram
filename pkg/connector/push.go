@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/base64"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"time"
@@ -336,9 +337,15 @@ UserLoop:
 	plaintext, err := c.DecryptRaw(*matchingAuthKey, &em)
 	if err != nil {
 		return userLoginID, nil, fmt.Errorf("failed to decrypt payload: %w", err)
+	} else if len(plaintext) < 4 {
+		return userLoginID, nil, fmt.Errorf("decrypted payload too short (expected >4, got %d)", len(plaintext))
+	}
+	jsonLength := binary.LittleEndian.Uint32(plaintext[0:4])
+	if len(plaintext) < int(jsonLength)+4 {
+		return userLoginID, nil, fmt.Errorf("decrypted payload too short (expected 4+%d, got %d)", jsonLength, len(plaintext))
 	}
 	var pmd PushNotificationData
-	err = json.Unmarshal(plaintext, &pmd)
+	err = json.Unmarshal(plaintext[4:jsonLength+4], &pmd)
 	if err != nil {
 		zerolog.Ctx(ctx).Debug().Str("raw_data", base64.StdEncoding.EncodeToString(plaintext)).Msg("Decrypted non-JSON push data")
 		return userLoginID, nil, fmt.Errorf("failed to unmarshal decrypted payload: %w", err)
