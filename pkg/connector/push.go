@@ -7,6 +7,7 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/gotd/td/bin"
@@ -41,7 +42,19 @@ type PushCustomData struct {
 	ChatFromID          int64 `json:"chat_from_id,string"`
 }
 
+type Aps struct {
+	Alert    Alert  `json:"alert"`
+	ThreadID string `json:"thread-id"`
+}
+
+type Alert struct {
+	Title string `json:"title"`
+	Body  string `json:"body"`
+}
+
 type PushNotificationData struct {
+	Aps *Aps `json:"aps"` // Only present for APNs
+
 	LocKey  string         `json:"loc_key"`
 	LocArgs []string       `json:"loc_args"`
 	Custom  PushCustomData `json:"custom"`
@@ -231,10 +244,17 @@ func (t *TelegramClient) ConnectBackground(ctx context.Context, params *bridgev2
 	var relatedPortal *bridgev2.Portal
 	var sender *bridgev2.Ghost
 	var messageID networkid.MessageID
-	var messageText, notificationText string
+	var messageText, notificationText, notificationTitle string
 	if data != nil {
+		if data.Aps != nil {
+			notificationTitle = data.Aps.Alert.Title
+			notificationText = data.Aps.Alert.Body
+			if data.LocKey == "" {
+				messageText = data.Aps.Alert.Body
+			}
+		}
 		tpl, ok := PushMessageFormats[data.LocKey]
-		if ok {
+		if ok && (len(data.LocArgs) > 0 || !strings.Contains(tpl, "%[1]")) {
 			notificationText = fmt.Sprintf(tpl, exslices.CastToAny(data.LocArgs)...)
 		}
 		switch data.LocKey {
@@ -258,6 +278,8 @@ func (t *TelegramClient) ConnectBackground(ctx context.Context, params *bridgev2
 			sender, err = t.main.Bridge.GetGhostByID(ctx, ids.MakeChannelUserID(data.Custom.FromID))
 		} else if data.Custom.ChatFromGroupID != 0 {
 			sender, err = t.main.Bridge.GetGhostByID(ctx, ids.MakeChannelUserID(data.Custom.ChatFromGroupID))
+		} else if data.Custom.ChatFromID != 0 {
+			sender, err = t.main.Bridge.GetGhostByID(ctx, ids.MakeUserID(data.Custom.ChatFromID))
 		} else if data.Custom.FromID != 0 {
 			sender, err = t.main.Bridge.GetGhostByID(ctx, ids.MakeUserID(data.Custom.FromID))
 		}
@@ -277,6 +299,7 @@ func (t *TelegramClient) ConnectBackground(ctx context.Context, params *bridgev2
 			MessageID: messageID,
 
 			FormattedNotification: notificationText,
+			FormattedTitle:        notificationTitle,
 		})
 	}
 	if FullSyncOnConnectBackground {
@@ -344,11 +367,19 @@ UserLoop:
 	if len(plaintext) < int(jsonLength)+4 {
 		return userLoginID, nil, fmt.Errorf("decrypted payload too short (expected 4+%d, got %d)", jsonLength, len(plaintext))
 	}
+	jsonData := plaintext[4 : jsonLength+4]
 	var pmd PushNotificationData
-	err = json.Unmarshal(plaintext[4:jsonLength+4], &pmd)
+	err = json.Unmarshal(jsonData, &pmd)
 	if err != nil {
 		zerolog.Ctx(ctx).Debug().Str("raw_data", base64.StdEncoding.EncodeToString(plaintext)).Msg("Decrypted non-JSON push data")
 		return userLoginID, nil, fmt.Errorf("failed to unmarshal decrypted payload: %w", err)
+	}
+	if pmd.Aps != nil {
+		// APNs notifications don't have custom data nested in a separate key, they have it at the top level
+		err = json.Unmarshal(jsonData, &pmd.Custom)
+		if err != nil {
+			return userLoginID, nil, fmt.Errorf("failed to unmarshal APNs data into custom field: %w", err)
+		}
 	}
 	return userLoginID, &pmd, nil
 }
