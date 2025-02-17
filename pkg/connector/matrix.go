@@ -46,7 +46,7 @@ func getMediaFilename(content *event.MessageEventContent) (filename string) {
 	}
 	if content.MsgType == event.MsgImage && (!strings.HasSuffix(filename, ".jpg") && !strings.HasSuffix(filename, ".jpeg") && !strings.HasSuffix(filename, ".png")) {
 		if content.Info != nil && content.Info.MimeType != "" {
-			return filename + strings.TrimPrefix(content.Info.MimeType, "image/")
+			return filename + "." + strings.TrimPrefix(content.Info.MimeType, "image/")
 		}
 		return filename + ".jpg" // Assume it's a JPEG
 	}
