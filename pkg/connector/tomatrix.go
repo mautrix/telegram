@@ -145,6 +145,7 @@ func (c *TelegramClient) convertToMatrix(ctx context.Context, portal *bridgev2.P
 			if err != nil {
 				log.Err(err).Msg("error converting webpage to link preview")
 			} else if preview != nil {
+				hasher.Write([]byte(preview.MatchedURL))
 				content.BeeperLinkPreviews = append(content.BeeperLinkPreviews, preview)
 			}
 		}
