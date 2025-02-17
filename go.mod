@@ -1,8 +1,8 @@
 module go.mau.fi/mautrix-telegram
 
-go 1.22.0
+go 1.23.0
 
-toolchain go1.23.5
+toolchain go1.24.0
 
 require (
 	github.com/gorilla/mux v1.8.0

@@ -67,9 +67,9 @@ func (p *PhoneLogin) SubmitUserInput(ctx context.Context, input map[string]strin
 			Logger:               zap.New(zerozap.New(zerolog.Ctx(ctx).With().Str("component", "telegram_phone_login_client").Logger())),
 		})
 		var err error
-		authClientContext, _ := context.WithTimeoutCause(log.WithContext(context.Background()), time.Hour, errors.New("phone login took over one hour"))
-		ctx, p.authClientCancel, err = connectTelegramClient(authClientContext, p.authClient)
-		if err != nil {
+		var authClientContext context.Context
+		authClientContext, p.authClientCancel = context.WithTimeoutCause(log.WithContext(context.Background()), time.Hour, errors.New("phone login took over one hour"))
+		if err = connectTelegramClient(authClientContext, p.authClientCancel, p.authClient); err != nil {
 			return nil, err
 		}
 		sentCode, err := p.authClient.Auth().SendCode(ctx, p.phone, auth.SendCodeOptions{})

@@ -354,9 +354,7 @@ func NewTelegramClient(ctx context.Context, tc *TelegramConnector, login *bridge
 // connectTelegramClient blocks until client is connected, calling Run
 // internally.
 // Technique from: https://github.com/gotd/contrib/blob/master/bg/connect.go
-func connectTelegramClient(ctx context.Context, client *telegram.Client) (context.Context, context.CancelFunc, error) {
-	ctx, cancel := context.WithCancel(ctx)
-
+func connectTelegramClient(ctx context.Context, cancel context.CancelFunc, client *telegram.Client) error {
 	errC := make(chan error, 1)
 	initDone := make(chan struct{})
 	go func() {
@@ -374,14 +372,13 @@ func connectTelegramClient(ctx context.Context, client *telegram.Client) (contex
 	select {
 	case <-ctx.Done(): // context canceled
 		cancel()
-		return nil, func() {}, fmt.Errorf("context cancelled before init done: %w", ctx.Err())
+		return fmt.Errorf("context cancelled before init done: %w", ctx.Err())
 	case err := <-errC: // startup timeout
 		cancel()
-		return nil, func() {}, fmt.Errorf("client connection timeout: %w", err)
+		return fmt.Errorf("client connection timeout: %w", err)
 	case <-initDone: // init done
 	}
-
-	return ctx, cancel, nil
+	return nil
 }
 
 func (t *TelegramClient) onDead() {
@@ -483,8 +480,8 @@ func (t *TelegramClient) Connect(ctx context.Context) {
 	zerolog.Ctx(ctx).Info().Int64("user_id", t.telegramUserID).Msg("Connecting client")
 
 	var err error
-	t.clientCtx, t.clientCancel, err = connectTelegramClient(ctx, t.client)
-	if err != nil {
+	t.clientCtx, t.clientCancel = context.WithCancel(ctx)
+	if err = connectTelegramClient(t.clientCtx, t.clientCancel, t.client); err != nil {
 		t.sendBadCredentialsOrUnknownError(err)
 		return
 	}
