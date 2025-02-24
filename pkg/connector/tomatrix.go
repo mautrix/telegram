@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/gotd/td/tg"
+	"github.com/gotd/td/tgerr"
 	"github.com/rs/zerolog"
 	"go.mau.fi/util/exmime"
 	"go.mau.fi/util/ptr"
@@ -99,6 +100,36 @@ func (c *TelegramClient) mediaToMatrix(ctx context.Context, portal *bridgev2.Por
 		}, nil, nil, nil
 	default:
 		return nil, nil, nil, fmt.Errorf("unsupported media type %T", media)
+	}
+}
+
+func (c *TelegramClient) convertToMatrixWithRefetch(ctx context.Context, portal *bridgev2.Portal, intent bridgev2.MatrixAPI, msg *tg.Message) (cm *bridgev2.ConvertedMessage, err error) {
+	cm, err = c.convertToMatrix(ctx, portal, intent, msg)
+	if !tgerr.Is(err, tg.ErrFileReferenceExpired) {
+		return cm, err
+	}
+
+	// If the error is that the file reference expired, refetch the message and
+	// try to convert it again.
+	log := zerolog.Ctx(ctx).With().Bool("message_refetch", true).Logger()
+	ctx = log.WithContext(ctx)
+	log.Warn().Err(err).Msg("Refetching message to convert media")
+
+	m, err := c.client.API().MessagesGetMessages(ctx, []tg.InputMessageClass{
+		&tg.InputMessageID{ID: msg.ID},
+	})
+	if err != nil {
+		return nil, err
+	} else if messages, ok := m.(tg.ModifiedMessagesMessages); !ok {
+		return nil, fmt.Errorf("unsupported messages type %T", messages)
+	} else if len(messages.GetMessages()) != 1 {
+		return nil, fmt.Errorf("wrong number of messages retrieved %d", len(messages.GetMessages()))
+	} else if refetchedMsg, ok := messages.GetMessages()[0].(*tg.Message); !ok {
+		return nil, fmt.Errorf("message was of the wrong type %s", messages.GetMessages()[0].TypeName())
+	} else if refetchedMsg.ID != msg.ID {
+		return nil, fmt.Errorf("no media found with ID %d", msg.ID)
+	} else {
+		return c.convertToMatrix(ctx, portal, intent, refetchedMsg)
 	}
 }
 

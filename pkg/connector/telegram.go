@@ -146,7 +146,7 @@ func (t *TelegramClient) onUpdateNewMessage(ctx context.Context, entities tg.Ent
 			},
 			ID:                 ids.GetMessageIDFromMessage(msg),
 			Data:               msg,
-			ConvertMessageFunc: t.convertToMatrix,
+			ConvertMessageFunc: t.convertToMatrixWithRefetch,
 		})
 	case *tg.MessageService:
 		sender := t.getEventSender(msg, false)
@@ -766,7 +766,7 @@ func (t *TelegramClient) onMessageEdit(ctx context.Context, update IGetMessage) 
 		Data:          msg,
 		ConvertEditFunc: func(ctx context.Context, portal *bridgev2.Portal, intent bridgev2.MatrixAPI, existing []*database.Message, data *tg.Message) (*bridgev2.ConvertedEdit, error) {
 			log := zerolog.Ctx(ctx)
-			converted, err := t.convertToMatrix(ctx, portal, intent, msg)
+			converted, err := t.convertToMatrixWithRefetch(ctx, portal, intent, msg)
 			if err != nil {
 				return nil, err
 			}
