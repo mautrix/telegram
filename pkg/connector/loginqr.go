@@ -68,9 +68,8 @@ func (q *QRLogin) Start(ctx context.Context) (*bridgev2.LoginStep, error) {
 	})
 
 	var err error
-	var authClientContext context.Context
-	authClientContext, q.authClientCancel = context.WithTimeoutCause(log.WithContext(context.Background()), time.Hour, errors.New("phone login took over one hour"))
-	if err = connectTelegramClient(authClientContext, q.authClientCancel, q.authClient); err != nil {
+	q.authClientCtx, q.authClientCancel = context.WithTimeoutCause(log.WithContext(context.Background()), time.Hour, errors.New("phone login took over one hour"))
+	if err = connectTelegramClient(q.authClientCtx, q.authClientCancel, q.authClient); err != nil {
 		return nil, err
 	}
 
@@ -164,7 +163,7 @@ func (q *QRLogin) SubmitUserInput(ctx context.Context, input map[string]string) 
 	if !ok {
 		return nil, fmt.Errorf("unexpected state during phone login")
 	}
-	authorization, err := q.authClient.Auth().Password(ctx, password)
+	authorization, err := q.authClient.Auth().Password(q.authClientCtx, password)
 	if err != nil {
 		return nil, fmt.Errorf("failed to submit password: %w", err)
 	}

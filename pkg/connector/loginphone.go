@@ -26,6 +26,7 @@ type PhoneLogin struct {
 	main             *TelegramConnector
 	authData         UserLoginSession
 	authClient       *telegram.Client
+	authClientCtx    context.Context
 	authClientCancel context.CancelFunc
 
 	phone string
@@ -67,12 +68,11 @@ func (p *PhoneLogin) SubmitUserInput(ctx context.Context, input map[string]strin
 			Logger:               zap.New(zerozap.New(zerolog.Ctx(ctx).With().Str("component", "telegram_phone_login_client").Logger())),
 		})
 		var err error
-		var authClientContext context.Context
-		authClientContext, p.authClientCancel = context.WithTimeoutCause(log.WithContext(context.Background()), time.Hour, errors.New("phone login took over one hour"))
-		if err = connectTelegramClient(authClientContext, p.authClientCancel, p.authClient); err != nil {
+		p.authClientCtx, p.authClientCancel = context.WithTimeoutCause(log.WithContext(context.Background()), time.Hour, errors.New("phone login took over one hour"))
+		if err = connectTelegramClient(p.authClientCtx, p.authClientCancel, p.authClient); err != nil {
 			return nil, err
 		}
-		sentCode, err := p.authClient.Auth().SendCode(ctx, p.phone, auth.SendCodeOptions{})
+		sentCode, err := p.authClient.Auth().SendCode(p.authClientCtx, p.phone, auth.SendCodeOptions{})
 		if err != nil {
 			return nil, err
 		}
@@ -97,7 +97,7 @@ func (p *PhoneLogin) SubmitUserInput(ctx context.Context, input map[string]strin
 			switch a := s.Authorization.(type) {
 			case *tg.AuthAuthorization:
 				// Looks that we are already authorized.
-				return p.handleAuthSuccess(ctx, a)
+				return p.handleAuthSuccess(p.authClientCtx, a)
 			case *tg.AuthAuthorizationSignUpRequired:
 				return nil, fmt.Errorf("phone number does not correspond with an existing Telegram account and sign-up is not supported")
 			default:
@@ -107,7 +107,7 @@ func (p *PhoneLogin) SubmitUserInput(ctx context.Context, input map[string]strin
 			return nil, fmt.Errorf("unexpected sent code type: %T", sentCode)
 		}
 	} else if code, ok := input[LoginStepIDCode]; ok {
-		authorization, err := p.authClient.Auth().SignIn(ctx, p.phone, code, p.hash)
+		authorization, err := p.authClient.Auth().SignIn(p.authClientCtx, p.phone, code, p.hash)
 		if errors.Is(err, auth.ErrPasswordAuthNeeded) {
 			return &bridgev2.LoginStep{
 				Type:         bridgev2.LoginStepTypeUserInput,
@@ -128,13 +128,13 @@ func (p *PhoneLogin) SubmitUserInput(ctx context.Context, input map[string]strin
 		} else if err != nil {
 			return nil, fmt.Errorf("failed to submit code: %w", err)
 		}
-		return p.handleAuthSuccess(ctx, authorization)
+		return p.handleAuthSuccess(p.authClientCtx, authorization)
 	} else if password, ok := input[LoginStepIDPassword]; ok {
-		authorization, err := p.authClient.Auth().Password(ctx, password)
+		authorization, err := p.authClient.Auth().Password(p.authClientCtx, password)
 		if err != nil {
 			return nil, fmt.Errorf("failed to submit password: %w", err)
 		}
-		return p.handleAuthSuccess(ctx, authorization)
+		return p.handleAuthSuccess(p.authClientCtx, authorization)
 	}
 
 	return nil, fmt.Errorf("unexpected state during phone login")
