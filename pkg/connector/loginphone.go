@@ -97,7 +97,7 @@ func (p *PhoneLogin) SubmitUserInput(ctx context.Context, input map[string]strin
 			switch a := s.Authorization.(type) {
 			case *tg.AuthAuthorization:
 				// Looks that we are already authorized.
-				return p.handleAuthSuccess(p.authClientCtx, a)
+				return p.handleAuthSuccess(ctx, a)
 			case *tg.AuthAuthorizationSignUpRequired:
 				return nil, fmt.Errorf("phone number does not correspond with an existing Telegram account and sign-up is not supported")
 			default:
@@ -128,22 +128,20 @@ func (p *PhoneLogin) SubmitUserInput(ctx context.Context, input map[string]strin
 		} else if err != nil {
 			return nil, fmt.Errorf("failed to submit code: %w", err)
 		}
-		return p.handleAuthSuccess(p.authClientCtx, authorization)
+		return p.handleAuthSuccess(ctx, authorization)
 	} else if password, ok := input[LoginStepIDPassword]; ok {
 		authorization, err := p.authClient.Auth().Password(p.authClientCtx, password)
 		if err != nil {
 			return nil, fmt.Errorf("failed to submit password: %w", err)
 		}
-		return p.handleAuthSuccess(p.authClientCtx, authorization)
+		return p.handleAuthSuccess(ctx, authorization)
 	}
 
 	return nil, fmt.Errorf("unexpected state during phone login")
 }
 
 func (p *PhoneLogin) handleAuthSuccess(ctx context.Context, authorization *tg.AuthAuthorization) (*bridgev2.LoginStep, error) {
-	// Stop the login client.
-	p.authClientCancel()
-
+	defer p.authClientCancel()
 	return finalizeLogin(ctx, p.user, authorization, UserLoginMetadata{
 		Phone:   p.phone,
 		Session: p.authData,
