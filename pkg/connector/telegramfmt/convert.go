@@ -19,7 +19,6 @@ package telegramfmt
 import (
 	"context"
 	"html"
-	"strings"
 
 	"github.com/gotd/td/tg"
 	"github.com/rs/zerolog"
@@ -28,6 +27,7 @@ import (
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 
+	"go.mau.fi/mautrix-telegram/pkg/connector/emojis"
 	"go.mau.fi/mautrix-telegram/pkg/connector/ids"
 )
 
@@ -37,21 +37,13 @@ type UserInfo struct {
 }
 
 type FormatParams struct {
-	CustomEmojis          map[networkid.EmojiID]string
+	CustomEmojis          map[networkid.EmojiID]emojis.EmojiInfo
 	GetUserInfoByUsername func(ctx context.Context, username string) (UserInfo, error)
 	GetUserInfoByID       func(ctx context.Context, id int64) (UserInfo, error)
 	NormalizeURL          func(ctx context.Context, url string) string
 }
 
-func (fp FormatParams) GetCustomEmoji(emojiID networkid.EmojiID) (string, id.ContentURIString) {
-	if strings.HasPrefix(fp.CustomEmojis[emojiID], "mxc://") {
-		return "", id.ContentURIString(fp.CustomEmojis[emojiID])
-	} else {
-		return fp.CustomEmojis[emojiID], ""
-	}
-}
-
-func (fp FormatParams) WithCustomEmojis(emojis map[networkid.EmojiID]string) FormatParams {
+func (fp FormatParams) WithCustomEmojis(emojis map[networkid.EmojiID]emojis.EmojiInfo) FormatParams {
 	return FormatParams{
 		CustomEmojis:          emojis,
 		GetUserInfoByUsername: fp.GetUserInfoByUsername,
@@ -140,12 +132,7 @@ func Parse(ctx context.Context, message string, entities []tg.MessageEntityClass
 		case *tg.MessageEntitySpoiler:
 			br.Value = Style{Type: StyleSpoiler}
 		case *tg.MessageEntityCustomEmoji:
-			emoji, contentURI := params.GetCustomEmoji(ids.MakeEmojiIDFromDocumentID(entity.DocumentID))
-			if emoji != "" {
-				br.Value = Style{Type: StyleCustomEmoji, Emoji: emoji}
-			} else {
-				br.Value = Style{Type: StyleCustomEmoji, EmojiURI: contentURI}
-			}
+			br.Value = Style{Type: StyleCustomEmoji, EmojiInfo: params.CustomEmojis[ids.MakeEmojiIDFromDocumentID(entity.DocumentID)]}
 		case *tg.MessageEntityBlockquote:
 			br.Value = Style{Type: StyleBlockquote}
 		}

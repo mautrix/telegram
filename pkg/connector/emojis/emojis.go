@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 
 	"maunium.net/go/mautrix/bridgev2/networkid"
+	"maunium.net/go/mautrix/id"
 
 	"go.mau.fi/mautrix-telegram/pkg/connector/ids"
 )
@@ -27,11 +28,11 @@ func init() {
 
 // ConvertKnownEmojis converts known document IDs from the unicode emoji pack
 // to the corresponding unicode string and returns the remaining IDs.
-func ConvertKnownEmojis(emojiIDs []int64) (result map[networkid.EmojiID]string, remaining []int64) {
-	result = map[networkid.EmojiID]string{}
+func ConvertKnownEmojis(emojiIDs []int64) (result map[networkid.EmojiID]EmojiInfo, remaining []int64) {
+	result = map[networkid.EmojiID]EmojiInfo{}
 	for _, e := range emojiIDs {
 		if v, ok := reverseUnicodemojiPack[e]; ok {
-			result[ids.MakeEmojiIDFromDocumentID(e)] = v
+			result[ids.MakeEmojiIDFromDocumentID(e)] = EmojiInfo{Emoji: v}
 		} else {
 			remaining = append(remaining, e)
 		}
@@ -42,4 +43,10 @@ func ConvertKnownEmojis(emojiIDs []int64) (result map[networkid.EmojiID]string, 
 func GetEmojiDocumentID(emoji string) (int64, bool) {
 	id, ok := unicodemojiPack[emoji]
 	return id, ok
+}
+
+// EmojiInfo contains information about an emoji.
+type EmojiInfo struct {
+	Emoji    string
+	EmojiURI id.ContentURIString
 }

@@ -69,12 +69,12 @@ func (s Style) Format(message string) string {
 		}
 		return fmt.Sprintf(`<a href='%s'>%s</a>`, s.URL, message)
 	case StyleCustomEmoji:
-		if s.Emoji != "" {
-			return s.Emoji
+		if s.EmojiInfo.Emoji != "" {
+			return s.EmojiInfo.Emoji
 		} else {
 			return fmt.Sprintf(
 				`<img data-mx-emoticon data-mau-animated-emoji src="%s" height="32" width="32" alt="%s" title="%s"/>`,
-				s.EmojiURI, message, message,
+				s.EmojiInfo.EmojiURI, message, message,
 			)
 		}
 	case StyleBotCommand:

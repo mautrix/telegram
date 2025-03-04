@@ -20,7 +20,8 @@ import (
 	"fmt"
 
 	"maunium.net/go/mautrix/bridgev2/networkid"
-	"maunium.net/go/mautrix/id"
+
+	"go.mau.fi/mautrix-telegram/pkg/connector/emojis"
 )
 
 type BodyRangeValue interface {
@@ -125,11 +126,8 @@ type Style struct {
 	// URL is the URL to link to, if applicable.
 	URL string
 
-	// Emoji is the emoji to display, if applicable.
-	Emoji string
-
-	// EmojiURI is the URI to the emoji, if applicable.
-	EmojiURI id.ContentURIString
+	// EmojiInfo is the emoji to display, if applicable.
+	EmojiInfo emojis.EmojiInfo
 }
 
 func (s Style) String() string {

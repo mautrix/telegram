@@ -11,10 +11,11 @@ import (
 	"maunium.net/go/mautrix/bridgev2/networkid"
 	"maunium.net/go/mautrix/bridgev2/simplevent"
 
+	"go.mau.fi/mautrix-telegram/pkg/connector/emojis"
 	"go.mau.fi/mautrix-telegram/pkg/connector/ids"
 )
 
-func (t *TelegramClient) computeReactionsList(ctx context.Context, peer tg.PeerClass, msgID int, msgReactions tg.MessageReactions) (reactions []tg.MessagePeerReaction, isFull bool, customEmojis map[networkid.EmojiID]string, err error) {
+func (t *TelegramClient) computeReactionsList(ctx context.Context, peer tg.PeerClass, msgID int, msgReactions tg.MessageReactions) (reactions []tg.MessagePeerReaction, isFull bool, customEmojis map[networkid.EmojiID]emojis.EmojiInfo, err error) {
 	log := zerolog.Ctx(ctx).With().Str("fn", "computeReactionsList").Logger()
 	var totalCount int
 	for _, r := range msgReactions.Results {
@@ -72,10 +73,13 @@ func (t *TelegramClient) computeReactionsList(ctx context.Context, peer tg.PeerC
 	return reactionsList, len(reactionsList) == totalCount, customEmojis, err
 }
 
-func computeEmojiAndID(reaction tg.ReactionClass, customEmojis map[networkid.EmojiID]string) (emojiID networkid.EmojiID, emoji string, err error) {
+func computeEmojiAndID(reaction tg.ReactionClass, customEmojis map[networkid.EmojiID]emojis.EmojiInfo) (emojiID networkid.EmojiID, emoji string, err error) {
 	if r, ok := reaction.(*tg.ReactionCustomEmoji); ok {
 		emojiID = ids.MakeEmojiIDFromDocumentID(r.DocumentID)
-		emoji = customEmojis[emojiID]
+		emoji = customEmojis[emojiID].Emoji
+		if emoji == "" {
+			emoji = string(customEmojis[emojiID].EmojiURI)
+		}
 	} else if r, ok := reaction.(*tg.ReactionEmoji); ok {
 		emojiID = ids.MakeEmojiIDFromEmoticon(r.Emoticon)
 		emoji = r.Emoticon
