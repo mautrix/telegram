@@ -21,6 +21,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/gotd/td/telegram/updates"
 	"go.mau.fi/util/dbutil"
@@ -261,7 +262,7 @@ func (s *ScopedStore) SetUsername(ctx context.Context, entityType ids.PeerType, 
 }
 
 func (s *ScopedStore) GetEntityIDByUsername(ctx context.Context, username string) (entityType ids.PeerType, entityID int64, err error) {
-	err = s.db.QueryRow(ctx, getByUsernameQuery, username).Scan(&entityType, &entityID)
+	err = s.db.QueryRow(ctx, getByUsernameQuery, strings.ToLower(username)).Scan(&entityType, &entityID)
 	if errors.Is(err, sql.ErrNoRows) {
 		err = nil
 	}
