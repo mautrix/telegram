@@ -2,7 +2,7 @@
 # Uncommented lines after the group definition insert things into that group.
 
 #/speedups
-cryptg>=0.1,<0.5
+cryptg>=0.1,<0.6
 aiodns
 brotli
 
@@ -11,7 +11,7 @@ pillow>=10.0.1,<12
 qrcode>=6,<9
 
 #/formattednumbers
-phonenumbers>=8,<9
+phonenumbers>=8,<10
 
 #/metrics
 prometheus_client>=0.6,<0.21
@@ -22,7 +22,7 @@ pycryptodome>=3,<4
 unpaddedbase64>=1,<3
 
 #/sqlite
-aiosqlite>=0.16,<0.21
+aiosqlite>=0.16,<0.22
 
 #/proxy
 python-socks[asyncio]
