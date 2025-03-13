@@ -254,7 +254,9 @@ func (t *TelegramClient) FetchMessages(ctx context.Context, fetchParams bridgev2
 
 	// If the first message is the last read message, mark the chat as read
 	// during backfill.
-	markRead := fetchParams.Forward && portal.Metadata.(*PortalMetadata).ReadUpTo == messages[0].GetID()
+	markRead := fetchParams.Forward &&
+		len(messages) > 0 &&
+		portal.Metadata.(*PortalMetadata).ReadUpTo == messages[0].GetID()
 
 	var cursor networkid.PaginationCursor
 	if len(messages) > 0 {
