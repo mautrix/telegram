@@ -18,7 +18,7 @@ from __future__ import annotations
 import base64
 import html
 
-from telethon.tl.functions.channels import GetSponsoredMessagesRequest
+from telethon.tl.functions.messages import GetSponsoredMessagesRequest
 from telethon.tl.types import Channel, InputChannel, PeerChannel, PeerUser, SponsoredMessage, User
 from telethon.tl.types.messages import SponsoredMessages, SponsoredMessagesEmpty
 

@@ -70,7 +70,6 @@ from telethon.tl.functions.channels import (
     InviteToChannelRequest,
     JoinChannelRequest,
     UpdateUsernameRequest,
-    ViewSponsoredMessageRequest,
 )
 from telethon.tl.functions.messages import (
     AddChatUserRequest,
@@ -87,6 +86,7 @@ from telethon.tl.functions.messages import (
     SetTypingRequest,
     UnpinAllMessagesRequest,
     UpdatePinnedMessageRequest,
+    ViewSponsoredMessageRequest,
 )
 from telethon.tl.patched import Message, MessageService
 from telethon.tl.types import (
