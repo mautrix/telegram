@@ -121,6 +121,7 @@ async def login_qr(evt: CommandEvent) -> EventID:
         mxc = await evt.az.intent.upload_media(qr, "image/png", "login-qr.png", len(qr))
         content = MediaMessageEventContent(
             body=qr_login.url,
+            filename="login-qr.png",
             url=mxc,
             msgtype=MessageType.IMAGE,
             info=ImageInfo(mimetype="image/png", size=len(qr), width=size, height=size),
