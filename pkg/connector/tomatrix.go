@@ -131,9 +131,32 @@ func (c *TelegramClient) convertToMatrixWithRefetch(ctx context.Context, portal 
 	ctx = log.WithContext(ctx)
 	log.Warn().Err(err).Msg("Refetching message to convert media")
 
-	m, err := c.client.API().MessagesGetMessages(ctx, []tg.InputMessageClass{
-		&tg.InputMessageID{ID: msg.ID},
-	})
+	// TODO deduplicate this with the direct download code
+	var m tg.MessagesMessagesClass
+	peerType, id, err := ids.ParsePortalID(portal.ID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse portal ID: %w", err)
+	} else if peerType == ids.PeerTypeChannel {
+		var accessHash int64
+		accessHash, err = c.ScopedStore.GetAccessHash(ctx, ids.PeerTypeChannel, id)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get channel access hash: %w", err)
+		}
+		m, err = c.client.API().ChannelsGetMessages(ctx, &tg.ChannelsGetMessagesRequest{
+			Channel: &tg.InputChannel{
+				ChannelID:  id,
+				AccessHash: accessHash,
+			},
+			ID: []tg.InputMessageClass{
+				&tg.InputMessageID{ID: msg.ID},
+			},
+		})
+	} else {
+		m, err = c.client.API().MessagesGetMessages(ctx, []tg.InputMessageClass{
+			&tg.InputMessageID{ID: msg.ID},
+		})
+	}
+
 	if err != nil {
 		return nil, err
 	} else if messages, ok := m.(tg.ModifiedMessagesMessages); !ok {
