@@ -307,6 +307,7 @@ func (t *TelegramClient) FetchMessages(ctx context.Context, fetchParams bridgev2
 			Sender:           sender,
 			ID:               ids.GetMessageIDFromMessage(message),
 			Timestamp:        time.Unix(int64(message.Date), 0),
+			StreamOrder:      int64(message.GetID()),
 		}
 
 		if reactions, ok := message.GetReactions(); ok {
