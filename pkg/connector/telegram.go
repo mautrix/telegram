@@ -191,7 +191,7 @@ func (t *TelegramClient) onUpdateNewMessage(ctx context.Context, entities tg.Ent
 		case *tg.MessageActionChatEditPhoto:
 			t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.ChatInfoChange{
 				EventMeta:      eventMeta.WithType(bridgev2.RemoteEventChatInfoChange),
-				ChatInfoChange: &bridgev2.ChatInfoChange{ChatInfo: &bridgev2.ChatInfo{Avatar: t.avatarFromPhoto(action.Photo)}},
+				ChatInfoChange: &bridgev2.ChatInfoChange{ChatInfo: &bridgev2.ChatInfo{Avatar: t.avatarFromPhoto(ctx, action.Photo)}},
 			})
 		case *tg.MessageActionChatDeletePhoto:
 			t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.ChatInfoChange{

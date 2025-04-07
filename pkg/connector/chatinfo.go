@@ -186,8 +186,12 @@ func (t *TelegramClient) getGroupChatInfo(fullChat *tg.MessagesChatFull, chatID 
 	return &chatInfo, isBroadcastChannel, nil
 }
 
-func (t *TelegramClient) avatarFromPhoto(photo tg.PhotoClass) *bridgev2.Avatar {
-	if photo == nil || photo.TypeID() != tg.PhotoTypeID {
+func (t *TelegramClient) avatarFromPhoto(ctx context.Context, photo tg.PhotoClass) *bridgev2.Avatar {
+	if photo == nil {
+		zerolog.Ctx(ctx).Trace().Msg("Chat photo is nil, returning no avatar")
+		return nil
+	} else if photo.TypeID() != tg.PhotoTypeID {
+		zerolog.Ctx(ctx).Warn().Uint32("type_id", photo.TypeID()).Msg("Chat photo type unknown, returning no avatar")
 		return nil
 	}
 	return &bridgev2.Avatar{
@@ -256,7 +260,7 @@ func (t *TelegramClient) GetChatInfo(ctx context.Context, portal *bridgev2.Porta
 		if !ok {
 			return nil, fmt.Errorf("full chat is %T not *tg.ChatFull", fullChat.FullChat)
 		}
-		chatInfo.Avatar = t.avatarFromPhoto(chatFull.ChatPhoto)
+		chatInfo.Avatar = t.avatarFromPhoto(ctx, chatFull.ChatPhoto)
 
 		if chatFull.Participants.TypeID() == tg.ChatParticipantsForbiddenTypeID {
 			chatInfo.Members.IsFull = false
@@ -320,7 +324,7 @@ func (t *TelegramClient) GetChatInfo(ctx context.Context, portal *bridgev2.Porta
 			return nil, fmt.Errorf("too many participants (%d) in chat %d", channelFull.ParticipantsCount, id)
 		}
 
-		chatInfo.Avatar = t.avatarFromPhoto(channelFull.ChatPhoto)
+		chatInfo.Avatar = t.avatarFromPhoto(ctx, channelFull.ChatPhoto)
 
 		// TODO save available reactions?
 		// TODO save reactions limit?
