@@ -44,6 +44,7 @@ type PhoneLogin struct {
 	authClient       *telegram.Client
 	authClientCtx    context.Context
 	authClientCancel context.CancelFunc
+	authClientCloseC <-chan struct{}
 
 	phone string
 	hash  string
@@ -54,6 +55,9 @@ var _ bridgev2.LoginProcessUserInput = (*PhoneLogin)(nil)
 func (p *PhoneLogin) Cancel() {
 	if p.authClientCancel != nil {
 		p.authClientCancel()
+	}
+	if p.authClientCloseC != nil {
+		<-p.authClientCloseC
 	}
 }
 
@@ -85,7 +89,7 @@ func (p *PhoneLogin) SubmitUserInput(ctx context.Context, input map[string]strin
 		})
 		var err error
 		p.authClientCtx, p.authClientCancel = context.WithTimeoutCause(log.WithContext(context.Background()), time.Hour, errors.New("phone login took over one hour"))
-		if err = connectTelegramClient(p.authClientCtx, p.authClientCancel, p.authClient); err != nil {
+		if p.authClientCloseC, err = connectTelegramClient(p.authClientCtx, p.authClientCancel, p.authClient); err != nil {
 			return nil, err
 		}
 		sentCode, err := p.authClient.Auth().SendCode(p.authClientCtx, p.phone, auth.SendCodeOptions{})

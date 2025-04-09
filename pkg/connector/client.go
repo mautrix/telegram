@@ -66,6 +66,7 @@ type TelegramClient struct {
 	updatesManager *updates.Manager
 	clientCtx      context.Context
 	clientCancel   context.CancelFunc
+	clientCloseC   <-chan struct{}
 
 	appConfigLock sync.Mutex
 	appConfig     map[string]any
@@ -370,11 +371,13 @@ func NewTelegramClient(ctx context.Context, tc *TelegramConnector, login *bridge
 // connectTelegramClient blocks until client is connected, calling Run
 // internally.
 // Technique from: https://github.com/gotd/contrib/blob/master/bg/connect.go
-func connectTelegramClient(ctx context.Context, cancel context.CancelFunc, client *telegram.Client) error {
+func connectTelegramClient(ctx context.Context, cancel context.CancelFunc, client *telegram.Client) (<-chan struct{}, error) {
 	errC := make(chan error, 1)
 	initDone := make(chan struct{})
+	closeC := make(chan struct{})
 	go func() {
 		defer close(errC)
+		defer close(closeC)
 		errC <- client.Run(ctx, func(ctx context.Context) error {
 			close(initDone)
 			<-ctx.Done()
@@ -388,13 +391,13 @@ func connectTelegramClient(ctx context.Context, cancel context.CancelFunc, clien
 	select {
 	case <-ctx.Done(): // context canceled
 		cancel()
-		return fmt.Errorf("context cancelled before init done: %w", ctx.Err())
+		return nil, fmt.Errorf("context cancelled before init done: %w", ctx.Err())
 	case err := <-errC: // startup timeout
 		cancel()
-		return fmt.Errorf("client connection timeout: %w", err)
+		return nil, fmt.Errorf("client connection timeout: %w", err)
 	case <-initDone: // init done
 	}
-	return nil
+	return closeC, nil
 }
 
 func (t *TelegramClient) onDead() {
@@ -497,7 +500,7 @@ func (t *TelegramClient) Connect(ctx context.Context) {
 
 	var err error
 	t.clientCtx, t.clientCancel = context.WithCancel(ctx)
-	if err = connectTelegramClient(t.clientCtx, t.clientCancel, t.client); err != nil {
+	if t.clientCloseC, err = connectTelegramClient(t.clientCtx, t.clientCancel, t.client); err != nil {
 		t.sendBadCredentialsOrUnknownError(err)
 		return
 	}
@@ -535,6 +538,9 @@ func (t *TelegramClient) Disconnect() {
 	t.userLogin.Log.Info().Msg("disconnecting client")
 	if t.clientCancel != nil {
 		t.clientCancel()
+	}
+	if t.clientCloseC != nil {
+		<-t.clientCloseC
 	}
 }
 

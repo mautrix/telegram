@@ -47,6 +47,7 @@ type QRLogin struct {
 
 	authClientCtx    context.Context
 	authClientCancel context.CancelFunc
+	authClientCloseC <-chan struct{}
 
 	auth    chan qrAuthResult
 	qrToken chan qrlogin.Token
@@ -60,6 +61,9 @@ var _ bridgev2.LoginProcessUserInput = (*QRLogin)(nil)      // For asking for pa
 func (q *QRLogin) Cancel() {
 	if q.authClientCancel != nil {
 		q.authClientCancel()
+	}
+	if q.authClientCloseC != nil {
+		<-q.authClientCloseC
 	}
 }
 
@@ -85,7 +89,7 @@ func (q *QRLogin) Start(ctx context.Context) (*bridgev2.LoginStep, error) {
 
 	var err error
 	q.authClientCtx, q.authClientCancel = context.WithTimeoutCause(log.WithContext(context.Background()), time.Hour, errors.New("phone login took over one hour"))
-	if err = connectTelegramClient(q.authClientCtx, q.authClientCancel, q.authClient); err != nil {
+	if q.authClientCloseC, err = connectTelegramClient(q.authClientCtx, q.authClientCancel, q.authClient); err != nil {
 		return nil, err
 	}
 
