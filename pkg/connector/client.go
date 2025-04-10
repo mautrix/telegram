@@ -506,7 +506,7 @@ func (t *TelegramClient) Connect(ctx context.Context) {
 	}
 	go func() {
 		err = t.updatesManager.Run(t.clientCtx, t.client.API(), t.telegramUserID, updates.AuthOptions{})
-		if err != nil {
+		if err != nil && !errors.Is(err, context.Canceled) {
 			zerolog.Ctx(t.clientCtx).Err(err).Msg("failed to run updates manager")
 			t.Disconnect()
 			t.Connect(t.main.Bridge.Log.WithContext(context.Background()))
