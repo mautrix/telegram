@@ -330,6 +330,7 @@ func (t *TelegramClient) HandleMatrixMessage(ctx context.Context, msg *bridgev2.
 				ContentURI:  contentURI,
 			},
 		},
+		StreamOrder: int64(tgMessageID),
 	}
 	return
 }
