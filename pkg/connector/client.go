@@ -64,6 +64,7 @@ type TelegramClient struct {
 	userLogin      *bridgev2.UserLogin
 	client         *telegram.Client
 	updatesManager *updates.Manager
+	updatesCloseC  chan struct{}
 	clientCtx      context.Context
 	clientCancel   context.CancelFunc
 	clientCloseC   <-chan struct{}
@@ -504,12 +505,22 @@ func (t *TelegramClient) Connect(ctx context.Context) {
 		t.sendBadCredentialsOrUnknownError(err)
 		return
 	}
+	t.updatesCloseC = make(chan struct{})
 	go func() {
-		err = t.updatesManager.Run(t.clientCtx, t.client.API(), t.telegramUserID, updates.AuthOptions{})
-		if err != nil && !errors.Is(err, context.Canceled) {
-			zerolog.Ctx(t.clientCtx).Err(err).Msg("failed to run updates manager")
-			t.Disconnect()
-			t.Connect(t.main.Bridge.Log.WithContext(context.Background()))
+		defer close(t.updatesCloseC)
+		for {
+			err = t.updatesManager.Run(t.clientCtx, t.client.API(), t.telegramUserID, updates.AuthOptions{})
+			if err == nil || errors.Is(err, context.Canceled) {
+				return
+			}
+
+			zerolog.Ctx(t.clientCtx).Err(err).Msg("failed to run updates manager, retrying")
+
+			select {
+			case <-t.clientCtx.Done():
+				return
+			case <-time.After(5 * time.Second):
+			}
 		}
 	}()
 
@@ -541,6 +552,9 @@ func (t *TelegramClient) Disconnect() {
 	}
 	if t.clientCloseC != nil {
 		<-t.clientCloseC
+	}
+	if t.updatesCloseC != nil {
+		<-t.updatesCloseC
 	}
 }
 
