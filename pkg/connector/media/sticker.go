@@ -54,17 +54,17 @@ type ConvertedSticker struct {
 func (c AnimatedStickerConfig) convert(ctx context.Context, data []byte) ConvertedSticker {
 	input := bytes.NewBuffer(data)
 	if c.Target == "disable" {
-		return ConvertedSticker{DataWriter: input, MIMEType: "application/x-tgsticker"}
+		return ConvertedSticker{DataWriter: input, MIMEType: "video/lottie+json"}
 	}
 
 	log := zerolog.Ctx(ctx).With().Str("animated_sticker_target", c.Target).Logger()
 
 	if !lottie.Supported() {
 		log.Warn().Msg("lottie not supported, cannot convert animated stickers")
-		return ConvertedSticker{DataWriter: input, MIMEType: "application/x-tgsticker"}
+		return ConvertedSticker{DataWriter: input, MIMEType: "video/lottie+json"}
 	} else if (c.Target == "webp" || c.Target == "webm") && !ffmpeg.Supported() {
 		log.Warn().Msg("ffmpeg not supported, cannot convert animated stickers")
-		return ConvertedSticker{DataWriter: input, MIMEType: "application/x-tgsticker"}
+		return ConvertedSticker{DataWriter: input, MIMEType: "video/lottie+json"}
 	}
 
 	dataWriter := new(bytes.Buffer)
@@ -102,7 +102,7 @@ func (c AnimatedStickerConfig) convert(ctx context.Context, data []byte) Convert
 			Msg("failed to convert animated sticker to target format")
 
 		// Fallback to original data
-		return ConvertedSticker{DataWriter: input, MIMEType: "application/x-tgsticker"}
+		return ConvertedSticker{DataWriter: input, MIMEType: "video/lottie+json"}
 	}
 
 	return ConvertedSticker{
