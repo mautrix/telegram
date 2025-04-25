@@ -111,15 +111,6 @@ func (t *TelegramClient) handleTelegramReactions(ctx context.Context, msg *tg.Me
 		Int("message_id", msg.ID).
 		Logger()
 
-	dbMsg, err := t.main.Bridge.DB.Message.GetFirstPartByID(ctx, t.loginID, ids.GetMessageIDFromMessage(msg))
-	if err != nil {
-		log.Err(err).Msg("failed to get message from database")
-		return
-	} else if dbMsg == nil {
-		log.Warn().Msg("message not found in database")
-		return
-	}
-
 	reactionsList, isFull, customEmojis, err := t.computeReactionsList(ctx, msg.PeerID, msg.ID, msg.Reactions)
 	if err != nil {
 		log.Err(err).Msg("failed to compute reactions list")
@@ -163,9 +154,9 @@ func (t *TelegramClient) handleTelegramReactions(ctx context.Context, msg *tg.Me
 			LogContext: func(c zerolog.Context) zerolog.Context {
 				return c.Int("message_id", msg.ID)
 			},
-			PortalKey: dbMsg.Room,
+			PortalKey: t.makePortalKeyFromPeer(msg.PeerID),
 		},
-		TargetMessage: dbMsg.ID,
+		TargetMessage: ids.GetMessageIDFromMessage(msg),
 		Reactions:     &bridgev2.ReactionSyncData{Users: users, HasAllUsers: isFull},
 	})
 }

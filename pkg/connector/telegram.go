@@ -135,8 +135,6 @@ func (t *TelegramClient) onUpdateNewMessage(ctx context.Context, entities tg.Ent
 
 		sender := t.getEventSender(msg, isBroadcastChannel)
 
-		go t.handleTelegramReactions(ctx, msg)
-
 		if media, ok := msg.GetMedia(); ok && media.TypeID() == tg.MessageMediaContactTypeID {
 			contact := media.(*tg.MessageMediaContact)
 			// TODO update the corresponding puppet
@@ -164,6 +162,8 @@ func (t *TelegramClient) onUpdateNewMessage(ctx context.Context, entities tg.Ent
 			Data:               msg,
 			ConvertMessageFunc: t.convertToMatrixWithRefetch,
 		})
+
+		t.handleTelegramReactions(ctx, msg)
 	case *tg.MessageService:
 		sender := t.getEventSender(msg, false)
 
