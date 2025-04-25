@@ -410,5 +410,8 @@ func (t *ReadyTransferer) DirectDownloadURL(ctx context.Context, loggedInUserID 
 	if t.inner.fileInfo.MimeType == "" {
 		t.inner.fileInfo.MimeType = "image/jpeg"
 	}
+	if t.inner.fileInfo.MimeType == "application/x-tgsticker" {
+		t.inner.fileInfo.MimeType = "video/lottie+json"
+	}
 	return mxc, &t.inner.fileInfo, err
 }
