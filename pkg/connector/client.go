@@ -68,6 +68,7 @@ type TelegramClient struct {
 	clientCtx      context.Context
 	clientCancel   context.CancelFunc
 	clientCloseC   <-chan struct{}
+	mu             sync.Mutex
 
 	appConfigLock sync.Mutex
 	appConfig     map[string]any
@@ -248,7 +249,7 @@ func NewTelegramClient(ctx context.Context, tc *TelegramConnector, login *bridge
 		OnSession:            client.onConnectionStateChange("session"),
 		OnConnected:          client.onConnectionStateChange("connected"),
 		PingCallback:         client.onPing,
-		OnAuthError:          func(err error) { client.onAuthError(context.Background(), err) },
+		OnAuthError:          client.onAuthError,
 		PingTimeout:          time.Duration(tc.Config.Ping.TimeoutSeconds) * time.Second,
 		PingInterval:         time.Duration(tc.Config.Ping.IntervalSeconds) * time.Second,
 		Device: telegram.DeviceConfig{
@@ -454,11 +455,6 @@ func (t *TelegramClient) onConnectionStateChange(reason string) func() {
 		log.Info().Msg("Connection state changed")
 		ctx := log.WithContext(context.Background())
 
-		if t.client == nil {
-			log.Warn().Msg("client is nil")
-			return
-		}
-
 		authStatus, err := t.client.Auth().Status(ctx)
 		if err != nil {
 			if errors.Is(err, syscall.EPIPE) {
@@ -475,22 +471,24 @@ func (t *TelegramClient) onConnectionStateChange(reason string) func() {
 		} else if authStatus.Authorized {
 			t.userLogin.BridgeState.Send(status.BridgeState{StateEvent: status.StateConnected})
 		} else {
-			t.onAuthError(ctx, fmt.Errorf("not logged in"))
+			t.onAuthError(fmt.Errorf("not logged in"))
 		}
 	}
 }
 
-func (t *TelegramClient) onAuthError(ctx context.Context, err error) {
+func (t *TelegramClient) onAuthError(err error) {
 	t.sendBadCredentialsOrUnknownError(err)
 	t.userLogin.Metadata.(*UserLoginMetadata).ResetOnLogout()
-	t.client = nil
-	t.updatesManager.Reset()
-	if err := t.userLogin.Save(ctx); err != nil {
+	t.Disconnect()
+	if err := t.userLogin.Save(context.Background()); err != nil {
 		t.main.Bridge.Log.Err(err).Msg("failed to save user login")
 	}
 }
 
 func (t *TelegramClient) Connect(ctx context.Context) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
 	if !t.userLogin.Metadata.(*UserLoginMetadata).Session.HasAuthKey() {
 		zerolog.Ctx(ctx).Warn().Msg("user does not have an auth key, sending bad credentials state")
 		t.sendBadCredentialsOrUnknownError(ErrNoAuthKey)
@@ -546,15 +544,21 @@ func (t *TelegramClient) Connect(ctx context.Context) {
 }
 
 func (t *TelegramClient) Disconnect() {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
 	t.userLogin.Log.Info().Msg("disconnecting client")
 	if t.clientCancel != nil {
 		t.clientCancel()
+		t.clientCancel = nil
 	}
 	if t.clientCloseC != nil {
 		<-t.clientCloseC
+		t.clientCloseC = nil
 	}
 	if t.updatesCloseC != nil {
 		<-t.updatesCloseC
+		t.updatesCloseC = nil
 	}
 }
 
@@ -721,6 +725,16 @@ func (t *TelegramClient) LogoutRemote(ctx context.Context) {
 		Logger()
 	log.Info().Msg("Logging out")
 
+	if t.userLogin.Metadata.(*UserLoginMetadata).Session.HasAuthKey() {
+		log.Info().Msg("User has an auth key, logging out")
+		_, err := t.client.API().AuthLogOut(ctx)
+		if err != nil {
+			log.Err(err).Msg("failed to logout on Telegram")
+		}
+	}
+
+	t.Disconnect()
+
 	err := t.ScopedStore.DeleteUserState(ctx)
 	if err != nil {
 		log.Err(err).Msg("failed to delete user state")
@@ -734,16 +748,6 @@ func (t *TelegramClient) LogoutRemote(ctx context.Context) {
 	err = t.ScopedStore.DeleteAccessHashesForUser(ctx)
 	if err != nil {
 		log.Err(err).Msg("failed to delete access hashes for user")
-	}
-
-	if !t.userLogin.Metadata.(*UserLoginMetadata).Session.HasAuthKey() {
-		log.Info().Msg("User does not have an auth key, not logging out")
-		return
-	}
-
-	_, err = t.client.API().AuthLogOut(ctx)
-	if err != nil {
-		log.Err(err).Msg("failed to logout on Telegram")
 	}
 
 	log.Info().Msg("successfully logged out and deleted user state")
