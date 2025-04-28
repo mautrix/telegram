@@ -333,7 +333,7 @@ func (t *ReadyTransferer) Transfer(ctx context.Context, store *store.Container, 
 // Stream streams the media from Telegram to an [io.Reader].
 func (t *ReadyTransferer) Stream(ctx context.Context) (r io.Reader, mimeType string, fileSize int, err error) {
 	var storageFileTypeClass tg.StorageFileTypeClass
-	storageFileTypeClass, r, err = downloader.NewDownloader().Download(t.inner.client, t.loc).StreamToReader(ctx)
+	storageFileTypeClass, r, err = downloader.NewDownloader().WithPartSize(1024*1024).Download(t.inner.client, t.loc).StreamToReader(ctx)
 	if err != nil {
 		return nil, "", 0, err
 	}
