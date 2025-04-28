@@ -54,21 +54,26 @@ async def matrix_reply_to_telegram(
 
 
 async def matrix_to_telegram(
-    client: TelegramClient, *, text: str | None = None, html: str | None = None
+    client: TelegramClient,
+    *,
+    text: str | None = None,
+    html: str | None = None,
+    convert_commands: bool = True,
 ) -> tuple[str, list[TypeMessageEntity]]:
     if html is not None:
-        return await _matrix_html_to_telegram(client, html)
+        return await _matrix_html_to_telegram(client, html, convert_commands)
     elif text is not None:
-        return _matrix_text_to_telegram(text)
+        return _matrix_text_to_telegram(text, convert_commands)
     else:
         raise ValueError("text or html must be provided to convert formatting")
 
 
 async def _matrix_html_to_telegram(
-    client: TelegramClient, html: str
+    client: TelegramClient, html: str, convert_commands: bool
 ) -> tuple[str, list[TypeMessageEntity]]:
     try:
-        html = command_regex.sub(r"<command>\1</command>", html)
+        if convert_commands:
+            html = command_regex.sub(r"<command>\1</command>", html)
         html = html.replace("\t", " " * 4)
         html = not_command_regex.sub(r"\1", html)
 
@@ -98,8 +103,11 @@ def _cut_long_message(
     return message, entities
 
 
-def _matrix_text_to_telegram(text: str) -> tuple[str, list[TypeMessageEntity]]:
-    text = command_regex.sub(r"/\1", text)
+def _matrix_text_to_telegram(
+    text: str, convert_commands: bool
+) -> tuple[str, list[TypeMessageEntity]]:
+    if convert_commands:
+        text = command_regex.sub(r"/\1", text)
     text = text.replace("\t", " " * 4)
     text = not_command_regex.sub(r"\1", text)
     entities = []
