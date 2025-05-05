@@ -17,6 +17,8 @@
 package ids
 
 import (
+	"bytes"
+	"crypto/sha256"
 	"encoding/binary"
 	"fmt"
 
@@ -33,59 +35,94 @@ import (
 //
 // v (int8) = binary encoding format version. Should be 0.
 // p (byte) = the peer type of the Telegram chat ID
-// cccccccc (int64) = the Telegram chat ID (big endian)
-// rrrrrrrr (int64) = the receiver ID (big endian)
+// cccccccc (int64) = the Telegram peer ID (big endian)
+// rrrrrrrr (int64) = the Telegram user ID (big endian)
 // mmmmmmmm (int64) = the Telegram message ID (big endian)
-// MMMMMMMM (int64) = the Telegram media ID (big endian)
+// MMMMMMMM (int64) = the Telegram photo/file/document ID (big endian)
 // T (byte) = 0 or 1 depending on whether it's a thumbnail
 type DirectMediaInfo struct {
-	PeerType        PeerType
-	ChatID          int64
-	ReceiverID      int64
-	MessageID       int64
-	TelegramMediaID int64
-	Thumbnail       bool
+	// Type of PeerID
+	PeerType PeerType
+
+	// Peer ID, may be channel, chat or user
+	PeerID int64
+
+	// Telegram user ID of the client that downloads this media
+	UserID int64
+
+	// Telegram message ID if related to a message
+	MessageID int64
+
+	// Telegram photo/file/document ID, depends on PeerType
+	ID int64
+
+	// Is this a thumbnail?
+	Thumbnail bool
 }
 
 func (m DirectMediaInfo) AsMediaID() (networkid.MediaID, error) {
-	mediaID := []byte{
-		0x00,                // Version
-		m.PeerType.AsByte(), // Peer Type
+	var mediaID networkid.MediaID
+	buf := &bytes.Buffer{}
+
+	// version byte
+	if err := binary.Write(buf, binary.BigEndian, byte(0)); err != nil {
+		return mediaID, err
 	}
-	mediaID = binary.BigEndian.AppendUint64(mediaID, uint64(m.ChatID))          // Telegram Chat ID
-	mediaID = binary.BigEndian.AppendUint64(mediaID, uint64(m.ReceiverID))      // Telegram Chat ID
-	mediaID = binary.BigEndian.AppendUint64(mediaID, uint64(m.MessageID))       // Telegram Message ID
-	mediaID = binary.BigEndian.AppendUint64(mediaID, uint64(m.TelegramMediaID)) // Telegram Media ID
-	if m.Thumbnail {
-		mediaID = append(mediaID, 0x01)
-	} else {
-		mediaID = append(mediaID, 0x00)
+
+	// v0
+	if err := binary.Write(buf, binary.BigEndian, m.PeerType.AsByte()); err != nil {
+		return mediaID, err
+	} else if err := binary.Write(buf, binary.BigEndian, m.PeerID); err != nil {
+		return mediaID, err
+	} else if err := binary.Write(buf, binary.BigEndian, m.UserID); err != nil {
+		return mediaID, err
+	} else if err := binary.Write(buf, binary.BigEndian, m.MessageID); err != nil {
+		return mediaID, err
+	} else if err := binary.Write(buf, binary.BigEndian, m.ID); err != nil {
+		return mediaID, err
+	} else if err := binary.Write(buf, binary.BigEndian, m.Thumbnail); err != nil {
+		return mediaID, err
 	}
-	return mediaID, nil
+
+	return networkid.MediaID(buf.Bytes()), nil
 }
 
 func ParseDirectMediaInfo(mediaID networkid.MediaID) (info DirectMediaInfo, err error) {
 	if len(mediaID) == 0 {
-		err = fmt.Errorf("empty media ID")
-		return
-	}
-	if mediaID[0] != 0x00 {
-		err = fmt.Errorf("invalid version %d", mediaID[0])
-		return
-	}
-	if len(mediaID) != 35 {
-		err = fmt.Errorf("invalid media ID")
-		return
+		return info, fmt.Errorf("empty media ID")
 	}
 
-	info.PeerType, err = PeerTypeFromByte(mediaID[1])
-	if err != nil {
-		return
+	buf := bytes.NewBuffer(mediaID)
+
+	// version byte
+	var version byte
+	if err := binary.Read(buf, binary.BigEndian, &version); err != nil {
+		return info, err
+	} else if version != 0 {
+		return info, fmt.Errorf("invalid version %d", version)
 	}
-	info.ChatID = int64(binary.BigEndian.Uint64(mediaID[2:]))
-	info.ReceiverID = int64(binary.BigEndian.Uint64(mediaID[10:]))
-	info.MessageID = int64(binary.BigEndian.Uint64(mediaID[18:]))
-	info.TelegramMediaID = int64(binary.BigEndian.Uint64(mediaID[26:]))
-	info.Thumbnail = mediaID[34] == 1
-	return
+
+	// v0
+	var peerType byte
+	if err := binary.Read(buf, binary.BigEndian, &peerType); err != nil {
+		return info, fmt.Errorf("failed to read peer type: %w", err)
+	} else if info.PeerType, err = PeerTypeFromByte(peerType); err != nil {
+		return info, fmt.Errorf("failed to convert peer type: %w", err)
+	} else if err := binary.Read(buf, binary.BigEndian, &info.PeerID); err != nil {
+		return info, fmt.Errorf("failed to read peer id: %w", err)
+	} else if err := binary.Read(buf, binary.BigEndian, &info.UserID); err != nil {
+		return info, fmt.Errorf("failed to read user id: %w", err)
+	} else if err := binary.Read(buf, binary.BigEndian, &info.MessageID); err != nil {
+		return info, fmt.Errorf("failed to message id: %w", err)
+	} else if err := binary.Read(buf, binary.BigEndian, &info.ID); err != nil {
+		return info, fmt.Errorf("failed to media id: %w", err)
+	} else if err := binary.Read(buf, binary.BigEndian, &info.Thumbnail); err != nil {
+		return info, fmt.Errorf("failed to thumbnail flag: %w", err)
+	}
+
+	return info, nil
+}
+
+func HashMediaID(mediaID networkid.MediaID) [32]byte {
+	return sha256.Sum256(mediaID)
 }

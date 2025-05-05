@@ -181,7 +181,6 @@ func (t *TelegramClient) onUpdateNewMessage(ctx context.Context, entities tg.Ent
 			},
 			StreamOrder: int64(msg.GetID()),
 		}
-
 		switch action := msg.Action.(type) {
 		case *tg.MessageActionChatEditTitle:
 			t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.ChatInfoChange{
@@ -189,9 +188,12 @@ func (t *TelegramClient) onUpdateNewMessage(ctx context.Context, entities tg.Ent
 				ChatInfoChange: &bridgev2.ChatInfoChange{ChatInfo: &bridgev2.ChatInfo{Name: &action.Title}},
 			})
 		case *tg.MessageActionChatEditPhoto:
+			// FIXME
+			chatID := msg.PeerID.(*tg.PeerChat).ChatID
+
 			t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.ChatInfoChange{
 				EventMeta:      eventMeta.WithType(bridgev2.RemoteEventChatInfoChange),
-				ChatInfoChange: &bridgev2.ChatInfoChange{ChatInfo: &bridgev2.ChatInfo{Avatar: t.avatarFromPhoto(ctx, action.Photo)}},
+				ChatInfoChange: &bridgev2.ChatInfoChange{ChatInfo: &bridgev2.ChatInfo{Avatar: t.avatarFromPhoto(ctx, ids.PeerTypeChat, chatID, action.Photo)}},
 			})
 		case *tg.MessageActionChatDeletePhoto:
 			t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.ChatInfoChange{
@@ -689,11 +691,9 @@ func (t *TelegramClient) updateChannel(ctx context.Context, channel *tg.Channel)
 
 	var avatar *bridgev2.Avatar
 	if photo, ok := channel.GetPhoto().(*tg.ChatPhoto); ok {
-		avatar = &bridgev2.Avatar{
-			ID: ids.MakeAvatarID(photo.PhotoID),
-			Get: func(ctx context.Context) (data []byte, err error) {
-				return media.NewTransferer(t.client.API()).WithChannelPhoto(channel.ID, channel.AccessHash, photo.PhotoID).DownloadBytes(ctx)
-			},
+		avatar, err = t.convertChatPhoto(ctx, channel.ID, channel.AccessHash, photo)
+		if err != nil {
+			return nil, err
 		}
 	}
 

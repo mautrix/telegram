@@ -47,7 +47,6 @@ import (
 	"go.mau.fi/mautrix-telegram/pkg/connector/humanise"
 	"go.mau.fi/mautrix-telegram/pkg/connector/ids"
 	"go.mau.fi/mautrix-telegram/pkg/connector/matrixfmt"
-	"go.mau.fi/mautrix-telegram/pkg/connector/media"
 	"go.mau.fi/mautrix-telegram/pkg/connector/store"
 	"go.mau.fi/mautrix-telegram/pkg/connector/telegramfmt"
 	"go.mau.fi/mautrix-telegram/pkg/connector/util"
@@ -668,15 +667,10 @@ func (t *TelegramClient) getUserInfoFromTelegramUser(ctx context.Context, u tg.U
 	var avatar *bridgev2.Avatar
 	if p, ok := user.GetPhoto(); ok && p.TypeID() == tg.UserProfilePhotoTypeID {
 		photo := p.(*tg.UserProfilePhoto)
-		avatar = &bridgev2.Avatar{
-			ID: ids.MakeAvatarID(photo.PhotoID),
-			Get: func(ctx context.Context) (data []byte, err error) {
-				transferer, err := media.NewTransferer(t.client.API()).WithUserPhoto(ctx, t.ScopedStore, user, photo.PhotoID)
-				if err != nil {
-					return nil, err
-				}
-				return transferer.DownloadBytes(ctx)
-			},
+		var err error
+		avatar, err = t.convertUserProfilePhoto(ctx, user.ID, photo)
+		if err != nil {
+			return nil, err
 		}
 	}
 

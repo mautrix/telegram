@@ -765,3 +765,100 @@ func convertGame(media tg.MessageMediaClass) *bridgev2.ConvertedMessagePart {
 		},
 	}
 }
+
+func (c *TelegramClient) convertUserProfilePhoto(ctx context.Context, userID int64, photo *tg.UserProfilePhoto) (*bridgev2.Avatar, error) {
+	avatar := &bridgev2.Avatar{
+		ID: ids.MakeAvatarID(photo.PhotoID),
+	}
+
+	if c.main.useDirectMedia {
+		mediaID, err := ids.DirectMediaInfo{
+			PeerType: ids.PeerTypeUser,
+			PeerID:   userID,
+			UserID:   c.telegramUserID,
+			ID:       photo.PhotoID,
+		}.AsMediaID()
+		if err != nil {
+			return nil, err
+		}
+
+		if avatar.MXC, err = c.main.Bridge.Matrix.GenerateContentURI(ctx, mediaID); err != nil {
+			return nil, err
+		}
+		avatar.Hash = ids.HashMediaID(mediaID)
+	} else {
+		avatar.Get = func(ctx context.Context) (data []byte, err error) {
+			transferer, err := media.NewTransferer(c.client.API()).WithUserPhoto(ctx, c.ScopedStore, userID, photo.PhotoID)
+			if err != nil {
+				return nil, err
+			}
+			return transferer.DownloadBytes(ctx)
+		}
+	}
+
+	return avatar, nil
+}
+
+func (c *TelegramClient) convertChatPhoto(ctx context.Context, channelID, accessHash int64, chatPhoto *tg.ChatPhoto) (*bridgev2.Avatar, error) {
+	avatar := &bridgev2.Avatar{
+		ID: ids.MakeAvatarID(chatPhoto.PhotoID),
+	}
+
+	if c.main.useDirectMedia {
+		mediaID, err := ids.DirectMediaInfo{
+			PeerType: ids.PeerTypeChannel,
+			PeerID:   channelID,
+			UserID:   c.telegramUserID,
+			ID:       chatPhoto.PhotoID,
+		}.AsMediaID()
+		if err != nil {
+			return nil, err
+		}
+
+		if avatar.MXC, err = c.main.Bridge.Matrix.GenerateContentURI(ctx, mediaID); err != nil {
+			return nil, err
+		}
+		avatar.Hash = ids.HashMediaID(mediaID)
+	} else {
+		avatar.Get = func(ctx context.Context) (data []byte, err error) {
+			return media.NewTransferer(c.client.API()).WithChannelPhoto(channelID, accessHash, chatPhoto.PhotoID).DownloadBytes(ctx)
+		}
+	}
+
+	return avatar, nil
+}
+
+func (c *TelegramClient) convertPhoto(ctx context.Context, peerType ids.PeerType, peerID int64, photoClass tg.PhotoClass) (*bridgev2.Avatar, error) {
+	photo, ok := photoClass.(*tg.Photo)
+	if !ok {
+		return nil, fmt.Errorf("not a photo: %T", photoClass)
+	}
+
+	avatar := &bridgev2.Avatar{
+		ID: ids.MakeAvatarID(photo.GetID()),
+	}
+
+	if c.main.useDirectMedia {
+		mediaID, err := ids.DirectMediaInfo{
+			PeerType: peerType,
+			PeerID:   peerID,
+			UserID:   c.telegramUserID,
+			ID:       photo.GetID(),
+		}.AsMediaID()
+		if err != nil {
+			return nil, err
+		}
+
+		if avatar.MXC, err = c.main.Bridge.Matrix.GenerateContentURI(ctx, mediaID); err != nil {
+			return nil, err
+		}
+
+		avatar.Hash = ids.HashMediaID(mediaID)
+	} else {
+		avatar.Get = func(ctx context.Context) (data []byte, err error) {
+			return media.NewTransferer(c.client.API()).WithPhoto(photo).DownloadBytes(ctx)
+		}
+	}
+
+	return avatar, nil
+}

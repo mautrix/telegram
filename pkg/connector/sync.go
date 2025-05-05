@@ -149,6 +149,22 @@ func (t *TelegramClient) handleDialogs(ctx context.Context, dialogs tg.ModifiedM
 					Msg("Not syncing portal because chat type is unsupported")
 				continue
 			}
+			fullChat, err := APICallWithUpdates(ctx, t, func() (*tg.MessagesChatFull, error) {
+				return t.client.API().MessagesGetFullChat(ctx, chat.GetID())
+			})
+			if err != nil {
+				log.Err(err).Msg("Failed to get full chat")
+				continue
+			}
+			chatFull, ok := fullChat.FullChat.(*tg.ChatFull)
+			var avatar *bridgev2.Avatar
+			if ok {
+				avatar, err = t.convertPhoto(ctx, ids.PeerTypeChat, chatFull.ID, chatFull.ChatPhoto)
+				if err != nil {
+					log.Err(err).Msg("Failed to convert group avatar")
+				}
+			}
+
 			chatInfo = &bridgev2.ChatInfo{
 				CanBackfill: true,
 				Name:        &chat.(*tg.Chat).Title,
@@ -161,6 +177,7 @@ func (t *TelegramClient) handleDialogs(ctx context.Context, dialogs tg.ModifiedM
 						},
 					},
 				},
+				Avatar: avatar,
 			}
 		case *tg.PeerChannel:
 			channel := chats[peer.ChannelID]
@@ -176,6 +193,14 @@ func (t *TelegramClient) handleDialogs(ctx context.Context, dialogs tg.ModifiedM
 					Msg("Not syncing portal because channel type is unsupported")
 				continue
 			}
+			fullChannel := channel.(*tg.Channel)
+			var avatar *bridgev2.Avatar
+			if photo, ok := fullChannel.GetPhoto().(*tg.ChatPhoto); ok {
+				avatar, err = t.convertChatPhoto(ctx, fullChannel.ID, fullChannel.AccessHash, photo)
+				if err != nil {
+					log.Err(err).Msg("Failed to convert channel avatar")
+				}
+			}
 			chatInfo = &bridgev2.ChatInfo{
 				CanBackfill: true,
 				Name:        &channel.(*tg.Channel).Title,
@@ -188,6 +213,7 @@ func (t *TelegramClient) handleDialogs(ctx context.Context, dialogs tg.ModifiedM
 						},
 					},
 				},
+				Avatar: avatar,
 				ExtraUpdates: func(ctx context.Context, p *bridgev2.Portal) bool {
 					return p.Metadata.(*PortalMetadata).SetIsSuperGroup(channel.(*tg.Channel).GetMegagroup())
 				},

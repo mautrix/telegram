@@ -217,14 +217,14 @@ func (t *Transferer) WithPhoto(pc tg.PhotoClass) *ReadyTransferer {
 // WithUserPhoto transforms a [Transferer] to a [ReadyTransferer] by setting
 // the given user's photo as the location that will be downloaded by the
 // [ReadyTransferer].
-func (t *Transferer) WithUserPhoto(ctx context.Context, store *store.ScopedStore, user *tg.User, photoID int64) (*ReadyTransferer, error) {
-	if accessHash, err := store.GetAccessHash(ctx, ids.PeerTypeUser, user.GetID()); err != nil {
-		return nil, fmt.Errorf("failed to get user access hash for %d: %w", user.GetID(), err)
+func (t *Transferer) WithUserPhoto(ctx context.Context, store *store.ScopedStore, userID int64, photoID int64) (*ReadyTransferer, error) {
+	if accessHash, err := store.GetAccessHash(ctx, ids.PeerTypeUser, userID); err != nil {
+		return nil, fmt.Errorf("failed to get user access hash for %d: %w", userID, err)
 	} else {
 		return &ReadyTransferer{
 			inner: t,
 			loc: &tg.InputPeerPhotoFileLocation{
-				Peer:    &tg.InputPeerUser{UserID: user.GetID(), AccessHash: accessHash},
+				Peer:    &tg.InputPeerUser{UserID: userID, AccessHash: accessHash},
 				PhotoID: photoID,
 				Big:     true,
 			},
@@ -396,12 +396,12 @@ func (t *ReadyTransferer) DirectDownloadURL(ctx context.Context, loggedInUserID 
 		return "", nil, err
 	}
 	mediaID, err := ids.DirectMediaInfo{
-		PeerType:        peerType,
-		ChatID:          chatID,
-		ReceiverID:      loggedInUserID,
-		MessageID:       int64(msgID),
-		Thumbnail:       thumbnail,
-		TelegramMediaID: telegramMediaID,
+		PeerType:  peerType,
+		PeerID:    chatID,
+		UserID:    loggedInUserID,
+		MessageID: int64(msgID),
+		Thumbnail: thumbnail,
+		ID:        telegramMediaID,
 	}.AsMediaID()
 	if err != nil {
 		return "", nil, err

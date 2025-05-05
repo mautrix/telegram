@@ -32,7 +32,6 @@ import (
 	"maunium.net/go/mautrix/event"
 
 	"go.mau.fi/mautrix-telegram/pkg/connector/ids"
-	"go.mau.fi/mautrix-telegram/pkg/connector/media"
 )
 
 var (
@@ -186,7 +185,7 @@ func (t *TelegramClient) getGroupChatInfo(fullChat *tg.MessagesChatFull, chatID 
 	return &chatInfo, isBroadcastChannel, nil
 }
 
-func (t *TelegramClient) avatarFromPhoto(ctx context.Context, photo tg.PhotoClass) *bridgev2.Avatar {
+func (t *TelegramClient) avatarFromPhoto(ctx context.Context, peerType ids.PeerType, peerID int64, photo tg.PhotoClass) *bridgev2.Avatar {
 	if photo == nil {
 		zerolog.Ctx(ctx).Trace().Msg("Chat photo is nil, returning no avatar")
 		return nil
@@ -194,12 +193,12 @@ func (t *TelegramClient) avatarFromPhoto(ctx context.Context, photo tg.PhotoClas
 		zerolog.Ctx(ctx).Warn().Uint32("type_id", photo.TypeID()).Msg("Chat photo type unknown, returning no avatar")
 		return nil
 	}
-	return &bridgev2.Avatar{
-		ID: ids.MakeAvatarID(photo.GetID()),
-		Get: func(ctx context.Context) (data []byte, err error) {
-			return media.NewTransferer(t.client.API()).WithPhoto(photo).DownloadBytes(ctx)
-		},
+	avatar, err := t.convertPhoto(ctx, peerType, peerID, photo)
+	if err != nil {
+		zerolog.Ctx(ctx).Err(err).Int64("id", photo.GetID()).Msg("Failed to convert avatar")
+		return nil
 	}
+	return avatar
 }
 
 func (t *TelegramClient) filterChannelParticipants(participants []tg.ChannelParticipantClass, limit int) (members []bridgev2.ChatMember) {
@@ -260,7 +259,7 @@ func (t *TelegramClient) GetChatInfo(ctx context.Context, portal *bridgev2.Porta
 		if !ok {
 			return nil, fmt.Errorf("full chat is %T not *tg.ChatFull", fullChat.FullChat)
 		}
-		chatInfo.Avatar = t.avatarFromPhoto(ctx, chatFull.ChatPhoto)
+		chatInfo.Avatar = t.avatarFromPhoto(ctx, peerType, id, chatFull.ChatPhoto)
 
 		if chatFull.Participants.TypeID() == tg.ChatParticipantsForbiddenTypeID {
 			chatInfo.Members.IsFull = false
@@ -324,7 +323,7 @@ func (t *TelegramClient) GetChatInfo(ctx context.Context, portal *bridgev2.Porta
 			return nil, fmt.Errorf("too many participants (%d) in chat %d", channelFull.ParticipantsCount, id)
 		}
 
-		chatInfo.Avatar = t.avatarFromPhoto(ctx, channelFull.ChatPhoto)
+		chatInfo.Avatar = t.avatarFromPhoto(ctx, peerType, id, channelFull.ChatPhoto)
 
 		// TODO save available reactions?
 		// TODO save reactions limit?
