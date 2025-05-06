@@ -25,6 +25,7 @@ import (
 
 	"github.com/gotd/td/telegram/query/hasher"
 	"github.com/gotd/td/tg"
+	"github.com/rs/zerolog"
 	"maunium.net/go/mautrix/bridgev2"
 	"maunium.net/go/mautrix/bridgev2/networkid"
 
@@ -83,6 +84,9 @@ func (t *TelegramClient) getResolveIdentifierResponseForUserID(ctx context.Conte
 var usernameRe = regexp.MustCompile(`^@?([a-zA-Z](?:\w{3,30})[a-zA-Z\d])$`)
 
 func (t *TelegramClient) ResolveIdentifier(ctx context.Context, identifier string, createChat bool) (*bridgev2.ResolveIdentifierResponse, error) {
+	log := zerolog.Ctx(ctx).With().Str("identifier", identifier).Logger()
+	log.Debug().Msg("Resolving identifier")
+
 	if len(identifier) == 0 {
 		return nil, fmt.Errorf("empty identifier")
 	}
@@ -92,7 +96,8 @@ func (t *TelegramClient) ResolveIdentifier(ctx context.Context, identifier strin
 		if userID, err := t.ScopedStore.GetUserIDByPhoneNumber(ctx, normalized); err != nil {
 			return nil, fmt.Errorf("failed to get user ID by phone number: %w", err)
 		} else if userID == 0 {
-			return nil, fmt.Errorf("no user found with phone number '%s'", normalized)
+			log.Info().Msg("Phone number not found in database")
+			return nil, nil
 		} else {
 			return t.getResolveIdentifierResponseForUserID(ctx, userID)
 		}
@@ -113,7 +118,8 @@ func (t *TelegramClient) ResolveIdentifier(ctx context.Context, identifier strin
 			})
 			if err != nil {
 				if tg.IsUsernameNotOccupied(err) {
-					return nil, fmt.Errorf("no user found with username '%s'", match[1])
+					log.Info().Msg("Username not found in database")
+					return nil, nil
 				} else {
 					return nil, fmt.Errorf("failed to resolve username: %w", err)
 				}
