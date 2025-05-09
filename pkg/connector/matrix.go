@@ -25,7 +25,7 @@ import (
 	"image"
 	_ "image/jpeg"
 	_ "image/png"
-	"math/rand"
+	"math/rand/v2"
 	"os"
 	"strconv"
 	"strings"
@@ -187,6 +187,19 @@ func (t *TelegramClient) humaniseSendError(err error) bridgev2.MessageStatus {
 		WithStatus(event.MessageStatusFail)
 }
 
+func (tg *TelegramConnector) GenerateTransactionID(userID id.UserID, roomID id.RoomID, eventType event.Type) networkid.RawTransactionID {
+	return networkid.RawTransactionID(strconv.FormatInt(rand.Int64(), 10))
+}
+
+func parseRandomID(txnID networkid.RawTransactionID) int64 {
+	if txnID != "" {
+		if id, err := strconv.ParseInt(string(txnID), 10, 64); err == nil && id > 0 {
+			return id
+		}
+	}
+	return rand.Int64()
+}
+
 func (t *TelegramClient) HandleMatrixMessage(ctx context.Context, msg *bridgev2.MatrixMessage) (resp *bridgev2.MatrixMessageResponse, err error) {
 	peer, err := t.inputPeerForPortalID(ctx, msg.Portal.ID)
 	if err != nil {
@@ -211,6 +224,8 @@ func (t *TelegramClient) HandleMatrixMessage(ctx context.Context, msg *bridgev2.
 		replyTo = &tg.InputReplyToMessage{ReplyToMsgID: messageID}
 	}
 
+	randomID := parseRandomID(msg.InputTransactionID)
+
 	var updates tg.UpdatesClass
 	if msg.Event.Type == event.EventSticker {
 		var media tg.InputMediaClass
@@ -224,7 +239,7 @@ func (t *TelegramClient) HandleMatrixMessage(ctx context.Context, msg *bridgev2.
 			Entities: entities,
 			Media:    media,
 			ReplyTo:  replyTo,
-			RandomID: rand.Int63(),
+			RandomID: randomID,
 		})
 	} else {
 		switch msg.Content.MsgType {
@@ -235,7 +250,7 @@ func (t *TelegramClient) HandleMatrixMessage(ctx context.Context, msg *bridgev2.
 				Message:   message,
 				Entities:  entities,
 				ReplyTo:   replyTo,
-				RandomID:  rand.Int63(),
+				RandomID:  randomID,
 			})
 		case event.MsgImage, event.MsgFile, event.MsgAudio, event.MsgVideo:
 			var media tg.InputMediaClass
@@ -249,7 +264,7 @@ func (t *TelegramClient) HandleMatrixMessage(ctx context.Context, msg *bridgev2.
 				Entities: entities,
 				Media:    media,
 				ReplyTo:  replyTo,
-				RandomID: rand.Int63(),
+				RandomID: randomID,
 			})
 		case event.MsgLocation:
 			var uri GeoURI
@@ -270,7 +285,7 @@ func (t *TelegramClient) HandleMatrixMessage(ctx context.Context, msg *bridgev2.
 					GeoPoint: &tg.InputGeoPoint{Lat: uri.Lat, Long: uri.Long},
 				},
 				ReplyTo:  replyTo,
-				RandomID: rand.Int63(),
+				RandomID: randomID,
 			})
 		default:
 			return nil, fmt.Errorf("unsupported message type %s", msg.Content.MsgType)
