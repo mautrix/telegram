@@ -188,13 +188,19 @@ func (t *TelegramClient) onUpdateNewMessage(ctx context.Context, entities tg.Ent
 				ChatInfoChange: &bridgev2.ChatInfoChange{ChatInfo: &bridgev2.ChatInfo{Name: &action.Title}},
 			})
 		case *tg.MessageActionChatEditPhoto:
-			// FIXME
-			chatID := msg.PeerID.(*tg.PeerChat).ChatID
+			switch peer := msg.PeerID.(type) {
+			case *tg.PeerChat:
+				t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.ChatInfoChange{
+					EventMeta:      eventMeta.WithType(bridgev2.RemoteEventChatInfoChange),
+					ChatInfoChange: &bridgev2.ChatInfoChange{ChatInfo: &bridgev2.ChatInfo{Avatar: t.avatarFromPhoto(ctx, ids.PeerTypeChat, peer.ChatID, action.Photo)}},
+				})
+			case *tg.PeerChannel:
+				t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.ChatInfoChange{
+					EventMeta:      eventMeta.WithType(bridgev2.RemoteEventChatInfoChange),
+					ChatInfoChange: &bridgev2.ChatInfoChange{ChatInfo: &bridgev2.ChatInfo{Avatar: t.avatarFromPhoto(ctx, ids.PeerTypeChannel, peer.ChannelID, action.Photo)}},
+				})
+			}
 
-			t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.ChatInfoChange{
-				EventMeta:      eventMeta.WithType(bridgev2.RemoteEventChatInfoChange),
-				ChatInfoChange: &bridgev2.ChatInfoChange{ChatInfo: &bridgev2.ChatInfo{Avatar: t.avatarFromPhoto(ctx, ids.PeerTypeChat, chatID, action.Photo)}},
-			})
 		case *tg.MessageActionChatDeletePhoto:
 			t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.ChatInfoChange{
 				EventMeta:      eventMeta.WithType(bridgev2.RemoteEventChatInfoChange),
