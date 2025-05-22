@@ -115,6 +115,9 @@ var fileCaps = event.FileFeatureMap{
 	event.CapMsgSticker: {
 		MimeTypes: map[string]event.CapabilitySupportLevel{
 			"image/webp": event.CapLevelFullySupported,
+			// These are converted to webp
+			"image/jpeg": event.CapLevelPartialSupport,
+			"image/png":  event.CapLevelPartialSupport,
 			// TODO
 			//"video/lottie+json": event.CapLevelFullySupported,
 			//"video/webm": event.CapLevelFullySupported,

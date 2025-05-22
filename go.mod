@@ -12,6 +12,7 @@ require (
 	github.com/stretchr/testify v1.10.0
 	github.com/tidwall/gjson v1.18.0
 	go.mau.fi/util v0.8.7-0.20250427215252-d2d18a7e463c
+	go.mau.fi/webp v0.2.0
 	go.mau.fi/zerozap v0.1.1
 	go.uber.org/zap v1.27.0
 	golang.org/x/exp v0.0.0-20250408133849-7e4ce0ab07d0
