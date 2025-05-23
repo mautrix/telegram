@@ -725,6 +725,11 @@ func (t *TelegramClient) LogoutRemote(ctx context.Context) {
 
 	if t.userLogin.Metadata.(*UserLoginMetadata).Session.HasAuthKey() {
 		log.Info().Msg("User has an auth key, logging out")
+
+		// logging out is best effort, we want to logout even if we can't call the endpoint
+		ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		defer cancel()
+
 		_, err := t.client.API().AuthLogOut(ctx)
 		if err != nil {
 			log.Err(err).Msg("failed to logout on Telegram")
