@@ -854,7 +854,8 @@ func (t *TelegramClient) updateReadReceipt(ctx context.Context, e tg.Entities, u
 				Sender:      ids.MakeUserID(user.UserID),
 			},
 		},
-		LastTarget: ids.MakeMessageID(update.Peer, update.MaxID),
+		LastTarget:          ids.MakeMessageID(update.Peer, update.MaxID),
+		ReadUpToStreamOrder: int64(update.MaxID),
 	})
 	return nil
 }
@@ -866,7 +867,8 @@ func (t *TelegramClient) onOwnReadReceipt(portalKey networkid.PortalKey, maxID i
 			PortalKey: portalKey,
 			Sender:    t.mySender(),
 		},
-		LastTarget: ids.MakeMessageID(portalKey, maxID),
+		LastTarget:          ids.MakeMessageID(portalKey, maxID),
+		ReadUpToStreamOrder: int64(maxID),
 	})
 	return nil
 }

@@ -326,7 +326,9 @@ func (c *TelegramClient) webpageToBeeperLinkPreview(ctx context.Context, intent 
 		if err != nil {
 			return nil, err
 		}
-		preview.ImageSize, preview.ImageWidth, preview.ImageHeight = fileInfo.Size, fileInfo.Width, fileInfo.Height
+		preview.ImageSize = event.IntOrString(fileInfo.Size)
+		preview.ImageWidth = event.IntOrString(fileInfo.Width)
+		preview.ImageHeight = event.IntOrString(fileInfo.Height)
 	}
 
 	return preview, nil
