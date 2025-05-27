@@ -211,7 +211,7 @@ func (c *TelegramClient) convertToMatrix(ctx context.Context, portal *bridgev2.P
 		if media, ok := msg.GetMedia(); ok && media.TypeID() == tg.MessageMediaWebPageTypeID {
 			webpageCtx, webpageCtxCancel := context.WithTimeout(ctx, time.Second*5)
 			defer webpageCtxCancel()
-			preview, err := c.webpageToBeeperLinkPreview(webpageCtx, intent, media)
+			preview, err := c.webpageToBeeperLinkPreview(webpageCtx, portal, intent, msg, media)
 			if err != nil {
 				log.Err(err).Msg("error converting webpage to link preview")
 			} else if preview != nil {
@@ -304,7 +304,7 @@ func (t *TelegramClient) parseBodyAndHTML(ctx context.Context, message string, e
 	return telegramfmt.Parse(ctx, message, entities, t.telegramFmtParams.WithCustomEmojis(customEmojis))
 }
 
-func (c *TelegramClient) webpageToBeeperLinkPreview(ctx context.Context, intent bridgev2.MatrixAPI, msgMedia tg.MessageMediaClass) (preview *event.BeeperLinkPreview, err error) {
+func (c *TelegramClient) webpageToBeeperLinkPreview(ctx context.Context, portal *bridgev2.Portal, intent bridgev2.MatrixAPI, msg *tg.Message, msgMedia tg.MessageMediaClass) (preview *event.BeeperLinkPreview, err error) {
 	webpage, ok := msgMedia.(*tg.MessageMediaWebPage).Webpage.(*tg.WebPage)
 	if !ok {
 		return nil, nil
@@ -320,9 +320,12 @@ func (c *TelegramClient) webpageToBeeperLinkPreview(ctx context.Context, intent 
 
 	if pc, ok := webpage.GetPhoto(); ok && pc.TypeID() == tg.PhotoTypeID {
 		var fileInfo *event.FileInfo
-		preview.ImageURL, preview.ImageEncryption, fileInfo, err = media.NewTransferer(c.client.API()).
-			WithPhoto(pc).
-			Transfer(ctx, c.main.Store, intent)
+		transferer := media.NewTransferer(c.client.API()).WithPhoto(pc)
+		if c.main.useDirectMedia {
+			preview.ImageURL, fileInfo, err = transferer.DirectDownloadURL(ctx, c.telegramUserID, portal, msg.ID, true, 0)
+		} else {
+			preview.ImageURL, preview.ImageEncryption, fileInfo, err = transferer.Transfer(ctx, c.main.Store, intent)
+		}
 		if err != nil {
 			return nil, err
 		}
