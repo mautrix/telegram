@@ -76,6 +76,12 @@ func finalizeLogin(ctx context.Context, user *bridgev2.User, authorization *tg.A
 	}
 	ul.Client.Connect(ul.Log.WithContext(context.Background()))
 	client := ul.Client.(*TelegramClient)
+	// Connecting is non-blocking so wait for gotd to initialize before doing anythign to avoid deadlocking
+	select {
+	case <-client.initialized:
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
 	me, err := client.client.Self(ctx)
 	if err != nil {
 		return nil, err

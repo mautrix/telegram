@@ -67,6 +67,7 @@ type TelegramClient struct {
 	clientCtx      context.Context
 	clientCancel   context.CancelFunc
 	clientCloseC   <-chan struct{}
+	initialized    chan struct{}
 	mu             sync.Mutex
 
 	appConfigLock sync.Mutex
@@ -164,6 +165,8 @@ func NewTelegramClient(ctx context.Context, tc *TelegramConnector, login *bridge
 		takeoutAccepted: exsync.NewEvent(),
 
 		prevReactionPoll: map[networkid.PortalKey]time.Time{},
+
+		initialized: make(chan struct{}),
 	}
 
 	if !login.Metadata.(*UserLoginMetadata).Session.HasAuthKey() {
@@ -498,48 +501,53 @@ func (t *TelegramClient) Connect(ctx context.Context) {
 
 	var err error
 	t.clientCtx, t.clientCancel = context.WithCancel(ctx)
-	if t.clientCloseC, err = connectTelegramClient(t.clientCtx, t.clientCancel, t.client); err != nil {
-		t.sendBadCredentialsOrUnknownError(err)
-		return
-	}
 	t.updatesCloseC = make(chan struct{})
 	go func() {
-		defer close(t.updatesCloseC)
-		for {
-			err = t.updatesManager.Run(t.clientCtx, t.client.API(), t.telegramUserID, updates.AuthOptions{})
-			if err == nil || errors.Is(err, context.Canceled) {
-				return
-			}
-
-			zerolog.Ctx(t.clientCtx).Err(err).Msg("failed to run updates manager, retrying")
-
-			select {
-			case <-t.clientCtx.Done():
-				return
-			case <-time.After(5 * time.Second):
-			}
+		defer close(t.initialized)
+		if t.clientCloseC, err = connectTelegramClient(t.clientCtx, t.clientCancel, t.client); err != nil {
+			t.sendBadCredentialsOrUnknownError(err)
+			close(t.updatesCloseC)
+			return
 		}
+
+		go func() {
+			defer close(t.updatesCloseC)
+			for {
+				err = t.updatesManager.Run(t.clientCtx, t.client.API(), t.telegramUserID, updates.AuthOptions{})
+				if err == nil || errors.Is(err, context.Canceled) {
+					return
+				}
+
+				zerolog.Ctx(t.clientCtx).Err(err).Msg("failed to run updates manager, retrying")
+
+				select {
+				case <-t.clientCtx.Done():
+					return
+				case <-time.After(5 * time.Second):
+				}
+			}
+		}()
+
+		// Update the logged-in user's ghost info (this also updates the user
+		// login's remote name and profile).
+		if me, err := t.client.Self(t.clientCtx); err != nil {
+			t.sendBadCredentialsOrUnknownError(err)
+		} else if _, err := t.updateGhost(t.clientCtx, t.telegramUserID, me); err != nil {
+			t.sendBadCredentialsOrUnknownError(err)
+		} else {
+			t.userLogin.BridgeState.Send(status.BridgeState{StateEvent: status.StateConnected})
+		}
+
+		// Fix the "Telegram Saved Messages" chat
+		t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.ChatResync{
+			ChatInfo: t.getDMChatInfo(t.telegramUserID),
+			EventMeta: simplevent.EventMeta{
+				Type:         bridgev2.RemoteEventChatResync,
+				PortalKey:    t.makePortalKeyFromID(ids.PeerTypeUser, t.telegramUserID),
+				CreatePortal: false, // Do not create the portal if it doesn't already exist
+			},
+		})
 	}()
-
-	// Update the logged-in user's ghost info (this also updates the user
-	// login's remote name and profile).
-	if me, err := t.client.Self(t.clientCtx); err != nil {
-		t.sendBadCredentialsOrUnknownError(err)
-	} else if _, err := t.updateGhost(t.clientCtx, t.telegramUserID, me); err != nil {
-		t.sendBadCredentialsOrUnknownError(err)
-	} else {
-		t.userLogin.BridgeState.Send(status.BridgeState{StateEvent: status.StateConnected})
-	}
-
-	// Fix the "Telegram Saved Messages" chat
-	t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.ChatResync{
-		ChatInfo: t.getDMChatInfo(t.telegramUserID),
-		EventMeta: simplevent.EventMeta{
-			Type:         bridgev2.RemoteEventChatResync,
-			PortalKey:    t.makePortalKeyFromID(ids.PeerTypeUser, t.telegramUserID),
-			CreatePortal: false, // Do not create the portal if it doesn't already exist
-		},
-	})
 }
 
 func (t *TelegramClient) Disconnect() {
