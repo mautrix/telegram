@@ -40,6 +40,7 @@ type GhostMetadata struct {
 	IsPremium bool `json:"is_premium,omitempty"`
 	IsBot     bool `json:"is_bot,omitempty"`
 	IsChannel bool `json:"is_channel,omitempty"`
+	IsContact bool `json:"is_contact,omitempty"`
 	Blocked   bool `json:"blocked,omitempty"`
 	Deleted   bool `json:"deleted,omitempty"`
 }

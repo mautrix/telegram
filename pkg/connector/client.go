@@ -691,9 +691,10 @@ func (t *TelegramClient) getUserInfoFromTelegramUser(ctx context.Context, u tg.U
 		ExtraUpdates: func(ctx context.Context, ghost *bridgev2.Ghost) (changed bool) {
 			meta := ghost.Metadata.(*GhostMetadata)
 			if !user.Min {
-				changed = changed || meta.IsPremium != user.Premium || meta.IsBot != user.Bot
+				changed = changed || meta.IsPremium != user.Premium || meta.IsBot != user.Bot || meta.IsContact != user.Contact
 				meta.IsPremium = user.Premium
 				meta.IsBot = user.Bot
+				meta.IsContact = user.Contact
 				meta.Deleted = user.Deleted
 			}
 			return changed

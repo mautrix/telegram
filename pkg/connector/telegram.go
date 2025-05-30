@@ -609,8 +609,12 @@ func (t *TelegramClient) onUserName(ctx context.Context, e tg.Entities, update *
 		return err
 	}
 
-	name := util.FormatFullName(update.FirstName, update.LastName, false, update.UserID)
-	userInfo := bridgev2.UserInfo{Name: &name}
+	var userInfo bridgev2.UserInfo
+
+	if !ghost.Metadata.(*GhostMetadata).IsContact {
+		name := util.FormatFullName(update.FirstName, update.LastName, false, update.UserID)
+		userInfo.Name = &name
+	}
 
 	if len(update.Usernames) > 0 {
 		for _, ident := range ghost.Identifiers {
