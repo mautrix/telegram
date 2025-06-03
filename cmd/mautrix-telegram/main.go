@@ -107,7 +107,7 @@ func main() {
 			"v0.14.0",
 			"v0.16.0",
 			m.LegacyMigrateWithAnotherUpgrader(
-				legacyMigrateRenameTables, legacyMigrateCopyData, 16,
+				legacyMigrateRenameTables, legacyMigrateCopyData, 21,
 				upgrades.Table, "telegram_version", 2,
 			),
 			true,

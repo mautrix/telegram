@@ -234,7 +234,8 @@ SELECT
     expiration_seconds * 1000000000,
     expiration_ts * 1000000
 FROM disappearing_message_old
-WHERE expiration_ts<9999999999999 AND expiration_seconds<999999;
+WHERE expiration_ts<9999999999999 AND expiration_seconds<999999
+  AND room_id IN (SELECT mxid FROM portal WHERE mxid IS NOT NULL);
 
 -- TODO do something with the bot_chat table?
 
