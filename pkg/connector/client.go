@@ -66,7 +66,7 @@ type TelegramClient struct {
 	updatesCloseC  chan struct{}
 	clientCtx      context.Context
 	clientCancel   context.CancelFunc
-	clientCloseC   <-chan struct{}
+	clientCloseC   chan struct{}
 	initialized    chan struct{}
 	mu             sync.Mutex
 
@@ -491,24 +491,33 @@ func (t *TelegramClient) Connect(ctx context.Context) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
+	log := zerolog.Ctx(ctx).With().Int64("user_id", t.telegramUserID).Logger()
+
 	if !t.userLogin.Metadata.(*UserLoginMetadata).Session.HasAuthKey() {
-		zerolog.Ctx(ctx).Warn().Msg("user does not have an auth key, sending bad credentials state")
+		log.Warn().Msg("user does not have an auth key, sending bad credentials state")
 		t.sendBadCredentialsOrUnknownError(ErrNoAuthKey)
 		return
 	}
 
-	zerolog.Ctx(ctx).Info().Int64("user_id", t.telegramUserID).Msg("Connecting client")
+	log.Info().Msg("Connecting client")
 
-	var err error
 	t.clientCtx, t.clientCancel = context.WithCancel(ctx)
+	t.clientCloseC = make(chan struct{})
 	t.updatesCloseC = make(chan struct{})
 	go func() {
 		defer close(t.initialized)
-		if t.clientCloseC, err = connectTelegramClient(t.clientCtx, t.clientCancel, t.client); err != nil {
+		connectClientCloseC, err := connectTelegramClient(t.clientCtx, t.clientCancel, t.client)
+		if err != nil {
 			t.sendBadCredentialsOrUnknownError(err)
 			close(t.updatesCloseC)
 			return
 		}
+
+		// awful hack to prevent assigning clientCloseC from racing Disconnect()
+		go func() {
+			<-connectClientCloseC
+			close(t.clientCloseC)
+		}()
 
 		go func() {
 			defer close(t.updatesCloseC)
@@ -554,19 +563,24 @@ func (t *TelegramClient) Disconnect() {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
-	t.userLogin.Log.Info().Msg("disconnecting client")
+	t.userLogin.Log.Info().Msg("Disconnecting client")
+
 	if t.clientCancel != nil {
 		t.clientCancel()
 		t.clientCancel = nil
 	}
 	if t.clientCloseC != nil {
+		t.userLogin.Log.Debug().Msg("Waiting for client to finish")
 		<-t.clientCloseC
 		t.clientCloseC = nil
 	}
 	if t.updatesCloseC != nil {
+		t.userLogin.Log.Debug().Msg("Waiting for updates to finish")
 		<-t.updatesCloseC
 		t.updatesCloseC = nil
 	}
+
+	t.userLogin.Log.Info().Msg("Disconnect complete")
 }
 
 func (t *TelegramClient) getInputUser(ctx context.Context, id int64) (*tg.InputUser, error) {
@@ -726,7 +740,8 @@ func (t *TelegramClient) LogoutRemote(ctx context.Context) {
 		Str("action", "logout_remote").
 		Int64("user_id", t.telegramUserID).
 		Logger()
-	log.Info().Msg("Logging out")
+
+	log.Info().Msg("Logging out and disconnecting")
 
 	if t.userLogin.Metadata.(*UserLoginMetadata).Session.HasAuthKey() {
 		log.Info().Msg("User has an auth key, logging out")
@@ -743,6 +758,8 @@ func (t *TelegramClient) LogoutRemote(ctx context.Context) {
 
 	t.Disconnect()
 
+	log.Info().Msg("Deleting user state")
+
 	err := t.ScopedStore.DeleteUserState(ctx)
 	if err != nil {
 		log.Err(err).Msg("failed to delete user state")
@@ -758,7 +775,7 @@ func (t *TelegramClient) LogoutRemote(ctx context.Context) {
 		log.Err(err).Msg("failed to delete access hashes for user")
 	}
 
-	log.Info().Msg("successfully logged out and deleted user state")
+	log.Info().Msg("Logged out and deleted user state")
 }
 
 func (t *TelegramClient) IsThisUser(ctx context.Context, userID networkid.UserID) bool {
