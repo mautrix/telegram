@@ -13,7 +13,7 @@ require (
 	github.com/tidwall/gjson v1.18.0
 	go.mau.fi/util v0.8.7
 	go.mau.fi/webp v0.2.0
-	go.mau.fi/zerozap v0.1.1
+	go.mau.fi/zerozap v0.1.2
 	go.uber.org/zap v1.27.0
 	golang.org/x/exp v0.0.0-20250506013437-ce4c2cf36ca6
 	golang.org/x/net v0.40.0

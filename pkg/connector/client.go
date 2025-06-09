@@ -37,6 +37,7 @@ import (
 	"go.mau.fi/util/exsync"
 	"go.mau.fi/zerozap"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 	"maunium.net/go/mautrix/bridgev2"
 	"maunium.net/go/mautrix/bridgev2/database"
 	"maunium.net/go/mautrix/bridgev2/networkid"
@@ -151,7 +152,18 @@ func NewTelegramClient(ctx context.Context, tc *TelegramConnector, login *bridge
 		Str("user_login_id", string(login.ID)).
 		Logger()
 
-	zaplog := zap.New(zerozap.New(log))
+	zaplog := zap.New(zerozap.NewWithLevels(log, map[zapcore.Level]zerolog.Level{
+		// shifted
+		zapcore.DebugLevel: zerolog.TraceLevel,
+		zapcore.InfoLevel:  zerolog.DebugLevel,
+
+		// direct mapping
+		zapcore.WarnLevel:   zerolog.WarnLevel,
+		zapcore.ErrorLevel:  zerolog.ErrorLevel,
+		zapcore.DPanicLevel: zerolog.PanicLevel,
+		zapcore.PanicLevel:  zerolog.PanicLevel,
+		zapcore.FatalLevel:  zerolog.FatalLevel,
+	}))
 
 	client := TelegramClient{
 		ScopedStore: tc.Store.GetScopedStore(telegramUserID),
@@ -441,7 +453,7 @@ func (t *TelegramClient) sendBadCredentialsOrUnknownError(err error) {
 
 func (t *TelegramClient) onPing() {
 	if t.userLogin.BridgeState.GetPrev().StateEvent == status.StateConnected {
-		t.main.Bridge.Log.Info().Msg("Got ping, not checking connectivity because we are already connected")
+		t.main.Bridge.Log.Trace().Msg("Got ping, not checking connectivity because we are already connected")
 	} else {
 		t.onConnectionStateChange("ping while not connected")
 	}
