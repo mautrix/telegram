@@ -14,7 +14,7 @@ qrcode>=6,<9
 phonenumbers>=8,<10
 
 #/metrics
-prometheus_client>=0.6,<0.21
+prometheus_client>=0.6,<0.23
 
 #/e2be
 python-olm>=3,<4
