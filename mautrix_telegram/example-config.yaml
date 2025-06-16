@@ -352,7 +352,7 @@ bridge:
     private_chat_portal_meta: default
     # Disable generating reply fallbacks? Some extremely bad clients still rely on them,
     # but they're being phased out and will be completely removed in the future.
-    disable_reply_fallbacks: false
+    disable_reply_fallbacks: true
     # Should cross-chat replies from Telegram be bridged? Most servers and clients don't support this.
     cross_room_replies: false
     # Whether or not the bridge should send a read receipt from the bridge bot when a message has
