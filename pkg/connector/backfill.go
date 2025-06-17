@@ -296,7 +296,10 @@ func (t *TelegramClient) FetchMessages(ctx context.Context, fetchParams bridgev2
 		}
 
 		sender := t.getEventSender(message, !portal.Metadata.(*PortalMetadata).IsSuperGroup)
-		intent := portal.GetIntentFor(ctx, sender, t.userLogin, bridgev2.RemoteEventBackfill)
+		intent, ok := portal.GetIntentFor(ctx, sender, t.userLogin, bridgev2.RemoteEventBackfill)
+		if !ok {
+			continue
+		}
 		converted, err := t.convertToMatrixWithRefetch(ctx, portal, intent, message)
 		if err != nil {
 			return nil, err
