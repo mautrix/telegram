@@ -1069,6 +1069,26 @@ func (t *TelegramClient) transferEmojisToMatrix(ctx context.Context, customEmoji
 		return
 	}
 
+	if t.main.useDirectMedia {
+		for _, emojiID := range customEmojiIDs {
+			mediaID, err := ids.DirectMediaInfo{
+				PeerType: ids.FakePeerTypeEmoji,
+				UserID:   t.telegramUserID,
+				ID:       emojiID,
+			}.AsMediaID()
+			if err != nil {
+				return nil, err
+			}
+			if mxcURI, err := t.main.Bridge.Matrix.GenerateContentURI(ctx, mediaID); err != nil {
+				return nil, err
+			} else {
+				result[ids.MakeEmojiIDFromDocumentID(emojiID)] = emojis.EmojiInfo{EmojiURI: mxcURI}
+			}
+		}
+
+		return result, nil
+	}
+
 	customEmojiDocuments, err := t.client.API().MessagesGetCustomEmojiDocuments(ctx, customEmojiIDs)
 	if err != nil {
 		return nil, err
