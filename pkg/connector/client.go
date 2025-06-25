@@ -493,10 +493,12 @@ func (t *TelegramClient) onConnectionStateChange(reason string) func() {
 func (t *TelegramClient) onAuthError(err error) {
 	t.sendBadCredentialsOrUnknownError(err)
 	t.userLogin.Metadata.(*UserLoginMetadata).ResetOnLogout()
-	t.Disconnect()
-	if err := t.userLogin.Save(context.Background()); err != nil {
-		t.main.Bridge.Log.Err(err).Msg("failed to save user login")
-	}
+	go func() {
+		t.Disconnect()
+		if err := t.userLogin.Save(context.Background()); err != nil {
+			t.main.Bridge.Log.Err(err).Msg("failed to save user login")
+		}
+	}()
 }
 
 func (t *TelegramClient) Connect(ctx context.Context) {
