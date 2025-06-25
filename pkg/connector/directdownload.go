@@ -28,6 +28,7 @@ import (
 	"maunium.net/go/mautrix/bridgev2/networkid"
 	"maunium.net/go/mautrix/mediaproxy"
 
+	"go.mau.fi/mautrix-telegram/pkg/connector/emojis"
 	"go.mau.fi/mautrix-telegram/pkg/connector/ids"
 	"go.mau.fi/mautrix-telegram/pkg/connector/media"
 )
@@ -206,6 +207,23 @@ func (tc *TelegramConnector) Download(ctx context.Context, mediaID networkid.Med
 		}
 
 		readyTransferer = transferer.WithChannelPhoto(info.PeerID, accessHash, info.ID)
+	} else if info.PeerType == ids.PeerTypeEmoji {
+		_, customEmojiIDs := emojis.ConvertKnownEmojis([]int64{info.ID})
+		if len(customEmojiIDs) == 0 {
+			return nil, fmt.Errorf("emoji id is not custom")
+		}
+
+		customEmojiDocuments, err := client.client.API().MessagesGetCustomEmojiDocuments(ctx, customEmojiIDs)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get custom emoji documents: %w", err)
+		}
+		if len(customEmojiDocuments) == 0 {
+			return nil, fmt.Errorf("emoji id did not result in a document")
+		}
+
+		readyTransferer = media.NewTransferer(client.client.API()).
+			WithStickerConfig(tc.Config.AnimatedSticker).
+			WithDocument(customEmojiDocuments[0], false)
 	}
 
 	if readyTransferer == nil {

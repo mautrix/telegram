@@ -989,6 +989,28 @@ func (t *TelegramClient) getAvailableReactions(ctx context.Context) (map[string]
 }
 
 func (t *TelegramClient) transferEmojisToMatrix(ctx context.Context, customEmojiIDs []int64) (result map[networkid.EmojiID]emojis.EmojiInfo, err error) {
+	if t.main.useDirectMedia {
+		result = make(map[networkid.EmojiID]emojis.EmojiInfo)
+
+		for _, emojiID := range customEmojiIDs {
+			mediaID, err := ids.DirectMediaInfo{
+				PeerType: ids.PeerTypeEmoji,
+				UserID:   t.telegramUserID,
+				ID:       emojiID,
+			}.AsMediaID()
+			if err != nil {
+				return nil, err
+			}
+			if mxcURI, err := t.main.Bridge.Matrix.GenerateContentURI(ctx, mediaID); err != nil {
+				return nil, err
+			} else {
+				result[ids.MakeEmojiIDFromDocumentID(emojiID)] = emojis.EmojiInfo{EmojiURI: mxcURI}
+			}
+		}
+
+		return result, nil
+	}
+
 	result, customEmojiIDs = emojis.ConvertKnownEmojis(customEmojiIDs)
 
 	if len(customEmojiIDs) == 0 {
