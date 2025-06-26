@@ -111,8 +111,7 @@ func (t *TelegramClient) handleDialogs(ctx context.Context, dialogs tg.ModifiedM
 		portalKey := t.makePortalKeyFromPeer(dialog.GetPeer())
 		portal, err := t.main.Bridge.GetPortalByKey(ctx, portalKey)
 		if err != nil {
-			log.Err(err).Msg("Failed to get portal")
-			continue
+			return err
 		}
 		if dialog.UnreadCount == 0 && !dialog.UnreadMark {
 			portal.Metadata.(*PortalMetadata).ReadUpTo = dialog.TopMessage
@@ -153,15 +152,14 @@ func (t *TelegramClient) handleDialogs(ctx context.Context, dialogs tg.ModifiedM
 				return t.client.API().MessagesGetFullChat(ctx, chat.GetID())
 			})
 			if err != nil {
-				log.Err(err).Msg("Failed to get full chat")
-				continue
+				return err
 			}
 			chatFull, ok := fullChat.FullChat.(*tg.ChatFull)
 			var avatar *bridgev2.Avatar
-			if ok {
+			if ok && chatFull.ChatPhoto != nil {
 				avatar, err = t.convertPhoto(ctx, ids.PeerTypeChat, chatFull.ID, chatFull.ChatPhoto)
 				if err != nil {
-					log.Err(err).Msg("Failed to convert group avatar")
+					return err
 				}
 			}
 
@@ -198,7 +196,7 @@ func (t *TelegramClient) handleDialogs(ctx context.Context, dialogs tg.ModifiedM
 			if photo, ok := fullChannel.GetPhoto().(*tg.ChatPhoto); ok {
 				avatar, err = t.convertChatPhoto(ctx, fullChannel.ID, fullChannel.AccessHash, photo)
 				if err != nil {
-					log.Err(err).Msg("Failed to convert channel avatar")
+					return err
 				}
 			}
 			chatInfo = &bridgev2.ChatInfo{
@@ -255,7 +253,7 @@ func (t *TelegramClient) handleDialogs(ctx context.Context, dialogs tg.ModifiedM
 			chatInfo.UserLocal.Tag = ptr.Ptr(event.RoomTagFavourite)
 		}
 
-		t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.ChatResync{
+		res := t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.ChatResync{
 			ChatInfo: chatInfo,
 			EventMeta: simplevent.EventMeta{
 				Type: bridgev2.RemoteEventChatResync,
@@ -276,6 +274,10 @@ func (t *TelegramClient) handleDialogs(ctx context.Context, dialogs tg.ModifiedM
 				return dialog.TopMessage > latestMessageID, nil
 			},
 		})
+
+		if !res.Success {
+			return ErrFailToQueueEvent
+		}
 	}
 	return nil
 }

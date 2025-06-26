@@ -53,7 +53,10 @@ import (
 	"go.mau.fi/mautrix-telegram/pkg/connector/util"
 )
 
-var ErrNoAuthKey = errors.New("user does not have auth key")
+var (
+	ErrNoAuthKey        = errors.New("user does not have auth key")
+	ErrFailToQueueEvent = errors.New("failed to queue event")
+)
 
 type TelegramClient struct {
 	main           *TelegramConnector
@@ -237,8 +240,8 @@ func NewTelegramClient(ctx context.Context, tc *TelegramConnector, login *bridge
 	dispatcher.OnPhoneCall(client.onPhoneCall)
 
 	client.updatesManager = updates.New(updates.Config{
-		OnChannelTooLong: func(channelID int64) {
-			tc.Bridge.QueueRemoteEvent(login, &simplevent.ChatResync{
+		OnChannelTooLong: func(channelID int64) error {
+			res := tc.Bridge.QueueRemoteEvent(login, &simplevent.ChatResync{
 				EventMeta: simplevent.EventMeta{
 					Type: bridgev2.RemoteEventChatResync,
 					LogContext: func(c zerolog.Context) zerolog.Context {
@@ -248,6 +251,11 @@ func NewTelegramClient(ctx context.Context, tc *TelegramConnector, login *bridge
 				},
 				CheckNeedsBackfillFunc: func(ctx context.Context, latestMessage *database.Message) (bool, error) { return true, nil },
 			})
+
+			if !res.Success {
+				return ErrFailToQueueEvent
+			}
+			return nil
 		},
 		Handler:      dispatcher,
 		Logger:       zaplog.Named("gaps"),

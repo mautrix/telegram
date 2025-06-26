@@ -105,7 +105,7 @@ func computeEmojiAndID(reaction tg.ReactionClass, customEmojis map[networkid.Emo
 	return
 }
 
-func (t *TelegramClient) handleTelegramReactions(ctx context.Context, msg *tg.Message) {
+func (t *TelegramClient) handleTelegramReactions(ctx context.Context, msg *tg.Message) error {
 	log := zerolog.Ctx(ctx).With().
 		Str("handler", "handle_telegram_reactions").
 		Int("message_id", msg.ID).
@@ -113,16 +113,14 @@ func (t *TelegramClient) handleTelegramReactions(ctx context.Context, msg *tg.Me
 
 	reactionsList, isFull, customEmojis, err := t.computeReactionsList(ctx, msg.PeerID, msg.ID, msg.Reactions)
 	if err != nil {
-		log.Err(err).Msg("failed to compute reactions list")
-		return
+		return fmt.Errorf("failed to compute reactions: %w", err)
 	}
 
 	users := map[networkid.UserID]*bridgev2.ReactionSyncUser{}
 	for _, reaction := range reactionsList {
 		peer, ok := reaction.PeerID.(*tg.PeerUser)
 		if !ok {
-			log.Error().Type("peer_id", reaction.PeerID).Msg("unknown peer type")
-			return
+			return fmt.Errorf("unknown peer type: %T", reaction.PeerID)
 		}
 		userID := ids.MakeUserID(peer.UserID)
 		reactionLimit, err := t.getReactionLimit(ctx, userID)
@@ -136,8 +134,7 @@ func (t *TelegramClient) handleTelegramReactions(ctx context.Context, msg *tg.Me
 
 		emojiID, emoji, err := computeEmojiAndID(reaction.Reaction, customEmojis)
 		if err != nil {
-			log.Err(err).Msg("failed to compute emoji and ID")
-			return
+			return fmt.Errorf("failed to compute emoji and ID: %w", err)
 		}
 
 		users[userID].Reactions = append(users[userID].Reactions, &bridgev2.BackfillReaction{
@@ -148,7 +145,7 @@ func (t *TelegramClient) handleTelegramReactions(ctx context.Context, msg *tg.Me
 		})
 	}
 
-	t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.ReactionSync{
+	res := t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.ReactionSync{
 		EventMeta: simplevent.EventMeta{
 			Type: bridgev2.RemoteEventReactionSync,
 			LogContext: func(c zerolog.Context) zerolog.Context {
@@ -159,6 +156,12 @@ func (t *TelegramClient) handleTelegramReactions(ctx context.Context, msg *tg.Me
 		TargetMessage: ids.GetMessageIDFromMessage(msg),
 		Reactions:     &bridgev2.ReactionSyncData{Users: users, HasAllUsers: isFull},
 	})
+
+	if !res.Success {
+		return ErrFailToQueueEvent
+	}
+
+	return nil
 }
 
 func splitDMReactionCounts(res []tg.ReactionCount, theirUserID, myUserID int64) (reactions []tg.MessagePeerReaction) {
@@ -286,7 +289,7 @@ func (t *TelegramClient) pollForReactions(ctx context.Context, portalKey network
 					Emoji:     emoji,
 				})
 			}
-			t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.ReactionSync{
+			res := t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.ReactionSync{
 				EventMeta: simplevent.EventMeta{
 					Type: bridgev2.RemoteEventReactionSync,
 					LogContext: func(c zerolog.Context) zerolog.Context {
@@ -297,6 +300,9 @@ func (t *TelegramClient) pollForReactions(ctx context.Context, portalKey network
 				TargetMessage: dbMsg.ID,
 				Reactions:     &bridgev2.ReactionSyncData{Users: users, HasAllUsers: isFull},
 			})
+			if !res.Success {
+				return ErrFailToQueueEvent
+			}
 		} else {
 			log.Warn().Type("update_type", update).Msg("Unexpected update type in get reactions response")
 		}

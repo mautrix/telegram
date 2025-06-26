@@ -53,8 +53,8 @@ type IGetMessages interface {
 	GetMessages() []int
 }
 
-func (t *TelegramClient) selfLeaveChat(portalKey networkid.PortalKey) {
-	t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.ChatDelete{
+func (t *TelegramClient) selfLeaveChat(portalKey networkid.PortalKey) error {
+	res := t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.ChatDelete{
 		EventMeta: simplevent.EventMeta{
 			Type: bridgev2.RemoteEventChatDelete,
 			LogContext: func(c zerolog.Context) zerolog.Context {
@@ -65,6 +65,10 @@ func (t *TelegramClient) selfLeaveChat(portalKey networkid.PortalKey) {
 		},
 		OnlyForMe: true,
 	})
+	if !res.Success {
+		return ErrFailToQueueEvent
+	}
+	return nil
 }
 
 func (t *TelegramClient) onUpdateChannel(ctx context.Context, e tg.Entities, update *tg.UpdateChannel) error {
@@ -87,18 +91,17 @@ func (t *TelegramClient) onUpdateChannel(ctx context.Context, e tg.Entities, upd
 	})
 	if err != nil {
 		if tgerr.Is(err, tg.ErrChannelInvalid, tg.ErrChannelPrivate) {
-			t.selfLeaveChat(portalKey)
-			return nil
+			return t.selfLeaveChat(portalKey)
 		}
 		return fmt.Errorf("failed to get channel: %w", err)
 	} else if len(chats.GetChats()) != 1 {
 		return fmt.Errorf("expected 1 chat, got %d", len(chats.GetChats()))
 	} else if channel, ok := chats.GetChats()[0].(*tg.Channel); !ok {
 		log.Error().Type("chat_type", chats.GetChats()[0]).Msg("Expected channel, got something else. Leaving the channel.")
-		t.selfLeaveChat(portalKey)
+		return t.selfLeaveChat(portalKey)
 	} else if channel.Left {
 		log.Error().Msg("Update was for a left channel. Leaving the channel.")
-		t.selfLeaveChat(portalKey)
+		return t.selfLeaveChat(portalKey)
 	} else {
 		// TODO update the channel info
 	}
@@ -141,7 +144,7 @@ func (t *TelegramClient) onUpdateNewMessage(ctx context.Context, entities tg.Ent
 			log.Info().Int64("user_id", contact.UserID).Msg("received contact")
 		}
 
-		t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.Message[*tg.Message]{
+		res := t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.Message[*tg.Message]{
 			EventMeta: simplevent.EventMeta{
 				Type: bridgev2.RemoteEventMessage,
 				LogContext: func(c zerolog.Context) zerolog.Context {
@@ -163,7 +166,11 @@ func (t *TelegramClient) onUpdateNewMessage(ctx context.Context, entities tg.Ent
 			ConvertMessageFunc: t.convertToMatrixWithRefetch,
 		})
 
-		t.handleTelegramReactions(ctx, msg)
+		if !res.Success {
+			return ErrFailToQueueEvent
+		}
+
+		return t.handleTelegramReactions(ctx, msg)
 	case *tg.MessageService:
 		sender := t.getEventSender(msg, false)
 
@@ -183,29 +190,41 @@ func (t *TelegramClient) onUpdateNewMessage(ctx context.Context, entities tg.Ent
 		}
 		switch action := msg.Action.(type) {
 		case *tg.MessageActionChatEditTitle:
-			t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.ChatInfoChange{
+			res := t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.ChatInfoChange{
 				EventMeta:      eventMeta.WithType(bridgev2.RemoteEventChatInfoChange),
 				ChatInfoChange: &bridgev2.ChatInfoChange{ChatInfo: &bridgev2.ChatInfo{Name: &action.Title}},
 			})
+			if !res.Success {
+				return ErrFailToQueueEvent
+			}
 		case *tg.MessageActionChatEditPhoto:
 			switch peer := msg.PeerID.(type) {
 			case *tg.PeerChat:
-				t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.ChatInfoChange{
+				res := t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.ChatInfoChange{
 					EventMeta:      eventMeta.WithType(bridgev2.RemoteEventChatInfoChange),
 					ChatInfoChange: &bridgev2.ChatInfoChange{ChatInfo: &bridgev2.ChatInfo{Avatar: t.avatarFromPhoto(ctx, ids.PeerTypeChat, peer.ChatID, action.Photo)}},
 				})
+				if !res.Success {
+					return ErrFailToQueueEvent
+				}
 			case *tg.PeerChannel:
-				t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.ChatInfoChange{
+				res := t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.ChatInfoChange{
 					EventMeta:      eventMeta.WithType(bridgev2.RemoteEventChatInfoChange),
 					ChatInfoChange: &bridgev2.ChatInfoChange{ChatInfo: &bridgev2.ChatInfo{Avatar: t.avatarFromPhoto(ctx, ids.PeerTypeChannel, peer.ChannelID, action.Photo)}},
 				})
+				if !res.Success {
+					return ErrFailToQueueEvent
+				}
 			}
 
 		case *tg.MessageActionChatDeletePhoto:
-			t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.ChatInfoChange{
+			res := t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.ChatInfoChange{
 				EventMeta:      eventMeta.WithType(bridgev2.RemoteEventChatInfoChange),
 				ChatInfoChange: &bridgev2.ChatInfoChange{ChatInfo: &bridgev2.ChatInfo{Avatar: &bridgev2.Avatar{Remove: true}}},
 			})
+			if !res.Success {
+				return ErrFailToQueueEvent
+			}
 		case *tg.MessageActionChatAddUser:
 			memberChanges := &bridgev2.ChatMemberList{
 				MemberMap: map[networkid.UserID]bridgev2.ChatMember{},
@@ -216,12 +235,15 @@ func (t *TelegramClient) onUpdateNewMessage(ctx context.Context, entities tg.Ent
 					Membership:  event.MembershipJoin,
 				}
 			}
-			t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.ChatInfoChange{
+			res := t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.ChatInfoChange{
 				EventMeta:      eventMeta.WithType(bridgev2.RemoteEventChatInfoChange),
 				ChatInfoChange: &bridgev2.ChatInfoChange{MemberChanges: memberChanges},
 			})
+			if !res.Success {
+				return ErrFailToQueueEvent
+			}
 		case *tg.MessageActionChatJoinedByLink:
-			t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.ChatInfoChange{
+			res := t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.ChatInfoChange{
 				EventMeta: eventMeta.WithType(bridgev2.RemoteEventChatInfoChange),
 				ChatInfoChange: &bridgev2.ChatInfoChange{
 					MemberChanges: &bridgev2.ChatMemberList{
@@ -231,12 +253,14 @@ func (t *TelegramClient) onUpdateNewMessage(ctx context.Context, entities tg.Ent
 					},
 				},
 			})
+			if !res.Success {
+				return ErrFailToQueueEvent
+			}
 		case *tg.MessageActionChatDeleteUser:
 			if action.UserID == t.telegramUserID {
-				t.selfLeaveChat(eventMeta.PortalKey)
-				return nil
+				return t.selfLeaveChat(eventMeta.PortalKey)
 			}
-			t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.ChatInfoChange{
+			res := t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.ChatInfoChange{
 				EventMeta: eventMeta.WithType(bridgev2.RemoteEventChatInfoChange),
 				ChatInfoChange: &bridgev2.ChatInfoChange{
 					MemberChanges: &bridgev2.ChatMemberList{
@@ -249,6 +273,9 @@ func (t *TelegramClient) onUpdateNewMessage(ctx context.Context, entities tg.Ent
 					},
 				},
 			})
+			if !res.Success {
+				return ErrFailToQueueEvent
+			}
 		case *tg.MessageActionChatCreate:
 			memberMap := map[networkid.UserID]bridgev2.ChatMember{}
 			for _, userID := range action.Users {
@@ -258,7 +285,7 @@ func (t *TelegramClient) onUpdateNewMessage(ctx context.Context, entities tg.Ent
 				}
 			}
 
-			t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.ChatResync{
+			res := t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.ChatResync{
 				EventMeta: eventMeta.
 					WithType(bridgev2.RemoteEventChatResync).
 					WithCreatePortal(true),
@@ -272,7 +299,10 @@ func (t *TelegramClient) onUpdateNewMessage(ctx context.Context, entities tg.Ent
 					CanBackfill: true,
 				},
 			})
-			t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.Message[any]{
+			if !res.Success {
+				return ErrFailToQueueEvent
+			}
+			res = t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.Message[any]{
 				EventMeta: eventMeta.WithType(bridgev2.RemoteEventMessage),
 				ID:        ids.GetMessageIDFromMessage(msg),
 				ConvertMessageFunc: func(ctx context.Context, portal *bridgev2.Portal, intent bridgev2.MatrixAPI, data any) (*bridgev2.ConvertedMessage, error) {
@@ -286,10 +316,13 @@ func (t *TelegramClient) onUpdateNewMessage(ctx context.Context, entities tg.Ent
 					}, nil
 				},
 			})
+			if !res.Success {
+				return ErrFailToQueueEvent
+			}
 
 		case *tg.MessageActionChannelCreate:
 			modLevel := 50
-			t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.ChatResync{
+			res := t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.ChatResync{
 				EventMeta: eventMeta.
 					WithType(bridgev2.RemoteEventChatResync).
 					WithCreatePortal(true),
@@ -310,7 +343,10 @@ func (t *TelegramClient) onUpdateNewMessage(ctx context.Context, entities tg.Ent
 					CanBackfill: true,
 				},
 			})
-			t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.Message[any]{
+			if !res.Success {
+				return ErrFailToQueueEvent
+			}
+			res = t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.Message[any]{
 				EventMeta: eventMeta.WithType(bridgev2.RemoteEventMessage),
 				ID:        ids.GetMessageIDFromMessage(msg),
 				ConvertMessageFunc: func(ctx context.Context, portal *bridgev2.Portal, intent bridgev2.MatrixAPI, data any) (*bridgev2.ConvertedMessage, error) {
@@ -324,8 +360,11 @@ func (t *TelegramClient) onUpdateNewMessage(ctx context.Context, entities tg.Ent
 					}, nil
 				},
 			})
+			if !res.Success {
+				return ErrFailToQueueEvent
+			}
 		case *tg.MessageActionSetMessagesTTL:
-			t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.ChatResync{
+			res := t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.ChatResync{
 				EventMeta: eventMeta.WithType(bridgev2.RemoteEventChatResync),
 				ChatInfo: &bridgev2.ChatInfo{
 					ExtraUpdates: func(ctx context.Context, p *bridgev2.Portal) bool {
@@ -335,10 +374,13 @@ func (t *TelegramClient) onUpdateNewMessage(ctx context.Context, entities tg.Ent
 					},
 				},
 			})
+			if !res.Success {
+				return ErrFailToQueueEvent
+			}
 
 			// Send a notice about the TTL change
 			content := bridgev2.DisappearingMessageNotice(time.Duration(action.Period)*time.Second, false)
-			t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.Message[any]{
+			res = t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.Message[any]{
 				EventMeta: eventMeta.WithType(bridgev2.RemoteEventMessage),
 				ID:        ids.GetMessageIDFromMessage(msg),
 				ConvertMessageFunc: func(ctx context.Context, portal *bridgev2.Portal, intent bridgev2.MatrixAPI, data any) (*bridgev2.ConvertedMessage, error) {
@@ -349,6 +391,9 @@ func (t *TelegramClient) onUpdateNewMessage(ctx context.Context, entities tg.Ent
 					}, nil
 				},
 			})
+			if !res.Success {
+				return ErrFailToQueueEvent
+			}
 		case *tg.MessageActionPhoneCall:
 			var body strings.Builder
 			if action.Video {
@@ -375,7 +420,7 @@ func (t *TelegramClient) onUpdateNewMessage(ctx context.Context, entities tg.Ent
 				body.WriteString(")")
 			}
 
-			t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.Message[any]{
+			res := t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.Message[any]{
 				EventMeta: eventMeta.WithType(bridgev2.RemoteEventMessage),
 				ID:        ids.GetMessageIDFromMessage(msg),
 				ConvertMessageFunc: func(ctx context.Context, portal *bridgev2.Portal, intent bridgev2.MatrixAPI, data any) (*bridgev2.ConvertedMessage, error) {
@@ -389,6 +434,9 @@ func (t *TelegramClient) onUpdateNewMessage(ctx context.Context, entities tg.Ent
 					}, nil
 				},
 			})
+			if !res.Success {
+				return ErrFailToQueueEvent
+			}
 		case *tg.MessageActionGroupCall:
 			var body strings.Builder
 			if action.Duration == 0 {
@@ -400,7 +448,7 @@ func (t *TelegramClient) onUpdateNewMessage(ctx context.Context, entities tg.Ent
 				body.WriteString(")")
 			}
 
-			t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.Message[any]{
+			res := t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.Message[any]{
 				EventMeta: eventMeta.WithType(bridgev2.RemoteEventMessage),
 				ID:        ids.GetMessageIDFromMessage(msg),
 				ConvertMessageFunc: func(ctx context.Context, portal *bridgev2.Portal, intent bridgev2.MatrixAPI, data any) (*bridgev2.ConvertedMessage, error) {
@@ -414,6 +462,9 @@ func (t *TelegramClient) onUpdateNewMessage(ctx context.Context, entities tg.Ent
 					}, nil
 				},
 			})
+			if !res.Success {
+				return ErrFailToQueueEvent
+			}
 		case *tg.MessageActionInviteToGroupCall:
 			var body, html strings.Builder
 			var mentions event.Mentions
@@ -441,7 +492,7 @@ func (t *TelegramClient) onUpdateNewMessage(ctx context.Context, entities tg.Ent
 			}
 			body.WriteString(" to the video chat")
 			html.WriteString(" to the video chat")
-			t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.Message[any]{
+			res := t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.Message[any]{
 				EventMeta: eventMeta.WithType(bridgev2.RemoteEventMessage),
 				ID:        ids.GetMessageIDFromMessage(msg),
 				ConvertMessageFunc: func(ctx context.Context, portal *bridgev2.Portal, intent bridgev2.MatrixAPI, data any) (*bridgev2.ConvertedMessage, error) {
@@ -461,9 +512,12 @@ func (t *TelegramClient) onUpdateNewMessage(ctx context.Context, entities tg.Ent
 					}, nil
 				},
 			})
+			if !res.Success {
+				return ErrFailToQueueEvent
+			}
 		case *tg.MessageActionGroupCallScheduled:
 			start := time.Unix(int64(action.ScheduleDate), 0)
-			t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.Message[any]{
+			res := t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.Message[any]{
 				EventMeta: eventMeta.
 					WithType(bridgev2.RemoteEventMessage).
 					WithSender(bridgev2.EventSender{}), // Telegram shows it as not coming from a specific user
@@ -482,6 +536,9 @@ func (t *TelegramClient) onUpdateNewMessage(ctx context.Context, entities tg.Ent
 					}, nil
 				},
 			})
+			if !res.Success {
+				return ErrFailToQueueEvent
+			}
 
 		// case *tg.MessageActionChatMigrateTo:
 		// case *tg.MessageActionChannelMigrateFrom:
@@ -652,7 +709,7 @@ func (t *TelegramClient) onDeleteMessages(ctx context.Context, channelID int64, 
 		} else {
 			portalKey = t.makePortalKeyFromPeer(&tg.PeerChannel{ChannelID: channelID})
 		}
-		t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.MessageRemove{
+		res := t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.MessageRemove{
 			EventMeta: simplevent.EventMeta{
 				Type: bridgev2.RemoteEventMessageRemove,
 				LogContext: func(c zerolog.Context) zerolog.Context {
@@ -665,6 +722,9 @@ func (t *TelegramClient) onDeleteMessages(ctx context.Context, channelID int64, 
 			},
 			TargetMessage: ids.MakeMessageID(channelID, messageID),
 		})
+		if !res.Success {
+			return ErrFailToQueueEvent
+		}
 	}
 	return nil
 }
@@ -774,7 +834,7 @@ func (t *TelegramClient) onMessageEdit(ctx context.Context, update IGetMessage) 
 		}
 	}
 
-	t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.Message[*tg.Message]{
+	res := t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.Message[*tg.Message]{
 		EventMeta: simplevent.EventMeta{
 			Type: bridgev2.RemoteEventEdit,
 			LogContext: func(c zerolog.Context) zerolog.Context {
@@ -818,6 +878,9 @@ func (t *TelegramClient) onMessageEdit(ctx context.Context, update IGetMessage) 
 			return &ce, nil
 		},
 	})
+	if !res.Success {
+		return ErrFailToQueueEvent
+	}
 
 	return nil
 }
@@ -831,7 +894,7 @@ func (t *TelegramClient) handleTyping(portal networkid.PortalKey, sender bridgev
 		timeout = 0
 	}
 	// TODO send proper TypingTypes
-	t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.Typing{
+	res := t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.Typing{
 		EventMeta: simplevent.EventMeta{
 			Type:      bridgev2.RemoteEventTyping,
 			PortalKey: portal,
@@ -839,6 +902,9 @@ func (t *TelegramClient) handleTyping(portal networkid.PortalKey, sender bridgev
 		},
 		Timeout: timeout,
 	})
+	if !res.Success {
+		return ErrFailToQueueEvent
+	}
 	return nil
 }
 
@@ -849,7 +915,7 @@ func (t *TelegramClient) updateReadReceipt(ctx context.Context, e tg.Entities, u
 		// (they only say "someone read the message" and not who)
 		return nil
 	}
-	t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.Receipt{
+	res := t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.Receipt{
 		EventMeta: simplevent.EventMeta{
 			Type:      bridgev2.RemoteEventReadReceipt,
 			PortalKey: t.makePortalKeyFromPeer(update.Peer),
@@ -861,11 +927,14 @@ func (t *TelegramClient) updateReadReceipt(ctx context.Context, e tg.Entities, u
 		LastTarget:          ids.MakeMessageID(update.Peer, update.MaxID),
 		ReadUpToStreamOrder: int64(update.MaxID),
 	})
+	if !res.Success {
+		return ErrFailToQueueEvent
+	}
 	return nil
 }
 
 func (t *TelegramClient) onOwnReadReceipt(portalKey networkid.PortalKey, maxID int) error {
-	t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.Receipt{
+	res := t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.Receipt{
 		EventMeta: simplevent.EventMeta{
 			Type:      bridgev2.RemoteEventReadReceipt,
 			PortalKey: portalKey,
@@ -874,6 +943,9 @@ func (t *TelegramClient) onOwnReadReceipt(portalKey networkid.PortalKey, maxID i
 		LastTarget:          ids.MakeMessageID(portalKey, maxID),
 		ReadUpToStreamOrder: int64(maxID),
 	})
+	if !res.Success {
+		return ErrFailToQueueEvent
+	}
 	return nil
 }
 
@@ -1025,7 +1097,7 @@ func (t *TelegramClient) onNotifySettings(ctx context.Context, e tg.Entities, up
 		mutedUntil = &bridgev2.Unmuted
 	}
 
-	t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.ChatResync{
+	res := t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.ChatResync{
 		ChatInfo: &bridgev2.ChatInfo{
 			UserLocal: &bridgev2.UserLocalPortalInfo{
 				MutedUntil: mutedUntil,
@@ -1037,6 +1109,9 @@ func (t *TelegramClient) onNotifySettings(ctx context.Context, e tg.Entities, up
 			PortalKey: t.makePortalKeyFromPeer(update.Peer.(*tg.NotifyPeer).Peer),
 		},
 	})
+	if !res.Success {
+		return ErrFailToQueueEvent
+	}
 	return nil
 }
 
@@ -1074,7 +1149,7 @@ func (t *TelegramClient) onPinnedDialogs(ctx context.Context, e tg.Entities, msg
 		delete(needsUnpinning, portalKey)
 		t.userLogin.Metadata.(*UserLoginMetadata).PinnedDialogs = append(t.userLogin.Metadata.(*UserLoginMetadata).PinnedDialogs, portalKey.ID)
 
-		t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.ChatResync{
+		res := t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.ChatResync{
 			ChatInfo: &bridgev2.ChatInfo{
 				UserLocal: &bridgev2.UserLocalPortalInfo{
 					Tag: ptr.Ptr(event.RoomTagFavourite),
@@ -1086,11 +1161,14 @@ func (t *TelegramClient) onPinnedDialogs(ctx context.Context, e tg.Entities, msg
 				PortalKey: portalKey,
 			},
 		})
+		if !res.Success {
+			return ErrFailToQueueEvent
+		}
 	}
 
 	var empty event.RoomTag
 	for portalKey := range needsUnpinning {
-		t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.ChatResync{
+		res := t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.ChatResync{
 			ChatInfo: &bridgev2.ChatInfo{
 				UserLocal: &bridgev2.UserLocalPortalInfo{
 					Tag: &empty,
@@ -1102,6 +1180,9 @@ func (t *TelegramClient) onPinnedDialogs(ctx context.Context, e tg.Entities, msg
 				PortalKey: portalKey,
 			},
 		})
+		if !res.Success {
+			return ErrFailToQueueEvent
+		}
 	}
 
 	return t.userLogin.Save(ctx)
@@ -1121,7 +1202,7 @@ func (t *TelegramClient) HandleRoomTag(ctx context.Context, msg *bridgev2.Matrix
 }
 
 func (t *TelegramClient) onChatDefaultBannedRights(ctx context.Context, entities tg.Entities, update *tg.UpdateChatDefaultBannedRights) error {
-	t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.ChatResync{
+	res := t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.ChatResync{
 		ChatInfo: &bridgev2.ChatInfo{
 			Members: &bridgev2.ChatMemberList{
 				PowerLevels: t.getPowerLevelOverridesFromBannedRights(entities.Chats[0], update.DefaultBannedRights),
@@ -1133,6 +1214,9 @@ func (t *TelegramClient) onChatDefaultBannedRights(ctx context.Context, entities
 			PortalKey: t.makePortalKeyFromPeer(update.Peer),
 		},
 	})
+	if !res.Success {
+		return ErrFailToQueueEvent
+	}
 	return nil
 }
 
@@ -1158,7 +1242,7 @@ func (t *TelegramClient) onPeerBlocked(ctx context.Context, e tg.Entities, updat
 	})
 
 	// Find portals that are DMs with the user
-	t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.ChatResync{
+	res := t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.ChatResync{
 		ChatInfo: &bridgev2.ChatInfo{
 			Members: &bridgev2.ChatMemberList{
 				PowerLevels: t.getDMPowerLevels(ghost),
@@ -1170,6 +1254,9 @@ func (t *TelegramClient) onPeerBlocked(ctx context.Context, e tg.Entities, updat
 			PortalKey: t.makePortalKeyFromPeer(update.PeerID),
 		},
 	})
+	if !res.Success {
+		return ErrFailToQueueEvent
+	}
 	return nil
 }
 
@@ -1198,7 +1285,7 @@ func (t *TelegramClient) onPhoneCall(ctx context.Context, e tg.Entities, update 
 	} else {
 		body.WriteString("call")
 	}
-	t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.Message[any]{
+	res := t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.Message[any]{
 		EventMeta: simplevent.EventMeta{
 			Type:         bridgev2.RemoteEventMessage,
 			PortalKey:    t.makePortalKeyFromID(ids.PeerTypeUser, call.AdminID),
@@ -1217,5 +1304,8 @@ func (t *TelegramClient) onPhoneCall(ctx context.Context, e tg.Entities, update 
 			}, nil
 		},
 	})
+	if !res.Success {
+		return ErrFailToQueueEvent
+	}
 	return nil
 }
