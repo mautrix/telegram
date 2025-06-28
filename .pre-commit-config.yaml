@@ -18,7 +18,8 @@ repos:
           - "go.mau.fi/mautrix-telegram"
           - "-w"
       - id: go-vet-mod
-      - id: go-staticcheck-repo-mod
+# Disabled for now until we can find a way to filter out the gotd package
+#      - id: go-staticcheck-repo-mod
       - id: go-mod-tidy
 
   - repo: https://github.com/beeper/pre-commit-go

@@ -697,7 +697,11 @@ func (t *TelegramClient) onDeleteMessages(ctx context.Context, channelID int64, 
 				return err
 			}
 			if len(parts) == 0 {
-				return fmt.Errorf("no parts found for message %d", messageID)
+				zerolog.Ctx(ctx).Debug().
+					Int("message_id", messageID).
+					Int64("channel_id", channelID).
+					Msg("ignoring delete of message we have no parts for")
+				continue
 			}
 			// TODO can deletes happen across rooms?
 			portalKey = parts[0].Room
