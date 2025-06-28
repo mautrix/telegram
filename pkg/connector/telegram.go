@@ -565,11 +565,17 @@ func (t *TelegramClient) onUpdateNewMessage(ctx context.Context, entities tg.Ent
 		// case *tg.MessageActionBoostApply:
 		// case *tg.MessageActionRequestedPeerSentMe:
 		default:
-			return fmt.Errorf("unknown action type %T", action)
+			log.Warn().
+				Type("action_type", action).
+				Msg("ignoring unknown action type")
+			return nil
 		}
 
 	default:
-		return fmt.Errorf("unknown message type %T", msg)
+		log.Warn().
+			Type("action_type", msg).
+			Msg("ignoring unknown message type")
+		return nil
 	}
 	return nil
 }
