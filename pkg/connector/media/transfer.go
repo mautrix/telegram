@@ -23,12 +23,13 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/gotd/td/telegram/downloader"
-	"github.com/gotd/td/tg"
 	"github.com/rs/zerolog"
 	"maunium.net/go/mautrix/bridgev2"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
+
+	"go.mau.fi/mautrix-telegram/pkg/gotd/telegram/downloader"
+	"go.mau.fi/mautrix-telegram/pkg/gotd/tg"
 
 	"go.mau.fi/util/gnuzip"
 

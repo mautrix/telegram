@@ -34,7 +34,7 @@ func main() {
 	reader := csv.NewReader(errorCSV)
 	var data bytes.Buffer
 	data.WriteString("package humanise\n")
-	data.WriteString("import \"github.com/gotd/td/tgerr\"\n")
+	data.WriteString("import \"go.mau.fi/mautrix-telegram/pkg/gotd/tgerr\"\n")
 	data.WriteString("func Error(err error) string {\n")
 	data.WriteString("switch {\n")
 	for {

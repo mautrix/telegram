@@ -21,11 +21,12 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/gotd/td/tg"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
+
+	"go.mau.fi/mautrix-telegram/pkg/gotd/tg"
 
 	"go.mau.fi/mautrix-telegram/pkg/connector/telegramfmt"
 )

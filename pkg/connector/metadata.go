@@ -19,11 +19,12 @@ package connector
 import (
 	"context"
 
-	"github.com/gotd/td/crypto"
-	"github.com/gotd/td/session"
 	"maunium.net/go/mautrix/bridgev2/database"
 	"maunium.net/go/mautrix/bridgev2/networkid"
 	"maunium.net/go/mautrix/id"
+
+	"go.mau.fi/mautrix-telegram/pkg/gotd/crypto"
+	"go.mau.fi/mautrix-telegram/pkg/gotd/session"
 )
 
 func (tg *TelegramConnector) GetDBMetaTypes() database.MetaTypes {

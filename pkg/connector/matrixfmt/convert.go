@@ -20,8 +20,9 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/gotd/td/tg"
 	"maunium.net/go/mautrix/event"
+
+	"go.mau.fi/mautrix-telegram/pkg/gotd/tg"
 
 	"go.mau.fi/mautrix-telegram/pkg/connector/ids"
 	"go.mau.fi/mautrix-telegram/pkg/connector/telegramfmt"

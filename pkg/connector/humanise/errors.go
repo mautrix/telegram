@@ -1,6 +1,6 @@
 package humanise
 
-import "github.com/gotd/td/tgerr"
+import "go.mau.fi/mautrix-telegram/pkg/gotd/tgerr"
 
 func Error(err error) string {
 	switch {

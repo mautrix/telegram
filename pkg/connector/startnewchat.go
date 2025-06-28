@@ -23,11 +23,12 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/gotd/td/telegram/query/hasher"
-	"github.com/gotd/td/tg"
 	"github.com/rs/zerolog"
 	"maunium.net/go/mautrix/bridgev2"
 	"maunium.net/go/mautrix/bridgev2/networkid"
+
+	"go.mau.fi/mautrix-telegram/pkg/gotd/telegram/query/hasher"
+	"go.mau.fi/mautrix-telegram/pkg/gotd/tg"
 
 	"go.mau.fi/mautrix-telegram/pkg/connector/ids"
 )
@@ -114,7 +115,9 @@ func (t *TelegramClient) ResolveIdentifier(ctx context.Context, identifier strin
 			// We don't know this username, try to resolve the username from
 			// Telegram.
 			resolved, err := APICallWithUpdates(ctx, t, func() (*tg.ContactsResolvedPeer, error) {
-				return t.client.API().ContactsResolveUsername(ctx, match[1])
+				return t.client.API().ContactsResolveUsername(ctx, &tg.ContactsResolveUsernameRequest{
+					Username: match[1],
+				})
 			})
 			if err != nil {
 				if tg.IsUsernameNotOccupied(err) {

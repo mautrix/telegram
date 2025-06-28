@@ -20,8 +20,9 @@ import (
 	"slices"
 	"sync"
 
-	"github.com/gotd/td/tg"
 	"maunium.net/go/mautrix/bridgev2/commands"
+
+	"go.mau.fi/mautrix-telegram/pkg/gotd/tg"
 )
 
 var cmdSync = &commands.FullHandler{

@@ -21,11 +21,12 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/gotd/td/tg"
 	"github.com/rs/zerolog"
 	"maunium.net/go/mautrix/bridgev2"
 	"maunium.net/go/mautrix/bridgev2/networkid"
 	"maunium.net/go/mautrix/bridgev2/simplevent"
+
+	"go.mau.fi/mautrix-telegram/pkg/gotd/tg"
 
 	"go.mau.fi/mautrix-telegram/pkg/connector/emojis"
 	"go.mau.fi/mautrix-telegram/pkg/connector/ids"

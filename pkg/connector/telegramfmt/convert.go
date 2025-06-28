@@ -20,12 +20,13 @@ import (
 	"context"
 	"html"
 
-	"github.com/gotd/td/tg"
 	"github.com/rs/zerolog"
 	"golang.org/x/exp/maps"
 	"maunium.net/go/mautrix/bridgev2/networkid"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
+
+	"go.mau.fi/mautrix-telegram/pkg/gotd/tg"
 
 	"go.mau.fi/mautrix-telegram/pkg/connector/emojis"
 	"go.mau.fi/mautrix-telegram/pkg/connector/ids"

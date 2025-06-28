@@ -1,3 +1,4 @@
+exclude: pkg/gotd/_fuzz/.*|pkg/gotd/_schema/.*|pkg/gotd/.*\.tmpl
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0

@@ -23,12 +23,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/gotd/td/tg"
-	"github.com/gotd/td/tgerr"
 	"github.com/rs/zerolog"
 	"maunium.net/go/mautrix/bridgev2"
 	"maunium.net/go/mautrix/bridgev2/database"
 	"maunium.net/go/mautrix/bridgev2/networkid"
+
+	"go.mau.fi/mautrix-telegram/pkg/gotd/tg"
+	"go.mau.fi/mautrix-telegram/pkg/gotd/tgerr"
 
 	"go.mau.fi/mautrix-telegram/pkg/connector/ids"
 )

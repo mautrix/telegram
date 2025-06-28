@@ -29,10 +29,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/gotd/td/telegram"
-	"github.com/gotd/td/telegram/auth"
-	"github.com/gotd/td/telegram/updates"
-	"github.com/gotd/td/tg"
 	"github.com/rs/zerolog"
 	"go.mau.fi/util/exsync"
 	"go.mau.fi/zerozap"
@@ -44,6 +40,11 @@ import (
 	"maunium.net/go/mautrix/bridgev2/simplevent"
 	"maunium.net/go/mautrix/bridgev2/status"
 	"maunium.net/go/mautrix/id"
+
+	"go.mau.fi/mautrix-telegram/pkg/gotd/telegram"
+	"go.mau.fi/mautrix-telegram/pkg/gotd/telegram/auth"
+	"go.mau.fi/mautrix-telegram/pkg/gotd/telegram/updates"
+	"go.mau.fi/mautrix-telegram/pkg/gotd/tg"
 
 	"go.mau.fi/mautrix-telegram/pkg/connector/humanise"
 	"go.mau.fi/mautrix-telegram/pkg/connector/ids"

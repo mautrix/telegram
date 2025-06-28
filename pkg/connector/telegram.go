@@ -1,4 +1,4 @@
-// mautrix-telegram - A Matrix-Telegram puppeting bridge.
+// mautrix - A Matrix-Telegram puppeting bridge.
 // Copyright (C) 2025 Sumner Evans
 //
 // This program is free software: you can redistribute it and/or modify
@@ -25,8 +25,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gotd/td/tg"
-	"github.com/gotd/td/tgerr"
 	"github.com/rs/zerolog"
 	"go.mau.fi/util/exfmt"
 	"go.mau.fi/util/ptr"
@@ -37,6 +35,9 @@ import (
 	"maunium.net/go/mautrix/bridgev2/simplevent"
 	"maunium.net/go/mautrix/bridgev2/status"
 	"maunium.net/go/mautrix/event"
+
+	"go.mau.fi/mautrix-telegram/pkg/gotd/tg"
+	"go.mau.fi/mautrix-telegram/pkg/gotd/tgerr"
 
 	"go.mau.fi/mautrix-telegram/pkg/connector/emojis"
 	"go.mau.fi/mautrix-telegram/pkg/connector/ids"
@@ -116,10 +117,7 @@ func (t *TelegramClient) onUpdateNewMessage(ctx context.Context, entities tg.Ent
 		switch peer := msg.PeerID.(type) {
 		case *tg.PeerChannel:
 			log := log.With().Int64("channel_id", peer.ChannelID).Logger()
-			if _, ok := entities.ChannelsForbidden[peer.ChannelID]; ok {
-				log.Debug().Msg("Received message in forbidden channel, ignoring")
-				return nil
-			} else if c, ok := entities.Channels[peer.ChannelID]; ok && c.Left {
+			if c, ok := entities.Channels[peer.ChannelID]; ok && c.Left {
 				log.Debug().Msg("Received message in left channel, ignoring")
 				return nil
 			} else if ok && !c.GetMegagroup() {
@@ -127,10 +125,7 @@ func (t *TelegramClient) onUpdateNewMessage(ctx context.Context, entities tg.Ent
 			}
 		case *tg.PeerChat:
 			log := log.With().Int64("chat_id", peer.ChatID).Logger()
-			if _, ok := entities.ChatsForbidden[peer.ChatID]; ok {
-				log.Debug().Msg("Received message in forbidden chat, ignoring")
-				return nil
-			} else if c, ok := entities.Chats[peer.ChatID]; ok && c.Left {
+			if c, ok := entities.Chats[peer.ChatID]; ok && c.Left {
 				log.Debug().Msg("Received message in left chat, ignoring")
 				return nil
 			}
@@ -803,9 +798,6 @@ func (t *TelegramClient) onEntityUpdate(ctx context.Context, e tg.Entities) erro
 			return err
 		}
 	}
-	for channelID := range e.ChannelsForbidden {
-		t.selfLeaveChat(t.makePortalKeyFromID(ids.PeerTypeChannel, channelID))
-	}
 	return nil
 }
 
@@ -1261,10 +1253,6 @@ func (t *TelegramClient) onPeerBlocked(ctx context.Context, e tg.Entities, updat
 }
 
 func (t *TelegramClient) onChat(ctx context.Context, e tg.Entities, update *tg.UpdateChat) error {
-	if _, ok := e.ChatsForbidden[update.ChatID]; ok {
-		// The chat is now forbidden, we should leave it.
-		t.selfLeaveChat(t.makePortalKeyFromID(ids.PeerTypeChat, update.ChatID))
-	}
 	return nil
 }
 

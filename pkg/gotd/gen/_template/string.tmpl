@@ -1,0 +1,10 @@
+{{define "string_derive" }}{{ $s := $ }}
+// String implements fmt.Stringer.
+func ({{ $s.Receiver }} *{{ $s.Name }}) String() string {
+    if {{ $s.Receiver }} == nil {
+        return "{{ $.Name }}(nil)"
+    }
+    type Alias {{ $s.Name }}
+    return fmt.Sprintf("{{ $s.Name }}%+v", Alias(*{{ $s.Receiver }}))
+}
+{{- end }}

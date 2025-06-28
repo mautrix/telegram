@@ -23,8 +23,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/gotd/td/telegram/updates"
 	"go.mau.fi/util/dbutil"
+
+	"go.mau.fi/mautrix-telegram/pkg/gotd/telegram/updates"
 
 	"go.mau.fi/mautrix-telegram/pkg/connector/ids"
 )

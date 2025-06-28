@@ -22,15 +22,16 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/gotd/td/telegram"
-	"github.com/gotd/td/telegram/auth/qrlogin"
-	"github.com/gotd/td/telegram/updates"
-	"github.com/gotd/td/tg"
-	"github.com/gotd/td/tgerr"
 	"github.com/rs/zerolog"
 	"go.mau.fi/zerozap"
 	"go.uber.org/zap"
 	"maunium.net/go/mautrix/bridgev2"
+
+	"go.mau.fi/mautrix-telegram/pkg/gotd/telegram"
+	"go.mau.fi/mautrix-telegram/pkg/gotd/telegram/auth/qrlogin"
+	"go.mau.fi/mautrix-telegram/pkg/gotd/telegram/updates"
+	"go.mau.fi/mautrix-telegram/pkg/gotd/tg"
+	"go.mau.fi/mautrix-telegram/pkg/gotd/tgerr"
 )
 
 type qrAuthResult struct {

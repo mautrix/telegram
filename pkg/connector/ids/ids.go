@@ -21,8 +21,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/gotd/td/tg"
 	"maunium.net/go/mautrix/bridgev2/networkid"
+
+	"go.mau.fi/mautrix-telegram/pkg/gotd/tg"
 )
 
 func MakeUserID(userID int64) networkid.UserID {

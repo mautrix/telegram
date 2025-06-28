@@ -22,13 +22,14 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/gotd/td/telegram"
-	"github.com/gotd/td/telegram/auth"
-	"github.com/gotd/td/tg"
 	"github.com/rs/zerolog"
 	"go.mau.fi/zerozap"
 	"go.uber.org/zap"
 	"maunium.net/go/mautrix/bridgev2"
+
+	"go.mau.fi/mautrix-telegram/pkg/gotd/telegram"
+	"go.mau.fi/mautrix-telegram/pkg/gotd/telegram/auth"
+	"go.mau.fi/mautrix-telegram/pkg/gotd/tg"
 )
 
 const (

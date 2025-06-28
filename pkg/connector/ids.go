@@ -17,8 +17,9 @@
 package connector
 
 import (
-	"github.com/gotd/td/tg"
 	"maunium.net/go/mautrix/bridgev2/networkid"
+
+	"go.mau.fi/mautrix-telegram/pkg/gotd/tg"
 
 	"go.mau.fi/mautrix-telegram/pkg/connector/ids"
 )

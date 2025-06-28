@@ -32,9 +32,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/gotd/td/telegram/message"
-	"github.com/gotd/td/telegram/uploader"
-	"github.com/gotd/td/tg"
 	"github.com/rs/zerolog"
 	"go.mau.fi/util/ffmpeg"
 	"go.mau.fi/util/variationselector"
@@ -44,6 +41,10 @@ import (
 	"maunium.net/go/mautrix/bridgev2/networkid"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
+
+	"go.mau.fi/mautrix-telegram/pkg/gotd/telegram/message"
+	"go.mau.fi/mautrix-telegram/pkg/gotd/telegram/uploader"
+	"go.mau.fi/mautrix-telegram/pkg/gotd/tg"
 
 	"go.mau.fi/mautrix-telegram/pkg/connector/emojis"
 	"go.mau.fi/mautrix-telegram/pkg/connector/humanise"

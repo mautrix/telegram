@@ -20,7 +20,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/gotd/td/tg"
+	"go.mau.fi/mautrix-telegram/pkg/gotd/tg"
 )
 
 type hasUserUpdates interface {

@@ -19,7 +19,7 @@ package tljson
 import (
 	"fmt"
 
-	"github.com/gotd/td/tg"
+	"go.mau.fi/mautrix-telegram/pkg/gotd/tg"
 )
 
 func Parse(v tg.JSONValueClass) (out any, err error) {
