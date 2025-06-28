@@ -1089,7 +1089,10 @@ func (t *TelegramClient) transferEmojisToMatrix(ctx context.Context, customEmoji
 
 func (t *TelegramClient) onNotifySettings(ctx context.Context, e tg.Entities, update *tg.UpdateNotifySettings) error {
 	if update.Peer.TypeID() != tg.NotifyPeerTypeID {
-		return fmt.Errorf("unsupported peer type %s", update.Peer.TypeName())
+		zerolog.Ctx(ctx).Debug().
+			Str("peer_type", update.Peer.TypeName()).
+			Msg("Ignoring unsupported peer type")
+		return nil
 	}
 
 	var mutedUntil *time.Time
