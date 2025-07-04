@@ -161,7 +161,7 @@ func New(dialer Dialer, opt Options) *Conn {
 			RetryInterval: opt.RetryInterval,
 			MaxRetries:    opt.MaxRetries,
 			Clock:         opt.Clock,
-			DropHandler:   conn.dropRPC,
+			DropHandler:   rpc.NopDrop, // was conn.dropRPC, but disabled for faster shutdown
 			OnError:       opt.OnError,
 		})
 	}
