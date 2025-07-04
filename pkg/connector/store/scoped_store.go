@@ -207,14 +207,13 @@ func (s *ScopedStore) SetChannelAccessHash(ctx context.Context, forUserID, chann
 
 // Deprecated: only for interface, don't use directly. Use [GetAccessHash]
 // instead.
-func (s *ScopedStore) GetUserAccessHash(ctx context.Context, forUserID int64, userID int64) (accessHash int64, found bool, err error) {
+func (s *ScopedStore) GetUserAccessHash(ctx context.Context, forUserID int64, userID int64) (int64, bool, error) {
 	s.assertUserIDMatches(forUserID)
-	accessHash, err = s.GetAccessHash(ctx, ids.PeerTypeUser, userID)
+	accessHash, err := s.GetAccessHash(ctx, ids.PeerTypeUser, userID)
 	if errors.Is(err, ErrNoAccessHash) {
-		err = nil
-		found = false
+		return 0, false, nil
 	}
-	return
+	return accessHash, true, err
 }
 
 // Deprecated: only for interface, don't use directly. Use [SetAccessHash]
