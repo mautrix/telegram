@@ -1125,11 +1125,16 @@ func (t *TelegramClient) HandleMute(ctx context.Context, msg *bridgev2.MatrixMut
 	if err != nil {
 		return err
 	}
+
+	until := int(msg.Content.GetMutedUntilTime().Unix())
+	settings := tg.InputPeerNotifySettings{
+		Silent:    until > 0,
+		MuteUntil: until,
+	}
+
 	_, err = t.client.API().AccountUpdateNotifySettings(ctx, &tg.AccountUpdateNotifySettingsRequest{
-		Peer: &tg.InputNotifyPeer{Peer: inputPeer},
-		Settings: tg.InputPeerNotifySettings{
-			MuteUntil: int(msg.Content.GetMutedUntilTime().Unix()),
-		},
+		Peer:     &tg.InputNotifyPeer{Peer: inputPeer},
+		Settings: settings,
 	})
 	return err
 }
