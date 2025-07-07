@@ -24,7 +24,7 @@ type protoConn interface {
 	Ping(ctx context.Context) error
 }
 
-//go:generate go run -modfile=../../../_tools/go.mod golang.org/x/tools/cmd/stringer -type=ConnMode
+//go:generate go tool golang.org/x/tools/cmd/stringer -type=ConnMode
 
 // ConnMode represents connection mode.
 type ConnMode byte

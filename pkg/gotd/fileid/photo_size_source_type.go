@@ -1,6 +1,6 @@
 package fileid
 
-//go:generate go run -modfile=../_tools/go.mod golang.org/x/tools/cmd/stringer -type=PhotoSizeSourceType
+//go:generate go tool golang.org/x/tools/cmd/stringer -type=PhotoSizeSourceType
 
 // PhotoSizeSourceType represents photo_size_source type.
 type PhotoSizeSourceType int

@@ -1,6 +1,6 @@
 module go.mau.fi/mautrix-telegram
 
-go 1.23.0
+go 1.24.0
 
 toolchain go1.24.4
 
@@ -73,3 +73,5 @@ require (
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1 // indirect
 	maunium.net/go/mauflag v1.0.0 // indirect
 )
+
+tool golang.org/x/tools/cmd/stringer
