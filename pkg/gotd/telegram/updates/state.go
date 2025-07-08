@@ -169,9 +169,6 @@ func (s *internalState) Run(ctx context.Context) error {
 	for {
 		select {
 		case <-ctx.Done():
-			if len(s.pts.pending) > 0 || len(s.qts.pending) > 0 || len(s.seq.pending) > 0 {
-				s.getDifferenceLogger(ctx)
-			}
 			return ctx.Err()
 		case u := <-s.externalQueue:
 			ctx := trace.ContextWithSpanContext(ctx, u.span)

@@ -112,10 +112,6 @@ func (s *channelState) Run(ctx context.Context) error {
 			s.log.Debug("Gap timeout")
 			s.getDifferenceLogger(ctx)
 		case <-ctx.Done():
-			if len(s.pts.pending) > 0 {
-				// This will probably fail.
-				s.getDifferenceLogger(ctx)
-			}
 			return ctx.Err()
 		case <-s.idleTimeout.C:
 			s.log.Debug("Idle timeout")
