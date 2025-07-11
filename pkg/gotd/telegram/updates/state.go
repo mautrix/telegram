@@ -162,8 +162,8 @@ func (s *internalState) Run(ctx context.Context) error {
 	if s.log == nil {
 		return errors.New("invalid: nil logger")
 	}
-	s.log.Debug("Starting updates handler")
-	defer s.log.Debug("Updates handler stopped")
+	s.log.Info("Starting updates handler")
+	defer s.log.Info("Updates handler stopped")
 	s.getDifferenceLogger(ctx)
 
 	for {
