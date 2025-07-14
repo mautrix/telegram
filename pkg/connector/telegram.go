@@ -814,7 +814,10 @@ func (t *TelegramClient) onEntityUpdate(ctx context.Context, e tg.Entities) erro
 func (t *TelegramClient) onMessageEdit(ctx context.Context, update IGetMessage) error {
 	msg, ok := update.GetMessage().(*tg.Message)
 	if !ok {
-		return fmt.Errorf("edit message is not *tg.Message")
+		zerolog.Ctx(ctx).Warn().
+			Str("type_name", update.GetMessage().TypeName()).
+			Msg("edit message is not *tg.Message")
+		return nil
 	}
 
 	t.handleTelegramReactions(ctx, msg)
