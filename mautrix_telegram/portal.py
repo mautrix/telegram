@@ -1038,6 +1038,7 @@ class Portal(DBPortal, BasePortal):
                 initial_state=initial_state,
                 creation_content=creation_content,
                 beeper_auto_join_invites=autojoin_invites,
+                room_version="11",
             )
             if not room_id:
                 raise Exception(f"Failed to create room")
