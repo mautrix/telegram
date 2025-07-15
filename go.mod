@@ -37,7 +37,7 @@ require (
 	golang.org/x/sync v0.15.0
 	golang.org/x/tools v0.34.0
 	gopkg.in/yaml.v3 v3.0.1
-	maunium.net/go/mautrix v0.24.2-0.20250625103518-3a135b6b1586
+	maunium.net/go/mautrix v0.24.2-0.20250715113707-1ee29a47b6c6
 	nhooyr.io/websocket v1.8.17
 	rsc.io/qr v0.2.0
 )
