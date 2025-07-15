@@ -345,6 +345,7 @@ func NewTelegramClient(ctx context.Context, tc *TelegramConnector, login *bridge
 			} else if submatches[1] == "premium" {
 				portalKey = client.makePortalKeyFromID(ids.PeerTypeUser, 777000)
 			} else {
+				// FIXME why does this not handle usernames??
 				userID, err := strconv.ParseInt(submatches[1], 10, 64)
 				if err != nil {
 					log.Warn().Err(err).Msg("error parsing user ID")
