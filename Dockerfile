@@ -1,4 +1,4 @@
-FROM dock.mau.dev/tulir/lottieconverter:alpine-3.19
+FROM dock.mau.dev/tulir/lottieconverter:alpine-3.22
 
 RUN apk add --no-cache \
       python3 py3-pip py3-setuptools py3-wheel \
