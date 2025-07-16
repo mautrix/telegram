@@ -1,9 +1,11 @@
-# v0.15.3 (unreleased)
+# v0.15.3 (2025-07-16)
 
 * Updated Telegram API to layer 204.
 * Added support for MSC4190.
 * Enabled captions by default, as they are now supported by most clients.
   * Existing configs will still need to enable `caption_in_message` manually.
+* Changed new room creation to hardcode room v11 to avoid v12 rooms being
+  created before proper support for them can be added.
 * Fixed bridging sticker messages with partial quote replies from Telegram.
 * Fixed text in poll bridging.
 * Disabled kicking unauthenticated users from portals.
