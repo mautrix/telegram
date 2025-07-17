@@ -231,7 +231,14 @@ func (t *TelegramClient) handleDialogs(ctx context.Context, dialogs tg.ModifiedM
 		if portal == nil || portal.MXID == "" {
 			// Check what the latest message is
 			topMessage := messages[ids.MakeMessageID(dialog.Peer, dialog.TopMessage)]
-			if topMessage.TypeID() == tg.MessageServiceTypeID {
+			if topMessage == nil {
+				if dialog.TopMessage == 0 {
+					log.Debug().Msg("Not syncing portal because there are no messages")
+					continue
+				} else {
+					log.Warn().Msg("TopMessage of dialog not in messages map")
+				}
+			} else if topMessage.TypeID() == tg.MessageServiceTypeID {
 				action := topMessage.(*tg.MessageService).Action
 				if action.TypeID() == tg.MessageActionContactSignUpTypeID || action.TypeID() == tg.MessageActionHistoryClearTypeID {
 					log.Debug().Str("action_type", action.TypeName()).Msg("Not syncing portal because it's a contact sign up or history clear")
