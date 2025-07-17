@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/rs/zerolog"
+	"go.mau.fi/util/exsync"
 	"go.mau.fi/zerozap"
 	"go.uber.org/zap"
 	"maunium.net/go/mautrix/bridgev2"
@@ -45,7 +46,6 @@ type PhoneLogin struct {
 	authClient       *telegram.Client
 	authClientCtx    context.Context
 	authClientCancel context.CancelFunc
-	authClientCloseC <-chan struct{}
 
 	phone string
 	hash  string
@@ -56,9 +56,7 @@ var _ bridgev2.LoginProcessUserInput = (*PhoneLogin)(nil)
 func (p *PhoneLogin) Cancel() {
 	if p.authClientCancel != nil {
 		p.authClientCancel()
-	}
-	if p.authClientCloseC != nil {
-		<-p.authClientCloseC
+		<-p.authClientCtx.Done()
 	}
 }
 
@@ -88,11 +86,21 @@ func (p *PhoneLogin) SubmitUserInput(ctx context.Context, input map[string]strin
 			CustomSessionStorage: &p.authData,
 			Logger:               zap.New(zerozap.New(zerolog.Ctx(ctx).With().Str("component", "telegram_phone_login_client").Logger())),
 		})
-		var err error
-		p.authClientCtx, p.authClientCancel = context.WithTimeoutCause(log.WithContext(context.Background()), time.Hour, errors.New("phone login took over one hour"))
-		if p.authClientCloseC, err = connectTelegramClient(p.authClientCtx, p.authClientCancel, p.authClient); err != nil {
+
+		p.authClientCtx, p.authClientCancel = context.WithTimeoutCause(log.WithContext(ctx), time.Hour, errors.New("phone login took over one hour"))
+		initialized := exsync.NewEvent()
+		done := NewFuture[error]()
+		runTelegramClient(p.authClientCtx, p.authClient, initialized, done, func(ctx context.Context) error {
+			<-ctx.Done()
+			return ctx.Err()
+		})
+
+		log.Info().Msg("Waiting for client to connect.")
+		err := initialized.Wait(ctx)
+		if err != nil {
 			return nil, err
 		}
+
 		sentCode, err := p.authClient.Auth().SendCode(p.authClientCtx, p.phone, auth.SendCodeOptions{})
 		if err != nil {
 			return nil, err

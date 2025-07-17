@@ -220,16 +220,9 @@ func parseRandomID(txnID networkid.RawTransactionID) int64 {
 
 func (t *TelegramClient) HandleMatrixMessage(ctx context.Context, msg *bridgev2.MatrixMessage) (resp *bridgev2.MatrixMessageResponse, err error) {
 	// Handle Matrix events only after initial connection has been established to avoid deadlocking gotd
-	select {
-	case <-t.initialized:
-	default:
-		zerolog.Ctx(ctx).Warn().Msg("Got Matrix event before connected, blocking until done")
-
-		select {
-		case <-t.initialized:
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		}
+	err = t.clientInitialized.Wait(ctx)
+	if err != nil {
+		return nil, err
 	}
 
 	peer, err := t.inputPeerForPortalID(ctx, msg.Portal.ID)
