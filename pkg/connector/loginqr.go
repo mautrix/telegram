@@ -86,7 +86,7 @@ func (q *QRLogin) Start(ctx context.Context) (*bridgev2.LoginStep, error) {
 		Logger:               zaplog,
 	})
 
-	q.authClientCtx, q.authClientCancel = context.WithTimeoutCause(log.WithContext(ctx), time.Hour, errors.New("phone login took over one hour"))
+	q.authClientCtx, q.authClientCancel = context.WithTimeoutCause(log.WithContext(context.Background()), time.Hour, errors.New("phone login took over one hour"))
 
 	initialized := exsync.NewEvent()
 	done := NewFuture[error]()
