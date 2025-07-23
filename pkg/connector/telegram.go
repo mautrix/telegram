@@ -21,6 +21,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"slices"
 	"strings"
 	"time"
@@ -1149,10 +1150,9 @@ func (t *TelegramClient) HandleMute(ctx context.Context, msg *bridgev2.MatrixMut
 		return err
 	}
 
-	until := int(msg.Content.GetMutedUntilTime().Unix())
 	settings := tg.InputPeerNotifySettings{
-		Silent:    until > 0,
-		MuteUntil: until,
+		Silent:    msg.Content.IsMuted(),
+		MuteUntil: int(max(0, min(msg.Content.GetMutedUntilTime().Unix(), math.MaxInt32))),
 	}
 
 	_, err = t.client.API().AccountUpdateNotifySettings(ctx, &tg.AccountUpdateNotifySettingsRequest{
