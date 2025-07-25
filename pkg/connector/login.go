@@ -19,6 +19,7 @@ package connector
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"strings"
 
 	"maunium.net/go/mautrix/bridgev2"
@@ -36,6 +37,19 @@ const (
 	LoginFlowIDQR    = "qr"
 
 	LoginStepIDComplete = "fi.mau.telegram.login.complete"
+)
+
+var (
+	ErrInvalidPassword = bridgev2.RespError{
+		ErrCode:    "FI.MAU.TELEGRAM.INVALID_PASSWORD",
+		Err:        "Invalid password",
+		StatusCode: http.StatusBadRequest,
+	}
+	ErrPhoneCodeInvalid = bridgev2.RespError{
+		ErrCode:    "FI.MAU.TELEGRAM.PHONE_CODE_INVALID",
+		Err:        "Invalid phone code",
+		StatusCode: http.StatusBadRequest,
+	}
 )
 
 func (tg *TelegramConnector) GetLoginFlows() []bridgev2.LoginFlow {

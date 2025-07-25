@@ -152,6 +152,8 @@ func (p *PhoneLogin) SubmitUserInput(ctx context.Context, input map[string]strin
 					},
 				},
 			}, nil
+		} else if errors.Is(err, auth.ErrPhoneCodeInvalid) {
+			return nil, ErrPhoneCodeInvalid
 		} else if errors.Is(err, &auth.SignUpRequired{}) {
 			return nil, fmt.Errorf("sign-up is not supported")
 		} else if err != nil {
@@ -161,6 +163,9 @@ func (p *PhoneLogin) SubmitUserInput(ctx context.Context, input map[string]strin
 	} else if password, ok := input[LoginStepIDPassword]; ok {
 		authorization, err := p.authClient.Auth().Password(p.authClientCtx, password)
 		if err != nil {
+			if errors.Is(err, auth.ErrPasswordInvalid) {
+				return nil, ErrInvalidPassword
+			}
 			return nil, fmt.Errorf("failed to submit password: %w", err)
 		}
 		return p.handleAuthSuccess(ctx, authorization)

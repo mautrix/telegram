@@ -91,7 +91,10 @@ func (c *Client) SendCode(ctx context.Context, phone string, options SendCodeOpt
 // ErrPasswordAuthNeeded means that 2FA auth is required.
 //
 // Call Client.Password to provide 2FA password.
-var ErrPasswordAuthNeeded = errors.New("2FA required")
+var (
+	ErrPasswordAuthNeeded = errors.New("2FA required")
+	ErrPhoneCodeInvalid   = errors.New("Phone code invalid")
+)
 
 // SignIn performs sign in with provided user phone, code and code hash.
 //
@@ -106,6 +109,9 @@ func (c *Client) SignIn(ctx context.Context, phone, code, codeHash string) (*tg.
 		PhoneCode:     code,
 	})
 	if tgerr.Is(err, "SESSION_PASSWORD_NEEDED") {
+		return nil, ErrPasswordAuthNeeded
+	}
+	if tgerr.Is(err, "PHONE_CODE_INVALID") {
 		return nil, ErrPasswordAuthNeeded
 	}
 	if err != nil {

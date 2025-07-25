@@ -29,6 +29,7 @@ import (
 	"maunium.net/go/mautrix/bridgev2"
 
 	"go.mau.fi/mautrix-telegram/pkg/gotd/telegram"
+	"go.mau.fi/mautrix-telegram/pkg/gotd/telegram/auth"
 	"go.mau.fi/mautrix-telegram/pkg/gotd/telegram/auth/qrlogin"
 	"go.mau.fi/mautrix-telegram/pkg/gotd/telegram/updates"
 	"go.mau.fi/mautrix-telegram/pkg/gotd/tg"
@@ -193,6 +194,9 @@ func (q *QRLogin) SubmitUserInput(ctx context.Context, input map[string]string) 
 	}
 	authorization, err := q.authClient.Auth().Password(q.authClientCtx, password)
 	if err != nil {
+		if errors.Is(err, auth.ErrPasswordInvalid) {
+			return nil, ErrInvalidPassword
+		}
 		return nil, fmt.Errorf("failed to submit password: %w", err)
 	}
 
