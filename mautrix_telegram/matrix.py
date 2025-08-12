@@ -155,14 +155,6 @@ class MatrixHandler(BaseMatrixHandler):
                 room_id, user.mxid, "You are not whitelisted on this Telegram bridge."
             )
             return
-        elif not await user.is_logged_in() and not portal.has_bot:
-            await portal.main_intent.kick_user(
-                room_id,
-                user.mxid,
-                "This chat does not have a bot on the Telegram side for relaying messages sent by"
-                " unauthenticated Matrix users.",
-            )
-            return
 
         self.log.debug(f"{user.mxid} joined {room_id}")
         if await user.is_logged_in() or portal.has_bot:
