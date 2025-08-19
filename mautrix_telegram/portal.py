@@ -1504,7 +1504,11 @@ class Portal(DBPortal, BasePortal):
             message = await self._get_state_change_message(event, user, **kwargs)
             if not message:
                 return
-            message, entities = await formatter.matrix_to_telegram(self.bot.client, html=message)
+            message, entities = await formatter.matrix_to_telegram(
+                self.bot.client,
+                html=message,
+                convert_commands=self.config["bridge.convert_commands"],
+            )
             response = await self.bot.client.send_message(
                 self.peer, message, formatting_entities=entities
             )
@@ -1790,7 +1794,10 @@ class Portal(DBPortal, BasePortal):
         reply_to: TelegramID | None,
     ) -> None:
         message, entities = await formatter.matrix_to_telegram(
-            client, text=content.body, html=content.formatted(Format.HTML)
+            client,
+            text=content.body,
+            html=content.formatted(Format.HTML),
+            convert_commands=self.config["bridge.convert_commands"],
         )
         sender_id = sender.tgid if logged_in else self.bot.tgid
         async with self.send_lock(sender_id):
@@ -1934,7 +1941,10 @@ class Portal(DBPortal, BasePortal):
 
         capt, entities = (
             await formatter.matrix_to_telegram(
-                client, text=caption.body, html=caption.formatted(Format.HTML)
+                client,
+                text=caption.body,
+                html=caption.formatted(Format.HTML),
+                convert_commands=self.config["bridge.convert_commands"],
             )
             if caption
             else (None, None)
@@ -2031,7 +2041,9 @@ class Portal(DBPortal, BasePortal):
             caption = content["org.matrix.msc3488.location"]["description"]
             entities = []
         except KeyError:
-            caption, entities = await formatter.matrix_to_telegram(client, text=content.body)
+            caption, entities = await formatter.matrix_to_telegram(
+                client, text=content.body, convert_commands=self.config["bridge.convert_commands"]
+            )
         media = MessageMediaGeo(geo=GeoPoint(lat=lat, long=long, access_hash=0))
 
         async with self.send_lock(sender_id):
