@@ -26,13 +26,17 @@ log: logging.Logger = logging.getLogger("mau.util.webm")
 
 converter_args = {
     "gif": {
+        "input_args": ("-c:v", "libvpx-vp9"),
         "output_args": ("-vf", "split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse"),
     },
     "png": {
-        "input_args": ("-ss", "0"),
+        "input_args": ("-c:v", "libvpx-vp9", "-ss", "0"),
         "output_args": ("-frames:v", "1"),
     },
-    "webp": {},
+    "webp": {
+        "input_args": ("-c:v", "libvpx-vp9"),
+        "output_args": ("-loop", "0"),
+    },
 }
 
 
