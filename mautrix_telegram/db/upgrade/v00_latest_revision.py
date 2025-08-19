@@ -15,7 +15,7 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from mautrix.util.async_db import Connection, Scheme
 
-latest_version = 18
+latest_version = 19
 
 
 async def create_latest_tables(conn: Connection, scheme: Scheme) -> int:
@@ -92,10 +92,12 @@ async def create_latest_tables(conn: Connection, scheme: Scheme) -> int:
             event_id            TEXT,
             expiration_seconds  BIGINT,
             expiration_ts       BIGINT,
+            unqueued_ts         BIGINT,
 
             PRIMARY KEY (room_id, event_id)
         )"""
     )
+    await conn.execute("CREATE INDEX disappearing_message_expiration_ts ON disappearing_message(expiration_ts)")
     await conn.execute(
         """CREATE TABLE puppet (
             id BIGINT PRIMARY KEY,
