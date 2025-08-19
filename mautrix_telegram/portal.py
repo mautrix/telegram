@@ -65,6 +65,7 @@ from telethon.errors import (
 from telethon.tl.custom import Dialog
 from telethon.tl.functions.channels import (
     CreateChannelRequest,
+    EditAdminRequest,
     EditPhotoRequest,
     EditTitleRequest,
     InviteToChannelRequest,
@@ -93,6 +94,7 @@ from telethon.tl.types import (
     Channel,
     ChannelFull,
     Chat,
+    ChatAdminRights,
     ChatBannedRights,
     ChatEmpty,
     ChatFull,
@@ -680,9 +682,14 @@ class Portal(DBPortal, BasePortal):
                     AddChatUserRequest(chat_id=self.tgid, user_id=puppet.tgid, fwd_limit=0)
                 )
             elif self.peer_type == "channel":
-                await invited_by.client(
-                    InviteToChannelRequest(channel=self.peer, users=[puppet.tgid])
-                )
+                if not puppet.is_bot:
+                    await invited_by.client(
+                        InviteToChannelRequest(channel=self.peer, users=[puppet.tgid])
+                    )
+                else:
+                    await invited_by.client(
+                        EditAdminRequest(channel=self.peer, user_id=puppet.tgid, admin_rights=ChatAdminRights(), rank="Bridge")
+                    )
             # We don't care if there are invites for private chat portals with the relaybot.
             elif not self.bot or self.tg_receiver != self.bot.tgid:
                 raise RejectMatrixInvite("You can't invite additional users to private chats.")
