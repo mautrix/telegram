@@ -24,14 +24,7 @@ func (c *Conn) handleSessionCreated(b *bin.Buffer) error {
 		zap.Time("first_msg_time", created.Local()),
 	)
 
-	if (created.Before(now) && now.Sub(created) > maxPast) || created.Sub(now) > maxFuture {
-		c.log.Warn("Local clock needs synchronization",
-			zap.Time("first_msg_time", created),
-			zap.Time("local", now),
-			zap.Duration("time_difference", now.Sub(created)),
-		)
-	}
-
+	c.setServerTimeOffset(created.Sub(now))
 	c.storeSalt(s.ServerSalt)
 	if err := c.handler.OnSession(c.session()); err != nil {
 		return errors.Wrap(err, "handler.OnSession")

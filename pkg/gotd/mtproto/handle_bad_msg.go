@@ -7,11 +7,13 @@ import (
 
 	"go.mau.fi/mautrix-telegram/pkg/gotd/bin"
 	"go.mau.fi/mautrix-telegram/pkg/gotd/mt"
+	"go.mau.fi/mautrix-telegram/pkg/gotd/proto"
 )
 
 type badMessageError struct {
-	Code    int
-	NewSalt int64
+	Code         int
+	NewSalt      int64
+	TimeResynced bool
 }
 
 const (
@@ -40,7 +42,8 @@ func (c badMessageError) Error() string {
 	return description
 }
 
-func (c *Conn) handleBadMsg(b *bin.Buffer) error {
+func (c *Conn) handleBadMsg(msgID int64, b *bin.Buffer) error {
+	now := c.clock.Now()
 	id, err := b.PeekID()
 	if err != nil {
 		return err
@@ -51,8 +54,16 @@ func (c *Conn) handleBadMsg(b *bin.Buffer) error {
 		if err := bad.Decode(b); err != nil {
 			return err
 		}
+		var resynced bool
+		if !c.hasServerTimeOffset() && (bad.ErrorCode == codeMessageIDTooLow || bad.ErrorCode == codeMessageIDTooHigh) {
+			created := proto.MessageID(msgID).Time()
+			c.setServerTimeOffset(created.Sub(now))
+			c.messageID.Reset()
+			c.updateSalt()
+			resynced = true
+		}
 
-		c.rpc.NotifyError(bad.BadMsgID, &badMessageError{Code: bad.ErrorCode})
+		c.rpc.NotifyError(bad.BadMsgID, &badMessageError{Code: bad.ErrorCode, TimeResynced: resynced})
 		return nil
 	case mt.BadServerSaltTypeID:
 		var bad mt.BadServerSalt

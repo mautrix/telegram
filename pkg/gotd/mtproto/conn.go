@@ -31,6 +31,7 @@ type Handler interface {
 // MessageIDSource is message id generator.
 type MessageIDSource interface {
 	New(t proto.MessageType) int64
+	Reset()
 }
 
 // MessageBuf is message id buffer.
@@ -72,6 +73,8 @@ type Conn struct {
 	authKey    crypto.AuthKey
 	salt       int64
 	sessionID  int64
+
+	serverTimeOffset time.Duration
 
 	// server salts fetched by getSalts.
 	salts salts.Salts
@@ -127,7 +130,6 @@ func New(dialer Dialer, opt Options) *Conn {
 		rand:         opt.Random,
 		cipher:       opt.Cipher,
 		log:          opt.Logger,
-		messageID:    opt.MessageID,
 		messageIDBuf: proto.NewMessageIDBuf(100),
 
 		ackSendChan:  make(chan int64),
@@ -155,6 +157,7 @@ func New(dialer Dialer, opt Options) *Conn {
 		saltFetchInterval: opt.SaltFetchInterval,
 		getTimeout:        opt.RequestTimeout,
 	}
+	conn.messageID = proto.NewMessageIDGen(conn.TimeWithOffset)
 	if conn.rpc == nil {
 		conn.rpc = rpc.New(conn.writeContentMessage, rpc.Options{
 			Logger:        opt.Logger.Named("rpc"),
@@ -217,4 +220,41 @@ func (c *Conn) Run(ctx context.Context, f func(ctx context.Context) error) error
 		return errors.Wrap(err, "group")
 	}
 	return nil
+}
+
+func (c *Conn) setServerTimeOffset(offset time.Duration) {
+	if offset == 0 {
+		offset = 1
+	}
+	c.sessionMux.Lock()
+	c.serverTimeOffset = offset
+	c.sessionMux.Unlock()
+	if offset > 10*time.Second || offset < -10*time.Second {
+		c.log.Warn("Updated server time offset (high)", zap.Duration("offset", offset))
+	} else {
+		c.log.Info("Updated server time offset", zap.Duration("offset", offset))
+	}
+}
+
+func (c *Conn) hasServerTimeOffset() bool {
+	c.sessionMux.RLock()
+	has := c.serverTimeOffset != 0
+	c.sessionMux.RUnlock()
+	return has
+}
+
+func (c *Conn) TimeWithOffset() (t time.Time) {
+	c.sessionMux.RLock()
+	t = c.clock.Now().Add(c.serverTimeOffset)
+	c.sessionMux.RUnlock()
+	return
+}
+
+func (c *Conn) altTimeWithOffset() (t time.Time) {
+	c.sessionMux.RLock()
+	if c.serverTimeOffset != 0 {
+		t = c.clock.Now().Add(c.serverTimeOffset)
+	}
+	c.sessionMux.RUnlock()
+	return
 }

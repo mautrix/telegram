@@ -12,8 +12,6 @@ import (
 	"go.mau.fi/mautrix-telegram/pkg/gotd/clock"
 	"go.mau.fi/mautrix-telegram/pkg/gotd/crypto"
 	"go.mau.fi/mautrix-telegram/pkg/gotd/exchange"
-	"go.mau.fi/mautrix-telegram/pkg/gotd/mtproto"
-	"go.mau.fi/mautrix-telegram/pkg/gotd/proto"
 	"go.mau.fi/mautrix-telegram/pkg/gotd/telegram/dcs"
 	"go.mau.fi/mautrix-telegram/pkg/gotd/tg"
 )
@@ -99,8 +97,7 @@ type Options struct {
 	// Will be sent with session creation request.
 	Device DeviceConfig
 
-	MessageID mtproto.MessageIDSource
-	Clock     clock.Clock
+	Clock clock.Clock
 
 	PingInterval time.Duration
 	PingTimeout  time.Duration
@@ -152,9 +149,6 @@ func (opt *Options) setDefaults() {
 	}
 	if opt.MigrationTimeout == 0 {
 		opt.MigrationTimeout = time.Second * 15
-	}
-	if opt.MessageID == nil {
-		opt.MessageID = proto.NewMessageIDGen(opt.Clock.Now)
 	}
 	if opt.UpdateHandler == nil {
 		// No updates handler passed, so no sense to subscribe for updates.

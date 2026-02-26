@@ -206,7 +206,6 @@ func NewClient(appID int, appHash string, opt Options) *Client {
 		RetryInterval:     opt.RetryInterval,
 		MaxRetries:        opt.MaxRetries,
 		CompressThreshold: opt.CompressThreshold,
-		MessageID:         opt.MessageID,
 		ExchangeTimeout:   opt.ExchangeTimeout,
 		DialTimeout:       opt.DialTimeout,
 		Clock:             opt.Clock,

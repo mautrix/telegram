@@ -8,6 +8,7 @@ import (
 
 	"go.mau.fi/mautrix-telegram/pkg/gotd/bin"
 	"go.mau.fi/mautrix-telegram/pkg/gotd/mt"
+	"go.mau.fi/mautrix-telegram/pkg/gotd/proto"
 	"go.mau.fi/mautrix-telegram/pkg/gotd/rpc"
 )
 
@@ -23,20 +24,29 @@ func (c *Conn) Invoke(ctx context.Context, input bin.Encoder, output bin.Decoder
 		Output: output,
 	}
 
-	if err := c.rpc.Do(ctx, req); err != nil {
+	for retries := 0; ; retries++ {
 		var badMsgErr *badMessageError
-		if errors.As(err, &badMsgErr) && badMsgErr.Code == codeIncorrectServerSalt {
+		err := c.rpc.Do(ctx, req)
+		if err == nil || retries >= 2 || !errors.As(err, &badMsgErr) {
+			return err
+		} else if badMsgErr.Code == codeIncorrectServerSalt {
 			// Store salt from server.
 			c.storeSalt(badMsgErr.NewSalt)
 			// Reset saved salts to fetch new.
 			c.salts.Reset()
 			c.log.Info("Retrying request after updating salt from badMsgErr", zap.Int64("msg_id", req.MsgID))
-			return c.rpc.Do(ctx, req)
+		} else if badMsgErr.TimeResynced {
+			req.MsgID, req.SeqNo = c.nextMsgSeq(true)
+			c.log.Info("Retrying request after adjusting time offset from badMsgErr",
+				zap.Int64("old_msg_id", msgID),
+				zap.Int64("new_msg_id", req.MsgID),
+				zap.Stringer("old_msg_id_str", proto.MessageID(msgID)),
+				zap.Stringer("new_msg_id_str", proto.MessageID(req.MsgID)),
+			)
+		} else {
+			return err
 		}
-		return err
 	}
-
-	return nil
 }
 
 func (c *Conn) dropRPC(req rpc.Request) error {

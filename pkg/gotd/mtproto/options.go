@@ -11,7 +11,6 @@ import (
 	"go.mau.fi/mautrix-telegram/pkg/gotd/clock"
 	"go.mau.fi/mautrix-telegram/pkg/gotd/crypto"
 	"go.mau.fi/mautrix-telegram/pkg/gotd/exchange"
-	"go.mau.fi/mautrix-telegram/pkg/gotd/proto"
 	"go.mau.fi/mautrix-telegram/pkg/gotd/rpc"
 	"go.mau.fi/mautrix-telegram/pkg/gotd/tmap"
 )
@@ -64,9 +63,6 @@ type Options struct {
 	// If < 0, compression will be disabled.
 	// If == 0, default value will be used.
 	CompressThreshold int
-	// MessageID is message id source. Share source between connection to
-	// reduce collision probability.
-	MessageID MessageIDSource
 	// Clock is current time source. Defaults to system time.
 	Clock clock.Clock
 	// Types map, used in verbose logging of incoming message.
@@ -151,9 +147,6 @@ func (opt *Options) setDefaults() {
 	}
 	if opt.Clock == nil {
 		opt.Clock = clock.System
-	}
-	if opt.MessageID == nil {
-		opt.MessageID = proto.NewMessageIDGen(opt.Clock.Now)
 	}
 	if len(opt.PublicKeys) == 0 {
 		opt.setDefaultPublicKeys()

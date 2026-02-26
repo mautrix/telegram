@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"math/big"
+	"time"
 
 	"github.com/go-faster/errors"
 	"go.uber.org/zap"
@@ -118,6 +119,7 @@ Loop:
 		EncryptedData:        encryptedData,
 	}
 	c.log.Debug("Sending ReqDHParamsRequest")
+	reqStart := c.clock.Now()
 	if err := c.writeUnencrypted(ctx, b, reqDHParams); err != nil {
 		return ClientExchangeResult{}, errors.Wrap(err, "write ReqDHParamsRequest")
 	}
@@ -126,6 +128,7 @@ Loop:
 	if err := c.conn.Recv(ctx, b); err != nil {
 		return ClientExchangeResult{}, errors.Wrap(err, "read ServerDHParams message")
 	}
+	roundtripDuration := c.clock.Now().Sub(reqStart)
 	c.log.Debug("Received server ServerDHParams")
 
 	var plaintextMsg proto.UnencryptedMessage
@@ -262,6 +265,8 @@ Loop:
 				AuthKey:    crypto.AuthKey{Value: key, ID: authKeyID},
 				SessionID:  sessionID,
 				ServerSalt: serverSalt,
+
+				ServerTimeOffset: time.Unix(int64(innerData.ServerTime), 0).Sub(reqStart.Add(roundtripDuration / 2)),
 			}, nil
 		case *mt.DhGenRetry: // dh_gen_retry#46dc1fb9
 			return ClientExchangeResult{}, errors.Errorf("retry required: %x", v.NewNonceHash2)

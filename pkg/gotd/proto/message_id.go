@@ -152,6 +152,12 @@ func (g *MessageIDGen) New(t MessageType) int64 {
 	return int64(NewMessageIDNano(g.nano, t))
 }
 
+func (g *MessageIDGen) Reset() {
+	g.mux.Lock()
+	g.nano = 0
+	g.mux.Unlock()
+}
+
 // NewMessageIDGen creates new message id generator.
 //
 // Current time will be provided by now() function.

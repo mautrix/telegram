@@ -38,12 +38,14 @@ func checkMessageID(now time.Time, rawID int64) error {
 		return errors.Wrapf(errRejected, "unexpected type %s", id.Type())
 	}
 
-	created := id.Time()
-	if created.Before(now) && now.Sub(created) > maxPast {
-		return errors.Wrap(errRejected, "created too far in past")
-	}
-	if created.Sub(now) > maxFuture {
-		return errors.Wrap(errRejected, "created too far in future")
+	if !now.IsZero() {
+		created := id.Time()
+		if created.Before(now) && now.Sub(created) > maxPast {
+			return errors.Wrap(errRejected, "created too far in past")
+		}
+		if created.Sub(now) > maxFuture {
+			return errors.Wrap(errRejected, "created too far in future")
+		}
 	}
 
 	return nil
@@ -60,7 +62,8 @@ func (c *Conn) decryptMessage(b *bin.Buffer) (*crypto.EncryptedMessageData, erro
 	if msg.SessionID != session.ID {
 		return nil, errors.Wrapf(errRejected, "invalid session (got %d, expected %d)", msg.SessionID, session.ID)
 	}
-	if err := checkMessageID(c.clock.Now(), msg.MessageID); err != nil {
+
+	if err := checkMessageID(c.altTimeWithOffset(), msg.MessageID); err != nil {
 		return nil, errors.Wrapf(err, "bad message id %d", msg.MessageID)
 	}
 	if !c.messageIDBuf.Consume(msg.MessageID) {

@@ -9,7 +9,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/zap"
@@ -44,10 +43,9 @@ func newTestClient(h testHandler, opts ...testClientOption) *Conn {
 	}, rpc.Options{})
 
 	opt := Options{
-		Logger:    zap.NewNop(),
-		Random:    rand.New(rand.NewSource(1)),
-		Key:       crypto.Key{}.WithID(),
-		MessageID: proto.NewMessageIDGen(time.Now),
+		Logger: zap.NewNop(),
+		Random: rand.New(rand.NewSource(1)),
+		Key:    crypto.Key{}.WithID(),
 
 		engine: engine,
 	}

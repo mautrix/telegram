@@ -84,10 +84,17 @@ func (c *Conn) createAuthKey(ctx context.Context) error {
 	}
 
 	c.sessionMux.Lock()
+	c.serverTimeOffset = r.ServerTimeOffset
+	if c.serverTimeOffset == 0 {
+		// Creating an auth key always calculates the offset and it should never be 0 in practice,
+		// but default to 1 just in case
+		c.serverTimeOffset = 1
+	}
 	c.authKey = r.AuthKey
 	c.sessionID = r.SessionID
 	c.salt = r.ServerSalt
 	c.sessionMux.Unlock()
+	c.log.Info("Created auth key", zap.Duration("server_time_offset", r.ServerTimeOffset))
 
 	return nil
 }

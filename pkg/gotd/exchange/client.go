@@ -2,6 +2,7 @@ package exchange
 
 import (
 	"io"
+	"time"
 
 	"go.uber.org/zap"
 
@@ -23,4 +24,6 @@ type ClientExchangeResult struct {
 	AuthKey    crypto.AuthKey
 	SessionID  int64
 	ServerSalt int64
+
+	ServerTimeOffset time.Duration
 }
