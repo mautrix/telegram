@@ -257,7 +257,7 @@ func (t *ReadyTransferer) Transfer(ctx context.Context, store *store.Container, 
 		Str("location_id", string(locationID)).
 		Logger()
 	ctx = log.WithContext(ctx)
-	log.Info().Msg("Transferring file from Telegram to Matrix")
+	log.Debug().Msg("Transferring file from Telegram to Matrix")
 
 	if file, err := store.TelegramFile.GetByLocationID(ctx, locationID); err != nil {
 		return "", nil, nil, fmt.Errorf("failed to search for Telegram file by location ID: %w", err)
