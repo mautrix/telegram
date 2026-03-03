@@ -10,7 +10,7 @@ download_schema:
 .PHONY: download_schema
 
 download_public_keys:
-	go run ./cmd/dlkey -o internal/mtproto/_data/public_keys.pem
+	go run ./cmd/dlkey -o mtproto/_data/public_keys.pem
 .PHONY: download_public_keys
 
 download_e2e_schema:
