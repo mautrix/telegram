@@ -130,6 +130,8 @@ type ChatAdminRights struct {
 	//  1) https://core.telegram.org/api/monoforum
 	//  2) https://core.telegram.org/api/suggested-posts
 	ManageDirectMessages bool
+	// ManageRanks field of ChatAdminRights.
+	ManageRanks bool
 }
 
 // ChatAdminRightsTypeID is TL type id of ChatAdminRights.
@@ -198,6 +200,9 @@ func (c *ChatAdminRights) Zero() bool {
 	if !(c.ManageDirectMessages == false) {
 		return false
 	}
+	if !(c.ManageRanks == false) {
+		return false
+	}
 
 	return true
 }
@@ -229,6 +234,7 @@ func (c *ChatAdminRights) FillFrom(from interface {
 	GetEditStories() (value bool)
 	GetDeleteStories() (value bool)
 	GetManageDirectMessages() (value bool)
+	GetManageRanks() (value bool)
 }) {
 	c.ChangeInfo = from.GetChangeInfo()
 	c.PostMessages = from.GetPostMessages()
@@ -246,6 +252,7 @@ func (c *ChatAdminRights) FillFrom(from interface {
 	c.EditStories = from.GetEditStories()
 	c.DeleteStories = from.GetDeleteStories()
 	c.ManageDirectMessages = from.GetManageDirectMessages()
+	c.ManageRanks = from.GetManageRanks()
 }
 
 // TypeID returns type id in TL schema.
@@ -351,6 +358,11 @@ func (c *ChatAdminRights) TypeInfo() tdp.Type {
 			SchemaName: "manage_direct_messages",
 			Null:       !c.Flags.Has(17),
 		},
+		{
+			Name:       "ManageRanks",
+			SchemaName: "manage_ranks",
+			Null:       !c.Flags.Has(18),
+		},
 	}
 	return typ
 }
@@ -404,6 +416,9 @@ func (c *ChatAdminRights) SetFlags() {
 	}
 	if !(c.ManageDirectMessages == false) {
 		c.Flags.Set(17)
+	}
+	if !(c.ManageRanks == false) {
+		c.Flags.Set(18)
 	}
 }
 
@@ -465,6 +480,7 @@ func (c *ChatAdminRights) DecodeBare(b *bin.Buffer) error {
 	c.EditStories = c.Flags.Has(15)
 	c.DeleteStories = c.Flags.Has(16)
 	c.ManageDirectMessages = c.Flags.Has(17)
+	c.ManageRanks = c.Flags.Has(18)
 	return nil
 }
 
@@ -770,4 +786,23 @@ func (c *ChatAdminRights) GetManageDirectMessages() (value bool) {
 		return
 	}
 	return c.Flags.Has(17)
+}
+
+// SetManageRanks sets value of ManageRanks conditional field.
+func (c *ChatAdminRights) SetManageRanks(value bool) {
+	if value {
+		c.Flags.Set(18)
+		c.ManageRanks = true
+	} else {
+		c.Flags.Unset(18)
+		c.ManageRanks = false
+	}
+}
+
+// GetManageRanks returns value of ManageRanks conditional field.
+func (c *ChatAdminRights) GetManageRanks() (value bool) {
+	if c == nil {
+		return
+	}
+	return c.Flags.Has(18)
 }

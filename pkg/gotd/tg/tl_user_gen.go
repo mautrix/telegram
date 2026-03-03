@@ -311,6 +311,8 @@ type User struct {
 	BotHasMainApp bool
 	// BotForumView field of User.
 	BotForumView bool
+	// BotForumCanManageTopics field of User.
+	BotForumCanManageTopics bool
 	// ID of the user, see here »¹ for more info and the available ID range.
 	//
 	// Links:
@@ -593,6 +595,9 @@ func (u *User) Zero() bool {
 	if !(u.BotForumView == false) {
 		return false
 	}
+	if !(u.BotForumCanManageTopics == false) {
+		return false
+	}
 	if !(u.ID == 0) {
 		return false
 	}
@@ -694,6 +699,7 @@ func (u *User) FillFrom(from interface {
 	GetBotBusiness() (value bool)
 	GetBotHasMainApp() (value bool)
 	GetBotForumView() (value bool)
+	GetBotForumCanManageTopics() (value bool)
 	GetID() (value int64)
 	GetAccessHash() (value int64, ok bool)
 	GetFirstName() (value string, ok bool)
@@ -741,6 +747,7 @@ func (u *User) FillFrom(from interface {
 	u.BotBusiness = from.GetBotBusiness()
 	u.BotHasMainApp = from.GetBotHasMainApp()
 	u.BotForumView = from.GetBotForumView()
+	u.BotForumCanManageTopics = from.GetBotForumCanManageTopics()
 	u.ID = from.GetID()
 	if val, ok := from.GetAccessHash(); ok {
 		u.AccessHash = val
@@ -974,6 +981,11 @@ func (u *User) TypeInfo() tdp.Type {
 			Null:       !u.Flags2.Has(16),
 		},
 		{
+			Name:       "BotForumCanManageTopics",
+			SchemaName: "bot_forum_can_manage_topics",
+			Null:       !u.Flags2.Has(17),
+		},
+		{
 			Name:       "ID",
 			SchemaName: "id",
 		},
@@ -1155,6 +1167,9 @@ func (u *User) SetFlags() {
 	}
 	if !(u.BotForumView == false) {
 		u.Flags2.Set(16)
+	}
+	if !(u.BotForumCanManageTopics == false) {
+		u.Flags2.Set(17)
 	}
 	if !(u.AccessHash == 0) {
 		u.Flags.Set(0)
@@ -1386,6 +1401,7 @@ func (u *User) DecodeBare(b *bin.Buffer) error {
 	u.BotBusiness = u.Flags2.Has(11)
 	u.BotHasMainApp = u.Flags2.Has(13)
 	u.BotForumView = u.Flags2.Has(16)
+	u.BotForumCanManageTopics = u.Flags2.Has(17)
 	{
 		value, err := b.Long()
 		if err != nil {
@@ -2039,6 +2055,25 @@ func (u *User) GetBotForumView() (value bool) {
 		return
 	}
 	return u.Flags2.Has(16)
+}
+
+// SetBotForumCanManageTopics sets value of BotForumCanManageTopics conditional field.
+func (u *User) SetBotForumCanManageTopics(value bool) {
+	if value {
+		u.Flags2.Set(17)
+		u.BotForumCanManageTopics = true
+	} else {
+		u.Flags2.Unset(17)
+		u.BotForumCanManageTopics = false
+	}
+}
+
+// GetBotForumCanManageTopics returns value of BotForumCanManageTopics conditional field.
+func (u *User) GetBotForumCanManageTopics() (value bool) {
+	if u == nil {
+		return
+	}
+	return u.Flags2.Has(17)
 }
 
 // GetID returns value of ID field.

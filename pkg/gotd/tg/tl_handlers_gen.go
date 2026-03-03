@@ -1531,6 +1531,36 @@ func (u UpdateDispatcher) OnStarGiftAuctionUserState(handler StarGiftAuctionUser
 	}
 }
 
+// EmojiGameInfoHandler is a EmojiGameInfo event handler.
+type EmojiGameInfoHandler func(ctx context.Context, e Entities, update *UpdateEmojiGameInfo) error
+
+// OnEmojiGameInfo sets EmojiGameInfo handler.
+func (u UpdateDispatcher) OnEmojiGameInfo(handler EmojiGameInfoHandler) {
+	u.handlers[UpdateEmojiGameInfoTypeID] = func(ctx context.Context, e Entities, update UpdateClass) error {
+		return handler(ctx, e, update.(*UpdateEmojiGameInfo))
+	}
+}
+
+// StarGiftCraftFailHandler is a StarGiftCraftFail event handler.
+type StarGiftCraftFailHandler func(ctx context.Context, e Entities, update *UpdateStarGiftCraftFail) error
+
+// OnStarGiftCraftFail sets StarGiftCraftFail handler.
+func (u UpdateDispatcher) OnStarGiftCraftFail(handler StarGiftCraftFailHandler) {
+	u.handlers[UpdateStarGiftCraftFailTypeID] = func(ctx context.Context, e Entities, update UpdateClass) error {
+		return handler(ctx, e, update.(*UpdateStarGiftCraftFail))
+	}
+}
+
+// ChatParticipantRankHandler is a ChatParticipantRank event handler.
+type ChatParticipantRankHandler func(ctx context.Context, e Entities, update *UpdateChatParticipantRank) error
+
+// OnChatParticipantRank sets ChatParticipantRank handler.
+func (u UpdateDispatcher) OnChatParticipantRank(handler ChatParticipantRankHandler) {
+	u.handlers[UpdateChatParticipantRankTypeID] = func(ctx context.Context, e Entities, update UpdateClass) error {
+		return handler(ctx, e, update.(*UpdateChatParticipantRank))
+	}
+}
+
 // OnFallback sets fallback handler.
 func (u *UpdateDispatcher) OnFallback(handler Handler) {
 	u.fallback = handler

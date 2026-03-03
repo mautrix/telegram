@@ -140,6 +140,10 @@ type UserFull struct {
 	//  2) https://core.telegram.org/api/premium
 	//  3) https://core.telegram.org/api/gifts
 	DisplayGiftsButton bool
+	// NoforwardsMyEnabled field of UserFull.
+	NoforwardsMyEnabled bool
+	// NoforwardsPeerEnabled field of UserFull.
+	NoforwardsPeerEnabled bool
 	// User ID
 	ID int64
 	// Bio of the user
@@ -442,6 +446,12 @@ func (u *UserFull) Zero() bool {
 	if !(u.DisplayGiftsButton == false) {
 		return false
 	}
+	if !(u.NoforwardsMyEnabled == false) {
+		return false
+	}
+	if !(u.NoforwardsPeerEnabled == false) {
+		return false
+	}
 	if !(u.ID == 0) {
 		return false
 	}
@@ -585,6 +595,8 @@ func (u *UserFull) FillFrom(from interface {
 	GetCanViewRevenue() (value bool)
 	GetBotCanManageEmojiStatus() (value bool)
 	GetDisplayGiftsButton() (value bool)
+	GetNoforwardsMyEnabled() (value bool)
+	GetNoforwardsPeerEnabled() (value bool)
 	GetID() (value int64)
 	GetAbout() (value string, ok bool)
 	GetSettings() (value PeerSettings)
@@ -640,6 +652,8 @@ func (u *UserFull) FillFrom(from interface {
 	u.CanViewRevenue = from.GetCanViewRevenue()
 	u.BotCanManageEmojiStatus = from.GetBotCanManageEmojiStatus()
 	u.DisplayGiftsButton = from.GetDisplayGiftsButton()
+	u.NoforwardsMyEnabled = from.GetNoforwardsMyEnabled()
+	u.NoforwardsPeerEnabled = from.GetNoforwardsPeerEnabled()
 	u.ID = from.GetID()
 	if val, ok := from.GetAbout(); ok {
 		u.About = val
@@ -887,6 +901,16 @@ func (u *UserFull) TypeInfo() tdp.Type {
 			Null:       !u.Flags2.Has(16),
 		},
 		{
+			Name:       "NoforwardsMyEnabled",
+			SchemaName: "noforwards_my_enabled",
+			Null:       !u.Flags2.Has(23),
+		},
+		{
+			Name:       "NoforwardsPeerEnabled",
+			SchemaName: "noforwards_peer_enabled",
+			Null:       !u.Flags2.Has(24),
+		},
+		{
 			Name:       "ID",
 			SchemaName: "id",
 		},
@@ -1123,6 +1147,12 @@ func (u *UserFull) SetFlags() {
 	}
 	if !(u.DisplayGiftsButton == false) {
 		u.Flags2.Set(16)
+	}
+	if !(u.NoforwardsMyEnabled == false) {
+		u.Flags2.Set(23)
+	}
+	if !(u.NoforwardsPeerEnabled == false) {
+		u.Flags2.Set(24)
 	}
 	if !(u.About == "") {
 		u.Flags.Set(1)
@@ -1466,6 +1496,8 @@ func (u *UserFull) DecodeBare(b *bin.Buffer) error {
 	u.CanViewRevenue = u.Flags2.Has(9)
 	u.BotCanManageEmojiStatus = u.Flags2.Has(10)
 	u.DisplayGiftsButton = u.Flags2.Has(16)
+	u.NoforwardsMyEnabled = u.Flags2.Has(23)
+	u.NoforwardsPeerEnabled = u.Flags2.Has(24)
 	{
 		value, err := b.Long()
 		if err != nil {
@@ -2013,6 +2045,44 @@ func (u *UserFull) GetDisplayGiftsButton() (value bool) {
 		return
 	}
 	return u.Flags2.Has(16)
+}
+
+// SetNoforwardsMyEnabled sets value of NoforwardsMyEnabled conditional field.
+func (u *UserFull) SetNoforwardsMyEnabled(value bool) {
+	if value {
+		u.Flags2.Set(23)
+		u.NoforwardsMyEnabled = true
+	} else {
+		u.Flags2.Unset(23)
+		u.NoforwardsMyEnabled = false
+	}
+}
+
+// GetNoforwardsMyEnabled returns value of NoforwardsMyEnabled conditional field.
+func (u *UserFull) GetNoforwardsMyEnabled() (value bool) {
+	if u == nil {
+		return
+	}
+	return u.Flags2.Has(23)
+}
+
+// SetNoforwardsPeerEnabled sets value of NoforwardsPeerEnabled conditional field.
+func (u *UserFull) SetNoforwardsPeerEnabled(value bool) {
+	if value {
+		u.Flags2.Set(24)
+		u.NoforwardsPeerEnabled = true
+	} else {
+		u.Flags2.Unset(24)
+		u.NoforwardsPeerEnabled = false
+	}
+}
+
+// GetNoforwardsPeerEnabled returns value of NoforwardsPeerEnabled conditional field.
+func (u *UserFull) GetNoforwardsPeerEnabled() (value bool) {
+	if u == nil {
+		return
+	}
+	return u.Flags2.Has(24)
 }
 
 // GetID returns value of ID field.
