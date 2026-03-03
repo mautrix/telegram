@@ -119,6 +119,8 @@ func (c *Conn) trackInvoke() func(bin.Encoder, bin.Decoder, *error) {
 			respField = zap.Error(*retErr)
 		} else if _, isFile := output.(*tg.UploadFileBox); !isFile {
 			respField = zap.Any("response_payload", output)
+		} else {
+			respField = zap.Skip()
 		}
 		if f, isFile := input.(*tg.UploadSaveFilePartRequest); isFile {
 			reqField = zap.String("request_payload", fmt.Sprintf("%d bytes for part %d of %d", len(f.Bytes), f.FilePart, f.FileID))
