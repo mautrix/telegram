@@ -18,13 +18,17 @@ func (c *Conn) handleSessionCreated(b *bin.Buffer) error {
 
 	created := proto.MessageID(s.FirstMsgID).Time()
 	now := c.clock.Now()
+	hasServerTimeOffset := c.hasServerTimeOffset()
 	c.log.Debug("Session created",
 		zap.Int64("unique_id", s.UniqueID),
 		zap.Int64("first_msg_id", s.FirstMsgID),
 		zap.Time("first_msg_time", created.Local()),
+		zap.Bool("has_server_time_offset", hasServerTimeOffset),
 	)
 
-	c.setServerTimeOffset(created.Sub(now))
+	if !hasServerTimeOffset {
+		c.setServerTimeOffset(created.Sub(now))
+	}
 	c.storeSalt(s.ServerSalt)
 	if err := c.handler.OnSession(c.session()); err != nil {
 		return errors.Wrap(err, "handler.OnSession")
