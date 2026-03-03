@@ -3012,11 +3012,20 @@ class Portal(DBPortal, BasePortal):
         if sender:
             intent = sender.intent_for(self)
             if not sender.displayname:
-                try:
-                    entity = await client.get_entity(sender.peer)
-                    await sender.update_info(source, entity, client_override=client)
-                except ValueError:
-                    self.log.warning(f"Could not find entity for {sender.peer}, proceeding without entity info")
+                if not hasattr(self, '_unresolvable_senders'):
+                    self._unresolvable_senders = set()
+                peer_key = str(sender.peer)
+                if peer_key not in self._unresolvable_senders:
+                    try:
+                        entity = await client.get_entity(sender.peer)
+                    except ValueError:
+                        self._unresolvable_senders.add(peer_key)
+                        self.log.warning(
+                            f"Could not find entity for {sender.peer}, proceeding without entity info",
+                            exc_info=True,
+                        )
+                    else:
+                        await sender.update_info(source, entity, client_override=client)
         else:
             intent = self.main_intent
         if (
