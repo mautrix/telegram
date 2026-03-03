@@ -96,6 +96,7 @@ var fileCaps = event.FileFeatureMap{
 	event.MsgImage: {
 		MimeTypes: map[string]event.CapabilitySupportLevel{
 			"image/jpeg": event.CapLevelFullySupported,
+			"image/webp": event.CapLevelPartialSupport,
 			"image/png":  event.CapLevelPartialSupport,
 			"image/gif":  event.CapLevelPartialSupport,
 		},

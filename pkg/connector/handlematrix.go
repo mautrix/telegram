@@ -23,8 +23,10 @@ import (
 	"errors"
 	"fmt"
 	"image"
+	"image/jpeg"
 	_ "image/jpeg"
 	_ "image/png"
+	"io"
 	"math"
 	"math/rand/v2"
 	"os"
@@ -39,6 +41,7 @@ import (
 	"go.mau.fi/util/variationselector"
 	"go.mau.fi/webp"
 	"golang.org/x/exp/maps"
+	_ "golang.org/x/image/webp"
 	"maunium.net/go/mautrix/bridgev2"
 	"maunium.net/go/mautrix/bridgev2/database"
 	"maunium.net/go/mautrix/bridgev2/networkid"
@@ -116,17 +119,17 @@ func (t *TelegramClient) transferMediaToTelegram(ctx context.Context, content *e
 	err := t.main.Bridge.Bot.DownloadMediaToFile(ctx, content.URL, content.File, false, func(f *os.File) (err error) {
 		uploadFilename := f.Name()
 		if sticker && content.Info != nil && (content.Info.MimeType == "image/png" || content.Info.MimeType == "image/jpeg") {
-			tempFile, err := os.CreateTemp("", "telegram-sticker-*")
+			tempFile, err := os.CreateTemp("", "telegram-sticker-*.webp")
 			if err != nil {
 				return err
 			}
 			defer func() {
-				tempFile.Close()
-				os.Remove(tempFile.Name())
+				_ = tempFile.Close()
+				_ = os.Remove(tempFile.Name())
 			}()
-			if image, _, err := image.Decode(f); err != nil {
+			if img, _, err := image.Decode(f); err != nil {
 				return fmt.Errorf("failed to decode sticker image: %w", err)
-			} else if err := webp.Encode(tempFile, image, nil); err != nil {
+			} else if err := webp.Encode(tempFile, img, nil); err != nil {
 				return fmt.Errorf("failed to encode sticker webp image: %w", err)
 			}
 			uploadFilename = tempFile.Name()
@@ -158,9 +161,30 @@ func (t *TelegramClient) transferMediaToTelegram(ctx context.Context, content *e
 				aspectRatio > 20 ||
 				cfg.Height+cfg.Width > 10000
 		}
+		if !forceDocument && !sticker && content.MsgType == event.MsgImage {
+			_, err = f.Seek(0, io.SeekStart)
+			if err != nil {
+				return err
+			}
+			tempFile, err := os.CreateTemp("", "telegram-nonsticker-*.jpeg")
+			if err != nil {
+				return err
+			}
+			defer func() {
+				_ = tempFile.Close()
+				_ = os.Remove(tempFile.Name())
+			}()
+			if img, _, err := image.Decode(f); err != nil {
+				return fmt.Errorf("failed to decode non-sticker webp image: %w", err)
+			} else if err := jpeg.Encode(tempFile, img, nil); err != nil {
+				return fmt.Errorf("failed to encode non-sticker jpeg image: %w", err)
+			}
+			uploadFilename = tempFile.Name()
+			filename += ".jpeg"
+			content.Info.MimeType = "image/jpeg"
+		}
 
-		uploader := uploader.NewUploader(t.client.API())
-		upload, err = uploader.FromPath(ctx, uploadFilename, filename)
+		upload, err = uploader.NewUploader(t.client.API()).FromPath(ctx, uploadFilename, filename)
 		return
 	})
 	if err != nil {
