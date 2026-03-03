@@ -3012,8 +3012,11 @@ class Portal(DBPortal, BasePortal):
         if sender:
             intent = sender.intent_for(self)
             if not sender.displayname:
-                entity = await client.get_entity(sender.peer)
-                await sender.update_info(source, entity, client_override=client)
+                try:
+                    entity = await client.get_entity(sender.peer)
+                    await sender.update_info(source, entity, client_override=client)
+                except ValueError:
+                    self.log.warning(f"Could not find entity for {sender.peer}, proceeding without entity info")
         else:
             intent = self.main_intent
         if (
