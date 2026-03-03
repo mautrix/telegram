@@ -1025,10 +1025,10 @@ func (t *TelegramClient) HandleMatrixRoomAvatar(ctx context.Context, msg *bridge
 	}
 
 	var photo tg.InputChatPhotoClass
-	if msg.Content.URL == "" && msg.Content.MSC3414File == nil {
+	if msg.Content.URL == "" {
 		photo = &tg.InputChatPhotoEmpty{}
 	} else {
-		data, err := t.main.Bridge.Bot.DownloadMedia(ctx, msg.Content.URL, msg.Content.MSC3414File)
+		data, err := t.main.Bridge.Bot.DownloadMedia(ctx, msg.Content.URL, nil)
 		if err != nil {
 			return false, fmt.Errorf("failed to download avatar: %w", err)
 		}
@@ -1048,6 +1048,7 @@ func (t *TelegramClient) HandleMatrixRoomAvatar(ctx context.Context, msg *bridge
 		if err != nil {
 			return false, err
 		}
+		// TODO update portal metadata
 		return true, nil
 	case ids.PeerTypeChannel:
 		accessHash, err := t.ScopedStore.GetAccessHash(ctx, peerType, id)
@@ -1064,6 +1065,7 @@ func (t *TelegramClient) HandleMatrixRoomAvatar(ctx context.Context, msg *bridge
 		if err != nil {
 			return false, err
 		}
+		// TODO update portal metadata
 		return true, nil
 	default:
 		return false, fmt.Errorf("unsupported peer type %s for changing room avatar", peerType)
