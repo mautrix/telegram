@@ -178,53 +178,7 @@ func NewTelegramClient(ctx context.Context, tc *TelegramConnector, login *bridge
 	}
 
 	dispatcher := tg.NewUpdateDispatcher()
-	dispatcher.OnFallback(client.onEntityUpdate)
-	dispatcher.OnNewMessage(func(ctx context.Context, e tg.Entities, update *tg.UpdateNewMessage) error {
-		return client.onUpdateNewMessage(ctx, e, update)
-	})
-	dispatcher.OnNewChannelMessage(func(ctx context.Context, e tg.Entities, update *tg.UpdateNewChannelMessage) error {
-		return client.onUpdateNewMessage(ctx, e, update)
-	})
-	dispatcher.OnChannel(client.onUpdateChannel)
-	dispatcher.OnUserName(client.onUserName)
-	dispatcher.OnDeleteMessages(func(ctx context.Context, e tg.Entities, update *tg.UpdateDeleteMessages) error {
-		return client.onDeleteMessages(ctx, 0, update)
-	})
-	dispatcher.OnDeleteChannelMessages(func(ctx context.Context, e tg.Entities, update *tg.UpdateDeleteChannelMessages) error {
-		return client.onDeleteMessages(ctx, update.ChannelID, update)
-	})
-	dispatcher.OnEditMessage(func(ctx context.Context, e tg.Entities, update *tg.UpdateEditMessage) error {
-		return client.onMessageEdit(ctx, update)
-	})
-	dispatcher.OnEditChannelMessage(func(ctx context.Context, e tg.Entities, update *tg.UpdateEditChannelMessage) error {
-		return client.onMessageEdit(ctx, update)
-	})
-	dispatcher.OnUserTyping(func(ctx context.Context, e tg.Entities, update *tg.UpdateUserTyping) error {
-		return client.handleTyping(client.makePortalKeyFromID(ids.PeerTypeUser, update.UserID, 0), client.senderForUserID(update.UserID), update.Action)
-	})
-	dispatcher.OnChatUserTyping(func(ctx context.Context, e tg.Entities, update *tg.UpdateChatUserTyping) error {
-		if update.FromID.TypeID() != tg.PeerUserTypeID {
-			log.Warn().Str("from_id_type", update.FromID.TypeName()).Msg("unsupported from_id type")
-			return nil
-		}
-		return client.handleTyping(client.makePortalKeyFromID(ids.PeerTypeChat, update.ChatID, 0), client.getPeerSender(update.FromID), update.Action)
-	})
-	dispatcher.OnChannelUserTyping(func(ctx context.Context, e tg.Entities, update *tg.UpdateChannelUserTyping) error {
-		return client.handleTyping(client.makePortalKeyFromID(ids.PeerTypeChannel, update.ChannelID, update.TopMsgID), client.getPeerSender(update.FromID), update.Action)
-	})
-	dispatcher.OnReadHistoryOutbox(client.updateReadReceipt)
-	dispatcher.OnReadHistoryInbox(func(ctx context.Context, e tg.Entities, update *tg.UpdateReadHistoryInbox) error {
-		return client.onOwnReadReceipt(client.makePortalKeyFromPeer(update.Peer, update.TopMsgID), update.MaxID)
-	})
-	dispatcher.OnReadChannelInbox(func(ctx context.Context, e tg.Entities, update *tg.UpdateReadChannelInbox) error {
-		return client.onOwnReadReceipt(client.makePortalKeyFromID(ids.PeerTypeChannel, update.ChannelID, 0), update.MaxID)
-	})
-	dispatcher.OnNotifySettings(client.onNotifySettings)
-	dispatcher.OnPinnedDialogs(client.onPinnedDialogs)
-	dispatcher.OnChatDefaultBannedRights(client.onChatDefaultBannedRights)
-	dispatcher.OnPeerBlocked(client.onPeerBlocked)
-	dispatcher.OnChat(client.onChat)
-	dispatcher.OnPhoneCall(client.onPhoneCall)
+	dispatcher.OnFallback(client.onUpdateWrapper)
 
 	client.updatesManager = updates.New(updates.Config{
 		OnNotChannelMember: client.onNotChannelMember,
@@ -426,7 +380,8 @@ func (t *TelegramClient) sendBadCredentialsOrUnknownError(err error) {
 }
 
 func (t *TelegramClient) onPing() {
-	if t.userLogin.BridgeState.GetPrev().StateEvent == status.StateConnected {
+	prev := t.userLogin.BridgeState.GetPrev()
+	if prev.StateEvent == status.StateConnected || prev.Error == updateHandlerStuck {
 		return
 	}
 	ctx := t.userLogin.Log.WithContext(t.main.Bridge.BackgroundCtx)
