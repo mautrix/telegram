@@ -1,0 +1,87 @@
+package tg
+
+import (
+	"context"
+
+	"go.uber.org/multierr"
+)
+
+type Handler = func(context.Context, Entities, UpdateClass) error
+
+type UpdateDispatcher struct {
+	handlers map[uint32]Handler
+	fallback Handler
+}
+
+func NewUpdateDispatcher() UpdateDispatcher {
+	return UpdateDispatcher{
+		handlers: map[uint32]Handler{},
+		fallback: func(ctx context.Context, entities Entities, class UpdateClass) error { return nil },
+	}
+}
+
+type Entities struct {
+	Short    bool
+	Users    map[int64]*User
+	Chats    map[int64]*Chat
+	Channels map[int64]*Channel
+}
+
+func (u *Entities) short() {
+	u.Short = true
+	u.Users = make(map[int64]*User, 0)
+	u.Chats = make(map[int64]*Chat, 0)
+	u.Channels = make(map[int64]*Channel, 0)
+}
+
+// Handle implements UpdateDispatcher.
+func (u UpdateDispatcher) Handle(ctx context.Context, updates UpdatesClass) error {
+	var (
+		e    Entities
+		upds []UpdateClass
+	)
+	switch u := updates.(type) {
+	case *Updates:
+		upds = u.Updates
+		e.Users = u.MapUsers().NotEmptyToMap()
+		chats := u.MapChats()
+		e.Chats = chats.ChatToMap()
+		e.Channels = chats.ChannelToMap()
+	case *UpdatesCombined:
+		upds = u.Updates
+		e.Users = u.MapUsers().NotEmptyToMap()
+		chats := u.MapChats()
+		e.Chats = chats.ChatToMap()
+		e.Channels = chats.ChannelToMap()
+	case *UpdateShort:
+		upds = []UpdateClass{u.Update}
+		e.short()
+	default:
+		// *UpdateShortMessage
+		// *UpdateShortChatMessage
+		// *UpdateShortSentMessage
+		// *UpdatesTooLong
+		return nil
+	}
+
+	var err error
+	for _, update := range upds {
+		multierr.AppendInto(&err, u.dispatch(ctx, e, update))
+	}
+	return err
+}
+
+func (u UpdateDispatcher) dispatch(ctx context.Context, e Entities, update UpdateClass) error {
+	if update == nil {
+		return nil
+	}
+	if err := u.fallback(ctx, e, update); err != nil {
+		return err
+	}
+	typeID := update.TypeID()
+	handler, ok := u.handlers[typeID]
+	if ok {
+		return handler(ctx, e, update)
+	}
+	return nil
+}
