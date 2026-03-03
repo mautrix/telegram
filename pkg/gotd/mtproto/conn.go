@@ -175,7 +175,7 @@ func New(dialer Dialer, opt Options) *Conn {
 // handleClose closes rpc engine and underlying connection on context done.
 func (c *Conn) handleClose(ctx context.Context) error {
 	<-ctx.Done()
-	c.log.Info("Connection context done, closing")
+	c.log.Info("Connection context done, closing", zap.NamedError("ctx_err", context.Cause(ctx)))
 
 	// Close RPC Engine.
 	c.rpc.ForceClose()
@@ -186,6 +186,8 @@ func (c *Conn) handleClose(ctx context.Context) error {
 	c.log.Info("Connection closed")
 	return nil
 }
+
+var errRunReturned = errors.New("Conn.Run() returned")
 
 // Run initializes MTProto connection to server and blocks until disconnection.
 //
@@ -199,8 +201,8 @@ func (c *Conn) Run(ctx context.Context, f func(ctx context.Context) error) error
 		return errors.New("do Run on closed connection")
 	}
 
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
+	ctx, cancel := context.WithCancelCause(ctx)
+	defer cancel(errRunReturned)
 
 	c.log.Info("Run: start")
 	defer c.log.Info("Run: end")

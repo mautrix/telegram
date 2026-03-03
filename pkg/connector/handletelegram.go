@@ -70,6 +70,9 @@ func (t *TelegramClient) selfLeaveChat(ctx context.Context, portalKey networkid.
 					Type:      bridgev2.RemoteEventChatDelete,
 					PortalKey: t.makePortalKeyFromID(peerType, id, topicID),
 					Sender:    t.mySender(),
+					LogContext: func(c zerolog.Context) zerolog.Context {
+						return c.AnErr("self_leave_reason", reason)
+					},
 				},
 				OnlyForMe: true,
 			})
@@ -83,6 +86,9 @@ func (t *TelegramClient) selfLeaveChat(ctx context.Context, portalKey networkid.
 			Type:      bridgev2.RemoteEventChatDelete,
 			PortalKey: portalKey,
 			Sender:    t.mySender(),
+			LogContext: func(c zerolog.Context) zerolog.Context {
+				return c.AnErr("self_leave_reason", reason)
+			},
 		},
 		OnlyForMe: true,
 	})
@@ -96,6 +102,9 @@ func (t *TelegramClient) selfLeaveChat(ctx context.Context, portalKey networkid.
 				Type:      bridgev2.RemoteEventChatDelete,
 				PortalKey: t.makePortalKeyFromID(peerType, id, ids.TopicIDSpaceRoom),
 				Sender:    t.mySender(),
+				LogContext: func(c zerolog.Context) zerolog.Context {
+					return c.AnErr("self_leave_reason", reason)
+				},
 			},
 			OnlyForMe: true,
 		})
@@ -145,8 +154,12 @@ func (t *TelegramClient) onUpdateChannel(ctx context.Context, e tg.Entities, upd
 	} else {
 		res := t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.ChatResync{
 			EventMeta: simplevent.EventMeta{
+				Type:         bridgev2.RemoteEventChatResync,
 				PortalKey:    portalKey,
 				CreatePortal: true,
+				LogContext: func(c zerolog.Context) zerolog.Context {
+					return c.Str("tg_event", "updateChannel")
+				},
 			},
 			GetChatInfoFunc: func(ctx context.Context, portal *bridgev2.Portal) (*bridgev2.ChatInfo, error) {
 				chatInfo, mfm, err := t.wrapChatInfo(portal.ID, channel)
@@ -972,6 +985,9 @@ func (t *TelegramClient) handleTyping(portal networkid.PortalKey, sender bridgev
 			Type:      bridgev2.RemoteEventTyping,
 			PortalKey: portal,
 			Sender:    sender,
+			LogContext: func(c zerolog.Context) zerolog.Context {
+				return c.Str("tg_event", "update*Typing")
+			},
 		},
 		Timeout: timeout,
 		Type:    typingType,
@@ -994,6 +1010,9 @@ func (t *TelegramClient) updateReadReceipt(ctx context.Context, e tg.Entities, u
 				SenderLogin: ids.MakeUserLoginID(user.UserID),
 				Sender:      ids.MakeUserID(user.UserID),
 			},
+			LogContext: func(c zerolog.Context) zerolog.Context {
+				return c.Str("tg_event", "updateReadHistoryOutbox")
+			},
 		},
 		LastTarget:          ids.MakeMessageID(update.Peer, update.MaxID),
 		ReadUpToStreamOrder: int64(update.MaxID),
@@ -1007,6 +1026,9 @@ func (t *TelegramClient) onOwnReadReceipt(portalKey networkid.PortalKey, maxID i
 			Type:      bridgev2.RemoteEventReadReceipt,
 			PortalKey: portalKey,
 			Sender:    t.mySender(),
+			LogContext: func(c zerolog.Context) zerolog.Context {
+				return c.Str("tg_event", "updateRead*Inbox")
+			},
 		},
 		LastTarget:          ids.MakeMessageID(portalKey, maxID),
 		ReadUpToStreamOrder: int64(maxID),
@@ -1208,6 +1230,11 @@ func (t *TelegramClient) onNotifySettings(ctx context.Context, e tg.Entities, up
 		EventMeta: simplevent.EventMeta{
 			Type:      bridgev2.RemoteEventChatInfoChange,
 			PortalKey: portalKey,
+			LogContext: func(c zerolog.Context) zerolog.Context {
+				return c.
+					Str("tg_event", "updateNotifySettings").
+					Time("muted_until", *mutedUntil)
+			},
 		},
 	})
 	return resultToError(res)
@@ -1244,6 +1271,11 @@ func (t *TelegramClient) onPinnedDialogs(ctx context.Context, e tg.Entities, msg
 			EventMeta: simplevent.EventMeta{
 				Type:      bridgev2.RemoteEventChatInfoChange,
 				PortalKey: portalKey,
+				LogContext: func(c zerolog.Context) zerolog.Context {
+					return c.
+						Str("tg_event", "updatePinnedDialogs").
+						Bool("pinned", true)
+				},
 			},
 		})
 		if err := resultToError(res); err != nil {
@@ -1264,6 +1296,11 @@ func (t *TelegramClient) onPinnedDialogs(ctx context.Context, e tg.Entities, msg
 			EventMeta: simplevent.EventMeta{
 				Type:      bridgev2.RemoteEventChatInfoChange,
 				PortalKey: portalKey,
+				LogContext: func(c zerolog.Context) zerolog.Context {
+					return c.
+						Str("tg_event", "updatePinnedDialogs").
+						Bool("pinned", false)
+				},
 			},
 		})
 		if err := resultToError(res); err != nil {
@@ -1287,6 +1324,9 @@ func (t *TelegramClient) onChatDefaultBannedRights(ctx context.Context, entities
 		EventMeta: simplevent.EventMeta{
 			Type:      bridgev2.RemoteEventChatInfoChange,
 			PortalKey: t.makePortalKeyFromPeer(update.Peer, 0),
+			LogContext: func(c zerolog.Context) zerolog.Context {
+				return c.Str("tg_event", "updateChatDefaultBannedRights")
+			},
 		},
 	})
 	return resultToError(res)
@@ -1322,6 +1362,9 @@ func (t *TelegramClient) onPeerBlocked(ctx context.Context, e tg.Entities, updat
 		EventMeta: simplevent.EventMeta{
 			Type:      bridgev2.RemoteEventChatResync,
 			PortalKey: t.makePortalKeyFromPeer(update.PeerID, 0),
+			LogContext: func(c zerolog.Context) zerolog.Context {
+				return c.Str("tg_event", "updatePeerBlocked")
+			},
 		},
 	})
 	return resultToError(res)
@@ -1358,6 +1401,9 @@ func (t *TelegramClient) onPhoneCall(ctx context.Context, e tg.Entities, update 
 			PortalKey:    t.makePortalKeyFromID(ids.PeerTypeUser, call.AdminID, 0),
 			CreatePortal: true,
 			Sender:       t.senderForUserID(call.AdminID),
+			LogContext: func(c zerolog.Context) zerolog.Context {
+				return c.Str("tg_event", "updatePhoneCall")
+			},
 		},
 		ID: networkid.MessageID(fmt.Sprintf("requested-%d", call.ID)),
 		ConvertMessageFunc: func(ctx context.Context, portal *bridgev2.Portal, intent bridgev2.MatrixAPI, data any) (*bridgev2.ConvertedMessage, error) {

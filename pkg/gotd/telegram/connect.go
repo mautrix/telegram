@@ -2,6 +2,7 @@ package telegram
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/cenkalti/backoff/v4"
@@ -117,6 +118,8 @@ func (c *Client) resetReady() {
 	c.ready.Reset()
 }
 
+var errRunReturned = errors.New("Client.Run() returned")
+
 // Run starts client session and blocks until connection close.
 // The f callback is called on successful session initialization and Run
 // will return on f() result.
@@ -137,12 +140,12 @@ func (c *Client) Run(ctx context.Context, f func(ctx context.Context) error) (er
 
 	// Setting up client context for background operations like updates
 	// handling or pool creation.
-	c.ctx, c.cancel = context.WithCancel(ctx)
+	c.ctx, c.cancel = context.WithCancelCause(ctx)
 
 	c.log.Info("Client starting")
 	defer c.log.Info("Client closed")
 	// Cancel client on exit.
-	defer c.cancel()
+	defer c.cancel(errRunReturned)
 	defer func() {
 		c.subConnsMux.Lock()
 		defer c.subConnsMux.Unlock()
@@ -164,7 +167,7 @@ func (c *Client) Run(ctx context.Context, f func(ctx context.Context) error) (er
 	g.Go(func(ctx context.Context) error {
 		select {
 		case <-ctx.Done():
-			c.cancel()
+			c.cancel(fmt.Errorf("Client.Run group context done: %w", context.Cause(ctx)))
 			return ctx.Err()
 		case <-c.ctx.Done():
 			return c.ctx.Err()

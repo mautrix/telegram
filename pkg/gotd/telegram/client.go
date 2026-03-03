@@ -114,7 +114,7 @@ type Client struct {
 
 	// Client context. Will be canceled by Run on exit.
 	ctx    context.Context
-	cancel context.CancelFunc
+	cancel context.CancelCauseFunc
 
 	// Client config.
 	appID   int    // immutable

@@ -112,7 +112,7 @@ func newMigrationClient(t *testing.T, h migrationTestHandler) *Client {
 		}),
 		newConnBackoff:   defaultBackoff(clock.System),
 		ctx:              context.Background(),
-		cancel:           func() {},
+		cancel:           func(error) {},
 		migrationTimeout: 10 * time.Second,
 	}
 	client.init()
