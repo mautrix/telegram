@@ -2,6 +2,7 @@ package manager
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"time"
 
@@ -113,17 +114,22 @@ func (c *Conn) trackInvoke() func(bin.Encoder, bin.Decoder, *error) {
 		end := c.clock.Now()
 		c.latest = end
 
-		var respField zap.Field
+		var respField, reqField zap.Field
 		if *retErr != nil {
 			respField = zap.Error(*retErr)
 		} else if _, isFile := output.(*tg.UploadFileBox); !isFile {
 			respField = zap.Any("response_payload", output)
 		}
+		if f, isFile := input.(*tg.UploadSaveFilePartRequest); isFile {
+			reqField = zap.String("request_payload", fmt.Sprintf("%d bytes for part %d of %d", len(f.Bytes), f.FilePart, f.FileID))
+		} else {
+			reqField = zap.Any("request_payload", input)
+		}
 
 		c.log.Debug("Request completed",
 			zap.Duration("duration", end.Sub(start)),
 			zap.Int("ongoing", c.ongoing),
-			zap.Any("request_payload", input),
+			reqField,
 			respField,
 		)
 	}
