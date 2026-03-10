@@ -175,7 +175,7 @@ func (tc *TelegramConnector) Download(ctx context.Context, mediaID networkid.Med
 					Msg("downloading webpage photo")
 				readyTransferer = transferer.WithPhoto(pc)
 			} else {
-				return nil, fmt.Errorf("not a photo: %T", pc.TypeName())
+				return nil, fmt.Errorf("no photo found in webpage item")
 			}
 		default:
 			return nil, fmt.Errorf("unhandled media type %T", msgMedia)
