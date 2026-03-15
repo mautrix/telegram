@@ -449,7 +449,7 @@ func (t *TelegramClient) onConnected(self *tg.User) {
 	ghost, err := t.main.Bridge.GetGhostByID(ctx, t.userID)
 	if err != nil {
 		log.Err(err).Msg("Failed to get own ghost")
-	} else if wrapped, err := t.wrapUserInfo(ctx, self); err != nil {
+	} else if wrapped, err := t.wrapUserInfo(ctx, self, ghost); err != nil {
 		log.Err(err).Msg("Failed to wrap own user info")
 	} else {
 		ghost.UpdateInfo(ctx, wrapped)

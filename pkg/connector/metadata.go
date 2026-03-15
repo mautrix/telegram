@@ -44,6 +44,13 @@ type GhostMetadata struct {
 	IsBot     bool `json:"is_bot,omitempty"`
 	IsChannel bool `json:"is_channel,omitempty"`
 	Deleted   bool `json:"deleted,omitempty"`
+	NotMin    bool `json:"not_min,omitempty"`
+
+	ContactSource int64 `json:"contact_source,omitempty"`
+}
+
+func (gm *GhostMetadata) IsMin() bool {
+	return !gm.NotMin
 }
 
 type PortalMetadata struct {

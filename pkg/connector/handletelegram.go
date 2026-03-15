@@ -716,12 +716,16 @@ func (t *TelegramClient) onUserName(ctx context.Context, e tg.Entities, update *
 	if err != nil {
 		return err
 	}
+	meta := ghost.Metadata.(*GhostMetadata)
 
 	var userInfo bridgev2.UserInfo
 
-	// TODO anti-contact-name logic
 	name := util.FormatFullName(update.FirstName, update.LastName, false, update.UserID)
 	userInfo.Name = &name
+	if meta.ContactSource != 0 && meta.ContactSource != t.telegramUserID && !t.main.Config.ContactNames {
+		// TODO fetch full info to accurately detect if the user is a contact or not
+		userInfo.Name = nil
+	}
 
 	if len(update.Usernames) > 0 {
 		for _, ident := range ghost.Identifiers {
@@ -800,7 +804,7 @@ func (t *TelegramClient) updateGhost(ctx context.Context, userID int64, user *tg
 	if err != nil {
 		return nil, err
 	}
-	userInfo, err := t.wrapUserInfo(ctx, user)
+	userInfo, err := t.wrapUserInfo(ctx, user, ghost)
 	if err != nil {
 		return nil, err
 	}

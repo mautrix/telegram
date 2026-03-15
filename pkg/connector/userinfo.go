@@ -27,7 +27,7 @@ func (t *TelegramClient) GetUserInfo(ctx context.Context, ghost *bridgev2.Ghost)
 		if user, err := t.getSingleUser(ctx, id); err != nil {
 			return nil, fmt.Errorf("failed to get user %d: %w", id, err)
 		} else {
-			return t.wrapUserInfo(ctx, user)
+			return t.wrapUserInfo(ctx, user, ghost)
 		}
 	case ids.PeerTypeChannel:
 		if channel, err := t.getSingleChannel(ctx, id); err != nil {
@@ -151,7 +151,8 @@ func (t *TelegramClient) wrapChannelGhostInfo(ctx context.Context, channel *tg.C
 	}, nil
 }
 
-func (t *TelegramClient) wrapUserInfo(ctx context.Context, u tg.UserClass) (*bridgev2.UserInfo, error) {
+func (t *TelegramClient) wrapUserInfo(ctx context.Context, u tg.UserClass, ghost *bridgev2.Ghost) (*bridgev2.UserInfo, error) {
+	oldMeta := ghost.Metadata.(*GhostMetadata)
 	user, ok := u.(*tg.User)
 	if !ok {
 		return nil, fmt.Errorf("user is %T not *tg.User", user)
@@ -186,9 +187,10 @@ func (t *TelegramClient) wrapUserInfo(ctx context.Context, u tg.UserClass) (*bri
 	identifiers = slices.Compact(identifiers)
 
 	var avatar *bridgev2.Avatar
-	// TODO don't apply min avatars without checking apply_min_photo or existing min status
-	if p, ok := user.GetPhoto(); ok && p.TypeID() == tg.UserProfilePhotoTypeID {
-		photo := p.(*tg.UserProfilePhoto)
+	photo, ok := user.Photo.(*tg.UserProfilePhoto)
+	if ok &&
+		(!user.Min || user.ApplyMinPhoto || oldMeta.IsMin()) &&
+		(!photo.Personal || t.main.Config.ContactAvatars) {
 		var err error
 		avatar, err = t.convertUserProfilePhoto(ctx, user, photo)
 		if err != nil {
@@ -197,18 +199,26 @@ func (t *TelegramClient) wrapUserInfo(ctx context.Context, u tg.UserClass) (*bri
 	}
 
 	name := util.FormatFullName(user.FirstName, user.LastName, user.Deleted, user.ID)
+	namePtr := &name
+	if user.Contact && ghost.Name != "" && oldMeta.ContactSource != t.telegramUserID && oldMeta.ContactSource != 0 && !t.main.Config.ContactNames {
+		namePtr = nil
+	}
 	return &bridgev2.UserInfo{
 		IsBot:       &user.Bot,
-		Name:        &name,
+		Name:        namePtr,
 		Avatar:      avatar,
 		Identifiers: identifiers,
 		ExtraUpdates: func(ctx context.Context, ghost *bridgev2.Ghost) (changed bool) {
 			meta := ghost.Metadata.(*GhostMetadata)
 			if !user.Min {
-				changed = changed || meta.IsPremium != user.Premium || meta.IsBot != user.Bot
+				changed = changed || meta.IsPremium != user.Premium || meta.IsBot != user.Bot || meta.IsMin()
 				meta.IsPremium = user.Premium
 				meta.IsBot = user.Bot
 				meta.Deleted = user.Deleted
+				meta.NotMin = true
+				if meta.ContactSource == 0 {
+					meta.ContactSource = t.telegramUserID
+				}
 			}
 			return changed
 		},

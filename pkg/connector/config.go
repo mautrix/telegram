@@ -56,16 +56,9 @@ type TelegramConfig struct {
 	APIID   int    `yaml:"api_id"`
 	APIHash string `yaml:"api_hash"`
 
-	DeviceInfo DeviceInfo `yaml:"device_info"`
-
-	AnimatedSticker   media.AnimatedStickerConfig `yaml:"animated_sticker"`
-	ImageAsFilePixels int                         `yaml:"image_as_file_pixels"`
-
-	DisableViewOnce bool `yaml:"disable_view_once"`
-
-	MemberList MemberListConfig `yaml:"member_list"`
-
-	MaxMemberCount int `yaml:"max_member_count"`
+	DeviceInfo      DeviceInfo                  `yaml:"device_info"`
+	AnimatedSticker media.AnimatedStickerConfig `yaml:"animated_sticker"`
+	MemberList      MemberListConfig            `yaml:"member_list"`
 
 	Ping struct {
 		IntervalSeconds int `yaml:"interval_seconds"`
@@ -78,11 +71,14 @@ type TelegramConfig struct {
 		DirectChats bool `yaml:"direct_chats"`
 	} `yaml:"sync"`
 
-	AlwaysCustomEmojiReaction bool `yaml:"always_custom_emoji_reaction"`
-
-	SavedMessagesAvatar id.ContentURIString `yaml:"saved_message_avatar"`
-
-	AlwaysTombstoneOnSupergroupMigration bool `yaml:"always_tombstone_on_supergroup_migration"`
+	ContactAvatars                       bool                `yaml:"contact_avatars"`
+	ContactNames                         bool                `yaml:"contact_names"`
+	MaxMemberCount                       int                 `yaml:"max_member_count"`
+	AlwaysCustomEmojiReaction            bool                `yaml:"always_custom_emoji_reaction"`
+	SavedMessagesAvatar                  id.ContentURIString `yaml:"saved_message_avatar"`
+	AlwaysTombstoneOnSupergroupMigration bool                `yaml:"always_tombstone_on_supergroup_migration"`
+	ImageAsFilePixels                    int                 `yaml:"image_as_file_pixels"`
+	DisableViewOnce                      bool                `yaml:"disable_view_once"`
 }
 
 func (c TelegramConfig) ShouldBridge(participantCount int) bool {
@@ -107,20 +103,22 @@ func upgradeConfig(helper up.Helper) {
 	helper.Copy(up.Int, "animated_sticker", "args", "width")
 	helper.Copy(up.Int, "animated_sticker", "args", "height")
 	helper.Copy(up.Int, "animated_sticker", "args", "fps")
-	helper.Copy(up.Int, "image_as_file_pixels")
-	helper.Copy(up.Bool, "disable_view_once")
 	helper.Copy(up.Int, "member_list", "max_initial_sync")
 	helper.Copy(up.Bool, "member_list", "sync_broadcast_channels")
 	helper.Copy(up.Bool, "member_list", "skip_deleted")
-	helper.Copy(up.Int, "max_member_count")
 	helper.Copy(up.Int, "ping", "interval_seconds")
 	helper.Copy(up.Int, "ping", "timeout_seconds")
 	helper.Copy(up.Int, "sync", "update_limit")
 	helper.Copy(up.Int, "sync", "create_limit")
 	helper.Copy(up.Bool, "sync", "direct_chats")
+	helper.Copy(up.Bool, "contact_avatars")
+	helper.Copy(up.Bool, "contact_names")
+	helper.Copy(up.Int, "max_member_count")
 	helper.Copy(up.Bool, "always_custom_emoji_reaction")
 	helper.Copy(up.Str, "saved_message_avatar")
 	helper.Copy(up.Bool, "always_tombstone_on_supergroup_migration")
+	helper.Copy(up.Int, "image_as_file_pixels")
+	helper.Copy(up.Bool, "disable_view_once")
 }
 
 func (tg *TelegramConnector) GetConfig() (example string, data any, upgrader up.Upgrader) {
@@ -132,6 +130,7 @@ func (tg *TelegramConnector) GetConfig() (example string, data any, upgrader up.
 			{"member_list"},
 			{"ping"},
 			{"sync"},
+			{"max_member_count"},
 		},
 		Base: ExampleConfig,
 	}

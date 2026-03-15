@@ -30,13 +30,6 @@ animated_sticker:
         height: 256
         fps: 25 # only for webm, webp and gif (2, 5, 10, 20 or 25 recommended)
 
-# Maximum number of pixels in an image before sending to Telegram as a
-# document. Defaults to 4096x4096 = 16777216.
-image_as_file_pixels: 16777216
-
-# Should view-once messages be disabled entirely?
-disable_view_once: false
-
 # Settings for syncing the member list for portals.
 member_list:
     # Maximum number of members to sync per portal when starting up. Other
@@ -53,12 +46,6 @@ member_list:
     sync_broadcast_channels: false
     # Whether or not to skip deleted members when syncing members.
     skip_deleted: true
-# Maximum number of participants in chats to bridge. Only applies when the
-# portal is being created. If there are more members when trying to create a
-# room, the room creation will be cancelled.
-#
-# -1 means no limit (which means all chats can be bridged)
-max_member_count: -1
 
 # Settings for pings to the Telegram server.
 ping:
@@ -78,13 +65,26 @@ sync:
     # Whether or not to sync and create portals for direct chats at startup.
     direct_chats: false
 
+# Maximum number of participants in chats to bridge. Only applies when the
+# portal is being created. If there are more members when trying to create a
+# room, the room creation will be cancelled.
+#
+# -1 means no limit (which means all chats can be bridged)
+max_member_count: -1
+# Should personal avatars (that are only visible to specific users) be allowed?
+contact_avatars: false
+# Should contact names be updated from any source even if a name is already set?
+contact_names: false
 # Should the bridge send all unicode reactions as custom emoji reactions to
 # Telegram? By default, the bridge only uses custom emojis for unicode emojis
 # that aren't allowed in reactions.
 always_custom_emoji_reaction: false
-
 # The avatar to use for the Telegram Saved Messages chat
 saved_message_avatar: mxc://maunium.net/XhhfHoPejeneOngMyBbtyWDk
-
 # Create a new room and tombstone the old one when upgrading rooms
 always_tombstone_on_supergroup_migration: false
+# Maximum number of pixels in an image before sending to Telegram as a
+# document. Defaults to 4096x4096 = 16777216.
+image_as_file_pixels: 16777216
+# Should view-once messages be disabled entirely?
+disable_view_once: false

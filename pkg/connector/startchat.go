@@ -44,19 +44,23 @@ var (
 
 func (t *TelegramClient) resolveUser(ctx context.Context, user tg.UserClass) (*bridgev2.ResolveIdentifierResponse, error) {
 	networkUserID := ids.MakeUserID(user.GetID())
-	if userInfo, err := t.wrapUserInfo(ctx, user); err != nil {
-		return nil, fmt.Errorf("failed to get user info: %w", err)
-	} else if ghost, err := t.main.Bridge.GetGhostByID(ctx, networkUserID); err != nil {
+	if ghost, err := t.main.Bridge.GetGhostByID(ctx, networkUserID); err != nil {
 		return nil, fmt.Errorf("failed to get ghost: %w", err)
+	} else if userInfo, err := t.wrapUserInfo(ctx, user, ghost); err != nil {
+		return nil, fmt.Errorf("failed to get user info: %w", err)
 	} else {
-		return &bridgev2.ResolveIdentifierResponse{
-			Ghost:    ghost,
-			UserID:   networkUserID,
-			UserInfo: userInfo,
-			Chat: &bridgev2.CreateChatResponse{
-				PortalKey: t.makePortalKeyFromID(ids.PeerTypeUser, user.GetID(), 0),
-			},
-		}, nil
+		return t.makeResolveIdentifierResponse(ghost, user, userInfo), nil
+	}
+}
+
+func (t *TelegramClient) makeResolveIdentifierResponse(ghost *bridgev2.Ghost, user tg.UserClass, info *bridgev2.UserInfo) *bridgev2.ResolveIdentifierResponse {
+	return &bridgev2.ResolveIdentifierResponse{
+		Ghost:    ghost,
+		UserID:   ids.MakeUserID(user.GetID()),
+		UserInfo: info,
+		Chat: &bridgev2.CreateChatResponse{
+			PortalKey: t.makePortalKeyFromID(ids.PeerTypeUser, user.GetID(), 0),
+		},
 	}
 }
 
@@ -93,10 +97,13 @@ func (t *TelegramClient) resolveUserID(ctx context.Context, userID int64) (resp 
 			return nil, fmt.Errorf("failed to get user with ID %d: %w", userID, err)
 		} else if user.TypeID() != tg.UserTypeID {
 			return nil, fmt.Errorf("unexpected user type: %T", user)
-		} else if _, err = t.updateGhost(ctx, userID, user.(*tg.User)); err != nil {
+		} else if userInfo, err := t.updateGhost(ctx, userID, user.(*tg.User)); err != nil {
 			return nil, fmt.Errorf("failed to update ghost: %w", err)
 		} else {
-			return t.resolveUser(ctx, user)
+			if resp.Ghost == nil {
+				resp.Ghost, _ = t.main.Bridge.GetExistingGhostByID(ctx, networkUserID)
+			}
+			return t.makeResolveIdentifierResponse(resp.Ghost, user, userInfo), nil
 		}
 	}
 	return
