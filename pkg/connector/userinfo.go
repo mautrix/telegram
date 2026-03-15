@@ -216,7 +216,8 @@ func (t *TelegramClient) wrapUserInfo(ctx context.Context, u tg.UserClass, ghost
 				meta.IsBot = user.Bot
 				meta.Deleted = user.Deleted
 				meta.NotMin = true
-				if meta.ContactSource == 0 || (!user.Contact && meta.SourceIsContact) {
+				if meta.ContactSource == 0 || meta.ContactSource == t.telegramUserID || (!user.Contact && meta.SourceIsContact) {
+					changed = changed || meta.ContactSource != t.telegramUserID || meta.SourceIsContact != user.Contact
 					meta.ContactSource = t.telegramUserID
 					meta.SourceIsContact = user.Contact
 				}
