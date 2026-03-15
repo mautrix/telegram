@@ -181,6 +181,7 @@ func (tc *TelegramConnector) Download(ctx context.Context, mediaID networkid.Med
 			return nil, fmt.Errorf("unhandled media type %T", msgMedia)
 		}
 	} else if info.PeerType == ids.PeerTypeUser {
+		// TODO this needs to be able to use min access hashes
 		readyTransferer, err = transferer.WithUserPhoto(ctx, client.ScopedStore, info.PeerID, info.ID)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create user photo transferer: %w", err)
@@ -188,6 +189,7 @@ func (tc *TelegramConnector) Download(ctx context.Context, mediaID networkid.Med
 	} else if info.PeerType == ids.PeerTypeChat {
 		readyTransferer = transferer.WithPeerPhoto(&tg.InputPeerChat{ChatID: info.PeerID}, info.ID)
 	} else if info.PeerType == ids.PeerTypeChannel {
+		// TODO min access hashes here too
 		readyTransferer, err = transferer.WithChannelPhoto(ctx, client.ScopedStore, info.PeerID, info.ID)
 		if err != nil {
 			return nil, err

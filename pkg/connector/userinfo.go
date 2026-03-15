@@ -44,6 +44,14 @@ func (t *TelegramClient) getInputUser(ctx context.Context, id int64) (*tg.InputU
 	return &tg.InputUser{UserID: id, AccessHash: accessHash}, nil
 }
 
+func (t *TelegramClient) getInputPeerUser(ctx context.Context, id int64) (*tg.InputPeerUser, error) {
+	accessHash, err := t.ScopedStore.GetAccessHash(ctx, ids.PeerTypeUser, id)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get access hash for user %d: %w", id, err)
+	}
+	return &tg.InputPeerUser{UserID: id, AccessHash: accessHash}, nil
+}
+
 func (t *TelegramClient) getSingleUser(ctx context.Context, id int64) (tg.UserClass, error) {
 	if inputUser, err := t.getInputUser(ctx, id); err != nil {
 		return nil, err
@@ -131,10 +139,11 @@ func (t *TelegramClient) wrapUserInfo(ctx context.Context, u tg.UserClass) (*bri
 	identifiers = slices.Compact(identifiers)
 
 	var avatar *bridgev2.Avatar
+	// TODO don't apply min avatars without checking apply_min_photo or existing min status
 	if p, ok := user.GetPhoto(); ok && p.TypeID() == tg.UserProfilePhotoTypeID {
 		photo := p.(*tg.UserProfilePhoto)
 		var err error
-		avatar, err = t.convertUserProfilePhoto(ctx, user.ID, photo)
+		avatar, err = t.convertUserProfilePhoto(ctx, user, photo)
 		if err != nil {
 			return nil, err
 		}

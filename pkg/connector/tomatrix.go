@@ -20,6 +20,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"html"
 	"strconv"
@@ -37,6 +38,7 @@ import (
 
 	"go.mau.fi/mautrix-telegram/pkg/connector/ids"
 	"go.mau.fi/mautrix-telegram/pkg/connector/media"
+	"go.mau.fi/mautrix-telegram/pkg/connector/store"
 	"go.mau.fi/mautrix-telegram/pkg/connector/telegramfmt"
 	"go.mau.fi/mautrix-telegram/pkg/connector/util"
 	"go.mau.fi/mautrix-telegram/pkg/connector/waveform"
@@ -773,7 +775,7 @@ func convertGame(media tg.MessageMediaClass) *bridgev2.ConvertedMessagePart {
 	}
 }
 
-func (c *TelegramClient) convertUserProfilePhoto(ctx context.Context, userID int64, photo *tg.UserProfilePhoto) (*bridgev2.Avatar, error) {
+func (c *TelegramClient) convertUserProfilePhoto(ctx context.Context, user *tg.User, photo *tg.UserProfilePhoto) (*bridgev2.Avatar, error) {
 	avatar := &bridgev2.Avatar{
 		ID: ids.MakeAvatarID(photo.PhotoID),
 	}
@@ -781,7 +783,7 @@ func (c *TelegramClient) convertUserProfilePhoto(ctx context.Context, userID int
 	if c.main.useDirectMedia {
 		mediaID, err := ids.DirectMediaInfo{
 			PeerType: ids.PeerTypeUser,
-			PeerID:   userID,
+			PeerID:   user.ID,
 			UserID:   c.telegramUserID,
 			ID:       photo.PhotoID,
 		}.AsMediaID()
@@ -795,11 +797,21 @@ func (c *TelegramClient) convertUserProfilePhoto(ctx context.Context, userID int
 		avatar.Hash = ids.HashMediaID(mediaID)
 	} else {
 		avatar.Get = func(ctx context.Context) (data []byte, err error) {
-			transferer, err := media.NewTransferer(c.client.API()).WithUserPhoto(ctx, c.ScopedStore, userID, photo.PhotoID)
-			if err != nil {
-				return nil, err
+			// TODO determine if it's safe to unconditionally use the access hash from the user object here
+			peer, err := c.getInputPeerUser(ctx, user.ID)
+			if errors.Is(err, store.ErrNoAccessHash) {
+				peer = &tg.InputPeerUser{
+					UserID:     user.ID,
+					AccessHash: user.AccessHash,
+				}
+				if user.Min && c.metadata.IsBot {
+					// Bots should use a zero access hash when only a min hash is available
+					peer.AccessHash = 0
+				}
+			} else if err != nil {
+				return nil, fmt.Errorf("failed to get peer: %w", err)
 			}
-			return transferer.DownloadBytes(ctx)
+			return media.NewTransferer(c.client.API()).WithPeerPhoto(peer, photo.PhotoID).DownloadBytes(ctx)
 		}
 	}
 
