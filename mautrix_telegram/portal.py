@@ -1006,6 +1006,12 @@ class Portal(DBPortal, BasePortal):
             )
             if self.is_direct:
                 create_invites.add(self.az.bot_mxid)
+        # Invite bot to direct chats when backfill is enabled,
+        # even without encryption. Fixes bot not being able to join
+        # for backfill in unencrypted private portals.
+        # See: https://github.com/mautrix/telegram/issues/669
+        if self.is_direct and self.backfill_enable and self.az.bot_mxid not in create_invites:
+            create_invites.add(self.az.bot_mxid)
         if self.is_direct:
             assert puppet is not None
             self.title = puppet.displayname
