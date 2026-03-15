@@ -29,7 +29,7 @@ var cmdSync = &commands.FullHandler{
 	Func: fnSync,
 	Name: "sync",
 	Help: commands.HelpMeta{
-		Section:     commands.HelpSectionGeneral,
+		Section:     commands.HelpSectionChats,
 		Description: "Synchronize your chat portals, contacts and/or own info.",
 		Args:        "[`chats`|`contacts`|`me`]",
 	},
