@@ -2,13 +2,17 @@ package connector
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
 
+	"github.com/rs/zerolog"
 	"maunium.net/go/mautrix/bridgev2"
+	"maunium.net/go/mautrix/bridgev2/simplevent"
 
 	"go.mau.fi/mautrix-telegram/pkg/connector/ids"
+	"go.mau.fi/mautrix-telegram/pkg/connector/store"
 	"go.mau.fi/mautrix-telegram/pkg/connector/util"
 	"go.mau.fi/mautrix-telegram/pkg/gotd/tg"
 )
@@ -36,9 +40,50 @@ func (t *TelegramClient) GetUserInfo(ctx context.Context, ghost *bridgev2.Ghost)
 	}
 }
 
-func (t *TelegramClient) getInputUser(ctx context.Context, id int64) (*tg.InputUser, error) {
+func (t *TelegramClient) getInputUserFromContext(ctx context.Context, id int64) (*tg.InputUserFromMessage, error) {
+	msg, ok := bridgev2.GetRemoteEventFromContext(ctx).(*simplevent.Message[*tg.Message])
+	if !ok {
+		return nil, nil
+	}
+	fromUser, ok := msg.Data.FromID.(*tg.PeerUser)
+	if !ok || fromUser.UserID != id {
+		return nil, nil
+	}
+	var inputPeer tg.InputPeerClass
+	switch typedChat := msg.Data.PeerID.(type) {
+	case *tg.PeerUser:
+		// We don't have the user's access hash
+		return nil, nil
+	case *tg.PeerChat:
+		inputPeer = &tg.InputPeerChat{ChatID: typedChat.ChatID}
+	case *tg.PeerChannel:
+		accessHash, err := t.ScopedStore.GetAccessHash(ctx, ids.PeerTypeChannel, typedChat.ChannelID)
+		if err != nil {
+			return nil, err
+		}
+		inputPeer = &tg.InputPeerChannel{ChannelID: typedChat.ChannelID, AccessHash: accessHash}
+	}
+	return &tg.InputUserFromMessage{
+		Peer:   inputPeer,
+		MsgID:  msg.Data.ID,
+		UserID: fromUser.UserID,
+	}, nil
+}
+
+func (t *TelegramClient) getInputUser(ctx context.Context, id int64) (tg.InputUserClass, error) {
 	accessHash, err := t.ScopedStore.GetAccessHash(ctx, ids.PeerTypeUser, id)
-	if err != nil {
+	if errors.Is(err, store.ErrNoAccessHash) {
+		fromMsg, fromMsgErr := t.getInputUserFromContext(ctx, id)
+		if fromMsgErr != nil {
+			return nil, fmt.Errorf("%w, also failed to get from message: %w", err, fromMsgErr)
+		} else if fromMsg == nil {
+			return nil, err
+		}
+		zerolog.Ctx(ctx).Trace().
+			Any("input_peer", fromMsg).
+			Msg("Using InputUserFromMessage as access hash wasn't found")
+		return fromMsg, nil
+	} else if err != nil {
 		return nil, fmt.Errorf("failed to get access hash for user %d: %w", id, err)
 	}
 	return &tg.InputUser{UserID: id, AccessHash: accessHash}, nil
@@ -46,7 +91,9 @@ func (t *TelegramClient) getInputUser(ctx context.Context, id int64) (*tg.InputU
 
 func (t *TelegramClient) getInputPeerUser(ctx context.Context, id int64) (*tg.InputPeerUser, error) {
 	accessHash, err := t.ScopedStore.GetAccessHash(ctx, ids.PeerTypeUser, id)
-	if err != nil {
+	if errors.Is(err, store.ErrNoAccessHash) {
+		return nil, err
+	} else if err != nil {
 		return nil, fmt.Errorf("failed to get access hash for user %d: %w", id, err)
 	}
 	return &tg.InputPeerUser{UserID: id, AccessHash: accessHash}, nil
