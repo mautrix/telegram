@@ -247,6 +247,7 @@ UPDATE mx_room_state SET members_fetched=false WHERE members_fetched IS NULL;
 -- only: postgres until "end only"
 ALTER TABLE mx_room_state ALTER COLUMN power_levels TYPE jsonb USING power_levels::jsonb;
 ALTER TABLE mx_room_state ALTER COLUMN encryption TYPE jsonb USING encryption::jsonb;
+ALTER TABLE mx_room_state ALTER COLUMN create_event TYPE jsonb USING create_event::jsonb;
 ALTER TABLE mx_room_state ALTER COLUMN members_fetched SET DEFAULT false;
 ALTER TABLE mx_room_state ALTER COLUMN members_fetched SET NOT NULL;
 -- end only postgres
@@ -262,7 +263,7 @@ CREATE TABLE mx_registrations (
     user_id TEXT PRIMARY KEY
 );
 
-UPDATE mx_version SET version=7;
+UPDATE mx_version SET version=8;
 
 DROP TABLE user_portal_old;
 DROP TABLE backfill_queue_old;

@@ -46,7 +46,7 @@ var m = mxmain.BridgeMain{
 	Name:        "mautrix-telegram",
 	URL:         "https://github.com/mautrix/telegram",
 	Description: "A Matrix-Telegram puppeting bridge.",
-	Version:     "26.01",
+	Version:     "26.04",
 	SemCalVer:   true,
 
 	Connector: c,
@@ -105,10 +105,10 @@ func main() {
 		m.CheckLegacyDB(
 			18,
 			"v0.14.0",
-			"v26.01",
+			"v26.04",
 			m.LegacyMigrateWithAnotherUpgrader(
-				legacyMigrateRenameTables, legacyMigrateCopyData, 21,
-				upgrades.Table, "telegram_version", 2,
+				legacyMigrateRenameTables, legacyMigrateCopyData, 27,
+				upgrades.Table, "telegram_version", 6,
 			),
 			true,
 		)
