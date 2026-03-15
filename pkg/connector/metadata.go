@@ -46,7 +46,8 @@ type GhostMetadata struct {
 	Deleted   bool `json:"deleted,omitempty"`
 	NotMin    bool `json:"not_min,omitempty"`
 
-	ContactSource int64 `json:"contact_source,omitempty"`
+	ContactSource   int64 `json:"contact_source,omitempty"`
+	SourceIsContact bool  `json:"source_is_contact,omitempty"`
 }
 
 func (gm *GhostMetadata) IsMin() bool {
