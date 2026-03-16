@@ -203,6 +203,9 @@ func (t *TelegramClient) wrapUserInfo(ctx context.Context, u tg.UserClass, ghost
 	if user.Contact && ghost.Name != "" && oldMeta.ContactSource != t.telegramUserID && oldMeta.ContactSource != 0 && !t.main.Config.ContactNames {
 		namePtr = nil
 	}
+	if user.Min && !oldMeta.IsMin() && ghost.Name != "" {
+		namePtr = nil
+	}
 	return &bridgev2.UserInfo{
 		IsBot:       &user.Bot,
 		Name:        namePtr,
