@@ -2,7 +2,7 @@ module go.mau.fi/mautrix-telegram
 
 go 1.25.0
 
-toolchain go1.26.0
+toolchain go1.26.1
 
 tool (
 	go.mau.fi/util/cmd/maubuild
@@ -27,7 +27,7 @@ require (
 	github.com/rs/zerolog v1.34.0
 	github.com/stretchr/testify v1.11.1
 	github.com/tidwall/gjson v1.18.0
-	go.mau.fi/util v0.9.6
+	go.mau.fi/util v0.9.7
 	go.mau.fi/webp v0.2.0
 	go.mau.fi/zerozap v0.1.2
 	go.opentelemetry.io/otel v1.40.0
@@ -42,7 +42,7 @@ require (
 	golang.org/x/sync v0.20.0
 	golang.org/x/tools v0.43.0
 	gopkg.in/yaml.v3 v3.0.1
-	maunium.net/go/mautrix v0.26.4-0.20260316144802-7101758f4a5a
+	maunium.net/go/mautrix v0.26.4
 	rsc.io/qr v0.2.0
 )
 
@@ -60,7 +60,7 @@ require (
 	github.com/mattn/go-colorable v0.1.14 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/mattn/go-sqlite3 v1.14.34 // indirect
-	github.com/petermattis/goid v0.0.0-20260113132338-7c7de50cc741 // indirect
+	github.com/petermattis/goid v0.0.0-20260226131333-17d1149c6ac6 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/rs/xid v1.6.0 // indirect
 	github.com/segmentio/asm v1.2.1 // indirect
