@@ -136,6 +136,11 @@ func Parse(ctx context.Context, message string, entities []tg.MessageEntityClass
 			br.Value = Style{Type: StyleCustomEmoji, EmojiInfo: params.CustomEmojis[ids.MakeEmojiIDFromDocumentID(entity.DocumentID)]}
 		case *tg.MessageEntityBlockquote:
 			br.Value = Style{Type: StyleBlockquote}
+		case *tg.MessageEntityFormattedDate:
+			br.Value = Style{Type: StyleFormattedDate}
+		default:
+			log.Warn().Any("entity", e).Msg("Unsupported message entity")
+			continue
 		}
 		lrt.Add(br)
 	}

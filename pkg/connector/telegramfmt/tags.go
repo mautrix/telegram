@@ -70,6 +70,7 @@ const (
 	StylePhone
 	StyleSpoiler
 	StyleBankCard
+	StyleFormattedDate
 )
 
 func (s StyleType) String() string {
@@ -110,6 +111,8 @@ func (s StyleType) String() string {
 		return "StyleSpoiler"
 	case StyleBankCard:
 		return "StyleBankCard"
+	case StyleFormattedDate:
+		return "StyleFormattedDate"
 	default:
 		return fmt.Sprintf("StyleType(%d)", s)
 	}
