@@ -549,27 +549,6 @@ func (t *TelegramClient) Disconnect() {
 	t.userLogin.Log.Info().Msg("Disconnect complete")
 }
 
-func (t *TelegramClient) getSingleChannel(ctx context.Context, id int64) (*tg.Channel, error) {
-	accessHash, err := t.ScopedStore.GetAccessHash(ctx, ids.PeerTypeChannel, id)
-	if err != nil {
-		return nil, err
-	}
-	chats, err := APICallWithOnlyChatUpdates(ctx, t, func() (tg.MessagesChatsClass, error) {
-		return t.client.API().ChannelsGetChannels(ctx, []tg.InputChannelClass{
-			&tg.InputChannel{ChannelID: id, AccessHash: accessHash},
-		})
-	})
-	if err != nil {
-		return nil, err
-	} else if len(chats.GetChats()) == 0 {
-		return nil, fmt.Errorf("failed to get channel info for channel %d", id)
-	} else if channel, ok := chats.GetChats()[0].(*tg.Channel); !ok {
-		return nil, fmt.Errorf("unexpected channel type %T", chats.GetChats()[id])
-	} else {
-		return channel, nil
-	}
-}
-
 func (t *TelegramClient) IsLoggedIn() bool {
 	// TODO use less hacky check than context cancellation
 	return t != nil && t.client != nil &&

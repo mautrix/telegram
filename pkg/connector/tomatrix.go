@@ -17,6 +17,7 @@
 package connector
 
 import (
+	"cmp"
 	"context"
 	"crypto/sha256"
 	"encoding/binary"
@@ -209,6 +210,12 @@ func (c *TelegramClient) convertToMatrix(
 		ContentHash: hasher.Sum(nil),
 		ContentURI:  contentURI,
 	}
+	if fwd, isForwarded := msg.GetFwdFrom(); isForwarded {
+		err = c.addForwardHeader(ctx, cm.Parts[0], fwd)
+		if err != nil {
+			return nil, fmt.Errorf("failed to add forward header: %w", err)
+		}
+	}
 
 	if replyTo, ok := msg.GetReplyTo(); ok {
 		switch replyTo := replyTo.(type) {
@@ -234,6 +241,99 @@ func (c *TelegramClient) convertToMatrix(
 	}
 
 	return
+}
+
+func (t *TelegramClient) addForwardHeader(ctx context.Context, part *bridgev2.ConvertedMessagePart, fwd tg.MessageFwdHeader) error {
+	var fwdFromText, fwdFromHTML string
+	switch from := fwd.FromID.(type) {
+	case *tg.PeerUser:
+		user := t.main.Bridge.GetCachedUserLoginByID(ids.MakeUserLoginID(from.UserID))
+		var mxid id.UserID
+		if user != nil {
+			mxid = user.UserMXID
+			fwdFromText = cmp.Or(user.RemoteName, user.UserMXID.String())
+		} else if ghost, err := t.main.Bridge.GetGhostByID(ctx, ids.MakeUserID(from.UserID)); err != nil {
+			return err
+		} else {
+			if ghost.Name == "" {
+				info, err := t.GetUserInfo(ctx, ghost)
+				if err != nil {
+					zerolog.Ctx(ctx).Warn().Err(err).Msg("Failed to get user info to add forward header")
+				} else if info != nil {
+					ghost.UpdateInfo(ctx, info)
+				}
+			}
+			mxid = ghost.Intent.GetMXID()
+			fwdFromText = cmp.Or(ghost.Name, fwd.FromName, "unknown user")
+		}
+		fwdFromHTML = fmt.Sprintf(
+			`<a href="%s">%s</a>`,
+			mxid.URI().MatrixToURL(),
+			html.EscapeString(fwdFromText),
+		)
+	case *tg.PeerChannel, *tg.PeerChat:
+		unknownType := "unknown chat"
+		if _, ok := from.(*tg.PeerChannel); ok {
+			unknownType = "unknown channel"
+		}
+		portal, err := t.main.Bridge.GetExistingPortalByKey(ctx, t.makePortalKeyFromPeer(from, 0))
+		if err != nil {
+			return err
+		} else if portal != nil && portal.MXID != "" {
+			fwdFromText = cmp.Or(portal.Name, fwd.FromName, unknownType)
+			fwdFromHTML = fmt.Sprintf(
+				`<a href="%s">%s</a>`,
+				portal.MXID.URI().MatrixToURL(),
+				html.EscapeString(fwdFromText),
+			)
+		} else if fwd.FromName != "" {
+			fwdFromText = fwd.FromName
+			fwdFromHTML = fmt.Sprintf("<strong>%s</strong>", html.EscapeString(fwd.FromName))
+		} else {
+			fwdFromText = unknownType
+			fwdFromHTML = unknownType
+		}
+		// TODO fetch channel if not found
+	}
+	if fwdFromText == "" && fwd.FromName != "" {
+		fwdFromText = fwd.FromName
+		fwdFromHTML = fmt.Sprintf("<strong>%s</strong>", html.EscapeString(fwd.FromName))
+	}
+	if fwdFromText == "" {
+		fwdFromText = "unknown source"
+		fwdFromHTML = fwdFromText
+	}
+
+	if part.Content.MsgType.IsMedia() {
+		if part.Content.FileName == "" {
+			part.Content.FileName = part.Content.Body
+		}
+		if part.Content.Body == part.Content.FileName {
+			part.Content.Body = ""
+		}
+	}
+
+	part.Content.EnsureHasHTML()
+	existingBodyLines := strings.Split(part.Content.Body, "\n")
+	for i, line := range existingBodyLines {
+		existingBodyLines[i] = fmt.Sprintf("> %s", line)
+	}
+	if len(existingBodyLines) > 0 {
+		existingBodyLines = append([]string{"\n"}, existingBodyLines...)
+	}
+	part.Content.Body = fmt.Sprintf(
+		"Forwarded message from %s%s",
+		fwdFromText, strings.Join(existingBodyLines, "\n"),
+	)
+	existingFormattedBody := part.Content.FormattedBody
+	if existingFormattedBody != "" {
+		existingFormattedBody = fmt.Sprintf("<br><tg-forward><blockquote>%s</blockquote></tg-forward>", existingFormattedBody)
+	}
+	part.Content.FormattedBody = fmt.Sprintf(
+		"Forwarded message from %s%s",
+		fwdFromHTML, existingFormattedBody,
+	)
+	return nil
 }
 
 func (t *TelegramClient) parseBodyAndHTML(ctx context.Context, message string, entities []tg.MessageEntityClass) *event.MessageEventContent {

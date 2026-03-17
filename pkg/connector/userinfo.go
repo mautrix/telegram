@@ -40,33 +40,64 @@ func (t *TelegramClient) GetUserInfo(ctx context.Context, ghost *bridgev2.Ghost)
 	}
 }
 
+func (t *TelegramClient) getChatPeerForInputFromMessage(ctx context.Context, id int64, peerID tg.PeerClass) (tg.InputPeerClass, error) {
+	switch typedChat := peerID.(type) {
+	case *tg.PeerUser:
+		if id == typedChat.UserID {
+			// We don't have the user's access hash
+			return nil, nil
+		}
+		accessHash, err := t.ScopedStore.GetAccessHash(ctx, ids.PeerTypeUser, typedChat.UserID)
+		if err != nil {
+			return nil, err
+		}
+		return &tg.InputPeerUser{UserID: typedChat.UserID, AccessHash: accessHash}, nil
+	case *tg.PeerChat:
+		return &tg.InputPeerChat{ChatID: typedChat.ChatID}, nil
+	case *tg.PeerChannel:
+		if id == typedChat.ChannelID {
+			// We don't have the channel's access hash
+			return nil, nil
+		}
+		accessHash, err := t.ScopedStore.GetAccessHash(ctx, ids.PeerTypeChannel, typedChat.ChannelID)
+		if err != nil {
+			return nil, err
+		}
+		return &tg.InputPeerChannel{ChannelID: typedChat.ChannelID, AccessHash: accessHash}, nil
+	default:
+		return nil, nil
+	}
+}
+
 func (t *TelegramClient) getInputUserFromContext(ctx context.Context, id int64) (*tg.InputUserFromMessage, error) {
 	msg, ok := bridgev2.GetRemoteEventFromContext(ctx).(*simplevent.Message[*tg.Message])
 	if !ok {
 		return nil, nil
 	}
-	fromUser, ok := msg.Data.FromID.(*tg.PeerUser)
-	if !ok || fromUser.UserID != id {
-		return nil, nil
-	}
-	var inputPeer tg.InputPeerClass
-	switch typedChat := msg.Data.PeerID.(type) {
-	case *tg.PeerUser:
-		// We don't have the user's access hash
-		return nil, nil
-	case *tg.PeerChat:
-		inputPeer = &tg.InputPeerChat{ChatID: typedChat.ChatID}
-	case *tg.PeerChannel:
-		accessHash, err := t.ScopedStore.GetAccessHash(ctx, ids.PeerTypeChannel, typedChat.ChannelID)
-		if err != nil {
-			return nil, err
-		}
-		inputPeer = &tg.InputPeerChannel{ChannelID: typedChat.ChannelID, AccessHash: accessHash}
+	inputPeer, err := t.getChatPeerForInputFromMessage(ctx, id, msg.Data.PeerID)
+	if err != nil || inputPeer == nil {
+		return nil, err
 	}
 	return &tg.InputUserFromMessage{
 		Peer:   inputPeer,
 		MsgID:  msg.Data.ID,
-		UserID: fromUser.UserID,
+		UserID: id,
+	}, nil
+}
+
+func (t *TelegramClient) getInputChannelFromContext(ctx context.Context, id int64) (*tg.InputChannelFromMessage, error) {
+	msg, ok := bridgev2.GetRemoteEventFromContext(ctx).(*simplevent.Message[*tg.Message])
+	if !ok {
+		return nil, nil
+	}
+	inputPeer, err := t.getChatPeerForInputFromMessage(ctx, id, msg.Data.PeerID)
+	if err != nil || inputPeer == nil {
+		return nil, err
+	}
+	return &tg.InputChannelFromMessage{
+		Peer:      inputPeer,
+		MsgID:     msg.Data.ID,
+		ChannelID: id,
 	}, nil
 }
 
@@ -109,6 +140,42 @@ func (t *TelegramClient) getSingleUser(ctx context.Context, id int64) (tg.UserCl
 		return nil, fmt.Errorf("failed to get user info for user %d", id)
 	} else {
 		return users[0], nil
+	}
+}
+
+func (t *TelegramClient) getInputChannel(ctx context.Context, id int64) (tg.InputChannelClass, error) {
+	accessHash, err := t.ScopedStore.GetAccessHash(ctx, ids.PeerTypeChannel, id)
+	if err != nil {
+		fromMsg, fromMsgErr := t.getInputChannelFromContext(ctx, id)
+		if fromMsgErr != nil {
+			return nil, fmt.Errorf("%w, also failed to get from message: %w", err, fromMsgErr)
+		} else if fromMsg == nil {
+			return nil, err
+		}
+		zerolog.Ctx(ctx).Trace().
+			Any("input_peer", fromMsg).
+			Msg("Using InputChannelFromMessage as access hash wasn't found")
+		return fromMsg, nil
+	}
+	return &tg.InputChannel{ChannelID: id, AccessHash: accessHash}, nil
+}
+
+func (t *TelegramClient) getSingleChannel(ctx context.Context, id int64) (*tg.Channel, error) {
+	inputChannel, err := t.getInputChannel(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	chats, err := APICallWithOnlyChatUpdates(ctx, t, func() (tg.MessagesChatsClass, error) {
+		return t.client.API().ChannelsGetChannels(ctx, []tg.InputChannelClass{inputChannel})
+	})
+	if err != nil {
+		return nil, err
+	} else if len(chats.GetChats()) == 0 {
+		return nil, fmt.Errorf("failed to get channel info for channel %d", id)
+	} else if channel, ok := chats.GetChats()[0].(*tg.Channel); !ok {
+		return nil, fmt.Errorf("unexpected channel type %T", chats.GetChats()[id])
+	} else {
+		return channel, nil
 	}
 }
 
