@@ -810,7 +810,7 @@ func (t *TelegramClient) updateGhost(ctx context.Context, userID int64, user *tg
 	}
 	ghost.UpdateInfo(ctx, userInfo)
 
-	if ghost.ID == t.userID && t.updateRemoteProfile(ctx, user, ghost) {
+	if !user.Min && ghost.ID == t.userID && t.updateRemoteProfile(ctx, user, ghost) {
 		t.userLogin.BridgeState.Send(status.BridgeState{StateEvent: status.StateConnected})
 	}
 
