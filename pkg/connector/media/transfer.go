@@ -137,7 +137,23 @@ func (t *Transferer) WithFilename(filename string) *Transferer {
 // WithStickerConfig sets the animated sticker config for the [Transferer].
 func (t *Transferer) WithStickerConfig(cfg AnimatedStickerConfig) *Transferer {
 	t.animatedStickerConfig = &cfg
+	t.adjustStickerSize()
 	return t
+}
+
+func (t *Transferer) adjustStickerSize() {
+	if (t.fileInfo.Width < 256 && t.fileInfo.Height < 256) || t.animatedStickerConfig == nil {
+		return
+	}
+	if t.fileInfo.Width == t.fileInfo.Height {
+		t.fileInfo.Width, t.fileInfo.Height = 256, 256
+	} else if t.fileInfo.Width > t.fileInfo.Height {
+		t.fileInfo.Height = t.fileInfo.Height * 256 / t.fileInfo.Width
+		t.fileInfo.Width = 256
+	} else {
+		t.fileInfo.Width = t.fileInfo.Width * 256 / t.fileInfo.Height
+		t.fileInfo.Height = 256
+	}
 }
 
 func (t *Transferer) WithMIMEType(mimeType string) *Transferer {
@@ -160,6 +176,7 @@ func (t *Transferer) WithVideo(attr *tg.DocumentAttributeVideo) *Transferer {
 
 func (t *Transferer) WithImageSize(attr *tg.DocumentAttributeImageSize) *Transferer {
 	t.fileInfo.Width, t.fileInfo.Height = attr.W, attr.H
+	t.adjustStickerSize()
 	return t
 }
 
