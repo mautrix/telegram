@@ -4,6 +4,8 @@ import (
 	"context"
 	"time"
 
+	"github.com/rs/zerolog"
+
 	"go.mau.fi/mautrix-telegram/pkg/gotd/clock"
 )
 
@@ -31,7 +33,8 @@ func AsFloodWait(err error) (d time.Duration, ok bool) {
 }
 
 type floodWaitOptions struct {
-	clock clock.Clock
+	clock       clock.Clock
+	maxDuration time.Duration
 }
 
 // FloodWaitOption configures flood wait.
@@ -52,19 +55,26 @@ func FloodWaitWithClock(c clock.Clock) FloodWaitOption {
 	})
 }
 
+func FloodWaitWithMaxDuration(d time.Duration) FloodWaitOption {
+	return floodWaitOptionFunc(func(o *floodWaitOptions) {
+		o.maxDuration = d
+	})
+}
+
 // FloodWait sleeps required duration and returns true if err is FLOOD_WAIT
 // or false and context or original error otherwise.
 func FloodWait(ctx context.Context, err error, opts ...FloodWaitOption) (bool, error) {
 	opt := &floodWaitOptions{
-		clock: clock.System,
+		clock:       clock.System,
+		maxDuration: 1 * time.Hour,
 	}
 	for _, o := range opts {
 		o.apply(opt)
 	}
-	if d, ok := AsFloodWait(err); ok {
+	if d, ok := AsFloodWait(err); ok && d < opt.maxDuration {
 		timer := opt.clock.Timer(d + 1*time.Second)
 		defer clock.StopTimer(timer)
-
+		zerolog.Ctx(ctx).Debug().Dur("duration", d).Msg("Waiting on flood wait")
 		select {
 		case <-timer.C():
 			return true, err
