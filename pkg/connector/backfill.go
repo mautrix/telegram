@@ -55,7 +55,7 @@ func (t *TelegramClient) getTakeoutID(ctx context.Context) (takeoutID int64, err
 		// Resume fetching dialogs using takeout and enqueueing them for
 		// backfill.
 		go t.takeoutDialogsOnce.Do(func() {
-			if err = t.takeoutDialogs(ctx, takeoutID); err != nil {
+			if err = t.syncChats(ctx, takeoutID, false); err != nil {
 				log.Err(err).Msg("Failed to takeout dialogs")
 			}
 		})
@@ -88,91 +88,13 @@ func (t *TelegramClient) getTakeoutID(ctx context.Context) (takeoutID int64, err
 
 		// Fetch all dialogs using takeout and enqueue them for backfill.
 		go t.takeoutDialogsOnce.Do(func() {
-			if err = t.takeoutDialogs(ctx, takeoutID); err != nil {
+			if err = t.syncChats(ctx, takeoutID, false); err != nil {
 				log.Err(err).Msg("Failed to takeout dialogs")
 			}
 		})
 
 		t.metadata.TakeoutID = accountTakeout.ID
 		return accountTakeout.ID, t.userLogin.Save(ctx)
-	}
-}
-
-func (t *TelegramClient) takeoutDialogs(ctx context.Context, takeoutID int64) error {
-	log := zerolog.Ctx(ctx).With().Str("loop", "chat_fetch").Logger()
-	if t.metadata.TakeoutDialogCrawlDone {
-		log.Debug().Msg("Dialogs already crawled")
-		return nil
-	}
-
-	req := tg.MessagesGetDialogsRequest{
-		Limit:      100,
-		OffsetPeer: &tg.InputPeerEmpty{},
-	}
-	if t.metadata.TakeoutDialogCrawlCursor != "" {
-		var err error
-		req.OffsetPeer, _, err = t.inputPeerForPortalID(ctx, t.metadata.TakeoutDialogCrawlCursor)
-		if err != nil {
-			return fmt.Errorf("failed to get input peer for pagination: %w", err)
-		}
-	}
-	for {
-		log.Info().Stringer("cursor", req.OffsetPeer).Msg("Fetching dialogs")
-		dialogs, err := APICallWithUpdates(ctx, t, func() (tg.ModifiedMessagesDialogs, error) {
-			var dialogs tg.MessagesDialogsBox
-			err := t.client.Invoke(ctx,
-				&tg.InvokeWithTakeoutRequest{TakeoutID: takeoutID, Query: &req},
-				&dialogs)
-			if err != nil {
-				return nil, err
-			} else if modified, ok := dialogs.Dialogs.AsModified(); !ok {
-				return nil, fmt.Errorf("unexpected response type: %T", dialogs.Dialogs)
-			} else {
-				return modified, nil
-			}
-		})
-		if err != nil {
-			return fmt.Errorf("failed to get dialogs: %w", err)
-		} else if len(dialogs.GetDialogs()) == 0 {
-			t.metadata.TakeoutDialogCrawlDone = true
-			if err = t.userLogin.Save(ctx); err != nil {
-				return fmt.Errorf("failed to save user login: %w", err)
-			}
-			log.Debug().Msg("No more dialogs found")
-			return nil
-		}
-
-		if req.OffsetPeer.TypeID() == tg.InputPeerEmptyTypeID {
-			// This is the first fetch of dialogs, reset the pinned dialogs
-			// based on the list.
-			if err := t.resetPinnedDialogs(ctx, dialogs.GetDialogs()); err != nil {
-				return err
-			}
-		}
-
-		err = t.handleDialogs(ctx, dialogs, -1)
-		if err != nil {
-			return fmt.Errorf("failed to handle dialogs: %w", err)
-		}
-
-		portalKey := t.makePortalKeyFromPeer(dialogs.GetDialogs()[len(dialogs.GetDialogs())-1].GetPeer(), 0)
-
-		if t.metadata.TakeoutDialogCrawlCursor == portalKey.ID {
-			t.metadata.TakeoutDialogCrawlDone = true
-			t.metadata.TakeoutDialogCrawlCursor = ""
-			log.Debug().Msg("No more dialogs found")
-			return nil
-		} else {
-			t.metadata.TakeoutDialogCrawlCursor = portalKey.ID
-		}
-		if err = t.userLogin.Save(ctx); err != nil {
-			return fmt.Errorf("failed to save user login: %w", err)
-		}
-
-		req.OffsetPeer, _, err = t.inputPeerForPortalID(ctx, portalKey.ID)
-		if err != nil {
-			return fmt.Errorf("failed to get input peer for pagination: %w", err)
-		}
 	}
 }
 
@@ -197,8 +119,7 @@ func (t *TelegramClient) FetchMessages(ctx context.Context, fetchParams bridgev2
 
 	var takeoutID int64
 	var err error
-	// TODO use takeout for forward backfill if already available
-	if !fetchParams.Forward { // Backwards
+	if (t.main.Config.Takeout.ForwardBackfill && fetchParams.Forward) || (t.main.Config.Takeout.BackwardBackfill && !fetchParams.Forward) {
 		t.takeoutLock.Lock()
 		defer t.takeoutLock.Unlock()
 		takeoutID, err = t.getTakeoutID(ctx)
@@ -261,6 +182,7 @@ func (t *TelegramClient) FetchMessages(ctx context.Context, fetchParams bridgev2
 	log.Info().Any("req", req).Msg("Fetching messages")
 	msgs, err := APICallWithUpdates(ctx, t, func() (tg.ModifiedMessagesMessages, error) {
 		var box tg.MessagesMessagesBox
+		// TODO a single request can only fetch 100 messages, use multiple requests if the requested count is higher
 		err = t.client.Invoke(ctx, req, &box)
 		if err != nil {
 			return nil, err

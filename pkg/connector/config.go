@@ -68,8 +68,15 @@ type TelegramConfig struct {
 	Sync struct {
 		UpdateLimit int  `yaml:"update_limit"`
 		CreateLimit int  `yaml:"create_limit"`
+		LoginLimit  int  `yaml:"login_sync_limit"`
 		DirectChats bool `yaml:"direct_chats"`
 	} `yaml:"sync"`
+
+	Takeout struct {
+		DialogSync       bool `yaml:"dialog_sync"`
+		ForwardBackfill  bool `yaml:"forward_backfill"`
+		BackwardBackfill bool `yaml:"backward_backfill"`
+	} `yaml:"takeout"`
 
 	ContactAvatars                       bool                `yaml:"contact_avatars"`
 	ContactNames                         bool                `yaml:"contact_names"`
@@ -110,7 +117,11 @@ func upgradeConfig(helper up.Helper) {
 	helper.Copy(up.Int, "ping", "timeout_seconds")
 	helper.Copy(up.Int, "sync", "update_limit")
 	helper.Copy(up.Int, "sync", "create_limit")
+	helper.Copy(up.Int, "sync", "login_sync_limit")
 	helper.Copy(up.Bool, "sync", "direct_chats")
+	helper.Copy(up.Bool, "takeout", "dialog_sync")
+	helper.Copy(up.Bool, "takeout", "forward_backfill")
+	helper.Copy(up.Bool, "takeout", "backward_backfill")
 	helper.Copy(up.Bool, "contact_avatars")
 	helper.Copy(up.Bool, "contact_names")
 	helper.Copy(up.Int, "max_member_count")
@@ -130,6 +141,7 @@ func (tg *TelegramConnector) GetConfig() (example string, data any, upgrader up.
 			{"member_list"},
 			{"ping"},
 			{"sync"},
+			{"takeout"},
 			{"max_member_count"},
 		},
 		Base: ExampleConfig,

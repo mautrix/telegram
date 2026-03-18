@@ -110,6 +110,7 @@ type TelegramClient struct {
 	takeoutAccepted    *exsync.Event
 	stopTakeoutTimer   *time.Timer
 	takeoutDialogsOnce sync.Once
+	syncChatsLock      sync.Mutex
 
 	prevReactionPoll     map[networkid.PortalKey]time.Time
 	prevReactionPollLock sync.Mutex

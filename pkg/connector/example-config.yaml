@@ -56,14 +56,29 @@ ping:
 
 sync:
     # Number of most recently active dialogs to check when syncing chats.
-    # Set to 0 to remove limit.
-    update_limit: 0
-    # Number of most recently active dialogs to create portals for when syncing
-    # chats.
-    # Set to 0 to remove limit.
+    # Set to -1 to remove limit.
+    update_limit: 100
+    # Number of most recently active dialogs to create portals for when syncing chats.
+    # Set to -1 to remove limit.
     create_limit: 15
+    # Number of chats to sync immediately on login before the data export is accepted.
+    # The create_limit above still applies. This is ignored if takeout.dialog_sync is false.
+    login_sync_limit: 15
     # Whether or not to sync and create portals for direct chats at startup.
-    direct_chats: false
+    direct_chats: true
+
+takeout:
+    # Should the bridge use the data export mode for syncing the full chat list?
+    # If true, login_sync_limit of chats is synced immediately on login,
+    # then the rest are synced after the takeout is accepted.
+    dialog_sync: false
+    # Should the bridge use the data export mode for forward backfilling messages?
+    # This should be set to true if the forward backfill limits are set to high values,
+    # but is probably not necessary otherwise.
+    forward_backfill: false
+    # Should the bridge use the data export mode for backward backfilling messages?
+    # This only affects the backfill queue, which is only available on Beeper.
+    backward_backfill: false
 
 # Maximum number of participants in chats to bridge. Only applies when the
 # portal is being created. If there are more members when trying to create a

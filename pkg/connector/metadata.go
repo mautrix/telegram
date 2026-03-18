@@ -57,7 +57,7 @@ func (gm *GhostMetadata) IsMin() bool {
 type PortalMetadata struct {
 	IsSuperGroup      bool          `json:"is_supergroup,omitempty"`
 	IsForumGeneral    bool          `json:"is_forum_general,omitempty"`
-	ReadUpTo          int           `json:"read_up_to,omitempty"`
+	ReadUpTo          int           `json:"read_up_to,omitempty"` // FIXME this shouldn't be here
 	AllowedReactions  []string      `json:"allowed_reactions"`
 	LastSync          jsontime.Unix `json:"last_sync,omitempty"`
 	FullSynced        bool          `json:"full_synced,omitempty"`
@@ -90,8 +90,9 @@ type UserLoginMetadata struct {
 
 	TakeoutInvalidated bool `json:"takeout_invalidated,omitempty"`
 
-	TakeoutDialogCrawlDone   bool               `json:"takeout_portal_crawl_done,omitempty"`
-	TakeoutDialogCrawlCursor networkid.PortalID `json:"takeout_portal_crawl_cursor,omitempty"`
+	DialogSyncComplete bool               `json:"takeout_portal_crawl_done,omitempty"`
+	DialogSyncCursor   networkid.PortalID `json:"takeout_portal_crawl_cursor,omitempty"`
+	DialogSyncCount    int                `json:"dialog_sync_count,omitempty"`
 
 	PinnedDialogs []networkid.PortalID `json:"pinned_dialogs,omitempty"`
 
@@ -101,9 +102,10 @@ type UserLoginMetadata struct {
 func (u *UserLoginMetadata) ResetOnLogout() {
 	u.Session.AuthKey = nil
 	u.TakeoutID = 0
-	u.TakeoutDialogCrawlDone = false
 	u.TakeoutInvalidated = false
-	u.TakeoutDialogCrawlCursor = networkid.PortalID("")
+	u.DialogSyncComplete = false
+	u.DialogSyncCursor = networkid.PortalID("")
+	u.DialogSyncCount = 0
 	u.PushEncryptionKey = nil
 }
 

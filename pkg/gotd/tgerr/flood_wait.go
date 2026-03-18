@@ -74,7 +74,7 @@ func FloodWait(ctx context.Context, err error, opts ...FloodWaitOption) (bool, e
 	if d, ok := AsFloodWait(err); ok && d < opt.maxDuration {
 		timer := opt.clock.Timer(d + 1*time.Second)
 		defer clock.StopTimer(timer)
-		zerolog.Ctx(ctx).Debug().Dur("duration", d).Msg("Waiting on flood wait")
+		zerolog.Ctx(ctx).Warn().Dur("duration", d).Msg("Waiting on flood wait")
 		select {
 		case <-timer.C():
 			return true, err

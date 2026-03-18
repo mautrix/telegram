@@ -241,13 +241,16 @@ func (bl *baseLogin) finalizeLogin(
 		err := client.clientInitialized.Wait(bgCtx)
 		if err != nil {
 			log.Err(err).Msg("Failed to wait for client init to sync chats after login")
-		} else if err = client.SyncChats(log.WithContext(client.clientCtx)); err != nil {
+		} else if err = client.syncChats(log.WithContext(client.clientCtx), 0, true); err != nil {
 			log.Err(err).Msg("Failed to sync chats")
 		}
 	}()
 
 	go func() {
 		if metadata.IsBot {
+			return
+		}
+		if !bl.main.Config.Takeout.BackwardBackfill && !bl.main.Config.Takeout.ForwardBackfill && !bl.main.Config.Takeout.DialogSync {
 			return
 		}
 		log := ul.Log.With().Str("component", "post-login takeout").Logger()
