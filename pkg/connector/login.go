@@ -229,8 +229,9 @@ func (bl *baseLogin) finalizeLogin(
 	if err != nil {
 		return nil, fmt.Errorf("failed to save new login: %w", err)
 	}
-	ul.Client.Connect(ul.Log.WithContext(bl.main.Bridge.BackgroundCtx))
 	client := ul.Client.(*TelegramClient)
+	client.isNewLogin = true
+	client.Connect(ul.Log.WithContext(bl.main.Bridge.BackgroundCtx))
 
 	bgCtx := ul.Log.WithContext(bl.main.Bridge.BackgroundCtx)
 	go func() {
@@ -241,6 +242,8 @@ func (bl *baseLogin) finalizeLogin(
 		err := client.clientInitialized.Wait(bgCtx)
 		if err != nil {
 			log.Err(err).Msg("Failed to wait for client init to sync chats after login")
+		} else if client.clientDone.IsSet() {
+			log.Warn().Msg("Client is already done after login, skipping chat sync")
 		} else if err = client.syncChats(log.WithContext(client.clientCtx), 0, true, false); err != nil {
 			log.Err(err).Msg("Failed to sync chats")
 		}
@@ -259,6 +262,8 @@ func (bl *baseLogin) finalizeLogin(
 		err := client.clientInitialized.Wait(bgCtx)
 		if err != nil {
 			log.Err(err).Msg("Failed to wait for client init to start takeout")
+		} else if client.clientDone.IsSet() {
+			log.Warn().Msg("Client is already done after login, skipping takeout")
 		} else if _, err = client.getTakeoutID(bgCtx); err != nil {
 			log.Err(err).Msg("Failed to get takeout")
 		} else if client.stopTakeoutTimer == nil {

@@ -111,6 +111,7 @@ type TelegramClient struct {
 	stopTakeoutTimer   *time.Timer
 	takeoutDialogsOnce sync.Once
 	syncChatsLock      sync.Mutex
+	isNewLogin         bool
 
 	prevReactionPoll     map[networkid.PortalKey]time.Time
 	prevReactionPollLock sync.Mutex
@@ -511,6 +512,15 @@ func (t *TelegramClient) runInBackground(ctx context.Context) {
 	log := zerolog.Ctx(ctx)
 	err := t.client.Run(ctx, func(ctx context.Context) error {
 		t.clientInitialized.Set()
+		// If takeout dialog sync is enabled, we assume it'll resume from a getTakeoutID call.
+		// If not, resume dialog sync manually here.
+		if !t.isNewLogin && !t.main.Config.Takeout.DialogSync {
+			go func() {
+				if err := t.syncChats(log.WithContext(t.clientCtx), 0, false, false); err != nil {
+					log.Err(err).Msg("Failed to resume chat sync")
+				}
+			}()
+		}
 		log.Info().Msg("Client running, starting updates")
 		err := t.updatesManager.Run(ctx, t.client.API(), t.telegramUserID, updates.AuthOptions{
 			IsBot: t.metadata.IsBot,
