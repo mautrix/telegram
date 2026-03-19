@@ -88,8 +88,6 @@ type UserLoginMetadata struct {
 	Session     UserLoginSession `json:"session"`
 	TakeoutID   int64            `json:"takeout_id,omitempty"`
 
-	TakeoutInvalidated bool `json:"takeout_invalidated,omitempty"`
-
 	DialogSyncComplete bool               `json:"takeout_portal_crawl_done,omitempty"`
 	DialogSyncCursor   networkid.PortalID `json:"takeout_portal_crawl_cursor,omitempty"`
 	DialogSyncCount    int                `json:"dialog_sync_count,omitempty"`
@@ -102,7 +100,6 @@ type UserLoginMetadata struct {
 func (u *UserLoginMetadata) ResetOnLogout() {
 	u.Session.AuthKey = nil
 	u.TakeoutID = 0
-	u.TakeoutInvalidated = false
 	u.DialogSyncComplete = false
 	u.DialogSyncCursor = networkid.PortalID("")
 	u.DialogSyncCount = 0

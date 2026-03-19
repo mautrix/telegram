@@ -41,10 +41,6 @@ var (
 
 // getTakeoutID blocks until the takeout ID is available.
 func (t *TelegramClient) getTakeoutID(ctx context.Context) (takeoutID int64, err error) {
-	if t.metadata.TakeoutInvalidated {
-		// TODO should we just backfill without takeout here?
-		return 0, fmt.Errorf("takeout invalidated, cannot backfill")
-	}
 	// Always stop the takeout timeout timer
 	if t.stopTakeoutTimer != nil {
 		t.stopTakeoutTimer.Stop()
@@ -196,7 +192,6 @@ func (t *TelegramClient) FetchMessages(ctx context.Context, fetchParams bridgev2
 	if err != nil {
 		if tgerr.Is(err, tg.ErrTakeoutInvalid) {
 			t.metadata.TakeoutID = 0
-			t.metadata.TakeoutInvalidated = true
 			err := t.userLogin.Save(ctx)
 			if err != nil {
 				log.Err(err).Msg("Failed to save user login after clearing takeout ID")
