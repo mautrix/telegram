@@ -36,6 +36,7 @@ import (
 )
 
 var (
+	mutedPowerLevel      = ptr.Ptr(-1)
 	anyonePowerLevel     = ptr.Ptr(0)
 	modPowerLevel        = ptr.Ptr(50)
 	superadminPowerLevel = ptr.Ptr(75)
@@ -429,8 +430,10 @@ func (t *TelegramClient) filterChannelParticipants(participants []tg.ChannelPart
 			switch participant := u.(type) {
 			case *tg.ChannelParticipant:
 				member.EventSender = t.senderForUserID(participant.GetUserID())
+				member.PowerLevel = anyonePowerLevel
 			case *tg.ChannelParticipantSelf:
 				member.EventSender = t.senderForUserID(participant.GetUserID())
+				member.PowerLevel = anyonePowerLevel
 			case *tg.ChannelParticipantCreator:
 				member.EventSender = t.senderForUserID(participant.GetUserID())
 				member.PowerLevel = creatorPowerLevel
@@ -438,8 +441,16 @@ func (t *TelegramClient) filterChannelParticipants(participants []tg.ChannelPart
 				member.EventSender = t.senderForUserID(participant.GetUserID())
 				member.PowerLevel = adminRightsToPowerLevel(participant.AdminRights)
 			case *tg.ChannelParticipantBanned:
-				member.Membership = event.MembershipBan
-				member.PrevMembership = event.MembershipJoin
+				if participant.BannedRights.ViewMessages {
+					member.Membership = event.MembershipBan
+				} else if participant.Left {
+					member.Membership = event.MembershipLeave
+				}
+				if participant.BannedRights.SendMessages {
+					member.PowerLevel = mutedPowerLevel
+				} else {
+					member.PowerLevel = anyonePowerLevel
+				}
 				member.EventSender = t.getPeerSender(participant.GetPeer())
 				member.MemberSender = t.senderForUserID(participant.GetKickedBy())
 			case *tg.ChannelParticipantLeft:
