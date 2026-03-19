@@ -51,7 +51,7 @@ func (t *TelegramClient) getTakeoutID(ctx context.Context) (takeoutID int64, err
 		// Resume fetching dialogs using takeout and enqueueing them for
 		// backfill.
 		go t.takeoutDialogsOnce.Do(func() {
-			if err = t.syncChats(ctx, takeoutID, false); err != nil {
+			if err = t.syncChats(ctx, takeoutID, false, false); err != nil {
 				log.Err(err).Msg("Failed to takeout dialogs")
 			}
 		})
@@ -84,7 +84,7 @@ func (t *TelegramClient) getTakeoutID(ctx context.Context) (takeoutID int64, err
 
 		// Fetch all dialogs using takeout and enqueue them for backfill.
 		go t.takeoutDialogsOnce.Do(func() {
-			if err = t.syncChats(ctx, takeoutID, false); err != nil {
+			if err = t.syncChats(ctx, takeoutID, false, false); err != nil {
 				log.Err(err).Msg("Failed to takeout dialogs")
 			}
 		})

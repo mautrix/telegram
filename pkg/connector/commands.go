@@ -54,7 +54,7 @@ func fnSync(ce *commands.Event) {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				if err := client.syncChats(ce.Ctx, 0, false); err != nil {
+				if err := client.syncChats(ce.Ctx, 0, false, true); err != nil {
 					ce.Reply("Failed to synchronize chats for %s: %v", login.ID, err)
 				}
 			}()

@@ -33,7 +33,7 @@ import (
 	"go.mau.fi/mautrix-telegram/pkg/gotd/tgerr"
 )
 
-func (t *TelegramClient) syncChats(ctx context.Context, takeoutID int64, onLogin bool) error {
+func (t *TelegramClient) syncChats(ctx context.Context, takeoutID int64, onLogin, restart bool) error {
 	if takeoutID != 0 && !t.main.Config.Takeout.DialogSync {
 		return nil
 	}
@@ -53,7 +53,11 @@ func (t *TelegramClient) syncChats(ctx context.Context, takeoutID int64, onLogin
 	}
 	defer t.syncChatsLock.Unlock()
 
-	if t.metadata.DialogSyncComplete {
+	if restart {
+		t.metadata.DialogSyncCount = 0
+		t.metadata.DialogSyncComplete = false
+		t.metadata.DialogSyncCursor = ""
+	} else if t.metadata.DialogSyncComplete {
 		log.Debug().Msg("Dialogs already synced")
 		return nil
 	}

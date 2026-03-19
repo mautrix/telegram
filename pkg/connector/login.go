@@ -241,7 +241,7 @@ func (bl *baseLogin) finalizeLogin(
 		err := client.clientInitialized.Wait(bgCtx)
 		if err != nil {
 			log.Err(err).Msg("Failed to wait for client init to sync chats after login")
-		} else if err = client.syncChats(log.WithContext(client.clientCtx), 0, true); err != nil {
+		} else if err = client.syncChats(log.WithContext(client.clientCtx), 0, true, false); err != nil {
 			log.Err(err).Msg("Failed to sync chats")
 		}
 	}()
