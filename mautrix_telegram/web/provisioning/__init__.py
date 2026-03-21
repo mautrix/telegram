@@ -623,22 +623,20 @@ class ProvisioningAPI(AuthAPI):
         )
 
     @staticmethod
+    @web.middleware
     async def error_middleware(
-        _, handler: Callable[[web.Request], Awaitable[web.Response]]
-    ) -> Callable[[web.Request], Awaitable[web.Response]]:
-        async def middleware_handler(request: web.Request) -> web.Response:
-            try:
-                return await handler(request)
-            except web.HTTPException as ex:
-                return web.json_response(
-                    {
-                        "error": f"Unhandled HTTP {ex.status}",
-                        "errcode": f"unhandled_http_{ex.status}",
-                    },
-                    status=ex.status,
-                )
-
-        return middleware_handler
+        request: web.Request, handler: Callable[[web.Request], Awaitable[web.Response]]
+    ) -> web.Response:
+        try:
+            return await handler(request)
+        except web.HTTPException as ex:
+            return web.json_response(
+                {
+                    "error": f"Unhandled HTTP {ex.status}",
+                    "errcode": f"unhandled_http_{ex.status}",
+                },
+                status=ex.status,
+            )
 
     @staticmethod
     def get_error_response(status=200, errcode="", error="") -> web.Response:
