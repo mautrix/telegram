@@ -262,7 +262,7 @@ func (t *TelegramClient) ConnectBackground(ctx context.Context, params *bridgev2
 	var sender *bridgev2.Ghost
 	var messageID networkid.MessageID
 	var messageText, notificationText, notificationTitle string
-	if data != nil {
+	if notifs, ok := t.main.Bridge.Matrix.(bridgev2.MatrixConnectorWithNotifications); ok && data != nil {
 		if data.Aps != nil {
 			notificationTitle = data.Aps.Alert.Title
 			notificationText = data.Aps.Alert.Body
@@ -306,9 +306,6 @@ func (t *TelegramClient) ConnectBackground(ctx context.Context, params *bridgev2
 		if relatedPortal != nil && data.Custom.MessageID != 0 {
 			messageID = ids.MakeMessageID(relatedPortal.PortalKey, data.Custom.MessageID)
 		}
-	}
-	notifs, ok := t.main.Bridge.Matrix.(bridgev2.MatrixConnectorWithNotifications)
-	if ok {
 		notifs.DisplayNotification(ctx, &bridgev2.DirectNotificationData{
 			Portal:    relatedPortal,
 			Sender:    sender,
