@@ -440,6 +440,20 @@ class Puppet(DBPuppet, BasePuppet):
             return False
         if not photo_id and not self.config["bridge.allow_avatar_remove"]:
             return False
+        if (
+            self.avatar_set
+            and self.displayname_source is not None
+            and source.tgid != self.displayname_source
+            and not (source.is_relaybot or source.is_bot)
+        ):
+            self.log.debug(
+                "Ignoring avatar update for %s from non-primary source %s "
+                "(primary source is %s)",
+                self.id,
+                source.tgid,
+                self.displayname_source,
+            )
+            return False
         if self.photo_id != photo_id or not self.avatar_set:
             if not photo_id:
                 self.photo_id = ""
