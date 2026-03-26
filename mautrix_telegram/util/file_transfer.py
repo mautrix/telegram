@@ -97,6 +97,28 @@ def convert_image(
         return source_mime, file, None, None
 
 
+def _get_image_dimensions(file: bytes) -> tuple[int | None, int | None]:
+    """Get image dimensions from file bytes, accounting for EXIF orientation.
+
+    Returns (width, height) with dimensions swapped for 90/270 degree rotations.
+    """
+    if not Image:
+        return None, None
+    try:
+        img = Image.open(BytesIO(file))
+        w, h = img.size
+        try:
+            exif = img.getexif()
+            orientation = exif.get(274)  # Orientation tag
+        except Exception:
+            orientation = None
+        if orientation in (5, 6, 7, 8):
+            return h, w
+        return w, h
+    except Exception:
+        return None, None
+
+
 async def _read_video_thumbnail(data: bytes, mime_type: str) -> tuple[bytes, int, int]:
     first_frame = await ffmpeg.convert_bytes(
         data,
@@ -345,6 +367,8 @@ async def _unlocked_transfer_file_to_matrix(
 
         width, height = None, None
         mime_type = magic.mimetype(file)
+        if mime_type.startswith("image/") and not is_sticker:
+            width, height = _get_image_dimensions(file)
 
         image_converted = False
         is_tgs = mime_type == "application/gzip"

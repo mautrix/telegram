@@ -468,8 +468,8 @@ class TelegramMessageConverter:
         if not file:
             return None
         info = ImageInfo(
-            height=largest_size.h,
-            width=largest_size.w,
+            height=file.height or largest_size.h,
+            width=file.width or largest_size.w,
             orientation=0,
             mimetype=file.mime_type,
             size=self._photo_size_key(largest_size),
