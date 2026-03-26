@@ -363,6 +363,12 @@ class Puppet(DBPuppet, BasePuppet):
             allow_because = "target user is a channel"
         elif not isinstance(info, UpdateUserName) and not info.contact:
             allow_because = "target user is not a contact"
+        elif (
+            not isinstance(info, (Channel, UpdateUserName))
+            and info.contact
+            and not self.config["bridge.allow_contact_info"]
+        ):
+            return False
         elif not self.displayname_source:
             allow_because = "no primary source set"
         elif not self.displayname:
