@@ -478,6 +478,7 @@ bridge:
         m.audio: "$distinguisher <b>$sender_displayname</b> sent an audio file: $message"
         m.video: "$distinguisher <b>$sender_displayname</b> sent a video: $message"
         m.location: "$distinguisher <b>$sender_displayname</b> sent a location: $message"
+        m.sticker: "$distinguisher <b>$sender_displayname</b> sent a sticker"
     # Telegram doesn't have built-in emotes, this field specifies how m.emote's from authenticated
     # users are sent to telegram. All fields in message_formats are supported. Additionally, the
     # Telegram user info is available in the following variables:
