@@ -20,6 +20,7 @@ import base64
 import codecs
 import re
 import shlex
+from urllib.parse import parse_qs, urlparse
 
 from aiohttp import ClientSession, InvalidURL
 from telethon.errors import (
@@ -266,6 +267,23 @@ async def join(evt: CommandEvent) -> EventID | None:
         return await evt.reply("**Usage:** `$cmdprefix+sp join <invite link>`")
 
     url = evt.args[0]
+
+    if url.startswith("tg://"):
+        try:
+            parsed = urlparse(url)
+            params = parse_qs(parsed.query)
+            if "domain" in params:
+                url = f"https://t.me/{params['domain'][0]}"
+            elif "invite" in params:
+                url = f"https://t.me/+{params['invite'][0]}"
+            else:
+                return await evt.reply(
+                    "Failed to parse tg:// link. "
+                    "Expected tg://resolve?domain=... or tg://join?invite=..."
+                )
+        except Exception as e:
+            return await evt.reply(f"Failed to parse tg:// link: {e}")
+
     if evt.config["bridge.invite_link_resolve"]:
         try:
             async with ClientSession() as sess, sess.get(url) as resp:
