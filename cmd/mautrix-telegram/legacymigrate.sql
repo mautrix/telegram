@@ -57,15 +57,12 @@ SELECT
     (
         'is_premium', CASE WHEN is_premium THEN json('true') ELSE json('false') END,
         'is_channel', CASE WHEN is_channel THEN json('true') ELSE json('false') END,
-        'phone', '+' || phone,
-        'name_source', displayname_source,
-        'name_quality', displayname_quality,
-        'name_not_contact', CASE WHEN displayname_contact THEN json('false') ELSE json('true') END
+        'contact_source', displayname_source,
+        'source_is_contact', CASE WHEN displayname_contact THEN json('true') ELSE json('false') END
     ) -- metadata
 FROM puppet_old;
 
 DELETE FROM user_portal_old WHERE portal IN (SELECT tgid FROM portal_old WHERE peer_type<>'channel');
--- TODO migrate backfill queue instead of deleting
 DELETE FROM backfill_queue_old WHERE portal_tgid IN (SELECT tgid FROM portal_old WHERE peer_type<>'channel');
 
 UPDATE portal_old
