@@ -88,11 +88,13 @@ func (r *reader) nextPlain(ctx context.Context) (block, error) {
 }
 
 func (r *reader) next(ctx context.Context, offset int64, limit int) (block, error) {
+	floodOrTimeoutRetries := 0
 	for {
 		ch, err := r.sch.Chunk(ctx, offset, limit)
 
 		if flood, err := tgerr.FloodWait(ctx, err); err != nil {
-			if flood || tgerr.Is(err, tg.ErrTimeout) {
+			if (flood || tgerr.Is(err, tg.ErrTimeout)) && floodOrTimeoutRetries < 10 {
+				floodOrTimeoutRetries++
 				continue
 			}
 			return block{}, errors.Wrap(err, "get next chunk")
