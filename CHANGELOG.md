@@ -1,15 +1,15 @@
-# unreleased
+# v26.04 (unreleased)
 
 * Rewrote bridge in Go using bridgev2 architecture.
   * To migrate the bridge, simply upgrade in-place. The database and config
     will be migrated automatically, although some parts of the config aren't
-    migrated (e.g. log config).
+    migrated (e.g. log config, permission types specific to the legacy bridge).
   * It is recommended to check the config file after upgrading. If you have
     prevented the bridge from writing to the config, you should update it
     manually.
   * The old-style relaybot is not yet supported and will not be migrated.
     Setups using the relaybot will have to manually log in as a bot and use
-    `set-relay` to enable the generic relay mode.
+    `set-relay` to enable the generic [relay mode](https://docs.mau.fi/bridges/general/relay-mode.html).
 
 # v0.15.3 (2025-07-16)
 
