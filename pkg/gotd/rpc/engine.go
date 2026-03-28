@@ -231,6 +231,7 @@ func (e *Engine) retryUntilAck(ctx context.Context, req Request) (sent bool, err
 // NotifyResult notifies engine about received RPC response.
 func (e *Engine) NotifyResult(msgID int64, b *bin.Buffer) error {
 	e.mux.Lock()
+	e.notifyAckUnlocked(msgID)
 	fn, ok := e.rpc[msgID]
 	e.mux.Unlock()
 	if !ok {
@@ -245,6 +246,7 @@ func (e *Engine) NotifyResult(msgID int64, b *bin.Buffer) error {
 func (e *Engine) NotifyError(msgID int64, rpcErr error) {
 	e.onError(rpcErr)
 	e.mux.Lock()
+	e.notifyAckUnlocked(msgID)
 	fn, ok := e.rpc[msgID]
 	e.mux.Unlock()
 	if !ok {

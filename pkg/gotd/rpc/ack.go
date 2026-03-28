@@ -10,11 +10,13 @@ func (e *Engine) NotifyAcks(ids []int64) {
 	defer e.mux.Unlock()
 
 	for _, id := range ids {
-		ch, ok := e.ack[id]
-		if !ok {
-			continue
-		}
+		e.notifyAckUnlocked(id)
+	}
+}
 
+func (e *Engine) notifyAckUnlocked(id int64) {
+	ch, ok := e.ack[id]
+	if ok {
 		close(ch)
 		delete(e.ack, id)
 	}
