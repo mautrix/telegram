@@ -362,7 +362,7 @@ func legacyContactInfoFromGhost(ghost *bridgev2.Ghost) *legacyContactInfo {
 		Name:      ghost.Name,
 		Username:  username,
 		Phone:     phone,
-		IsBot:     ghost.Metadata.(*connector.GhostMetadata).IsBot,
+		IsBot:     ghost.IsBot,
 		AvatarURL: ghost.AvatarMXC,
 	}
 }

@@ -281,9 +281,8 @@ func (t *TelegramClient) wrapUserInfo(ctx context.Context, u tg.UserClass, ghost
 		ExtraUpdates: func(ctx context.Context, ghost *bridgev2.Ghost) (changed bool) {
 			meta := ghost.Metadata.(*GhostMetadata)
 			if !user.Min {
-				changed = changed || meta.IsPremium != user.Premium || meta.IsBot != user.Bot || meta.IsMin()
+				changed = changed || meta.IsPremium != user.Premium || meta.IsMin()
 				meta.IsPremium = user.Premium
-				meta.IsBot = user.Bot
 				meta.Deleted = user.Deleted
 				meta.NotMin = true
 				if meta.ContactSource == 0 || meta.ContactSource == t.telegramUserID || (!user.Contact && meta.SourceIsContact) {
