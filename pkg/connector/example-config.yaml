@@ -89,6 +89,7 @@ max_member_count: -1
 # Should personal avatars (that are only visible to specific users) be allowed?
 contact_avatars: false
 # Should contact names be updated from any source even if a name is already set?
+# Note that contact names will still be used if there's no other name available.
 contact_names: false
 # Should the bridge send all unicode reactions as custom emoji reactions to
 # Telegram? By default, the bridge only uses custom emojis for unicode emojis
