@@ -75,7 +75,7 @@ func (t *TelegramClient) fnListEmojiPacks(ce *commands.Event) {
 }
 
 func (t *TelegramClient) fnUploadEmojiPack(ce *commands.Event) {
-	if len(ce.Args) < 3 || !strings.HasPrefix(ce.Args[0], "!") {
+	if len(ce.Args) < 3 || !strings.HasPrefix(ce.Args[1], "!") {
 		ce.Reply("Usage: `$cmdprefix emoji-pack upload <telegram shortcode> <room ID> <state key>`")
 		return
 	}
