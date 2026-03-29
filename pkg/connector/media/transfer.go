@@ -23,6 +23,7 @@ import (
 	"io"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/rs/zerolog"
 	"maunium.net/go/mautrix/bridgev2"
@@ -142,18 +143,24 @@ func (t *Transferer) WithStickerConfig(cfg AnimatedStickerConfig) *Transferer {
 	return t
 }
 
-func (t *Transferer) adjustStickerSize() {
-	if (t.fileInfo.Width < 256 && t.fileInfo.Height < 256) || t.animatedStickerConfig == nil {
+func adjustStickerSize(info *event.FileInfo) {
+	if info.Width <= 256 && info.Height <= 256 {
 		return
 	}
-	if t.fileInfo.Width == t.fileInfo.Height {
-		t.fileInfo.Width, t.fileInfo.Height = 256, 256
-	} else if t.fileInfo.Width > t.fileInfo.Height {
-		t.fileInfo.Height = t.fileInfo.Height * 256 / t.fileInfo.Width
-		t.fileInfo.Width = 256
+	if info.Width == info.Height {
+		info.Width, info.Height = 256, 256
+	} else if info.Width > info.Height {
+		info.Height = info.Height * 256 / info.Width
+		info.Width = 256
 	} else {
-		t.fileInfo.Width = t.fileInfo.Width * 256 / t.fileInfo.Height
-		t.fileInfo.Height = 256
+		info.Width = info.Width * 256 / info.Height
+		info.Height = 256
+	}
+}
+
+func (t *Transferer) adjustStickerSize() {
+	if t.animatedStickerConfig != nil {
+		adjustStickerSize(&t.fileInfo)
 	}
 }
 
@@ -284,7 +291,10 @@ func (t *ReadyTransferer) Transfer(ctx context.Context, store *store.Container, 
 	if file, err := store.TelegramFile.GetByLocationID(ctx, locationID); err != nil {
 		return "", nil, nil, fmt.Errorf("failed to search for Telegram file by location ID: %w", err)
 	} else if file != nil {
-		t.inner.fileInfo.Size, t.inner.fileInfo.MimeType = file.Size, file.MIMEType
+		t.inner.fileInfo.Size = file.Size
+		t.inner.fileInfo.Width = file.Width
+		t.inner.fileInfo.Height = file.Height
+		t.inner.fileInfo.MimeType = file.MIMEType
 		return file.MXC, nil, &t.inner.fileInfo, nil
 	}
 
@@ -357,8 +367,11 @@ func (t *ReadyTransferer) Transfer(ctx context.Context, store *store.Container, 
 		file := store.TelegramFile.New()
 		file.LocationID = locationID
 		file.MXC = mxc
-		file.Size = t.inner.fileInfo.Size
 		file.MIMEType = t.inner.fileInfo.MimeType
+		file.Size = t.inner.fileInfo.Size
+		file.Width = t.inner.fileInfo.Width
+		file.Height = t.inner.fileInfo.Height
+		file.Timestamp = time.Now()
 		if err = file.Insert(ctx); err != nil {
 			log.Err(err).Msg("failed to insert Telegram file into database")
 		}

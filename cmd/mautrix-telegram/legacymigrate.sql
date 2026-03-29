@@ -218,8 +218,8 @@ FROM telethon_entities_old
 WHERE phone<>''
 ON CONFLICT DO NOTHING;
 
-INSERT INTO telegram_file (id, mxc, mime_type, size)
-SELECT id, mxc, mime_type, size
+INSERT INTO telegram_file (id, mxc, mime_type, size, width, height, timestamp)
+SELECT id, mxc, mime_type, size, width, height, timestamp
 FROM telegram_file_old;
 
 INSERT INTO disappearing_message (bridge_id, mx_room, mxid, type, timer, disappear_at)

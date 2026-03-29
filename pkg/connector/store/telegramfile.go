@@ -18,16 +18,18 @@ package store
 
 import (
 	"context"
+	"database/sql"
+	"time"
 
 	"go.mau.fi/util/dbutil"
 	"maunium.net/go/mautrix/id"
 )
 
 const (
-	insertTelegramFileQuery          = "INSERT INTO telegram_file (id, mxc, mime_type, size) VALUES ($1, $2, $3, $4)"
-	getTelegramFileSelect            = "SELECT id, mxc, mime_type, size FROM telegram_file "
-	getTelegramFileByLocationIDQuery = getTelegramFileSelect + "WHERE id=$1"
-	getTelegramFileByMXCQuery        = getTelegramFileSelect + "WHERE mxc=$1"
+	insertTelegramFileQuery          = "INSERT INTO telegram_file (id, mxc, mime_type, size, width, height, timestamp) VALUES ($1, $2, $3, $4, $5, $6, $7)"
+	getTelegramFileSelect            = "SELECT id, mxc, mime_type, size, width, height, timestamp FROM telegram_file"
+	getTelegramFileByLocationIDQuery = getTelegramFileSelect + " WHERE id=$1"
+	getTelegramFileByMXCQuery        = getTelegramFileSelect + " WHERE mxc=$1"
 )
 
 type TelegramFileQuery struct {
@@ -43,6 +45,9 @@ type TelegramFile struct {
 	MXC        id.ContentURIString
 	MIMEType   string
 	Size       int
+	Width      int
+	Height     int
+	Timestamp  time.Time
 }
 
 var _ dbutil.DataStruct[*TelegramFile] = (*TelegramFile)(nil)
@@ -60,7 +65,15 @@ func (fq *TelegramFileQuery) GetByMXC(ctx context.Context, mxc string) (*Telegra
 }
 
 func (f *TelegramFile) sqlVariables() []any {
-	return []any{f.LocationID, f.MXC, f.MIMEType, f.Size}
+	return []any{
+		f.LocationID,
+		f.MXC,
+		dbutil.StrPtr(f.MIMEType),
+		dbutil.NumPtr(f.Size),
+		dbutil.NumPtr(f.Width),
+		dbutil.NumPtr(f.Height),
+		dbutil.ConvertedPtr(f.Timestamp, time.Time.Unix),
+	}
 }
 
 func (f *TelegramFile) Insert(ctx context.Context) error {
@@ -68,5 +81,18 @@ func (f *TelegramFile) Insert(ctx context.Context) error {
 }
 
 func (f *TelegramFile) Scan(row dbutil.Scannable) (*TelegramFile, error) {
-	return f, row.Scan(&f.LocationID, &f.MXC, &f.MIMEType, &f.Size)
+	var mime sql.NullString
+	var size, width, height, timestamp sql.NullInt64
+	err := row.Scan(&f.LocationID, &f.MXC, &mime, &size, &width, &height, &timestamp)
+	if err != nil {
+		return nil, err
+	}
+	f.MIMEType = mime.String
+	f.Size = int(size.Int64)
+	f.Width = int(width.Int64)
+	f.Height = int(height.Int64)
+	if timestamp.Int64 > 0 {
+		f.Timestamp = time.Unix(timestamp.Int64, 0)
+	}
+	return f, nil
 }

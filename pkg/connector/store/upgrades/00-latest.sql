@@ -49,7 +49,10 @@ CREATE TABLE telegram_file (
     id        TEXT PRIMARY KEY,
     mxc       TEXT NOT NULL,
     mime_type TEXT,
-    size      BIGINT
+    size      BIGINT,
+    width     INTEGER,
+    height    INTEGER,
+    timestamp BIGINT
 );
 
 CREATE INDEX telegram_file_mxc_idx ON telegram_file (mxc);
