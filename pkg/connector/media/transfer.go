@@ -165,6 +165,10 @@ func (t *Transferer) WithThumbnail(uri id.ContentURIString, file *event.Encrypte
 	t.fileInfo.ThumbnailURL = uri
 	t.fileInfo.ThumbnailFile = file
 	t.fileInfo.ThumbnailInfo = info
+	// Thumbnails are hopefully always jpeg like photos
+	if info.MimeType == "application/octet-stream" {
+		info.MimeType = "image/jpeg"
+	}
 	return t
 }
 
