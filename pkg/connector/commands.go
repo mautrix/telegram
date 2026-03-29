@@ -18,72 +18,40 @@ package connector
 
 import (
 	"slices"
-	"sync"
 
+	"maunium.net/go/mautrix/bridgev2"
 	"maunium.net/go/mautrix/bridgev2/commands"
-
-	"go.mau.fi/mautrix-telegram/pkg/gotd/tg"
+	"maunium.net/go/mautrix/format"
 )
 
-var cmdSync = &commands.FullHandler{
-	Func: fnSync,
-	Name: "sync",
+var cmdSyncChats = &commands.FullHandler{
+	Func: fnSyncChats,
+	Name: "sync-chats",
 	Help: commands.HelpMeta{
 		Section:     commands.HelpSectionChats,
-		Description: "Synchronize your chat portals, contacts and/or own info.",
-		Args:        "[`chats`|`contacts`|`me`]",
+		Description: "Synchronize your chats",
+		Args:        "[_login ID_]",
 	},
 	RequiresLogin: true,
 }
 
-func fnSync(ce *commands.Event) {
-	var only string
+func fnSyncChats(ce *commands.Event) {
+	logins := ce.User.GetUserLogins()
 	if len(ce.Args) > 0 {
-		if !slices.Contains([]string{"chats", "contacts", "me"}, ce.Args[0]) {
-			ce.Reply("Invalid argument. Use `chats`, `contacts` or `me`.")
+		logins = slices.DeleteFunc(logins, func(login *bridgev2.UserLogin) bool {
+			return !slices.Contains(ce.Args, string(login.ID))
+		})
+		if len(logins) == 0 {
+			ce.Reply("No matching logins found with provided ID(s)")
 			return
 		}
-		only = ce.Args[0]
 	}
-
-	var wg sync.WaitGroup
-	for _, login := range ce.User.GetUserLogins() {
+	for _, login := range logins {
 		client := login.Client.(*TelegramClient)
-		if only == "" || only == "chats" {
-			ce.Reply("Synchronizing chats for %s...", login.ID)
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				if err := client.syncChats(ce.Ctx, 0, false, true); err != nil {
-					ce.Reply("Failed to synchronize chats for %s: %v", login.ID, err)
-				}
-			}()
-		}
-		if only == "" || only == "contacts" {
-			ce.Reply("Synchronizing contacts...")
-			wg.Add(1)
-			go func() {
-				// TODO
-				ce.Reply("Contact sync is not yet implemented!")
-				defer wg.Done()
-			}()
-		}
-		if only == "" || only == "me" {
-			ce.Reply("Synchronizing your info...")
-			wg.Add(1)
-			go func() {
-				wg.Done()
-				if users, err := client.client.API().UsersGetUsers(ce.Ctx, []tg.InputUserClass{&tg.InputUserSelf{}}); err != nil {
-					ce.Reply("Failed to get your info for %s: %v", login.ID, err)
-				} else if len(users) == 0 {
-					ce.Reply("Failed to get your info for %s: no users returned", login.ID)
-				} else if users[0].TypeID() != tg.UserTypeID {
-					ce.Reply("Unexpected user type %s", users[0].TypeName())
-				} else if _, err = client.updateGhost(ce.Ctx, client.telegramUserID, users[0].(*tg.User)); err != nil {
-					ce.Reply("Failed to update your info for %s: %v", login.ID, err)
-				}
-			}()
+		if err := client.syncChats(ce.Ctx, 0, false, true); err != nil {
+			ce.Reply("Failed to synchronize chats for %s: %v", format.SafeMarkdownCode(login.ID), err)
+		} else {
+			ce.Reply("Successfully synchronized chats for %s", format.SafeMarkdownCode(login.ID))
 		}
 	}
-	wg.Wait()
 }
