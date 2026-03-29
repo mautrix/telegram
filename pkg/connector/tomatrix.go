@@ -273,8 +273,10 @@ func (t *TelegramClient) addForwardHeader(ctx context.Context, part *bridgev2.Co
 		)
 	case *tg.PeerChannel, *tg.PeerChat:
 		unknownType := "unknown chat"
-		if _, ok := from.(*tg.PeerChannel); ok {
+		var channelID int64
+		if ch, ok := from.(*tg.PeerChannel); ok {
 			unknownType = "unknown channel"
+			channelID = ch.ChannelID
 		}
 		portal, err := t.main.Bridge.GetExistingPortalByKey(ctx, t.makePortalKeyFromPeer(from, 0))
 		if err != nil {
@@ -292,6 +294,19 @@ func (t *TelegramClient) addForwardHeader(ctx context.Context, part *bridgev2.Co
 		} else {
 			fwdFromText = unknownType
 			fwdFromHTML = unknownType
+		}
+		if channelID != 0 && fwdFromText == unknownType {
+			ghost, err := t.main.Bridge.GetExistingGhostByID(ctx, ids.MakeChannelUserID(channelID))
+			if err != nil {
+				return err
+			} else if ghost != nil && ghost.Name != "" {
+				fwdFromText = ghost.Name
+				fwdFromHTML = fmt.Sprintf(
+					`<a href="%s">%s</a>`,
+					ghost.Intent.GetMXID().URI().MatrixToURL(),
+					html.EscapeString(fwdFromText),
+				)
+			}
 		}
 		// TODO fetch channel if not found
 	}
