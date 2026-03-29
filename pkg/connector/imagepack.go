@@ -391,6 +391,9 @@ func (t *TelegramClient) synchronizeEmojiPack(ctx context.Context, ce *commands.
 			Sticker:    *item,
 		})
 		if err != nil {
+			if tgerr.Is(err, tg.ErrStickerpackStickersTooMuch) {
+				return "", err
+			}
 			ce.Reply("Failed to add %s/%d to pack: %v", shortcode, item.Document.(*tg.InputDocument).ID, err)
 			continue
 		}
