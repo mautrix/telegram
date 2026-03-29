@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"image"
 	"io"
 	"os"
 	"strings"
@@ -140,6 +141,16 @@ func (t *Transferer) WithFilename(filename string) *Transferer {
 func (t *Transferer) WithStickerConfig(cfg AnimatedStickerConfig) *Transferer {
 	t.animatedStickerConfig = &cfg
 	t.adjustStickerSize()
+	return t
+}
+
+func (t *Transferer) WithForceWebmStickerConvert(force bool) *Transferer {
+	if force {
+		t.animatedStickerConfig.ConvertFromWebm = true
+		if t.animatedStickerConfig.Target == "webm" {
+			t.animatedStickerConfig.Target = "webp"
+		}
+	}
 	return t
 }
 
@@ -306,15 +317,32 @@ func (t *ReadyTransferer) Transfer(ctx context.Context, store *store.Container, 
 
 	needStickerConvert := t.inner.animatedStickerConfig != nil && (t.inner.fileInfo.MimeType == "application/x-tgsticker" ||
 		(t.inner.fileInfo.MimeType == "video/webm" && t.inner.animatedStickerConfig.ConvertFromWebm && t.inner.animatedStickerConfig.Target != "webm"))
+	needsDimensions := strings.HasPrefix(t.inner.fileInfo.MimeType, "image/") &&
+		t.inner.fileInfo.Width == 0 && t.inner.fileInfo.Height == 0
 
 	var thumbnailData []byte
 	var thumbnailMIMEType string
-	mxc, encryptedFileInfo, err = intent.UploadMediaStream(ctx, t.inner.roomID, int64(t.inner.fileInfo.Size), needStickerConvert, func(file io.Writer) (*bridgev2.FileStreamResult, error) {
+	mxc, encryptedFileInfo, err = intent.UploadMediaStream(ctx, t.inner.roomID, int64(t.inner.fileInfo.Size), needStickerConvert || needsDimensions, func(file io.Writer) (*bridgev2.FileStreamResult, error) {
 		_, err := io.Copy(file, reader)
 		if err != nil {
 			return nil, fmt.Errorf("failed to stream download: %w", err)
 		}
 		var replacementFile string
+		if needsDimensions {
+			osFile := file.(*os.File)
+			_, err = osFile.Seek(0, io.SeekStart)
+			if err != nil {
+				return nil, fmt.Errorf("failed to seek to start of file for sticker conversion: %w", err)
+			}
+			cfg, _, err := image.DecodeConfig(osFile)
+			if err != nil {
+				log.Debug().Err(err).Msg("Failed to decode image to detect dimensions")
+			} else {
+				t.inner.fileInfo.Width = cfg.Width
+				t.inner.fileInfo.Height = cfg.Height
+				t.inner.adjustStickerSize()
+			}
+		}
 		if needStickerConvert {
 			osFile := file.(*os.File)
 			_, err = osFile.Seek(0, io.SeekStart)

@@ -1282,6 +1282,7 @@ func (t *TelegramClient) transferEmojisToMatrix(ctx context.Context, customEmoji
 	for _, customEmojiDocument := range customEmojiDocuments {
 		mxcURI, _, _, err := media.NewTransferer(t.client.API()).
 			WithStickerConfig(t.main.Config.AnimatedSticker).
+			WithForceWebmStickerConvert(true).
 			WithDocument(customEmojiDocument, false).
 			Transfer(ctx, t.main.Store, t.main.Bridge.Bot)
 		if err != nil {
