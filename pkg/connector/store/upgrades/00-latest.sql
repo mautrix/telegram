@@ -1,4 +1,4 @@
--- v0 -> v7 (compatible with v2+): Latest revision
+-- v0 -> v8 (compatible with v2+): Latest revision
 
 CREATE TABLE telegram_user_state (
     user_id BIGINT NOT NULL PRIMARY KEY,
