@@ -104,7 +104,7 @@ func (t *TelegramClient) fnUploadEmojiPack(ce *commands.Event) {
 	}
 	evtID := ce.React("\u23f3\ufe0f")
 	defer redactReaction(ce, evtID)
-	link, err := t.synchronizeEmojiPack(ce.Ctx, pack, tgPackShortcode)
+	link, err := t.synchronizeEmojiPack(ce.Ctx, ce, pack, tgPackShortcode)
 	if err != nil {
 		ce.Reply("Failed to synchronize emoji pack: %v", err)
 		return
@@ -302,7 +302,7 @@ func extractNewDocID(oldSet tg.MessagesStickerSetClass, newSetBox tg.MessagesSti
 	return found
 }
 
-func (t *TelegramClient) synchronizeEmojiPack(ctx context.Context, pack *event.ImagePackEventContent, packShortcode string) (string, error) {
+func (t *TelegramClient) synchronizeEmojiPack(ctx context.Context, ce *commands.Event, pack *event.ImagePackEventContent, packShortcode string) (string, error) {
 	resp, err := t.client.API().StickersCheckShortName(ctx, packShortcode)
 	if err != nil && !tgerr.Is(err, tg.ErrShortNameOccupied) {
 		return "", fmt.Errorf("failed to check if shortcode is available: %w", err)
@@ -380,7 +380,8 @@ func (t *TelegramClient) synchronizeEmojiPack(ctx context.Context, pack *event.I
 			Sticker:    *item,
 		})
 		if err != nil {
-			return "", fmt.Errorf("failed to add %s/%d to set: %w", shortcode, item.Document.(*tg.InputDocument).ID, err)
+			ce.Reply("Failed to add %s/%d to pack: %v", shortcode, item.Document.(*tg.InputDocument).ID, err)
+			continue
 		}
 		err = saveCache(extractNewDocID(rawSet, rawNewSet))
 		if err != nil {
