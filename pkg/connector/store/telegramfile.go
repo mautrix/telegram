@@ -26,10 +26,13 @@ import (
 )
 
 const (
-	insertTelegramFileQuery          = "INSERT INTO telegram_file (id, mxc, mime_type, size, width, height, timestamp) VALUES ($1, $2, $3, $4, $5, $6, $7)"
+	insertTelegramFileQuery = `
+		INSERT INTO telegram_file (id, mxc, mime_type, size, width, height, timestamp)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
+	`
 	getTelegramFileSelect            = "SELECT id, mxc, mime_type, size, width, height, timestamp FROM telegram_file"
 	getTelegramFileByLocationIDQuery = getTelegramFileSelect + " WHERE id=$1"
-	getTelegramFileByMXCQuery        = getTelegramFileSelect + " WHERE mxc=$1"
+	getTelegramFileByMXCQuery        = getTelegramFileSelect + " WHERE mxc=$1 ORDER BY timestamp DESC LIMIT 1"
 )
 
 type TelegramFileQuery struct {
@@ -39,8 +42,6 @@ type TelegramFileQuery struct {
 type TelegramFileLocationID string
 
 type TelegramFile struct {
-	qh *dbutil.QueryHelper[*TelegramFile]
-
 	LocationID TelegramFileLocationID
 	MXC        id.ContentURIString
 	MIMEType   string
@@ -53,7 +54,7 @@ type TelegramFile struct {
 var _ dbutil.DataStruct[*TelegramFile] = (*TelegramFile)(nil)
 
 func newTelegramFile(qh *dbutil.QueryHelper[*TelegramFile]) *TelegramFile {
-	return &TelegramFile{qh: qh}
+	return &TelegramFile{}
 }
 
 func (fq *TelegramFileQuery) GetByLocationID(ctx context.Context, locationID TelegramFileLocationID) (*TelegramFile, error) {
@@ -62,6 +63,10 @@ func (fq *TelegramFileQuery) GetByLocationID(ctx context.Context, locationID Tel
 
 func (fq *TelegramFileQuery) GetByMXC(ctx context.Context, mxc id.ContentURIString) (*TelegramFile, error) {
 	return fq.QueryOne(ctx, getTelegramFileByMXCQuery, mxc)
+}
+
+func (fq *TelegramFileQuery) Insert(ctx context.Context, f *TelegramFile) error {
+	return fq.Exec(ctx, insertTelegramFileQuery, f.sqlVariables()...)
 }
 
 func (f *TelegramFile) sqlVariables() []any {
@@ -74,10 +79,6 @@ func (f *TelegramFile) sqlVariables() []any {
 		dbutil.NumPtr(f.Height),
 		dbutil.ConvertedPtr(f.Timestamp, time.Time.Unix),
 	}
-}
-
-func (f *TelegramFile) Insert(ctx context.Context) error {
-	return f.qh.Exec(ctx, insertTelegramFileQuery, f.sqlVariables()...)
 }
 
 func (f *TelegramFile) Scan(row dbutil.Scannable) (*TelegramFile, error) {

@@ -18,9 +18,12 @@ package connector
 
 import (
 	"slices"
+	"strings"
 
+	_ "golang.org/x/image/webp"
 	"maunium.net/go/mautrix/bridgev2"
 	"maunium.net/go/mautrix/bridgev2/commands"
+	"maunium.net/go/mautrix/bridgev2/networkid"
 	"maunium.net/go/mautrix/format"
 )
 
@@ -53,5 +56,62 @@ func fnSyncChats(ce *commands.Event) {
 		} else {
 			ce.Reply("Successfully synchronized chats for %s", format.SafeMarkdownCode(login.ID))
 		}
+	}
+}
+
+var cmdEmojiPack = &commands.FullHandler{
+	Func:    fnEmojiPack,
+	Name:    "emoji-pack",
+	Aliases: []string{"pack", "sticker-pack", "emojipack", "stickerpack"},
+	Help: commands.HelpMeta{
+		Section:     commands.HelpSectionChats,
+		Description: "Bridge emoji packs between Matrix and Telegram.",
+		Args:        "<upload/download/list/help> [args...]",
+	},
+	RequiresLogin: true,
+}
+
+const emojiPackHelp = `This command can be used to transfer emoji packs between Matrix and Telegram.
+
+* $cmdprefix emoji-pack upload <room ID> <pack key> - Transfer a pack from Matrix to Telegram.
+* $cmdprefix emoji-pack download <pack shortcode or link> - Transfer a pack from Telegram to Matrix.
+* $cmdprefix emoji-pack list - List your current emoji packs on Telegram.
+* $cmdprefix emoji-pack help - Show this help message.`
+
+func fnEmojiPack(ce *commands.Event) {
+	var login *bridgev2.UserLogin
+	if len(ce.Args) > 0 {
+		targetLogin := ce.Bridge.GetCachedUserLoginByID(networkid.UserLoginID(ce.Args[0]))
+		if targetLogin != nil && targetLogin.UserMXID == ce.User.MXID {
+			ce.Args = ce.Args[1:]
+			login = targetLogin
+		}
+	}
+	var command string
+	if len(ce.Args) > 0 {
+		command = strings.ToLower(ce.Args[0])
+		ce.Args = ce.Args[1:]
+	}
+
+	if login == nil {
+		login = ce.User.GetDefaultLogin()
+		if login == nil {
+			ce.Reply("You're not logged in.")
+			return
+		}
+	}
+	client := login.Client.(*TelegramClient)
+
+	switch command {
+	case "help", "":
+		ce.Reply(emojiPackHelp)
+	case "list":
+		client.fnListEmojiPacks(ce)
+	case "upload":
+		client.fnUploadEmojiPack(ce)
+	case "download":
+		client.fnDownloadEmojiPack(ce)
+	default:
+		ce.Reply("Usage: `$cmdprefix emoji-pack <upload/download/list/help> [args...]`")
 	}
 }

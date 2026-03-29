@@ -290,7 +290,7 @@ func (t *Transferer) WithPeerPhoto(peer tg.InputPeerClass, photoID int64) *Ready
 // If there is a sticker config on the [Transferer], this function converts
 // animated stickers to the target format specified by the specified
 // [AnimatedStickerConfig].
-func (t *ReadyTransferer) Transfer(ctx context.Context, store *store.Container, intent bridgev2.MatrixAPI) (mxc id.ContentURIString, encryptedFileInfo *event.EncryptedFileInfo, outFileInfo *event.FileInfo, err error) {
+func (t *ReadyTransferer) Transfer(ctx context.Context, db *store.Container, intent bridgev2.MatrixAPI) (mxc id.ContentURIString, encryptedFileInfo *event.EncryptedFileInfo, outFileInfo *event.FileInfo, err error) {
 	locationID := getLocationID(t.loc)
 	log := zerolog.Ctx(ctx).With().
 		Str("component", "media_transfer").
@@ -299,7 +299,7 @@ func (t *ReadyTransferer) Transfer(ctx context.Context, store *store.Container, 
 	ctx = log.WithContext(ctx)
 	log.Debug().Msg("Transferring file from Telegram to Matrix")
 
-	if file, err := store.TelegramFile.GetByLocationID(ctx, locationID); err != nil {
+	if file, err := db.TelegramFile.GetByLocationID(ctx, locationID); err != nil {
 		return "", nil, nil, fmt.Errorf("failed to search for Telegram file by location ID: %w", err)
 	} else if file != nil {
 		t.inner.fileInfo.Size = file.Size
@@ -392,15 +392,16 @@ func (t *ReadyTransferer) Transfer(ctx context.Context, store *store.Container, 
 	// If it's an unencrypted file, cache the MXC URI corresponding to the
 	// location ID.
 	if len(mxc) > 0 {
-		file := store.TelegramFile.New()
-		file.LocationID = locationID
-		file.MXC = mxc
-		file.MIMEType = t.inner.fileInfo.MimeType
-		file.Size = t.inner.fileInfo.Size
-		file.Width = t.inner.fileInfo.Width
-		file.Height = t.inner.fileInfo.Height
-		file.Timestamp = time.Now()
-		if err = file.Insert(ctx); err != nil {
+		err = db.TelegramFile.Insert(ctx, &store.TelegramFile{
+			LocationID: locationID,
+			MXC:        mxc,
+			MIMEType:   t.inner.fileInfo.MimeType,
+			Size:       t.inner.fileInfo.Size,
+			Width:      t.inner.fileInfo.Width,
+			Height:     t.inner.fileInfo.Height,
+			Timestamp:  time.Now(),
+		})
+		if err != nil {
 			log.Err(err).Msg("failed to insert Telegram file into database")
 		}
 	}
