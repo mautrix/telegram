@@ -257,7 +257,9 @@ func (t *TelegramClient) wrapUserInfo(ctx context.Context, u tg.UserClass, ghost
 	photo, ok := user.Photo.(*tg.UserProfilePhoto)
 	if ok &&
 		(!user.Min || user.ApplyMinPhoto || oldMeta.IsMin()) &&
-		(!photo.Personal || t.main.Config.ContactAvatars) {
+		// Hack: check ApplyMinPhoto in addition to Personal, because some personalized avatars
+		// only have the ApplyMinPhoto flag and not Personal.
+		((!photo.Personal && user.ApplyMinPhoto) || t.main.Config.ContactAvatars) {
 		var err error
 		avatar, err = t.convertUserProfilePhoto(ctx, user, photo)
 		if err != nil {
