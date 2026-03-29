@@ -357,21 +357,23 @@ func (t *TelegramClient) synchronizeEmojiPack(ctx context.Context, ce *commands.
 		ID:         set.Set.ID,
 		AccessHash: set.Set.AccessHash,
 	}
-	existingMXCs := make(map[id.ContentURIString]*tg.InputDocument, len(set.Documents))
+	deletedMXCs := make(map[id.ContentURIString]*tg.InputDocument, len(set.Documents))
+	existingMXCs := make(exmaps.Set[id.ContentURIString], len(set.Documents))
 	for _, doc := range set.Documents {
 		file, err := t.main.Store.TelegramFile.GetByLocationID(ctx, store.TelegramFileLocationID(strconv.FormatInt(doc.GetID(), 10)))
 		if err != nil {
 			return "", fmt.Errorf("failed to get cached file for doc %d: %w", doc.GetID(), err)
 		} else if file != nil {
-			existingMXCs[file.MXC] = doc.(*tg.Document).AsInput()
+			deletedMXCs[file.MXC] = doc.(*tg.Document).AsInput()
+			existingMXCs.Add(file.MXC)
 		}
 	}
 	for shortcode, img := range pack.Images {
-		_, exists := existingMXCs[img.URL]
-		if exists {
-			delete(existingMXCs, img.URL)
+		if existingMXCs.Has(img.URL) {
+			delete(deletedMXCs, img.URL)
 			continue
 		}
+		existingMXCs.Add(img.URL)
 		item, saveCache, err := t.synchronizeEmoji(ctx, shortcode, img, isEmojiPack)
 		if err != nil {
 			ce.Reply("Failed to reupload %s: %v", shortcode, err)
@@ -391,7 +393,7 @@ func (t *TelegramClient) synchronizeEmojiPack(ctx context.Context, ce *commands.
 		}
 		rawSet = rawNewSet
 	}
-	for mxc, inputDoc := range existingMXCs {
+	for mxc, inputDoc := range deletedMXCs {
 		_, err = t.client.API().StickersRemoveStickerFromSet(ctx, inputDoc)
 		if err != nil {
 			return "", fmt.Errorf("failed to remove %s/%d from set: %w", mxc, inputDoc.ID, err)
