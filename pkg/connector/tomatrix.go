@@ -386,9 +386,9 @@ func (c *TelegramClient) webpageToBeeperLinkPreview(ctx context.Context, portal 
 		},
 	}
 
-	if pc, ok := webpage.GetPhoto(); ok && pc.TypeID() == tg.PhotoTypeID {
+	if photo, ok := webpage.Photo.(*tg.Photo); ok {
 		var fileInfo *event.FileInfo
-		transferer := media.NewTransferer(c.client.API()).WithPhoto(pc)
+		transferer := media.NewTransferer(c.client.API()).WithPhoto(photo)
 		if c.main.useDirectMedia {
 			preview.ImageURL, fileInfo, err = transferer.DirectDownloadURL(ctx, c.telegramUserID, portal, msg.ID, true, 0)
 		} else {
@@ -400,6 +400,10 @@ func (c *TelegramClient) webpageToBeeperLinkPreview(ctx context.Context, portal 
 		preview.ImageSize = event.IntOrString(fileInfo.Size)
 		preview.ImageWidth = event.IntOrString(fileInfo.Width)
 		preview.ImageHeight = event.IntOrString(fileInfo.Height)
+		preview.ImageType = fileInfo.MimeType
+		if fileInfo.MimeType == "application/octet-stream" {
+			preview.ImageType = "image/jpeg"
+		}
 	}
 
 	return preview, nil
