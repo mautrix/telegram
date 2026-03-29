@@ -972,6 +972,9 @@ func (t *TelegramClient) onUpdate(ctx context.Context, e tg.Entities, upd tg.Upd
 		return t.onChat(ctx, e, update)
 	case *tg.UpdatePhoneCall:
 		return t.onPhoneCall(ctx, e, update)
+	case *tg.UpdateUserStatus:
+		// ignored
+		return nil
 	default:
 		zerolog.Ctx(ctx).Debug().Type("update_type", update).Msg("Unhandled update type")
 		return nil
