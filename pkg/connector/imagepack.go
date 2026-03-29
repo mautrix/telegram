@@ -222,10 +222,15 @@ func (t *TelegramClient) synchronizeEmoji(
 	if img.Info.MimeType == "" {
 		img.Info.MimeType = http.DetectContentType(data)
 	}
-	if img.Info.Width == 0 || img.Info.Height == 0 {
-		cfg, _, _ := image.DecodeConfig(bytes.NewReader(data))
-		img.Info.Width = cfg.Width
-		img.Info.Height = cfg.Height
+	origWidth, origHeight := img.Info.Width, img.Info.Height
+	cfg, _, err := image.DecodeConfig(bytes.NewReader(data))
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to decode image config for %s: %w", shortcode, err)
+	}
+	img.Info.Width = cfg.Width
+	img.Info.Height = cfg.Height
+	if origWidth == 0 || origHeight == 0 {
+		origWidth, origHeight = cfg.Width, cfg.Height
 	}
 	data, mime, err := normalizeImage(ctx, data, img.Info, emoji)
 	if err != nil {
@@ -263,8 +268,8 @@ func (t *TelegramClient) synchronizeEmoji(
 			MXC:        img.URL,
 			MIMEType:   img.Info.MimeType,
 			Size:       len(data),
-			Width:      img.Info.Width,
-			Height:     img.Info.Height,
+			Width:      origWidth,
+			Height:     origHeight,
 			Timestamp:  time.Now(),
 		})
 		if err != nil {
