@@ -180,6 +180,7 @@ func convertGIFToWebM(ctx context.Context, data []byte, scaleFilter string) ([]b
 		"-vf", scaleFilter,
 		"-c:v", "libvpx-vp9",
 		"-pix_fmt", "yuva420p",
+		"-t", "3",
 		"-f", "webm",
 	}, "image/gif")
 	if err != nil {
