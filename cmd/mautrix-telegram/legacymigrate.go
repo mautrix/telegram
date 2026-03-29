@@ -39,6 +39,7 @@ ALTER TABLE telethon_sessions RENAME TO telethon_sessions_old;
 ALTER TABLE telethon_update_state RENAME TO telethon_update_state_old;
 ALTER TABLE "user" RENAME TO user_old;
 ALTER TABLE user_portal RENAME TO user_portal_old;
+DROP INDEX IF EXISTS telegram_file_mxc_idx;
 `
 
 //go:embed legacymigrate.sql
