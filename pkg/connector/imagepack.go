@@ -374,7 +374,8 @@ func (t *TelegramClient) synchronizeEmojiPack(ctx context.Context, ce *commands.
 		}
 		item, saveCache, err := t.synchronizeEmoji(ctx, shortcode, img, isEmojiPack)
 		if err != nil {
-			return "", fmt.Errorf("failed to synchronize emoji %s: %w", shortcode, err)
+			ce.Reply("Failed to reupload %s: %v", shortcode, err)
+			continue
 		}
 		rawNewSet, err := t.client.API().StickersAddStickerToSet(ctx, &tg.StickersAddStickerToSetRequest{
 			Stickerset: inputSet,
