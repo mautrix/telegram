@@ -267,14 +267,14 @@ func NewTelegramClient(ctx context.Context, tc *TelegramConnector, login *bridge
 			group := submatches[1]
 			msgID, err := strconv.Atoi(submatches[2])
 			if err != nil {
-				log.Err(err).Msg("error parsing message ID")
+				log.Trace().Err(err).Str("url", url).Msg("Failed to parse message/topic ID in t.me link")
 				return url
 			}
 			var topicID int
 			if len(submatches) == 4 && submatches[3] != "" {
 				lastID, err := strconv.Atoi(submatches[3])
 				if err != nil {
-					log.Err(err).Msg("error parsing actual message ID")
+					log.Trace().Err(err).Str("url", url).Msg("Failed to parse message ID in t.me link")
 					return url
 				}
 				topicID = msgID
@@ -286,7 +286,7 @@ func NewTelegramClient(ctx context.Context, tc *TelegramConnector, login *bridge
 			if strings.HasPrefix(group, "C/") || strings.HasPrefix(group, "c/") {
 				chatID, err := strconv.ParseInt(submatches[1][2:], 10, 64)
 				if err != nil {
-					log.Err(err).Msg("error parsing channel ID")
+					log.Trace().Err(err).Str("url", url).Msg("Failed to parse channel ID in t.me link")
 					return url
 				}
 				portalKey = client.makePortalKeyFromID(ids.PeerTypeChannel, chatID, topicID)
@@ -305,19 +305,23 @@ func NewTelegramClient(ctx context.Context, tc *TelegramConnector, login *bridge
 
 			portal, err := tc.Bridge.DB.Portal.GetByKey(ctx, portalKey)
 			if err != nil {
-				log.Err(err).Msg("error getting portal")
+				log.Err(err).Msg("Failed to get portal referenced by link in text")
 				return url
 			} else if portal == nil {
-				log.Warn().Msg("portal not found")
+				log.Trace().
+					Str("url", url).
+					Msg("Portal referenced by link not found, using t.me link")
 				return url
 			}
 
 			message, err := tc.Bridge.DB.Message.GetFirstPartByID(ctx, client.loginID, ids.MakeMessageID(portalKey, msgID))
 			if err != nil {
-				log.Err(err).Msg("error getting referenced message")
+				log.Err(err).Msg("Failed to get message referenced by link in text")
 				return url
 			} else if message == nil {
-				log.Warn().Err(err).Msg("message not found")
+				log.Trace().
+					Str("url", url).
+					Msg("Message referenced by link not found, using t.me link")
 				return url
 			}
 
