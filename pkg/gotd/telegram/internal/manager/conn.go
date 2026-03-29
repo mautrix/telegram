@@ -114,13 +114,24 @@ func (c *Conn) trackInvoke() func(bin.Encoder, bin.Decoder, *error) {
 		end := c.clock.Now()
 		c.latest = end
 
-		var respField, reqField zap.Field
+		var reqField zap.Field
+		respField := zap.Skip()
 		if *retErr != nil {
 			respField = zap.Error(*retErr)
-		} else if _, isFile := output.(*tg.UploadFileBox); !isFile {
-			respField = zap.Any("response_payload", output)
+		} else if box, isFile := output.(*tg.UploadFileBox); isFile {
+			if uploadFile, ok := box.File.(*tg.UploadFile); ok {
+				respField = zap.Dict("response_payload",
+					zap.Int("size", len(uploadFile.Bytes)),
+					zap.Int("mtime", uploadFile.Mtime),
+					zap.Stringer("type", uploadFile.Type))
+			}
+		} else if cdnFile, isCDNFile := output.(*tg.UploadCDNFileBox); isCDNFile {
+			if uploadFile, ok := cdnFile.CdnFile.(*tg.UploadCDNFile); ok {
+				respField = zap.Dict("response_payload",
+					zap.Int("size", len(uploadFile.Bytes)))
+			}
 		} else {
-			respField = zap.Skip()
+			respField = zap.Any("response_payload", output)
 		}
 		if f, isFile := input.(*tg.UploadSaveFilePartRequest); isFile {
 			reqField = zap.String("request_payload", fmt.Sprintf("%d bytes for part %d of %d", len(f.Bytes), f.FilePart, f.FileID))
