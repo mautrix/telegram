@@ -405,7 +405,7 @@ func (parser *HTMLParser) imgToString(node *html.Node, ctx Context) *EntityStrin
 	if !isEmoji {
 		return NewEntityString(alt)
 	}
-	if file, _ := parser.Store.TelegramFile.GetByMXC(ctx.Ctx, src); file != nil {
+	if file, _ := parser.Store.TelegramFile.GetByMXC(ctx.Ctx, id.ContentURIString(src)); file != nil {
 		if documentID, err := strconv.ParseInt(string(file.LocationID), 10, 64); err == nil {
 			// Hardcode to a sparkle emoji because telegram requires the custom emoji fallback to be an emoji,
 			// but we don't know the actual emoji that should be used.

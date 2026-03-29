@@ -60,7 +60,7 @@ func (fq *TelegramFileQuery) GetByLocationID(ctx context.Context, locationID Tel
 	return fq.QueryOne(ctx, getTelegramFileByLocationIDQuery, locationID)
 }
 
-func (fq *TelegramFileQuery) GetByMXC(ctx context.Context, mxc string) (*TelegramFile, error) {
+func (fq *TelegramFileQuery) GetByMXC(ctx context.Context, mxc id.ContentURIString) (*TelegramFile, error) {
 	return fq.QueryOne(ctx, getTelegramFileByMXCQuery, mxc)
 }
 

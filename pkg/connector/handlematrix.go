@@ -560,7 +560,7 @@ func (t *TelegramClient) PreHandleMatrixReaction(ctx context.Context, msg *bridg
 	keyNoVariation := variationselector.Remove(msg.Content.RelatesTo.Key)
 	emojiID := ids.MakeEmojiIDFromEmoticon(msg.Content.RelatesTo.Key)
 	if strings.HasPrefix(msg.Content.RelatesTo.Key, "mxc://") {
-		if file, err := t.main.Store.TelegramFile.GetByMXC(ctx, msg.Content.RelatesTo.Key); err != nil {
+		if file, err := t.main.Store.TelegramFile.GetByMXC(ctx, id.ContentURIString(msg.Content.RelatesTo.Key)); err != nil {
 			return resp, err
 		} else if file == nil {
 			return resp, fmt.Errorf("reaction MXC URI %s does not correspond with any known Telegram files", msg.Content.RelatesTo.Key)
