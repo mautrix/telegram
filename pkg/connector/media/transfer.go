@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 
 	"github.com/rs/zerolog"
 	"maunium.net/go/mautrix/bridgev2"
@@ -96,7 +97,7 @@ func getLocationID(loc any) (locID store.TelegramFileLocationID) {
 	default:
 		panic(fmt.Errorf("unknown location type %T", location))
 	}
-	return store.TelegramFileLocationID(id)
+	return store.TelegramFileLocationID(strings.TrimRight(id, "-"))
 }
 
 // Transferer is a utility for downloading media from Telegram and uploading it

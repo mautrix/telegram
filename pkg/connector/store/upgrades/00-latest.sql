@@ -1,4 +1,4 @@
--- v0 -> v6 (compatible with v2+): Latest revision
+-- v0 -> v7 (compatible with v2+): Latest revision
 
 CREATE TABLE telegram_user_state (
     user_id BIGINT NOT NULL PRIMARY KEY,
@@ -51,6 +51,8 @@ CREATE TABLE telegram_file (
     mime_type TEXT,
     size      BIGINT
 );
+
+CREATE INDEX telegram_file_mxc_idx ON telegram_file (mxc);
 
 CREATE TABLE telegram_topic (
     channel_id BIGINT NOT NULL,
