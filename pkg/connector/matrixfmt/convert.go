@@ -77,6 +77,8 @@ func toTelegramEntity(br telegramfmt.BodyRange) tg.MessageEntityClass {
 			return &tg.MessageEntitySpoiler{Offset: br.Start, Length: br.Length}
 		case telegramfmt.StyleBankCard:
 			return &tg.MessageEntityBankCard{Offset: br.Start, Length: br.Length}
+		case telegramfmt.StyleCustomEmoji:
+			return &tg.MessageEntityCustomEmoji{Offset: br.Start, Length: br.Length, DocumentID: val.EmojiInfo.DocumentID}
 		default:
 			panic("unsupported style type")
 		}

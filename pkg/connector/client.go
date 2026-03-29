@@ -329,6 +329,7 @@ func NewTelegramClient(ctx context.Context, tc *TelegramConnector, login *bridge
 		},
 	}
 	client.matrixParser = &matrixfmt.HTMLParser{
+		Store: tc.Store,
 		GetGhostDetails: func(ctx context.Context, ui id.UserID) (networkid.UserID, string, int64, bool) {
 			if userID, ok := tc.Bridge.Matrix.ParseGhostMXID(ui); !ok {
 				return "", "", 0, false

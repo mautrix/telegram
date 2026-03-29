@@ -1264,7 +1264,7 @@ func (t *TelegramClient) transferEmojisToMatrix(ctx context.Context, customEmoji
 			if mxcURI, err := t.main.Bridge.Matrix.GenerateContentURI(ctx, mediaID); err != nil {
 				return nil, err
 			} else {
-				result[ids.MakeEmojiIDFromDocumentID(emojiID)] = emojis.EmojiInfo{EmojiURI: mxcURI}
+				result[ids.MakeEmojiIDFromDocumentID(emojiID)] = emojis.EmojiInfo{EmojiURI: mxcURI, DocumentID: emojiID}
 			}
 		}
 
@@ -1284,7 +1284,7 @@ func (t *TelegramClient) transferEmojisToMatrix(ctx context.Context, customEmoji
 		if err != nil {
 			return nil, err
 		}
-		result[ids.MakeEmojiIDFromDocumentID(customEmojiDocument.GetID())] = emojis.EmojiInfo{EmojiURI: mxcURI}
+		result[ids.MakeEmojiIDFromDocumentID(customEmojiDocument.GetID())] = emojis.EmojiInfo{EmojiURI: mxcURI, DocumentID: customEmojiDocument.GetID()}
 	}
 	return
 }

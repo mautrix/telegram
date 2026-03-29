@@ -63,7 +63,7 @@ func (s Style) Format(message string) string {
 			return s.EmojiInfo.Emoji
 		} else if s.EmojiInfo.EmojiURI != "" {
 			return fmt.Sprintf(
-				`<img data-mx-emoticon data-mau-animated-emoji src="%s" height="32" width="32" alt="%s" title="%s"/>`,
+				`<img data-mx-emoticon src="%s" height="32" width="32" alt="%s" title="%s"/>`,
 				s.EmojiInfo.EmojiURI, message, message,
 			)
 		}

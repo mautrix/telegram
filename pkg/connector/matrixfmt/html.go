@@ -29,6 +29,8 @@ import (
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 
+	"go.mau.fi/mautrix-telegram/pkg/connector/emojis"
+	"go.mau.fi/mautrix-telegram/pkg/connector/store"
 	"go.mau.fi/mautrix-telegram/pkg/connector/telegramfmt"
 )
 
@@ -250,6 +252,7 @@ func (ctx Context) WithIncrementedListDepth() Context {
 // HTMLParser is a somewhat customizable Matrix HTML parser.
 type HTMLParser struct {
 	GetGhostDetails func(context.Context, id.UserID) (networkid.UserID, string, int64, bool)
+	Store           *store.Container
 }
 
 // TaggedString is a string that also contains a HTML tag.
@@ -395,6 +398,23 @@ func (parser *HTMLParser) linkToString(node *html.Node, ctx Context) *EntityStri
 	}
 }
 
+func (parser *HTMLParser) imgToString(node *html.Node, ctx Context) *EntityString {
+	src := parser.getAttribute(node, "src")
+	alt := parser.getAttribute(node, "alt")
+	_, isEmoji := parser.maybeGetAttribute(node, "data-mx-emoticon")
+	if !isEmoji {
+		return NewEntityString(alt)
+	}
+	if file, _ := parser.Store.TelegramFile.GetByMXC(ctx.Ctx, src); file != nil {
+		if documentID, err := strconv.ParseInt(string(file.LocationID), 10, 64); err == nil {
+			// Hardcode to a sparkle emoji because telegram requires the custom emoji fallback to be an emoji,
+			// but we don't know the actual emoji that should be used.
+			return NewEntityString("\u2728\ufe0f").Format(telegramfmt.Style{Type: telegramfmt.StyleCustomEmoji, EmojiInfo: emojis.EmojiInfo{DocumentID: documentID}})
+		}
+	}
+	return NewEntityString(alt)
+}
+
 func (parser *HTMLParser) tagToString(node *html.Node, ctx Context) *EntityString {
 	ctx = ctx.WithTag(node.Data)
 	switch node.Data {
@@ -416,6 +436,8 @@ func (parser *HTMLParser) tagToString(node *html.Node, ctx Context) *EntityStrin
 		return parser.linkToString(node, ctx)
 	case "p":
 		return parser.nodeToTagAwareString(node.FirstChild, ctx)
+	case "img":
+		return parser.imgToString(node, ctx)
 	case "hr":
 		return NewEntityString("---")
 	case "pre":

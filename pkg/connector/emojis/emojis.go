@@ -69,6 +69,7 @@ func GetEmojiDocumentID(emoji string) (int64, bool) {
 
 // EmojiInfo contains information about an emoji.
 type EmojiInfo struct {
-	Emoji    string
-	EmojiURI id.ContentURIString
+	Emoji      string
+	DocumentID int64
+	EmojiURI   id.ContentURIString
 }
