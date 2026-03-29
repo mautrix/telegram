@@ -20,7 +20,6 @@ import (
 	"slices"
 	"strings"
 
-	_ "golang.org/x/image/webp"
 	"maunium.net/go/mautrix/bridgev2"
 	"maunium.net/go/mautrix/bridgev2/commands"
 	"maunium.net/go/mautrix/bridgev2/networkid"
