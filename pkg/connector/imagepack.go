@@ -76,7 +76,7 @@ func (t *TelegramClient) fnListEmojiPacks(ce *commands.Event) {
 
 func (t *TelegramClient) fnUploadEmojiPack(ce *commands.Event) {
 	if len(ce.Args) < 3 || !strings.HasPrefix(ce.Args[0], "!") {
-		ce.Reply("Usage: `$cmdprefix emoji-pack upload <room ID> <state key> <telegram shortcode>`")
+		ce.Reply("Usage: `$cmdprefix emoji-pack upload <telegram shortcode> <room ID> <state key>`")
 		return
 	}
 	mx, ok := t.main.Bridge.Matrix.(bridgev2.MatrixConnectorWithArbitraryRoomState)
@@ -84,12 +84,15 @@ func (t *TelegramClient) fnUploadEmojiPack(ce *commands.Event) {
 		ce.Reply("Matrix connector does not support fetching room state")
 		return
 	}
-	err := t.main.Bridge.Bot.EnsureJoined(ce.Ctx, id.RoomID(ce.Args[0]))
+	tgPackShortcode := ce.Args[0]
+	roomID := id.RoomID(ce.Args[1])
+	packStateKey := strings.Join(ce.Args[2:], " ")
+	err := t.main.Bridge.Bot.EnsureJoined(ce.Ctx, roomID)
 	if err != nil {
 		ce.Reply("Failed to join room: %v", err)
 		return
 	}
-	evt, err := mx.GetStateEvent(ce.Ctx, id.RoomID(ce.Args[0]), event.Type{Type: "im.ponies.room_emotes", Class: event.StateEventType}, ce.Args[1])
+	evt, err := mx.GetStateEvent(ce.Ctx, roomID, event.Type{Type: "im.ponies.room_emotes", Class: event.StateEventType}, packStateKey)
 	if err != nil {
 		ce.Reply("Failed to get state event: %v", err)
 		return
@@ -101,12 +104,12 @@ func (t *TelegramClient) fnUploadEmojiPack(ce *commands.Event) {
 	}
 	evtID := ce.React("\u23f3\ufe0f")
 	defer redactReaction(ce, evtID)
-	err = t.synchronizeEmojiPack(ce.Ctx, pack, ce.Args[2])
+	link, err := t.synchronizeEmojiPack(ce.Ctx, pack, tgPackShortcode)
 	if err != nil {
 		ce.Reply("Failed to synchronize emoji pack: %v", err)
 		return
 	}
-	ce.Reply("Successfully synchronized https://t.me/addstickers/%s", ce.Args[2])
+	ce.Reply("Successfully synchronized %s", link)
 }
 
 func resizeEmoji(src image.Image, size int) *image.RGBA {
@@ -299,10 +302,10 @@ func extractNewDocID(oldSet tg.MessagesStickerSetClass, newSetBox tg.MessagesSti
 	return found
 }
 
-func (t *TelegramClient) synchronizeEmojiPack(ctx context.Context, pack *event.ImagePackEventContent, packShortcode string) error {
+func (t *TelegramClient) synchronizeEmojiPack(ctx context.Context, pack *event.ImagePackEventContent, packShortcode string) (string, error) {
 	resp, err := t.client.API().StickersCheckShortName(ctx, packShortcode)
 	if err != nil && !tgerr.Is(err, tg.ErrShortNameOccupied) {
-		return fmt.Errorf("failed to check if shortcode is available: %w", err)
+		return "", fmt.Errorf("failed to check if shortcode is available: %w", err)
 	}
 	isEmojiPack := slices.Contains(pack.Metadata.Usage, event.ImagePackUsageEmoji) || len(pack.Metadata.Usage) == 0
 	var rawSet tg.MessagesStickerSetClass
@@ -313,11 +316,11 @@ func (t *TelegramClient) synchronizeEmojiPack(ctx context.Context, pack *event.I
 			break
 		}
 		if img == nil {
-			return fmt.Errorf("pack must contain at least one image")
+			return "", fmt.Errorf("pack must contain at least one image")
 		}
 		item, saveCache, err := t.synchronizeEmoji(ctx, shortcode, img, isEmojiPack)
 		if err != nil {
-			return fmt.Errorf("failed to synchronize emoji %s: %w", shortcode, err)
+			return "", fmt.Errorf("failed to synchronize emoji %s: %w", shortcode, err)
 		}
 		rawSet, err = t.client.API().StickersCreateStickerSet(ctx, &tg.StickersCreateStickerSetRequest{
 			Emojis:    isEmojiPack,
@@ -327,26 +330,26 @@ func (t *TelegramClient) synchronizeEmojiPack(ctx context.Context, pack *event.I
 			Stickers:  []tg.InputStickerSetItem{*item},
 		})
 		if err != nil {
-			return fmt.Errorf("failed to create pack: %w", err)
+			return "", fmt.Errorf("failed to create pack: %w", err)
 		}
 		err = saveCache(extractNewDocID(nil, rawSet))
 		if err != nil {
-			return fmt.Errorf("failed to cache document ID for new pack: %w", err)
+			return "", fmt.Errorf("failed to cache document ID for new pack: %w", err)
 		}
 	} else {
 		rawSet, err = t.client.API().MessagesGetStickerSet(ctx, &tg.MessagesGetStickerSetRequest{
 			Stickerset: &tg.InputStickerSetShortName{ShortName: packShortcode},
 		})
 		if err != nil {
-			return fmt.Errorf("failed to get pack: %w", err)
+			return "", fmt.Errorf("failed to get pack: %w", err)
 		}
 	}
 	set, ok := rawSet.(*tg.MessagesStickerSet)
 	if !ok {
-		return fmt.Errorf("unexpected set type %T", rawSet)
+		return "", fmt.Errorf("unexpected set type %T", rawSet)
 	}
 	if !set.Set.Creator {
-		return fmt.Errorf("set %s was created by someone else", packShortcode)
+		return "", fmt.Errorf("set %s was created by someone else", packShortcode)
 	}
 	isEmojiPack = set.Set.Emojis
 	inputSet := &tg.InputStickerSetID{
@@ -357,7 +360,7 @@ func (t *TelegramClient) synchronizeEmojiPack(ctx context.Context, pack *event.I
 	for _, doc := range set.Documents {
 		file, err := t.main.Store.TelegramFile.GetByLocationID(ctx, store.TelegramFileLocationID(strconv.FormatInt(doc.GetID(), 10)))
 		if err != nil {
-			return fmt.Errorf("failed to get cached file for doc %d: %w", doc.GetID(), err)
+			return "", fmt.Errorf("failed to get cached file for doc %d: %w", doc.GetID(), err)
 		} else if file != nil {
 			existingMXCs[file.MXC] = doc.(*tg.Document).AsInput()
 		}
@@ -370,28 +373,32 @@ func (t *TelegramClient) synchronizeEmojiPack(ctx context.Context, pack *event.I
 		}
 		item, saveCache, err := t.synchronizeEmoji(ctx, shortcode, img, isEmojiPack)
 		if err != nil {
-			return fmt.Errorf("failed to synchronize emoji %s: %w", shortcode, err)
+			return "", fmt.Errorf("failed to synchronize emoji %s: %w", shortcode, err)
 		}
 		rawNewSet, err := t.client.API().StickersAddStickerToSet(ctx, &tg.StickersAddStickerToSetRequest{
 			Stickerset: inputSet,
 			Sticker:    *item,
 		})
 		if err != nil {
-			return fmt.Errorf("failed to add %s/%d to set: %w", shortcode, item.Document.(*tg.InputDocument).ID, err)
+			return "", fmt.Errorf("failed to add %s/%d to set: %w", shortcode, item.Document.(*tg.InputDocument).ID, err)
 		}
 		err = saveCache(extractNewDocID(rawSet, rawNewSet))
 		if err != nil {
-			return fmt.Errorf("failed to cache document ID for new pack: %w", err)
+			return "", fmt.Errorf("failed to cache document ID for new pack: %w", err)
 		}
 		rawSet = rawNewSet
 	}
 	for mxc, inputDoc := range existingMXCs {
 		_, err = t.client.API().StickersRemoveStickerFromSet(ctx, inputDoc)
 		if err != nil {
-			return fmt.Errorf("failed to remove %s/%d from set: %w", mxc, inputDoc.ID, err)
+			return "", fmt.Errorf("failed to remove %s/%d from set: %w", mxc, inputDoc.ID, err)
 		}
 	}
-	return nil
+	linktype := "addstickers"
+	if isEmojiPack {
+		linktype = "addemoji"
+	}
+	return fmt.Sprintf("https://t.me/%s/%s", linktype, set.Set.ShortName), nil
 }
 
 var addStickersRegex = regexp.MustCompile(`^(?:(?:https?://)?(?:t|telegram)\.(?:me|dog)/(?:addstickers|addemoji)/)?([A-Za-z0-9-_]+)(?:\.json)?$`)

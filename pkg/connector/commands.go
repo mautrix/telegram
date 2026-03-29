@@ -73,7 +73,7 @@ var cmdEmojiPack = &commands.FullHandler{
 
 const emojiPackHelp = `This command can be used to transfer emoji packs between Matrix and Telegram.
 
-* $cmdprefix emoji-pack upload <room ID> <pack key> - Transfer a pack from Matrix to Telegram.
+* $cmdprefix emoji-pack upload <telegram shortcode> <room ID> <state key> - Transfer a pack from Matrix to Telegram.
 * $cmdprefix emoji-pack download <pack shortcode or link> - Transfer a pack from Telegram to Matrix.
 * $cmdprefix emoji-pack list - List your current emoji packs on Telegram.
 * $cmdprefix emoji-pack help - Show this help message.`
