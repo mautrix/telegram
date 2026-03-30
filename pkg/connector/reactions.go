@@ -114,17 +114,26 @@ func (t *TelegramClient) prepareReactionSync(ctx context.Context, peer tg.PeerCl
 	log := zerolog.Ctx(ctx)
 	users := map[networkid.UserID]*bridgev2.ReactionSyncUser{}
 	for _, reaction := range reactionsList {
-		peer, ok := reaction.PeerID.(*tg.PeerUser)
-		if !ok {
-			// TODO handle channel peers
+		var userID networkid.UserID
+		var eventSender bridgev2.EventSender
+		switch senderPeer := reaction.PeerID.(type) {
+		case *tg.PeerUser:
+			userID = ids.MakeUserID(senderPeer.UserID)
+			eventSender = t.senderForUserID(senderPeer.UserID)
+		case *tg.PeerChannel:
+			userID = ids.MakeChannelUserID(senderPeer.ChannelID)
+			eventSender = bridgev2.EventSender{
+				Sender:   userID,
+				IsFromMe: reaction.My && t.main.Bridge.Config.SplitPortals,
+			}
+		default:
 			log.Debug().Type("peer_type", reaction.PeerID).Msg("Ignoring reaction from non-user peer")
 			continue
 		}
-		userID := ids.MakeUserID(peer.UserID)
 		reactionLimit, err := t.getReactionLimit(ctx, userID)
 		if err != nil {
 			reactionLimit = 1
-			log.Err(err).Int64("id", peer.UserID).Msg("failed to get reaction limit")
+			log.Err(err).Str("id", string(userID)).Msg("failed to get reaction limit")
 		}
 		if _, ok := users[userID]; !ok {
 			users[userID] = &bridgev2.ReactionSyncUser{HasAllReactions: isFull, MaxCount: reactionLimit}
@@ -138,7 +147,7 @@ func (t *TelegramClient) prepareReactionSync(ctx context.Context, peer tg.PeerCl
 
 		users[userID].Reactions = append(users[userID].Reactions, &bridgev2.BackfillReaction{
 			Timestamp: time.Unix(int64(reaction.Date), 0),
-			Sender:    t.senderForUserID(peer.UserID),
+			Sender:    eventSender,
 			EmojiID:   emojiID,
 			Emoji:     emoji,
 		})
