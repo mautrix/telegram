@@ -404,16 +404,46 @@ func (t *TelegramClient) HandleMatrixMessage(ctx context.Context, msg *bridgev2.
 		tgDate = sentMessage.Date
 		hasher.Write([]byte(msg.Content.Body))
 	case *tg.Updates:
-		tgDate = sentMessage.Date
+		var realSentMessage *tg.Message
 		for _, u := range sentMessage.Updates {
 			switch update := u.(type) {
 			case *tg.UpdateMessageID:
 				tgMessageID = update.ID
+				if update.RandomID != randomID {
+					log.Warn().
+						Int64("update_random_id", update.RandomID).
+						Int64("expected_random_id", randomID).
+						Msg("Random ID in response does not match sent random ID")
+				}
 			case *tg.UpdateNewMessage:
-				msg := update.Message.(*tg.Message)
-				hasher.Write([]byte(msg.Message))
-				hasher.Write(mediaHashID(ctx, msg.Media))
+				if realSentMessage != nil {
+					log.Warn().
+						Int("prev_id", realSentMessage.ID).
+						Int("new_id", update.Message.GetID()).
+						Msg("Multiple messages in send response")
+				}
+				realSentMessage = update.Message.(*tg.Message)
+			case *tg.UpdateNewChannelMessage:
+				if realSentMessage != nil {
+					log.Warn().
+						Int("prev_id", realSentMessage.ID).
+						Int("new_id", update.Message.GetID()).
+						Msg("Multiple messages in send response")
+				}
+				realSentMessage = update.Message.(*tg.Message)
+			case *tg.UpdateReadChannelInbox, *tg.UpdateReadHistoryInbox, *tg.UpdateReadMonoForumInbox:
+				// ignore
+			default:
+				log.Warn().Type("update_type", update).Msg("Unexpected update type in send message response")
 			}
+		}
+		if realSentMessage != nil {
+			tgDate = realSentMessage.Date
+			hasher.Write([]byte(realSentMessage.Message))
+			hasher.Write(mediaHashID(ctx, realSentMessage.Media))
+		} else {
+			hasher.Write([]byte(msg.Content.Body))
+			tgDate = sentMessage.Date
 		}
 		if tgMessageID == 0 {
 			return nil, fmt.Errorf("couldn't find update message ID update")
