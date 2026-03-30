@@ -967,9 +967,14 @@ func (t *TelegramClient) onMessageEdit(ctx context.Context, update IGetMessage) 
 	}
 
 	topicID := t.getTopicID(ctx, msg.PeerID, msg.ReplyTo)
-	err := t.handleTelegramReactions(ctx, msg.PeerID, topicID, msg.ID, msg.Reactions)
-	if err != nil {
-		zerolog.Ctx(ctx).Err(err).Msg("Failed to handle reactions on edited message")
+	// Channels don't use edits to signal reactions, and when sending the first reaction they send a no-op edit
+	// with an empty reactions list, which would confuse the handle method. Therefore, just don't sync reactions
+	// on channel message edits.
+	if _, isChannel := msg.PeerID.(*tg.PeerChannel); !isChannel {
+		err := t.handleTelegramReactions(ctx, msg.PeerID, topicID, msg.ID, msg.Reactions)
+		if err != nil {
+			zerolog.Ctx(ctx).Err(err).Msg("Failed to handle reactions on edited message")
+		}
 	}
 
 	portalKey := t.makePortalKeyFromPeer(msg.PeerID, topicID)
@@ -987,6 +992,7 @@ func (t *TelegramClient) onMessageEdit(ctx context.Context, update IGetMessage) 
 				Msg("Received an edit to message that looks like the data export was accepted, marking takeout as retriable")
 			t.takeoutAccepted.Set()
 		}
+		// TODO detect takeout being rejected too
 	}
 
 	res := t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.Message[*tg.Message]{
