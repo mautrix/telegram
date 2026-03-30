@@ -105,13 +105,13 @@ func computeEmojiAndID(reaction tg.ReactionClass, customEmojis map[networkid.Emo
 	return
 }
 
-func (t *TelegramClient) handleTelegramReactions(ctx context.Context, msg *tg.Message) error {
+func (t *TelegramClient) handleTelegramReactions(ctx context.Context, peer tg.PeerClass, topicID, msgID int, reactions tg.MessageReactions) error {
 	log := zerolog.Ctx(ctx).With().
 		Str("handler", "handle_telegram_reactions").
-		Int("message_id", msg.ID).
+		Int("message_id", msgID).
 		Logger()
 
-	reactionsList, isFull, customEmojis, err := t.computeReactionsList(ctx, msg.PeerID, msg.ID, msg.Reactions)
+	reactionsList, isFull, customEmojis, err := t.computeReactionsList(ctx, peer, msgID, reactions)
 	if err != nil {
 		return fmt.Errorf("failed to compute reactions: %w", err)
 	}
@@ -152,11 +152,11 @@ func (t *TelegramClient) handleTelegramReactions(ctx context.Context, msg *tg.Me
 		EventMeta: simplevent.EventMeta{
 			Type: bridgev2.RemoteEventReactionSync,
 			LogContext: func(c zerolog.Context) zerolog.Context {
-				return c.Int("message_id", msg.ID)
+				return c.Int("message_id", msgID)
 			},
-			PortalKey: t.makePortalKeyFromPeer(msg.PeerID, t.getTopicID(ctx, msg.PeerID, msg.ReplyTo)),
+			PortalKey: t.makePortalKeyFromPeer(peer, topicID),
 		},
-		TargetMessage: ids.GetMessageIDFromMessage(msg),
+		TargetMessage: ids.MakeMessageID(peer, msgID),
 		Reactions:     &bridgev2.ReactionSyncData{Users: users, HasAllUsers: isFull},
 	})
 

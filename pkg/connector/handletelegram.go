@@ -210,6 +210,7 @@ func (t *TelegramClient) onUpdateNewMessage(ctx context.Context, entities tg.Ent
 			log.Info().Int64("user_id", contact.UserID).Msg("received contact")
 		}
 
+		topicID := t.getTopicID(ctx, msg.PeerID, msg.ReplyTo)
 		res := t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.Message[*tg.Message]{
 			EventMeta: simplevent.EventMeta{
 				Type: bridgev2.RemoteEventMessage,
@@ -222,7 +223,7 @@ func (t *TelegramClient) onUpdateNewMessage(ctx context.Context, entities tg.Ent
 						Stringer("peer_id", msg.PeerID)
 				},
 				Sender:       sender,
-				PortalKey:    t.makePortalKeyFromPeer(msg.PeerID, t.getTopicID(ctx, msg.PeerID, msg.ReplyTo)),
+				PortalKey:    t.makePortalKeyFromPeer(msg.PeerID, topicID),
 				CreatePortal: true,
 				Timestamp:    time.Unix(int64(msg.Date), 0),
 				StreamOrder:  int64(msg.GetID()),
@@ -236,7 +237,7 @@ func (t *TelegramClient) onUpdateNewMessage(ctx context.Context, entities tg.Ent
 			return err
 		}
 
-		return t.handleTelegramReactions(ctx, msg)
+		return t.handleTelegramReactions(ctx, msg.PeerID, topicID, msg.ID, msg.Reactions)
 	case *tg.MessageService:
 		return t.handleServiceMessage(ctx, msg)
 
@@ -911,6 +912,8 @@ func (t *TelegramClient) onUpdate(ctx context.Context, e tg.Entities, upd tg.Upd
 		return t.onMessageEdit(ctx, update)
 	case *tg.UpdateEditChannelMessage:
 		return t.onMessageEdit(ctx, update)
+	case *tg.UpdateMessageReactions:
+		return t.onMessageReactions(ctx, update)
 	case *tg.UpdateUserTyping:
 		return t.handleTyping(t.makePortalKeyFromID(ids.PeerTypeUser, update.UserID, 0), t.senderForUserID(update.UserID), update.Action)
 	case *tg.UpdateChatUserTyping:
@@ -948,6 +951,10 @@ func (t *TelegramClient) onUpdate(ctx context.Context, e tg.Entities, upd tg.Upd
 	}
 }
 
+func (t *TelegramClient) onMessageReactions(ctx context.Context, update *tg.UpdateMessageReactions) error {
+	return t.handleTelegramReactions(ctx, update.Peer, update.TopMsgID, update.MsgID, update.Reactions)
+}
+
 func (t *TelegramClient) onMessageEdit(ctx context.Context, update IGetMessage) error {
 	msg, ok := update.GetMessage().(*tg.Message)
 	if !ok {
@@ -957,12 +964,13 @@ func (t *TelegramClient) onMessageEdit(ctx context.Context, update IGetMessage) 
 		return nil
 	}
 
-	err := t.handleTelegramReactions(ctx, msg)
+	topicID := t.getTopicID(ctx, msg.PeerID, msg.ReplyTo)
+	err := t.handleTelegramReactions(ctx, msg.PeerID, topicID, msg.ID, msg.Reactions)
 	if err != nil {
 		zerolog.Ctx(ctx).Err(err).Msg("Failed to handle reactions on edited message")
 	}
 
-	portalKey := t.makePortalKeyFromPeer(msg.PeerID, t.getTopicID(ctx, msg.PeerID, msg.ReplyTo))
+	portalKey := t.makePortalKeyFromPeer(msg.PeerID, topicID)
 	portal, err := t.main.Bridge.GetPortalByKey(ctx, portalKey)
 	if err != nil {
 		return err
