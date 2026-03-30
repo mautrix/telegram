@@ -81,9 +81,14 @@ func (t *TelegramClient) fnUploadEmojiPack(ce *commands.Event) {
 		ce.Reply("Usage: `$cmdprefix emoji-pack upload <telegram shortcode> <room ID> <state key>`")
 		return
 	}
-	mx, ok := t.main.Bridge.Matrix.(bridgev2.MatrixConnectorWithArbitraryRoomState)
+	dbl := ce.User.DoublePuppet(ce.Ctx)
+	if dbl == nil {
+		ce.Reply("Double puppeting is required to fetch emoji packs from Matrix")
+		return
+	}
+	mx, ok := dbl.(bridgev2.MatrixAPIWithArbitraryRoomState)
 	if !ok {
-		ce.Reply("Matrix connector does not support fetching room state")
+		ce.Reply("Matrix connector does not implement required interface")
 		return
 	}
 	tgPackShortcode := ce.Args[0]
