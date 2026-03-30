@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -39,6 +40,7 @@ import (
 	"go.mau.fi/mautrix-telegram/pkg/connector/emojis"
 	"go.mau.fi/mautrix-telegram/pkg/connector/ids"
 	"go.mau.fi/mautrix-telegram/pkg/connector/media"
+	"go.mau.fi/mautrix-telegram/pkg/connector/store"
 	"go.mau.fi/mautrix-telegram/pkg/connector/tljson"
 	"go.mau.fi/mautrix-telegram/pkg/connector/util"
 	"go.mau.fi/mautrix-telegram/pkg/gotd/tg"
@@ -1249,7 +1251,22 @@ func (t *TelegramClient) transferEmojisToMatrix(ctx context.Context, customEmoji
 		return result, nil
 	}
 
-	customEmojiDocuments, err := t.client.API().MessagesGetCustomEmojiDocuments(ctx, customEmojiIDs)
+	missingCustomEmojiIDs := customEmojiIDs[:0]
+	for _, emojiID := range customEmojiIDs {
+		file, err := t.main.Store.TelegramFile.GetByLocationID(ctx, store.TelegramFileLocationID(strconv.FormatInt(emojiID, 10)))
+		if err != nil {
+			return nil, fmt.Errorf("failed to get file for custom emoji %d: %w", emojiID, err)
+		} else if file != nil {
+			result[ids.MakeEmojiIDFromDocumentID(emojiID)] = emojis.EmojiInfo{EmojiURI: file.MXC, DocumentID: emojiID}
+		} else {
+			missingCustomEmojiIDs = append(missingCustomEmojiIDs, emojiID)
+		}
+	}
+	if len(missingCustomEmojiIDs) == 0 {
+		return
+	}
+
+	customEmojiDocuments, err := t.client.API().MessagesGetCustomEmojiDocuments(ctx, missingCustomEmojiIDs)
 	if err != nil {
 		return nil, err
 	}
