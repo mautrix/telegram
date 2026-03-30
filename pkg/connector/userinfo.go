@@ -187,10 +187,6 @@ func (t *TelegramClient) wrapChannelGhostInfo(ctx context.Context, channel *tg.C
 		}
 	}
 
-	if !channel.Broadcast {
-		return nil, nil
-	}
-
 	var avatar *bridgev2.Avatar
 	avatar, err = t.convertChatPhoto(channel.AsInputPeer(), channel.GetPhoto())
 	if err != nil {
@@ -210,11 +206,6 @@ func (t *TelegramClient) wrapChannelGhostInfo(ctx context.Context, channel *tg.C
 		Name:        &channel.Title,
 		Avatar:      avatar,
 		Identifiers: identifiers,
-		ExtraUpdates: func(ctx context.Context, g *bridgev2.Ghost) bool {
-			updated := !g.Metadata.(*GhostMetadata).IsChannel
-			g.Metadata.(*GhostMetadata).IsChannel = true
-			return updated
-		},
 	}, nil
 }
 

@@ -818,47 +818,14 @@ func (t *TelegramClient) updateGhost(ctx context.Context, userID int64, user *tg
 }
 
 func (t *TelegramClient) updateChannel(ctx context.Context, channel *tg.Channel) (*bridgev2.UserInfo, error) {
-	if accessHash, ok := channel.GetAccessHash(); ok && !channel.Min {
-		if err := t.ScopedStore.SetAccessHash(ctx, ids.PeerTypeChannel, channel.ID, accessHash); err != nil {
-			return nil, err
-		}
-	}
-
 	// TODO resync portal metadata?
-
-	if !channel.Broadcast {
-		return nil, nil
-	}
-
-	// Update the channel ghost if this is a broadcast channel.
-	ghost, err := t.main.Bridge.GetGhostByID(ctx, ids.MakeChannelUserID(channel.ID))
+	userInfo, err := t.wrapChannelGhostInfo(ctx, channel)
 	if err != nil {
 		return nil, err
 	}
-
-	var avatar *bridgev2.Avatar
-	if photo, ok := channel.GetPhoto().(*tg.ChatPhoto); ok {
-		avatar, err = t.convertChatPhoto(channel.AsInputPeer(), photo)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	if username, set := channel.GetUsername(); set {
-		err := t.main.Store.Username.Set(ctx, ids.PeerTypeChannel, channel.ID, username)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	userInfo := &bridgev2.UserInfo{
-		Name:   &channel.Title,
-		Avatar: avatar,
-		ExtraUpdates: func(ctx context.Context, g *bridgev2.Ghost) bool {
-			updated := !g.Metadata.(*GhostMetadata).IsChannel
-			g.Metadata.(*GhostMetadata).IsChannel = true
-			return updated
-		},
+	ghost, err := t.main.Bridge.GetGhostByID(ctx, ids.MakeChannelUserID(channel.ID))
+	if err != nil {
+		return nil, err
 	}
 	ghost.UpdateInfo(ctx, userInfo)
 	return userInfo, nil
