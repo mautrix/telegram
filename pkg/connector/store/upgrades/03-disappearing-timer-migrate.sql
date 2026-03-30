@@ -1,7 +1,7 @@
 -- v3 (compatible with v2+): Migrate disappearing timer to standard column
 
 -- only: postgres
-UPDATE portal SET disappear_type='after_send', disappear_timer=(metadata->>'messages_ttl')::BIGINT * 1_000_000_000;
+UPDATE portal SET disappear_type='after_send', disappear_timer=(metadata->>'messages_ttl')::BIGINT * 1000000000;
 -- only: sqlite
 UPDATE portal SET disappear_type='after_send', disappear_timer=CAST(metadata->>'$.messages_ttl' AS INTEGER) * 1_000_000_000;
 
