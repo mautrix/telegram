@@ -403,6 +403,7 @@ func (t *TelegramClient) HandleMatrixMessage(ctx context.Context, msg *bridgev2.
 		tgMessageID = sentMessage.ID
 		tgDate = sentMessage.Date
 		hasher.Write([]byte(msg.Content.Body))
+		hasher.Write(mediaHashID(ctx, sentMessage.Media))
 	case *tg.Updates:
 		var realSentMessage *tg.Message
 		for _, u := range sentMessage.Updates {
@@ -533,14 +534,36 @@ func (t *TelegramClient) HandleMatrixEdit(ctx context.Context, msg *bridgev2.Mat
 	switch sentMessage := updates.(type) {
 	case *tg.UpdateShortSentMessage:
 		hasher.Write([]byte(msg.Content.Body))
+		hasher.Write(mediaHashID(ctx, sentMessage.Media))
 	case *tg.Updates:
+		var realSentMessage *tg.Message
 		for _, u := range sentMessage.Updates {
 			switch update := u.(type) {
 			case *tg.UpdateNewMessage:
-				msg := update.Message.(*tg.Message)
-				hasher.Write([]byte(msg.Message))
-				hasher.Write(mediaHashID(ctx, msg.Media))
+				if realSentMessage != nil {
+					log.Warn().
+						Int("prev_id", realSentMessage.ID).
+						Int("new_id", update.Message.GetID()).
+						Msg("Multiple messages in edit response")
+				}
+				realSentMessage = update.Message.(*tg.Message)
+			case *tg.UpdateNewChannelMessage:
+				if realSentMessage != nil {
+					log.Warn().
+						Int("prev_id", realSentMessage.ID).
+						Int("new_id", update.Message.GetID()).
+						Msg("Multiple messages in edit response")
+				}
+				realSentMessage = update.Message.(*tg.Message)
+			default:
+				log.Warn().Type("update_type", update).Msg("Unexpected update type in edit message response")
 			}
+		}
+		if realSentMessage != nil {
+			hasher.Write([]byte(realSentMessage.Message))
+			hasher.Write(mediaHashID(ctx, realSentMessage.Media))
+		} else {
+			hasher.Write([]byte(msg.Content.Body))
 		}
 	default:
 		return fmt.Errorf("unknown update from message response %T", updates)
