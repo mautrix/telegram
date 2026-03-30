@@ -452,7 +452,9 @@ func (parser *HTMLParser) tagToString(node *html.Node, ctx Context) *EntityStrin
 		} else {
 			preStr = parser.nodeToString(node.FirstChild, ctx.WithWhitespace())
 		}
-		return preStr.Format(telegramfmt.Style{Type: telegramfmt.StylePre, Language: language})
+
+		preStr.Entities = nil
+		return preStr.TrimSpace().Format(telegramfmt.Style{Type: telegramfmt.StylePre, Language: language})
 	default:
 		return parser.nodeToTagAwareString(node.FirstChild, ctx)
 	}
