@@ -4,12 +4,25 @@
   * To migrate the bridge, simply upgrade in-place. The database and config
     will be migrated automatically, although some parts of the config aren't
     migrated (e.g. log config, permission types specific to the legacy bridge).
+    Taking backups beforehand is always recommended.
   * It is recommended to check the config file after upgrading. If you have
     prevented the bridge from writing to the config, you should update it
     manually.
   * The old-style relaybot is not yet supported and will not be migrated.
     Setups using the relaybot will have to manually log in as a bot and use
     `set-relay` to enable the generic [relay mode](https://docs.mau.fi/bridges/general/relay-mode.html).
+    The `default_relays` config option can be used to allow users to bridge
+    chats through the relay user to emulate the old-style relaybot.
+  * For multi-user bridges, normal (mini/non-super) group portal rooms are no
+    longer shared, which means every Matrix user will have their own room. The
+    old room will be assigned to one Matrix user randomly and others will get
+    a new room created automatically when receiving a message in the chat or
+    when using the `!tg sync-chats` command.
+  * Any migration issues should be reported in the Matrix room linked in the
+    readme.
+
+Note: the last (unreleased) version of the legacy Python bridge is available in
+the [`python-final` tag](https://github.com/mautrix/telegram/tree/python-final).
 
 # v0.15.3 (2025-07-16)
 
