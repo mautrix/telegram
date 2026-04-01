@@ -20,6 +20,9 @@
     when using the `!tg sync-chats` command.
   * Any migration issues should be reported in the Matrix room linked in the
     readme.
+* Notable new features include:
+  * Topic groups are now bridged as spaces
+  * Entire sticker and emoji packs can be synced in both directions
 
 Note: the last (unreleased) version of the legacy Python bridge is available in
 the [`python-final` tag](https://github.com/mautrix/telegram/tree/python-final).
