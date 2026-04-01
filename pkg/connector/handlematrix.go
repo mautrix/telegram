@@ -17,6 +17,7 @@
 package connector
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/base64"
@@ -37,11 +38,14 @@ import (
 	"time"
 
 	"github.com/rs/zerolog"
+	"go.mau.fi/util/exsync"
 	"go.mau.fi/util/ffmpeg"
+	"go.mau.fi/util/jsontime"
 	"go.mau.fi/util/variationselector"
 	"go.mau.fi/webp"
 	"golang.org/x/exp/maps"
 	_ "golang.org/x/image/webp"
+	"golang.org/x/net/html"
 	"maunium.net/go/mautrix/bridgev2"
 	"maunium.net/go/mautrix/bridgev2/database"
 	"maunium.net/go/mautrix/bridgev2/networkid"
@@ -109,7 +113,117 @@ func (t *TelegramClient) HandleMatrixViewingChat(ctx context.Context, msg *bridg
 			GetChatInfoFunc: t.GetChatInfo,
 		})
 	}
-	return t.maybePollForReactions(ctx, msg.Portal)
+	err := t.maybePollForReactions(ctx, msg.Portal)
+	if err != nil {
+		return err
+	}
+	err = t.pollSponsoredMessage(ctx, msg.Portal)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (t *TelegramClient) pollSponsoredMessage(ctx context.Context, portal *bridgev2.Portal) error {
+	if t.metadata.IsBot {
+		return nil
+	}
+	meta := portal.Metadata.(*PortalMetadata)
+	peerType, id, topicID, err := ids.ParsePortalID(portal.ID)
+	if err != nil {
+		return err
+	} else if peerType != ids.PeerTypeChannel || meta.IsSuperGroup || topicID != 0 {
+		return nil
+	}
+	meta.sponsoredMessageLock.Lock()
+	defer meta.sponsoredMessageLock.Unlock()
+	if time.Since(meta.SponsoredMessagePollTS.Time) < 5*time.Minute {
+		return nil
+	}
+	latestMessage, err := t.main.Bridge.DB.Message.GetLastNonFakePartAtOrBeforeTime(ctx, portal.PortalKey, time.Now())
+	if err != nil {
+		return fmt.Errorf("failed to get latest message for portal: %w", err)
+	} else if latestMessage != nil && latestMessage.ID == meta.LastMessageOnSponsorFetch {
+		meta.SponsoredMessagePollTS = jsontime.UnixNow()
+		return nil
+	}
+	accessHash, err := t.ScopedStore.GetAccessHash(ctx, ids.PeerTypeChannel, id)
+	if err != nil {
+		return err
+	}
+	resp, err := t.client.API().MessagesGetSponsoredMessages(ctx, &tg.MessagesGetSponsoredMessagesRequest{
+		Peer: &tg.InputPeerChannel{ChannelID: id, AccessHash: accessHash},
+	})
+	if err != nil {
+		return fmt.Errorf("failed to get sponsored messages: %w", err)
+	}
+	meta.SponsoredMessagePollTS = jsontime.UnixNow()
+	if latestMessage != nil {
+		meta.LastMessageOnSponsorFetch = latestMessage.ID
+	}
+	msgs, ok := resp.(*tg.MessagesSponsoredMessages)
+	if !ok || len(msgs.Messages) == 0 || (len(msgs.Messages) == 1 && bytes.Equal(msgs.Messages[0].RandomID, meta.SponsoredMessageRandomID)) {
+		err = portal.Save(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to save portal after polling sponsored messages: %w", err)
+		}
+		return nil
+	}
+	if meta.sponsoredMessageSeen == nil {
+		meta.sponsoredMessageSeen = exsync.NewSet[int64]()
+	} else {
+		meta.sponsoredMessageSeen.Clear()
+	}
+	msg := msgs.Messages[0]
+	if bytes.Equal(msg.RandomID, meta.SponsoredMessageRandomID) && len(msgs.Messages) > 1 {
+		msg = msgs.Messages[1]
+	}
+	meta.SponsoredMessageRandomID = msg.RandomID
+	content := t.parseBodyAndHTML(ctx, msg.Message, msg.Entities)
+	content.MsgType = event.MsgNotice
+	content.EnsureHasHTML()
+	extra := map[string]any{
+		"external_url": msg.URL,
+		"fi.mau.telegram.sponsored": map[string]any{
+			"random_id":       msg.RandomID,
+			"url":             msg.URL,
+			"button_text":     msg.ButtonText,
+			"title":           msg.Title,
+			"content":         content.FormattedBody,
+			"sponsor_info":    msg.SponsorInfo,
+			"additional_info": msg.AdditionalInfo,
+			"recommended":     msg.Recommended,
+		},
+	}
+	var fromStr string
+	if msg.SponsorInfo != "" {
+		fromStr = fmt.Sprintf(" from %s", html.EscapeString(msg.SponsorInfo))
+	}
+	prefix := "Ad"
+	if msg.Recommended {
+		prefix = "Recommended"
+	}
+	content.FormattedBody = fmt.Sprintf(
+		`<strong>%s: %s</strong><blockquote>%s</blockquote><p>Sponsored message%s - <a href="%s">%s</a></p>`,
+		prefix, html.EscapeString(msg.Title), content.FormattedBody, fromStr, msg.URL, msg.ButtonText,
+	)
+	sendResp, err := t.main.Bridge.Bot.SendMessage(ctx, portal.MXID, event.EventMessage, &event.Content{
+		Raw:    extra,
+		Parsed: content,
+	}, &bridgev2.MatrixSendExtra{Timestamp: time.Now()})
+	if err != nil {
+		return fmt.Errorf("failed to send sponsored message: %w", err)
+	}
+	meta.SponsoredMessageEventID = sendResp.EventID
+	zerolog.Ctx(ctx).Debug().
+		Stringer("event_id", sendResp.EventID).
+		Str("random_id", base64.StdEncoding.EncodeToString(msg.RandomID)).
+		Msg("Sent sponsored message to Matrix")
+	err = portal.Save(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to save portal after sending sponsored messages: %w", err)
+	}
+	return nil
 }
 
 func (t *TelegramClient) transferMediaToTelegram(ctx context.Context, content *event.MessageEventContent, sticker bool) (tg.InputMediaClass, error) {
@@ -829,8 +943,21 @@ func (t *TelegramClient) HandleMatrixReadReceipt(ctx context.Context, msg *bridg
 				MaxID:   maxID,
 			})
 
-			if !msg.Portal.Metadata.(*PortalMetadata).IsSuperGroup {
-				// TODO handle sponsored message read receipts
+			meta := msg.Portal.Metadata.(*PortalMetadata)
+			randomID := meta.SponsoredMessageRandomID
+			if !t.metadata.IsBot &&
+				randomID != nil &&
+				time.Since(meta.SponsoredMessagePollTS.Time) < 15*time.Minute &&
+				(meta.SponsoredMessageEventID == msg.EventID || msg.Receipt.Timestamp.After(meta.SponsoredMessagePollTS.Time)) &&
+				meta.sponsoredMessageSeen.Add(t.telegramUserID) {
+				_, viewSponsoredErr := t.client.API().MessagesViewSponsoredMessage(ctx, randomID)
+				if viewSponsoredErr != nil {
+					log.Err(viewSponsoredErr).Msg("Failed to mark sponsored message as viewed after read receipt")
+				} else {
+					log.Debug().
+						Str("random_id", base64.StdEncoding.EncodeToString(randomID)).
+						Msg("Marked sponsored message as viewed after read receipt")
+				}
 			}
 		default:
 			readMessagesErr = fmt.Errorf("unknown peer type %s", peerType)
@@ -842,6 +969,10 @@ func (t *TelegramClient) HandleMatrixReadReceipt(ctx context.Context, msg *bridg
 		err := t.maybePollForReactions(ctx, msg.Portal)
 		if err != nil {
 			log.Err(err).Msg("failed to poll for reactions after read receipt")
+		}
+		err = t.pollSponsoredMessage(ctx, msg.Portal)
+		if err != nil {
+			log.Err(err).Msg("failed to poll for sponsored message after read receipt")
 		}
 	}()
 

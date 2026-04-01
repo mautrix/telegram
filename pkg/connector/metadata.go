@@ -18,7 +18,9 @@ package connector
 
 import (
 	"context"
+	"sync"
 
+	"go.mau.fi/util/exsync"
 	"go.mau.fi/util/jsontime"
 	"maunium.net/go/mautrix/bridgev2"
 	"maunium.net/go/mautrix/bridgev2/database"
@@ -60,6 +62,14 @@ type PortalMetadata struct {
 	LastSync          jsontime.Unix `json:"last_sync,omitempty"`
 	FullSynced        bool          `json:"full_synced,omitempty"`
 	ParticipantsCount int           `json:"member_count,omitempty"`
+
+	SponsoredMessagePollTS    jsontime.Unix       `json:"sponsored_message_poll_ts,omitempty"`
+	SponsoredMessageEventID   id.EventID          `json:"sponsored_message_event_id,omitempty"`
+	SponsoredMessageRandomID  []byte              `json:"sponsored_message_random_id,omitempty"`
+	LastMessageOnSponsorFetch networkid.MessageID `json:"last_message_on_sponsor_fetch,omitempty"`
+
+	sponsoredMessageLock sync.Mutex
+	sponsoredMessageSeen *exsync.Set[int64]
 }
 
 func (pm *PortalMetadata) SetIsSuperGroup(isSupergroup bool) (changed bool) {
