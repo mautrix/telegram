@@ -126,60 +126,65 @@ func (t *TelegramClient) onUpdateChannel(ctx context.Context, e tg.Entities, upd
 		Str("handler", "on_update_channel").
 		Int64("channel_id", update.ChannelID).
 		Logger()
-	log.Debug().Msg("Fetching channel due to UpdateChannel event")
 
 	// TODO resync topic portals?
 	portalKey := t.makePortalKeyFromID(ids.PeerTypeChannel, update.ChannelID, 0)
 
-	chats, err := APICallWithOnlyChatUpdates(ctx, t, func() (tg.MessagesChatsClass, error) {
-		if accessHash, err := t.ScopedStore.GetAccessHash(ctx, ids.PeerTypeChannel, update.ChannelID); err != nil {
-			return nil, err
-		} else {
-			return t.client.API().ChannelsGetChannels(ctx, []tg.InputChannelClass{
-				&tg.InputChannel{ChannelID: update.ChannelID, AccessHash: accessHash},
-			})
+	// TODO is using the info in entities safe?
+	channel, ok := e.Channels[update.ChannelID]
+	if !ok {
+		log.Debug().Msg("Fetching channel due to UpdateChannel event")
+		chats, err := APICallWithOnlyChatUpdates(ctx, t, func() (tg.MessagesChatsClass, error) {
+			if accessHash, err := t.ScopedStore.GetAccessHash(ctx, ids.PeerTypeChannel, update.ChannelID); err != nil {
+				return nil, err
+			} else {
+				return t.client.API().ChannelsGetChannels(ctx, []tg.InputChannelClass{
+					&tg.InputChannel{ChannelID: update.ChannelID, AccessHash: accessHash},
+				})
+			}
+		})
+		if err != nil {
+			if tgerr.Is(err, tg.ErrChannelInvalid, tg.ErrChannelPrivate) {
+				return t.selfLeaveChat(ctx, portalKey, fmt.Errorf("error fetching after UpdateChannel: %w", err))
+			}
+			log.Err(err).Msg("Failed to get channel info after UpdateChannel event")
+			return nil
+		} else if len(chats.GetChats()) != 1 {
+			log.Warn().Int("chat_count", len(chats.GetChats())).Msg("Got more than 1 chat in GetChannels response")
+			return nil
+		} else if channel, ok = chats.GetChats()[0].(*tg.Channel); !ok {
+			log.Error().Type("chat_type", chats.GetChats()[0]).Msg("Expected channel, got something else. Leaving the channel.")
+			return t.selfLeaveChat(ctx, portalKey, fmt.Errorf("channel not returned in getChannels after UpdateChannel"))
 		}
-	})
-	if err != nil {
-		if tgerr.Is(err, tg.ErrChannelInvalid, tg.ErrChannelPrivate) {
-			return t.selfLeaveChat(ctx, portalKey, fmt.Errorf("error fetching after UpdateChannel: %w", err))
-		}
-		log.Err(err).Msg("Failed to get channel info after UpdateChannel event")
-	} else if len(chats.GetChats()) != 1 {
-		log.Warn().Int("chat_count", len(chats.GetChats())).Msg("Got more than 1 chat in GetChannels response")
-	} else if channel, ok := chats.GetChats()[0].(*tg.Channel); !ok {
-		log.Error().Type("chat_type", chats.GetChats()[0]).Msg("Expected channel, got something else. Leaving the channel.")
-		return t.selfLeaveChat(ctx, portalKey, fmt.Errorf("channel not returned in getChannels after UpdateChannel"))
-	} else if channel.Left {
-		log.Error().Msg("Update was for a left channel. Leaving the channel.")
-		return t.selfLeaveChat(ctx, portalKey, fmt.Errorf("channel has left=true in getChannels after UpdateChannel"))
-	} else {
-		res := t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.ChatResync{
-			EventMeta: simplevent.EventMeta{
-				Type:         bridgev2.RemoteEventChatResync,
-				PortalKey:    portalKey,
-				CreatePortal: true,
-				LogContext: func(c zerolog.Context) zerolog.Context {
-					return c.Str("tg_event", "updateChannel")
-				},
+	}
+	if channel.Left {
+		log.Debug().Msg("Update was for a left channel. Leaving the channel.")
+		return t.selfLeaveChat(ctx, portalKey, fmt.Errorf("channel has left=true after UpdateChannel"))
+	}
+	res := t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.ChatResync{
+		EventMeta: simplevent.EventMeta{
+			Type:         bridgev2.RemoteEventChatResync,
+			PortalKey:    portalKey,
+			CreatePortal: true,
+			LogContext: func(c zerolog.Context) zerolog.Context {
+				return c.Str("tg_event", "updateChannel")
 			},
-			GetChatInfoFunc: func(ctx context.Context, portal *bridgev2.Portal) (*bridgev2.ChatInfo, error) {
-				chatInfo, mfm, err := t.wrapChatInfo(portal.ID, channel)
+		},
+		GetChatInfoFunc: func(ctx context.Context, portal *bridgev2.Portal) (*bridgev2.ChatInfo, error) {
+			chatInfo, mfm, err := t.wrapChatInfo(portal.ID, channel)
+			if err != nil {
+				return nil, err
+			}
+			if portal.MXID == "" {
+				err = t.fillChannelMembers(ctx, mfm, chatInfo.Members)
 				if err != nil {
 					return nil, err
 				}
-				if portal.MXID == "" {
-					err = t.fillChannelMembers(ctx, mfm, chatInfo.Members)
-					if err != nil {
-						return nil, err
-					}
-				}
-				return chatInfo, nil
-			},
-		})
-		return resultToError(res)
-	}
-	return nil
+			}
+			return chatInfo, nil
+		},
+	})
+	return resultToError(res)
 }
 
 func (t *TelegramClient) onUpdateNewMessage(ctx context.Context, entities tg.Entities, update IGetMessage) error {
