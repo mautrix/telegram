@@ -153,6 +153,7 @@ func (t *TelegramClient) wrapChatInfo(portalID networkid.PortalID, rawChat tg.Ch
 	var mfm memberFetchMeta
 	var isMegagroup, isForumGeneral, left bool
 	var avatarErr error
+	var ownPL *int
 	switch chat := rawChat.(type) {
 	case *tg.Chat:
 		info.Name = &chat.Title
@@ -160,6 +161,13 @@ func (t *TelegramClient) wrapChatInfo(portalID networkid.PortalID, rawChat tg.Ch
 		info.Avatar, avatarErr = t.convertChatPhoto(chat.AsInputPeer(), chat.Photo)
 		info.Members.PowerLevels = t.getPowerLevelOverridesFromBannedRights(chat, chat.DefaultBannedRights)
 		left = chat.Left
+		if chat.Creator {
+			ownPL = creatorPowerLevel
+		} else if rights, isAdmin := chat.GetAdminRights(); isAdmin {
+			ownPL = adminRightsToPowerLevel(rights)
+		} else {
+			ownPL = anyonePowerLevel
+		}
 	case *tg.Channel:
 		mfm.Input = chat.AsInput()
 		mfm.IsBroadcast = chat.Broadcast
@@ -168,6 +176,13 @@ func (t *TelegramClient) wrapChatInfo(portalID networkid.PortalID, rawChat tg.Ch
 		isMegagroup = chat.Megagroup
 		info.Avatar, avatarErr = t.convertChatPhoto(chat.AsInputPeer(), chat.Photo)
 		info.Members.PowerLevels = t.getPowerLevelOverridesFromBannedRights(chat, chat.DefaultBannedRights)
+		if chat.Creator {
+			ownPL = creatorPowerLevel
+		} else if rights, isAdmin := chat.GetAdminRights(); isAdmin {
+			ownPL = adminRightsToPowerLevel(rights)
+		} else {
+			ownPL = anyonePowerLevel
+		}
 		_, _, topicID, _ := ids.ParsePortalID(portalID)
 		if chat.Forum {
 			if topicID == ids.TopicIDSpaceRoom {
@@ -200,7 +215,7 @@ func (t *TelegramClient) wrapChatInfo(portalID networkid.PortalID, rawChat tg.Ch
 		return nil, nil, fmt.Errorf("failed to wrap chat avatar: %w", avatarErr)
 	}
 	if !left {
-		info.Members.MemberMap.Add(bridgev2.ChatMember{EventSender: t.mySender()})
+		info.Members.MemberMap.Add(bridgev2.ChatMember{EventSender: t.mySender(), PowerLevel: ownPL})
 	}
 	info.ExtraUpdates = func(ctx context.Context, portal *bridgev2.Portal) bool {
 		meta := portal.Metadata.(*PortalMetadata)
