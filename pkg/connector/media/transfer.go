@@ -225,6 +225,12 @@ func (t *Transferer) WithDocument(doc tg.DocumentClass, thumbnail bool) *ReadyTr
 	return &ReadyTransferer{t, &documentFileLocation}
 }
 
+func (t *Transferer) WithLivePhoto(pc tg.PhotoClass, doc tg.DocumentClass) *ReadyTransferer {
+	photo := pc.(*tg.Photo)
+	t.fileInfo.Width, t.fileInfo.Height, _, _ = getLargestPhotoSize(photo.GetSizes())
+	return t.WithDocument(doc, false)
+}
+
 // WithPhoto transforms a [Transferer] to a [ReadyTransferer] by setting the
 // given photo as the location that will be downloaded by the
 // [ReadyTransferer].

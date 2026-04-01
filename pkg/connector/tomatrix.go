@@ -61,7 +61,9 @@ func mediaHashID(ctx context.Context, m tg.MessageMediaClass) []byte {
 	}
 	switch media := m.(type) {
 	case *tg.MessageMediaPhoto:
-		if media.Photo != nil {
+		if media.Video != nil {
+			return binary.BigEndian.AppendUint64(nil, uint64(media.Video.GetID()))
+		} else if media.Photo != nil {
 			return binary.BigEndian.AppendUint64(nil, uint64(media.Photo.GetID()))
 		} else {
 			zerolog.Ctx(ctx).Debug().Msg("Attempted to get hash for nil photo")
@@ -427,6 +429,8 @@ func (c *TelegramClient) convertMediaRequiringUpload(
 	var telegramMediaID int64
 	var isSticker, isVideo, isVideoGif bool
 	extra := map[string]any{}
+	// FIXME don't use raw map for fields in the FileInfo struct
+	extraInfo := map[string]any{}
 
 	transferer := media.NewTransferer(c.client.API()).WithRoomID(portal.MXID)
 	var mediaTransferer *media.ReadyTransferer
@@ -482,8 +486,40 @@ func (c *TelegramClient) convertMediaRequiringUpload(
 			}
 			return
 		}
-		telegramMediaID = photo.GetID()
-		mediaTransferer = transferer.WithPhoto(photo)
+		if video, ok := msgMedia.Video.(*tg.Document); ok {
+			content.MsgType = event.MsgVideo
+			telegramMediaID = video.GetID()
+			mediaTransferer = transferer.WithLivePhoto(photo, video)
+			extraInfo["fi.mau.telegram.live_photo"] = true
+
+			// TODO deduplicate with document thumbnail code
+			var thumbnailURL id.ContentURIString
+			var thumbnailFile *event.EncryptedFileInfo
+			var thumbnailInfo *event.FileInfo
+			var err error
+
+			thumbnailTransferer := media.NewTransferer(c.client.API()).
+				WithRoomID(portal.MXID).
+				WithPhoto(photo)
+			if c.main.useDirectMedia {
+				thumbnailURL, thumbnailInfo, err = thumbnailTransferer.DirectDownloadURL(ctx, c.telegramUserID, portal, msgID, false, photo.ID)
+				if err != nil {
+					log.Err(err).Msg("Failed to create direct download URL for thumbnail")
+				}
+			}
+			if thumbnailURL == "" {
+				thumbnailURL, thumbnailFile, thumbnailInfo, err = thumbnailTransferer.Transfer(ctx, c.main.Store, intent)
+				if err != nil {
+					log.Err(err).Msg("Failed to transfer thumbnail")
+				}
+			}
+			if thumbnailURL != "" || thumbnailFile != nil {
+				transferer = transferer.WithThumbnail(thumbnailURL, thumbnailFile, thumbnailInfo)
+			}
+		} else {
+			telegramMediaID = photo.GetID()
+			mediaTransferer = transferer.WithPhoto(photo)
+		}
 	case *tg.MessageMediaDocument:
 		document, ok := msgMedia.Document.(*tg.Document)
 		if !ok {
@@ -500,7 +536,6 @@ func (c *TelegramClient) convertMediaRequiringUpload(
 
 		content.MsgType = event.MsgFile
 
-		extraInfo := map[string]any{}
 		for _, attr := range document.GetAttributes() {
 			switch a := attr.(type) {
 			case *tg.DocumentAttributeFilename:
@@ -593,7 +628,6 @@ func (c *TelegramClient) convertMediaRequiringUpload(
 			extraInfo["fi.mau.hide_controls"] = true
 			extraInfo["fi.mau.no_audio"] = true
 		}
-		extra["info"] = extraInfo
 
 		if _, ok := document.GetThumbs(); ok && eventType != event.EventSticker {
 			var thumbnailURL id.ContentURIString
@@ -678,11 +712,11 @@ func (c *TelegramClient) convertMediaRequiringUpload(
 		extra["town.robin.msc3725.content_warning"] = map[string]any{
 			"type": "town.robin.msc3725.spoiler",
 		}
-		if extra["info"] == nil {
-			extra["info"] = map[string]any{}
-		}
-		info := extra["info"].(map[string]any)
-		info["fi.mau.telegram.spoiler"] = true
+		extra["page.codeberg.everypizza.msc4193.spoiler"] = true
+		extraInfo["fi.mau.telegram.spoiler"] = true
+	}
+	if len(extraInfo) > 0 {
+		extra["info"] = extraInfo
 	}
 
 	converted = &bridgev2.ConvertedMessagePart{

@@ -141,10 +141,17 @@ func (tc *TelegramConnector) Download(ctx context.Context, mediaID networkid.Med
 
 		switch msgMedia := rawMsgMedia.(type) {
 		case *tg.MessageMediaPhoto:
-			log.Debug().
-				Int64("photo_id", msgMedia.Photo.GetID()).
-				Msg("downloading photo")
-			readyTransferer = transferer.WithPhoto(msgMedia.Photo)
+			if msgMedia.Video != nil && !info.Thumbnail {
+				log.Debug().
+					Int64("document_id", msgMedia.Video.GetID()).
+					Msg("downloading live photo")
+				readyTransferer = transferer.WithDocument(msgMedia.Video, false)
+			} else {
+				log.Debug().
+					Int64("photo_id", msgMedia.Photo.GetID()).
+					Msg("downloading photo")
+				readyTransferer = transferer.WithPhoto(msgMedia.Photo)
+			}
 		case *tg.MessageMediaDocument:
 			document, ok := msgMedia.Document.(*tg.Document)
 			if !ok {
