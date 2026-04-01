@@ -50,7 +50,7 @@ func TestConn_handleSessionCreated(t *testing.T) {
 
 		msgs := logs.All()
 		a.Len(msgs, 1)
-		a.Equal("Local clock needs synchronization", msgs[0].Message)
+		a.Equal("Updated server time offset (high)", msgs[0].Message)
 	})
 	t.Run("Invalid", func(t *testing.T) {
 		conn := Conn{}

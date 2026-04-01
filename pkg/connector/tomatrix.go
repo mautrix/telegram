@@ -797,8 +797,9 @@ func convertPoll(media tg.MessageMediaClass) *bridgev2.ConvertedMessagePart {
 	var textAnswers []string
 	var htmlAnswers strings.Builder
 	for i, opt := range poll.Poll.Answers {
-		textAnswers = append(textAnswers, fmt.Sprintf("%d. %s", i+1, opt.Text.Text))
-		htmlAnswers.WriteString(fmt.Sprintf("<li>%s</li>", opt.Text.Text))
+		text := opt.GetText()
+		textAnswers = append(textAnswers, fmt.Sprintf("%d. %s", i+1, text.Text))
+		htmlAnswers.WriteString(fmt.Sprintf("<li>%s</li>", text.Text))
 	}
 
 	return &bridgev2.ConvertedMessagePart{
