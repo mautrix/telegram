@@ -1104,47 +1104,45 @@ func (t *TelegramClient) HandleMatrixDeleteChat(ctx context.Context, chat *bridg
 			return err
 		}
 	case ids.PeerTypeChat:
-		if chat.Content.DeleteForEveryone {
-			result, err := t.client.API().MessagesDeleteChat(ctx, id)
-			if err != nil {
-				return err
-			}
-			if !result {
-				return fmt.Errorf("failed to delete chat %d", id)
-			}
-			return nil
-		} else {
-			return fmt.Errorf("deleting chat only supported for group creators")
+		if !chat.Content.DeleteForEveryone {
+			return fmt.Errorf("chats can only be deleted for everyone or left")
 		}
+		result, err := t.client.API().MessagesDeleteChat(ctx, id)
+		if err != nil {
+			return err
+		}
+		if !result {
+			return fmt.Errorf("failed to delete chat %d", id)
+		}
+		return nil
 	case ids.PeerTypeChannel:
+		if !chat.Content.DeleteForEveryone {
+			return fmt.Errorf("channels can only be deleted for everyone or left")
+		}
 		accessHash, err := t.ScopedStore.GetAccessHash(ctx, peerType, id)
 		if err != nil {
 			return err
 		}
-		if chat.Content.DeleteForEveryone {
-			if topicID > 0 {
-				_, err = t.client.API().MessagesDeleteTopicHistory(ctx, &tg.MessagesDeleteTopicHistoryRequest{
-					Peer: &tg.InputPeerChannel{
-						ChannelID:  id,
-						AccessHash: accessHash,
-					},
-					TopMsgID: topicID,
-				})
-			} else {
-				_, err = t.client.API().ChannelsDeleteChannel(ctx, &tg.InputChannel{
+		if topicID > 0 {
+			_, err = t.client.API().MessagesDeleteTopicHistory(ctx, &tg.MessagesDeleteTopicHistoryRequest{
+				Peer: &tg.InputPeerChannel{
 					ChannelID:  id,
 					AccessHash: accessHash,
-				})
-			}
-			if err != nil {
-				return err
-			}
-			return nil
+				},
+				TopMsgID: topicID,
+			})
 		} else {
-			return fmt.Errorf("deleting chat only supported for channel creators")
+			_, err = t.client.API().ChannelsDeleteChannel(ctx, &tg.InputChannel{
+				ChannelID:  id,
+				AccessHash: accessHash,
+			})
 		}
+		if err != nil {
+			return err
+		}
+		return nil
 	default:
-		return fmt.Errorf("deleting chat not supported for peer type %s", peerType)
+		return fmt.Errorf("unknown peer type %s", peerType)
 	}
 	return nil
 }
