@@ -546,7 +546,8 @@ func (t *TelegramClient) HandleMatrixMessage(ctx context.Context, msg *bridgev2.
 						Msg("Multiple messages in send response")
 				}
 				realSentMessage = update.Message.(*tg.Message)
-			case *tg.UpdateReadChannelInbox, *tg.UpdateReadHistoryInbox, *tg.UpdateReadMonoForumInbox:
+			case *tg.UpdateReadChannelInbox, *tg.UpdateReadHistoryInbox, *tg.UpdateReadMonoForumInbox,
+				*tg.UpdateReadHistoryOutbox, *tg.UpdateReadChannelOutbox:
 				// ignore
 			default:
 				log.Warn().Type("update_type", update).Msg("Unexpected update type in send message response")
