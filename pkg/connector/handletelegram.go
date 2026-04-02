@@ -1018,6 +1018,7 @@ func (t *TelegramClient) onMessageEdit(ctx context.Context, update IGetMessage) 
 			if err != nil {
 				return nil, err
 			}
+			convertedPart := converted.Parts[0]
 
 			existingPart := existing[0]
 			if len(existing) > 1 {
@@ -1030,11 +1031,18 @@ func (t *TelegramClient) onMessageEdit(ctx context.Context, update IGetMessage) 
 				}
 			}
 
-			if bytes.Equal(existingPart.Metadata.(*MessageMetadata).ContentHash, converted.Parts[0].DBMetadata.(*MessageMetadata).ContentHash) {
+			if bytes.Equal(existingPart.Metadata.(*MessageMetadata).ContentHash, convertedPart.DBMetadata.(*MessageMetadata).ContentHash) {
 				return nil, fmt.Errorf("%w (content hash didn't change)", bridgev2.ErrIgnoringRemoteEvent)
 			}
+			editPart := convertedPart.ToEditPart(existingPart)
+			if data.EditHide {
+				if editPart.TopLevelExtra == nil {
+					editPart.TopLevelExtra = make(map[string]any)
+				}
+				editPart.TopLevelExtra["com.beeper.dont_render_edited"] = true
+			}
 			return &bridgev2.ConvertedEdit{
-				ModifiedParts: []*bridgev2.ConvertedEditPart{converted.Parts[0].ToEditPart(existingPart)},
+				ModifiedParts: []*bridgev2.ConvertedEditPart{editPart},
 			}, nil
 		},
 	})
