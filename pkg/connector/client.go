@@ -79,6 +79,7 @@ type TelegramClient struct {
 	metadata          *UserLoginMetadata
 	client            *telegram.Client
 	updatesManager    *updates.Manager
+	dispatcher        tg.UpdateDispatcher
 	clientCtx         context.Context
 	clientCancel      context.CancelFunc
 	clientDone        *exsync.Event
@@ -183,8 +184,8 @@ func NewTelegramClient(ctx context.Context, tc *TelegramConnector, login *bridge
 		return &client, nil
 	}
 
-	dispatcher := tg.NewUpdateDispatcher()
-	dispatcher.OnFallback(client.onUpdateWrapper)
+	client.dispatcher = tg.NewUpdateDispatcher()
+	client.dispatcher.OnFallback(client.onUpdateWrapper)
 
 	client.updatesManager = updates.New(updates.Config{
 		OnNotChannelMember: client.onNotChannelMember,
@@ -205,7 +206,7 @@ func NewTelegramClient(ctx context.Context, tc *TelegramConnector, login *bridge
 
 			return resultToError(res)
 		},
-		Handler:      dispatcher,
+		Handler:      client.dispatcher,
 		Logger:       zaplog.Named("gaps"),
 		Storage:      client.ScopedStore,
 		AccessHasher: client.ScopedStore,

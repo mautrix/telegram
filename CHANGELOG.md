@@ -18,6 +18,10 @@
     old room will be assigned to one Matrix user randomly and others will get
     a new room created automatically when receiving a message in the chat or
     when using the `!tg sync-chats` command.
+    * If you want shared portals, upgrade the affected groups to supergroups.
+      You can upgrade groups using the `!tg upgrade` command, or in the
+      official apps by enabling any setting that requires a supergroup
+      (e.g. add a member tag for any admin).
   * Any migration issues should be reported in the Matrix room linked in the
     readme.
 * Notable new features include:

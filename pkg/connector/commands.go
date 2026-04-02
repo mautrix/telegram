@@ -17,6 +17,7 @@
 package connector
 
 import (
+	"errors"
 	"slices"
 	"strings"
 
@@ -24,6 +25,8 @@ import (
 	"maunium.net/go/mautrix/bridgev2/commands"
 	"maunium.net/go/mautrix/bridgev2/networkid"
 	"maunium.net/go/mautrix/format"
+
+	"go.mau.fi/mautrix-telegram/pkg/connector/ids"
 )
 
 var cmdSyncChats = &commands.FullHandler{
@@ -54,6 +57,46 @@ func fnSyncChats(ce *commands.Event) {
 			ce.Reply("Failed to synchronize chats for %s: %v", format.SafeMarkdownCode(login.ID), err)
 		} else {
 			ce.Reply("Successfully synchronized chats for %s", format.SafeMarkdownCode(login.ID))
+		}
+	}
+}
+
+var cmdUpgrade = &commands.FullHandler{
+	Func: fnUpgrade,
+	Name: "upgrade",
+	Help: commands.HelpMeta{
+		Section:     commands.HelpSectionChats,
+		Description: "Upgrade a minigroup to a supergroup on Telegram",
+	},
+	RequiresPortal: true,
+}
+
+func fnUpgrade(ce *commands.Event) {
+	login, _, err := ce.Portal.FindPreferredLogin(ce.Ctx, ce.User, false)
+	if errors.Is(err, bridgev2.ErrNotLoggedIn) {
+		ce.Reply("No logins found to upgrade the chat.")
+	} else if err != nil {
+		ce.Log.Err(err).Msg("Failed to find preferred login for upgrade command")
+		ce.Reply("Failed to find a login to upgrade the chat.")
+	} else if peerType, chatID, _, err := ids.ParsePortalID(ce.Portal.ID); err != nil {
+		ce.Log.Err(err).Str("portal_id", string(ce.Portal.ID)).Msg("Failed to parse portal ID for upgrade command")
+		ce.Reply("Failed to parse portal ID")
+	} else if peerType == ids.PeerTypeChannel {
+		ce.Reply("Only minigroups can be upgraded (this is already a channel/supergroup).")
+	} else if peerType == ids.PeerTypeUser {
+		ce.Reply("Only minigroups can be upgraded (this is direct chat).")
+	} else if resp, err := login.Client.(*TelegramClient).client.API().MessagesMigrateChat(ce.Ctx, chatID); err != nil {
+		ce.Log.Err(err).Int64("chat_id", chatID).Msg("Failed to upgrade chat")
+		ce.Reply("Failed to upgrade chat: %v", err)
+	} else {
+		ce.Log.Trace().Any("response", resp).Msg("Updates from chat upgrade")
+		ce.Log.Info().Int64("old_chat_id", chatID).Msg("Successfully upgraded chat")
+		ce.React("\u2705\ufe0f")
+		err = login.Client.(*TelegramClient).dispatcher.Handle(ce.Ctx, resp)
+		if err != nil {
+			ce.Log.Err(err).Msg("Failed to handle updates from chat upgrade")
+		} else {
+			ce.Log.Debug().Msg("Finished handling updates from chat upgrade")
 		}
 	}
 }
