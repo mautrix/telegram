@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 
+	"maunium.net/go/mautrix/bridgev2"
 	"maunium.net/go/mautrix/event"
 
 	"go.mau.fi/mautrix-telegram/pkg/connector/ids"
@@ -87,7 +88,7 @@ func toTelegramEntity(br telegramfmt.BodyRange) tg.MessageEntityClass {
 	}
 }
 
-func Parse(ctx context.Context, parser *HTMLParser, content *event.MessageEventContent) (string, []tg.MessageEntityClass) {
+func Parse(ctx context.Context, parser *HTMLParser, content *event.MessageEventContent, portal *bridgev2.Portal) (string, []tg.MessageEntityClass) {
 	if content.MsgType.IsMedia() && (content.FileName == "" || content.FileName == content.Body) {
 		// The body is the filename.
 		return "", nil
@@ -96,7 +97,7 @@ func Parse(ctx context.Context, parser *HTMLParser, content *event.MessageEventC
 	if content.Format != event.FormatHTML {
 		return content.Body, nil
 	}
-	parseCtx := NewContext(ctx)
+	parseCtx := NewContext(ctx, portal)
 	parseCtx.AllowedMentions = content.Mentions
 	parsed := parser.Parse(content.FormattedBody, parseCtx)
 	if parsed == nil {

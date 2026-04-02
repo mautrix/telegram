@@ -236,6 +236,8 @@ func NewTelegramClient(ctx context.Context, tc *TelegramConnector, login *bridge
 			// FIXME this should look for user logins by ID, not hardcode the current user
 			if id == client.telegramUserID {
 				userInfo.MXID = client.userLogin.UserMXID
+			} else if login := tc.Bridge.GetCachedUserLoginByID(ids.MakeUserLoginID(id)); login != nil {
+				userInfo.MXID = login.UserMXID
 			}
 			return userInfo, nil
 		},
@@ -250,6 +252,8 @@ func NewTelegramClient(ctx context.Context, tc *TelegramConnector, login *bridge
 				userInfo := telegramfmt.UserInfo{MXID: ghost.Intent.GetMXID(), Name: ghost.Name}
 				if ghost.ID == client.userID {
 					userInfo.MXID = client.userLogin.UserMXID
+				} else if login := tc.Bridge.GetCachedUserLoginByID(ids.MakeUserLoginID(userID)); login != nil {
+					userInfo.MXID = login.UserMXID
 				}
 				return userInfo, nil
 			}
@@ -334,10 +338,19 @@ func NewTelegramClient(ctx context.Context, tc *TelegramConnector, login *bridge
 	}
 	client.matrixParser = &matrixfmt.HTMLParser{
 		Store: tc.Store,
-		GetGhostDetails: func(ctx context.Context, ui id.UserID) (networkid.UserID, string, int64, bool) {
-			if userID, ok := tc.Bridge.Matrix.ParseGhostMXID(ui); !ok {
-				return "", "", 0, false
-			} else if peerType, telegramUserID, err := ids.ParseUserID(userID); err != nil {
+		GetGhostDetails: func(ctx context.Context, portal *bridgev2.Portal, ui id.UserID) (networkid.UserID, string, int64, bool) {
+			userID, ok := tc.Bridge.Matrix.ParseGhostMXID(ui)
+			if !ok {
+				user, err := tc.Bridge.GetExistingUserByMXID(ctx, ui)
+				if err != nil {
+					return "", "", 0, false
+				} else if login, _, _ := portal.FindPreferredLogin(ctx, user, false); login != nil {
+					userID = ids.UserLoginIDToUserID(login.ID)
+				} else {
+					return "", "", 0, false
+				}
+			}
+			if peerType, telegramUserID, err := ids.ParseUserID(userID); err != nil {
 				return "", "", 0, false
 			} else if accessHash, err := client.ScopedStore.GetAccessHash(ctx, peerType, telegramUserID); err != nil || accessHash == 0 {
 				return "", "", 0, false

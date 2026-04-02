@@ -25,6 +25,7 @@ import (
 	"strings"
 
 	"golang.org/x/net/html"
+	"maunium.net/go/mautrix/bridgev2"
 	"maunium.net/go/mautrix/bridgev2/networkid"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
@@ -221,16 +222,18 @@ func (ts TagStack) Has(tag string) bool {
 
 type Context struct {
 	Ctx                context.Context
+	Portal             *bridgev2.Portal
 	AllowedMentions    *event.Mentions
 	TagStack           TagStack
 	PreserveWhitespace bool
 	ListDepth          int
 }
 
-func NewContext(ctx context.Context) Context {
+func NewContext(ctx context.Context, portal *bridgev2.Portal) Context {
 	return Context{
 		Ctx:      ctx,
 		TagStack: make(TagStack, 0, 4),
+		Portal:   portal,
 	}
 }
 
@@ -251,7 +254,7 @@ func (ctx Context) WithIncrementedListDepth() Context {
 
 // HTMLParser is a somewhat customizable Matrix HTML parser.
 type HTMLParser struct {
-	GetGhostDetails func(context.Context, id.UserID) (networkid.UserID, string, int64, bool)
+	GetGhostDetails func(context.Context, *bridgev2.Portal, id.UserID) (networkid.UserID, string, int64, bool)
 	Store           *store.Container
 }
 
@@ -381,8 +384,7 @@ func (parser *HTMLParser) linkToString(node *html.Node, ctx Context) *EntityStri
 			// Mention not allowed, use name as-is
 			return str
 		}
-		// FIXME this or GetGhostDetails needs to support non-ghost users too
-		userID, username, accessHash, ok := parser.GetGhostDetails(ctx.Ctx, mxid)
+		userID, username, accessHash, ok := parser.GetGhostDetails(ctx.Ctx, ctx.Portal, mxid)
 		if !ok {
 			return str
 		} else if username == "" {

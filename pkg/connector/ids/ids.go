@@ -56,6 +56,10 @@ func ParseUserLoginID(userID networkid.UserLoginID) (int64, error) {
 	return strconv.ParseInt(string(userID), 10, 64)
 }
 
+func UserLoginIDToUserID(userLoginID networkid.UserLoginID) networkid.UserID {
+	return networkid.UserID(userLoginID)
+}
+
 func MakeUserLoginID(userID int64) networkid.UserLoginID {
 	if userID == 0 {
 		return ""
