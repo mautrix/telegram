@@ -96,6 +96,8 @@ type TelegramClient struct {
 	availableReactionsList    []string
 	isPremiumCache            atomic.Bool
 
+	recentMessageRooms *exsync.RingBuffer[networkid.MessageID, networkid.PortalKey]
+
 	telegramFmtParams *telegramfmt.FormatParams
 	matrixParser      *matrixfmt.HTMLParser
 
@@ -170,6 +172,8 @@ func NewTelegramClient(ctx context.Context, tc *TelegramConnector, login *bridge
 		takeoutAccepted: exsync.NewEvent(),
 
 		prevReactionPoll: map[networkid.PortalKey]time.Time{},
+
+		recentMessageRooms: exsync.NewRingBuffer[networkid.MessageID, networkid.PortalKey](32),
 
 		clientInitialized: exsync.NewEvent(),
 		clientDone:        exsync.NewEvent(),

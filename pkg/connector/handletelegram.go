@@ -771,34 +771,30 @@ func (t *TelegramClient) onUserName(ctx context.Context, e tg.Entities, update *
 
 func (t *TelegramClient) onDeleteMessages(ctx context.Context, channelID int64, update IGetMessages) error {
 	for _, messageID := range update.GetMessages() {
-		// TODO have mautrix-go do this part too?
-		parts, err := t.main.Bridge.DB.Message.GetAllPartsByID(ctx, t.loginID, ids.MakeMessageID(channelID, messageID))
-		if err != nil {
+		wrappedMessageID := ids.MakeMessageID(channelID, messageID)
+		var portalKey networkid.PortalKey
+		var ok bool
+		if portalKey, ok = t.recentMessageRooms.Get(wrappedMessageID); ok {
+			// key found in cache
+		} else if parts, err := t.main.Bridge.DB.Message.GetAllPartsByID(ctx, t.loginID, wrappedMessageID); err != nil {
 			return err
-		}
-		if len(parts) == 0 {
+		} else if len(parts) > 0 {
+			portalKey = parts[0].Room
+		} else if channelID != 0 {
+			// This won't work for topics, but should work for any other channels
+			portalKey = t.makePortalKeyFromPeer(&tg.PeerChannel{ChannelID: channelID}, 0)
+		} else {
 			zerolog.Ctx(ctx).Debug().
 				Int("message_id", messageID).
-				Int64("channel_id", channelID).
-				Msg("ignoring delete of message we have no parts for")
+				Msg("Ignoring delete of unknown message")
 			continue
 		}
-		// TODO can deletes happen across rooms?
-		portalKey := parts[0].Room
-		// TODO optimize non-topic portal deletion by using channel ID?
-		//portalKey = t.makePortalKeyFromPeer(&tg.PeerChannel{ChannelID: channelID})
 		res := t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.MessageRemove{
 			EventMeta: simplevent.EventMeta{
-				Type: bridgev2.RemoteEventMessageRemove,
-				LogContext: func(c zerolog.Context) zerolog.Context {
-					return c.
-						Str("action", "delete message").
-						Int("message_id", messageID)
-				},
-				PortalKey:    portalKey,
-				CreatePortal: false,
+				Type:      bridgev2.RemoteEventMessageRemove,
+				PortalKey: portalKey,
 			},
-			TargetMessage: ids.MakeMessageID(channelID, messageID),
+			TargetMessage: wrappedMessageID,
 		})
 		if err := resultToError(res); err != nil {
 			return err
