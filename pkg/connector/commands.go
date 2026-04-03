@@ -18,6 +18,7 @@ package connector
 
 import (
 	"errors"
+	"regexp"
 	"slices"
 	"strings"
 
@@ -27,6 +28,8 @@ import (
 	"maunium.net/go/mautrix/format"
 
 	"go.mau.fi/mautrix-telegram/pkg/connector/ids"
+	"go.mau.fi/mautrix-telegram/pkg/gotd/tg"
+	"go.mau.fi/mautrix-telegram/pkg/gotd/tgerr"
 )
 
 var cmdSyncChats = &commands.FullHandler{
@@ -99,6 +102,99 @@ func fnUpgrade(ce *commands.Event) {
 			ce.Log.Debug().Msg("Finished handling updates from chat upgrade")
 		}
 	}
+}
+
+var cmdJoin = &commands.FullHandler{
+	Func: fnJoin,
+	Name: "join",
+	Help: commands.HelpMeta{
+		Section:     commands.HelpSectionChats,
+		Description: "Join a Telegram group using an invite link.",
+		Args:        "[login ID] <invite link>",
+	},
+	RequiresLogin: true,
+}
+
+var usernameLinkRe = regexp.MustCompile(`^(?:(?:https?://)?t(?:elegram)?\.(?:me|dog)/|tg:/{0,2}resolve\?domain=)([a-zA-Z]\w{3,30}[a-zA-Z\d])(?:\?.+)?$`)
+var inviteLinkRe = regexp.MustCompile(`^(?:(?:https?://)?t(?:elegram)?\.(?:me|dog)/(?:joinchat/|\+)|tg:/{0,2}join\?invite=)([a-zA-Z0-9_-]{22})(?:\?.+)?$`)
+
+func fnJoin(ce *commands.Event) {
+	if len(ce.Args) == 0 || len(ce.Args) > 2 {
+		ce.Reply("Usage: `$cmdprefix join [login ID] <invite link>`")
+		return
+	}
+	var login *bridgev2.UserLogin
+	if len(ce.Args) == 2 {
+		targetLogin := ce.Bridge.GetCachedUserLoginByID(networkid.UserLoginID(ce.Args[0]))
+		if targetLogin == nil || targetLogin.UserMXID != ce.User.MXID {
+			ce.Reply("No login found with the provided ID.")
+			return
+		}
+		login = targetLogin
+		ce.Args = ce.Args[1:]
+	} else {
+		login = ce.User.GetDefaultLogin()
+		if login == nil {
+			ce.Reply("You're not logged in.")
+			return
+		}
+	}
+	t := login.Client.(*TelegramClient)
+	var resp tg.UpdatesClass
+	if usernameMatch := usernameLinkRe.FindStringSubmatch(ce.Args[0]); usernameMatch != nil {
+		resolve, err := t.client.API().ContactsResolveUsername(ce.Ctx, &tg.ContactsResolveUsernameRequest{Username: usernameMatch[1]})
+		if err != nil {
+			ce.Log.Err(err).Msg("Failed to resolve username from invite link")
+			ce.Reply("Failed to resolve username from invite link: %v", err)
+			return
+		}
+		peer, isChannel := resolve.Peer.(*tg.PeerChannel)
+		if !isChannel {
+			ce.Reply("That username does not belong to a channel or supergroup.")
+			return
+		}
+		var ch *tg.Channel
+		for _, chat := range resolve.Chats {
+			if chat.GetID() == peer.ChannelID {
+				ch = chat.(*tg.Channel)
+			}
+		}
+		if ch == nil {
+			ce.Reply("Channel information not found in resolve response.")
+			return
+		}
+		resp, err = t.client.API().ChannelsJoinChannel(ce.Ctx, ch.AsInput())
+		if err != nil {
+			ce.Log.Err(err).Msg("Failed to join chat with invite link")
+			ce.Reply("Failed to join chat: %v", err)
+			return
+		}
+	} else if inviteLinkMatch := inviteLinkRe.FindStringSubmatch(ce.Args[0]); inviteLinkMatch != nil {
+		_, err := t.client.API().MessagesCheckChatInvite(ce.Ctx, inviteLinkMatch[1])
+		if tgerr.Is(err, tg.ErrInviteHashInvalid) {
+			ce.Reply("Invalid invite link.")
+			return
+		} else if tgerr.Is(err, tg.ErrInviteHashExpired) {
+			ce.Reply("Invite link expired.")
+			return
+		}
+		resp, err = t.client.API().MessagesImportChatInvite(ce.Ctx, inviteLinkMatch[1])
+		if err != nil {
+			ce.Log.Err(err).Msg("Failed to join chat with invite link")
+			ce.Reply("Failed to join chat: %v", err)
+			return
+		}
+	} else {
+		ce.Reply("Invalid invite link format.")
+		return
+	}
+	err := t.dispatcher.Handle(ce.Ctx, resp)
+	if err != nil {
+		ce.Log.Err(err).Msg("Failed to handle updates from joining chat with invite link")
+	} else {
+		ce.Log.Debug().Msg("Finished handling updates from joining chat with invite link")
+	}
+	ce.React("\u2705\ufe0f")
 }
 
 var cmdEmojiPack = &commands.FullHandler{
