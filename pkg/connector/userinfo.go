@@ -13,7 +13,6 @@ import (
 
 	"go.mau.fi/mautrix-telegram/pkg/connector/ids"
 	"go.mau.fi/mautrix-telegram/pkg/connector/store"
-	"go.mau.fi/mautrix-telegram/pkg/connector/util"
 	"go.mau.fi/mautrix-telegram/pkg/gotd/tg"
 )
 
@@ -258,7 +257,7 @@ func (t *TelegramClient) wrapUserInfo(ctx context.Context, u tg.UserClass, ghost
 		}
 	}
 
-	name := util.FormatFullName(user.FirstName, user.LastName, user.Deleted, user.ID)
+	name := t.main.Config.FormatDisplayname(user.FirstName, user.LastName, user.Username, user.Deleted, user.ID)
 	namePtr := &name
 	if user.Contact && ghost.Name != "" && oldMeta.ContactSource != t.telegramUserID && oldMeta.ContactSource != 0 && !t.main.Config.ContactNames {
 		namePtr = nil

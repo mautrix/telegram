@@ -20,8 +20,11 @@ import (
 	_ "embed"
 	"fmt"
 	"slices"
+	"strings"
+	"text/template"
 
 	up "go.mau.fi/util/configupgrade"
+	"gopkg.in/yaml.v3"
 	"maunium.net/go/mautrix/bridgev2"
 	"maunium.net/go/mautrix/bridgev2/bridgeconfig"
 	"maunium.net/go/mautrix/id"
@@ -86,10 +89,53 @@ type TelegramConfig struct {
 	AlwaysTombstoneOnSupergroupMigration bool                `yaml:"always_tombstone_on_supergroup_migration"`
 	ImageAsFilePixels                    int                 `yaml:"image_as_file_pixels"`
 	DisableViewOnce                      bool                `yaml:"disable_view_once"`
+	DisplaynameTemplate                  string              `yaml:"displayname_template"`
+	displaynameTemplate                  *template.Template  `yaml:"-"`
 }
 
 func (c TelegramConfig) ShouldBridge(participantCount int) bool {
 	return c.MaxMemberCount < 0 || participantCount <= c.MaxMemberCount
+}
+
+type DisplaynameParams struct {
+	FullName  string
+	FirstName string
+	LastName  string
+	Username  string
+	UserID    int64
+	Deleted   bool
+}
+
+func (c *TelegramConfig) FormatDisplayname(firstName, lastName, username string, deleted bool, userID int64) string {
+	var buf strings.Builder
+	err := c.displaynameTemplate.Execute(&buf, DisplaynameParams{
+		FullName:  strings.TrimSpace(firstName + " " + lastName),
+		FirstName: firstName,
+		LastName:  lastName,
+		Username:  username,
+		UserID:    userID,
+		Deleted:   deleted,
+	})
+	if err != nil {
+		panic(fmt.Errorf("displayname template is broken: %w", err))
+	}
+	return buf.String()
+}
+
+type umConfig TelegramConfig
+
+func (c *TelegramConfig) UnmarshalYAML(node *yaml.Node) error {
+	err := node.Decode((*umConfig)(c))
+	if err != nil {
+		return err
+	}
+	return c.PostProcess()
+}
+
+func (c *TelegramConfig) PostProcess() error {
+	var err error
+	c.displaynameTemplate, err = template.New("displayname").Parse(c.DisplaynameTemplate)
+	return err
 }
 
 //go:embed example-config.yaml
@@ -130,6 +176,7 @@ func upgradeConfig(helper up.Helper) {
 	helper.Copy(up.Bool, "always_tombstone_on_supergroup_migration")
 	helper.Copy(up.Int, "image_as_file_pixels")
 	helper.Copy(up.Bool, "disable_view_once")
+	helper.Copy(up.Str, "displayname_template")
 }
 
 func (tg *TelegramConnector) GetConfig() (example string, data any, upgrader up.Upgrader) {

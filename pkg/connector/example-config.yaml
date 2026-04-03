@@ -104,3 +104,11 @@ always_tombstone_on_supergroup_migration: false
 image_as_file_pixels: 16777216
 # Should view-once messages be disabled entirely?
 disable_view_once: false
+# Displayname template for Telegram users.
+# {{ .FullName }} - the full name of the Telegram user
+# {{ .FirstName }} - the first name of the Telegram user
+# {{ .LastName }} - the last name of the Telegram user
+# {{ .Username }} - the primary username of the Telegram user, if the user has one
+# {{ .UserID }} - the internal user ID of the Telegram user
+# {{ .Deleted }} - true if the user has been deleted, false otherwise
+displayname_template: "{{ if .Deleted }}Deleted account {{ .UserID }}{{ else }}{{ .FullName }}{{ end }}"

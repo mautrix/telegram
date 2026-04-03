@@ -42,7 +42,6 @@ import (
 	"go.mau.fi/mautrix-telegram/pkg/connector/media"
 	"go.mau.fi/mautrix-telegram/pkg/connector/store"
 	"go.mau.fi/mautrix-telegram/pkg/connector/tljson"
-	"go.mau.fi/mautrix-telegram/pkg/connector/util"
 	"go.mau.fi/mautrix-telegram/pkg/gotd/tg"
 	"go.mau.fi/mautrix-telegram/pkg/gotd/tgerr"
 )
@@ -728,13 +727,7 @@ func (t *TelegramClient) onUserName(ctx context.Context, e tg.Entities, update *
 
 	var userInfo bridgev2.UserInfo
 
-	name := util.FormatFullName(update.FirstName, update.LastName, false, update.UserID)
-	userInfo.Name = &name
-	if meta.ContactSource != 0 && meta.ContactSource != t.telegramUserID && !t.main.Config.ContactNames {
-		// TODO fetch full info to accurately detect if the user is a contact or not
-		userInfo.Name = nil
-	}
-
+	var firstUsername string
 	if len(update.Usernames) > 0 {
 		for _, ident := range ghost.Identifiers {
 			if !strings.HasPrefix(ident, "telegram:") {
@@ -742,12 +735,22 @@ func (t *TelegramClient) onUserName(ctx context.Context, e tg.Entities, update *
 			}
 		}
 
-		for _, username := range update.Usernames {
+		for i, username := range update.Usernames {
+			if i == 0 {
+				firstUsername = username.Username
+			}
 			userInfo.Identifiers = append(userInfo.Identifiers, fmt.Sprintf("telegram:%s", username.Username))
 		}
 
 		slices.Sort(userInfo.Identifiers)
 		userInfo.Identifiers = slices.Compact(userInfo.Identifiers)
+	}
+
+	name := t.main.Config.FormatDisplayname(update.FirstName, update.LastName, firstUsername, false, update.UserID)
+	userInfo.Name = &name
+	if meta.ContactSource != 0 && meta.ContactSource != t.telegramUserID && !t.main.Config.ContactNames {
+		// TODO fetch full info to accurately detect if the user is a contact or not
+		userInfo.Name = nil
 	}
 
 	ghost.UpdateInfo(ctx, &userInfo)

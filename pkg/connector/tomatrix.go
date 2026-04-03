@@ -41,7 +41,6 @@ import (
 	"go.mau.fi/mautrix-telegram/pkg/connector/media"
 	"go.mau.fi/mautrix-telegram/pkg/connector/store"
 	"go.mau.fi/mautrix-telegram/pkg/connector/telegramfmt"
-	"go.mau.fi/mautrix-telegram/pkg/connector/util"
 	"go.mau.fi/mautrix-telegram/pkg/connector/waveform"
 	"go.mau.fi/mautrix-telegram/pkg/gotd/tg"
 	"go.mau.fi/mautrix-telegram/pkg/gotd/tgerr"
@@ -729,7 +728,7 @@ func (c *TelegramClient) convertMediaRequiringUpload(
 
 func (c *TelegramClient) convertContact(media tg.MessageMediaClass) *bridgev2.ConvertedMessagePart {
 	contact := media.(*tg.MessageMediaContact)
-	name := util.FormatFullName(contact.FirstName, contact.LastName, false, contact.UserID)
+	name := c.main.Config.FormatDisplayname(contact.FirstName, contact.LastName, "", false, contact.UserID)
 	formattedPhone := fmt.Sprintf("+%s", strings.TrimPrefix(contact.PhoneNumber, "+"))
 
 	content := event.MessageEventContent{

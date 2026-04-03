@@ -216,7 +216,7 @@ func (bl *baseLogin) finalizeLogin(
 	}
 	metadata.Session = bl.session
 	metadata.LoginMethod = bl.flowID
-	profile, name := userToRemoteProfile(self, nil, nil)
+	profile, name := bl.main.userToRemoteProfile(self, nil, nil)
 	userLoginID := ids.MakeUserLoginID(authorization.User.GetID())
 	ul, err := bl.user.NewLogin(ctx, &database.UserLogin{
 		ID:            userLoginID,

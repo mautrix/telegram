@@ -47,7 +47,6 @@ import (
 	"go.mau.fi/mautrix-telegram/pkg/connector/matrixfmt"
 	"go.mau.fi/mautrix-telegram/pkg/connector/store"
 	"go.mau.fi/mautrix-telegram/pkg/connector/telegramfmt"
-	"go.mau.fi/mautrix-telegram/pkg/connector/util"
 	"go.mau.fi/mautrix-telegram/pkg/gotd/telegram"
 	"go.mau.fi/mautrix-telegram/pkg/gotd/telegram/auth"
 	"go.mau.fi/mautrix-telegram/pkg/gotd/telegram/updates"
@@ -430,12 +429,12 @@ func (t *TelegramClient) onPing() {
 	}
 }
 
-func userToRemoteProfile(
+func (t *TelegramConnector) userToRemoteProfile(
 	self *tg.User,
 	ghost *bridgev2.Ghost,
 	prevState *status.RemoteProfile,
 ) (profile status.RemoteProfile, name string) {
-	profile.Name = util.FormatFullName(self.FirstName, self.LastName, self.Deleted, self.ID)
+	profile.Name = t.Config.FormatDisplayname(self.FirstName, self.LastName, self.Username, self.Deleted, self.ID)
 	if self.Phone != "" {
 		profile.Phone = "+" + strings.TrimPrefix(self.Phone, "+")
 	} else if prevState != nil {
@@ -455,7 +454,7 @@ func userToRemoteProfile(
 }
 
 func (t *TelegramClient) updateRemoteProfile(ctx context.Context, self *tg.User, ghost *bridgev2.Ghost) bool {
-	newProfile, newName := userToRemoteProfile(self, ghost, &t.userLogin.RemoteProfile)
+	newProfile, newName := t.main.userToRemoteProfile(self, ghost, &t.userLogin.RemoteProfile)
 	if t.userLogin.RemoteProfile != newProfile || t.userLogin.RemoteName != newName {
 		t.userLogin.RemoteProfile = newProfile
 		t.userLogin.RemoteName = newName
