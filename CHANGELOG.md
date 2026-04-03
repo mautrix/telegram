@@ -22,6 +22,9 @@
       You can upgrade groups using the `!tg upgrade` command, or in the
       official apps by enabling any setting that requires a supergroup
       (e.g. add a member tag for any admin).
+  * Management room status will not be migrated. Use `!tg set-management-room`
+    after the upgrade to re-allow commands without the `!tg` prefix in your
+    private chat with the bridge bot.
   * Any migration issues should be reported in the Matrix room linked in the
     readme.
 * Notable new features include:
