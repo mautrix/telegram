@@ -22,6 +22,7 @@ import (
 	"slices"
 	"strings"
 
+	"golang.org/x/net/html"
 	"maunium.net/go/mautrix/bridgev2"
 	"maunium.net/go/mautrix/bridgev2/commands"
 	"maunium.net/go/mautrix/bridgev2/networkid"
@@ -141,6 +142,7 @@ func fnJoin(ce *commands.Event) {
 	}
 	t := login.Client.(*TelegramClient)
 	var resp tg.UpdatesClass
+	var chatName string
 	if usernameMatch := usernameLinkRe.FindStringSubmatch(ce.Args[0]); usernameMatch != nil {
 		resolve, err := t.client.API().ContactsResolveUsername(ce.Ctx, &tg.ContactsResolveUsernameRequest{Username: usernameMatch[1]})
 		if err != nil {
@@ -163,6 +165,7 @@ func fnJoin(ce *commands.Event) {
 			ce.Reply("Channel information not found in resolve response.")
 			return
 		}
+		chatName = ch.Title
 		resp, err = t.client.API().ChannelsJoinChannel(ce.Ctx, ch.AsInput())
 		if err != nil {
 			ce.Log.Err(err).Msg("Failed to join chat with invite link")
@@ -170,13 +173,30 @@ func fnJoin(ce *commands.Event) {
 			return
 		}
 	} else if inviteLinkMatch := inviteLinkRe.FindStringSubmatch(ce.Args[0]); inviteLinkMatch != nil {
-		_, err := t.client.API().MessagesCheckChatInvite(ce.Ctx, inviteLinkMatch[1])
+		resolve, err := t.client.API().MessagesCheckChatInvite(ce.Ctx, inviteLinkMatch[1])
 		if tgerr.Is(err, tg.ErrInviteHashInvalid) {
 			ce.Reply("Invalid invite link.")
 			return
 		} else if tgerr.Is(err, tg.ErrInviteHashExpired) {
 			ce.Reply("Invite link expired.")
 			return
+		}
+		switch typed := resolve.(type) {
+		case *tg.ChatInviteAlready:
+			titler, ok := typed.Chat.(interface {
+				GetTitle() string
+			})
+			if ok {
+				chatName = titler.GetTitle()
+			} else {
+				chatName = "that chat"
+			}
+			ce.Reply("You're already a member of %s", html.EscapeString(chatName))
+			return
+		case *tg.ChatInvite:
+			chatName = typed.Title
+		default:
+			ce.Log.Warn().Type("resolved_type", typed).Msg("Unexpected response type from MessagesCheckChatInvite")
 		}
 		resp, err = t.client.API().MessagesImportChatInvite(ce.Ctx, inviteLinkMatch[1])
 		if err != nil {
@@ -194,7 +214,7 @@ func fnJoin(ce *commands.Event) {
 	} else {
 		ce.Log.Debug().Msg("Finished handling updates from joining chat with invite link")
 	}
-	ce.React("\u2705\ufe0f")
+	ce.Reply("Successfully joined %s", html.EscapeString(chatName))
 }
 
 var cmdEmojiPack = &commands.FullHandler{
