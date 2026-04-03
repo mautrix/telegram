@@ -143,7 +143,7 @@ func (t *TelegramClient) resolveUsername(ctx context.Context, username string, e
 	return nil, fmt.Errorf("peer user not found in contact resolved response")
 }
 
-// Parses usernames with or without the @ sign in front of the username.
+// Parses user links or usernames with or without the @ sign in front of the username.
 // This verifies the following restrictions:
 // - Usernames must be at least 5 characters long
 // - Usernames must be at most 32 characters long
@@ -152,7 +152,7 @@ func (t *TelegramClient) resolveUsername(ctx context.Context, username string, e
 // - Usernames cannot end with an underscore
 // TODO some usernames are shorter, figure out actual limits
 // (some bots like @pic and @gif have 3 characters, fragment might allow 4 characters)
-var usernameRe = regexp.MustCompile(`^@?([a-zA-Z]\w{3,30}[a-zA-Z\d])$`)
+var usernameRe = regexp.MustCompile(`^(?:(?:https?://)?t(?:elegram)?\.(?:me|dog)/|tg:/{0,2}resolve\?domain=|@)?([a-zA-Z]\w{3,30}[a-zA-Z\d])$`)
 
 func (t *TelegramClient) ResolveIdentifier(ctx context.Context, identifier string, createChat bool) (*bridgev2.ResolveIdentifierResponse, error) {
 	log := zerolog.Ctx(ctx).With().Str("identifier", identifier).Logger()
