@@ -1,10 +1,10 @@
 # v26.04 (unreleased)
 
 * Rewrote bridge in Go using bridgev2 architecture.
-  * To migrate the bridge, simply upgrade in-place. The database and config
-    will be migrated automatically, although some parts of the config aren't
-    migrated (e.g. log config, permission types specific to the legacy bridge).
-    Taking backups beforehand is always recommended.
+  * To migrate the bridge, simply upgrade in-place from v0.15.3 or later. The
+    database and config will be migrated automatically, although some parts of
+    the config aren't migrated (e.g. log config, permission types specific to
+    the legacy bridge). Taking backups beforehand is always recommended.
   * It is recommended to check the config file after upgrading. If you have
     prevented the bridge from writing to the config, you should update it
     manually.

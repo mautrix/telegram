@@ -17,13 +17,17 @@
 package main
 
 import (
+	"context"
 	_ "embed"
+	"fmt"
 
+	"github.com/rs/zerolog"
 	up "go.mau.fi/util/configupgrade"
+	"go.mau.fi/util/dbutil"
 	"maunium.net/go/mautrix/bridgev2/bridgeconfig"
 )
 
-const legacyMigrateRenameTables = `
+const legacyMigrateRenameTablesQuery = `
 ALTER TABLE backfill_queue RENAME TO backfill_queue_old;
 ALTER TABLE bot_chat RENAME TO bot_chat_old;
 ALTER TABLE contact RENAME TO contact_old;
@@ -41,6 +45,28 @@ ALTER TABLE "user" RENAME TO user_old;
 ALTER TABLE user_portal RENAME TO user_portal_old;
 DROP INDEX IF EXISTS telegram_file_mxc_idx;
 `
+
+func legacyMigrateRenameTables(ctx context.Context, db *dbutil.Database) error {
+	_, err := db.Exec(ctx, legacyMigrateRenameTablesQuery)
+	if err != nil {
+		return err
+	}
+	var mxVersion int
+	err = db.QueryRow(ctx, "SELECT version FROM mx_version").Scan(&mxVersion)
+	if err != nil {
+		return fmt.Errorf("failed to get mx_version: %w", err)
+	} else if mxVersion == 3 {
+		zerolog.Ctx(ctx).Debug().Msg("mx_version is 3, adding create_event column before running actual migration")
+		_, err = db.Exec(ctx, `
+			ALTER TABLE mx_room_state ADD COLUMN create_event TEXT;
+			UPDATE mx_version SET version=4;
+		`)
+		if err != nil {
+			return fmt.Errorf("failed to add create_event column to mx_room_state: %w", err)
+		}
+	}
+	return nil
+}
 
 //go:embed legacymigrate.sql
 var legacyMigrateCopyData string
