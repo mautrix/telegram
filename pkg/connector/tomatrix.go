@@ -211,6 +211,7 @@ func (c *TelegramClient) convertToMatrix(
 		ContentHash: hasher.Sum(nil),
 		ContentURI:  contentURI,
 	}
+
 	if fwd, isForwarded := msg.GetFwdFrom(); isForwarded {
 		err = c.addForwardHeader(ctx, cm.Parts[0], fwd)
 		if err != nil {
@@ -228,6 +229,17 @@ func (c *TelegramClient) convertToMatrix(
 				} else {
 					cm.ReplyTo.MessageID = ids.MakeMessageID(portal.PortalKey, replyTo.ReplyToMsgID)
 				}
+			}
+			if replyTo.Quote {
+				parsedQuote := c.parseBodyAndHTML(ctx, replyTo.QuoteText, replyTo.QuoteEntities)
+				parsedQuote.EnsureHasHTML()
+				existingPart := cm.Parts[0]
+				existingPart.Content.EnsureHasHTML()
+				existingPart.Content.FormattedBody = fmt.Sprintf(
+					"<blockquote data-telegram-partial-reply>%s</blockquote>%s",
+					parsedQuote.FormattedBody,
+					existingPart.Content.FormattedBody,
+				)
 			}
 		default:
 			log.Warn().Type("reply_to", replyTo).Msg("unhandled reply to type")
@@ -343,7 +355,7 @@ func (t *TelegramClient) addForwardHeader(ctx context.Context, part *bridgev2.Co
 	)
 	existingFormattedBody := part.Content.FormattedBody
 	if existingFormattedBody != "" {
-		existingFormattedBody = fmt.Sprintf("<br><tg-forward><blockquote>%s</blockquote></tg-forward>", existingFormattedBody)
+		existingFormattedBody = fmt.Sprintf("<br><blockquote data-telegram-forward>%s</blockquote>", existingFormattedBody)
 	}
 	part.Content.FormattedBody = fmt.Sprintf(
 		"Forwarded message from %s%s",

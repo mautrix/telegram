@@ -421,6 +421,9 @@ func (parser *HTMLParser) tagToString(node *html.Node, ctx Context) *EntityStrin
 	ctx = ctx.WithTag(node.Data)
 	switch node.Data {
 	case "blockquote":
+		if _, isPartialReply := parser.maybeGetAttribute(node, "data-telegram-partial-reply"); isPartialReply {
+			return NewEntityString("")
+		}
 		return parser.
 			nodeToTagAwareString(node.FirstChild, ctx).
 			Format(telegramfmt.Style{Type: telegramfmt.StyleBlockquote})
