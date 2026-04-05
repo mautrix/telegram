@@ -158,11 +158,15 @@ func (tc *TelegramClient) convertToMatrix(
 			sender = ptr.Ptr(tc.getPeerSender(fromID).Sender)
 		}
 		if sender != nil {
-			profile, err := portal.PerMessageProfileForSender(ctx, *sender)
+			ghost, err := portal.Bridge.GetGhostByID(ctx, *sender)
 			if err != nil {
-				return nil, fmt.Errorf("failed to get per-message profile for sender %s: %w", *sender, err)
+				return nil, fmt.Errorf("failed to get ghost for per message profile: %w", err)
 			}
-			perMessageProfile = &profile
+			perMessageProfile = &event.BeeperPerMessageProfile{
+				ID:          string(ghost.ID),
+				Displayname: ghost.Name,
+				AvatarURL:   &ghost.AvatarMXC,
+			}
 		}
 	}
 
@@ -206,7 +210,10 @@ func (tc *TelegramClient) convertToMatrix(
 			cm.Disappear = *disappearingSetting
 		}
 	}
-	cm.Parts[0].Content.BeeperPerMessageProfile = perMessageProfile
+	if perMessageProfile != nil {
+		cm.Parts[0].Content.BeeperPerMessageProfile = perMessageProfile
+		cm.Parts[0].Content.AddPerMessageProfileFallback()
+	}
 	cm.Parts[0].DBMetadata = &MessageMetadata{
 		ContentHash: hasher.Sum(nil),
 		ContentURI:  contentURI,
