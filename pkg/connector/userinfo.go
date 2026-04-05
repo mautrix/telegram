@@ -273,7 +273,7 @@ func (t *TelegramClient) wrapUserInfo(ctx context.Context, u tg.UserClass, ghost
 		ExtraUpdates: func(ctx context.Context, ghost *bridgev2.Ghost) (changed bool) {
 			meta := ghost.Metadata.(*GhostMetadata)
 			if !user.Min {
-				changed = changed || meta.IsPremium != user.Premium || meta.IsMin()
+				changed = changed || meta.IsPremium != user.Premium || meta.Deleted != user.Deleted || meta.IsMin()
 				meta.IsPremium = user.Premium
 				meta.Deleted = user.Deleted
 				meta.NotMin = true
