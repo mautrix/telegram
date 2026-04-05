@@ -32,7 +32,7 @@ import (
 	"go.mau.fi/mautrix-telegram/pkg/connector/ids"
 )
 
-func (tg *TelegramConnector) GetCapabilities() *bridgev2.NetworkGeneralCapabilities {
+func (tc *TelegramConnector) GetCapabilities() *bridgev2.NetworkGeneralCapabilities {
 	return &bridgev2.NetworkGeneralCapabilities{
 		DisappearingMessages: true,
 		Provisioning: bridgev2.ProvisioningCapabilities{
@@ -59,7 +59,7 @@ func (tg *TelegramConnector) GetCapabilities() *bridgev2.NetworkGeneralCapabilit
 	}
 }
 
-func (tg *TelegramConnector) GetBridgeInfoVersion() (info, capabilities int) {
+func (tc *TelegramConnector) GetBridgeInfoVersion() (info, capabilities int) {
 	return 1, 8
 }
 
@@ -210,7 +210,7 @@ func makeTimerList() []jsontime.Milliseconds {
 
 var telegramTimers = makeTimerList()
 
-func (t *TelegramClient) GetCapabilities(ctx context.Context, portal *bridgev2.Portal) *event.RoomFeatures {
+func (tc *TelegramClient) GetCapabilities(ctx context.Context, portal *bridgev2.Portal) *event.RoomFeatures {
 	baseID := "fi.mau.telegram.capabilities.2025_11_24"
 	feat := &event.RoomFeatures{
 		Formatting:          formattingCaps,
@@ -240,7 +240,7 @@ func (t *TelegramClient) GetCapabilities(ctx context.Context, portal *bridgev2.P
 	reactions := portal.Metadata.(*PortalMetadata).AllowedReactions
 	if reactions == nil {
 		baseID += "+reactions_any"
-		feat.AllowedReactions, feat.CustomEmojiReactions = t.getAvailableReactionsForCapability(ctx)
+		feat.AllowedReactions, feat.CustomEmojiReactions = tc.getAvailableReactionsForCapability(ctx)
 		if len(feat.AllowedReactions) > 0 {
 			baseID += "+any_list_" + hashEmojiList(feat.AllowedReactions)
 		}
@@ -254,7 +254,7 @@ func (t *TelegramClient) GetCapabilities(ctx context.Context, portal *bridgev2.P
 	for i, react := range feat.AllowedReactions {
 		feat.AllowedReactions[i] = variationselector.Add(react)
 	}
-	if t.isPremiumCache.Load() {
+	if tc.isPremiumCache.Load() {
 		baseID += "+premium"
 		feat.File = premiumFileCaps
 		feat.ReactionCount = 3

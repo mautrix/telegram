@@ -218,6 +218,6 @@ func (tc *TelegramConnector) Download(ctx context.Context, mediaID networkid.Med
 	return readyTransferer.ToDirectMediaResponse(ctx)
 }
 
-func (tg *TelegramConnector) SetUseDirectMedia() {
-	tg.useDirectMedia = true
+func (tc *TelegramConnector) SetUseDirectMedia() {
+	tc.useDirectMedia = true
 }

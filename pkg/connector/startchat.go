@@ -42,32 +42,32 @@ var (
 	_ bridgev2.GroupCreatingNetworkAPI       = (*TelegramClient)(nil)
 )
 
-func (t *TelegramClient) resolveUser(ctx context.Context, user tg.UserClass) (*bridgev2.ResolveIdentifierResponse, error) {
+func (tc *TelegramClient) resolveUser(ctx context.Context, user tg.UserClass) (*bridgev2.ResolveIdentifierResponse, error) {
 	networkUserID := ids.MakeUserID(user.GetID())
-	if ghost, err := t.main.Bridge.GetGhostByID(ctx, networkUserID); err != nil {
+	if ghost, err := tc.main.Bridge.GetGhostByID(ctx, networkUserID); err != nil {
 		return nil, fmt.Errorf("failed to get ghost: %w", err)
-	} else if userInfo, err := t.wrapUserInfo(ctx, user, ghost); err != nil {
+	} else if userInfo, err := tc.wrapUserInfo(ctx, user, ghost); err != nil {
 		return nil, fmt.Errorf("failed to get user info: %w", err)
 	} else {
-		return t.makeResolveIdentifierResponse(ghost, user, userInfo), nil
+		return tc.makeResolveIdentifierResponse(ghost, user, userInfo), nil
 	}
 }
 
-func (t *TelegramClient) makeResolveIdentifierResponse(ghost *bridgev2.Ghost, user tg.UserClass, info *bridgev2.UserInfo) *bridgev2.ResolveIdentifierResponse {
+func (tc *TelegramClient) makeResolveIdentifierResponse(ghost *bridgev2.Ghost, user tg.UserClass, info *bridgev2.UserInfo) *bridgev2.ResolveIdentifierResponse {
 	return &bridgev2.ResolveIdentifierResponse{
 		Ghost:    ghost,
 		UserID:   ids.MakeUserID(user.GetID()),
 		UserInfo: info,
 		Chat: &bridgev2.CreateChatResponse{
-			PortalKey: t.makePortalKeyFromID(ids.PeerTypeUser, user.GetID(), 0),
+			PortalKey: tc.makePortalKeyFromID(ids.PeerTypeUser, user.GetID(), 0),
 		},
 	}
 }
 
-func (t *TelegramClient) resolveUserID(ctx context.Context, userID int64) (resp *bridgev2.ResolveIdentifierResponse, err error) {
-	_, err = t.ScopedStore.GetAccessHash(ctx, ids.PeerTypeUser, userID)
+func (tc *TelegramClient) resolveUserID(ctx context.Context, userID int64) (resp *bridgev2.ResolveIdentifierResponse, err error) {
+	_, err = tc.ScopedStore.GetAccessHash(ctx, ids.PeerTypeUser, userID)
 	if errors.Is(err, store.ErrNoAccessHash) {
-		username, usernameErr := t.main.Store.Username.Get(ctx, ids.PeerTypeUser, userID)
+		username, usernameErr := tc.main.Store.Username.Get(ctx, ids.PeerTypeUser, userID)
 		if usernameErr != nil {
 			return nil, fmt.Errorf("failed to get username after missing access hash: %w", usernameErr)
 		} else if username != "" {
@@ -75,7 +75,7 @@ func (t *TelegramClient) resolveUserID(ctx context.Context, userID int64) (resp 
 				Str("target_username", username).
 				Int64("target_user_id", userID).
 				Msg("Access hash not found for user ID, trying to look up username")
-			return t.resolveUsername(ctx, username, userID)
+			return tc.resolveUsername(ctx, username, userID)
 		}
 		return nil, fmt.Errorf("%w: %w", bridgev2.ErrResolveIdentifierTryNext, err)
 	} else if err != nil {
@@ -85,39 +85,39 @@ func (t *TelegramClient) resolveUserID(ctx context.Context, userID int64) (resp 
 	resp = &bridgev2.ResolveIdentifierResponse{
 		UserID: networkUserID,
 		Chat: &bridgev2.CreateChatResponse{
-			PortalKey: t.makePortalKeyFromID(ids.PeerTypeUser, userID, 0),
+			PortalKey: tc.makePortalKeyFromID(ids.PeerTypeUser, userID, 0),
 		},
 	}
-	resp.Ghost, err = t.main.Bridge.GetExistingGhostByID(ctx, networkUserID)
+	resp.Ghost, err = tc.main.Bridge.GetExistingGhostByID(ctx, networkUserID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get ghost: %w", err)
 	} else if resp.Ghost == nil || resp.Ghost.Name == "" {
 		// Try to fetch the user from Telegram
-		if user, err := t.getSingleUser(ctx, userID); err != nil {
+		if user, err := tc.getSingleUser(ctx, userID); err != nil {
 			return nil, fmt.Errorf("failed to get user with ID %d: %w", userID, err)
 		} else if user.TypeID() != tg.UserTypeID {
 			return nil, fmt.Errorf("unexpected user type: %T", user)
-		} else if userInfo, err := t.updateGhost(ctx, userID, user.(*tg.User)); err != nil {
+		} else if userInfo, err := tc.updateGhost(ctx, userID, user.(*tg.User)); err != nil {
 			return nil, fmt.Errorf("failed to update ghost: %w", err)
 		} else {
 			if resp.Ghost == nil {
-				resp.Ghost, _ = t.main.Bridge.GetExistingGhostByID(ctx, networkUserID)
+				resp.Ghost, _ = tc.main.Bridge.GetExistingGhostByID(ctx, networkUserID)
 			}
-			return t.makeResolveIdentifierResponse(resp.Ghost, user, userInfo), nil
+			return tc.makeResolveIdentifierResponse(resp.Ghost, user, userInfo), nil
 		}
 	}
 	return
 }
 
-func (t *TelegramClient) resolveUsername(ctx context.Context, username string, expectedID int64) (*bridgev2.ResolveIdentifierResponse, error) {
-	resolved, err := APICallWithUpdates(ctx, t, func() (*tg.ContactsResolvedPeer, error) {
-		return t.client.API().ContactsResolveUsername(ctx, &tg.ContactsResolveUsernameRequest{
+func (tc *TelegramClient) resolveUsername(ctx context.Context, username string, expectedID int64) (*bridgev2.ResolveIdentifierResponse, error) {
+	resolved, err := APICallWithUpdates(ctx, tc, func() (*tg.ContactsResolvedPeer, error) {
+		return tc.client.API().ContactsResolveUsername(ctx, &tg.ContactsResolveUsernameRequest{
 			Username: username,
 		})
 	})
 	if tg.IsUsernameNotOccupied(err) {
 		if expectedID != 0 {
-			err = t.main.Store.Username.Delete(ctx, username)
+			err = tc.main.Store.Username.Delete(ctx, username)
 			if err != nil {
 				zerolog.Ctx(ctx).Warn().Err(err).Str("username", username).
 					Msg("Failed to delete stale username mapping")
@@ -137,7 +137,7 @@ func (t *TelegramClient) resolveUsername(ctx context.Context, username string, e
 	}
 	for _, user := range resolved.GetUsers() {
 		if user.GetID() == peer.GetUserID() {
-			return t.resolveUser(ctx, user)
+			return tc.resolveUser(ctx, user)
 		}
 	}
 	return nil, fmt.Errorf("peer user not found in contact resolved response")
@@ -154,7 +154,7 @@ func (t *TelegramClient) resolveUsername(ctx context.Context, username string, e
 // (some bots like @pic and @gif have 3 characters, fragment might allow 4 characters)
 var usernameRe = regexp.MustCompile(`^(?:(?:https?://)?t(?:elegram)?\.(?:me|dog)/|tg:/{0,2}resolve\?domain=|@)?([a-zA-Z]\w{3,30}[a-zA-Z\d])$`)
 
-func (t *TelegramClient) ResolveIdentifier(ctx context.Context, identifier string, createChat bool) (*bridgev2.ResolveIdentifierResponse, error) {
+func (tc *TelegramClient) ResolveIdentifier(ctx context.Context, identifier string, createChat bool) (*bridgev2.ResolveIdentifierResponse, error) {
 	log := zerolog.Ctx(ctx).With().Str("identifier", identifier).Logger()
 	log.Debug().Msg("Resolving identifier")
 
@@ -164,35 +164,35 @@ func (t *TelegramClient) ResolveIdentifier(ctx context.Context, identifier strin
 
 	if identifier[0] == '+' {
 		normalized := strings.TrimPrefix(identifier, "+")
-		if userID, err := t.main.Store.PhoneNumber.GetUserID(ctx, normalized); err != nil {
+		if userID, err := tc.main.Store.PhoneNumber.GetUserID(ctx, normalized); err != nil {
 			return nil, fmt.Errorf("failed to get user ID by phone number: %w", err)
 		} else if userID == 0 {
 			log.Info().Msg("Phone number not found in database")
 			return nil, nil
 		} else {
-			return t.resolveUserID(ctx, userID)
+			return tc.resolveUserID(ctx, userID)
 		}
 	} else if userID, err := strconv.ParseInt(identifier, 10, 64); err == nil && userID > 0 {
 		// This is an integer, try and parse it as a Telegram User ID
-		return t.resolveUserID(ctx, userID)
+		return tc.resolveUserID(ctx, userID)
 	} else if match := usernameRe.FindStringSubmatch(identifier); match != nil && !strings.Contains(identifier, "__") {
 		// This is a username
-		entityType, userID, err := t.main.Store.Username.GetEntityID(ctx, match[1])
+		entityType, userID, err := tc.main.Store.Username.GetEntityID(ctx, match[1])
 		if entityType == ids.PeerTypeUser && (err == nil || userID != 0) {
 			// We know this username.
-			resp, err := t.resolveUserID(ctx, userID)
+			resp, err := tc.resolveUserID(ctx, userID)
 			if err == nil || !errors.Is(err, store.ErrNoAccessHash) {
 				return resp, err
 			}
 		}
-		return t.resolveUsername(ctx, match[1], 0)
+		return tc.resolveUsername(ctx, match[1], 0)
 	}
 	return nil, fmt.Errorf("invalid identifier: %q (must be a phone number, username, or Telegram user ID)", identifier)
 }
 
-func (t *TelegramClient) SearchUsers(ctx context.Context, query string) (resp []*bridgev2.ResolveIdentifierResponse, err error) {
-	contactsFound, err := APICallWithUpdates(ctx, t, func() (*tg.ContactsFound, error) {
-		return t.client.API().ContactsSearch(ctx, &tg.ContactsSearchRequest{Q: query})
+func (tc *TelegramClient) SearchUsers(ctx context.Context, query string) (resp []*bridgev2.ResolveIdentifierResponse, err error) {
+	contactsFound, err := APICallWithUpdates(ctx, tc, func() (*tg.ContactsFound, error) {
+		return tc.client.API().ContactsSearch(ctx, &tg.ContactsSearchRequest{Q: query})
 	})
 	if err != nil {
 		return nil, err
@@ -206,7 +206,7 @@ func (t *TelegramClient) SearchUsers(ctx context.Context, query string) (resp []
 		if peer, ok := p.(*tg.PeerUser); !ok {
 			return nil
 		} else if user, ok := users[peer.GetUserID()]; ok {
-			if r, err := t.resolveUser(ctx, user); err != nil {
+			if r, err := tc.resolveUser(ctx, user); err != nil {
 				return err
 			} else {
 				resp = append(resp, r)
@@ -230,37 +230,37 @@ func (t *TelegramClient) SearchUsers(ctx context.Context, query string) (resp []
 	return resp, nil
 }
 
-func (t *TelegramClient) GetContactList(ctx context.Context) (resp []*bridgev2.ResolveIdentifierResponse, err error) {
-	t.contactsLock.Lock()
-	defer t.contactsLock.Unlock()
+func (tc *TelegramClient) GetContactList(ctx context.Context) (resp []*bridgev2.ResolveIdentifierResponse, err error) {
+	tc.contactsLock.Lock()
+	defer tc.contactsLock.Unlock()
 	var contacts *tg.ContactsContacts
-	if time.Since(t.lastContactReq) > 10*time.Minute {
-		contacts, err = APICallWithOnlyUserUpdates(ctx, t, func() (*tg.ContactsContacts, error) {
-			c, err := t.client.API().ContactsGetContacts(ctx, t.cachedContactsHash)
+	if time.Since(tc.lastContactReq) > 10*time.Minute {
+		contacts, err = APICallWithOnlyUserUpdates(ctx, tc, func() (*tg.ContactsContacts, error) {
+			c, err := tc.client.API().ContactsGetContacts(ctx, tc.cachedContactsHash)
 			if err != nil {
 				return nil, err
 			}
 			switch typedResp := c.(type) {
 			case *tg.ContactsContacts:
-				t.cachedContacts = typedResp
+				tc.cachedContacts = typedResp
 				var h hasher.Hasher
-				for _, contact := range t.cachedContacts.Contacts {
+				for _, contact := range tc.cachedContacts.Contacts {
 					h.Update(uint32(contact.UserID))
 				}
-				t.cachedContactsHash = h.Sum()
+				tc.cachedContactsHash = h.Sum()
 			case *tg.ContactsContactsNotModified:
 				// No changes
 			default:
 				return nil, fmt.Errorf("unexpected contacts type: %T", c)
 			}
-			return t.cachedContacts, nil
+			return tc.cachedContacts, nil
 		})
 		if err != nil {
 			return nil, err
 		}
-		t.lastContactReq = time.Now()
+		tc.lastContactReq = time.Now()
 	} else {
-		contacts = t.cachedContacts
+		contacts = tc.cachedContacts
 	}
 	users := map[int64]tg.UserClass{}
 	for _, user := range contacts.GetUsers() {
@@ -269,7 +269,7 @@ func (t *TelegramClient) GetContactList(ctx context.Context) (resp []*bridgev2.R
 
 	for _, contact := range contacts.Contacts {
 		if user, ok := users[contact.UserID]; ok {
-			if r, err := t.resolveUser(ctx, user); err != nil {
+			if r, err := tc.resolveUser(ctx, user); err != nil {
 				return nil, err
 			} else {
 				resp = append(resp, r)
@@ -282,7 +282,7 @@ func (t *TelegramClient) GetContactList(ctx context.Context) (resp []*bridgev2.R
 }
 
 // TODO support channels
-func (t *TelegramClient) CreateGroup(ctx context.Context, params *bridgev2.GroupCreateParams) (*bridgev2.CreateChatResponse, error) {
+func (tc *TelegramClient) CreateGroup(ctx context.Context, params *bridgev2.GroupCreateParams) (*bridgev2.CreateChatResponse, error) {
 	req := tg.MessagesCreateChatRequest{
 		Title: ptr.Val(params.Name).Name,
 	}
@@ -291,13 +291,13 @@ func (t *TelegramClient) CreateGroup(ctx context.Context, params *bridgev2.Group
 			return nil, fmt.Errorf("failed to parse user ID: %w", err)
 		} else if peerType != ids.PeerTypeUser {
 			return nil, fmt.Errorf("unexpected peer type: %s", peerType)
-		} else if inputUser, err := t.getInputUser(ctx, userID); err != nil {
+		} else if inputUser, err := tc.getInputUser(ctx, userID); err != nil {
 			return nil, fmt.Errorf("failed to get input user: %w", err)
 		} else {
 			req.Users = append(req.Users, inputUser)
 		}
 	}
-	invitedUsers, err := t.client.API().MessagesCreateChat(ctx, &req)
+	invitedUsers, err := tc.client.API().MessagesCreateChat(ctx, &req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create chat: %w", err)
 	}
@@ -315,9 +315,9 @@ func (t *TelegramClient) CreateGroup(ctx context.Context, params *bridgev2.Group
 	} else if chat, ok := chats[0].(*tg.Chat); !ok {
 		return nil, fmt.Errorf("unexpected chat type: %T", chats[0])
 	} else {
-		portalKey := t.makePortalKeyFromID(ids.PeerTypeChat, chat.ID, 0)
+		portalKey := tc.makePortalKeyFromID(ids.PeerTypeChat, chat.ID, 0)
 		if params.RoomID != "" {
-			portal, err := t.main.Bridge.GetPortalByKey(ctx, portalKey)
+			portal, err := tc.main.Bridge.GetPortalByKey(ctx, portalKey)
 			if err != nil {
 				return nil, err
 			}
@@ -329,7 +329,7 @@ func (t *TelegramClient) CreateGroup(ctx context.Context, params *bridgev2.Group
 				OverwriteOldPortal: true,
 				TombstoneOldRoom:   true,
 				DeleteOldRoom:      true,
-				ChatInfoSource:     t.userLogin,
+				ChatInfoSource:     tc.userLogin,
 			})
 			if err != nil {
 				return nil, err

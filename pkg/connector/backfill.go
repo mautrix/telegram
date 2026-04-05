@@ -40,74 +40,74 @@ var (
 )
 
 // getTakeoutID blocks until the takeout ID is available.
-func (t *TelegramClient) getTakeoutID(ctx context.Context) (takeoutID int64, err error) {
+func (tc *TelegramClient) getTakeoutID(ctx context.Context) (takeoutID int64, err error) {
 	// Always stop the takeout timeout timer
-	if t.stopTakeoutTimer != nil {
-		t.stopTakeoutTimer.Stop()
+	if tc.stopTakeoutTimer != nil {
+		tc.stopTakeoutTimer.Stop()
 	}
 	log := zerolog.Ctx(ctx).With().Str("function", "getTakeoutID").Logger()
 
-	if t.metadata.TakeoutID != 0 {
+	if tc.metadata.TakeoutID != 0 {
 		// Resume fetching dialogs using takeout and enqueueing them for
 		// backfill.
-		go t.takeoutDialogsOnce.Do(func() {
-			if err = t.syncChats(ctx, takeoutID, false, false); err != nil {
+		go tc.takeoutDialogsOnce.Do(func() {
+			if err = tc.syncChats(ctx, takeoutID, false, false); err != nil {
 				log.Err(err).Msg("Failed to takeout dialogs")
 			}
 		})
-		return t.metadata.TakeoutID, nil
+		return tc.metadata.TakeoutID, nil
 	}
 
-	t.stopTakeoutTimer = time.AfterFunc(max(time.Hour, time.Duration(t.main.Bridge.Config.Backfill.Queue.BatchDelay*2)), sync.OnceFunc(func() { t.stopTakeout(ctx) }))
+	tc.stopTakeoutTimer = time.AfterFunc(max(time.Hour, time.Duration(tc.main.Bridge.Config.Backfill.Queue.BatchDelay*2)), sync.OnceFunc(func() { tc.stopTakeout(ctx) }))
 
 	for {
-		t.takeoutAccepted.Clear()
+		tc.takeoutAccepted.Clear()
 
-		accountTakeout, err := t.client.API().AccountInitTakeoutSession(ctx, &tg.AccountInitTakeoutSessionRequest{
+		accountTakeout, err := tc.client.API().AccountInitTakeoutSession(ctx, &tg.AccountInitTakeoutSessionRequest{
 			MessageUsers:      true,
 			MessageChats:      true,
 			MessageMegagroups: true,
 			MessageChannels:   true,
 			Files:             true,
-			FileMaxSize:       min(t.main.maxFileSize, 2000*1024*1024),
+			FileMaxSize:       min(tc.main.maxFileSize, 2000*1024*1024),
 		})
 		if rpcErr, ok := tgerr.As(err); ok && rpcErr.IsOneOf(tg.ErrTakeoutInitDelay) {
 			log.Warn().
 				Err(err).
 				Int("delay", rpcErr.Argument).
 				Msg("Takeout requested, will wait for retry request or delay")
-			t.takeoutAccepted.WaitTimeout(time.Duration(rpcErr.Argument) * time.Second)
+			tc.takeoutAccepted.WaitTimeout(time.Duration(rpcErr.Argument) * time.Second)
 			continue
 		} else if err != nil {
 			return 0, err
 		}
 
 		// Fetch all dialogs using takeout and enqueue them for backfill.
-		go t.takeoutDialogsOnce.Do(func() {
-			if err = t.syncChats(ctx, takeoutID, false, false); err != nil {
+		go tc.takeoutDialogsOnce.Do(func() {
+			if err = tc.syncChats(ctx, takeoutID, false, false); err != nil {
 				log.Err(err).Msg("Failed to takeout dialogs")
 			}
 		})
 
-		t.metadata.TakeoutID = accountTakeout.ID
-		return accountTakeout.ID, t.userLogin.Save(ctx)
+		tc.metadata.TakeoutID = accountTakeout.ID
+		return accountTakeout.ID, tc.userLogin.Save(ctx)
 	}
 }
 
-func (t *TelegramClient) stopTakeout(ctx context.Context) error {
-	t.takeoutLock.Lock()
-	defer t.takeoutLock.Unlock()
+func (tc *TelegramClient) stopTakeout(ctx context.Context) error {
+	tc.takeoutLock.Lock()
+	defer tc.takeoutLock.Unlock()
 
-	_, err := t.client.API().AccountFinishTakeoutSession(ctx, &tg.AccountFinishTakeoutSessionRequest{Success: true})
+	_, err := tc.client.API().AccountFinishTakeoutSession(ctx, &tg.AccountFinishTakeoutSessionRequest{Success: true})
 	if err != nil {
 		return err
 	}
-	t.metadata.TakeoutID = 0
-	return t.userLogin.Save(ctx)
+	tc.metadata.TakeoutID = 0
+	return tc.userLogin.Save(ctx)
 }
 
-func (t *TelegramClient) FetchMessages(ctx context.Context, fetchParams bridgev2.FetchMessagesParams) (*bridgev2.FetchMessagesResponse, error) {
-	if t.metadata.IsBot {
+func (tc *TelegramClient) FetchMessages(ctx context.Context, fetchParams bridgev2.FetchMessagesParams) (*bridgev2.FetchMessagesResponse, error) {
+	if tc.metadata.IsBot {
 		return nil, fmt.Errorf("bots cannot backfill messages")
 	}
 	log := zerolog.Ctx(ctx).With().Str("method", "FetchMessages").Logger()
@@ -115,26 +115,26 @@ func (t *TelegramClient) FetchMessages(ctx context.Context, fetchParams bridgev2
 
 	var takeoutID int64
 	var err error
-	if (t.main.Config.Takeout.ForwardBackfill && fetchParams.Forward) || (t.main.Config.Takeout.BackwardBackfill && !fetchParams.Forward) {
-		t.takeoutLock.Lock()
-		defer t.takeoutLock.Unlock()
-		takeoutID, err = t.getTakeoutID(ctx)
+	if (tc.main.Config.Takeout.ForwardBackfill && fetchParams.Forward) || (tc.main.Config.Takeout.BackwardBackfill && !fetchParams.Forward) {
+		tc.takeoutLock.Lock()
+		defer tc.takeoutLock.Unlock()
+		takeoutID, err = tc.getTakeoutID(ctx)
 		if err != nil {
 			return nil, err
 		}
 
 		if takeoutID != 0 {
 			defer func() {
-				if t.stopTakeoutTimer == nil {
-					t.stopTakeoutTimer = time.AfterFunc(max(time.Hour, time.Duration(t.main.Bridge.Config.Backfill.Queue.BatchDelay*2)), sync.OnceFunc(func() { t.stopTakeout(ctx) }))
+				if tc.stopTakeoutTimer == nil {
+					tc.stopTakeoutTimer = time.AfterFunc(max(time.Hour, time.Duration(tc.main.Bridge.Config.Backfill.Queue.BatchDelay*2)), sync.OnceFunc(func() { tc.stopTakeout(ctx) }))
 				} else {
-					t.stopTakeoutTimer.Reset(max(time.Hour, time.Duration(t.main.Bridge.Config.Backfill.Queue.BatchDelay*2)))
+					tc.stopTakeoutTimer.Reset(max(time.Hour, time.Duration(tc.main.Bridge.Config.Backfill.Queue.BatchDelay*2)))
 				}
 			}()
 		}
 	}
 
-	peer, topicID, err := t.inputPeerForPortalID(ctx, fetchParams.Portal.ID)
+	peer, topicID, err := tc.inputPeerForPortalID(ctx, fetchParams.Portal.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -176,10 +176,10 @@ func (t *TelegramClient) FetchMessages(ctx context.Context, fetchParams bridgev2
 		req = &tg.InvokeWithTakeoutRequest{TakeoutID: takeoutID, Query: req}
 	}
 	log.Info().Any("req", req).Msg("Fetching messages")
-	msgs, err := APICallWithUpdates(ctx, t, func() (tg.ModifiedMessagesMessages, error) {
+	msgs, err := APICallWithUpdates(ctx, tc, func() (tg.ModifiedMessagesMessages, error) {
 		var box tg.MessagesMessagesBox
 		// TODO a single request can only fetch 100 messages, use multiple requests if the requested count is higher
-		err = t.client.Invoke(ctx, req, &box)
+		err = tc.client.Invoke(ctx, req, &box)
 		if err != nil {
 			return nil, err
 		}
@@ -191,8 +191,8 @@ func (t *TelegramClient) FetchMessages(ctx context.Context, fetchParams bridgev2
 	})
 	if err != nil {
 		if tgerr.Is(err, tg.ErrTakeoutInvalid) {
-			t.metadata.TakeoutID = 0
-			err := t.userLogin.Save(ctx)
+			tc.metadata.TakeoutID = 0
+			err := tc.userLogin.Save(ctx)
 			if err != nil {
 				log.Err(err).Msg("Failed to save user login after clearing takeout ID")
 			} else {
@@ -248,12 +248,12 @@ func (t *TelegramClient) FetchMessages(ctx context.Context, fetchParams bridgev2
 			continue
 		}
 
-		sender := t.getEventSender(message, !portal.Metadata.(*PortalMetadata).IsSuperGroup)
-		intent, ok := portal.GetIntentFor(ctx, sender, t.userLogin, bridgev2.RemoteEventBackfill)
+		sender := tc.getEventSender(message, !portal.Metadata.(*PortalMetadata).IsSuperGroup)
+		intent, ok := portal.GetIntentFor(ctx, sender, tc.userLogin, bridgev2.RemoteEventBackfill)
 		if !ok {
 			continue
 		}
-		converted, err := t.convertToMatrix(ctx, portal, intent, message)
+		converted, err := tc.convertToMatrix(ctx, portal, intent, message)
 		if err != nil {
 			return nil, err
 		}
@@ -267,7 +267,7 @@ func (t *TelegramClient) FetchMessages(ctx context.Context, fetchParams bridgev2
 		}
 
 		if reactions, ok := message.GetReactions(); ok {
-			reactionsList, _, customEmojis, err := t.computeReactionsList(ctx, message.PeerID, message.ID, reactions)
+			reactionsList, _, customEmojis, err := tc.computeReactionsList(ctx, message.PeerID, message.ID, reactions)
 			if err != nil {
 				return nil, err
 			}
@@ -285,7 +285,7 @@ func (t *TelegramClient) FetchMessages(ctx context.Context, fetchParams bridgev2
 
 				backfillMessage.Reactions = append(backfillMessage.Reactions, &bridgev2.BackfillReaction{
 					Timestamp: time.Unix(int64(reaction.Date), 0),
-					Sender:    t.senderForUserID(peer.UserID),
+					Sender:    tc.senderForUserID(peer.UserID),
 					EmojiID:   emojiID,
 					Emoji:     emoji,
 				})
@@ -307,7 +307,7 @@ func (t *TelegramClient) FetchMessages(ctx context.Context, fetchParams bridgev2
 	}, nil
 }
 
-func (c *TelegramClient) GetBackfillMaxBatchCount(ctx context.Context, portal *bridgev2.Portal, task *database.BackfillTask) int {
+func (tc *TelegramClient) GetBackfillMaxBatchCount(ctx context.Context, portal *bridgev2.Portal, task *database.BackfillTask) int {
 	log := zerolog.Ctx(ctx).With().
 		Str("method", "GetBackfillMaxBatchCount").
 		Logger()
@@ -318,18 +318,18 @@ func (c *TelegramClient) GetBackfillMaxBatchCount(ctx context.Context, portal *b
 	}
 	switch peerType {
 	case ids.PeerTypeUser:
-		return c.main.Bridge.Config.Backfill.Queue.GetOverride("user")
+		return tc.main.Bridge.Config.Backfill.Queue.GetOverride("user")
 	case ids.PeerTypeChat:
-		return c.main.Bridge.Config.Backfill.Queue.GetOverride("normal_group")
+		return tc.main.Bridge.Config.Backfill.Queue.GetOverride("normal_group")
 	case ids.PeerTypeChannel:
 		if topicID == ids.TopicIDSpaceRoom {
 			return 0
 		} else if topicID > 0 {
-			return c.main.Bridge.Config.Backfill.Queue.GetOverride("topic", "supergroup")
+			return tc.main.Bridge.Config.Backfill.Queue.GetOverride("topic", "supergroup")
 		} else if portal.Metadata.(*PortalMetadata).IsSuperGroup {
-			return c.main.Bridge.Config.Backfill.Queue.GetOverride("supergroup")
+			return tc.main.Bridge.Config.Backfill.Queue.GetOverride("supergroup")
 		} else {
-			return c.main.Bridge.Config.Backfill.Queue.GetOverride("channel")
+			return tc.main.Bridge.Config.Backfill.Queue.GetOverride("channel")
 		}
 	default:
 		log.Error().Str("peer_type", string(peerType)).Msg("unknown peer type")

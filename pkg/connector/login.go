@@ -64,7 +64,7 @@ var (
 	}
 )
 
-func (tg *TelegramConnector) GetLoginFlows() []bridgev2.LoginFlow {
+func (tc *TelegramConnector) GetLoginFlows() []bridgev2.LoginFlow {
 	return []bridgev2.LoginFlow{
 		{
 			Name:        "Phone Number",
@@ -84,10 +84,10 @@ func (tg *TelegramConnector) GetLoginFlows() []bridgev2.LoginFlow {
 	}
 }
 
-func (tg *TelegramConnector) CreateLogin(ctx context.Context, user *bridgev2.User, flowID string) (bridgev2.LoginProcess, error) {
+func (tc *TelegramConnector) CreateLogin(ctx context.Context, user *bridgev2.User, flowID string) (bridgev2.LoginProcess, error) {
 	bl := &baseLogin{
 		user:   user,
-		main:   tg,
+		main:   tc,
 		flowID: flowID,
 	}
 	switch flowID {

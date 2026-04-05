@@ -38,14 +38,14 @@ type TelegramConnector struct {
 var _ bridgev2.NetworkConnector = (*TelegramConnector)(nil)
 var _ bridgev2.MaxFileSizeingNetwork = (*TelegramConnector)(nil)
 
-func (tg *TelegramConnector) Init(bridge *bridgev2.Bridge) {
-	tg.Store = store.NewStore(bridge.DB.Database, dbutil.ZeroLogger(bridge.Log.With().Str("db_section", "telegram").Logger()))
-	tg.Bridge = bridge
-	tg.Bridge.Commands.(*commands.Processor).AddHandlers(cmdSyncChats, cmdEmojiPack, cmdUpgrade, cmdJoin)
+func (tc *TelegramConnector) Init(bridge *bridgev2.Bridge) {
+	tc.Store = store.NewStore(bridge.DB.Database, dbutil.ZeroLogger(bridge.Log.With().Str("db_section", "telegram").Logger()))
+	tc.Bridge = bridge
+	tc.Bridge.Commands.(*commands.Processor).AddHandlers(cmdSyncChats, cmdEmojiPack, cmdUpgrade, cmdJoin)
 }
 
-func (tg *TelegramConnector) Start(ctx context.Context) error {
-	return tg.Store.Upgrade(ctx)
+func (tc *TelegramConnector) Start(ctx context.Context) error {
+	return tc.Store.Upgrade(ctx)
 }
 
 func (tc *TelegramConnector) LoadUserLogin(ctx context.Context, login *bridgev2.UserLogin) (err error) {
@@ -53,11 +53,11 @@ func (tc *TelegramConnector) LoadUserLogin(ctx context.Context, login *bridgev2.
 	return
 }
 
-func (tg *TelegramConnector) SetMaxFileSize(maxSize int64) {
-	tg.maxFileSize = maxSize
+func (tc *TelegramConnector) SetMaxFileSize(maxSize int64) {
+	tc.maxFileSize = maxSize
 }
 
-func (tg *TelegramConnector) GetName() bridgev2.BridgeName {
+func (tc *TelegramConnector) GetName() bridgev2.BridgeName {
 	return bridgev2.BridgeName{
 		DisplayName:          "Telegram",
 		NetworkURL:           "https://telegram.org/",

@@ -32,7 +32,7 @@ import (
 	"go.mau.fi/mautrix-telegram/pkg/gotd/tg"
 )
 
-func (t *TelegramClient) computeReactionsList(ctx context.Context, peer tg.PeerClass, msgID int, msgReactions tg.MessageReactions) (reactions []tg.MessagePeerReaction, isFull bool, customEmojis map[networkid.EmojiID]emojis.EmojiInfo, err error) {
+func (tc *TelegramClient) computeReactionsList(ctx context.Context, peer tg.PeerClass, msgID int, msgReactions tg.MessageReactions) (reactions []tg.MessagePeerReaction, isFull bool, customEmojis map[networkid.EmojiID]emojis.EmojiInfo, err error) {
 	log := zerolog.Ctx(ctx).With().Str("fn", "computeReactionsList").Logger()
 	var totalCount int
 	for _, r := range msgReactions.Results {
@@ -54,18 +54,18 @@ func (t *TelegramClient) computeReactionsList(ctx context.Context, peer tg.PeerC
 
 	if len(reactionsList) < totalCount {
 		if user, ok := peer.(*tg.PeerUser); ok {
-			reactionsList = splitDMReactionCounts(msgReactions.Results, user.UserID, t.telegramUserID)
-		} else if t.metadata.IsBot {
+			reactionsList = splitDMReactionCounts(msgReactions.Results, user.UserID, tc.telegramUserID)
+		} else if tc.metadata.IsBot {
 			// Can't fetch exact reaction senders as a bot
 			return
 
 			// TODO remove redundant peer roundtrip, just add a peer -> input peer helper
-		} else if peer, _, err := t.inputPeerForPortalID(ctx, t.makePortalKeyFromPeer(peer, 0).ID); err != nil {
+		} else if peer, _, err := tc.inputPeerForPortalID(ctx, tc.makePortalKeyFromPeer(peer, 0).ID); err != nil {
 			return nil, false, nil, fmt.Errorf("failed to get input peer: %w", err)
 		} else {
 			// TODO should calls to this be limited?
-			reactions, err := APICallWithUpdates(ctx, t, func() (*tg.MessagesMessageReactionsList, error) {
-				return t.client.API().MessagesGetMessageReactionsList(ctx, &tg.MessagesGetMessageReactionsListRequest{
+			reactions, err := APICallWithUpdates(ctx, tc, func() (*tg.MessagesMessageReactionsList, error) {
+				return tc.client.API().MessagesGetMessageReactionsList(ctx, &tg.MessagesGetMessageReactionsListRequest{
 					Peer: peer, ID: msgID, Limit: 100,
 				})
 			})
@@ -85,7 +85,7 @@ func (t *TelegramClient) computeReactionsList(ctx context.Context, peer tg.PeerC
 		}
 	}
 
-	customEmojis, err = t.transferEmojisToMatrix(ctx, customEmojiIDs)
+	customEmojis, err = tc.transferEmojisToMatrix(ctx, customEmojiIDs)
 	return reactionsList, len(reactionsList) == totalCount, customEmojis, err
 }
 
@@ -105,8 +105,8 @@ func computeEmojiAndID(reaction tg.ReactionClass, customEmojis map[networkid.Emo
 	return
 }
 
-func (t *TelegramClient) prepareReactionSync(ctx context.Context, peer tg.PeerClass, msgID int, reactions tg.MessageReactions) (*bridgev2.ReactionSyncData, error) {
-	reactionsList, isFull, customEmojis, err := t.computeReactionsList(ctx, peer, msgID, reactions)
+func (tc *TelegramClient) prepareReactionSync(ctx context.Context, peer tg.PeerClass, msgID int, reactions tg.MessageReactions) (*bridgev2.ReactionSyncData, error) {
+	reactionsList, isFull, customEmojis, err := tc.computeReactionsList(ctx, peer, msgID, reactions)
 	if err != nil {
 		return nil, fmt.Errorf("failed to compute reactions: %w", err)
 	}
@@ -119,18 +119,18 @@ func (t *TelegramClient) prepareReactionSync(ctx context.Context, peer tg.PeerCl
 		switch senderPeer := reaction.PeerID.(type) {
 		case *tg.PeerUser:
 			userID = ids.MakeUserID(senderPeer.UserID)
-			eventSender = t.senderForUserID(senderPeer.UserID)
+			eventSender = tc.senderForUserID(senderPeer.UserID)
 		case *tg.PeerChannel:
 			userID = ids.MakeChannelUserID(senderPeer.ChannelID)
 			eventSender = bridgev2.EventSender{
 				Sender:   userID,
-				IsFromMe: reaction.My && t.main.Bridge.Config.SplitPortals,
+				IsFromMe: reaction.My && tc.main.Bridge.Config.SplitPortals,
 			}
 		default:
 			log.Debug().Type("peer_type", reaction.PeerID).Msg("Ignoring reaction from non-user peer")
 			continue
 		}
-		reactionLimit, err := t.getReactionLimit(ctx, userID)
+		reactionLimit, err := tc.getReactionLimit(ctx, userID)
 		if err != nil {
 			reactionLimit = 1
 			log.Err(err).Str("id", string(userID)).Msg("failed to get reaction limit")
@@ -155,24 +155,24 @@ func (t *TelegramClient) prepareReactionSync(ctx context.Context, peer tg.PeerCl
 	return &bridgev2.ReactionSyncData{Users: users, HasAllUsers: isFull}, nil
 }
 
-func (t *TelegramClient) handleTelegramReactions(ctx context.Context, peer tg.PeerClass, topicID, msgID int, reactions tg.MessageReactions) error {
+func (tc *TelegramClient) handleTelegramReactions(ctx context.Context, peer tg.PeerClass, topicID, msgID int, reactions tg.MessageReactions) error {
 	ctx = zerolog.Ctx(ctx).With().
 		Str("handler", "handle_telegram_reactions").
 		Int("message_id", msgID).
 		Logger().WithContext(ctx)
 
-	data, err := t.prepareReactionSync(ctx, peer, msgID, reactions)
+	data, err := tc.prepareReactionSync(ctx, peer, msgID, reactions)
 	if err != nil {
 		return err
 	}
 
-	return resultToError(t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.ReactionSync{
+	return resultToError(tc.main.Bridge.QueueRemoteEvent(tc.userLogin, &simplevent.ReactionSync{
 		EventMeta: simplevent.EventMeta{
 			Type: bridgev2.RemoteEventReactionSync,
 			LogContext: func(c zerolog.Context) zerolog.Context {
 				return c.Int("message_id", msgID)
 			},
-			PortalKey: t.makePortalKeyFromPeer(peer, topicID),
+			PortalKey: tc.makePortalKeyFromPeer(peer, topicID),
 		},
 		TargetMessage: ids.MakeMessageID(peer, msgID),
 		Reactions:     data,
@@ -198,13 +198,13 @@ func splitDMReactionCounts(res []tg.ReactionCount, theirUserID, myUserID int64) 
 	return
 }
 
-func (t *TelegramClient) getReactionLimit(ctx context.Context, sender networkid.UserID) (limit int, err error) {
-	config, err := t.getAppConfigCached(ctx)
+func (tc *TelegramClient) getReactionLimit(ctx context.Context, sender networkid.UserID) (limit int, err error) {
+	config, err := tc.getAppConfigCached(ctx)
 	if err != nil {
 		return 0, err
 	}
 
-	ghost, err := t.main.Bridge.GetGhostByID(ctx, sender)
+	ghost, err := tc.main.Bridge.GetGhostByID(ctx, sender)
 	if err != nil {
 		return 0, err
 	}
@@ -223,27 +223,27 @@ func (t *TelegramClient) getReactionLimit(ctx context.Context, sender networkid.
 	}
 }
 
-func (t *TelegramClient) maybePollForReactions(ctx context.Context, portal *bridgev2.Portal) error {
+func (tc *TelegramClient) maybePollForReactions(ctx context.Context, portal *bridgev2.Portal) error {
 	// Only poll for reactions in supergroups
-	if t.metadata.IsBot || portal == nil || !portal.Metadata.(*PortalMetadata).IsSuperGroup || portal.RoomType == database.RoomTypeSpace {
+	if tc.metadata.IsBot || portal == nil || !portal.Metadata.(*PortalMetadata).IsSuperGroup || portal.RoomType == database.RoomTypeSpace {
 		return nil
 	}
 
-	t.prevReactionPollLock.Lock()
-	prev, ok := t.prevReactionPoll[portal.PortalKey]
+	tc.prevReactionPollLock.Lock()
+	prev, ok := tc.prevReactionPoll[portal.PortalKey]
 	if ok && time.Since(prev) > 20*time.Second {
 		ok = false
-		t.prevReactionPoll[portal.PortalKey] = time.Now()
+		tc.prevReactionPoll[portal.PortalKey] = time.Now()
 	}
-	t.prevReactionPollLock.Unlock()
+	tc.prevReactionPollLock.Unlock()
 	if ok {
 		return nil
 	}
-	return t.pollForReactions(ctx, portal.PortalKey)
+	return tc.pollForReactions(ctx, portal.PortalKey)
 }
 
-func (t *TelegramClient) pollForReactions(ctx context.Context, portalKey networkid.PortalKey) error {
-	inputPeer, _, parseErr := t.inputPeerForPortalID(ctx, portalKey.ID)
+func (tc *TelegramClient) pollForReactions(ctx context.Context, portalKey networkid.PortalKey) error {
+	inputPeer, _, parseErr := tc.inputPeerForPortalID(ctx, portalKey.ID)
 	if parseErr != nil {
 		return parseErr
 	}
@@ -254,7 +254,7 @@ func (t *TelegramClient) pollForReactions(ctx context.Context, portalKey network
 
 	log.Debug().Msg("Polling reactions for recent messages")
 
-	messages, err := t.main.Bridge.DB.Message.GetLastNInPortal(ctx, portalKey, 20)
+	messages, err := tc.main.Bridge.DB.Message.GetLastNInPortal(ctx, portalKey, 20)
 	if err != nil {
 		return err
 	}
@@ -267,8 +267,8 @@ func (t *TelegramClient) pollForReactions(ctx context.Context, portalKey network
 		}
 	}
 
-	updates, err := APICallWithUpdates(ctx, t, func() (*tg.Updates, error) {
-		u, err := t.client.API().MessagesGetMessagesReactions(ctx, &tg.MessagesGetMessagesReactionsRequest{
+	updates, err := APICallWithUpdates(ctx, tc, func() (*tg.Updates, error) {
+		u, err := tc.client.API().MessagesGetMessagesReactions(ctx, &tg.MessagesGetMessagesReactionsRequest{
 			Peer: inputPeer,
 			ID:   messageIDs,
 		})
@@ -291,19 +291,19 @@ func (t *TelegramClient) pollForReactions(ctx context.Context, portalKey network
 			log.Warn().Type("update_type", update).Msg("Unexpected update type in get reactions response")
 			continue
 		}
-		dbMsg, err := t.main.Bridge.DB.Message.GetFirstPartByID(ctx, t.loginID, ids.MakeMessageID(portalKey, reaction.MsgID))
+		dbMsg, err := tc.main.Bridge.DB.Message.GetFirstPartByID(ctx, tc.loginID, ids.MakeMessageID(portalKey, reaction.MsgID))
 		if err != nil {
 			return fmt.Errorf("failed to get message from database: %w", err)
 		} else if dbMsg == nil {
 			return fmt.Errorf("message not found in database: %w", err)
 		}
 
-		data, err := t.prepareReactionSync(ctx, reaction.Peer, reaction.MsgID, reaction.Reactions)
+		data, err := tc.prepareReactionSync(ctx, reaction.Peer, reaction.MsgID, reaction.Reactions)
 		if err != nil {
 			return err
 		}
 
-		res := t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.ReactionSync{
+		res := tc.main.Bridge.QueueRemoteEvent(tc.userLogin, &simplevent.ReactionSync{
 			EventMeta: simplevent.EventMeta{
 				Type: bridgev2.RemoteEventReactionSync,
 				LogContext: func(c zerolog.Context) zerolog.Context {

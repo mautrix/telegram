@@ -31,7 +31,7 @@ import (
 	"go.mau.fi/mautrix-telegram/pkg/gotd/session"
 )
 
-func (tg *TelegramConnector) GetDBMetaTypes() database.MetaTypes {
+func (tc *TelegramConnector) GetDBMetaTypes() database.MetaTypes {
 	return database.MetaTypes{
 		Ghost:     func() any { return &GhostMetadata{} },
 		Portal:    func() any { return &PortalMetadata{} },

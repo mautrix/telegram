@@ -23,18 +23,18 @@ import (
 	"go.mau.fi/mautrix-telegram/pkg/gotd/tg"
 )
 
-func (t *TelegramClient) makePortalKeyFromPeer(peer tg.PeerClass, topicID int) networkid.PortalKey {
-	key := ids.InternalPeerToPortalKey(peer, topicID, t.loginID)
-	if t.main.Bridge.Config.SplitPortals {
-		key.Receiver = t.userLogin.ID
+func (tc *TelegramClient) makePortalKeyFromPeer(peer tg.PeerClass, topicID int) networkid.PortalKey {
+	key := ids.InternalPeerToPortalKey(peer, topicID, tc.loginID)
+	if tc.main.Bridge.Config.SplitPortals {
+		key.Receiver = tc.userLogin.ID
 	}
 	return key
 }
 
-func (t *TelegramClient) makePortalKeyFromID(peerType ids.PeerType, chatID int64, topicID int) networkid.PortalKey {
-	key := ids.InternalMakePortalKey(peerType, chatID, topicID, t.loginID)
-	if t.main.Bridge.Config.SplitPortals {
-		key.Receiver = t.userLogin.ID
+func (tc *TelegramClient) makePortalKeyFromID(peerType ids.PeerType, chatID int64, topicID int) networkid.PortalKey {
+	key := ids.InternalMakePortalKey(peerType, chatID, topicID, tc.loginID)
+	if tc.main.Bridge.Config.SplitPortals {
+		key.Receiver = tc.userLogin.ID
 	}
 	return key
 }

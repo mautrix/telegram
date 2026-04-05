@@ -16,37 +16,37 @@ import (
 	"go.mau.fi/mautrix-telegram/pkg/gotd/tg"
 )
 
-func (t *TelegramClient) GetUserInfo(ctx context.Context, ghost *bridgev2.Ghost) (*bridgev2.UserInfo, error) {
+func (tc *TelegramClient) GetUserInfo(ctx context.Context, ghost *bridgev2.Ghost) (*bridgev2.UserInfo, error) {
 	peerType, id, err := ids.ParseUserID(ghost.ID)
 	if err != nil {
 		return nil, err
 	}
 	switch peerType {
 	case ids.PeerTypeUser:
-		if user, err := t.getSingleUser(ctx, id); err != nil {
+		if user, err := tc.getSingleUser(ctx, id); err != nil {
 			return nil, fmt.Errorf("failed to get user %d: %w", id, err)
 		} else {
-			return t.wrapUserInfo(ctx, user, ghost)
+			return tc.wrapUserInfo(ctx, user, ghost)
 		}
 	case ids.PeerTypeChannel:
-		if channel, err := t.getSingleChannel(ctx, id); err != nil {
+		if channel, err := tc.getSingleChannel(ctx, id); err != nil {
 			return nil, fmt.Errorf("failed to get channel %d: %w", id, err)
 		} else {
-			return t.wrapChannelGhostInfo(ctx, channel)
+			return tc.wrapChannelGhostInfo(ctx, channel)
 		}
 	default:
 		return nil, fmt.Errorf("unexpected peer type: %s", peerType)
 	}
 }
 
-func (t *TelegramClient) getChatPeerForInputFromMessage(ctx context.Context, id int64, peerID tg.PeerClass) (tg.InputPeerClass, error) {
+func (tc *TelegramClient) getChatPeerForInputFromMessage(ctx context.Context, id int64, peerID tg.PeerClass) (tg.InputPeerClass, error) {
 	switch typedChat := peerID.(type) {
 	case *tg.PeerUser:
 		if id == typedChat.UserID {
 			// We don't have the user's access hash
 			return nil, nil
 		}
-		accessHash, err := t.ScopedStore.GetAccessHash(ctx, ids.PeerTypeUser, typedChat.UserID)
+		accessHash, err := tc.ScopedStore.GetAccessHash(ctx, ids.PeerTypeUser, typedChat.UserID)
 		if err != nil {
 			return nil, err
 		}
@@ -58,7 +58,7 @@ func (t *TelegramClient) getChatPeerForInputFromMessage(ctx context.Context, id 
 			// We don't have the channel's access hash
 			return nil, nil
 		}
-		accessHash, err := t.ScopedStore.GetAccessHash(ctx, ids.PeerTypeChannel, typedChat.ChannelID)
+		accessHash, err := tc.ScopedStore.GetAccessHash(ctx, ids.PeerTypeChannel, typedChat.ChannelID)
 		if err != nil {
 			return nil, err
 		}
@@ -68,12 +68,12 @@ func (t *TelegramClient) getChatPeerForInputFromMessage(ctx context.Context, id 
 	}
 }
 
-func (t *TelegramClient) getInputUserFromContext(ctx context.Context, id int64) (*tg.InputUserFromMessage, error) {
+func (tc *TelegramClient) getInputUserFromContext(ctx context.Context, id int64) (*tg.InputUserFromMessage, error) {
 	msg, ok := bridgev2.GetRemoteEventFromContext(ctx).(*simplevent.Message[*tg.Message])
 	if !ok {
 		return nil, nil
 	}
-	inputPeer, err := t.getChatPeerForInputFromMessage(ctx, id, msg.Data.PeerID)
+	inputPeer, err := tc.getChatPeerForInputFromMessage(ctx, id, msg.Data.PeerID)
 	if err != nil || inputPeer == nil {
 		return nil, err
 	}
@@ -84,12 +84,12 @@ func (t *TelegramClient) getInputUserFromContext(ctx context.Context, id int64) 
 	}, nil
 }
 
-func (t *TelegramClient) getInputChannelFromContext(ctx context.Context, id int64) (*tg.InputChannelFromMessage, error) {
+func (tc *TelegramClient) getInputChannelFromContext(ctx context.Context, id int64) (*tg.InputChannelFromMessage, error) {
 	msg, ok := bridgev2.GetRemoteEventFromContext(ctx).(*simplevent.Message[*tg.Message])
 	if !ok {
 		return nil, nil
 	}
-	inputPeer, err := t.getChatPeerForInputFromMessage(ctx, id, msg.Data.PeerID)
+	inputPeer, err := tc.getChatPeerForInputFromMessage(ctx, id, msg.Data.PeerID)
 	if err != nil || inputPeer == nil {
 		return nil, err
 	}
@@ -100,10 +100,10 @@ func (t *TelegramClient) getInputChannelFromContext(ctx context.Context, id int6
 	}, nil
 }
 
-func (t *TelegramClient) getInputUser(ctx context.Context, id int64) (tg.InputUserClass, error) {
-	accessHash, err := t.ScopedStore.GetAccessHash(ctx, ids.PeerTypeUser, id)
+func (tc *TelegramClient) getInputUser(ctx context.Context, id int64) (tg.InputUserClass, error) {
+	accessHash, err := tc.ScopedStore.GetAccessHash(ctx, ids.PeerTypeUser, id)
 	if errors.Is(err, store.ErrNoAccessHash) {
-		fromMsg, fromMsgErr := t.getInputUserFromContext(ctx, id)
+		fromMsg, fromMsgErr := tc.getInputUserFromContext(ctx, id)
 		if fromMsgErr != nil {
 			return nil, fmt.Errorf("%w, also failed to get from message: %w", err, fromMsgErr)
 		} else if fromMsg == nil {
@@ -119,8 +119,8 @@ func (t *TelegramClient) getInputUser(ctx context.Context, id int64) (tg.InputUs
 	return &tg.InputUser{UserID: id, AccessHash: accessHash}, nil
 }
 
-func (t *TelegramClient) getInputPeerUser(ctx context.Context, id int64) (*tg.InputPeerUser, error) {
-	accessHash, err := t.ScopedStore.GetAccessHash(ctx, ids.PeerTypeUser, id)
+func (tc *TelegramClient) getInputPeerUser(ctx context.Context, id int64) (*tg.InputPeerUser, error) {
+	accessHash, err := tc.ScopedStore.GetAccessHash(ctx, ids.PeerTypeUser, id)
 	if errors.Is(err, store.ErrNoAccessHash) {
 		return nil, err
 	} else if err != nil {
@@ -129,10 +129,10 @@ func (t *TelegramClient) getInputPeerUser(ctx context.Context, id int64) (*tg.In
 	return &tg.InputPeerUser{UserID: id, AccessHash: accessHash}, nil
 }
 
-func (t *TelegramClient) getSingleUser(ctx context.Context, id int64) (tg.UserClass, error) {
-	if inputUser, err := t.getInputUser(ctx, id); err != nil {
+func (tc *TelegramClient) getSingleUser(ctx context.Context, id int64) (tg.UserClass, error) {
+	if inputUser, err := tc.getInputUser(ctx, id); err != nil {
 		return nil, err
-	} else if users, err := t.client.API().UsersGetUsers(ctx, []tg.InputUserClass{inputUser}); err != nil {
+	} else if users, err := tc.client.API().UsersGetUsers(ctx, []tg.InputUserClass{inputUser}); err != nil {
 		return nil, err
 	} else if len(users) == 0 {
 		// TODO does this mean the user is deleted? Need to handle this a bit better
@@ -142,10 +142,10 @@ func (t *TelegramClient) getSingleUser(ctx context.Context, id int64) (tg.UserCl
 	}
 }
 
-func (t *TelegramClient) getInputChannel(ctx context.Context, id int64) (tg.InputChannelClass, error) {
-	accessHash, err := t.ScopedStore.GetAccessHash(ctx, ids.PeerTypeChannel, id)
+func (tc *TelegramClient) getInputChannel(ctx context.Context, id int64) (tg.InputChannelClass, error) {
+	accessHash, err := tc.ScopedStore.GetAccessHash(ctx, ids.PeerTypeChannel, id)
 	if err != nil {
-		fromMsg, fromMsgErr := t.getInputChannelFromContext(ctx, id)
+		fromMsg, fromMsgErr := tc.getInputChannelFromContext(ctx, id)
 		if fromMsgErr != nil {
 			return nil, fmt.Errorf("%w, also failed to get from message: %w", err, fromMsgErr)
 		} else if fromMsg == nil {
@@ -159,13 +159,13 @@ func (t *TelegramClient) getInputChannel(ctx context.Context, id int64) (tg.Inpu
 	return &tg.InputChannel{ChannelID: id, AccessHash: accessHash}, nil
 }
 
-func (t *TelegramClient) getSingleChannel(ctx context.Context, id int64) (*tg.Channel, error) {
-	inputChannel, err := t.getInputChannel(ctx, id)
+func (tc *TelegramClient) getSingleChannel(ctx context.Context, id int64) (*tg.Channel, error) {
+	inputChannel, err := tc.getInputChannel(ctx, id)
 	if err != nil {
 		return nil, err
 	}
-	chats, err := APICallWithOnlyChatUpdates(ctx, t, func() (tg.MessagesChatsClass, error) {
-		return t.client.API().ChannelsGetChannels(ctx, []tg.InputChannelClass{inputChannel})
+	chats, err := APICallWithOnlyChatUpdates(ctx, tc, func() (tg.MessagesChatsClass, error) {
+		return tc.client.API().ChannelsGetChannels(ctx, []tg.InputChannelClass{inputChannel})
 	})
 	if err != nil {
 		return nil, err
@@ -178,23 +178,23 @@ func (t *TelegramClient) getSingleChannel(ctx context.Context, id int64) (*tg.Ch
 	}
 }
 
-func (t *TelegramClient) wrapChannelGhostInfo(ctx context.Context, channel *tg.Channel) (*bridgev2.UserInfo, error) {
+func (tc *TelegramClient) wrapChannelGhostInfo(ctx context.Context, channel *tg.Channel) (*bridgev2.UserInfo, error) {
 	var err error
 	if accessHash, ok := channel.GetAccessHash(); ok && !channel.Min {
-		if err = t.ScopedStore.SetAccessHash(ctx, ids.PeerTypeChannel, channel.ID, accessHash); err != nil {
+		if err = tc.ScopedStore.SetAccessHash(ctx, ids.PeerTypeChannel, channel.ID, accessHash); err != nil {
 			return nil, err
 		}
 	}
 
 	var avatar *bridgev2.Avatar
-	avatar, err = t.convertChatPhoto(channel.AsInputPeer(), channel.GetPhoto())
+	avatar, err = tc.convertChatPhoto(channel.AsInputPeer(), channel.GetPhoto())
 	if err != nil {
 		return nil, err
 	}
 
 	var identifiers []string
 	if username, set := channel.GetUsername(); set {
-		err = t.main.Store.Username.Set(ctx, ids.PeerTypeChannel, channel.ID, username)
+		err = tc.main.Store.Username.Set(ctx, ids.PeerTypeChannel, channel.ID, username)
 		if err != nil {
 			return nil, err
 		}
@@ -208,7 +208,7 @@ func (t *TelegramClient) wrapChannelGhostInfo(ctx context.Context, channel *tg.C
 	}, nil
 }
 
-func (t *TelegramClient) wrapUserInfo(ctx context.Context, u tg.UserClass, ghost *bridgev2.Ghost) (*bridgev2.UserInfo, error) {
+func (tc *TelegramClient) wrapUserInfo(ctx context.Context, u tg.UserClass, ghost *bridgev2.Ghost) (*bridgev2.UserInfo, error) {
 	oldMeta := ghost.Metadata.(*GhostMetadata)
 	user, ok := u.(*tg.User)
 	if !ok {
@@ -217,12 +217,12 @@ func (t *TelegramClient) wrapUserInfo(ctx context.Context, u tg.UserClass, ghost
 	var identifiers []string
 	if !user.Min {
 		if accessHash, ok := user.GetAccessHash(); ok {
-			if err := t.ScopedStore.SetAccessHash(ctx, ids.PeerTypeUser, user.ID, accessHash); err != nil {
+			if err := tc.ScopedStore.SetAccessHash(ctx, ids.PeerTypeUser, user.ID, accessHash); err != nil {
 				return nil, err
 			}
 		}
 
-		if err := t.main.Store.Username.Set(ctx, ids.PeerTypeUser, user.ID, user.Username); err != nil {
+		if err := tc.main.Store.Username.Set(ctx, ids.PeerTypeUser, user.ID, user.Username); err != nil {
 			return nil, err
 		}
 
@@ -235,7 +235,7 @@ func (t *TelegramClient) wrapUserInfo(ctx context.Context, u tg.UserClass, ghost
 		if phone, ok := user.GetPhone(); ok {
 			normalized := strings.TrimPrefix(phone, "+")
 			identifiers = append(identifiers, fmt.Sprintf("tel:+%s", normalized))
-			if err := t.main.Store.PhoneNumber.Set(ctx, user.ID, normalized); err != nil {
+			if err := tc.main.Store.PhoneNumber.Set(ctx, user.ID, normalized); err != nil {
 				return nil, err
 			}
 		}
@@ -249,17 +249,17 @@ func (t *TelegramClient) wrapUserInfo(ctx context.Context, u tg.UserClass, ghost
 		(!user.Min || user.ApplyMinPhoto || oldMeta.IsMin()) &&
 		// Hack: check ApplyMinPhoto in addition to Personal, because some personalized avatars
 		// only have the ApplyMinPhoto flag and not Personal.
-		((!photo.Personal && user.ApplyMinPhoto) || t.main.Config.ContactAvatars) {
+		((!photo.Personal && user.ApplyMinPhoto) || tc.main.Config.ContactAvatars) {
 		var err error
-		avatar, err = t.convertUserProfilePhoto(ctx, user, photo)
+		avatar, err = tc.convertUserProfilePhoto(ctx, user, photo)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	name := t.main.Config.FormatDisplayname(user.FirstName, user.LastName, user.Username, user.Deleted, user.ID)
+	name := tc.main.Config.FormatDisplayname(user.FirstName, user.LastName, user.Username, user.Deleted, user.ID)
 	namePtr := &name
-	if user.Contact && ghost.Name != "" && oldMeta.ContactSource != t.telegramUserID && oldMeta.ContactSource != 0 && !t.main.Config.ContactNames {
+	if user.Contact && ghost.Name != "" && oldMeta.ContactSource != tc.telegramUserID && oldMeta.ContactSource != 0 && !tc.main.Config.ContactNames {
 		namePtr = nil
 	}
 	if user.Min && !oldMeta.IsMin() && ghost.Name != "" {
@@ -277,9 +277,9 @@ func (t *TelegramClient) wrapUserInfo(ctx context.Context, u tg.UserClass, ghost
 				meta.IsPremium = user.Premium
 				meta.Deleted = user.Deleted
 				meta.NotMin = true
-				if meta.ContactSource == 0 || meta.ContactSource == t.telegramUserID || (!user.Contact && meta.SourceIsContact) {
-					changed = changed || meta.ContactSource != t.telegramUserID || meta.SourceIsContact != user.Contact
-					meta.ContactSource = t.telegramUserID
+				if meta.ContactSource == 0 || meta.ContactSource == tc.telegramUserID || (!user.Contact && meta.SourceIsContact) {
+					changed = changed || meta.ContactSource != tc.telegramUserID || meta.SourceIsContact != user.Contact
+					meta.ContactSource = tc.telegramUserID
 					meta.SourceIsContact = user.Contact
 				}
 			}

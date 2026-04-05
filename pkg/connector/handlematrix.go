@@ -97,7 +97,7 @@ func getMediaFilename(content *event.MessageEventContent) (filename string) {
 	return filename
 }
 
-func (t *TelegramClient) HandleMatrixViewingChat(ctx context.Context, msg *bridgev2.MatrixViewingChat) error {
+func (tc *TelegramClient) HandleMatrixViewingChat(ctx context.Context, msg *bridgev2.MatrixViewingChat) error {
 	if msg.Portal == nil {
 		return nil
 	}
@@ -105,27 +105,27 @@ func (t *TelegramClient) HandleMatrixViewingChat(ctx context.Context, msg *bridg
 	// TODO sync topic parent space
 	meta := msg.Portal.Metadata.(*PortalMetadata)
 	if (topicID == 0 && !meta.FullSynced) || meta.LastSync.Add(24*time.Hour).Before(time.Now()) {
-		t.userLogin.QueueRemoteEvent(&simplevent.ChatResync{
+		tc.userLogin.QueueRemoteEvent(&simplevent.ChatResync{
 			EventMeta: simplevent.EventMeta{
 				Type:      bridgev2.RemoteEventChatResync,
 				PortalKey: msg.Portal.PortalKey,
 			},
-			GetChatInfoFunc: t.GetChatInfo,
+			GetChatInfoFunc: tc.GetChatInfo,
 		})
 	}
-	err := t.maybePollForReactions(ctx, msg.Portal)
+	err := tc.maybePollForReactions(ctx, msg.Portal)
 	if err != nil {
 		return err
 	}
-	err = t.pollSponsoredMessage(ctx, msg.Portal)
+	err = tc.pollSponsoredMessage(ctx, msg.Portal)
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func (t *TelegramClient) pollSponsoredMessage(ctx context.Context, portal *bridgev2.Portal) error {
-	if t.metadata.IsBot {
+func (tc *TelegramClient) pollSponsoredMessage(ctx context.Context, portal *bridgev2.Portal) error {
+	if tc.metadata.IsBot {
 		return nil
 	}
 	meta := portal.Metadata.(*PortalMetadata)
@@ -140,18 +140,18 @@ func (t *TelegramClient) pollSponsoredMessage(ctx context.Context, portal *bridg
 	if time.Since(meta.SponsoredMessagePollTS.Time) < 5*time.Minute {
 		return nil
 	}
-	latestMessage, err := t.main.Bridge.DB.Message.GetLastNonFakePartAtOrBeforeTime(ctx, portal.PortalKey, time.Now())
+	latestMessage, err := tc.main.Bridge.DB.Message.GetLastNonFakePartAtOrBeforeTime(ctx, portal.PortalKey, time.Now())
 	if err != nil {
 		return fmt.Errorf("failed to get latest message for portal: %w", err)
 	} else if latestMessage != nil && latestMessage.ID == meta.LastMessageOnSponsorFetch {
 		meta.SponsoredMessagePollTS = jsontime.UnixNow()
 		return nil
 	}
-	accessHash, err := t.ScopedStore.GetAccessHash(ctx, ids.PeerTypeChannel, id)
+	accessHash, err := tc.ScopedStore.GetAccessHash(ctx, ids.PeerTypeChannel, id)
 	if err != nil {
 		return err
 	}
-	resp, err := t.client.API().MessagesGetSponsoredMessages(ctx, &tg.MessagesGetSponsoredMessagesRequest{
+	resp, err := tc.client.API().MessagesGetSponsoredMessages(ctx, &tg.MessagesGetSponsoredMessagesRequest{
 		Peer: &tg.InputPeerChannel{ChannelID: id, AccessHash: accessHash},
 	})
 	if err != nil {
@@ -179,7 +179,7 @@ func (t *TelegramClient) pollSponsoredMessage(ctx context.Context, portal *bridg
 		msg = msgs.Messages[1]
 	}
 	meta.SponsoredMessageRandomID = msg.RandomID
-	content := t.parseBodyAndHTML(ctx, msg.Message, msg.Entities)
+	content := tc.parseBodyAndHTML(ctx, msg.Message, msg.Entities)
 	content.MsgType = event.MsgNotice
 	content.EnsureHasHTML()
 	extra := map[string]any{
@@ -207,7 +207,7 @@ func (t *TelegramClient) pollSponsoredMessage(ctx context.Context, portal *bridg
 		`<strong>%s: %s</strong><blockquote>%s</blockquote><p>Sponsored message%s - <a href="%s">%s</a></p>`,
 		prefix, html.EscapeString(msg.Title), content.FormattedBody, fromStr, msg.URL, msg.ButtonText,
 	)
-	sendResp, err := t.main.Bridge.Bot.SendMessage(ctx, portal.MXID, event.EventMessage, &event.Content{
+	sendResp, err := tc.main.Bridge.Bot.SendMessage(ctx, portal.MXID, event.EventMessage, &event.Content{
 		Raw:    extra,
 		Parsed: content,
 	}, &bridgev2.MatrixSendExtra{Timestamp: time.Now()})
@@ -226,11 +226,11 @@ func (t *TelegramClient) pollSponsoredMessage(ctx context.Context, portal *bridg
 	return nil
 }
 
-func (t *TelegramClient) transferMediaToTelegram(ctx context.Context, content *event.MessageEventContent, sticker bool) (tg.InputMediaClass, error) {
+func (tc *TelegramClient) transferMediaToTelegram(ctx context.Context, content *event.MessageEventContent, sticker bool) (tg.InputMediaClass, error) {
 	var upload tg.InputFileClass
 	var forceDocument bool
 	filename := getMediaFilename(content)
-	err := t.main.Bridge.Bot.DownloadMediaToFile(ctx, content.URL, content.File, false, func(f *os.File) (err error) {
+	err := tc.main.Bridge.Bot.DownloadMediaToFile(ctx, content.URL, content.File, false, func(f *os.File) (err error) {
 		uploadFilename := f.Name()
 		if sticker && content.Info != nil && (content.Info.MimeType == "image/png" || content.Info.MimeType == "image/jpeg") {
 			tempFile, err := os.CreateTemp("", "telegram-sticker-*.webp")
@@ -270,7 +270,7 @@ func (t *TelegramClient) transferMediaToTelegram(ctx context.Context, content *e
 			// We also have the image_as_file_pixels configuration threshold to
 			// prevent Telegram from compressing the file.
 			aspectRatio := float64(max(cfg.Height, cfg.Width)) / float64(min(cfg.Height, cfg.Width))
-			forceDocument = cfg.Height*cfg.Width > t.main.Config.ImageAsFilePixels ||
+			forceDocument = cfg.Height*cfg.Width > tc.main.Config.ImageAsFilePixels ||
 				info.Size() > int64(10*1024*1024) ||
 				aspectRatio > 20 ||
 				cfg.Height+cfg.Width > 10000
@@ -298,7 +298,7 @@ func (t *TelegramClient) transferMediaToTelegram(ctx context.Context, content *e
 			content.Info.MimeType = "image/jpeg"
 		}
 
-		upload, err = uploader.NewUploader(t.client.API()).FromPath(ctx, uploadFilename, filename)
+		upload, err = uploader.NewUploader(tc.client.API()).FromPath(ctx, uploadFilename, filename)
 		return
 	})
 	if err != nil {
@@ -349,7 +349,7 @@ func (t *TelegramClient) transferMediaToTelegram(ctx context.Context, content *e
 	}, nil
 }
 
-func (t *TelegramClient) humaniseSendError(err error) bridgev2.MessageStatus {
+func (tc *TelegramClient) humaniseSendError(err error) bridgev2.MessageStatus {
 	status := bridgev2.WrapErrorInStatus(err).
 		WithErrorReason(event.MessageStatusNetworkError).
 		WithMessage(humanise.Error(err))
@@ -381,7 +381,7 @@ func (t *TelegramClient) humaniseSendError(err error) bridgev2.MessageStatus {
 		WithStatus(event.MessageStatusFail)
 }
 
-func (tg *TelegramConnector) GenerateTransactionID(userID id.UserID, roomID id.RoomID, eventType event.Type) networkid.RawTransactionID {
+func (tc *TelegramConnector) GenerateTransactionID(userID id.UserID, roomID id.RoomID, eventType event.Type) networkid.RawTransactionID {
 	return networkid.RawTransactionID(strconv.FormatInt(rand.Int64(), 10))
 }
 
@@ -394,17 +394,17 @@ func parseRandomID(txnID networkid.RawTransactionID) int64 {
 	return rand.Int64()
 }
 
-func (t *TelegramClient) HandleMatrixMessage(ctx context.Context, msg *bridgev2.MatrixMessage) (resp *bridgev2.MatrixMessageResponse, err error) {
+func (tc *TelegramClient) HandleMatrixMessage(ctx context.Context, msg *bridgev2.MatrixMessage) (resp *bridgev2.MatrixMessageResponse, err error) {
 	if msg.Portal.RoomType == database.RoomTypeSpace {
 		return nil, fmt.Errorf("can't send messages to space portals")
 	}
 	// Handle Matrix events only after initial connection has been established to avoid deadlocking gotd
-	err = t.clientInitialized.Wait(ctx)
+	err = tc.clientInitialized.Wait(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	peer, topicID, err := t.inputPeerForPortalID(ctx, msg.Portal.ID)
+	peer, topicID, err := tc.inputPeerForPortalID(ctx, msg.Portal.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -418,7 +418,7 @@ func (t *TelegramClient) HandleMatrixMessage(ctx context.Context, msg *bridgev2.
 
 	noWebpage := msg.Content.BeeperLinkPreviews != nil && len(msg.Content.BeeperLinkPreviews) == 0
 
-	message, entities := matrixfmt.Parse(ctx, t.matrixParser, msg.Content, msg.Portal)
+	message, entities := matrixfmt.Parse(ctx, tc.matrixParser, msg.Content, msg.Portal)
 
 	var replyTo tg.InputReplyToClass
 	if msg.ReplyTo != nil {
@@ -442,11 +442,11 @@ func (t *TelegramClient) HandleMatrixMessage(ctx context.Context, msg *bridgev2.
 	var updates tg.UpdatesClass
 	if msg.Event.Type == event.EventSticker {
 		var media tg.InputMediaClass
-		media, err = t.transferMediaToTelegram(ctx, msg.Content, true)
+		media, err = tc.transferMediaToTelegram(ctx, msg.Content, true)
 		if err != nil {
 			return nil, err
 		}
-		updates, err = t.client.API().MessagesSendMedia(ctx, &tg.MessagesSendMediaRequest{
+		updates, err = tc.client.API().MessagesSendMedia(ctx, &tg.MessagesSendMediaRequest{
 			Peer:     peer,
 			Message:  message,
 			Entities: entities,
@@ -457,7 +457,7 @@ func (t *TelegramClient) HandleMatrixMessage(ctx context.Context, msg *bridgev2.
 	} else {
 		switch msg.Content.MsgType {
 		case event.MsgText, event.MsgNotice, event.MsgEmote:
-			updates, err = t.client.API().MessagesSendMessage(ctx, &tg.MessagesSendMessageRequest{
+			updates, err = tc.client.API().MessagesSendMessage(ctx, &tg.MessagesSendMessageRequest{
 				Peer:      peer,
 				NoWebpage: noWebpage,
 				Message:   message,
@@ -467,11 +467,11 @@ func (t *TelegramClient) HandleMatrixMessage(ctx context.Context, msg *bridgev2.
 			})
 		case event.MsgImage, event.MsgFile, event.MsgAudio, event.MsgVideo:
 			var media tg.InputMediaClass
-			media, err = t.transferMediaToTelegram(ctx, msg.Content, false)
+			media, err = tc.transferMediaToTelegram(ctx, msg.Content, false)
 			if err != nil {
 				return nil, err
 			}
-			updates, err = t.client.API().MessagesSendMedia(ctx, &tg.MessagesSendMediaRequest{
+			updates, err = tc.client.API().MessagesSendMedia(ctx, &tg.MessagesSendMediaRequest{
 				Peer:     peer,
 				Message:  message,
 				Entities: entities,
@@ -491,7 +491,7 @@ func (t *TelegramClient) HandleMatrixMessage(ctx context.Context, msg *bridgev2.
 					message = desc
 				}
 			}
-			updates, err = t.client.API().MessagesSendMedia(ctx, &tg.MessagesSendMediaRequest{
+			updates, err = tc.client.API().MessagesSendMedia(ctx, &tg.MessagesSendMediaRequest{
 				Peer:    peer,
 				Message: message,
 				Media: &tg.InputMediaGeoPoint{
@@ -506,7 +506,7 @@ func (t *TelegramClient) HandleMatrixMessage(ctx context.Context, msg *bridgev2.
 	}
 	if err != nil {
 		log.Err(err).Msg("failed to send message to Telegram")
-		return nil, t.humaniseSendError(err)
+		return nil, tc.humaniseSendError(err)
 	}
 
 	hasher := sha256.New()
@@ -581,7 +581,7 @@ func (t *TelegramClient) HandleMatrixMessage(ctx context.Context, msg *bridgev2.
 	resp = &bridgev2.MatrixMessageResponse{
 		DB: &database.Message{
 			ID:        messageID,
-			SenderID:  t.userID,
+			SenderID:  tc.userID,
 			Timestamp: timestamp,
 			Metadata: &MessageMetadata{
 				ContentHash: hash,
@@ -593,7 +593,7 @@ func (t *TelegramClient) HandleMatrixMessage(ctx context.Context, msg *bridgev2.
 	return
 }
 
-func (t *TelegramClient) HandleMatrixEdit(ctx context.Context, msg *bridgev2.MatrixEdit) error {
+func (tc *TelegramClient) HandleMatrixEdit(ctx context.Context, msg *bridgev2.MatrixEdit) error {
 	if msg.Portal.RoomType == database.RoomTypeSpace {
 		return fmt.Errorf("can't send messages to space portals")
 	}
@@ -602,7 +602,7 @@ func (t *TelegramClient) HandleMatrixEdit(ctx context.Context, msg *bridgev2.Mat
 		Str("handler", "matrix_edit").
 		Logger()
 
-	peer, _, err := t.inputPeerForPortalID(ctx, msg.Portal.ID)
+	peer, _, err := tc.inputPeerForPortalID(ctx, msg.Portal.ID)
 	if err != nil {
 		return err
 	}
@@ -612,7 +612,7 @@ func (t *TelegramClient) HandleMatrixEdit(ctx context.Context, msg *bridgev2.Mat
 		return err
 	}
 
-	message, entities := matrixfmt.Parse(ctx, t.matrixParser, msg.Content, msg.Portal)
+	message, entities := matrixfmt.Parse(ctx, tc.matrixParser, msg.Content, msg.Portal)
 
 	var newContentURI id.ContentURIString
 	req := tg.MessagesEditMessageRequest{
@@ -631,7 +631,7 @@ func (t *TelegramClient) HandleMatrixEdit(ctx context.Context, msg *bridgev2.Mat
 			log.Info().Msg("media URI unchanged, skipping re-upload, just editing text")
 		} else {
 			log.Info().Msg("media URI changed, re-uploading media")
-			req.Media, err = t.transferMediaToTelegram(ctx, msg.Content, false)
+			req.Media, err = tc.transferMediaToTelegram(ctx, msg.Content, false)
 			if err != nil {
 				return err
 			}
@@ -639,9 +639,9 @@ func (t *TelegramClient) HandleMatrixEdit(ctx context.Context, msg *bridgev2.Mat
 	} else if !msg.Content.MsgType.IsText() {
 		return fmt.Errorf("editing message type %s is unsupported", msg.Content.MsgType)
 	}
-	updates, err := t.client.API().MessagesEditMessage(ctx, &req)
+	updates, err := tc.client.API().MessagesEditMessage(ctx, &req)
 	if err != nil {
-		return t.humaniseSendError(err)
+		return tc.humaniseSendError(err)
 	}
 
 	hasher := sha256.New()
@@ -690,17 +690,17 @@ func (t *TelegramClient) HandleMatrixEdit(ctx context.Context, msg *bridgev2.Mat
 	return nil
 }
 
-func (t *TelegramClient) HandleMatrixMessageRemove(ctx context.Context, msg *bridgev2.MatrixMessageRemove) error {
+func (tc *TelegramClient) HandleMatrixMessageRemove(ctx context.Context, msg *bridgev2.MatrixMessageRemove) error {
 	if msg.Portal.RoomType == database.RoomTypeSpace {
 		return fmt.Errorf("can't send messages to space portals")
-	} else if dbMsg, err := t.main.Bridge.DB.Message.GetPartByMXID(ctx, msg.TargetMessage.MXID); err != nil {
+	} else if dbMsg, err := tc.main.Bridge.DB.Message.GetPartByMXID(ctx, msg.TargetMessage.MXID); err != nil {
 		return err
 	} else if _, messageID, err := ids.ParseMessageID(dbMsg.ID); err != nil {
 		return err
-	} else if peer, _, err := t.inputPeerForPortalID(ctx, msg.Portal.ID); err != nil {
+	} else if peer, _, err := tc.inputPeerForPortalID(ctx, msg.Portal.ID); err != nil {
 		return err
 	} else {
-		_, err := message.NewSender(t.client.API()).
+		_, err := message.NewSender(tc.client.API()).
 			To(peer).
 			Revoke().
 			Messages(ctx, messageID)
@@ -708,7 +708,7 @@ func (t *TelegramClient) HandleMatrixMessageRemove(ctx context.Context, msg *bri
 	}
 }
 
-func (t *TelegramClient) PreHandleMatrixReaction(ctx context.Context, msg *bridgev2.MatrixReaction) (bridgev2.MatrixReactionPreResponse, error) {
+func (tc *TelegramClient) PreHandleMatrixReaction(ctx context.Context, msg *bridgev2.MatrixReaction) (bridgev2.MatrixReactionPreResponse, error) {
 	if msg.Portal.RoomType == database.RoomTypeSpace {
 		return bridgev2.MatrixReactionPreResponse{}, fmt.Errorf("can't send messages to space portals")
 	}
@@ -720,7 +720,7 @@ func (t *TelegramClient) PreHandleMatrixReaction(ctx context.Context, msg *bridg
 	var resp bridgev2.MatrixReactionPreResponse
 
 	var maxReactions int
-	maxReactions, err := t.getReactionLimit(ctx, t.userID)
+	maxReactions, err := tc.getReactionLimit(ctx, tc.userID)
 	if err != nil {
 		return resp, err
 	}
@@ -728,7 +728,7 @@ func (t *TelegramClient) PreHandleMatrixReaction(ctx context.Context, msg *bridg
 	keyNoVariation := variationselector.Remove(msg.Content.RelatesTo.Key)
 	emojiID := ids.MakeEmojiIDFromEmoticon(msg.Content.RelatesTo.Key)
 	if strings.HasPrefix(msg.Content.RelatesTo.Key, "mxc://") {
-		if file, err := t.main.Store.TelegramFile.GetByMXC(ctx, id.ContentURIString(msg.Content.RelatesTo.Key)); err != nil {
+		if file, err := tc.main.Store.TelegramFile.GetByMXC(ctx, id.ContentURIString(msg.Content.RelatesTo.Key)); err != nil {
 			return resp, err
 		} else if file == nil {
 			return resp, fmt.Errorf("reaction MXC URI %s does not correspond with any known Telegram files", msg.Content.RelatesTo.Key)
@@ -737,17 +737,17 @@ func (t *TelegramClient) PreHandleMatrixReaction(ctx context.Context, msg *bridg
 		} else {
 			emojiID = ids.MakeEmojiIDFromDocumentID(documentID)
 		}
-	} else if t.main.Config.AlwaysCustomEmojiReaction {
+	} else if tc.main.Config.AlwaysCustomEmojiReaction {
 		// Always use the unicodemoji reaction if available
 		if documentID, ok := emojis.GetEmojiDocumentID(keyNoVariation); ok {
 			log.Debug().Msg("Using custom emoji reaction")
 			emojiID = ids.MakeEmojiIDFromDocumentID(documentID)
 		}
-	} else if availableReactions, err := t.getAvailableReactions(ctx); err != nil {
+	} else if availableReactions, err := tc.getAvailableReactions(ctx); err != nil {
 		return resp, fmt.Errorf("failed to get available reactions: %w", err)
 	} else if _, ok := availableReactions[keyNoVariation]; ok {
 		log.Debug().Msg("Not using custom emoji reaction since the emoji is available")
-	} else if documentID, ok := emojis.GetEmojiDocumentID(keyNoVariation); ok && !t.metadata.IsBot {
+	} else if documentID, ok := emojis.GetEmojiDocumentID(keyNoVariation); ok && !tc.metadata.IsBot {
 		log.Debug().Msg("Using custom emoji reaction")
 		emojiID = ids.MakeEmojiIDFromDocumentID(documentID)
 	}
@@ -755,14 +755,14 @@ func (t *TelegramClient) PreHandleMatrixReaction(ctx context.Context, msg *bridg
 	log.Debug().Str("emoji_id", string(emojiID)).Msg("Pre-handled reaction")
 
 	return bridgev2.MatrixReactionPreResponse{
-		SenderID:     t.userID,
+		SenderID:     tc.userID,
 		EmojiID:      emojiID,
 		Emoji:        variationselector.FullyQualify(msg.Content.RelatesTo.Key),
 		MaxReactions: maxReactions,
 	}, nil
 }
 
-func (t *TelegramClient) appendEmojiID(reactionList []tg.ReactionClass, emojiID networkid.EmojiID) ([]tg.ReactionClass, error) {
+func (tc *TelegramClient) appendEmojiID(reactionList []tg.ReactionClass, emojiID networkid.EmojiID) ([]tg.ReactionClass, error) {
 	if documentID, emoticon, err := ids.ParseEmojiID(emojiID); err != nil {
 		return nil, err
 	} else if documentID > 0 {
@@ -772,8 +772,8 @@ func (t *TelegramClient) appendEmojiID(reactionList []tg.ReactionClass, emojiID 
 	}
 }
 
-func (t *TelegramClient) HandleMatrixReaction(ctx context.Context, msg *bridgev2.MatrixReaction) (reaction *database.Reaction, err error) {
-	peer, _, err := t.inputPeerForPortalID(ctx, msg.Portal.ID)
+func (tc *TelegramClient) HandleMatrixReaction(ctx context.Context, msg *bridgev2.MatrixReaction) (reaction *database.Reaction, err error) {
+	peer, _, err := tc.inputPeerForPortalID(ctx, msg.Portal.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -784,17 +784,17 @@ func (t *TelegramClient) HandleMatrixReaction(ctx context.Context, msg *bridgev2
 
 	var newReactions []tg.ReactionClass
 	for _, existing := range msg.ExistingReactionsToKeep {
-		newReactions, err = t.appendEmojiID(newReactions, existing.EmojiID)
+		newReactions, err = tc.appendEmojiID(newReactions, existing.EmojiID)
 		if err != nil {
 			return nil, err
 		}
 	}
-	newReactions, err = t.appendEmojiID(newReactions, msg.PreHandleResp.EmojiID)
+	newReactions, err = tc.appendEmojiID(newReactions, msg.PreHandleResp.EmojiID)
 	if err != nil {
 		return nil, err
 	}
 
-	_, err = t.client.API().MessagesSendReaction(ctx, &tg.MessagesSendReactionRequest{
+	_, err = tc.client.API().MessagesSendReaction(ctx, &tg.MessagesSendReactionRequest{
 		Peer:        peer,
 		AddToRecent: true,
 		MsgID:       targetMessageID,
@@ -809,27 +809,27 @@ func (t *TelegramClient) HandleMatrixReaction(ctx context.Context, msg *bridgev2
 	return &database.Reaction{}, err
 }
 
-func (t *TelegramClient) HandleMatrixReactionRemove(ctx context.Context, msg *bridgev2.MatrixReactionRemove) error {
+func (tc *TelegramClient) HandleMatrixReactionRemove(ctx context.Context, msg *bridgev2.MatrixReactionRemove) error {
 	if msg.Portal.RoomType == database.RoomTypeSpace {
 		return fmt.Errorf("can't send messages to space portals")
 	}
-	peer, _, err := t.inputPeerForPortalID(ctx, msg.Portal.ID)
+	peer, _, err := tc.inputPeerForPortalID(ctx, msg.Portal.ID)
 	if err != nil {
 		return err
 	}
 
 	var newReactions []tg.ReactionClass
 
-	if maxReactions, err := t.getReactionLimit(ctx, t.userID); err != nil {
+	if maxReactions, err := tc.getReactionLimit(ctx, tc.userID); err != nil {
 		return err
 	} else if maxReactions > 1 {
-		existing, err := t.main.Bridge.DB.Reaction.GetAllToMessageBySender(ctx, msg.Portal.Receiver, msg.TargetReaction.MessageID, msg.TargetReaction.SenderID)
+		existing, err := tc.main.Bridge.DB.Reaction.GetAllToMessageBySender(ctx, msg.Portal.Receiver, msg.TargetReaction.MessageID, msg.TargetReaction.SenderID)
 		if err != nil {
 			return err
 		}
 		for _, existing := range existing {
 			if msg.TargetReaction.EmojiID != existing.EmojiID {
-				newReactions, err = t.appendEmojiID(newReactions, existing.EmojiID)
+				newReactions, err = tc.appendEmojiID(newReactions, existing.EmojiID)
 				if err != nil {
 					return err
 				}
@@ -841,7 +841,7 @@ func (t *TelegramClient) HandleMatrixReactionRemove(ctx context.Context, msg *br
 	if err != nil {
 		return err
 	}
-	_, err = t.client.API().MessagesSendReaction(ctx, &tg.MessagesSendReactionRequest{
+	_, err = tc.client.API().MessagesSendReaction(ctx, &tg.MessagesSendReactionRequest{
 		Peer:        peer,
 		AddToRecent: true,
 		MsgID:       messageID,
@@ -850,7 +850,7 @@ func (t *TelegramClient) HandleMatrixReactionRemove(ctx context.Context, msg *br
 	return err
 }
 
-func (t *TelegramClient) HandleMatrixReadReceipt(ctx context.Context, msg *bridgev2.MatrixReadReceipt) error {
+func (tc *TelegramClient) HandleMatrixReadReceipt(ctx context.Context, msg *bridgev2.MatrixReadReceipt) error {
 	if msg.Portal.RoomType == database.RoomTypeSpace {
 		return nil
 	}
@@ -866,7 +866,7 @@ func (t *TelegramClient) HandleMatrixReadReceipt(ctx context.Context, msg *bridg
 	if msg.Portal.Metadata.(*PortalMetadata).IsForumGeneral {
 		topicID = 1
 	}
-	inputPeer, _, parseErr := t.inputPeerForPortalID(ctx, msg.Portal.ID)
+	inputPeer, _, parseErr := tc.inputPeerForPortalID(ctx, msg.Portal.ID)
 	if parseErr != nil {
 		return parseErr
 	}
@@ -874,7 +874,7 @@ func (t *TelegramClient) HandleMatrixReadReceipt(ctx context.Context, msg *bridg
 	var readMentionsErr, readReactionsErr, readMessagesErr error
 	var wg sync.WaitGroup
 
-	isBot := t.metadata.IsBot
+	isBot := tc.metadata.IsBot
 
 	// Read mentions
 	wg.Add(1)
@@ -883,7 +883,7 @@ func (t *TelegramClient) HandleMatrixReadReceipt(ctx context.Context, msg *bridg
 		if isBot {
 			return
 		}
-		_, readMentionsErr = t.client.API().MessagesReadMentions(ctx, &tg.MessagesReadMentionsRequest{
+		_, readMentionsErr = tc.client.API().MessagesReadMentions(ctx, &tg.MessagesReadMentionsRequest{
 			Peer:     inputPeer,
 			TopMsgID: topicID,
 		})
@@ -896,7 +896,7 @@ func (t *TelegramClient) HandleMatrixReadReceipt(ctx context.Context, msg *bridg
 		if isBot {
 			return
 		}
-		_, readMentionsErr = t.client.API().MessagesReadReactions(ctx, &tg.MessagesReadReactionsRequest{
+		_, readMentionsErr = tc.client.API().MessagesReadReactions(ctx, &tg.MessagesReadReactionsRequest{
 			Peer:     inputPeer,
 			TopMsgID: topicID,
 		})
@@ -913,7 +913,7 @@ func (t *TelegramClient) HandleMatrixReadReceipt(ctx context.Context, msg *bridg
 
 		message := msg.ExactMessage
 		if message == nil {
-			message, readMessagesErr = t.main.Bridge.DB.Message.GetLastPartAtOrBeforeTime(ctx, msg.Portal.PortalKey, time.Now())
+			message, readMessagesErr = tc.main.Bridge.DB.Message.GetLastPartAtOrBeforeTime(ctx, msg.Portal.PortalKey, time.Now())
 			if readMessagesErr != nil {
 				return
 			} else if message == nil {
@@ -929,29 +929,29 @@ func (t *TelegramClient) HandleMatrixReadReceipt(ctx context.Context, msg *bridg
 
 		switch peerType {
 		case ids.PeerTypeUser, ids.PeerTypeChat:
-			_, readMessagesErr = t.client.API().MessagesReadHistory(ctx, &tg.MessagesReadHistoryRequest{
+			_, readMessagesErr = tc.client.API().MessagesReadHistory(ctx, &tg.MessagesReadHistoryRequest{
 				Peer:  inputPeer,
 				MaxID: maxID,
 			})
 		case ids.PeerTypeChannel:
 			var accessHash int64
-			accessHash, readMessagesErr = t.ScopedStore.GetAccessHash(ctx, ids.PeerTypeChannel, portalID)
+			accessHash, readMessagesErr = tc.ScopedStore.GetAccessHash(ctx, ids.PeerTypeChannel, portalID)
 			if readMessagesErr != nil {
 				return
 			}
-			_, readMessagesErr = t.client.API().ChannelsReadHistory(ctx, &tg.ChannelsReadHistoryRequest{
+			_, readMessagesErr = tc.client.API().ChannelsReadHistory(ctx, &tg.ChannelsReadHistoryRequest{
 				Channel: &tg.InputChannel{ChannelID: portalID, AccessHash: accessHash},
 				MaxID:   maxID,
 			})
 
 			meta := msg.Portal.Metadata.(*PortalMetadata)
 			randomID := meta.SponsoredMessageRandomID
-			if !t.metadata.IsBot &&
+			if !tc.metadata.IsBot &&
 				randomID != nil &&
 				time.Since(meta.SponsoredMessagePollTS.Time) < 15*time.Minute &&
 				(meta.SponsoredMessageEventID == msg.EventID || msg.Receipt.Timestamp.After(meta.SponsoredMessagePollTS.Time)) &&
-				meta.sponsoredMessageSeen.Add(t.telegramUserID) {
-				_, viewSponsoredErr := t.client.API().MessagesViewSponsoredMessage(ctx, randomID)
+				meta.sponsoredMessageSeen.Add(tc.telegramUserID) {
+				_, viewSponsoredErr := tc.client.API().MessagesViewSponsoredMessage(ctx, randomID)
 				if viewSponsoredErr != nil {
 					log.Err(viewSponsoredErr).Msg("Failed to mark sponsored message as viewed after read receipt")
 				} else {
@@ -967,11 +967,11 @@ func (t *TelegramClient) HandleMatrixReadReceipt(ctx context.Context, msg *bridg
 
 	// Poll for reactions (non-blocking to avoid deadlock when portal event buffer is disabled)
 	go func() {
-		err := t.maybePollForReactions(ctx, msg.Portal)
+		err := tc.maybePollForReactions(ctx, msg.Portal)
 		if err != nil {
 			log.Err(err).Msg("failed to poll for reactions after read receipt")
 		}
-		err = t.pollSponsoredMessage(ctx, msg.Portal)
+		err = tc.pollSponsoredMessage(ctx, msg.Portal)
 		if err != nil {
 			log.Err(err).Msg("failed to poll for sponsored message after read receipt")
 		}
@@ -979,12 +979,12 @@ func (t *TelegramClient) HandleMatrixReadReceipt(ctx context.Context, msg *bridg
 
 	if peerType == ids.PeerTypeChannel && !msg.Portal.Metadata.(*PortalMetadata).FullSynced {
 		log.Debug().Msg("Scheduling chat resync on read receipt because channel has never got a full sync")
-		go t.userLogin.QueueRemoteEvent(&simplevent.ChatResync{
+		go tc.userLogin.QueueRemoteEvent(&simplevent.ChatResync{
 			EventMeta: simplevent.EventMeta{
 				Type:      bridgev2.RemoteEventChatResync,
 				PortalKey: msg.Portal.PortalKey,
 			},
-			GetChatInfoFunc: t.GetChatInfo,
+			GetChatInfoFunc: tc.GetChatInfo,
 		})
 	}
 
@@ -992,11 +992,11 @@ func (t *TelegramClient) HandleMatrixReadReceipt(ctx context.Context, msg *bridg
 	return errors.Join(readMentionsErr, readReactionsErr, readMessagesErr)
 }
 
-func (t *TelegramClient) HandleMatrixTyping(ctx context.Context, msg *bridgev2.MatrixTyping) error {
+func (tc *TelegramClient) HandleMatrixTyping(ctx context.Context, msg *bridgev2.MatrixTyping) error {
 	if msg.Portal.RoomType == database.RoomTypeSpace {
 		return nil
 	}
-	inputPeer, topicID, err := t.inputPeerForPortalID(ctx, msg.Portal.ID)
+	inputPeer, topicID, err := tc.inputPeerForPortalID(ctx, msg.Portal.ID)
 	if err != nil {
 		return err
 	}
@@ -1016,7 +1016,7 @@ func (t *TelegramClient) HandleMatrixTyping(ctx context.Context, msg *bridgev2.M
 	if !msg.IsTyping {
 		action = &tg.SendMessageCancelAction{}
 	}
-	_, err = t.client.API().MessagesSetTyping(ctx, &tg.MessagesSetTypingRequest{
+	_, err = tc.client.API().MessagesSetTyping(ctx, &tg.MessagesSetTypingRequest{
 		Peer:     inputPeer,
 		TopMsgID: topicID,
 		Action:   action,
@@ -1024,14 +1024,14 @@ func (t *TelegramClient) HandleMatrixTyping(ctx context.Context, msg *bridgev2.M
 	return err
 }
 
-func (t *TelegramClient) HandleMatrixDisappearingTimer(ctx context.Context, msg *bridgev2.MatrixDisappearingTimer) (bool, error) {
-	inputPeer, topicID, err := t.inputPeerForPortalID(ctx, msg.Portal.ID)
+func (tc *TelegramClient) HandleMatrixDisappearingTimer(ctx context.Context, msg *bridgev2.MatrixDisappearingTimer) (bool, error) {
+	inputPeer, topicID, err := tc.inputPeerForPortalID(ctx, msg.Portal.ID)
 	if err != nil {
 		return false, err
 	} else if topicID > 0 {
 		return false, fmt.Errorf("topics can't have their own disappearing timer")
 	}
-	_, err = t.client.API().MessagesSetHistoryTTL(ctx, &tg.MessagesSetHistoryTTLRequest{
+	_, err = tc.client.API().MessagesSetHistoryTTL(ctx, &tg.MessagesSetHistoryTTLRequest{
 		Peer:   inputPeer,
 		Period: int(msg.Content.Timer.Seconds()),
 	})
@@ -1044,8 +1044,8 @@ func (t *TelegramClient) HandleMatrixDisappearingTimer(ctx context.Context, msg 
 	return err == nil, err
 }
 
-func (t *TelegramClient) HandleMute(ctx context.Context, msg *bridgev2.MatrixMute) error {
-	inputPeer, topicID, err := t.inputPeerForPortalID(ctx, msg.Portal.ID)
+func (tc *TelegramClient) HandleMute(ctx context.Context, msg *bridgev2.MatrixMute) error {
+	inputPeer, topicID, err := tc.inputPeerForPortalID(ctx, msg.Portal.ID)
 	if err != nil {
 		return err
 	}
@@ -1061,40 +1061,40 @@ func (t *TelegramClient) HandleMute(ctx context.Context, msg *bridgev2.MatrixMut
 		peer = &tg.InputNotifyPeer{Peer: inputPeer}
 	}
 
-	_, err = t.client.API().AccountUpdateNotifySettings(ctx, &tg.AccountUpdateNotifySettingsRequest{
+	_, err = tc.client.API().AccountUpdateNotifySettings(ctx, &tg.AccountUpdateNotifySettingsRequest{
 		Peer:     peer,
 		Settings: settings,
 	})
 	return err
 }
 
-func (t *TelegramClient) HandleRoomTag(ctx context.Context, msg *bridgev2.MatrixRoomTag) error {
-	inputPeer, topicID, err := t.inputPeerForPortalID(ctx, msg.Portal.ID)
+func (tc *TelegramClient) HandleRoomTag(ctx context.Context, msg *bridgev2.MatrixRoomTag) error {
+	inputPeer, topicID, err := tc.inputPeerForPortalID(ctx, msg.Portal.ID)
 	if err != nil {
 		return err
 	} else if topicID > 0 {
 		return fmt.Errorf("topics can't be pinned for yourself")
 	}
 
-	_, err = t.client.API().MessagesToggleDialogPin(ctx, &tg.MessagesToggleDialogPinRequest{
+	_, err = tc.client.API().MessagesToggleDialogPin(ctx, &tg.MessagesToggleDialogPinRequest{
 		Pinned: slices.Contains(maps.Keys(msg.Content.Tags), event.RoomTagFavourite),
 		Peer:   &tg.InputDialogPeer{Peer: inputPeer},
 	})
 	return err
 }
 
-func (t *TelegramClient) HandleMatrixDeleteChat(ctx context.Context, chat *bridgev2.MatrixDeleteChat) error {
+func (tc *TelegramClient) HandleMatrixDeleteChat(ctx context.Context, chat *bridgev2.MatrixDeleteChat) error {
 	peerType, id, topicID, err := ids.ParsePortalID(chat.Portal.ID)
 	if err != nil {
 		return err
 	}
 	switch peerType {
 	case ids.PeerTypeUser:
-		accessHash, err := t.ScopedStore.GetAccessHash(ctx, peerType, id)
+		accessHash, err := tc.ScopedStore.GetAccessHash(ctx, peerType, id)
 		if err != nil {
 			return err
 		}
-		_, err = t.client.API().MessagesDeleteHistory(ctx, &tg.MessagesDeleteHistoryRequest{
+		_, err = tc.client.API().MessagesDeleteHistory(ctx, &tg.MessagesDeleteHistoryRequest{
 			Peer:      &tg.InputPeerUser{UserID: id, AccessHash: accessHash},
 			JustClear: !chat.Content.DeleteForEveryone,
 			Revoke:    chat.Content.DeleteForEveryone,
@@ -1107,7 +1107,7 @@ func (t *TelegramClient) HandleMatrixDeleteChat(ctx context.Context, chat *bridg
 		if !chat.Content.DeleteForEveryone {
 			return fmt.Errorf("chats can only be deleted for everyone or left")
 		}
-		result, err := t.client.API().MessagesDeleteChat(ctx, id)
+		result, err := tc.client.API().MessagesDeleteChat(ctx, id)
 		if err != nil {
 			return err
 		}
@@ -1119,12 +1119,12 @@ func (t *TelegramClient) HandleMatrixDeleteChat(ctx context.Context, chat *bridg
 		if !chat.Content.DeleteForEveryone {
 			return fmt.Errorf("channels can only be deleted for everyone or left")
 		}
-		accessHash, err := t.ScopedStore.GetAccessHash(ctx, peerType, id)
+		accessHash, err := tc.ScopedStore.GetAccessHash(ctx, peerType, id)
 		if err != nil {
 			return err
 		}
 		if topicID > 0 {
-			_, err = t.client.API().MessagesDeleteTopicHistory(ctx, &tg.MessagesDeleteTopicHistoryRequest{
+			_, err = tc.client.API().MessagesDeleteTopicHistory(ctx, &tg.MessagesDeleteTopicHistoryRequest{
 				Peer: &tg.InputPeerChannel{
 					ChannelID:  id,
 					AccessHash: accessHash,
@@ -1132,7 +1132,7 @@ func (t *TelegramClient) HandleMatrixDeleteChat(ctx context.Context, chat *bridg
 				TopMsgID: topicID,
 			})
 		} else {
-			_, err = t.client.API().ChannelsDeleteChannel(ctx, &tg.InputChannel{
+			_, err = tc.client.API().ChannelsDeleteChannel(ctx, &tg.InputChannel{
 				ChannelID:  id,
 				AccessHash: accessHash,
 			})
@@ -1147,7 +1147,7 @@ func (t *TelegramClient) HandleMatrixDeleteChat(ctx context.Context, chat *bridg
 	return nil
 }
 
-func (t *TelegramClient) HandleMatrixRoomName(ctx context.Context, msg *bridgev2.MatrixRoomName) (bool, error) {
+func (tc *TelegramClient) HandleMatrixRoomName(ctx context.Context, msg *bridgev2.MatrixRoomName) (bool, error) {
 	peerType, id, topicID, err := ids.ParsePortalID(msg.Portal.ID)
 	if err != nil {
 		return false, err
@@ -1155,7 +1155,7 @@ func (t *TelegramClient) HandleMatrixRoomName(ctx context.Context, msg *bridgev2
 
 	switch peerType {
 	case ids.PeerTypeChat:
-		_, err = t.client.API().MessagesEditChatTitle(ctx, &tg.MessagesEditChatTitleRequest{
+		_, err = tc.client.API().MessagesEditChatTitle(ctx, &tg.MessagesEditChatTitleRequest{
 			ChatID: id,
 			Title:  msg.Content.Name,
 		})
@@ -1164,12 +1164,12 @@ func (t *TelegramClient) HandleMatrixRoomName(ctx context.Context, msg *bridgev2
 		}
 		return true, nil
 	case ids.PeerTypeChannel:
-		accessHash, err := t.ScopedStore.GetAccessHash(ctx, peerType, id)
+		accessHash, err := tc.ScopedStore.GetAccessHash(ctx, peerType, id)
 		if err != nil {
 			return false, err
 		}
 		if topicID > 0 {
-			_, err = t.client.API().MessagesEditForumTopic(ctx, &tg.MessagesEditForumTopicRequest{
+			_, err = tc.client.API().MessagesEditForumTopic(ctx, &tg.MessagesEditForumTopicRequest{
 				Peer: &tg.InputPeerChannel{
 					ChannelID:  id,
 					AccessHash: accessHash,
@@ -1178,7 +1178,7 @@ func (t *TelegramClient) HandleMatrixRoomName(ctx context.Context, msg *bridgev2
 				Title:   msg.Content.Name,
 			})
 		} else {
-			_, err = t.client.API().ChannelsEditTitle(ctx, &tg.ChannelsEditTitleRequest{
+			_, err = tc.client.API().ChannelsEditTitle(ctx, &tg.ChannelsEditTitleRequest{
 				Channel: &tg.InputChannel{
 					ChannelID:  id,
 					AccessHash: accessHash,
@@ -1195,7 +1195,7 @@ func (t *TelegramClient) HandleMatrixRoomName(ctx context.Context, msg *bridgev2
 	}
 }
 
-func (t *TelegramClient) HandleMatrixRoomAvatar(ctx context.Context, msg *bridgev2.MatrixRoomAvatar) (bool, error) {
+func (tc *TelegramClient) HandleMatrixRoomAvatar(ctx context.Context, msg *bridgev2.MatrixRoomAvatar) (bool, error) {
 	peerType, id, topicID, err := ids.ParsePortalID(msg.Portal.ID)
 	if err != nil {
 		return false, err
@@ -1211,11 +1211,11 @@ func (t *TelegramClient) HandleMatrixRoomAvatar(ctx context.Context, msg *bridge
 	if msg.Content.URL == "" {
 		photo = &tg.InputChatPhotoEmpty{}
 	} else {
-		data, err := t.main.Bridge.Bot.DownloadMedia(ctx, msg.Content.URL, nil)
+		data, err := tc.main.Bridge.Bot.DownloadMedia(ctx, msg.Content.URL, nil)
 		if err != nil {
 			return false, fmt.Errorf("failed to download avatar: %w", err)
 		}
-		upload, err := uploader.NewUploader(t.client.API()).FromBytes(ctx, "avatar.jpg", data)
+		upload, err := uploader.NewUploader(tc.client.API()).FromBytes(ctx, "avatar.jpg", data)
 		if err != nil {
 			return false, fmt.Errorf("failed to upload avatar: %w", err)
 		}
@@ -1224,7 +1224,7 @@ func (t *TelegramClient) HandleMatrixRoomAvatar(ctx context.Context, msg *bridge
 
 	switch peerType {
 	case ids.PeerTypeChat:
-		_, err = t.client.API().MessagesEditChatPhoto(ctx, &tg.MessagesEditChatPhotoRequest{
+		_, err = tc.client.API().MessagesEditChatPhoto(ctx, &tg.MessagesEditChatPhotoRequest{
 			ChatID: id,
 			Photo:  photo,
 		})
@@ -1234,11 +1234,11 @@ func (t *TelegramClient) HandleMatrixRoomAvatar(ctx context.Context, msg *bridge
 		// TODO update portal metadata
 		return true, nil
 	case ids.PeerTypeChannel:
-		accessHash, err := t.ScopedStore.GetAccessHash(ctx, peerType, id)
+		accessHash, err := tc.ScopedStore.GetAccessHash(ctx, peerType, id)
 		if err != nil {
 			return false, err
 		}
-		_, err = t.client.API().ChannelsEditPhoto(ctx, &tg.ChannelsEditPhotoRequest{
+		_, err = tc.client.API().ChannelsEditPhoto(ctx, &tg.ChannelsEditPhotoRequest{
 			Channel: &tg.InputChannel{
 				ChannelID:  id,
 				AccessHash: accessHash,

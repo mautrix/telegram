@@ -179,8 +179,8 @@ func upgradeConfig(helper up.Helper) {
 	helper.Copy(up.Str, "displayname_template")
 }
 
-func (tg *TelegramConnector) GetConfig() (example string, data any, upgrader up.Upgrader) {
-	return ExampleConfig, &tg.Config, &up.StructUpgrader{
+func (tc *TelegramConnector) GetConfig() (example string, data any, upgrader up.Upgrader) {
+	return ExampleConfig, &tc.Config, &up.StructUpgrader{
 		SimpleUpgrader: up.SimpleUpgrader(upgradeConfig),
 		Blocks: [][]string{
 			{"device_info"},
@@ -195,15 +195,15 @@ func (tg *TelegramConnector) GetConfig() (example string, data any, upgrader up.
 	}
 }
 
-func (tg *TelegramConnector) ValidateConfig() error {
-	if tg.Config.APIID == 0 {
+func (tc *TelegramConnector) ValidateConfig() error {
+	if tc.Config.APIID == 0 {
 		return fmt.Errorf("api_id is required")
 	}
-	if tg.Config.APIHash == "" || tg.Config.APIHash == "tjyd5yge35lbodk1xwzw2jstp90k55qz" {
+	if tc.Config.APIHash == "" || tc.Config.APIHash == "tjyd5yge35lbodk1xwzw2jstp90k55qz" {
 		return fmt.Errorf("api_hash is required")
 	}
-	if !slices.Contains([]string{"disable", "gif", "png", "webp", "webm"}, tg.Config.AnimatedSticker.Target) {
-		return fmt.Errorf("unsupported animated sticker target: %s", tg.Config.AnimatedSticker.Target)
+	if !slices.Contains([]string{"disable", "gif", "png", "webp", "webm"}, tc.Config.AnimatedSticker.Target) {
+		return fmt.Errorf("unsupported animated sticker target: %s", tc.Config.AnimatedSticker.Target)
 	}
 	return nil
 }

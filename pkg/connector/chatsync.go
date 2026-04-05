@@ -33,8 +33,8 @@ import (
 	"go.mau.fi/mautrix-telegram/pkg/gotd/tgerr"
 )
 
-func (t *TelegramClient) syncChats(ctx context.Context, takeoutID int64, onLogin, restart bool) error {
-	if takeoutID != 0 && !t.main.Config.Takeout.DialogSync {
+func (tc *TelegramClient) syncChats(ctx context.Context, takeoutID int64, onLogin, restart bool) error {
+	if takeoutID != 0 && !tc.main.Config.Takeout.DialogSync {
 		return nil
 	}
 	logWith := zerolog.Ctx(ctx).With().Str("loop", "chat sync")
@@ -46,36 +46,36 @@ func (t *TelegramClient) syncChats(ctx context.Context, takeoutID int64, onLogin
 	}
 	log := logWith.Logger()
 
-	if !t.syncChatsLock.TryLock() {
+	if !tc.syncChatsLock.TryLock() {
 		log.Warn().Msg("Waiting for chat sync lock")
-		t.syncChatsLock.Lock()
+		tc.syncChatsLock.Lock()
 		log.Debug().Msg("Acquired chat sync lock after waiting")
 	}
-	defer t.syncChatsLock.Unlock()
+	defer tc.syncChatsLock.Unlock()
 
 	if restart {
-		t.metadata.DialogSyncCount = 0
-		t.metadata.DialogSyncComplete = false
-		t.metadata.DialogSyncCursor = ""
-	} else if t.metadata.DialogSyncComplete {
+		tc.metadata.DialogSyncCount = 0
+		tc.metadata.DialogSyncComplete = false
+		tc.metadata.DialogSyncCursor = ""
+	} else if tc.metadata.DialogSyncComplete {
 		log.Debug().Msg("Dialogs already synced")
 		return nil
 	}
 
 	isFullSync := true
-	updateLimit := subtractLimit(t.main.Config.Sync.UpdateLimit, t.metadata.DialogSyncCount)
-	if onLogin && t.main.Config.Takeout.DialogSync {
-		updateLimit = t.main.Config.Sync.LoginLimit
+	updateLimit := subtractLimit(tc.main.Config.Sync.UpdateLimit, tc.metadata.DialogSyncCount)
+	if onLogin && tc.main.Config.Takeout.DialogSync {
+		updateLimit = tc.main.Config.Sync.LoginLimit
 		isFullSync = false
 	}
-	createLimit := subtractLimit(t.main.Config.Sync.CreateLimit, t.metadata.DialogSyncCount)
+	createLimit := subtractLimit(tc.main.Config.Sync.CreateLimit, tc.metadata.DialogSyncCount)
 
 	var req tg.MessagesGetDialogsRequest
 	isFirst := true
-	if t.metadata.DialogSyncCursor != "" {
+	if tc.metadata.DialogSyncCursor != "" {
 		isFirst = false
 		var err error
-		req.OffsetPeer, _, err = t.inputPeerForPortalID(ctx, t.metadata.DialogSyncCursor)
+		req.OffsetPeer, _, err = tc.inputPeerForPortalID(ctx, tc.metadata.DialogSyncCursor)
 		if err != nil {
 			return fmt.Errorf("failed to get input peer for pagination: %w", err)
 		}
@@ -99,12 +99,12 @@ func (t *TelegramClient) syncChats(ctx context.Context, takeoutID int64, onLogin
 			Int("update_limit", updateLimit).
 			Int("create_limit", createLimit).
 			Msg("Fetching dialogs")
-		dialogs, err := APICallWithUpdates(ctx, t, func() (tg.ModifiedMessagesDialogs, error) {
+		dialogs, err := APICallWithUpdates(ctx, tc, func() (tg.ModifiedMessagesDialogs, error) {
 			var dialogs tg.MessagesDialogsBox
 			retry := true
 			var err error
 			for retry {
-				retry, err = tgerr.FloodWait(ctx, t.client.Invoke(ctx, wrappedReq, &dialogs))
+				retry, err = tgerr.FloodWait(ctx, tc.client.Invoke(ctx, wrappedReq, &dialogs))
 			}
 			if err != nil {
 				return nil, err
@@ -123,7 +123,7 @@ func (t *TelegramClient) syncChats(ctx context.Context, takeoutID int64, onLogin
 
 		if isFirst {
 			// This is the first fetch of dialogs, reset the pinned dialogs based on the list.
-			if err = t.resetPinnedDialogs(ctx, dialogs.GetDialogs()); err != nil {
+			if err = tc.resetPinnedDialogs(ctx, dialogs.GetDialogs()); err != nil {
 				return fmt.Errorf("failed to save pinned dialogs: %w", err)
 			}
 		}
@@ -133,34 +133,34 @@ func (t *TelegramClient) syncChats(ctx context.Context, takeoutID int64, onLogin
 		if updateLimit > 0 && len(dialogList) > updateLimit {
 			dialogList = dialogList[:updateLimit]
 		}
-		err = t.handleDialogs(ctx, dialogList, dialogs, createLimit)
+		err = tc.handleDialogs(ctx, dialogList, dialogs, createLimit)
 		if err != nil {
 			return fmt.Errorf("failed to handle dialogs: %w", err)
 		}
 		updateLimit = subtractLimit(updateLimit, len(dialogList))
 		createLimit = subtractLimit(createLimit, len(dialogList))
 
-		cursorPortalKey := t.makePortalKeyFromPeer(dialogList[len(dialogList)-1].GetPeer(), 0)
-		if t.metadata.DialogSyncCursor == cursorPortalKey.ID {
+		cursorPortalKey := tc.makePortalKeyFromPeer(dialogList[len(dialogList)-1].GetPeer(), 0)
+		if tc.metadata.DialogSyncCursor == cursorPortalKey.ID {
 			log.Debug().Msg("No more dialogs found (last dialog is same as old cursor)")
 			break
 		}
-		t.metadata.DialogSyncCursor = cursorPortalKey.ID
-		t.metadata.DialogSyncCount += len(dialogList)
-		if err = t.userLogin.Save(ctx); err != nil {
+		tc.metadata.DialogSyncCursor = cursorPortalKey.ID
+		tc.metadata.DialogSyncCount += len(dialogList)
+		if err = tc.userLogin.Save(ctx); err != nil {
 			return fmt.Errorf("failed to save user login to update cursor: %w", err)
 		}
 
-		req.OffsetPeer, _, err = t.inputPeerForPortalID(ctx, cursorPortalKey.ID)
+		req.OffsetPeer, _, err = tc.inputPeerForPortalID(ctx, cursorPortalKey.ID)
 		if err != nil {
 			return fmt.Errorf("failed to get input peer for pagination: %w", err)
 		}
 	}
 	if isFullSync {
-		t.metadata.DialogSyncComplete = true
-		t.metadata.DialogSyncCursor = ""
-		t.metadata.DialogSyncCount = 0
-		if err := t.userLogin.Save(ctx); err != nil {
+		tc.metadata.DialogSyncComplete = true
+		tc.metadata.DialogSyncCursor = ""
+		tc.metadata.DialogSyncCount = 0
+		if err := tc.userLogin.Save(ctx); err != nil {
 			return fmt.Errorf("failed to save user login after successful sync: %w", err)
 		}
 	}
@@ -179,18 +179,18 @@ func subtractLimit(limit, count int) int {
 	return limit
 }
 
-func (t *TelegramClient) resetPinnedDialogs(ctx context.Context, dialogs []tg.DialogClass) error {
-	t.metadata.PinnedDialogs = nil
+func (tc *TelegramClient) resetPinnedDialogs(ctx context.Context, dialogs []tg.DialogClass) error {
+	tc.metadata.PinnedDialogs = nil
 	for _, dialog := range dialogs {
 		if dialog.GetPinned() {
-			portalKey := t.makePortalKeyFromPeer(dialog.GetPeer(), 0)
-			t.metadata.PinnedDialogs = append(t.metadata.PinnedDialogs, portalKey.ID)
+			portalKey := tc.makePortalKeyFromPeer(dialog.GetPeer(), 0)
+			tc.metadata.PinnedDialogs = append(tc.metadata.PinnedDialogs, portalKey.ID)
 		}
 	}
-	return t.userLogin.Save(ctx)
+	return tc.userLogin.Save(ctx)
 }
 
-func (t *TelegramClient) handleDialogs(ctx context.Context, dialogList []tg.DialogClass, meta tg.ModifiedMessagesDialogs, createLimit int) error {
+func (tc *TelegramClient) handleDialogs(ctx context.Context, dialogList []tg.DialogClass, meta tg.ModifiedMessagesDialogs, createLimit int) error {
 	log := zerolog.Ctx(ctx)
 
 	users := map[int64]tg.UserClass{}
@@ -218,8 +218,8 @@ func (t *TelegramClient) handleDialogs(ctx context.Context, dialogList []tg.Dial
 			Logger()
 		log.Debug().Msg("Syncing dialog")
 
-		portalKey := t.makePortalKeyFromPeer(dialog.GetPeer(), 0)
-		portal, err := t.main.Bridge.GetPortalByKey(ctx, portalKey)
+		portalKey := tc.makePortalKeyFromPeer(dialog.GetPeer(), 0)
+		portal, err := tc.main.Bridge.GetPortalByKey(ctx, portalKey)
 		if err != nil {
 			return err
 		}
@@ -236,7 +236,7 @@ func (t *TelegramClient) handleDialogs(ctx context.Context, dialogList []tg.Dial
 					log.Debug().Int64("user_id", peer.UserID).Msg("Not syncing portal because user is deleted")
 					continue
 				}
-				chatInfo, err = t.getDMChatInfo(ctx, peer.UserID)
+				chatInfo, err = tc.getDMChatInfo(ctx, peer.UserID)
 				if err != nil {
 					return fmt.Errorf("failed to get dm info for %d: %w", peer.UserID, err)
 				}
@@ -251,7 +251,7 @@ func (t *TelegramClient) handleDialogs(ctx context.Context, dialogList []tg.Dial
 			switch chat := chats[peer.ChatID].(type) {
 			case *tg.Chat:
 				// Need to get full chat info to get the member list
-				chatInfo, err = t.GetChatInfo(ctx, portal)
+				chatInfo, err = tc.GetChatInfo(ctx, portal)
 				if err != nil {
 					return fmt.Errorf("failed to get chat info for %s: %w", portalKey, err)
 				}
@@ -271,11 +271,11 @@ func (t *TelegramClient) handleDialogs(ctx context.Context, dialogList []tg.Dial
 			switch channel := chats[peer.ChannelID].(type) {
 			case *tg.Channel:
 				var mfm *memberFetchMeta
-				chatInfo, mfm, err = t.wrapChatInfo(portal.ID, channel)
+				chatInfo, mfm, err = tc.wrapChatInfo(portal.ID, channel)
 				if err != nil {
 					return fmt.Errorf("failed to get chat info for %s: %w", portalKey, err)
 				}
-				err = t.fillChannelMembers(ctx, mfm, chatInfo.Members)
+				err = tc.fillChannelMembers(ctx, mfm, chatInfo.Members)
 				if err != nil {
 					log.Err(err).Msg("Failed to get channel members")
 				}
@@ -315,9 +315,9 @@ func (t *TelegramClient) handleDialogs(ctx context.Context, dialogList []tg.Dial
 			}
 		}
 
-		t.fillUserLocalMeta(chatInfo, dialog)
+		tc.fillUserLocalMeta(chatInfo, dialog)
 
-		res := t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.ChatResync{
+		res := tc.main.Bridge.QueueRemoteEvent(tc.userLogin, &simplevent.ChatResync{
 			ChatInfo: chatInfo,
 			EventMeta: simplevent.EventMeta{
 				Type: bridgev2.RemoteEventChatResync,
@@ -343,11 +343,11 @@ func (t *TelegramClient) handleDialogs(ctx context.Context, dialogList []tg.Dial
 		}
 
 		// Generate a read receipt from the last known read message id
-		res = t.main.Bridge.QueueRemoteEvent(t.userLogin, &simplevent.Receipt{
+		res = tc.main.Bridge.QueueRemoteEvent(tc.userLogin, &simplevent.Receipt{
 			EventMeta: simplevent.EventMeta{
 				Type:      bridgev2.RemoteEventReadReceipt,
 				PortalKey: portalKey,
-				Sender:    t.mySender(),
+				Sender:    tc.mySender(),
 			},
 			LastTarget:          ids.MakeMessageID(portalKey, dialog.ReadInboxMaxID),
 			ReadUpToStreamOrder: int64(dialog.ReadInboxMaxID),

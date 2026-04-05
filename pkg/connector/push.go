@@ -256,13 +256,13 @@ var PushMessageFormats = map[string]string{
 
 var FullSyncOnConnectBackground = false
 
-func (t *TelegramClient) ConnectBackground(ctx context.Context, params *bridgev2.ConnectBackgroundParams) error {
+func (tc *TelegramClient) ConnectBackground(ctx context.Context, params *bridgev2.ConnectBackgroundParams) error {
 	data, _ := params.ExtraData.(*PushNotificationData)
 	var relatedPortal *bridgev2.Portal
 	var sender *bridgev2.Ghost
 	var messageID networkid.MessageID
 	var messageText, notificationText, notificationTitle string
-	if notifs, ok := t.main.Bridge.Matrix.(bridgev2.MatrixConnectorWithNotifications); ok && data != nil {
+	if notifs, ok := tc.main.Bridge.Matrix.(bridgev2.MatrixConnectorWithNotifications); ok && data != nil {
 		if data.Aps != nil {
 			notificationTitle = data.Aps.Alert.Title
 			notificationText = data.Aps.Alert.Body
@@ -282,23 +282,23 @@ func (t *TelegramClient) ConnectBackground(ctx context.Context, params *bridgev2
 		}
 		var err error
 		if data.Custom.ChannelID != 0 {
-			relatedPortal, err = t.main.Bridge.GetPortalByKey(ctx, t.makePortalKeyFromID(ids.PeerTypeChannel, data.Custom.ChannelID, data.Custom.TopicID))
+			relatedPortal, err = tc.main.Bridge.GetPortalByKey(ctx, tc.makePortalKeyFromID(ids.PeerTypeChannel, data.Custom.ChannelID, data.Custom.TopicID))
 		} else if data.Custom.ChatID != 0 {
-			relatedPortal, err = t.main.Bridge.GetPortalByKey(ctx, t.makePortalKeyFromID(ids.PeerTypeChat, data.Custom.ChatID, 0))
+			relatedPortal, err = tc.main.Bridge.GetPortalByKey(ctx, tc.makePortalKeyFromID(ids.PeerTypeChat, data.Custom.ChatID, 0))
 		} else if data.Custom.FromID != 0 {
-			relatedPortal, err = t.main.Bridge.GetPortalByKey(ctx, t.makePortalKeyFromID(ids.PeerTypeUser, data.Custom.FromID, 0))
+			relatedPortal, err = tc.main.Bridge.GetPortalByKey(ctx, tc.makePortalKeyFromID(ids.PeerTypeUser, data.Custom.FromID, 0))
 		}
 		if err != nil {
 			return fmt.Errorf("failed to get related portal: %w", err)
 		}
 		if data.Custom.ChatFromBroadcastID != 0 {
-			sender, err = t.main.Bridge.GetGhostByID(ctx, ids.MakeChannelUserID(data.Custom.FromID))
+			sender, err = tc.main.Bridge.GetGhostByID(ctx, ids.MakeChannelUserID(data.Custom.FromID))
 		} else if data.Custom.ChatFromGroupID != 0 {
-			sender, err = t.main.Bridge.GetGhostByID(ctx, ids.MakeChannelUserID(data.Custom.ChatFromGroupID))
+			sender, err = tc.main.Bridge.GetGhostByID(ctx, ids.MakeChannelUserID(data.Custom.ChatFromGroupID))
 		} else if data.Custom.ChatFromID != 0 {
-			sender, err = t.main.Bridge.GetGhostByID(ctx, ids.MakeUserID(data.Custom.ChatFromID))
+			sender, err = tc.main.Bridge.GetGhostByID(ctx, ids.MakeUserID(data.Custom.ChatFromID))
 		} else if data.Custom.FromID != 0 {
-			sender, err = t.main.Bridge.GetGhostByID(ctx, ids.MakeUserID(data.Custom.FromID))
+			sender, err = tc.main.Bridge.GetGhostByID(ctx, ids.MakeUserID(data.Custom.FromID))
 		}
 		if err != nil {
 			return fmt.Errorf("failed to get sender: %w", err)
@@ -317,8 +317,8 @@ func (t *TelegramClient) ConnectBackground(ctx context.Context, params *bridgev2
 		})
 	}
 	if FullSyncOnConnectBackground {
-		t.Connect(ctx)
-		defer t.Disconnect()
+		tc.Connect(ctx)
+		defer tc.Disconnect()
 		// TODO is it possible to safely only sync one chat?
 		select {
 		case <-time.After(20 * time.Second):
@@ -328,7 +328,7 @@ func (t *TelegramClient) ConnectBackground(ctx context.Context, params *bridgev2
 	return nil
 }
 
-func (tg *TelegramConnector) ParsePushNotification(ctx context.Context, data json.RawMessage) (networkid.UserLoginID, any, error) {
+func (tc *TelegramConnector) ParsePushNotification(ctx context.Context, data json.RawMessage) (networkid.UserLoginID, any, error) {
 	val := gjson.GetBytes(data, "p")
 	if val.Type != gjson.String {
 		return "", nil, fmt.Errorf("missing or invalid p field")
@@ -342,7 +342,7 @@ func (tg *TelegramConnector) ParsePushNotification(ctx context.Context, data jso
 	if err != nil {
 		return "", nil, fmt.Errorf("failed to decode auth key and message ID: %w", err)
 	}
-	userIDs, err := tg.Bridge.DB.UserLogin.GetAllUserIDsWithLogins(ctx)
+	userIDs, err := tc.Bridge.DB.UserLogin.GetAllUserIDsWithLogins(ctx)
 	if err != nil {
 		return "", nil, fmt.Errorf("failed to get users with logins: %w", err)
 	}
@@ -350,7 +350,7 @@ func (tg *TelegramConnector) ParsePushNotification(ctx context.Context, data jso
 	var userLoginID networkid.UserLoginID
 UserLoop:
 	for _, userID := range userIDs {
-		user, err := tg.Bridge.GetExistingUserByMXID(ctx, userID)
+		user, err := tc.Bridge.GetExistingUserByMXID(ctx, userID)
 		if err != nil {
 			return "", nil, fmt.Errorf("failed to get user %s: %w", userID, err)
 		}
@@ -398,11 +398,11 @@ UserLoop:
 	return userLoginID, &pmd, nil
 }
 
-func (t *TelegramClient) RegisterPushNotifications(ctx context.Context, pushType bridgev2.PushType, token string) error {
-	meta := t.metadata
+func (tc *TelegramClient) RegisterPushNotifications(ctx context.Context, pushType bridgev2.PushType, token string) error {
+	meta := tc.metadata
 	if meta.PushEncryptionKey == nil {
 		meta.PushEncryptionKey = random.Bytes(256)
-		err := t.userLogin.Save(ctx)
+		err := tc.userLogin.Save(ctx)
 		if err != nil {
 			return fmt.Errorf("failed to save push encryption key: %w", err)
 		}
@@ -418,7 +418,7 @@ func (t *TelegramClient) RegisterPushNotifications(ctx context.Context, pushType
 	default:
 		return fmt.Errorf("unsupported push type %s", pushType)
 	}
-	_, err := t.client.API().AccountRegisterDevice(ctx, &tg.AccountRegisterDeviceRequest{
+	_, err := tc.client.API().AccountRegisterDevice(ctx, &tg.AccountRegisterDeviceRequest{
 		NoMuted:    true,
 		TokenType:  tokenType,
 		Token:      token,
@@ -429,6 +429,6 @@ func (t *TelegramClient) RegisterPushNotifications(ctx context.Context, pushType
 	return err
 }
 
-func (t *TelegramClient) GetPushConfigs() *bridgev2.PushConfig {
+func (tc *TelegramClient) GetPushConfigs() *bridgev2.PushConfig {
 	return &bridgev2.PushConfig{Native: true}
 }
