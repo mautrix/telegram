@@ -719,9 +719,9 @@ func (tc *TelegramClient) convertMediaRequiringUpload(
 			}
 			return
 		}
-		if msgMedia.TypeID() == tg.MessageMediaPhotoTypeID {
-			content.Body = content.Body + exmime.ExtensionFromMimetype(content.Info.MimeType)
-		}
+	}
+	if _, isPhoto := msgMedia.(*tg.MessageMediaPhoto); isPhoto {
+		content.Body = content.Body + exmime.ExtensionFromMimetype(content.Info.MimeType)
 	}
 
 	// Handle spoilers
