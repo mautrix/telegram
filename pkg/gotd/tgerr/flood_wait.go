@@ -66,7 +66,7 @@ func FloodWaitWithMaxDuration(d time.Duration) FloodWaitOption {
 func FloodWait(ctx context.Context, err error, opts ...FloodWaitOption) (bool, error) {
 	opt := &floodWaitOptions{
 		clock:       clock.System,
-		maxDuration: 1 * time.Hour,
+		maxDuration: 5 * time.Minute,
 	}
 	for _, o := range opts {
 		o.apply(opt)

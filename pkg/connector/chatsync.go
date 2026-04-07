@@ -102,9 +102,11 @@ func (tc *TelegramClient) syncChats(ctx context.Context, takeoutID int64, onLogi
 		dialogs, err := APICallWithUpdates(ctx, tc, func() (tg.ModifiedMessagesDialogs, error) {
 			var dialogs tg.MessagesDialogsBox
 			retry := true
+			attempts := 0
 			var err error
-			for retry {
+			for retry && attempts < 5 {
 				retry, err = tgerr.FloodWait(ctx, tc.client.Invoke(ctx, wrappedReq, &dialogs))
+				attempts++
 			}
 			if err != nil {
 				return nil, err
