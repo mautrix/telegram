@@ -342,7 +342,7 @@ func NewTelegramClient(ctx context.Context, tc *TelegramConnector, login *bridge
 			userID, ok := tc.Bridge.Matrix.ParseGhostMXID(ui)
 			if !ok {
 				user, err := tc.Bridge.GetExistingUserByMXID(ctx, ui)
-				if err != nil {
+				if err != nil || user == nil {
 					return "", "", 0, false
 				} else if login, _, _ := portal.FindPreferredLogin(ctx, user, false); login != nil {
 					userID = ids.UserLoginIDToUserID(login.ID)
