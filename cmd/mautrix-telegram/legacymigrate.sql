@@ -249,12 +249,27 @@ ALTER TABLE mx_room_state ALTER COLUMN members_fetched SET DEFAULT false;
 ALTER TABLE mx_room_state ALTER COLUMN members_fetched SET NOT NULL;
 -- end only postgres
 
-ALTER TABLE mx_user_profile ADD COLUMN name_skeleton bytea;
+CREATE TABLE new_mx_user_profile (
+    room_id       TEXT,
+    user_id       TEXT,
+    membership    membership NOT NULL,
+    displayname   TEXT       NOT NULL DEFAULT '',
+    avatar_url    TEXT       NOT NULL DEFAULT '',
+
+    name_skeleton bytea,
+
+    PRIMARY KEY (room_id, user_id)
+);
+
+INSERT INTO new_mx_user_profile
+SELECT room_id, user_id, membership, COALESCE(displayname, ''), COALESCE(avatar_url, '')
+FROM mx_user_profile;
+
+DROP TABLE mx_user_profile;
+ALTER TABLE new_mx_user_profile RENAME TO mx_user_profile;
+
 CREATE INDEX mx_user_profile_membership_idx ON mx_user_profile (room_id, membership);
 CREATE INDEX mx_user_profile_name_skeleton_idx ON mx_user_profile (room_id, name_skeleton);
-
-UPDATE mx_user_profile SET displayname='' WHERE displayname IS NULL;
-UPDATE mx_user_profile SET avatar_url='' WHERE avatar_url IS NULL;
 
 CREATE TABLE mx_registrations (
     user_id TEXT PRIMARY KEY
