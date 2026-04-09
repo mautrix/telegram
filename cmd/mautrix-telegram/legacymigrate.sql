@@ -237,17 +237,32 @@ WHERE expiration_ts<9999999999999 AND expiration_seconds<999999
 -- TODO do something with the bot_chat table?
 
 -- Python -> Go mx_ table migration
+-- only: postgres until "end only"
 ALTER TABLE mx_room_state DROP COLUMN is_encrypted;
 ALTER TABLE mx_room_state RENAME COLUMN has_full_member_list TO members_fetched;
 UPDATE mx_room_state SET members_fetched=false WHERE members_fetched IS NULL;
+ALTER TABLE mx_room_state ADD COLUMN join_rules jsonb;
 
--- only: postgres until "end only"
 ALTER TABLE mx_room_state ALTER COLUMN power_levels TYPE jsonb USING power_levels::jsonb;
 ALTER TABLE mx_room_state ALTER COLUMN encryption TYPE jsonb USING encryption::jsonb;
 ALTER TABLE mx_room_state ALTER COLUMN create_event TYPE jsonb USING create_event::jsonb;
 ALTER TABLE mx_room_state ALTER COLUMN members_fetched SET DEFAULT false;
 ALTER TABLE mx_room_state ALTER COLUMN members_fetched SET NOT NULL;
 -- end only postgres
+-- only: sqlite until "end only"
+CREATE TABLE new_mx_room_state (
+    room_id         TEXT PRIMARY KEY,
+    power_levels    jsonb,
+    encryption      jsonb,
+    create_event    jsonb,
+    join_rules      jsonb,
+    members_fetched BOOLEAN NOT NULL DEFAULT false
+);
+
+INSERT INTO new_mx_room_state (room_id, encryption, power_levels, create_event, members_fetched)
+SELECT room_id, encryption, power_levels, create_event, COALESCE(has_full_member_list, false)
+FROM mx_room_state;
+-- end only sqlite
 
 ALTER TABLE mx_user_profile ADD COLUMN name_skeleton bytea;
 CREATE INDEX mx_user_profile_membership_idx ON mx_user_profile (room_id, membership);
@@ -260,7 +275,9 @@ CREATE TABLE mx_registrations (
     user_id TEXT PRIMARY KEY
 );
 
-UPDATE mx_version SET version=8;
+UPDATE mx_version SET version=10;
+DELETE FROM mx_user_profile WHERE room_id='' OR user_id='';
+DELETE FROM mx_room_state WHERE room_id='';
 
 DROP TABLE user_portal_old;
 DROP TABLE backfill_queue_old;
