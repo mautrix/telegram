@@ -632,7 +632,7 @@ func (tc *TelegramClient) convertMediaRequiringUpload(
 			if content.Body != "" {
 				content.FileName = content.Body
 			} else {
-				content.Body = "file" + exmime.ExtensionFromMimetype(content.Info.MimeType)
+				content.Body = "document"
 			}
 		}
 
@@ -731,8 +731,13 @@ func (tc *TelegramClient) convertMediaRequiringUpload(
 			return
 		}
 	}
-	if _, isPhoto := msgMedia.(*tg.MessageMediaPhoto); isPhoto {
-		content.Body = content.Body + exmime.ExtensionFromMimetype(content.Info.MimeType)
+	if eventType != event.EventSticker && content.MsgType.IsMedia() {
+		if (content.FileName == "" || content.FileName == content.Body) && !strings.ContainsRune(content.Body, '.') {
+			content.Body = content.Body + exmime.ExtensionFromMimetype(content.Info.MimeType)
+			content.FileName = content.Body
+		} else if content.FileName != content.Body && content.FileName != "" && !strings.ContainsRune(content.FileName, '.') {
+			content.FileName = content.FileName + exmime.ExtensionFromMimetype(content.Info.MimeType)
+		}
 	}
 
 	// Handle spoilers
