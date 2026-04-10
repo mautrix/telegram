@@ -632,7 +632,7 @@ func (tc *TelegramClient) convertMediaRequiringUpload(
 			if content.Body != "" {
 				content.FileName = content.Body
 			} else {
-				content.Body = "file"
+				content.Body = "file" + exmime.ExtensionFromMimetype(content.Info.MimeType)
 			}
 		}
 
