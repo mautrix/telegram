@@ -78,7 +78,7 @@ var cmdUpgrade = &commands.FullHandler{
 func fnUpgrade(ce *commands.Event) {
 	login, _, err := ce.Portal.FindPreferredLogin(ce.Ctx, ce.User, false)
 	if errors.Is(err, bridgev2.ErrNotLoggedIn) {
-		ce.Reply("No logins found to upgrade the chat.")
+		ce.Reply("No logins found to upgrade the chat")
 	} else if err != nil {
 		ce.Log.Err(err).Msg("Failed to find preferred login for upgrade command")
 		ce.Reply("Failed to find a login to upgrade the chat.")
@@ -86,9 +86,9 @@ func fnUpgrade(ce *commands.Event) {
 		ce.Log.Err(err).Str("portal_id", string(ce.Portal.ID)).Msg("Failed to parse portal ID for upgrade command")
 		ce.Reply("Failed to parse portal ID")
 	} else if peerType == ids.PeerTypeChannel {
-		ce.Reply("Only minigroups can be upgraded (this is already a channel/supergroup).")
+		ce.Reply("Only minigroups can be upgraded (this is already a channel/supergroup)")
 	} else if peerType == ids.PeerTypeUser {
-		ce.Reply("Only minigroups can be upgraded (this is direct chat).")
+		ce.Reply("Only minigroups can be upgraded (this is direct chat)")
 	} else if resp, err := login.Client.(*TelegramClient).client.API().MessagesMigrateChat(ce.Ctx, chatID); err != nil {
 		ce.Log.Err(err).Int64("chat_id", chatID).Msg("Failed to upgrade chat")
 		ce.Reply("Failed to upgrade chat: %v", err)
@@ -128,7 +128,7 @@ func fnJoin(ce *commands.Event) {
 	if len(ce.Args) == 2 {
 		targetLogin := ce.Bridge.GetCachedUserLoginByID(networkid.UserLoginID(ce.Args[0]))
 		if targetLogin == nil || targetLogin.UserMXID != ce.User.MXID {
-			ce.Reply("No login found with the provided ID.")
+			ce.Reply("No login found with the provided ID")
 			return
 		}
 		login = targetLogin
@@ -136,7 +136,7 @@ func fnJoin(ce *commands.Event) {
 	} else {
 		login = ce.User.GetDefaultLogin()
 		if login == nil {
-			ce.Reply("You're not logged in.")
+			ce.Reply("You're not logged in")
 			return
 		}
 	}
@@ -152,7 +152,7 @@ func fnJoin(ce *commands.Event) {
 		}
 		peer, isChannel := resolve.Peer.(*tg.PeerChannel)
 		if !isChannel {
-			ce.Reply("That username does not belong to a channel or supergroup.")
+			ce.Reply("That username does not belong to a channel or supergroup")
 			return
 		}
 		var ch *tg.Channel
@@ -162,7 +162,7 @@ func fnJoin(ce *commands.Event) {
 			}
 		}
 		if ch == nil {
-			ce.Reply("Channel information not found in resolve response.")
+			ce.Reply("Channel information not found in resolve response")
 			return
 		}
 		chatName = ch.Title
@@ -175,10 +175,10 @@ func fnJoin(ce *commands.Event) {
 	} else if inviteLinkMatch := inviteLinkRe.FindStringSubmatch(ce.Args[0]); inviteLinkMatch != nil {
 		resolve, err := t.client.API().MessagesCheckChatInvite(ce.Ctx, inviteLinkMatch[1])
 		if tgerr.Is(err, tg.ErrInviteHashInvalid) {
-			ce.Reply("Invalid invite link.")
+			ce.Reply("Invalid invite link")
 			return
 		} else if tgerr.Is(err, tg.ErrInviteHashExpired) {
-			ce.Reply("Invite link expired.")
+			ce.Reply("Invite link expired")
 			return
 		}
 		switch typed := resolve.(type) {
@@ -205,7 +205,7 @@ func fnJoin(ce *commands.Event) {
 			return
 		}
 	} else {
-		ce.Reply("Invalid invite link format.")
+		ce.Reply("Invalid invite link format")
 		return
 	}
 	err := t.dispatcher.Handle(ce.Ctx, resp)
@@ -254,7 +254,7 @@ func fnEmojiPack(ce *commands.Event) {
 	if login == nil {
 		login = ce.User.GetDefaultLogin()
 		if login == nil {
-			ce.Reply("You're not logged in.")
+			ce.Reply("You're not logged in")
 			return
 		}
 	}

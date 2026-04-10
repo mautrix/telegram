@@ -454,7 +454,7 @@ func (tc *TelegramClient) fnDownloadEmojiPack(ce *commands.Event) {
 	} else if packShortcodeRegex.MatchString(ce.Args[0]) {
 		input = &tg.InputStickerSetShortName{ShortName: ce.Args[0]}
 	} else {
-		ce.Reply("Invalid pack shortcode or link.")
+		ce.Reply("Invalid pack shortcode or link")
 		return
 	}
 	rawSet, err := tc.client.API().MessagesGetStickerSet(ce.Ctx, &tg.MessagesGetStickerSetRequest{Stickerset: input})
