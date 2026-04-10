@@ -199,6 +199,11 @@ func (tc *TelegramClient) convertToMatrix(
 	if mediaPart != nil {
 		hasher.Write(mediaHashID)
 		cm.Parts = append(cm.Parts, mediaPart)
+		// Force stickers into images if there is a caption (usually there shouldn't be)
+		if mediaPart.Type == event.EventSticker && len(cm.Parts) == 2 {
+			mediaPart.Type = event.EventMessage
+			mediaPart.Content.MsgType = event.MsgImage
+		}
 		cm.MergeCaption()
 
 		contentURI = mediaPart.Content.URL
@@ -250,6 +255,12 @@ func (tc *TelegramClient) convertToMatrix(
 			}
 		default:
 			log.Warn().Type("reply_to", replyTo).Msg("unhandled reply to type")
+		}
+	}
+	if len(cm.Parts) > 1 {
+		log.Warn().Int("part_count", len(cm.Parts)).Msg("Message has multiple parts")
+		for i, part := range cm.Parts[1:] {
+			part.ID = networkid.PartID(strconv.Itoa(i + 1))
 		}
 	}
 
