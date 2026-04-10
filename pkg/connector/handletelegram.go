@@ -243,7 +243,10 @@ func (tc *TelegramClient) onUpdateNewMessage(ctx context.Context, entities tg.En
 			return err
 		}
 
-		return tc.handleTelegramReactions(ctx, msg.PeerID, topicID, msg.ID, msg.Reactions)
+		if len(msg.Reactions.Results) > 0 {
+			return tc.handleTelegramReactions(ctx, msg.PeerID, topicID, msg.ID, msg.Reactions, "updateNewMessage")
+		}
+		return nil
 	case *tg.MessageService:
 		return tc.handleServiceMessage(ctx, msg)
 
@@ -958,7 +961,7 @@ func (tc *TelegramClient) onUpdate(ctx context.Context, e tg.Entities, upd tg.Up
 }
 
 func (tc *TelegramClient) onMessageReactions(ctx context.Context, update *tg.UpdateMessageReactions) error {
-	return tc.handleTelegramReactions(ctx, update.Peer, update.TopMsgID, update.MsgID, update.Reactions)
+	return tc.handleTelegramReactions(ctx, update.Peer, update.TopMsgID, update.MsgID, update.Reactions, "updateMessageReactions")
 }
 
 func (tc *TelegramClient) onMessageEdit(ctx context.Context, update IGetMessage) error {
@@ -975,7 +978,7 @@ func (tc *TelegramClient) onMessageEdit(ctx context.Context, update IGetMessage)
 	// with an empty reactions list, which would confuse the handle method. Therefore, just don't sync reactions
 	// on channel message edits.
 	if _, isChannel := msg.PeerID.(*tg.PeerChannel); !isChannel {
-		err := tc.handleTelegramReactions(ctx, msg.PeerID, topicID, msg.ID, msg.Reactions)
+		err := tc.handleTelegramReactions(ctx, msg.PeerID, topicID, msg.ID, msg.Reactions, "updateMessageEdit")
 		if err != nil {
 			zerolog.Ctx(ctx).Err(err).Msg("Failed to handle reactions on edited message")
 		}

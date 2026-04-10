@@ -155,9 +155,10 @@ func (tc *TelegramClient) prepareReactionSync(ctx context.Context, peer tg.PeerC
 	return &bridgev2.ReactionSyncData{Users: users, HasAllUsers: isFull}, nil
 }
 
-func (tc *TelegramClient) handleTelegramReactions(ctx context.Context, peer tg.PeerClass, topicID, msgID int, reactions tg.MessageReactions) error {
+func (tc *TelegramClient) handleTelegramReactions(ctx context.Context, peer tg.PeerClass, topicID, msgID int, reactions tg.MessageReactions, source string) error {
 	ctx = zerolog.Ctx(ctx).With().
 		Str("handler", "handle_telegram_reactions").
+		Str("sync_source", source).
 		Int("message_id", msgID).
 		Logger().WithContext(ctx)
 
@@ -170,7 +171,7 @@ func (tc *TelegramClient) handleTelegramReactions(ctx context.Context, peer tg.P
 		EventMeta: simplevent.EventMeta{
 			Type: bridgev2.RemoteEventReactionSync,
 			LogContext: func(c zerolog.Context) zerolog.Context {
-				return c.Int("message_id", msgID)
+				return c.Int("message_id", msgID).Str("sync_source", source)
 			},
 			PortalKey: tc.makePortalKeyFromPeer(peer, topicID),
 		},
@@ -307,7 +308,7 @@ func (tc *TelegramClient) pollForReactions(ctx context.Context, portalKey networ
 			EventMeta: simplevent.EventMeta{
 				Type: bridgev2.RemoteEventReactionSync,
 				LogContext: func(c zerolog.Context) zerolog.Context {
-					return c.Int("message_id", reaction.MsgID)
+					return c.Int("message_id", reaction.MsgID).Str("sync_source", "poll")
 				},
 				PortalKey: dbMsg.Room,
 			},
