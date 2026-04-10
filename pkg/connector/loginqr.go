@@ -70,7 +70,8 @@ func (ql *QRLogin) Start(ctx context.Context) (*bridgev2.LoginStep, error) {
 	loggedIn := make(chan struct{})
 	dispatcher := tg.NewUpdateDispatcher()
 	dispatcher.OnLoginToken(func(ctx context.Context, e tg.Entities, update *tg.UpdateLoginToken) error {
-		loggedIn <- struct{}{}
+		log.Debug().Msg("Received updateLoginToken")
+		close(loggedIn)
 		return nil
 	})
 	err := ql.makeClient(ctx, &dispatcher)
@@ -78,13 +79,10 @@ func (ql *QRLogin) Start(ctx context.Context) (*bridgev2.LoginStep, error) {
 		return nil, err
 	}
 
-	qr := qrlogin.NewQR(ql.client.API(), ql.main.Config.APIID, ql.main.Config.APIHash, qrlogin.Options{
-		Migrate: ql.client.MigrateTo,
-	})
 	ql.qrToken = make(chan qrlogin.Token)
 	ql.auth = make(chan qrAuthResult)
 	go func() {
-		auth, err := qr.Auth(ql.ctx, loggedIn, func(ctx context.Context, token qrlogin.Token) error {
+		auth, err := ql.client.QR().Auth(ql.ctx, loggedIn, func(ctx context.Context, token qrlogin.Token) error {
 			ql.qrToken <- token
 			return nil
 		})

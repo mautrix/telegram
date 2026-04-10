@@ -140,6 +140,8 @@ func OnLoginToken(d interface {
 	return loggedIn
 }
 
+const QRRenewBuffer = 3 * time.Second
+
 // Auth generates new QR login token, shows it and awaits acceptation.
 //
 // NB: Show callback may be called more than once if QR expires.
@@ -150,7 +152,7 @@ func (q QR) Auth(
 	exceptIDs ...int64,
 ) (*tg.AuthAuthorization, error) {
 	until := func(token Token) time.Duration {
-		return token.Expires().Sub(q.clock.Now()).Truncate(time.Second)
+		return token.Expires().Sub(q.clock.Now()) - QRRenewBuffer
 	}
 
 	token, err := q.Export(ctx, exceptIDs...)
@@ -173,7 +175,7 @@ func (q QR) Auth(
 	defer clock.StopTimer(timer)
 
 	for {
-		if err := show(ctx, token); err != nil {
+		if err = show(ctx, token); err != nil {
 			return nil, errors.Wrap(err, "show")
 		}
 
@@ -181,18 +183,17 @@ func (q QR) Auth(
 		case <-ctx.Done():
 			return nil, ctx.Err()
 		case <-timer.C():
-			t, err := q.Export(ctx, exceptIDs...)
+			token, err = q.Export(ctx, exceptIDs...)
 			if err != nil {
 				return nil, err
 			}
 
-			if t.Empty() {
+			if token.Empty() {
 				// If empty token, it means AuthLoginTokenSuccess was returned.
 				// QR was scanned and accepted, break to import.
 				break
 			}
 
-			token = t
 			timer.Reset(until(token))
 
 			continue

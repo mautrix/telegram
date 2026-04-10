@@ -133,6 +133,7 @@ func (bl *baseLogin) makeClient(ctx context.Context, dispatcher *tg.UpdateDispat
 		Logger:               zaplog,
 		Device:               bl.main.deviceConfig(),
 		UpdateHandler:        updateManager,
+		NoUpdates:            true,
 	})
 
 	bl.ctx, bl.cancel = context.WithTimeoutCause(log.WithContext(bl.main.Bridge.BackgroundCtx), LoginTimeout, ErrLoginTimeout)

@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"image"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/go-faster/errors"
@@ -33,7 +34,7 @@ func ParseTokenURL(u string) (Token, error) {
 	if q.Get("token") == "" {
 		return Token{}, errors.New("token is empty")
 	}
-	token, err := base64.URLEncoding.DecodeString(q.Get("token"))
+	token, err := base64.RawURLEncoding.DecodeString(strings.TrimRight(q.Get("token"), "="))
 	if err != nil {
 		return Token{}, err
 	}
@@ -56,7 +57,7 @@ func (t Token) Expires() time.Time {
 
 // String implements fmt.Stringer.
 func (t Token) String() string {
-	return base64.URLEncoding.EncodeToString(t.token)
+	return base64.RawURLEncoding.EncodeToString(t.token)
 }
 
 // Empty reports whether token is empty.
@@ -68,7 +69,7 @@ func (t Token) Empty() bool {
 //
 // See https://core.telegram.org/api/qr-login#exporting-a-login-token.
 func (t Token) URL() string {
-	return "tg://login?token=" + base64.URLEncoding.EncodeToString(t.token)
+	return "tg://login?token=" + base64.RawURLEncoding.EncodeToString(t.token)
 }
 
 // Image returns QR image.
