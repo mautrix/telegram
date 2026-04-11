@@ -600,6 +600,10 @@ func (tc *TelegramClient) convertMediaRequiringUpload(
 				}
 			case *tg.DocumentAttributeImageSize:
 				transferer = transferer.WithImageSize(a)
+				if content.MsgType == event.MsgFile {
+					content.MsgType = event.MsgImage
+					extra["fi.mau.telegram.force_document"] = true
+				}
 			case *tg.DocumentAttributeSticker:
 				isSticker = true
 				if content.Body == "" {

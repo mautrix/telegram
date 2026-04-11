@@ -227,9 +227,8 @@ func (tc *TelegramClient) pollSponsoredMessage(ctx context.Context, portal *brid
 	return nil
 }
 
-func (tc *TelegramClient) transferMediaToTelegram(ctx context.Context, content *event.MessageEventContent, sticker bool) (tg.InputMediaClass, error) {
+func (tc *TelegramClient) transferMediaToTelegram(ctx context.Context, content *event.MessageEventContent, sticker, forceDocument bool) (tg.InputMediaClass, error) {
 	var upload tg.InputFileClass
-	var forceDocument bool
 	filename := getMediaFilename(content)
 	info := content.GetInfo()
 	err := tc.main.Bridge.Bot.DownloadMediaToFile(ctx, content.URL, content.File, false, func(f *os.File) (err error) {
@@ -272,7 +271,8 @@ func (tc *TelegramClient) transferMediaToTelegram(ctx context.Context, content *
 			// We also have the image_as_file_pixels configuration threshold to
 			// prevent Telegram from compressing the file.
 			aspectRatio := float64(max(cfg.Height, cfg.Width)) / float64(min(cfg.Height, cfg.Width))
-			forceDocument = cfg.Height*cfg.Width > tc.main.Config.ImageAsFilePixels ||
+			forceDocument = forceDocument ||
+				cfg.Height*cfg.Width > tc.main.Config.ImageAsFilePixels ||
 				fileInfo.Size() > int64(10*1024*1024) ||
 				aspectRatio > 20 ||
 				cfg.Height+cfg.Width > 10000
@@ -444,7 +444,7 @@ func (tc *TelegramClient) HandleMatrixMessage(ctx context.Context, msg *bridgev2
 	var updates tg.UpdatesClass
 	if msg.Event.Type == event.EventSticker {
 		var media tg.InputMediaClass
-		media, err = tc.transferMediaToTelegram(ctx, msg.Content, true)
+		media, err = tc.transferMediaToTelegram(ctx, msg.Content, true, false)
 		if err != nil {
 			return nil, err
 		}
@@ -469,7 +469,8 @@ func (tc *TelegramClient) HandleMatrixMessage(ctx context.Context, msg *bridgev2
 			})
 		case event.MsgImage, event.MsgFile, event.MsgAudio, event.MsgVideo:
 			var media tg.InputMediaClass
-			media, err = tc.transferMediaToTelegram(ctx, msg.Content, false)
+			forceDocument, _ := msg.Event.Content.Raw["fi.mau.telegram.force_document"].(bool)
+			media, err = tc.transferMediaToTelegram(ctx, msg.Content, false, forceDocument)
 			if err != nil {
 				return nil, err
 			}
@@ -633,7 +634,8 @@ func (tc *TelegramClient) HandleMatrixEdit(ctx context.Context, msg *bridgev2.Ma
 			log.Info().Msg("media URI unchanged, skipping re-upload, just editing text")
 		} else {
 			log.Info().Msg("media URI changed, re-uploading media")
-			req.Media, err = tc.transferMediaToTelegram(ctx, msg.Content, false)
+			forceDocument, _ := msg.Event.Content.Raw["fi.mau.telegram.force_document"].(bool)
+			req.Media, err = tc.transferMediaToTelegram(ctx, msg.Content, false, forceDocument)
 			if err != nil {
 				return err
 			}
