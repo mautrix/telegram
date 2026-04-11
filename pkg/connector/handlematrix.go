@@ -312,7 +312,7 @@ func (tc *TelegramClient) transferMediaToTelegram(ctx context.Context, content *
 	var attributes []tg.DocumentAttributeClass
 	attributes = append(attributes, &tg.DocumentAttributeFilename{FileName: filename})
 
-	if content.Info != nil && content.Info.Width != 0 && content.Info.Height != 0 {
+	if content.Info != nil && content.Info.Width != 0 && content.Info.Height != 0 && content.MsgType == event.MsgImage {
 		attributes = append(attributes, &tg.DocumentAttributeImageSize{W: content.Info.Width, H: content.Info.Height})
 	}
 
@@ -326,16 +326,20 @@ func (tc *TelegramClient) transferMediaToTelegram(ctx context.Context, content *
 			Stickerset: &tg.InputStickerSetEmpty{},
 		})
 	} else if content.MsgType == event.MsgAudio {
-		audioAttr := tg.DocumentAttributeAudio{
-			Voice: content.MSC3245Voice != nil,
+		audioAttr := &tg.DocumentAttributeAudio{
+			Voice:    content.MSC3245Voice != nil,
+			Duration: content.Info.Duration / 1000,
 		}
-		if content.MSC1767Audio != nil {
-			audioAttr.Duration = content.MSC1767Audio.Duration / 1000
-			if len(content.MSC1767Audio.Waveform) > 0 {
-				audioAttr.Waveform = waveform.Encode(content.MSC1767Audio.Waveform)
-			}
+		if content.MSC1767Audio != nil && len(content.MSC1767Audio.Waveform) > 0 {
+			audioAttr.Waveform = waveform.Encode(content.MSC1767Audio.Waveform)
 		}
-		attributes = append(attributes, &audioAttr)
+		attributes = append(attributes, audioAttr)
+	} else if content.MsgType == event.MsgVideo {
+		attributes = append(attributes, &tg.DocumentAttributeVideo{
+			Duration: float64(content.Info.Duration) / 1000,
+			W:        content.Info.Width,
+			H:        content.Info.Height,
+		})
 	}
 
 	mimeType := "application/octet-stream"
