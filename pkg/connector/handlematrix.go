@@ -18,6 +18,7 @@ package connector
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"crypto/sha256"
 	"encoding/base64"
@@ -230,9 +231,10 @@ func (tc *TelegramClient) transferMediaToTelegram(ctx context.Context, content *
 	var upload tg.InputFileClass
 	var forceDocument bool
 	filename := getMediaFilename(content)
+	info := content.GetInfo()
 	err := tc.main.Bridge.Bot.DownloadMediaToFile(ctx, content.URL, content.File, false, func(f *os.File) (err error) {
 		uploadFilename := f.Name()
-		if sticker && content.Info != nil && (content.Info.MimeType == "image/png" || content.Info.MimeType == "image/jpeg") {
+		if sticker && (info.MimeType == "image/png" || info.MimeType == "image/jpeg") {
 			tempFile, err := os.CreateTemp("", "telegram-sticker-*.webp")
 			if err != nil {
 				return err
@@ -247,17 +249,17 @@ func (tc *TelegramClient) transferMediaToTelegram(ctx context.Context, content *
 				return fmt.Errorf("failed to encode sticker webp image: %w", err)
 			}
 			uploadFilename = tempFile.Name()
-			content.Info.MimeType = "image/webp"
-		} else if sticker && content.Info != nil && (content.Info.MimeType != "video/webm" && content.Info.MimeType != "application/x-tgsticker") {
+			info.MimeType = "image/webp"
+		} else if sticker && (info.MimeType != "video/webm" && info.MimeType != "application/x-tgsticker") {
 			uploadFilename, err = ffmpeg.ConvertPath(ctx, uploadFilename, ".webp", []string{}, []string{}, false)
 			if err != nil {
 				return fmt.Errorf("failed to convert sticker to webm: %+w", err)
 			}
 			defer os.Remove(uploadFilename)
-			content.Info.MimeType = "image/webp"
+			info.MimeType = "image/webp"
 		} else if cfg, _, err := image.DecodeConfig(f); err != nil {
 			forceDocument = true
-		} else if info, err := f.Stat(); err != nil {
+		} else if fileInfo, err := f.Stat(); err != nil {
 			return err
 		} else {
 			// Telegram restricts photos in the following ways according to:
@@ -271,7 +273,7 @@ func (tc *TelegramClient) transferMediaToTelegram(ctx context.Context, content *
 			// prevent Telegram from compressing the file.
 			aspectRatio := float64(max(cfg.Height, cfg.Width)) / float64(min(cfg.Height, cfg.Width))
 			forceDocument = cfg.Height*cfg.Width > tc.main.Config.ImageAsFilePixels ||
-				info.Size() > int64(10*1024*1024) ||
+				fileInfo.Size() > int64(10*1024*1024) ||
 				aspectRatio > 20 ||
 				cfg.Height+cfg.Width > 10000
 		}
@@ -295,7 +297,7 @@ func (tc *TelegramClient) transferMediaToTelegram(ctx context.Context, content *
 			}
 			uploadFilename = tempFile.Name()
 			filename += ".jpeg"
-			content.Info.MimeType = "image/jpeg"
+			info.MimeType = "image/jpeg"
 		}
 
 		upload, err = uploader.NewUploader(tc.client.API()).FromPath(ctx, uploadFilename, filename)
@@ -305,18 +307,18 @@ func (tc *TelegramClient) transferMediaToTelegram(ctx context.Context, content *
 		return nil, fmt.Errorf("failed to download media from Matrix and upload media to Telegram: %w", err)
 	}
 
-	if !forceDocument && content.MsgType == event.MsgImage && content.Info != nil && (content.Info.MimeType == "image/jpeg" || content.Info.MimeType == "image/png") {
+	if !forceDocument && content.MsgType == event.MsgImage && (info.MimeType == "image/jpeg" || info.MimeType == "image/png") {
 		return &tg.InputMediaUploadedPhoto{File: upload}, nil
 	}
 
 	var attributes []tg.DocumentAttributeClass
 	attributes = append(attributes, &tg.DocumentAttributeFilename{FileName: filename})
 
-	if content.Info != nil && content.Info.Width != 0 && content.Info.Height != 0 && content.MsgType == event.MsgImage {
-		attributes = append(attributes, &tg.DocumentAttributeImageSize{W: content.Info.Width, H: content.Info.Height})
+	if info.Width != 0 && info.Height != 0 && content.MsgType == event.MsgImage {
+		attributes = append(attributes, &tg.DocumentAttributeImageSize{W: info.Width, H: info.Height})
 	}
 
-	if content.Info != nil && content.Info.MauGIF {
+	if info.MauGIF {
 		attributes = append(attributes, &tg.DocumentAttributeAnimated{})
 	}
 
@@ -328,7 +330,7 @@ func (tc *TelegramClient) transferMediaToTelegram(ctx context.Context, content *
 	} else if content.MsgType == event.MsgAudio {
 		audioAttr := &tg.DocumentAttributeAudio{
 			Voice:    content.MSC3245Voice != nil,
-			Duration: content.Info.Duration / 1000,
+			Duration: info.Duration / 1000,
 		}
 		if content.MSC1767Audio != nil && len(content.MSC1767Audio.Waveform) > 0 {
 			audioAttr.Waveform = waveform.Encode(content.MSC1767Audio.Waveform)
@@ -336,19 +338,15 @@ func (tc *TelegramClient) transferMediaToTelegram(ctx context.Context, content *
 		attributes = append(attributes, audioAttr)
 	} else if content.MsgType == event.MsgVideo {
 		attributes = append(attributes, &tg.DocumentAttributeVideo{
-			Duration: float64(content.Info.Duration) / 1000,
-			W:        content.Info.Width,
-			H:        content.Info.Height,
+			Duration: float64(info.Duration) / 1000,
+			W:        info.Width,
+			H:        info.Height,
 		})
 	}
 
-	mimeType := "application/octet-stream"
-	if content.Info != nil && content.Info.MimeType != "" {
-		mimeType = content.Info.MimeType
-	}
 	return &tg.InputMediaUploadedDocument{
 		File:       upload,
-		MimeType:   mimeType,
+		MimeType:   cmp.Or(info.MimeType, "application/octet-stream"),
 		Attributes: attributes,
 	}, nil
 }
