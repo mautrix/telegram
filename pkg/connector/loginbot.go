@@ -63,7 +63,16 @@ func (bl *BotLogin) SubmitUserInput(ctx context.Context, input map[string]string
 	ctx = log.WithContext(ctx)
 
 	botToken := input[LoginStepIDBotToken]
-	err := logoutBotAPI(ctx, botToken)
+	dialFunc, err := GetProxyDialFunc(bl.main.Config.ProxyConfig)
+	if err != nil {
+		return nil, err
+	}
+	httpClient := &http.Client{
+		Transport: &http.Transport{
+			DialContext: dialFunc,
+		},
+	}
+	err = logoutBotAPI(ctx, botToken, httpClient)
 	if err != nil {
 		return nil, fmt.Errorf("failed to logout from bot API: %w", err)
 	}
@@ -86,12 +95,12 @@ type botAPIResponse struct {
 	Description string `json:"description"`
 }
 
-func logoutBotAPI(ctx context.Context, token string) error {
+func logoutBotAPI(ctx context.Context, token string, client *http.Client) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "https://api.telegram.org/bot"+token+"/logOut", nil)
 	if err != nil {
 		return fmt.Errorf("failed to prepare request: %w", err)
 	}
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := client.Do(req)
 	if err != nil {
 		return fmt.Errorf("failed to send request: %w", err)
 	}
