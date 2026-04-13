@@ -517,6 +517,7 @@ func (tc *TelegramClient) convertMediaRequiringUpload(
 		}
 		if video, ok := msgMedia.Video.(*tg.Document); ok {
 			content.MsgType = event.MsgVideo
+			content.Body = strings.Replace(content.Body, "image", "live_photo", 1)
 			telegramMediaID = video.GetID()
 			mediaTransferer = transferer.WithLivePhoto(photo, video)
 			extraInfo["fi.mau.telegram.live_photo"] = true
@@ -564,6 +565,7 @@ func (tc *TelegramClient) convertMediaRequiringUpload(
 		telegramMediaID = document.GetID()
 
 		content.MsgType = event.MsgFile
+		defaultFileName := "file_document"
 
 		for _, attr := range document.GetAttributes() {
 			switch a := attr.(type) {
@@ -574,6 +576,7 @@ func (tc *TelegramClient) convertMediaRequiringUpload(
 					content.FileName = a.GetFileName()
 				}
 			case *tg.DocumentAttributeVideo:
+				defaultFileName = "video_document"
 				isVideo = true
 				content.MsgType = event.MsgVideo
 				transferer = transferer.WithVideo(a)
@@ -596,13 +599,17 @@ func (tc *TelegramClient) convertMediaRequiringUpload(
 					}
 				}
 				if a.Voice {
+					defaultFileName = "Voice message"
 					content.MSC3245Voice = &event.MSC3245Voice{}
+				} else {
+					defaultFileName = "audio_document"
 				}
 			case *tg.DocumentAttributeImageSize:
 				transferer = transferer.WithImageSize(a)
 				if content.MsgType == event.MsgFile {
 					content.MsgType = event.MsgImage
 					extra["fi.mau.telegram.force_document"] = true
+					defaultFileName = "image_document"
 				}
 			case *tg.DocumentAttributeSticker:
 				isSticker = true
@@ -629,14 +636,15 @@ func (tc *TelegramClient) convertMediaRequiringUpload(
 			case *tg.DocumentAttributeAnimated:
 				isVideoGif = true
 				extraInfo["fi.mau.telegram.gif"] = true
+				defaultFileName = "gif"
 			}
 		}
 
-		if content.FileName == "" {
+		if content.FileName == "" && content.Body == "" {
 			if content.Body != "" {
 				content.FileName = content.Body
 			} else {
-				content.Body = "document"
+				content.Body = defaultFileName
 			}
 		}
 
