@@ -215,6 +215,21 @@ func (tc *TelegramClient) pollSponsoredMessage(ctx context.Context, portal *brid
 	if err != nil {
 		return fmt.Errorf("failed to send sponsored message: %w", err)
 	}
+	oldSponsoredMessageMXID := meta.SponsoredMessageEventID
+	if oldSponsoredMessageMXID != "" {
+		_, err = tc.main.Bridge.Bot.SendMessage(ctx, portal.MXID, event.EventRedaction, &event.Content{
+			Parsed: &event.RedactionEventContent{
+				Reason:  "new sponsored message sent",
+				Redacts: oldSponsoredMessageMXID,
+			},
+			Raw: map[string]any{
+				"com.beeper.dont_render_redacted_placeholder": true,
+			},
+		}, &bridgev2.MatrixSendExtra{Timestamp: time.Now()})
+		if err != nil {
+			zerolog.Ctx(ctx).Warn().Err(err).Msg("Failed to redact old sponsored message after sending new one")
+		}
+	}
 	meta.SponsoredMessageEventID = sendResp.EventID
 	zerolog.Ctx(ctx).Debug().
 		Stringer("event_id", sendResp.EventID).
