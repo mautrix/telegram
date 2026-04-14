@@ -2,7 +2,7 @@ module go.mau.fi/mautrix-telegram
 
 go 1.25.0
 
-toolchain go1.26.1
+toolchain go1.26.2
 
 tool (
 	go.mau.fi/util/cmd/maubuild
@@ -42,7 +42,7 @@ require (
 	golang.org/x/sync v0.20.0
 	golang.org/x/tools v0.43.0
 	gopkg.in/yaml.v3 v3.0.1
-	maunium.net/go/mautrix v0.26.5-0.20260410201350-d233e053b30f
+	maunium.net/go/mautrix v0.26.5-0.20260413182302-f3fab8d38470
 	rsc.io/qr v0.2.0
 )
 
