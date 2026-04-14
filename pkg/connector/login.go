@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/rs/zerolog"
+	"go.mau.fi/util/ptr"
 	"go.mau.fi/zerozap"
 	"go.uber.org/zap"
 	"maunium.net/go/mautrix/bridgev2"
@@ -121,19 +122,18 @@ func (bl *baseLogin) Cancel() {
 func (bl *baseLogin) makeClient(ctx context.Context, dispatcher *tg.UpdateDispatcher) error {
 	log := zerolog.Ctx(ctx)
 	zaplog := zap.New(zerozap.NewWithLevels(*log, zapLevelMap))
-	var updateManager *updates.Manager
-	if dispatcher != nil {
-		updateManager = updates.New(updates.Config{
-			Handler: dispatcher,
-			Logger:  zaplog.Named("login_update_manager"),
-		})
+	if dispatcher == nil {
+		dispatcher = ptr.Ptr(tg.NewUpdateDispatcher())
 	}
 	bl.client = telegram.NewClient(bl.main.Config.APIID, bl.main.Config.APIHash, telegram.Options{
 		CustomSessionStorage: &bl.session,
 		Logger:               zaplog,
 		Device:               bl.main.deviceConfig(),
-		UpdateHandler:        updateManager,
-		NoUpdates:            true,
+		UpdateHandler: updates.New(updates.Config{
+			Handler: dispatcher,
+			Logger:  zaplog.Named("login_update_manager"),
+		}),
+		NoUpdates: true,
 	})
 
 	bl.ctx, bl.cancel = context.WithTimeoutCause(log.WithContext(bl.main.Bridge.BackgroundCtx), LoginTimeout, ErrLoginTimeout)
