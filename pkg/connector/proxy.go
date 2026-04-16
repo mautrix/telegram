@@ -33,8 +33,6 @@ func GetProxyDialFunc(cfg ProxyConfig) (dcs.DialFunc, error) {
 		var auth *proxy.Auth
 		if cfg.Username != "" && cfg.Password != "" {
 			auth = &proxy.Auth{User: cfg.Username, Password: cfg.Password}
-		} else {
-			auth = nil
 		}
 		sock5, err := proxy.SOCKS5("tcp", cfg.Address, auth, proxy.Direct)
 		if err != nil {
