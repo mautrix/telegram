@@ -262,6 +262,9 @@ CREATE TABLE new_mx_room_state (
 INSERT INTO new_mx_room_state (room_id, encryption, power_levels, create_event, members_fetched)
 SELECT room_id, encryption, power_levels, create_event, COALESCE(has_full_member_list, false)
 FROM mx_room_state;
+
+DROP TABLE mx_room_state;
+ALTER TABLE new_mx_room_state RENAME TO mx_room_state;
 -- end only sqlite
 
 ALTER TABLE mx_user_profile ADD COLUMN name_skeleton bytea;
