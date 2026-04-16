@@ -125,7 +125,12 @@ func (bl *baseLogin) makeClient(ctx context.Context, dispatcher *tg.UpdateDispat
 	if dispatcher == nil {
 		dispatcher = ptr.Ptr(tg.NewUpdateDispatcher())
 	}
+	resolver, err := GetProxyResolver(bl.main.Config.ProxyConfig)
+	if err != nil {
+		return err
+	}
 	bl.client = telegram.NewClient(bl.main.Config.APIID, bl.main.Config.APIHash, telegram.Options{
+		Resolver:             resolver,
 		CustomSessionStorage: &bl.session,
 		Logger:               zaplog,
 		Device:               bl.main.deviceConfig(),

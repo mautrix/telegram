@@ -210,11 +210,15 @@ func NewTelegramClient(ctx context.Context, tc *TelegramConnector, login *bridge
 		Storage:      client.ScopedStore,
 		AccessHasher: client.ScopedStore,
 	})
-
+	resolver, err := GetProxyResolver(tc.Config.ProxyConfig)
+	if err != nil {
+		return nil, err
+	}
 	client.client = telegram.NewClient(tc.Config.APIID, tc.Config.APIHash, telegram.Options{
 		CustomSessionStorage: &login.Metadata.(*UserLoginMetadata).Session,
 		Logger:               zaplog,
 		UpdateHandler:        client.updatesManager,
+		Resolver:             resolver,
 		OnDead:               client.onDead,
 		OnSession:            client.onSession,
 		OnConnected:          client.onConnected,

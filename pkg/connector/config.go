@@ -55,6 +55,13 @@ type DeviceInfo struct {
 	LangCode       string `yaml:"lang_code"`
 }
 
+type ProxyConfig struct {
+	Type     string `yaml:"type"`
+	Address  string `yaml:"address"`
+	Username string `yaml:"username"`
+	Password string `yaml:"password"`
+}
+
 type TelegramConfig struct {
 	APIID   int    `yaml:"api_id"`
 	APIHash string `yaml:"api_hash"`
@@ -67,6 +74,8 @@ type TelegramConfig struct {
 		IntervalSeconds int `yaml:"interval_seconds"`
 		TimeoutSeconds  int `yaml:"timeout_seconds"`
 	} `yaml:"ping"`
+
+	ProxyConfig ProxyConfig `yaml:"proxy"`
 
 	Sync struct {
 		UpdateLimit int  `yaml:"update_limit"`
@@ -161,6 +170,10 @@ func upgradeConfig(helper up.Helper) {
 	helper.Copy(up.Bool, "member_list", "skip_deleted")
 	helper.Copy(up.Int, "ping", "interval_seconds")
 	helper.Copy(up.Int, "ping", "timeout_seconds")
+	helper.Copy(up.Str, "proxy", "type")
+	helper.Copy(up.Str|up.Null, "proxy", "address")
+	helper.Copy(up.Str|up.Null, "proxy", "username")
+	helper.Copy(up.Str|up.Null, "proxy", "password")
 	helper.Copy(up.Int, "sync", "update_limit")
 	helper.Copy(up.Int, "sync", "create_limit")
 	helper.Copy(up.Int, "sync", "login_sync_limit")
@@ -187,6 +200,7 @@ func (tc *TelegramConnector) GetConfig() (example string, data any, upgrader up.
 			{"animated_sticker"},
 			{"member_list"},
 			{"ping"},
+			{"proxy"},
 			{"sync"},
 			{"takeout"},
 			{"max_member_count"},

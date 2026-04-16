@@ -54,6 +54,16 @@ ping:
     # The timeout (in seconds) for a single ping.
     timeout_seconds: 10
 
+# Proxy settings
+proxy:
+    # Allowed types: disabled, socks5, mtproxy
+    type: disabled
+    # Proxy IP address/domain name and port.
+    address: "127.0.0.1:1080"
+    # Proxy authentication (optional). Put MTProxy secret in password field.
+    username:
+    password:
+
 sync:
     # Number of most recently active dialogs to check when syncing chats.
     # Set to -1 to remove limit.
