@@ -1,4 +1,4 @@
-# v26.04 (unreleased)
+# v26.04
 
 * Rewrote bridge in Go using bridgev2 architecture.
   * To migrate the bridge, simply upgrade in-place from v0.15.3 or later. The
