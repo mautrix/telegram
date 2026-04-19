@@ -923,6 +923,8 @@ func (tc *TelegramClient) onUpdate(ctx context.Context, e tg.Entities, upd tg.Up
 		return tc.onMessageEdit(ctx, update)
 	case *tg.UpdateMessageReactions:
 		return tc.onMessageReactions(ctx, update)
+	case *tg.UpdateBotMessageReaction:
+		return tc.onBotMessageReaction(ctx, update)
 	case *tg.UpdateUserTyping:
 		return tc.handleTyping(tc.makePortalKeyFromID(ids.PeerTypeUser, update.UserID, 0), tc.senderForUserID(update.UserID), update.Action)
 	case *tg.UpdateChatUserTyping:
@@ -962,6 +964,78 @@ func (tc *TelegramClient) onUpdate(ctx context.Context, e tg.Entities, upd tg.Up
 
 func (tc *TelegramClient) onMessageReactions(ctx context.Context, update *tg.UpdateMessageReactions) error {
 	return tc.handleTelegramReactions(ctx, update.Peer, update.TopMsgID, update.MsgID, update.Reactions, "updateMessageReactions")
+}
+
+func (tc *TelegramClient) onBotMessageReaction(ctx context.Context, update *tg.UpdateBotMessageReaction) error {
+	wrappedMessageID := ids.MakeMessageID(update.Peer, update.MsgID)
+	var portalKey networkid.PortalKey
+	var ok bool
+	if portalKey, ok = tc.recentMessageRooms.Get(wrappedMessageID); ok {
+		// key found in cache
+	} else if parts, err := tc.main.Bridge.DB.Message.GetAllPartsByID(ctx, tc.loginID, wrappedMessageID); err != nil {
+		return err
+	} else if len(parts) > 0 {
+		portalKey = parts[0].Room
+	} else {
+		// This won't work for topics, but hopefully the cases above will cover most messages
+		portalKey = tc.makePortalKeyFromPeer(update.Peer, 0)
+	}
+	var eventSender bridgev2.EventSender
+	switch update.Actor.(type) {
+	case *tg.PeerUser, *tg.PeerChannel:
+		eventSender = tc.getPeerSender(update.Actor)
+	default:
+		zerolog.Ctx(ctx).Warn().
+			Type("actor_type", update.Actor).
+			Msg("Unexpected actor type in bot message reaction")
+		return nil
+	}
+	var customEmojiIDs []int64
+	for _, reaction := range update.NewReactions {
+		if e, ok := reaction.(*tg.ReactionCustomEmoji); ok {
+			customEmojiIDs = append(customEmojiIDs, e.DocumentID)
+		}
+	}
+	customEmojis, err := tc.transferEmojisToMatrix(ctx, customEmojiIDs)
+	if err != nil {
+		return fmt.Errorf("failed to transfer custom emojis for bot message reaction: %w", err)
+	}
+	reactions := make([]*bridgev2.BackfillReaction, 0, len(update.NewReactions))
+	for _, reaction := range update.NewReactions {
+		emojiID, emoji, err := computeEmojiAndID(reaction, customEmojis)
+		if err != nil {
+			zerolog.Ctx(ctx).Err(err).Msg("Failed to compute emoji and ID for reaction")
+			continue
+		}
+		reactions = append(reactions, &bridgev2.BackfillReaction{
+			Timestamp: time.Unix(int64(update.Date), 0),
+			Sender:    eventSender,
+			EmojiID:   emojiID,
+			Emoji:     emoji,
+		})
+	}
+
+	return resultToError(tc.main.Bridge.QueueRemoteEvent(tc.userLogin, &simplevent.ReactionSync{
+		EventMeta: simplevent.EventMeta{
+			Type: bridgev2.RemoteEventReactionSync,
+			LogContext: func(c zerolog.Context) zerolog.Context {
+				return c.
+					Int("message_id", update.MsgID).
+					Any("peer_id", update.Peer).
+					Str("sync_source", "updateBotMessageReaction")
+			},
+			PortalKey: portalKey,
+		},
+		TargetMessage: wrappedMessageID,
+		Reactions: &bridgev2.ReactionSyncData{
+			Users: map[networkid.UserID]*bridgev2.ReactionSyncUser{
+				eventSender.Sender: {
+					Reactions:       reactions,
+					HasAllReactions: true,
+				},
+			},
+		},
+	}))
 }
 
 func (tc *TelegramClient) onMessageEdit(ctx context.Context, update IGetMessage) error {
