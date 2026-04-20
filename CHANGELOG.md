@@ -1,3 +1,10 @@
+# unreleased
+
+* Added support for bridging message reactions from Telegram when logged in as
+  a bot.
+* Fixed `mx_room_state` table not being migrated correctly from the Python
+  bridge in SQLite databases.
+
 # v26.04
 
 * Rewrote bridge in Go using bridgev2 architecture.
