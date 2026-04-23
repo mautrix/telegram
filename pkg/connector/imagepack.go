@@ -482,6 +482,13 @@ func (tc *TelegramClient) fnDownloadEmojiPack(ce *commands.Event) {
 			Attribution: fmt.Sprintf("Imported from https://t.me/%s/%s", linkType, set.Set.ShortName),
 		},
 	}
+	topLevelExtra := map[string]any{
+		"fi.mau.telegram.stickerpack": map[string]any{
+			"id":         strconv.FormatInt(set.Set.ID, 10),
+			"short_name": set.Set.ShortName,
+			"emoji_pack": set.Set.Emojis,
+		},
+	}
 	keywords := make(map[int64][]string)
 	emojis := make(map[int64][]string)
 	for _, kw := range set.Keywords {
@@ -524,13 +531,29 @@ func (tc *TelegramClient) fnDownloadEmojiPack(ce *commands.Event) {
 		if len(imageEmojis) > 0 {
 			body = imageEmojis[0]
 		}
+		if !set.Set.Emojis {
+			// Stickers need extra info in each sticker so they can be accurately bridged back to Telegram
+			// Custom emojis don't have space for such info and can be used with just the document ID
+			info.Extra = map[string]any{
+				"fi.mau.telegram.sticker": map[string]any{
+					"id": strconv.FormatInt(rawDoc.GetID(), 10),
+					"pack": map[string]any{
+						"short_name": set.Set.ShortName,
+						"id":         strconv.FormatInt(set.Set.ID, 10),
+					},
+				},
+			}
+		}
 		pack.Images[key] = &event.ImagePackImage{
 			URL:  mxc,
 			Body: body,
 			Info: info,
 		}
 	}
-	_, err = tc.main.Bridge.Bot.SendState(ce.Ctx, spaceRoom, event.StateUnstableImagePack, set.Set.ShortName, &event.Content{Parsed: pack}, time.Now())
+	_, err = tc.main.Bridge.Bot.SendState(ce.Ctx, spaceRoom, event.StateUnstableImagePack, set.Set.ShortName, &event.Content{
+		Parsed: pack,
+		Raw:    topLevelExtra,
+	}, time.Now())
 	if err != nil {
 		ce.Reply("Failed to send image pack to space: %v", err)
 	} else {

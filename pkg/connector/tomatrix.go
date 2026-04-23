@@ -606,7 +606,7 @@ func (tc *TelegramClient) convertMediaRequiringUpload(
 				}
 			case *tg.DocumentAttributeImageSize:
 				transferer = transferer.WithImageSize(a)
-				if content.MsgType == event.MsgFile {
+				if content.MsgType == event.MsgFile && !isSticker {
 					content.MsgType = event.MsgImage
 					extra["fi.mau.telegram.force_document"] = true
 					defaultFileName = "image_document"
@@ -623,8 +623,9 @@ func (tc *TelegramClient) convertMediaRequiringUpload(
 
 				if setID, ok := a.Stickerset.(*tg.InputStickerSetID); ok {
 					stickerInfo["pack"] = map[string]any{
-						"id":          strconv.FormatInt(setID.ID, 10),
-						"access_hash": strconv.FormatInt(setID.AccessHash, 10),
+						"id":                 strconv.FormatInt(setID.ID, 10),
+						"access_hash":        strconv.FormatInt(setID.AccessHash, 10),
+						"access_hash_source": strconv.FormatInt(tc.telegramUserID, 10),
 					}
 				} else if shortName, ok := a.Stickerset.(*tg.InputStickerSetShortName); ok {
 					stickerInfo["pack"] = map[string]any{

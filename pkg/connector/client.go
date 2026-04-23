@@ -117,6 +117,9 @@ type TelegramClient struct {
 
 	prevReactionPoll     map[networkid.PortalKey]time.Time
 	prevReactionPollLock sync.Mutex
+
+	stickerPackCache     map[string]map[int64]*tg.Document
+	stickerPackCacheLock sync.Mutex
 }
 
 var _ bridgev2.NetworkAPI = (*TelegramClient)(nil)
@@ -172,6 +175,7 @@ func NewTelegramClient(ctx context.Context, tc *TelegramConnector, login *bridge
 		takeoutAccepted: exsync.NewEvent(),
 
 		prevReactionPoll: map[networkid.PortalKey]time.Time{},
+		stickerPackCache: map[string]map[int64]*tg.Document{},
 
 		recentMessageRooms: exsync.NewRingBuffer[networkid.MessageID, networkid.PortalKey](32),
 
