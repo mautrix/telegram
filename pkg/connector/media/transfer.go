@@ -197,6 +197,11 @@ func (t *Transferer) WithVideo(attr *tg.DocumentAttributeVideo) *Transferer {
 	return t
 }
 
+func (t *Transferer) WithAudio(attr *tg.DocumentAttributeAudio) *Transferer {
+	t.fileInfo.Duration = attr.Duration * 1000
+	return t
+}
+
 func (t *Transferer) WithImageSize(attr *tg.DocumentAttributeImageSize) *Transferer {
 	t.fileInfo.Width, t.fileInfo.Height = attr.W, attr.H
 	t.adjustStickerSize()

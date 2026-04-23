@@ -584,11 +584,10 @@ func (tc *TelegramClient) convertMediaRequiringUpload(
 				if a.RoundMessage {
 					extraInfo["fi.mau.telegram.round_message"] = a.RoundMessage
 				}
-				extraInfo["duration"] = int(a.Duration * 1000)
 			case *tg.DocumentAttributeAudio:
 				if content.MsgType != event.MsgVideo {
 					content.MsgType = event.MsgAudio
-					extraInfo["duration"] = int(a.Duration * 1000) // only set the duration is not already set by the video handling logic
+					transferer = transferer.WithAudio(a) // only set the duration is not already set by the video handling logic
 				}
 				content.MSC1767Audio = &event.MSC1767Audio{
 					Duration: a.Duration * 1000,
@@ -661,14 +660,6 @@ func (tc *TelegramClient) convertMediaRequiringUpload(
 				eventType = event.EventSticker
 				content.MsgType = "" // Strip the msgtype since that doesn't apply for stickers
 			}
-		}
-
-		if isVideoGif {
-			extraInfo["fi.mau.gif"] = true
-			extraInfo["fi.mau.loop"] = true
-			extraInfo["fi.mau.autoplay"] = true
-			extraInfo["fi.mau.hide_controls"] = true
-			extraInfo["fi.mau.no_audio"] = true
 		}
 
 		if _, ok := document.GetThumbs(); ok && eventType != event.EventSticker {
@@ -752,6 +743,13 @@ func (tc *TelegramClient) convertMediaRequiringUpload(
 			content.FileName = content.FileName + exmime.ExtensionFromMimetype(content.Info.MimeType)
 		}
 	}
+	if isVideoGif {
+		content.Info.MauGIF = true
+		extraInfo["fi.mau.loop"] = true
+		extraInfo["fi.mau.autoplay"] = true
+		extraInfo["fi.mau.hide_controls"] = true
+		extraInfo["fi.mau.no_audio"] = true
+	}
 
 	// Handle spoilers
 	// See: https://github.com/matrix-org/matrix-spec-proposals/pull/3725
@@ -763,7 +761,7 @@ func (tc *TelegramClient) convertMediaRequiringUpload(
 		extraInfo["fi.mau.telegram.spoiler"] = true
 	}
 	if len(extraInfo) > 0 {
-		extra["info"] = extraInfo
+		content.Info.Extra = extraInfo
 	}
 
 	converted = &bridgev2.ConvertedMessagePart{
