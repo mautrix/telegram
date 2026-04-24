@@ -47,6 +47,7 @@ import (
 	"go.mau.fi/mautrix-telegram/pkg/connector/matrixfmt"
 	"go.mau.fi/mautrix-telegram/pkg/connector/store"
 	"go.mau.fi/mautrix-telegram/pkg/connector/telegramfmt"
+	"go.mau.fi/mautrix-telegram/pkg/gotd/pool"
 	"go.mau.fi/mautrix-telegram/pkg/gotd/telegram"
 	"go.mau.fi/mautrix-telegram/pkg/gotd/telegram/auth"
 	"go.mau.fi/mautrix-telegram/pkg/gotd/telegram/updates"
@@ -422,12 +423,12 @@ func (tc *TelegramClient) onPing() {
 	me, err := tc.client.Self(ctx)
 	if auth.IsUnauthorized(err) {
 		tc.onAuthError(err)
-	} else if errors.Is(err, syscall.EPIPE) {
-		// This is a pipe error, try disconnecting which will force the
-		// updatesManager to fail and cause the client to reconnect.
+	} else if errors.Is(err, syscall.EPIPE) || errors.Is(err, pool.ErrConnDead) {
+		// Connectivity error — connection died during the Self() call.
+		// Keep as transient; gotd's backoff will reconnect.
 		tc.userLogin.BridgeState.Send(status.BridgeState{
 			StateEvent: status.StateTransientDisconnect,
-			Error:      "pipe-error",
+			Error:      "connectivity-error",
 			Message:    humanise.Error(err),
 		})
 	} else if err != nil {
