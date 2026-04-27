@@ -144,6 +144,11 @@ func (t *Transferer) WithStickerConfig(cfg AnimatedStickerConfig) *Transferer {
 	return t
 }
 
+func (t *Transferer) WithStickerMetadata(meta *event.BridgedSticker) *Transferer {
+	t.fileInfo.BridgedSticker = meta
+	return t
+}
+
 func (t *Transferer) WithForceWebmStickerConvert(force bool) *Transferer {
 	if force {
 		t.animatedStickerConfig.ConvertFromWebm = true

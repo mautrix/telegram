@@ -119,7 +119,8 @@ type TelegramClient struct {
 	prevReactionPoll     map[networkid.PortalKey]time.Time
 	prevReactionPollLock sync.Mutex
 
-	stickerPackCache     map[string]map[int64]*tg.Document
+	stickerPacksByName   map[string]*stickerPackCache
+	stickerPacksByID     map[int64]*stickerPackCache
 	stickerPackCacheLock sync.Mutex
 }
 
@@ -175,8 +176,9 @@ func NewTelegramClient(ctx context.Context, tc *TelegramConnector, login *bridge
 
 		takeoutAccepted: exsync.NewEvent(),
 
-		prevReactionPoll: map[networkid.PortalKey]time.Time{},
-		stickerPackCache: map[string]map[int64]*tg.Document{},
+		prevReactionPoll:   map[networkid.PortalKey]time.Time{},
+		stickerPacksByName: map[string]*stickerPackCache{},
+		stickerPacksByID:   map[int64]*stickerPackCache{},
 
 		recentMessageRooms: exsync.NewRingBuffer[networkid.MessageID, networkid.PortalKey](32),
 

@@ -618,21 +618,9 @@ func (tc *TelegramClient) convertMediaRequiringUpload(
 					content.FileName = content.Body
 					content.Body = a.Alt
 				}
-				stickerInfo := map[string]any{"alt": a.Alt, "id": strconv.FormatInt(document.ID, 10)}
-
-				if setID, ok := a.Stickerset.(*tg.InputStickerSetID); ok {
-					stickerInfo["pack"] = map[string]any{
-						"id":                 strconv.FormatInt(setID.ID, 10),
-						"access_hash":        strconv.FormatInt(setID.AccessHash, 10),
-						"access_hash_source": strconv.FormatInt(tc.telegramUserID, 10),
-					}
-				} else if shortName, ok := a.Stickerset.(*tg.InputStickerSetShortName); ok {
-					stickerInfo["pack"] = map[string]any{
-						"short_name": shortName.ShortName,
-					}
-				}
-				extraInfo["fi.mau.telegram.sticker"] = stickerInfo
-				transferer = transferer.WithStickerConfig(tc.main.Config.AnimatedSticker)
+				transferer = transferer.
+					WithStickerConfig(tc.main.Config.AnimatedSticker).
+					WithStickerMetadata(tc.stickerSourceFromAttribute(ctx, document.ID, a))
 			case *tg.DocumentAttributeAnimated:
 				isVideoGif = true
 				extraInfo["fi.mau.telegram.gif"] = true

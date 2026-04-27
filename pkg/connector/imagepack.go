@@ -31,6 +31,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rs/zerolog"
 	"go.mau.fi/util/exmaps"
 	"go.mau.fi/util/ffmpeg"
 	"go.mau.fi/util/variationselector"
@@ -473,13 +474,18 @@ func (tc *TelegramClient) fnDownloadEmojiPack(ce *commands.Event) {
 		linkType = "addemoji"
 		usage = event.ImagePackUsageEmoji
 	}
+	packURL := fmt.Sprintf("https://t.me/%s/%s", linkType, set.Set.ShortName)
 	pack := &event.ImagePackEventContent{
 		Images: make(map[string]*event.ImagePackImage, len(set.Documents)),
 		Metadata: event.ImagePackMetadata{
 			DisplayName: set.Set.Title,
 			AvatarURL:   "",
 			Usage:       []event.ImagePackUsage{usage},
-			Attribution: fmt.Sprintf("Imported from https://t.me/%s/%s", linkType, set.Set.ShortName),
+			Attribution: fmt.Sprintf("Imported from %s", packURL),
+			BridgedPack: &event.BridgedStickerPack{
+				Network: StickerSourceID,
+				URL:     packURL,
+			},
 		},
 	}
 	topLevelExtra := map[string]any{
@@ -534,14 +540,10 @@ func (tc *TelegramClient) fnDownloadEmojiPack(ce *commands.Event) {
 		if !set.Set.Emojis {
 			// Stickers need extra info in each sticker so they can be accurately bridged back to Telegram
 			// Custom emojis don't have space for such info and can be used with just the document ID
-			info.Extra = map[string]any{
-				"fi.mau.telegram.sticker": map[string]any{
-					"id": strconv.FormatInt(rawDoc.GetID(), 10),
-					"pack": map[string]any{
-						"short_name": set.Set.ShortName,
-						"id":         strconv.FormatInt(set.Set.ID, 10),
-					},
-				},
+			info.BridgedSticker = &event.BridgedSticker{
+				Network: StickerSourceID,
+				ID:      strconv.FormatInt(rawDoc.GetID(), 10),
+				PackURL: StickerPackURLPrefix + set.Set.ShortName,
 			}
 		}
 		pack.Images[key] = &event.ImagePackImage{
@@ -562,4 +564,105 @@ func (tc *TelegramClient) fnDownloadEmojiPack(ce *commands.Event) {
 			format.MarkdownLink("your personal filtering space",
 				spaceRoom.URI(tc.main.Bridge.Matrix.ServerName()).MatrixToURL()))
 	}
+}
+
+const StickerSourceID = "telegram"
+const StickerPackURLPrefix = "https://t.me/addstickers/"
+
+func (tc *TelegramClient) stickerSourceFromAttribute(ctx context.Context, documentID int64, attr *tg.DocumentAttributeSticker) *event.BridgedSticker {
+	var shortName string
+	switch set := attr.Stickerset.(type) {
+	case *tg.InputStickerSetID:
+		pack, err := tc.GetCachedStickerPack(ctx, "", set, false)
+		if err != nil {
+			zerolog.Ctx(ctx).Debug().Err(err).
+				Int64("pack_id", set.ID).
+				Msg("Failed to get sticker pack by ID to fill info")
+			return nil
+		}
+		shortName = pack.meta.ShortName
+	case *tg.InputStickerSetShortName:
+		shortName = set.ShortName
+	default:
+		return nil
+	}
+	return &event.BridgedSticker{
+		Network: StickerSourceID,
+		ID:      strconv.FormatInt(documentID, 10),
+		Emoji:   attr.Alt,
+		PackURL: StickerPackURLPrefix + shortName,
+	}
+}
+
+type stickerPackCache struct {
+	docs map[int64]*tg.Document
+	meta tg.StickerSet
+}
+
+func (tc *TelegramClient) GetCachedStickerPack(ctx context.Context, shortName string, id *tg.InputStickerSetID, forceClearCache bool) (*stickerPackCache, error) {
+	tc.stickerPackCacheLock.Lock()
+	defer tc.stickerPackCacheLock.Unlock()
+	cacheName := strings.ToLower(shortName)
+	cache, ok := tc.stickerPacksByName[cacheName]
+	if !ok {
+		cache, ok = tc.stickerPacksByID[id.GetID()]
+	}
+	if !ok || forceClearCache {
+		var inputSet tg.InputStickerSetClass = id
+		if id == nil {
+			inputSet = &tg.InputStickerSetShortName{ShortName: shortName}
+		}
+		resp, err := tc.client.API().MessagesGetStickerSet(ctx, &tg.MessagesGetStickerSetRequest{Stickerset: inputSet})
+		if err != nil {
+			if tgerr.Is(err, tg.ErrStickersetInvalid) {
+				if cacheName != "" {
+					tc.stickerPacksByName[cacheName] = nil
+				}
+				if id != nil {
+					tc.stickerPacksByID[id.GetID()] = nil
+				}
+			}
+			return nil, fmt.Errorf("failed to get sticker set: %w", err)
+		}
+		set, ok := resp.AsModified()
+		if !ok {
+			if cacheName != "" {
+				tc.stickerPacksByName[cacheName] = nil
+			}
+			if id != nil {
+				tc.stickerPacksByID[id.GetID()] = nil
+			}
+			return nil, fmt.Errorf("unexpected response type for MessagesGetStickerSet: %T", resp)
+		}
+		cache = &stickerPackCache{
+			docs: set.MapDocuments().DocumentToMap(),
+			meta: set.Set,
+		}
+		tc.stickerPacksByName[strings.ToLower(set.Set.ShortName)] = cache
+		tc.stickerPacksByID[set.Set.ID] = cache
+	}
+	return cache, nil
+}
+
+func (tc *TelegramClient) findOriginalStickerDocument(ctx context.Context, meta *event.BridgedSticker, forceClearCache bool) (tg.InputMediaClass, error) {
+	if meta == nil || !strings.HasPrefix(meta.PackURL, StickerPackURLPrefix) {
+		return nil, nil
+	}
+	shortName := strings.TrimPrefix(meta.PackURL, StickerPackURLPrefix)
+	if shortName == "" {
+		return nil, nil
+	}
+	idNum, err := strconv.ParseInt(meta.ID, 10, 64)
+	if err != nil {
+		return nil, nil
+	}
+	cache, err := tc.GetCachedStickerPack(ctx, shortName, nil, forceClearCache)
+	if err != nil {
+		return nil, err
+	}
+	stickerDoc, ok := cache.docs[idNum]
+	if !ok {
+		return nil, nil
+	}
+	return &tg.InputMediaDocument{ID: stickerDoc.AsInput()}, nil
 }

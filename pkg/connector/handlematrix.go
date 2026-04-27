@@ -243,85 +243,12 @@ func (tc *TelegramClient) pollSponsoredMessage(ctx context.Context, portal *brid
 	return nil
 }
 
-func (tc *TelegramClient) parseInputPack(meta map[string]any) (shortName string, id, accessHash int64) {
-	shortName, _ = meta["short_name"].(string)
-	idStr, _ := meta["id"].(string)
-	if idStr != "" {
-		id, _ = strconv.ParseInt(idStr, 10, 64)
-	}
-	accessHashStr, _ := meta["access_hash"].(string)
-	accessHashSourceStr, _ := meta["access_hash_source"].(string)
-	if id != 0 && accessHashStr != "" && accessHashSourceStr != "" {
-		accessHashSource, _ := strconv.ParseInt(accessHashSourceStr, 10, 64)
-		if accessHashSource == tc.telegramUserID {
-			accessHash, _ = strconv.ParseInt(accessHashStr, 10, 64)
-		}
-	}
-	return
-}
-
-func (tc *TelegramClient) findOriginalStickerDocument(ctx context.Context, info map[string]any, forceClearCache bool) (tg.InputMediaClass, error) {
-	stickerIDStr, ok := info["id"].(string)
-	if !ok {
-		return nil, nil
-	}
-	stickerID, err := strconv.ParseInt(stickerIDStr, 10, 64)
-	if err != nil {
-		return nil, nil
-	}
-	pack, ok := info["pack"].(map[string]any)
-	if !ok {
-		return nil, nil
-	}
-	var inputPack tg.InputStickerSetClass
-	var cacheKey string
-	packName, packID, packAccessHash := tc.parseInputPack(pack)
-	if packAccessHash != 0 {
-		inputPack = &tg.InputStickerSetID{ID: packID, AccessHash: packAccessHash}
-		cacheKey = fmt.Sprintf("pack_id:%d", packID)
-	} else if packName != "" {
-		inputPack = &tg.InputStickerSetShortName{ShortName: packName}
-		cacheKey = fmt.Sprintf("pack_name:%s", packName)
-	} else {
-		return nil, nil
-	}
-	tc.stickerPackCacheLock.Lock()
-	defer tc.stickerPackCacheLock.Unlock()
-	docMap, ok := tc.stickerPackCache[cacheKey]
-	if !ok || forceClearCache {
-		resp, err := tc.client.API().MessagesGetStickerSet(ctx, &tg.MessagesGetStickerSetRequest{Stickerset: inputPack})
-		if err != nil {
-			if tgerr.Is(err, tg.ErrStickersetInvalid) {
-				tc.stickerPackCache[cacheKey] = nil
-			}
-			return nil, fmt.Errorf("failed to get sticker set: %w", err)
-		}
-		set, ok := resp.AsModified()
-		if !ok {
-			tc.stickerPackCache[cacheKey] = nil
-			return nil, fmt.Errorf("unexpected response type for MessagesGetStickerSet: %T", resp)
-		}
-		docMap = set.MapDocuments().DocumentToMap()
-		tc.stickerPackCache[cacheKey] = docMap
-		tc.stickerPackCache[fmt.Sprintf("pack_id:%d", set.Set.ID)] = docMap
-		tc.stickerPackCache[fmt.Sprintf("pack_name:%s", set.Set.ShortName)] = docMap
-	}
-	stickerDoc, ok := docMap[stickerID]
-	if !ok {
-		return nil, nil
-	}
-	return &tg.InputMediaDocument{ID: stickerDoc.AsInput()}, nil
-}
-
 func (tc *TelegramClient) transferMediaToTelegram(ctx context.Context, content *event.MessageEventContent, sticker, forceRetry, forceDocument bool) (tg.InputMediaClass, error) {
 	var upload tg.InputFileClass
 	filename := getMediaFilename(content)
 	info := content.GetInfo()
 	if sticker {
-		extra, ok := info.Extra["fi.mau.telegram.sticker"].(map[string]any)
-		if !ok {
-			// Not from telegram, continue to reupload
-		} else if origFile, err := tc.findOriginalStickerDocument(ctx, extra, forceRetry); err != nil {
+		if origFile, err := tc.findOriginalStickerDocument(ctx, info.BridgedSticker, forceRetry); err != nil {
 			zerolog.Ctx(ctx).Err(err).Msg("Failed to find original sticker document, falling back to reupload")
 		} else if origFile != nil {
 			return origFile, nil
