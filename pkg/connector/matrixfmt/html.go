@@ -108,6 +108,10 @@ func (es *EntityString) TrimSpace() *EntityString {
 		}
 		break
 	}
+	if cutStart == len(es.String) {
+		DebugLog("  -> ALLSPACE\n")
+		return &EntityString{}
+	}
 	for cutEnd = len(es.String) - 1; cutEnd >= 0; cutEnd-- {
 		switch es.String[cutEnd] {
 		case '\t', '\n', '\v', '\f', '\r', ' ', 0x85, 0xA0:
