@@ -257,6 +257,12 @@ func (tc *TelegramClient) convertToMatrix(
 			log.Warn().Type("reply_to", replyTo).Msg("unhandled reply to type")
 		}
 	}
+	if cm.Parts[0].Extra == nil {
+		cm.Parts[0].Extra = make(map[string]any)
+	}
+	if externalURL := getMessageLink(msg); externalURL != "" {
+		cm.Parts[0].Extra["external_url"] = externalURL
+	}
 	if len(cm.Parts) > 1 {
 		log.Warn().Int("part_count", len(cm.Parts)).Msg("Message has multiple parts")
 		for i, part := range cm.Parts[1:] {
@@ -272,6 +278,23 @@ func (tc *TelegramClient) convertToMatrix(
 	}
 
 	return
+}
+
+func getMessageLink(msg *tg.Message) string {
+	var chatID int64
+	switch peer := msg.PeerID.(type) {
+	case *tg.PeerChat:
+		chatID = peer.ChatID
+	case *tg.PeerChannel:
+		chatID = peer.ChannelID
+	default: // also PeerUser
+		return ""
+	}
+	topicID := rawGetTopicID(msg.ReplyTo)
+	if topicID > 0 {
+		return fmt.Sprintf("https://t.me/c/%d/%d/%d", chatID, topicID, msg.ID)
+	}
+	return fmt.Sprintf("https://t.me/c/%d/%d", chatID, msg.ID)
 }
 
 func (tc *TelegramClient) addForwardHeader(ctx context.Context, part *bridgev2.ConvertedMessagePart, fwd tg.MessageFwdHeader) error {
