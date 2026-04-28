@@ -40,7 +40,6 @@ import (
 	"maunium.net/go/mautrix/bridgev2/networkid"
 	"maunium.net/go/mautrix/bridgev2/simplevent"
 	"maunium.net/go/mautrix/bridgev2/status"
-	"maunium.net/go/mautrix/id"
 
 	"go.mau.fi/mautrix-telegram/pkg/connector/humanise"
 	"go.mau.fi/mautrix-telegram/pkg/connector/ids"
@@ -348,29 +347,9 @@ func NewTelegramClient(ctx context.Context, tc *TelegramConnector, login *bridge
 		},
 	}
 	client.matrixParser = &matrixfmt.HTMLParser{
-		Store: tc.Store,
-		GetGhostDetails: func(ctx context.Context, portal *bridgev2.Portal, ui id.UserID) (networkid.UserID, string, int64, bool) {
-			userID, ok := tc.Bridge.Matrix.ParseGhostMXID(ui)
-			if !ok {
-				user, err := tc.Bridge.GetExistingUserByMXID(ctx, ui)
-				if err != nil || user == nil {
-					return "", "", 0, false
-				} else if login, _, _ := portal.FindPreferredLogin(ctx, user, false); login != nil {
-					userID = ids.UserLoginIDToUserID(login.ID)
-				} else {
-					return "", "", 0, false
-				}
-			}
-			if peerType, telegramUserID, err := ids.ParseUserID(userID); err != nil {
-				return "", "", 0, false
-			} else if accessHash, err := client.ScopedStore.GetAccessHash(ctx, peerType, telegramUserID); err != nil || accessHash == 0 {
-				return "", "", 0, false
-			} else if username, err := client.main.Store.Username.Get(ctx, peerType, telegramUserID); err != nil {
-				return "", "", 0, false
-			} else {
-				return userID, username, accessHash, true
-			}
-		},
+		Store:       tc.Store,
+		Bridge:      tc.Bridge,
+		ScopedStore: client.ScopedStore,
 	}
 
 	return &client, err

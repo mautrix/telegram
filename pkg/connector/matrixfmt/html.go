@@ -24,6 +24,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/rs/zerolog"
 	"golang.org/x/net/html"
 	"maunium.net/go/mautrix/bridgev2"
 	"maunium.net/go/mautrix/bridgev2/networkid"
@@ -31,6 +32,7 @@ import (
 	"maunium.net/go/mautrix/id"
 
 	"go.mau.fi/mautrix-telegram/pkg/connector/emojis"
+	"go.mau.fi/mautrix-telegram/pkg/connector/ids"
 	"go.mau.fi/mautrix-telegram/pkg/connector/store"
 	"go.mau.fi/mautrix-telegram/pkg/connector/telegramfmt"
 )
@@ -258,8 +260,9 @@ func (ctx Context) WithIncrementedListDepth() Context {
 
 // HTMLParser is a somewhat customizable Matrix HTML parser.
 type HTMLParser struct {
-	GetGhostDetails func(context.Context, *bridgev2.Portal, id.UserID) (networkid.UserID, string, int64, bool)
-	Store           *store.Container
+	Bridge      *bridgev2.Bridge
+	Store       *store.Container
+	ScopedStore *store.ScopedStore
 }
 
 // TaggedString is a string that also contains a HTML tag.
@@ -373,13 +376,38 @@ func (parser *HTMLParser) headerToString(node *html.Node, ctx Context) *EntitySt
 	return NewEntityString(prefix).Append(parser.nodeToString(node.FirstChild, ctx)).Format(telegramfmt.Style{Type: telegramfmt.StyleBold})
 }
 
+func (parser *HTMLParser) getGhostDetails(ctx context.Context, portal *bridgev2.Portal, ui id.UserID) (networkid.UserID, string, int64, bool) {
+	userID, ok := parser.Bridge.Matrix.ParseGhostMXID(ui)
+	if !ok {
+		user, err := parser.Bridge.GetExistingUserByMXID(ctx, ui)
+		if err != nil || user == nil {
+			return "", "", 0, false
+		} else if login, _, _ := portal.FindPreferredLogin(ctx, user, false); login != nil {
+			userID = ids.UserLoginIDToUserID(login.ID)
+		} else {
+			return "", "", 0, false
+		}
+	}
+	if peerType, telegramUserID, err := ids.ParseUserID(userID); err != nil {
+		return "", "", 0, false
+	} else if accessHash, err := parser.ScopedStore.GetAccessHash(ctx, peerType, telegramUserID); err != nil || accessHash == 0 {
+		return "", "", 0, false
+	} else if username, err := parser.Store.Username.Get(ctx, peerType, telegramUserID); err != nil {
+		return "", "", 0, false
+	} else {
+		return userID, username, accessHash, true
+	}
+}
+
 func (parser *HTMLParser) linkToString(node *html.Node, ctx Context) *EntityString {
 	str := parser.nodeToTagAwareString(node.FirstChild, ctx)
 	href := parser.getAttribute(node, "href")
 	if len(href) == 0 {
 		return str
 	}
-	ent := NewEntityString(str.String.String())
+	linkText := str.String.String()
+	linkTextEnt := NewEntityString(linkText)
+	isRawLink := linkText == href
 
 	parsedMatrix, err := id.ParseMatrixURIOrMatrixToURL(href)
 	if err == nil && parsedMatrix != nil && parsedMatrix.Sigil1 == '@' {
@@ -388,19 +416,37 @@ func (parser *HTMLParser) linkToString(node *html.Node, ctx Context) *EntityStri
 			// Mention not allowed, use name as-is
 			return str
 		}
-		userID, username, accessHash, ok := parser.GetGhostDetails(ctx.Ctx, ctx.Portal, mxid)
+		userID, username, accessHash, ok := parser.getGhostDetails(ctx.Ctx, ctx.Portal, mxid)
 		if !ok {
 			return str
 		} else if username == "" {
-			return ent.Format(telegramfmt.Mention{UserID: userID, AccessHash: accessHash})
+			return linkTextEnt.Format(telegramfmt.Mention{UserID: userID, AccessHash: accessHash})
 		} else {
 			return NewEntityString("@" + username).Format(telegramfmt.Mention{UserID: userID, Username: username})
 		}
 	}
-	if str.String.String() == href {
-		return ent.Format(telegramfmt.Style{Type: telegramfmt.StyleURL, URL: href})
+	if parsedMatrix != nil && parsedMatrix.Sigil1 == '!' && parsedMatrix.Sigil2 == '$' {
+		msg, err := parser.Bridge.DB.Message.GetPartByMXID(ctx.Ctx, parsedMatrix.EventID())
+		if err != nil {
+			zerolog.Ctx(ctx.Ctx).Err(err).Msg("Failed to get message for event ID in link")
+		} else if msg != nil {
+			_, chatID, topicID, _ := ids.ParsePortalID(msg.Room.ID)
+			_, msgID, _ := ids.ParseMessageID(msg.ID)
+			if msgID != 0 && chatID != 0 {
+				href = fmt.Sprintf("https://t.me/c/%d/%d", chatID, msgID)
+				if topicID > 0 {
+					href = fmt.Sprintf("https://t.me/c/%d/%d/%d", chatID, topicID, msgID)
+				}
+				if isRawLink {
+					linkTextEnt = NewEntityString(href)
+				}
+			}
+		}
+	}
+	if isRawLink {
+		return linkTextEnt.Format(telegramfmt.Style{Type: telegramfmt.StyleURL, URL: href})
 	} else {
-		return ent.Format(telegramfmt.Style{Type: telegramfmt.StyleTextURL, URL: href})
+		return linkTextEnt.Format(telegramfmt.Style{Type: telegramfmt.StyleTextURL, URL: href})
 	}
 }
 
