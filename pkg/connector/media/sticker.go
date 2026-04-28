@@ -110,6 +110,30 @@ func (c *AnimatedStickerConfig) convertWebm(ctx context.Context, src *os.File) *
 	}
 }
 
+func CompressGZip(src *os.File) (replPath string, err error) {
+	tempFile, err := os.CreateTemp("", "telegram-sticker-gzip-*.tgs")
+	if err != nil {
+		return "", fmt.Errorf("failed to create temp file: %w", err)
+	}
+	writer := gzip.NewWriter(tempFile)
+	defer func() {
+		_ = tempFile.Close()
+		_ = writer.Close()
+		if replPath == "" {
+			_ = os.Remove(tempFile.Name())
+		}
+	}()
+	_, err = io.Copy(writer, src)
+	if err != nil {
+		return "", fmt.Errorf("failed to compress lottie gzip: %w", err)
+	}
+	err = writer.Close()
+	if err != nil {
+		return "", fmt.Errorf("failed to close gzip writer: %w", err)
+	}
+	return tempFile.Name(), nil
+}
+
 func extractGZip(src *os.File) (*ConvertedSticker, error) {
 	reader, err := gzip.NewReader(src)
 	if err != nil {

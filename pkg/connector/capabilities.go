@@ -145,9 +145,9 @@ var fileCaps = event.FileFeatureMap{
 			// These are converted to webp
 			"image/jpeg": event.CapLevelPartialSupport,
 			"image/png":  event.CapLevelPartialSupport,
-			// TODO
-			//"video/lottie+json": event.CapLevelFullySupported,
-			//"video/webm": event.CapLevelFullySupported,
+			// These will only go through if they're from an imported Telegram pack
+			"video/lottie+json": event.CapLevelPartialSupport,
+			"video/webm":        event.CapLevelPartialSupport,
 		},
 	},
 	event.CapMsgVoice: {
