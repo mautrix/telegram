@@ -222,7 +222,7 @@ var cmdEmojiPack = &commands.FullHandler{
 	Name:    "emoji-pack",
 	Aliases: []string{"pack", "sticker-pack", "emojipack", "stickerpack"},
 	Help: commands.HelpMeta{
-		Section:     commands.HelpSectionChats,
+		Section:     commands.HelpSectionMisc,
 		Description: "Bridge emoji packs between Matrix and Telegram.",
 		Args:        "<upload/download/list/help> [args...]",
 	},

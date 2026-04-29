@@ -450,24 +450,46 @@ func (tc *TelegramClient) fnDownloadEmojiPack(ce *commands.Event) {
 		ce.Reply("Can't bridge image packs if personal filtering spaces are disabled")
 		return
 	}
-	var shortName string
-	if match := addStickersRegex.FindStringSubmatch(ce.Args[0]); match != nil {
-		shortName = match[1]
-	} else if packShortcodeRegex.MatchString(ce.Args[0]) {
-		shortName = ce.Args[0]
-	} else {
-		ce.Reply("Invalid pack shortcode or link")
+	evtID := ce.React("\u23f3\ufe0f")
+	defer redactReaction(ce, evtID)
+	pack, err := tc.DownloadImagePack(ce.Ctx, ce.Args[0])
+	if err != nil {
+		ce.Reply("Failed to import pack: %v", err)
 		return
 	}
-	rawSet, err := tc.client.API().MessagesGetStickerSet(ce.Ctx, &tg.MessagesGetStickerSetRequest{Stickerset: &tg.InputStickerSetShortName{ShortName: shortName}})
+	if pack.Shortcode == "" && pack.Content.Metadata.BridgedPack != nil {
+		pack.Shortcode = pack.Content.Metadata.BridgedPack.URL
+	}
+	_, err = tc.main.Bridge.Bot.SendState(ce.Ctx, spaceRoom, event.StateUnstableImagePack, pack.Shortcode, &event.Content{
+		Parsed: pack.Content,
+		Raw:    pack.Extra,
+	}, time.Now())
 	if err != nil {
-		ce.Reply("Failed to get sticker set: %v", err)
-		return
+		ce.Reply("Failed to send image pack to space: %v", err)
+	} else {
+		ce.Reply(
+			"Successfully bridged image pack to %s",
+			format.MarkdownLink("your personal filtering space",
+				spaceRoom.URI(tc.main.Bridge.Matrix.ServerName()).MatrixToURL()))
+	}
+}
+
+func (tc *TelegramClient) DownloadImagePack(ctx context.Context, url string) (*bridgev2.ImportedImagePack, error) {
+	var shortName string
+	if match := addStickersRegex.FindStringSubmatch(url); match != nil {
+		shortName = match[1]
+	} else if packShortcodeRegex.MatchString(url) {
+		shortName = url
+	} else {
+		return nil, fmt.Errorf("invalid pack shortcode or link: %s", url)
+	}
+	rawSet, err := tc.client.API().MessagesGetStickerSet(ctx, &tg.MessagesGetStickerSetRequest{Stickerset: &tg.InputStickerSetShortName{ShortName: shortName}})
+	if err != nil {
+		return nil, err
 	}
 	set, ok := rawSet.(*tg.MessagesStickerSet)
 	if !ok {
-		ce.Reply("Unexpected response type: %T", rawSet)
-		return
+		return nil, fmt.Errorf("unexpected response type: %T", rawSet)
 	}
 	tc.addStickerPackToCache(set, true)
 	linkType := "addstickers"
@@ -508,19 +530,16 @@ func (tc *TelegramClient) fnDownloadEmojiPack(ce *commands.Event) {
 			emojiLists[doc] = append(emojiLists[doc], emoji)
 		}
 	}
-	evtID := ce.React("\u23f3\ufe0f")
-	defer redactReaction(ce, evtID)
 	for i, rawDoc := range set.Documents {
 		// TODO use direct media
 		mxc, _, info, err := media.NewTransferer(tc.client.API()).
 			WithStickerConfig(tc.main.Config.AnimatedSticker).
 			WithForceWebmStickerConvert(set.Set.Emojis).
 			WithDocument(rawDoc, false).
-			Transfer(ce.Ctx, tc.main.Store, tc.main.Bridge.Bot)
+			Transfer(ctx, tc.main.Store, tc.main.Bridge.Bot)
 		if err != nil {
-			ce.Log.Err(err).Msg("Failed to transfer image in pack")
-			ce.Reply("Failed to transfer document `%d`: %v", rawDoc.GetID(), err)
-			return
+			zerolog.Ctx(ctx).Err(err).Msg("Failed to transfer image in pack")
+			return nil, fmt.Errorf("failed to transfer document %d: %w", rawDoc.GetID(), err)
 		}
 		kws := keywords[rawDoc.GetID()]
 		imageEmojis := emojiLists[rawDoc.GetID()]
@@ -585,18 +604,11 @@ func (tc *TelegramClient) fnDownloadEmojiPack(ce *commands.Event) {
 			Info: info,
 		}
 	}
-	_, err = tc.main.Bridge.Bot.SendState(ce.Ctx, spaceRoom, event.StateUnstableImagePack, set.Set.ShortName, &event.Content{
-		Parsed: pack,
-		Raw:    topLevelExtra,
-	}, time.Now())
-	if err != nil {
-		ce.Reply("Failed to send image pack to space: %v", err)
-	} else {
-		ce.Reply(
-			"Successfully bridged image pack to %s",
-			format.MarkdownLink("your personal filtering space",
-				spaceRoom.URI(tc.main.Bridge.Matrix.ServerName()).MatrixToURL()))
-	}
+	return &bridgev2.ImportedImagePack{
+		Content:   pack,
+		Extra:     topLevelExtra,
+		Shortcode: set.Set.ShortName,
+	}, nil
 }
 
 const StickerSourceID = "telegram"
