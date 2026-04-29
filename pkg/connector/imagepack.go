@@ -450,16 +450,16 @@ func (tc *TelegramClient) fnDownloadEmojiPack(ce *commands.Event) {
 		ce.Reply("Can't bridge image packs if personal filtering spaces are disabled")
 		return
 	}
-	var input tg.InputStickerSetClass
+	var shortName string
 	if match := addStickersRegex.FindStringSubmatch(ce.Args[0]); match != nil {
-		input = &tg.InputStickerSetShortName{ShortName: match[1]}
+		shortName = match[1]
 	} else if packShortcodeRegex.MatchString(ce.Args[0]) {
-		input = &tg.InputStickerSetShortName{ShortName: ce.Args[0]}
+		shortName = ce.Args[0]
 	} else {
 		ce.Reply("Invalid pack shortcode or link")
 		return
 	}
-	rawSet, err := tc.client.API().MessagesGetStickerSet(ce.Ctx, &tg.MessagesGetStickerSetRequest{Stickerset: input})
+	rawSet, err := tc.client.API().MessagesGetStickerSet(ce.Ctx, &tg.MessagesGetStickerSetRequest{Stickerset: &tg.InputStickerSetShortName{ShortName: shortName}})
 	if err != nil {
 		ce.Reply("Failed to get sticker set: %v", err)
 		return
@@ -469,6 +469,7 @@ func (tc *TelegramClient) fnDownloadEmojiPack(ce *commands.Event) {
 		ce.Reply("Unexpected response type: %T", rawSet)
 		return
 	}
+	tc.addStickerPackToCache(set, true)
 	linkType := "addstickers"
 	usage := event.ImagePackUsageSticker
 	if set.Set.Emojis {
@@ -510,6 +511,7 @@ func (tc *TelegramClient) fnDownloadEmojiPack(ce *commands.Event) {
 	evtID := ce.React("\u23f3\ufe0f")
 	defer redactReaction(ce, evtID)
 	for i, rawDoc := range set.Documents {
+		// TODO use direct media
 		mxc, _, info, err := media.NewTransferer(tc.client.API()).
 			WithStickerConfig(tc.main.Config.AnimatedSticker).
 			WithForceWebmStickerConvert(set.Set.Emojis).
@@ -665,14 +667,23 @@ func (tc *TelegramClient) GetCachedStickerPack(ctx context.Context, shortName st
 			}
 			return nil, fmt.Errorf("unexpected response type for MessagesGetStickerSet: %T", resp)
 		}
-		cache = &stickerPackCache{
-			docs: set.MapDocuments().DocumentToMap(),
-			meta: set.Set,
-		}
-		tc.stickerPacksByName[strings.ToLower(set.Set.ShortName)] = cache
-		tc.stickerPacksByID[set.Set.ID] = cache
+		cache = tc.addStickerPackToCache(set, false)
 	}
 	return cache, nil
+}
+
+func (tc *TelegramClient) addStickerPackToCache(set *tg.MessagesStickerSet, lock bool) *stickerPackCache {
+	if lock {
+		tc.stickerPackCacheLock.Lock()
+		defer tc.stickerPackCacheLock.Unlock()
+	}
+	cache := &stickerPackCache{
+		docs: set.MapDocuments().DocumentToMap(),
+		meta: set.Set,
+	}
+	tc.stickerPacksByName[strings.ToLower(set.Set.ShortName)] = cache
+	tc.stickerPacksByID[set.Set.ID] = cache
+	return cache
 }
 
 func (tc *TelegramClient) findOriginalStickerDocument(ctx context.Context, meta *event.BridgedSticker, forceClearCache bool) (tg.InputMediaClass, error) {
