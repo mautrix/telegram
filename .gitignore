@@ -7,6 +7,7 @@
 
 *.json
 !pkg/connector/emojis/unicodemojipack.json
+!pkg/connector/emojis/shortcodes.json
 *.db*
 *.log
 *.bak

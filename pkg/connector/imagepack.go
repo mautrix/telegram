@@ -43,6 +43,7 @@ import (
 	"maunium.net/go/mautrix/format"
 	"maunium.net/go/mautrix/id"
 
+	"go.mau.fi/mautrix-telegram/pkg/connector/emojis"
 	"go.mau.fi/mautrix-telegram/pkg/connector/media"
 	"go.mau.fi/mautrix-telegram/pkg/connector/store"
 	"go.mau.fi/mautrix-telegram/pkg/gotd/telegram/uploader"
@@ -496,14 +497,14 @@ func (tc *TelegramClient) fnDownloadEmojiPack(ce *commands.Event) {
 		},
 	}
 	keywords := make(map[int64][]string)
-	emojis := make(map[int64][]string)
+	emojiLists := make(map[int64][]string)
 	for _, kw := range set.Keywords {
 		keywords[kw.DocumentID] = kw.Keyword
 	}
 	for _, emojiPack := range set.Packs {
 		emoji := variationselector.Add(emojiPack.Emoticon)
 		for _, doc := range emojiPack.Documents {
-			emojis[doc] = append(emojis[doc], emoji)
+			emojiLists[doc] = append(emojiLists[doc], emoji)
 		}
 	}
 	evtID := ce.React("\u23f3\ufe0f")
@@ -520,7 +521,7 @@ func (tc *TelegramClient) fnDownloadEmojiPack(ce *commands.Event) {
 			return
 		}
 		kws := keywords[rawDoc.GetID()]
-		imageEmojis := emojis[rawDoc.GetID()]
+		imageEmojis := emojiLists[rawDoc.GetID()]
 		var key string
 		for _, kw := range kws {
 			_, alreadySet := pack.Images[kw]
@@ -530,12 +531,41 @@ func (tc *TelegramClient) fnDownloadEmojiPack(ce *commands.Event) {
 			key = kw
 			break
 		}
+		var firstShortcode string
+		if key == "" {
+			for _, emoji := range imageEmojis {
+				shortcode := emojis.GetShortcode(emoji)
+				if shortcode == "" {
+					continue
+				}
+				shortcode = fmt.Sprintf("%s_%s", set.Set.ShortName, shortcode)
+				if firstShortcode == "" {
+					firstShortcode = shortcode
+				}
+				_, alreadySet := pack.Images[shortcode]
+				if alreadySet {
+					continue
+				}
+				key = shortcode
+				break
+			}
+		}
+		if key == "" && firstShortcode != "" {
+			for i := 2; i < 10000; i++ {
+				kw := fmt.Sprintf("%s%d", firstShortcode, i)
+				_, alreadySet := pack.Images[kw]
+				if alreadySet {
+					continue
+				}
+				key = kw
+			}
+		}
 		if key == "" {
 			key = fmt.Sprintf("%s_img%d", set.Set.ShortName, i+1)
 		}
-		body := key
+		var emoji string
 		if len(imageEmojis) > 0 {
-			body = imageEmojis[0]
+			emoji = imageEmojis[0]
 		}
 		if !set.Set.Emojis {
 			// Stickers need extra info in each sticker so they can be accurately bridged back to Telegram
@@ -544,11 +574,12 @@ func (tc *TelegramClient) fnDownloadEmojiPack(ce *commands.Event) {
 				Network: StickerSourceID,
 				ID:      strconv.FormatInt(rawDoc.GetID(), 10),
 				PackURL: StickerPackURLPrefix + set.Set.ShortName,
+				Emoji:   emoji,
 			}
 		}
 		pack.Images[key] = &event.ImagePackImage{
 			URL:  mxc,
-			Body: body,
+			Body: cmp.Or(emoji, key),
 			Info: info,
 		}
 	}
