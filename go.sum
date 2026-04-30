@@ -112,8 +112,8 @@ github.com/tidwall/sjson v1.2.5/go.mod h1:Fvgq9kS/6ociJEDnK0Fk1cpYF4FIW6ZF7LAe+6
 github.com/yuin/goldmark v1.4.13/go.mod h1:6yULJ656Px+3vBD8DxQVa3kxgyrAnzto9xy5taEt/CY=
 github.com/yuin/goldmark v1.8.2 h1:kEGpgqJXdgbkhcOgBxkC0X0PmoPG1ZyoZ117rDVp4zE=
 github.com/yuin/goldmark v1.8.2/go.mod h1:ip/1k0VRfGynBgxOz0yCqHrbZXhcjxyuS66Brc7iBKg=
-go.mau.fi/util v0.9.9-0.20260424160448-fd0d9737ad38 h1:D4OKITjyvlud39Q10oMnfhdeNkzEIVkXrEeCW6nvgLk=
-go.mau.fi/util v0.9.9-0.20260424160448-fd0d9737ad38/go.mod h1:up/5mbzH2M1pSBNXqRxODn8dg/hEKbLJu92W4/SNAX0=
+go.mau.fi/util v0.9.9-0.20260430092340-8772e7714ea5 h1:cNm4gkt7j907g1Q4XvyNKW8tTM8BaU91Kbfa5GGyiCs=
+go.mau.fi/util v0.9.9-0.20260430092340-8772e7714ea5/go.mod h1:up/5mbzH2M1pSBNXqRxODn8dg/hEKbLJu92W4/SNAX0=
 go.mau.fi/webp v0.2.0 h1:QVMenHw7JDb4vall5sV75JNBQj9Hw4u8AKbi1QetHvg=
 go.mau.fi/webp v0.2.0/go.mod h1:VSg9MyODn12Mb5pyG0NIyNFhujrmoFSsZBs8syOZD1Q=
 go.mau.fi/zeroconfig v0.2.0 h1:e/OGEERqVRRKlgaro7E6bh8xXiKFSXB3eNNIud7FUjU=

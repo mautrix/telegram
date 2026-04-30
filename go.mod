@@ -27,7 +27,7 @@ require (
 	github.com/rs/zerolog v1.35.0
 	github.com/stretchr/testify v1.11.1
 	github.com/tidwall/gjson v1.18.0
-	go.mau.fi/util v0.9.9-0.20260424160448-fd0d9737ad38
+	go.mau.fi/util v0.9.9-0.20260430092340-8772e7714ea5
 	go.mau.fi/webp v0.2.0
 	go.mau.fi/zerozap v0.1.2
 	go.opentelemetry.io/otel v1.42.0

@@ -20,11 +20,9 @@ import (
 	_ "embed"
 	"encoding/json"
 	"fmt"
-	"strings"
 	"sync"
 
 	"go.mau.fi/util/exstrings"
-	"go.mau.fi/util/variationselector"
 	"maunium.net/go/mautrix/bridgev2/networkid"
 	"maunium.net/go/mautrix/id"
 
@@ -37,35 +35,6 @@ var initOnce sync.Once
 
 var unicodemojiPack = map[string]int64{}
 var reverseUnicodemojiPack = map[int64]string{}
-
-//go:embed shortcodes.json
-//go:generate go run shortcode_gen.go
-var shortcodesJSON string
-var shortcodeMap = map[string]string{}
-var shortcodeInit = sync.OnceFunc(func() {
-	if err := json.Unmarshal(exstrings.UnsafeBytes(shortcodesJSON), &shortcodeMap); err != nil {
-		panic(fmt.Errorf("failed to unmarshal shortcodes: %w", err))
-	}
-})
-
-func GetShortcodes() map[string]string {
-	shortcodeInit()
-	return shortcodeMap
-}
-
-var skinToneRemover = strings.NewReplacer(
-	"\U0001F3FB", "",
-	"\U0001F3FC", "",
-	"\U0001F3FD", "",
-	"\U0001F3FE", "",
-	"\U0001F3FF", "",
-)
-
-func GetShortcode(emoji string) string {
-	sc := GetShortcodes()
-	emoji = skinToneRemover.Replace(emoji)
-	return sc[variationselector.Add(emoji)]
-}
 
 func doInit() {
 	if err := json.Unmarshal(exstrings.UnsafeBytes(unicodemojiPackJSON), &unicodemojiPack); err != nil {

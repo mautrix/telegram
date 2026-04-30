@@ -32,6 +32,7 @@ import (
 	"time"
 
 	"github.com/rs/zerolog"
+	"go.mau.fi/util/emojishortcodes"
 	"go.mau.fi/util/exmaps"
 	"go.mau.fi/util/ffmpeg"
 	"go.mau.fi/util/variationselector"
@@ -43,7 +44,6 @@ import (
 	"maunium.net/go/mautrix/format"
 	"maunium.net/go/mautrix/id"
 
-	"go.mau.fi/mautrix-telegram/pkg/connector/emojis"
 	"go.mau.fi/mautrix-telegram/pkg/connector/media"
 	"go.mau.fi/mautrix-telegram/pkg/connector/store"
 	"go.mau.fi/mautrix-telegram/pkg/gotd/telegram/uploader"
@@ -555,7 +555,7 @@ func (tc *TelegramClient) DownloadImagePack(ctx context.Context, url string) (*b
 		var firstShortcode string
 		if key == "" {
 			for _, emoji := range imageEmojis {
-				shortcode := emojis.GetShortcode(emoji)
+				shortcode := emojishortcodes.Get(emoji)
 				if shortcode == "" {
 					continue
 				}
