@@ -769,7 +769,7 @@ func (tc *TelegramClient) PreHandleMatrixReaction(ctx context.Context, msg *brid
 
 	keyNoVariation := variationselector.Remove(msg.Content.RelatesTo.Key)
 	emojiID := ids.MakeEmojiIDFromEmoticon(msg.Content.RelatesTo.Key)
-	if strings.HasPrefix(msg.Content.RelatesTo.Key, "mxc://") {
+	if strings.Contains(msg.Content.RelatesTo.Key, "://") {
 		if file, err := tc.main.Store.TelegramFile.GetByMXC(ctx, id.ContentURIString(msg.Content.RelatesTo.Key)); err != nil {
 			return resp, err
 		} else if file == nil {
