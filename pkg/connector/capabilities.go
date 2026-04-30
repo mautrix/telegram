@@ -36,6 +36,7 @@ func (tc *TelegramConnector) GetCapabilities() *bridgev2.NetworkGeneralCapabilit
 	return &bridgev2.NetworkGeneralCapabilities{
 		DisappearingMessages: true,
 		Provisioning: bridgev2.ProvisioningCapabilities{
+			ImagePackImport: true,
 			ResolveIdentifier: bridgev2.ResolveIdentifierCapabilities{
 				CreateDM:       true,
 				LookupPhone:    true,

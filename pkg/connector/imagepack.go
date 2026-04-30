@@ -474,6 +474,42 @@ func (tc *TelegramClient) fnDownloadEmojiPack(ce *commands.Event) {
 	}
 }
 
+func (tc *TelegramClient) ListImagePacks(ctx context.Context) ([]*event.ImagePackMetadata, error) {
+	resp, err := tc.client.API().MessagesGetAllStickers(ctx, 0)
+	if err != nil {
+		return nil, err
+	}
+	casted, ok := resp.(*tg.MessagesAllStickers)
+	if !ok {
+		return nil, fmt.Errorf("unexpected response type: %T", resp)
+	}
+	packs := make([]*event.ImagePackMetadata, len(casted.Sets))
+	for i, set := range casted.Sets {
+		packs[i] = tc.makeImagePackMetadata(ctx, set)
+	}
+	return packs, nil
+}
+
+func (tc *TelegramClient) makeImagePackMetadata(ctx context.Context, pack tg.StickerSet) *event.ImagePackMetadata {
+	linkType := "addstickers"
+	usage := event.ImagePackUsageSticker
+	if pack.Emojis {
+		linkType = "addemoji"
+		usage = event.ImagePackUsageEmoji
+	}
+	packURL := fmt.Sprintf("https://t.me/%s/%s", linkType, pack.ShortName)
+	return &event.ImagePackMetadata{
+		DisplayName: pack.Title,
+		AvatarURL:   "", // TODO
+		Usage:       []event.ImagePackUsage{usage},
+		Attribution: fmt.Sprintf("Imported from %s", packURL),
+		BridgedPack: &event.BridgedStickerPack{
+			Network: StickerSourceID,
+			URL:     packURL,
+		},
+	}
+}
+
 func (tc *TelegramClient) DownloadImagePack(ctx context.Context, url string) (*bridgev2.ImportedImagePack, error) {
 	var shortName string
 	if match := addStickersRegex.FindStringSubmatch(url); match != nil {
@@ -492,25 +528,9 @@ func (tc *TelegramClient) DownloadImagePack(ctx context.Context, url string) (*b
 		return nil, fmt.Errorf("unexpected response type: %T", rawSet)
 	}
 	tc.addStickerPackToCache(set, true)
-	linkType := "addstickers"
-	usage := event.ImagePackUsageSticker
-	if set.Set.Emojis {
-		linkType = "addemoji"
-		usage = event.ImagePackUsageEmoji
-	}
-	packURL := fmt.Sprintf("https://t.me/%s/%s", linkType, set.Set.ShortName)
 	pack := &event.ImagePackEventContent{
-		Images: make(map[string]*event.ImagePackImage, len(set.Documents)),
-		Metadata: event.ImagePackMetadata{
-			DisplayName: set.Set.Title,
-			AvatarURL:   "",
-			Usage:       []event.ImagePackUsage{usage},
-			Attribution: fmt.Sprintf("Imported from %s", packURL),
-			BridgedPack: &event.BridgedStickerPack{
-				Network: StickerSourceID,
-				URL:     packURL,
-			},
-		},
+		Images:   make(map[string]*event.ImagePackImage, len(set.Documents)),
+		Metadata: *tc.makeImagePackMetadata(ctx, set.Set),
 	}
 	topLevelExtra := map[string]any{
 		"fi.mau.telegram.stickerpack": map[string]any{
