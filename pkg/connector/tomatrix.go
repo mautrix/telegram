@@ -306,8 +306,11 @@ func (tc *TelegramClient) addForwardHeader(ctx context.Context, part *bridgev2.C
 		if user != nil {
 			mxid = user.UserMXID
 			fwdFromText = cmp.Or(user.RemoteName, user.UserMXID.String())
-		} else if ghost, err := tc.main.Bridge.GetGhostByID(ctx, ids.MakeUserID(from.UserID)); err != nil {
+		} else if ghost, err := tc.main.Bridge.GetExistingGhostByID(ctx, ids.MakeUserID(from.UserID)); err != nil {
 			return err
+		} else if ghost == nil {
+			fwdFromText = cmp.Or(fwd.FromName, "unknown user")
+			fwdFromHTML = fmt.Sprintf("<strong>%s</strong>", html.EscapeString(fwdFromText))
 		} else {
 			if ghost.Name == "" {
 				info, err := tc.GetUserInfo(ctx, ghost)

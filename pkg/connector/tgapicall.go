@@ -42,7 +42,7 @@ func handleUserUpdates[U hasUserUpdates](ctx context.Context, t *TelegramClient,
 		if !ok {
 			return fmt.Errorf("user is %T not *tg.User", user)
 		}
-		_, err := t.updateGhost(ctx, user.ID, user)
+		_, err := t.updateGhost(ctx, user.ID, user, false)
 		if err != nil {
 			return err
 		}
@@ -53,7 +53,7 @@ func handleUserUpdates[U hasUserUpdates](ctx context.Context, t *TelegramClient,
 func handleChatUpdates[U hasChatUpdates](ctx context.Context, t *TelegramClient, resp hasChatUpdates) error {
 	for _, c := range resp.GetChats() {
 		if channel, ok := c.(*tg.Channel); ok {
-			if _, err := t.updateChannel(ctx, channel); err != nil {
+			if _, err := t.updateChannel(ctx, channel, false); err != nil {
 				return err
 			}
 		}

@@ -32,6 +32,7 @@ type Container struct {
 	Username     *UsernameQuery
 	PhoneNumber  *PhoneNumberQuery
 	Topic        *TopicQuery
+	Approval     *PortalApprovalQuery
 }
 
 func NewStore(db *dbutil.Database, log dbutil.DatabaseLogger) *Container {
@@ -42,6 +43,7 @@ func NewStore(db *dbutil.Database, log dbutil.DatabaseLogger) *Container {
 		Username:     &UsernameQuery{db},
 		PhoneNumber:  &PhoneNumberQuery{db},
 		Topic:        &TopicQuery{db: db, existingTopics: exsync.NewSet[topicKey]()},
+		Approval:     &PortalApprovalQuery{db: db},
 	}
 }
 

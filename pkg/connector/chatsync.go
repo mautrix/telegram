@@ -221,10 +221,44 @@ func (tc *TelegramClient) handleDialogs(ctx context.Context, dialogList []tg.Dia
 		log.Debug().Msg("Syncing dialog")
 
 		portalKey := tc.makePortalKeyFromPeer(dialog.GetPeer(), 0)
-		portal, err := tc.main.Bridge.GetPortalByKey(ctx, portalKey)
+		portal, err := tc.main.Bridge.GetExistingPortalByKey(ctx, portalKey)
 		if err != nil {
 			return err
 		}
+		if portal == nil || portal.MXID == "" {
+			// Check what the latest message is before exposing the source in pending.
+			topMessage := messages[ids.MakeMessageID(dialog.Peer, dialog.TopMessage)]
+			if topMessage == nil {
+				if dialog.TopMessage == 0 {
+					log.Debug().Msg("Not syncing portal because there are no messages")
+					continue
+				}
+				log.Warn().Msg("TopMessage of dialog not in messages map")
+			} else if topMessage.TypeID() == tg.MessageServiceTypeID {
+				action := topMessage.(*tg.MessageService).Action
+				if action.TypeID() == tg.MessageActionContactSignUpTypeID || action.TypeID() == tg.MessageActionHistoryClearTypeID {
+					log.Debug().Str("action_type", action.TypeName()).Msg("Not syncing portal because it's a contact sign up or history clear")
+					continue
+				}
+			}
+
+			if createLimit >= 0 && i >= createLimit {
+				continue
+			}
+
+			ok, err := tc.ensurePortalApproved(ctx, portalKey, tc.portalApprovalInfoFromDialog(portalKey, dialog, users, chats), "dialog sync")
+			if err != nil {
+				return err
+			} else if !ok {
+				continue
+			}
+
+			portal, err = tc.main.Bridge.GetPortalByKey(ctx, portalKey)
+			if err != nil {
+				return err
+			}
+		}
+
 		if dialog.UnreadCount == 0 && !dialog.UnreadMark {
 			portal.Metadata.(*PortalMetadata).ReadUpTo = dialog.TopMessage
 		}
@@ -291,28 +325,6 @@ func (tc *TelegramClient) handleDialogs(ctx context.Context, dialogList []tg.Dia
 					Int64("channel_id", peer.ChannelID).
 					Type("channel_type", channel).
 					Msg("Not syncing portal because channel type is unsupported")
-				continue
-			}
-		}
-
-		if portal.MXID == "" {
-			// Check what the latest message is
-			topMessage := messages[ids.MakeMessageID(dialog.Peer, dialog.TopMessage)]
-			if topMessage == nil {
-				if dialog.TopMessage == 0 {
-					log.Debug().Msg("Not syncing portal because there are no messages")
-					continue
-				}
-				log.Warn().Msg("TopMessage of dialog not in messages map")
-			} else if topMessage.TypeID() == tg.MessageServiceTypeID {
-				action := topMessage.(*tg.MessageService).Action
-				if action.TypeID() == tg.MessageActionContactSignUpTypeID || action.TypeID() == tg.MessageActionHistoryClearTypeID {
-					log.Debug().Str("action_type", action.TypeName()).Msg("Not syncing portal because it's a contact sign up or history clear")
-					continue
-				}
-			}
-
-			if createLimit >= 0 && i >= createLimit {
 				continue
 			}
 		}

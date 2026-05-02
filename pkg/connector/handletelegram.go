@@ -160,6 +160,12 @@ func (tc *TelegramClient) onUpdateChannel(ctx context.Context, e tg.Entities, up
 		log.Debug().Msg("Update was for a left channel. Leaving the channel.")
 		return tc.selfLeaveChat(ctx, portalKey, fmt.Errorf("channel has left=true after UpdateChannel"))
 	}
+	ok, err := tc.ensurePortalApprovedForObject(ctx, portalKey, channel, "update channel")
+	if err != nil {
+		return err
+	} else if !ok {
+		return nil
+	}
 	res := tc.main.Bridge.QueueRemoteEvent(tc.userLogin, &simplevent.ChatResync{
 		EventMeta: simplevent.EventMeta{
 			Type:         bridgev2.RemoteEventChatResync,
@@ -208,8 +214,6 @@ func (tc *TelegramClient) onUpdateNewMessage(ctx context.Context, entities tg.En
 			}
 		}
 
-		sender := tc.getEventSender(msg, isBroadcastChannel)
-
 		if media, ok := msg.GetMedia(); ok && media.TypeID() == tg.MessageMediaContactTypeID {
 			contact := media.(*tg.MessageMediaContact)
 			// TODO update the corresponding puppet
@@ -217,6 +221,14 @@ func (tc *TelegramClient) onUpdateNewMessage(ctx context.Context, entities tg.En
 		}
 
 		topicID := tc.getTopicID(ctx, msg.PeerID, msg.ReplyTo)
+		portalKey := tc.makePortalKeyFromPeer(msg.PeerID, topicID)
+		ok, err := tc.ensurePortalApprovedForPeer(ctx, portalKey, msg.PeerID, topicID, entities, "new message")
+		if err != nil {
+			return err
+		} else if !ok {
+			return nil
+		}
+		sender := tc.getEventSender(msg, isBroadcastChannel)
 		res := tc.main.Bridge.QueueRemoteEvent(tc.userLogin, &simplevent.Message[*tg.Message]{
 			EventMeta: simplevent.EventMeta{
 				Type: bridgev2.RemoteEventMessage,
@@ -229,7 +241,7 @@ func (tc *TelegramClient) onUpdateNewMessage(ctx context.Context, entities tg.En
 						Stringer("peer_id", msg.PeerID)
 				},
 				Sender:       sender,
-				PortalKey:    tc.makePortalKeyFromPeer(msg.PeerID, topicID),
+				PortalKey:    portalKey,
 				CreatePortal: true,
 				Timestamp:    time.Unix(int64(msg.Date), 0),
 				StreamOrder:  int64(msg.GetID()),
@@ -248,7 +260,7 @@ func (tc *TelegramClient) onUpdateNewMessage(ctx context.Context, entities tg.En
 		}
 		return nil
 	case *tg.MessageService:
-		return tc.handleServiceMessage(ctx, msg)
+		return tc.handleServiceMessage(ctx, entities, msg)
 
 	default:
 		log.Warn().
@@ -283,12 +295,20 @@ func rawGetTopicID(rawReplyTo tg.MessageReplyHeaderClass) int {
 	return 0
 }
 
-func (tc *TelegramClient) handleServiceMessage(ctx context.Context, msg *tg.MessageService) error {
+func (tc *TelegramClient) handleServiceMessage(ctx context.Context, entities tg.Entities, msg *tg.MessageService) error {
 	log := zerolog.Ctx(ctx)
+	topicID := tc.getTopicID(ctx, msg.PeerID, msg.ReplyTo)
+	portalKey := tc.makePortalKeyFromPeer(msg.PeerID, topicID)
+	ok, err := tc.ensurePortalApprovedForPeer(ctx, portalKey, msg.PeerID, topicID, entities, "service message")
+	if err != nil {
+		return err
+	} else if !ok {
+		return nil
+	}
 	sender := tc.getEventSender(msg, false)
 
 	eventMeta := simplevent.EventMeta{
-		PortalKey: tc.makePortalKeyFromPeer(msg.PeerID, tc.getTopicID(ctx, msg.PeerID, msg.ReplyTo)),
+		PortalKey: portalKey,
 		Sender:    sender,
 		Timestamp: time.Unix(int64(msg.Date), 0),
 		LogContext: func(c zerolog.Context) zerolog.Context {
@@ -518,8 +538,11 @@ func (tc *TelegramClient) handleServiceMessage(ctx context.Context, msg *tg.Mess
 				body.WriteString(", ")
 			}
 
-			if ghost, err := tc.main.Bridge.GetGhostByID(ctx, ids.MakeUserID(userID)); err != nil {
+			if ghost, err := tc.main.Bridge.GetExistingGhostByID(ctx, ids.MakeUserID(userID)); err != nil {
 				return err
+			} else if ghost == nil {
+				body.WriteString(fmt.Sprintf("user %d", userID))
+				html.WriteString(fmt.Sprintf("<strong>user %d</strong>", userID))
 			} else {
 				var name string
 				if username, err := tc.main.Store.Username.Get(ctx, ids.PeerTypeUser, userID); err != nil {
@@ -722,9 +745,12 @@ func (tc *TelegramClient) getPeerSender(peer tg.PeerClass) bridgev2.EventSender 
 }
 
 func (tc *TelegramClient) onUserName(ctx context.Context, e tg.Entities, update *tg.UpdateUserName) error {
-	ghost, err := tc.main.Bridge.GetGhostByID(ctx, ids.MakeUserID(update.UserID))
+	ghost, err := tc.main.Bridge.GetExistingGhostByID(ctx, ids.MakeUserID(update.UserID))
 	if err != nil {
 		return err
+	} else if ghost == nil {
+		// Don't auto-create ghosts from background profile updates.
+		return nil
 	}
 	meta := ghost.Metadata.(*GhostMetadata)
 
@@ -809,8 +835,17 @@ func (tc *TelegramClient) onDeleteMessages(ctx context.Context, channelID int64,
 	return nil
 }
 
-func (tc *TelegramClient) updateGhost(ctx context.Context, userID int64, user *tg.User) (*bridgev2.UserInfo, error) {
-	ghost, err := tc.main.Bridge.GetGhostByID(ctx, ids.MakeUserID(userID))
+func (tc *TelegramClient) updateGhost(ctx context.Context, userID int64, user *tg.User, createIfMissing bool) (*bridgev2.UserInfo, error) {
+	var ghost *bridgev2.Ghost
+	var err error
+	if createIfMissing {
+		ghost, err = tc.main.Bridge.GetGhostByID(ctx, ids.MakeUserID(userID))
+	} else {
+		ghost, err = tc.main.Bridge.GetExistingGhostByID(ctx, ids.MakeUserID(userID))
+		if err == nil && ghost == nil {
+			return nil, nil
+		}
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -827,13 +862,21 @@ func (tc *TelegramClient) updateGhost(ctx context.Context, userID int64, user *t
 	return userInfo, nil
 }
 
-func (tc *TelegramClient) updateChannel(ctx context.Context, channel *tg.Channel) (*bridgev2.UserInfo, error) {
+func (tc *TelegramClient) updateChannel(ctx context.Context, channel *tg.Channel, createIfMissing bool) (*bridgev2.UserInfo, error) {
 	// TODO resync portal metadata?
 	userInfo, err := tc.wrapChannelGhostInfo(ctx, channel)
 	if err != nil {
 		return nil, err
 	}
-	ghost, err := tc.main.Bridge.GetGhostByID(ctx, ids.MakeChannelUserID(channel.ID))
+	var ghost *bridgev2.Ghost
+	if createIfMissing {
+		ghost, err = tc.main.Bridge.GetGhostByID(ctx, ids.MakeChannelUserID(channel.ID))
+	} else {
+		ghost, err = tc.main.Bridge.GetExistingGhostByID(ctx, ids.MakeChannelUserID(channel.ID))
+		if err == nil && ghost == nil {
+			return nil, nil
+		}
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -884,7 +927,7 @@ func (tc *TelegramClient) onUpdate(ctx context.Context, e tg.Entities, upd tg.Up
 	zerolog.Ctx(ctx).Trace().Stringer("update", upd).Msg("Raw update")
 	for userID, user := range e.Users {
 		zerolog.Ctx(ctx).Trace().Stringer("user", user).Msg("Raw user info in update")
-		if _, err := tc.updateGhost(ctx, userID, user); err != nil {
+		if _, err := tc.updateGhost(ctx, userID, user, false); err != nil {
 			return err
 		}
 	}
@@ -900,7 +943,7 @@ func (tc *TelegramClient) onUpdate(ctx context.Context, e tg.Entities, upd tg.Up
 		if channel.GetLeft() {
 			tc.selfLeaveChat(ctx, tc.makePortalKeyFromID(ids.PeerTypeChannel, channel.ID, 0), fmt.Errorf("left flag in entity update"))
 		}
-		if _, err := tc.updateChannel(ctx, channel); err != nil {
+		if _, err := tc.updateChannel(ctx, channel, false); err != nil {
 			return err
 		}
 	}
@@ -1059,9 +1102,11 @@ func (tc *TelegramClient) onMessageEdit(ctx context.Context, update IGetMessage)
 	}
 
 	portalKey := tc.makePortalKeyFromPeer(msg.PeerID, topicID)
-	portal, err := tc.main.Bridge.GetPortalByKey(ctx, portalKey)
+	portal, err := tc.main.Bridge.GetExistingPortalByKey(ctx, portalKey)
 	if err != nil {
 		return err
+	} else if portal == nil || portal.MXID == "" {
+		return nil
 	}
 	sender := tc.getEventSender(msg, !portal.Metadata.(*PortalMetadata).IsSuperGroup)
 

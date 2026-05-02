@@ -65,6 +65,37 @@ proxy:
     username:
     password:
 
+portal_approval:
+    # If enabled, portals are only created automatically for chat types allowed
+    # below. Other sources can be approved with Matrix commands.
+    enabled: false
+    auto_create:
+        private_chats: true
+        # Bot direct chats are controlled separately from normal private chats.
+        bots: true
+        groups: false
+        supergroups: false
+        channels: false
+    pending:
+        enabled: true
+        # Automatically remove pending approval entries that haven't been seen
+        # for this many hours. Set to 0 to keep them forever.
+        max_age_hours: 72
+    cleanup:
+        on_deny:
+            # Delete the existing Matrix portal room and bridge portal database row
+            # when a pending/allowed Telegram chat is denied.
+            delete_portal: false
+        on_unallow:
+            # Delete the existing Matrix portal room and bridge portal database row
+            # when an allowed Telegram chat is moved back to pending.
+            delete_portal: false
+
+contact_list:
+    # Allow clients/provisioning API to fetch Telegram contacts.
+    # Fetching contacts may create Matrix ghost users for those contacts.
+    enabled: true
+
 sync:
     # Number of most recently active dialogs to check when syncing chats.
     # Set to -1 to remove limit.
