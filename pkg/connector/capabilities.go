@@ -41,7 +41,7 @@ func (tc *TelegramConnector) GetCapabilities() *bridgev2.NetworkGeneralCapabilit
 				CreateDM:       true,
 				LookupPhone:    true,
 				LookupUsername: true,
-				ContactList:    true,
+				ContactList:    tc.Config.ContactListEnabled(),
 				Search:         true,
 			},
 			GroupCreation: map[string]bridgev2.GroupTypeCapabilities{

@@ -77,6 +77,10 @@ type TelegramConfig struct {
 
 	ProxyConfig ProxyConfig `yaml:"proxy"`
 
+	ContactList struct {
+		Enabled *bool `yaml:"enabled"`
+	} `yaml:"contact_list"`
+
 	Sync struct {
 		UpdateLimit int  `yaml:"update_limit"`
 		CreateLimit int  `yaml:"create_limit"`
@@ -104,6 +108,10 @@ type TelegramConfig struct {
 
 func (c TelegramConfig) ShouldBridge(participantCount int) bool {
 	return c.MaxMemberCount < 0 || participantCount <= c.MaxMemberCount
+}
+
+func (c TelegramConfig) ContactListEnabled() bool {
+	return c.ContactList.Enabled == nil || *c.ContactList.Enabled
 }
 
 type DisplaynameParams struct {
@@ -174,6 +182,7 @@ func upgradeConfig(helper up.Helper) {
 	helper.Copy(up.Str|up.Null, "proxy", "address")
 	helper.Copy(up.Str|up.Null, "proxy", "username")
 	helper.Copy(up.Str|up.Null, "proxy", "password")
+	helper.Copy(up.Bool, "contact_list", "enabled")
 	helper.Copy(up.Int, "sync", "update_limit")
 	helper.Copy(up.Int, "sync", "create_limit")
 	helper.Copy(up.Int, "sync", "login_sync_limit")

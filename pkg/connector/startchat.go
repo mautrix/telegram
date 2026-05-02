@@ -27,6 +27,7 @@ import (
 
 	"github.com/rs/zerolog"
 	"go.mau.fi/util/ptr"
+	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/bridgev2"
 
 	"go.mau.fi/mautrix-telegram/pkg/connector/ids"
@@ -231,6 +232,9 @@ func (tc *TelegramClient) SearchUsers(ctx context.Context, query string) (resp [
 }
 
 func (tc *TelegramClient) GetContactList(ctx context.Context) (resp []*bridgev2.ResolveIdentifierResponse, err error) {
+	if !tc.main.Config.ContactListEnabled() {
+		return nil, bridgev2.RespError(mautrix.MForbidden.WithMessage("Telegram contact list fetching is disabled"))
+	}
 	tc.contactsLock.Lock()
 	defer tc.contactsLock.Unlock()
 	var contacts *tg.ContactsContacts

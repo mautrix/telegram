@@ -65,6 +65,11 @@ proxy:
     username:
     password:
 
+contact_list:
+    # Allow clients/provisioning API to fetch Telegram contacts.
+    # Fetching contacts may create Matrix ghost users for those contacts.
+    enabled: true
+
 sync:
     # Number of most recently active dialogs to check when syncing chats.
     # Set to -1 to remove limit.
