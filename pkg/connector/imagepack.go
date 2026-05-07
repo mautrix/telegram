@@ -485,8 +485,19 @@ func (tc *TelegramClient) ListImagePacks(ctx context.Context) ([]*event.ImagePac
 	if !ok {
 		return nil, fmt.Errorf("unexpected response type: %T", resp)
 	}
-	packs := make([]*event.ImagePackMetadata, len(casted.Sets))
-	for i, set := range casted.Sets {
+
+	emojiResp, err := tc.client.API().MessagesGetEmojiStickers(ctx, 0)
+	if err != nil {
+		return nil, err
+	}
+	emojiCasted, ok := emojiResp.(*tg.MessagesAllStickers)
+	if !ok {
+		return nil, fmt.Errorf("unexpected response type: %T", emojiResp)
+	}
+
+	sets := append(casted.Sets, emojiCasted.Sets...)
+	packs := make([]*event.ImagePackMetadata, len(sets))
+	for i, set := range sets {
 		packs[i] = tc.makeImagePackMetadata(ctx, set)
 	}
 	return packs, nil
