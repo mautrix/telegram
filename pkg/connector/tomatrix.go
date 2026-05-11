@@ -134,6 +134,11 @@ func (tc *TelegramClient) mediaToMatrix(
 	}
 }
 
+func hasGuestchatViaFrom(msg *tg.Message) bool {
+	_, ok := msg.GetGuestchatViaFrom()
+	return ok
+}
+
 func (tc *TelegramClient) convertToMatrix(
 	ctx context.Context,
 	portal *bridgev2.Portal,
@@ -150,7 +155,7 @@ func (tc *TelegramClient) convertToMatrix(
 	var perMessageProfile *event.BeeperPerMessageProfile
 	if peerType, _, _, err := ids.ParsePortalID(portal.ID); err != nil {
 		return nil, fmt.Errorf("failed to parse portal ID: %w", err)
-	} else if peerType == ids.PeerTypeChannel && !portal.Metadata.(*PortalMetadata).IsSuperGroup {
+	} else if (peerType == ids.PeerTypeChannel && !portal.Metadata.(*PortalMetadata).IsSuperGroup) || hasGuestchatViaFrom(msg) {
 		var sender *networkid.UserID
 		if msg.Out {
 			sender = &tc.userID

@@ -686,11 +686,18 @@ func (tc *TelegramClient) migrateChat(ctx context.Context, oldPortalKey, newPort
 	return nil
 }
 
-func (tc *TelegramClient) getEventSender(msg interface {
+type eventSenderable interface {
 	GetOut() bool
 	GetFromID() (tg.PeerClass, bool)
 	GetPeerID() tg.PeerClass
-}, isBroadcastChannel bool) bridgev2.EventSender {
+}
+
+type extendedEventSenderable interface {
+	eventSenderable
+	GetGuestchatViaFrom() (value tg.PeerClass, ok bool)
+}
+
+func (tc *TelegramClient) getEventSender(msg eventSenderable, isBroadcastChannel bool) bridgev2.EventSender {
 	if isBroadcastChannel && msg.GetPeerID().TypeID() == tg.PeerChannelTypeID {
 		// Always send as the channel in broadcast channels. We set a
 		// per-message profile to indicate the actual user it was from.
@@ -701,7 +708,15 @@ func (tc *TelegramClient) getEventSender(msg interface {
 		return tc.mySender()
 	}
 
-	peer, ok := msg.GetFromID()
+	var peer tg.PeerClass
+	var ok bool
+	var extended extendedEventSenderable
+	if extended, ok = msg.(extendedEventSenderable); ok {
+		peer, ok = extended.GetGuestchatViaFrom()
+	}
+	if !ok {
+		peer, ok = msg.GetFromID()
+	}
 	if !ok {
 		peer = msg.GetPeerID()
 	}
