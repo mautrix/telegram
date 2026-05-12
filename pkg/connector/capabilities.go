@@ -60,7 +60,7 @@ func (tc *TelegramConnector) GetCapabilities() *bridgev2.NetworkGeneralCapabilit
 }
 
 func (tc *TelegramConnector) GetBridgeInfoVersion() (info, capabilities int) {
-	return 1, 8
+	return 1, 9
 }
 
 // TODO get these from getConfig instead of hardcoding?
