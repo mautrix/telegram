@@ -192,14 +192,22 @@ func (tc *TelegramClient) wrapChannelGhostInfo(ctx context.Context, channel *tg.
 		return nil, err
 	}
 
-	var identifiers []string
-	if username, set := channel.GetUsername(); set {
-		err = tc.main.Store.Username.Set(ctx, ids.PeerTypeChannel, channel.ID, username)
-		if err != nil {
-			return nil, err
-		}
-		identifiers = append(identifiers, fmt.Sprintf("telegram:%s", username))
+	// TODO store alternate usernames in database too
+	err = tc.main.Store.Username.Set(ctx, ids.PeerTypeChannel, channel.ID, channel.Username)
+	if err != nil {
+		return nil, err
 	}
+	var identifiers []string
+	if channel.Username != "" {
+		identifiers = append(identifiers, fmt.Sprintf("telegram:%s", channel.Username))
+	}
+	for _, username := range channel.Usernames {
+		if username.Active {
+			identifiers = append(identifiers, fmt.Sprintf("telegram:%s", username.Username))
+		}
+	}
+	slices.Sort(identifiers)
+	identifiers = slices.Compact(identifiers)
 
 	return &bridgev2.UserInfo{
 		Name:        &channel.Title,
@@ -222,6 +230,7 @@ func (tc *TelegramClient) wrapUserInfo(ctx context.Context, u tg.UserClass, ghos
 			}
 		}
 
+		// TODO store alternate usernames in database too
 		if err := tc.main.Store.Username.Set(ctx, ids.PeerTypeUser, user.ID, user.Username); err != nil {
 			return nil, err
 		}
@@ -230,7 +239,9 @@ func (tc *TelegramClient) wrapUserInfo(ctx context.Context, u tg.UserClass, ghos
 			identifiers = append(identifiers, fmt.Sprintf("telegram:%s", user.Username))
 		}
 		for _, username := range user.Usernames {
-			identifiers = append(identifiers, fmt.Sprintf("telegram:%s", username.Username))
+			if username.Active {
+				identifiers = append(identifiers, fmt.Sprintf("telegram:%s", username.Username))
+			}
 		}
 		if phone, ok := user.GetPhone(); ok {
 			normalized := strings.TrimPrefix(phone, "+")

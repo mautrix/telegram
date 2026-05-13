@@ -763,6 +763,10 @@ func (tc *TelegramClient) onUserName(ctx context.Context, e tg.Entities, update 
 		slices.Sort(userInfo.Identifiers)
 		userInfo.Identifiers = slices.Compact(userInfo.Identifiers)
 	}
+	err = tc.main.Store.Username.Set(ctx, ids.PeerTypeUser, update.UserID, firstUsername)
+	if err != nil {
+		return fmt.Errorf("failed to store username: %w", err)
+	}
 
 	name := tc.main.Config.FormatDisplayname(update.FirstName, update.LastName, firstUsername, false, update.UserID)
 	userInfo.Name = &name
