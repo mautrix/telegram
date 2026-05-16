@@ -1,9 +1,19 @@
-# unreleased
+# v26.05
 
+* Updated Telegram API to layer 225.
+* Added support for bridging guest bot messages from Telegram using per-message
+  profiles on Matrix.
 * Added support for bridging message reactions from Telegram when logged in as
   a bot.
+* Added support for sending imported animated stickers back to Telegram.
+  * Note: packs imported before this change will have to be re-imported.
+* Added support for cutting off long messages before sending to Telegram.
+* Added support for converting matrix.to event links to t.me links when sending
+  to Telegram.
+* Added support for bridging member events from Matrix.
 * Fixed `mx_room_state` table not being migrated correctly from the Python
   bridge in SQLite databases.
+* Fixed username changes of Telegram users not being saved correctly.
 
 # v26.04
 

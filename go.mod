@@ -2,7 +2,7 @@ module go.mau.fi/mautrix-telegram
 
 go 1.25.0
 
-toolchain go1.26.2
+toolchain go1.26.3
 
 tool (
 	go.mau.fi/util/cmd/maubuild
@@ -22,12 +22,12 @@ require (
 	github.com/gotd/neo v0.1.5
 	github.com/gotd/tl v0.4.0
 	github.com/k0kubun/pp/v3 v3.5.1
-	github.com/klauspost/compress v1.18.5
+	github.com/klauspost/compress v1.18.6
 	github.com/rogpeppe/go-internal v1.14.1
 	github.com/rs/zerolog v1.35.1
 	github.com/stretchr/testify v1.11.1
-	github.com/tidwall/gjson v1.18.0
-	go.mau.fi/util v0.9.9-0.20260511124621-9241e81bdf25
+	github.com/tidwall/gjson v1.19.0
+	go.mau.fi/util v0.9.9
 	go.mau.fi/webp v0.2.0
 	go.mau.fi/zerozap v0.1.2
 	go.opentelemetry.io/otel v1.43.0
@@ -35,14 +35,14 @@ require (
 	go.uber.org/atomic v1.11.0
 	go.uber.org/multierr v1.11.0
 	go.uber.org/zap v1.28.0
-	golang.org/x/crypto v0.50.0
-	golang.org/x/exp v0.0.0-20260410095643-746e56fc9e2f
-	golang.org/x/image v0.39.0
-	golang.org/x/net v0.53.0
+	golang.org/x/crypto v0.51.0
+	golang.org/x/exp v0.0.0-20260508232706-74f9aab9d74a
+	golang.org/x/image v0.40.0
+	golang.org/x/net v0.54.0
 	golang.org/x/sync v0.20.0
-	golang.org/x/tools v0.44.0
+	golang.org/x/tools v0.45.0
 	gopkg.in/yaml.v3 v3.0.1
-	maunium.net/go/mautrix v0.27.1-0.20260513120123-5fba7e3afae4
+	maunium.net/go/mautrix v0.28.0
 	rsc.io/qr v0.2.0
 )
 
@@ -72,9 +72,9 @@ require (
 	github.com/yuin/goldmark v1.8.2 // indirect
 	go.mau.fi/zeroconfig v0.2.0 // indirect
 	go.uber.org/ratelimit v0.3.1 // indirect
-	golang.org/x/mod v0.35.0 // indirect
-	golang.org/x/sys v0.43.0 // indirect
-	golang.org/x/text v0.36.0 // indirect
+	golang.org/x/mod v0.36.0 // indirect
+	golang.org/x/sys v0.44.0 // indirect
+	golang.org/x/text v0.37.0 // indirect
 	gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c // indirect
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1 // indirect
 	maunium.net/go/mauflag v1.0.0 // indirect
