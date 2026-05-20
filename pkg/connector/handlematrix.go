@@ -222,11 +222,9 @@ func (tc *TelegramClient) pollSponsoredMessage(ctx context.Context, portal *brid
 	if oldSponsoredMessageMXID != "" {
 		_, err = tc.main.Bridge.Bot.SendMessage(ctx, portal.MXID, event.EventRedaction, &event.Content{
 			Parsed: &event.RedactionEventContent{
-				Reason:  "new sponsored message sent",
-				Redacts: oldSponsoredMessageMXID,
-			},
-			Raw: map[string]any{
-				"com.beeper.dont_render_redacted_placeholder": true,
+				Reason:                "new sponsored message sent",
+				Redacts:               oldSponsoredMessageMXID,
+				DontRenderPlaceholder: true,
 			},
 		}, &bridgev2.MatrixSendExtra{Timestamp: time.Now()})
 		if err != nil {

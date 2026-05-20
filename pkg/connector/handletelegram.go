@@ -819,7 +819,8 @@ func (tc *TelegramClient) onDeleteMessages(ctx context.Context, channelID int64,
 				Type:      bridgev2.RemoteEventMessageRemove,
 				PortalKey: portalKey,
 			},
-			TargetMessage: wrappedMessageID,
+			TargetMessage:   wrappedMessageID,
+			HidePlaceholder: true,
 		})
 		if err := resultToError(res); err != nil {
 			return err
