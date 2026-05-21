@@ -60,7 +60,7 @@ func (tc *TelegramConnector) GetCapabilities() *bridgev2.NetworkGeneralCapabilit
 }
 
 func (tc *TelegramConnector) GetBridgeInfoVersion() (info, capabilities int) {
-	return 1, 9
+	return 1, 10
 }
 
 // TODO get these from getConfig instead of hardcoding?
@@ -141,13 +141,12 @@ var fileCaps = event.FileFeatureMap{
 	},
 	event.CapMsgSticker: {
 		MimeTypes: map[string]event.CapabilitySupportLevel{
-			"image/webp": event.CapLevelFullySupported,
+			"image/webp":        event.CapLevelFullySupported,
+			"video/lottie+json": event.CapLevelFullySupported,
+			"video/webm":        event.CapLevelFullySupported,
 			// These are converted to webp
 			"image/jpeg": event.CapLevelPartialSupport,
 			"image/png":  event.CapLevelPartialSupport,
-			// These will only go through if they're from an imported Telegram pack
-			"video/lottie+json": event.CapLevelPartialSupport,
-			"video/webm":        event.CapLevelPartialSupport,
 		},
 	},
 	event.CapMsgVoice: {
@@ -211,7 +210,7 @@ func makeTimerList() []jsontime.Milliseconds {
 var telegramTimers = makeTimerList()
 
 func (tc *TelegramClient) GetCapabilities(ctx context.Context, portal *bridgev2.Portal) *event.RoomFeatures {
-	baseID := "fi.mau.telegram.capabilities.2026_05_04"
+	baseID := "fi.mau.telegram.capabilities.2026_05_21"
 	feat := &event.RoomFeatures{
 		Formatting:          formattingCaps,
 		File:                fileCaps,

@@ -272,13 +272,6 @@ func (tc *TelegramClient) transferMediaToTelegram(ctx context.Context, content *
 			}
 			uploadFilename = tempFile.Name()
 			info.MimeType = "image/webp"
-		} else if sticker && (info.MimeType != "video/webm" && info.MimeType != "application/x-tgsticker") {
-			uploadFilename, err = ffmpeg.ConvertPath(ctx, uploadFilename, ".webp", []string{}, []string{}, false)
-			if err != nil {
-				return fmt.Errorf("failed to convert sticker to webm: %w", err)
-			}
-			defer os.Remove(uploadFilename)
-			info.MimeType = "image/webp"
 		} else if sticker && info.MimeType == "video/lottie+json" {
 			uploadFilename, err = media.CompressGZip(f)
 			if err != nil {
@@ -286,6 +279,13 @@ func (tc *TelegramClient) transferMediaToTelegram(ctx context.Context, content *
 			}
 			defer os.Remove(uploadFilename)
 			info.MimeType = "application/x-tgsticker"
+		} else if sticker && (info.MimeType != "video/webm" && info.MimeType != "application/x-tgsticker") {
+			uploadFilename, err = ffmpeg.ConvertPath(ctx, uploadFilename, ".webp", []string{}, []string{}, false)
+			if err != nil {
+				return fmt.Errorf("failed to convert sticker to webm: %w", err)
+			}
+			defer os.Remove(uploadFilename)
+			info.MimeType = "image/webp"
 		} else if cfg, _, err := image.DecodeConfig(f); err != nil {
 			forceDocument = true
 		} else if fileInfo, err := f.Stat(); err != nil {
