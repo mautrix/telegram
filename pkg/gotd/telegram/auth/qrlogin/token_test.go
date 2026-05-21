@@ -16,7 +16,7 @@ func TestParseTokenURL(t *testing.T) {
 	}{
 		{
 			"Valid",
-			"tg://login?token=AQL0cY5hVg_D1OqESdYnJVg5845qbd8FiOLpUUeyvcb28g==",
+			"tg://login?token=AQL0cY5hVg_D1OqESdYnJVg5845qbd8FiOLpUUeyvcb28g",
 			Token{
 				token: []uint8{
 					0x1, 0x2, 0xf4, 0x71, 0x8e, 0x61,
