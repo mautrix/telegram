@@ -61,6 +61,8 @@ proxy:
     # Proxy IP address/domain name and port.
     address: "127.0.0.1:1080"
     # Proxy authentication (optional). Put MTProxy secret in password field.
+    # MTProxy secret can be in hex (e.g. ee852380f362a09343efb4690c4e17862e676f6f676c652e636f6d),
+    # base64, or raw format. The bridge auto-detects the encoding.
     username:
     password:
 

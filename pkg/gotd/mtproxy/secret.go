@@ -1,6 +1,11 @@
 package mtproxy
 
 import (
+	"encoding/base64"
+	"encoding/hex"
+	"strings"
+	"unicode"
+
 	"github.com/go-faster/errors"
 
 	"go.mau.fi/mautrix-telegram/pkg/gotd/proto/codec"
@@ -41,6 +46,48 @@ func (s Secret) ExpectedCodec() (cdc codec.Codec, _ bool) {
 	}
 
 	return cdc, true
+}
+
+// ParseSecretString parses a secret from a string, auto-detecting the encoding format.
+// Supported formats:
+//   - Hex-encoded (e.g. "ee852380f362a09343efb4690c4e17862e676f6f676c652e636f6d")
+//   - Base64-encoded (e.g. "eehSO..." with URL-safe or standard base64)
+//   - Raw bytes (16-34 bytes)
+func ParseSecretString(secret string) ([]byte, error) {
+	secret = strings.TrimSpace(secret)
+	if secret == "" {
+		return nil, errors.New("empty secret")
+	}
+
+	if decoded, err := hex.DecodeString(secret); err == nil {
+		return decoded, nil
+	}
+
+	for _, enc := range []*base64.Encoding{
+		base64.RawURLEncoding,
+		base64.RawStdEncoding,
+		base64.URLEncoding,
+		base64.StdEncoding,
+	} {
+		if decoded, err := enc.DecodeString(secret); err == nil {
+			return decoded, nil
+		}
+	}
+
+	if isAllHex(secret) {
+		return nil, errors.Errorf("secret looks like hex but failed to decode: %q", secret)
+	}
+
+	return []byte(secret), nil
+}
+
+func isAllHex(s string) bool {
+	for _, c := range s {
+		if !unicode.Is(unicode.ASCII_Hex_Digit, c) {
+			return false
+		}
+	}
+	return len(s)%2 == 0
 }
 
 // ParseSecret checks and parses secret.

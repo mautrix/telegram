@@ -40,3 +40,63 @@ func TestParseSecret(t *testing.T) {
 		})
 	}
 }
+
+func TestParseSecretString(t *testing.T) {
+	tests := []struct {
+		name    string
+		secret  string
+		wantLen int
+		wantErr bool
+	}{
+		{
+			name:    "hex-simple",
+			secret:  "52a493bdfb90eea55739eabff2d92a14",
+			wantLen: 16,
+		},
+		{
+			name:    "hex-secured",
+			secret:  "ddf05fb7acb549be047a7c585116581418",
+			wantLen: 17,
+		},
+		{
+			name:    "hex-tls",
+			secret:  "ee852380f362a09343efb4690c4e17862e676f6f676c652e636f6d",
+			wantLen: 27,
+		},
+		{
+			name:    "base64url-secured",
+			secret:  "3fBPt6tFSb4EenxYURZYFBg",
+			wantLen: 17,
+		},
+		{
+			name:    "raw-bytes-secured",
+			secret:  "\xdd\xf0_\xb7\xac\xb5I\xbe\x04z|XQ\x16X\x14\x18",
+			wantLen: 17,
+		},
+		{
+			name:    "hex-with-whitespace",
+			secret:  "  ddf05fb7acb549be047a7c585116581418  ",
+			wantLen: 17,
+		},
+		{
+			name:    "empty",
+			secret:  "",
+			wantErr: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := ParseSecretString(tt.secret)
+			if tt.wantErr {
+				require.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+			require.Len(t, got, tt.wantLen)
+
+			parsed, err := ParseSecret(got)
+			require.NoError(t, err)
+			require.NotZero(t, parsed.Type)
+		})
+	}
+}
