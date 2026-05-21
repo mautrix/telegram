@@ -57,7 +57,6 @@ ping:
 # Proxy settings
 proxy:
     # Allowed types: disabled, socks5, mtproxy
-    # Note: mtproxy support is probably broken currently
     type: disabled
     # Proxy IP address/domain name and port.
     address: "127.0.0.1:1080"

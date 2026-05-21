@@ -17,6 +17,7 @@
 package connector
 
 import (
+	"encoding/hex"
 	"fmt"
 
 	"golang.org/x/net/proxy"
@@ -54,7 +55,11 @@ func GetProxyResolver(cfg ProxyConfig) (dcs.Resolver, error) {
 		resolver := dcs.Plain(dcs.PlainOptions{Dial: dialer})
 		return resolver, nil
 	case "mtproxy":
-		return dcs.MTProxy(cfg.Address, []byte(cfg.Password), dcs.MTProxyOptions{})
+		secret, err := hex.DecodeString(cfg.Password)
+		if err != nil {
+			return nil, fmt.Errorf("failed to decode secret: %w", err)
+		}
+		return dcs.MTProxy(cfg.Address, secret, dcs.MTProxyOptions{})
 	default:
 		return nil, fmt.Errorf("unsupported proxy type %s", cfg.Type)
 	}
