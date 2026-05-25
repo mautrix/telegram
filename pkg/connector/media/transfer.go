@@ -306,7 +306,9 @@ func (t *Transferer) WithPeerPhoto(peer tg.InputPeerClass, photoID int64) *Ready
 // If there is a sticker config on the [Transferer], this function converts
 // animated stickers to the target format specified by the specified
 // [AnimatedStickerConfig].
-func (t *ReadyTransferer) Transfer(ctx context.Context, db *store.Container, intent bridgev2.MatrixAPI) (mxc id.ContentURIString, encryptedFileInfo *event.EncryptedFileInfo, outFileInfo *event.FileInfo, err error) {
+func (t *ReadyTransferer) Transfer(ctx context.Context, db *store.Container, intent bridgev2.MatrixAPI) (
+	mxc id.ContentURIString, encryptedFileInfo *event.EncryptedFileInfo, outFileInfo *event.FileInfo, err error,
+) {
 	locationID := getLocationID(t.loc)
 	log := zerolog.Ctx(ctx).With().
 		Str("component", "media_transfer").
@@ -388,7 +390,7 @@ func (t *ReadyTransferer) Transfer(ctx context.Context, db *store.Container, int
 		}, err
 	})
 	if err != nil {
-		return "", nil, nil, fmt.Errorf("failed to upload media to Matrix: %w", err)
+		return "", nil, &t.inner.fileInfo, fmt.Errorf("failed to upload media to Matrix: %w", err)
 	}
 	if thumbnailData != nil {
 		thumbnailMXC, thumbnailFileInfo, err := intent.UploadMedia(ctx, t.inner.roomID, thumbnailData, t.inner.filename, thumbnailMIMEType)

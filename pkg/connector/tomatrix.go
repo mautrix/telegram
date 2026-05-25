@@ -748,6 +748,9 @@ func (tc *TelegramClient) convertMediaRequiringUpload(
 					Body:    "Failed to transfer media. Check Telegram app.",
 				},
 			}
+			if errors.Is(err, bridgev2.ErrMediaTooLarge) {
+				converted.Content.Body = fmt.Sprintf("Too large file %s (%.2f MiB)", content.GetFileName(), float64(content.Info.Size)/1024/1024)
+			}
 			return
 		}
 	}
