@@ -60,7 +60,7 @@ func (tc *TelegramConnector) GetCapabilities() *bridgev2.NetworkGeneralCapabilit
 }
 
 func (tc *TelegramConnector) GetBridgeInfoVersion() (info, capabilities int) {
-	return 1, 10
+	return 1, 11
 }
 
 // TODO get these from getConfig instead of hardcoding?
@@ -210,7 +210,7 @@ func makeTimerList() []jsontime.Milliseconds {
 var telegramTimers = makeTimerList()
 
 func (tc *TelegramClient) GetCapabilities(ctx context.Context, portal *bridgev2.Portal) *event.RoomFeatures {
-	baseID := "fi.mau.telegram.capabilities.2026_05_21"
+	baseID := "fi.mau.telegram.capabilities.2026_05_27"
 	feat := &event.RoomFeatures{
 		Formatting:          formattingCaps,
 		File:                fileCaps,
@@ -219,6 +219,7 @@ func (tc *TelegramClient) GetCapabilities(ctx context.Context, portal *bridgev2.
 		Reply:               event.CapLevelFullySupported,
 		Edit:                event.CapLevelFullySupported,
 		Delete:              event.CapLevelFullySupported,
+		DeleteHide:          true,
 		Reaction:            event.CapLevelFullySupported,
 		ReactionCount:       1,
 		ReadReceipts:        true,
