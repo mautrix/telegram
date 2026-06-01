@@ -59,7 +59,7 @@ func (s *UsernameQuery) Set(ctx context.Context, entityType ids.PeerType, entity
 	} else {
 		_, err = s.db.Exec(ctx, setUsernameQuery, username, entityType, entityID)
 		if err == nil {
-			_, err = s.db.Exec(ctx, clearUsernameQuery, entityType, entityID, username)
+			_, err = s.db.Exec(ctx, clearUsernameQuery, entityType, entityID, strings.ToLower(username))
 		}
 	}
 	return
