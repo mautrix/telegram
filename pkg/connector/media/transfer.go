@@ -28,6 +28,7 @@ import (
 
 	"github.com/rs/zerolog"
 	"maunium.net/go/mautrix/bridgev2"
+	"maunium.net/go/mautrix/bridgev2/networkid"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 	"maunium.net/go/mautrix/mediaproxy"
@@ -525,13 +526,23 @@ func (t *ReadyTransferer) DownloadBytes(ctx context.Context) ([]byte, error) {
 }
 
 func (t *ReadyTransferer) StickerDirectDownloadURL(ctx context.Context, br *bridgev2.Bridge, set tg.StickerSet, loggedInUserID int64) (id.ContentURIString, *event.FileInfo, error) {
-	mediaID, err := ids.DirectMediaInfo{
-		PeerType:  ids.FakePeerTypeSticker,
-		PeerID:    set.ID,
-		UserID:    loggedInUserID,
-		MessageID: set.AccessHash, // sticker pack direct media abuses the user ID field for access hashes
-		ID:        t.loc.(*tg.InputDocumentFileLocation).ID,
-	}.AsMediaID()
+	var mediaID networkid.MediaID
+	var err error
+	if set.Emojis {
+		mediaID, err = ids.DirectMediaInfo{
+			PeerType: ids.FakePeerTypeEmoji,
+			UserID:   loggedInUserID,
+			ID:       t.loc.(*tg.InputDocumentFileLocation).ID,
+		}.AsMediaID()
+	} else {
+		mediaID, err = ids.DirectMediaInfo{
+			PeerType:  ids.FakePeerTypeSticker,
+			PeerID:    set.ID,
+			UserID:    loggedInUserID,
+			MessageID: set.AccessHash, // sticker pack direct media abuses the user ID field for access hashes
+			ID:        t.loc.(*tg.InputDocumentFileLocation).ID,
+		}.AsMediaID()
+	}
 	if err != nil {
 		return "", nil, err
 	}
