@@ -480,7 +480,14 @@ func (parser *HTMLParser) imgToString(node *html.Node, ctx Context) *EntityStrin
 	if !isEmoji {
 		return NewEntityString(alt)
 	}
-	if file, _ := parser.Store.TelegramFile.GetByMXC(ctx.Ctx, id.ContentURIString(src)); file != nil {
+	if parsedMXC, err := parser.Bridge.Matrix.ParseContentURI(ctx.Ctx, id.ContentURIString(src)); err == nil {
+		parsedMediaInfo, err := ids.ParseDirectMediaInfo(parsedMXC)
+		// Note: the sticker peer type is only allowed here because custom emoji packs
+		// used to be accidentally imported with the wrong type.
+		if err == nil && (parsedMediaInfo.PeerType == ids.FakePeerTypeEmoji || parsedMediaInfo.PeerType == ids.FakePeerTypeSticker) {
+			return NewEntityString("\u2728\ufe0f").Format(telegramfmt.Style{Type: telegramfmt.StyleCustomEmoji, EmojiInfo: emojis.EmojiInfo{DocumentID: parsedMediaInfo.ID}})
+		}
+	} else if file, _ := parser.Store.TelegramFile.GetByMXC(ctx.Ctx, id.ContentURIString(src)); file != nil {
 		if documentID, err := strconv.ParseInt(string(file.LocationID), 10, 64); err == nil {
 			// Hardcode to a sparkle emoji because telegram requires the custom emoji fallback to be an emoji,
 			// but we don't know the actual emoji that should be used.

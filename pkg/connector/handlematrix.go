@@ -804,7 +804,17 @@ func (tc *TelegramClient) PreHandleMatrixReaction(ctx context.Context, msg *brid
 	keyNoVariation := variationselector.Remove(msg.Content.RelatesTo.Key)
 	emojiID := ids.MakeEmojiIDFromEmoticon(msg.Content.RelatesTo.Key)
 	if strings.Contains(msg.Content.RelatesTo.Key, "://") {
-		if file, err := tc.main.Store.TelegramFile.GetByMXC(ctx, id.ContentURIString(msg.Content.RelatesTo.Key)); err != nil {
+		if parsedMXC, err := tc.main.Bridge.Matrix.ParseContentURI(ctx, id.ContentURIString(msg.Content.RelatesTo.Key)); err == nil {
+			parsedMediaInfo, err := ids.ParseDirectMediaInfo(parsedMXC)
+			if err != nil {
+				return resp, fmt.Errorf("failed to parse reaction direct media MXC: %w", err)
+				// Note: the sticker peer type is only allowed here because custom emoji packs
+				// used to be accidentally imported with the wrong type.
+			} else if parsedMediaInfo.PeerType != ids.FakePeerTypeEmoji && parsedMediaInfo.PeerType != ids.FakePeerTypeSticker {
+				return resp, fmt.Errorf("direct media reaction MXC peer type %q is not emoji", parsedMediaInfo.PeerType)
+			}
+			emojiID = ids.MakeEmojiIDFromDocumentID(parsedMediaInfo.ID)
+		} else if file, err := tc.main.Store.TelegramFile.GetByMXC(ctx, id.ContentURIString(msg.Content.RelatesTo.Key)); err != nil {
 			return resp, err
 		} else if file == nil {
 			return resp, fmt.Errorf("reaction MXC URI %s does not correspond with any known Telegram files", msg.Content.RelatesTo.Key)
