@@ -220,6 +220,18 @@ func (tc *TelegramClient) convertToMatrix(
 			cm.Disappear = *disappearingSetting
 		}
 	}
+	if len(cm.Parts) == 0 {
+		cm.Parts = append(cm.Parts, &bridgev2.ConvertedMessagePart{
+			Type: event.EventMessage,
+			Content: &event.MessageEventContent{
+				MsgType: event.MsgNotice,
+				Body:    "Empty message",
+			},
+			Extra: map[string]any{
+				"fi.mau.telegram.unexpected_empty_message": true,
+			},
+		})
+	}
 	if perMessageProfile != nil {
 		cm.Parts[0].Content.BeeperPerMessageProfile = perMessageProfile
 		cm.Parts[0].Content.AddPerMessageProfileFallback()
