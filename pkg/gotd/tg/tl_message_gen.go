@@ -240,7 +240,7 @@ func (m *MessageEmpty) GetPeerID() (value PeerClass, ok bool) {
 	return m.PeerID, true
 }
 
-// Message represents TL type `message#95ef6f2b`.
+// Message represents TL type `message#7600b9d3`.
 // A message
 //
 // See https://core.telegram.org/constructor/message for reference.
@@ -502,10 +502,14 @@ type Message struct {
 	//
 	// Use SetSummaryFromLanguage and GetSummaryFromLanguage helpers.
 	SummaryFromLanguage string
+	// RichMessage field of Message.
+	//
+	// Use SetRichMessage and GetRichMessage helpers.
+	RichMessage RichMessage
 }
 
 // MessageTypeID is TL type id of Message.
-const MessageTypeID = 0x95ef6f2b
+const MessageTypeID = 0x7600b9d3
 
 // construct implements constructor of MessageClass.
 func (m Message) construct() MessageClass { return &m }
@@ -674,6 +678,9 @@ func (m *Message) Zero() bool {
 	if !(m.SummaryFromLanguage == "") {
 		return false
 	}
+	if !(m.RichMessage.Zero()) {
+		return false
+	}
 
 	return true
 }
@@ -737,6 +744,7 @@ func (m *Message) FillFrom(from interface {
 	GetSuggestedPost() (value SuggestedPost, ok bool)
 	GetScheduleRepeatPeriod() (value int, ok bool)
 	GetSummaryFromLanguage() (value string, ok bool)
+	GetRichMessage() (value RichMessage, ok bool)
 }) {
 	m.Out = from.GetOut()
 	m.Mentioned = from.GetMentioned()
@@ -871,6 +879,10 @@ func (m *Message) FillFrom(from interface {
 
 	if val, ok := from.GetSummaryFromLanguage(); ok {
 		m.SummaryFromLanguage = val
+	}
+
+	if val, ok := from.GetRichMessage(); ok {
+		m.RichMessage = val
 	}
 
 }
@@ -1134,6 +1146,11 @@ func (m *Message) TypeInfo() tdp.Type {
 			SchemaName: "summary_from_language",
 			Null:       !m.Flags2.Has(11),
 		},
+		{
+			Name:       "RichMessage",
+			SchemaName: "rich_message",
+			Null:       !m.Flags2.Has(13),
+		},
 	}
 	return typ
 }
@@ -1272,12 +1289,15 @@ func (m *Message) SetFlags() {
 	if !(m.SummaryFromLanguage == "") {
 		m.Flags2.Set(11)
 	}
+	if !(m.RichMessage.Zero()) {
+		m.Flags2.Set(13)
+	}
 }
 
 // Encode implements bin.Encoder.
 func (m *Message) Encode(b *bin.Buffer) error {
 	if m == nil {
-		return fmt.Errorf("can't encode message#95ef6f2b as nil")
+		return fmt.Errorf("can't encode message#7600b9d3 as nil")
 	}
 	b.PutID(MessageTypeID)
 	return m.EncodeBare(b)
@@ -1286,22 +1306,22 @@ func (m *Message) Encode(b *bin.Buffer) error {
 // EncodeBare implements bin.BareEncoder.
 func (m *Message) EncodeBare(b *bin.Buffer) error {
 	if m == nil {
-		return fmt.Errorf("can't encode message#95ef6f2b as nil")
+		return fmt.Errorf("can't encode message#7600b9d3 as nil")
 	}
 	m.SetFlags()
 	if err := m.Flags.Encode(b); err != nil {
-		return fmt.Errorf("unable to encode message#95ef6f2b: field flags: %w", err)
+		return fmt.Errorf("unable to encode message#7600b9d3: field flags: %w", err)
 	}
 	if err := m.Flags2.Encode(b); err != nil {
-		return fmt.Errorf("unable to encode message#95ef6f2b: field flags2: %w", err)
+		return fmt.Errorf("unable to encode message#7600b9d3: field flags2: %w", err)
 	}
 	b.PutInt(m.ID)
 	if m.Flags.Has(8) {
 		if m.FromID == nil {
-			return fmt.Errorf("unable to encode message#95ef6f2b: field from_id is nil")
+			return fmt.Errorf("unable to encode message#7600b9d3: field from_id is nil")
 		}
 		if err := m.FromID.Encode(b); err != nil {
-			return fmt.Errorf("unable to encode message#95ef6f2b: field from_id: %w", err)
+			return fmt.Errorf("unable to encode message#7600b9d3: field from_id: %w", err)
 		}
 	}
 	if m.Flags.Has(29) {
@@ -1311,22 +1331,22 @@ func (m *Message) EncodeBare(b *bin.Buffer) error {
 		b.PutString(m.FromRank)
 	}
 	if m.PeerID == nil {
-		return fmt.Errorf("unable to encode message#95ef6f2b: field peer_id is nil")
+		return fmt.Errorf("unable to encode message#7600b9d3: field peer_id is nil")
 	}
 	if err := m.PeerID.Encode(b); err != nil {
-		return fmt.Errorf("unable to encode message#95ef6f2b: field peer_id: %w", err)
+		return fmt.Errorf("unable to encode message#7600b9d3: field peer_id: %w", err)
 	}
 	if m.Flags.Has(28) {
 		if m.SavedPeerID == nil {
-			return fmt.Errorf("unable to encode message#95ef6f2b: field saved_peer_id is nil")
+			return fmt.Errorf("unable to encode message#7600b9d3: field saved_peer_id is nil")
 		}
 		if err := m.SavedPeerID.Encode(b); err != nil {
-			return fmt.Errorf("unable to encode message#95ef6f2b: field saved_peer_id: %w", err)
+			return fmt.Errorf("unable to encode message#7600b9d3: field saved_peer_id: %w", err)
 		}
 	}
 	if m.Flags.Has(2) {
 		if err := m.FwdFrom.Encode(b); err != nil {
-			return fmt.Errorf("unable to encode message#95ef6f2b: field fwd_from: %w", err)
+			return fmt.Errorf("unable to encode message#7600b9d3: field fwd_from: %w", err)
 		}
 	}
 	if m.Flags.Has(11) {
@@ -1337,46 +1357,46 @@ func (m *Message) EncodeBare(b *bin.Buffer) error {
 	}
 	if m.Flags2.Has(19) {
 		if m.GuestchatViaFrom == nil {
-			return fmt.Errorf("unable to encode message#95ef6f2b: field guestchat_via_from is nil")
+			return fmt.Errorf("unable to encode message#7600b9d3: field guestchat_via_from is nil")
 		}
 		if err := m.GuestchatViaFrom.Encode(b); err != nil {
-			return fmt.Errorf("unable to encode message#95ef6f2b: field guestchat_via_from: %w", err)
+			return fmt.Errorf("unable to encode message#7600b9d3: field guestchat_via_from: %w", err)
 		}
 	}
 	if m.Flags.Has(3) {
 		if m.ReplyTo == nil {
-			return fmt.Errorf("unable to encode message#95ef6f2b: field reply_to is nil")
+			return fmt.Errorf("unable to encode message#7600b9d3: field reply_to is nil")
 		}
 		if err := m.ReplyTo.Encode(b); err != nil {
-			return fmt.Errorf("unable to encode message#95ef6f2b: field reply_to: %w", err)
+			return fmt.Errorf("unable to encode message#7600b9d3: field reply_to: %w", err)
 		}
 	}
 	b.PutInt(m.Date)
 	b.PutString(m.Message)
 	if m.Flags.Has(9) {
 		if m.Media == nil {
-			return fmt.Errorf("unable to encode message#95ef6f2b: field media is nil")
+			return fmt.Errorf("unable to encode message#7600b9d3: field media is nil")
 		}
 		if err := m.Media.Encode(b); err != nil {
-			return fmt.Errorf("unable to encode message#95ef6f2b: field media: %w", err)
+			return fmt.Errorf("unable to encode message#7600b9d3: field media: %w", err)
 		}
 	}
 	if m.Flags.Has(6) {
 		if m.ReplyMarkup == nil {
-			return fmt.Errorf("unable to encode message#95ef6f2b: field reply_markup is nil")
+			return fmt.Errorf("unable to encode message#7600b9d3: field reply_markup is nil")
 		}
 		if err := m.ReplyMarkup.Encode(b); err != nil {
-			return fmt.Errorf("unable to encode message#95ef6f2b: field reply_markup: %w", err)
+			return fmt.Errorf("unable to encode message#7600b9d3: field reply_markup: %w", err)
 		}
 	}
 	if m.Flags.Has(7) {
 		b.PutVectorHeader(len(m.Entities))
 		for idx, v := range m.Entities {
 			if v == nil {
-				return fmt.Errorf("unable to encode message#95ef6f2b: field entities element with index %d is nil", idx)
+				return fmt.Errorf("unable to encode message#7600b9d3: field entities element with index %d is nil", idx)
 			}
 			if err := v.Encode(b); err != nil {
-				return fmt.Errorf("unable to encode message#95ef6f2b: field entities element with index %d: %w", idx, err)
+				return fmt.Errorf("unable to encode message#7600b9d3: field entities element with index %d: %w", idx, err)
 			}
 		}
 	}
@@ -1388,7 +1408,7 @@ func (m *Message) EncodeBare(b *bin.Buffer) error {
 	}
 	if m.Flags.Has(23) {
 		if err := m.Replies.Encode(b); err != nil {
-			return fmt.Errorf("unable to encode message#95ef6f2b: field replies: %w", err)
+			return fmt.Errorf("unable to encode message#7600b9d3: field replies: %w", err)
 		}
 	}
 	if m.Flags.Has(15) {
@@ -1402,14 +1422,14 @@ func (m *Message) EncodeBare(b *bin.Buffer) error {
 	}
 	if m.Flags.Has(20) {
 		if err := m.Reactions.Encode(b); err != nil {
-			return fmt.Errorf("unable to encode message#95ef6f2b: field reactions: %w", err)
+			return fmt.Errorf("unable to encode message#7600b9d3: field reactions: %w", err)
 		}
 	}
 	if m.Flags.Has(22) {
 		b.PutVectorHeader(len(m.RestrictionReason))
 		for idx, v := range m.RestrictionReason {
 			if err := v.Encode(b); err != nil {
-				return fmt.Errorf("unable to encode message#95ef6f2b: field restriction_reason element with index %d: %w", idx, err)
+				return fmt.Errorf("unable to encode message#7600b9d3: field restriction_reason element with index %d: %w", idx, err)
 			}
 		}
 	}
@@ -1424,7 +1444,7 @@ func (m *Message) EncodeBare(b *bin.Buffer) error {
 	}
 	if m.Flags2.Has(3) {
 		if err := m.Factcheck.Encode(b); err != nil {
-			return fmt.Errorf("unable to encode message#95ef6f2b: field factcheck: %w", err)
+			return fmt.Errorf("unable to encode message#7600b9d3: field factcheck: %w", err)
 		}
 	}
 	if m.Flags2.Has(5) {
@@ -1435,7 +1455,7 @@ func (m *Message) EncodeBare(b *bin.Buffer) error {
 	}
 	if m.Flags2.Has(7) {
 		if err := m.SuggestedPost.Encode(b); err != nil {
-			return fmt.Errorf("unable to encode message#95ef6f2b: field suggested_post: %w", err)
+			return fmt.Errorf("unable to encode message#7600b9d3: field suggested_post: %w", err)
 		}
 	}
 	if m.Flags2.Has(10) {
@@ -1444,16 +1464,21 @@ func (m *Message) EncodeBare(b *bin.Buffer) error {
 	if m.Flags2.Has(11) {
 		b.PutString(m.SummaryFromLanguage)
 	}
+	if m.Flags2.Has(13) {
+		if err := m.RichMessage.Encode(b); err != nil {
+			return fmt.Errorf("unable to encode message#7600b9d3: field rich_message: %w", err)
+		}
+	}
 	return nil
 }
 
 // Decode implements bin.Decoder.
 func (m *Message) Decode(b *bin.Buffer) error {
 	if m == nil {
-		return fmt.Errorf("can't decode message#95ef6f2b to nil")
+		return fmt.Errorf("can't decode message#7600b9d3 to nil")
 	}
 	if err := b.ConsumeID(MessageTypeID); err != nil {
-		return fmt.Errorf("unable to decode message#95ef6f2b: %w", err)
+		return fmt.Errorf("unable to decode message#7600b9d3: %w", err)
 	}
 	return m.DecodeBare(b)
 }
@@ -1461,11 +1486,11 @@ func (m *Message) Decode(b *bin.Buffer) error {
 // DecodeBare implements bin.BareDecoder.
 func (m *Message) DecodeBare(b *bin.Buffer) error {
 	if m == nil {
-		return fmt.Errorf("can't decode message#95ef6f2b to nil")
+		return fmt.Errorf("can't decode message#7600b9d3 to nil")
 	}
 	{
 		if err := m.Flags.Decode(b); err != nil {
-			return fmt.Errorf("unable to decode message#95ef6f2b: field flags: %w", err)
+			return fmt.Errorf("unable to decode message#7600b9d3: field flags: %w", err)
 		}
 	}
 	m.Out = m.Flags.Has(1)
@@ -1481,7 +1506,7 @@ func (m *Message) DecodeBare(b *bin.Buffer) error {
 	m.InvertMedia = m.Flags.Has(27)
 	{
 		if err := m.Flags2.Decode(b); err != nil {
-			return fmt.Errorf("unable to decode message#95ef6f2b: field flags2: %w", err)
+			return fmt.Errorf("unable to decode message#7600b9d3: field flags2: %w", err)
 		}
 	}
 	m.Offline = m.Flags2.Has(1)
@@ -1491,110 +1516,110 @@ func (m *Message) DecodeBare(b *bin.Buffer) error {
 	{
 		value, err := b.Int()
 		if err != nil {
-			return fmt.Errorf("unable to decode message#95ef6f2b: field id: %w", err)
+			return fmt.Errorf("unable to decode message#7600b9d3: field id: %w", err)
 		}
 		m.ID = value
 	}
 	if m.Flags.Has(8) {
 		value, err := DecodePeer(b)
 		if err != nil {
-			return fmt.Errorf("unable to decode message#95ef6f2b: field from_id: %w", err)
+			return fmt.Errorf("unable to decode message#7600b9d3: field from_id: %w", err)
 		}
 		m.FromID = value
 	}
 	if m.Flags.Has(29) {
 		value, err := b.Int()
 		if err != nil {
-			return fmt.Errorf("unable to decode message#95ef6f2b: field from_boosts_applied: %w", err)
+			return fmt.Errorf("unable to decode message#7600b9d3: field from_boosts_applied: %w", err)
 		}
 		m.FromBoostsApplied = value
 	}
 	if m.Flags2.Has(12) {
 		value, err := b.String()
 		if err != nil {
-			return fmt.Errorf("unable to decode message#95ef6f2b: field from_rank: %w", err)
+			return fmt.Errorf("unable to decode message#7600b9d3: field from_rank: %w", err)
 		}
 		m.FromRank = value
 	}
 	{
 		value, err := DecodePeer(b)
 		if err != nil {
-			return fmt.Errorf("unable to decode message#95ef6f2b: field peer_id: %w", err)
+			return fmt.Errorf("unable to decode message#7600b9d3: field peer_id: %w", err)
 		}
 		m.PeerID = value
 	}
 	if m.Flags.Has(28) {
 		value, err := DecodePeer(b)
 		if err != nil {
-			return fmt.Errorf("unable to decode message#95ef6f2b: field saved_peer_id: %w", err)
+			return fmt.Errorf("unable to decode message#7600b9d3: field saved_peer_id: %w", err)
 		}
 		m.SavedPeerID = value
 	}
 	if m.Flags.Has(2) {
 		if err := m.FwdFrom.Decode(b); err != nil {
-			return fmt.Errorf("unable to decode message#95ef6f2b: field fwd_from: %w", err)
+			return fmt.Errorf("unable to decode message#7600b9d3: field fwd_from: %w", err)
 		}
 	}
 	if m.Flags.Has(11) {
 		value, err := b.Long()
 		if err != nil {
-			return fmt.Errorf("unable to decode message#95ef6f2b: field via_bot_id: %w", err)
+			return fmt.Errorf("unable to decode message#7600b9d3: field via_bot_id: %w", err)
 		}
 		m.ViaBotID = value
 	}
 	if m.Flags2.Has(0) {
 		value, err := b.Long()
 		if err != nil {
-			return fmt.Errorf("unable to decode message#95ef6f2b: field via_business_bot_id: %w", err)
+			return fmt.Errorf("unable to decode message#7600b9d3: field via_business_bot_id: %w", err)
 		}
 		m.ViaBusinessBotID = value
 	}
 	if m.Flags2.Has(19) {
 		value, err := DecodePeer(b)
 		if err != nil {
-			return fmt.Errorf("unable to decode message#95ef6f2b: field guestchat_via_from: %w", err)
+			return fmt.Errorf("unable to decode message#7600b9d3: field guestchat_via_from: %w", err)
 		}
 		m.GuestchatViaFrom = value
 	}
 	if m.Flags.Has(3) {
 		value, err := DecodeMessageReplyHeader(b)
 		if err != nil {
-			return fmt.Errorf("unable to decode message#95ef6f2b: field reply_to: %w", err)
+			return fmt.Errorf("unable to decode message#7600b9d3: field reply_to: %w", err)
 		}
 		m.ReplyTo = value
 	}
 	{
 		value, err := b.Int()
 		if err != nil {
-			return fmt.Errorf("unable to decode message#95ef6f2b: field date: %w", err)
+			return fmt.Errorf("unable to decode message#7600b9d3: field date: %w", err)
 		}
 		m.Date = value
 	}
 	{
 		value, err := b.String()
 		if err != nil {
-			return fmt.Errorf("unable to decode message#95ef6f2b: field message: %w", err)
+			return fmt.Errorf("unable to decode message#7600b9d3: field message: %w", err)
 		}
 		m.Message = value
 	}
 	if m.Flags.Has(9) {
 		value, err := DecodeMessageMedia(b)
 		if err != nil {
-			return fmt.Errorf("unable to decode message#95ef6f2b: field media: %w", err)
+			return fmt.Errorf("unable to decode message#7600b9d3: field media: %w", err)
 		}
 		m.Media = value
 	}
 	if m.Flags.Has(6) {
 		value, err := DecodeReplyMarkup(b)
 		if err != nil {
-			return fmt.Errorf("unable to decode message#95ef6f2b: field reply_markup: %w", err)
+			return fmt.Errorf("unable to decode message#7600b9d3: field reply_markup: %w", err)
 		}
 		m.ReplyMarkup = value
 	}
 	if m.Flags.Has(7) {
 		headerLen, err := b.VectorHeader()
 		if err != nil {
-			return fmt.Errorf("unable to decode message#95ef6f2b: field entities: %w", err)
+			return fmt.Errorf("unable to decode message#7600b9d3: field entities: %w", err)
 		}
 
 		if headerLen > 0 {
@@ -1603,7 +1628,7 @@ func (m *Message) DecodeBare(b *bin.Buffer) error {
 		for idx := 0; idx < headerLen; idx++ {
 			value, err := DecodeMessageEntity(b)
 			if err != nil {
-				return fmt.Errorf("unable to decode message#95ef6f2b: field entities: %w", err)
+				return fmt.Errorf("unable to decode message#7600b9d3: field entities: %w", err)
 			}
 			m.Entities = append(m.Entities, value)
 		}
@@ -1611,52 +1636,52 @@ func (m *Message) DecodeBare(b *bin.Buffer) error {
 	if m.Flags.Has(10) {
 		value, err := b.Int()
 		if err != nil {
-			return fmt.Errorf("unable to decode message#95ef6f2b: field views: %w", err)
+			return fmt.Errorf("unable to decode message#7600b9d3: field views: %w", err)
 		}
 		m.Views = value
 	}
 	if m.Flags.Has(10) {
 		value, err := b.Int()
 		if err != nil {
-			return fmt.Errorf("unable to decode message#95ef6f2b: field forwards: %w", err)
+			return fmt.Errorf("unable to decode message#7600b9d3: field forwards: %w", err)
 		}
 		m.Forwards = value
 	}
 	if m.Flags.Has(23) {
 		if err := m.Replies.Decode(b); err != nil {
-			return fmt.Errorf("unable to decode message#95ef6f2b: field replies: %w", err)
+			return fmt.Errorf("unable to decode message#7600b9d3: field replies: %w", err)
 		}
 	}
 	if m.Flags.Has(15) {
 		value, err := b.Int()
 		if err != nil {
-			return fmt.Errorf("unable to decode message#95ef6f2b: field edit_date: %w", err)
+			return fmt.Errorf("unable to decode message#7600b9d3: field edit_date: %w", err)
 		}
 		m.EditDate = value
 	}
 	if m.Flags.Has(16) {
 		value, err := b.String()
 		if err != nil {
-			return fmt.Errorf("unable to decode message#95ef6f2b: field post_author: %w", err)
+			return fmt.Errorf("unable to decode message#7600b9d3: field post_author: %w", err)
 		}
 		m.PostAuthor = value
 	}
 	if m.Flags.Has(17) {
 		value, err := b.Long()
 		if err != nil {
-			return fmt.Errorf("unable to decode message#95ef6f2b: field grouped_id: %w", err)
+			return fmt.Errorf("unable to decode message#7600b9d3: field grouped_id: %w", err)
 		}
 		m.GroupedID = value
 	}
 	if m.Flags.Has(20) {
 		if err := m.Reactions.Decode(b); err != nil {
-			return fmt.Errorf("unable to decode message#95ef6f2b: field reactions: %w", err)
+			return fmt.Errorf("unable to decode message#7600b9d3: field reactions: %w", err)
 		}
 	}
 	if m.Flags.Has(22) {
 		headerLen, err := b.VectorHeader()
 		if err != nil {
-			return fmt.Errorf("unable to decode message#95ef6f2b: field restriction_reason: %w", err)
+			return fmt.Errorf("unable to decode message#7600b9d3: field restriction_reason: %w", err)
 		}
 
 		if headerLen > 0 {
@@ -1665,7 +1690,7 @@ func (m *Message) DecodeBare(b *bin.Buffer) error {
 		for idx := 0; idx < headerLen; idx++ {
 			var value RestrictionReason
 			if err := value.Decode(b); err != nil {
-				return fmt.Errorf("unable to decode message#95ef6f2b: field restriction_reason: %w", err)
+				return fmt.Errorf("unable to decode message#7600b9d3: field restriction_reason: %w", err)
 			}
 			m.RestrictionReason = append(m.RestrictionReason, value)
 		}
@@ -1673,61 +1698,66 @@ func (m *Message) DecodeBare(b *bin.Buffer) error {
 	if m.Flags.Has(25) {
 		value, err := b.Int()
 		if err != nil {
-			return fmt.Errorf("unable to decode message#95ef6f2b: field ttl_period: %w", err)
+			return fmt.Errorf("unable to decode message#7600b9d3: field ttl_period: %w", err)
 		}
 		m.TTLPeriod = value
 	}
 	if m.Flags.Has(30) {
 		value, err := b.Int()
 		if err != nil {
-			return fmt.Errorf("unable to decode message#95ef6f2b: field quick_reply_shortcut_id: %w", err)
+			return fmt.Errorf("unable to decode message#7600b9d3: field quick_reply_shortcut_id: %w", err)
 		}
 		m.QuickReplyShortcutID = value
 	}
 	if m.Flags2.Has(2) {
 		value, err := b.Long()
 		if err != nil {
-			return fmt.Errorf("unable to decode message#95ef6f2b: field effect: %w", err)
+			return fmt.Errorf("unable to decode message#7600b9d3: field effect: %w", err)
 		}
 		m.Effect = value
 	}
 	if m.Flags2.Has(3) {
 		if err := m.Factcheck.Decode(b); err != nil {
-			return fmt.Errorf("unable to decode message#95ef6f2b: field factcheck: %w", err)
+			return fmt.Errorf("unable to decode message#7600b9d3: field factcheck: %w", err)
 		}
 	}
 	if m.Flags2.Has(5) {
 		value, err := b.Int()
 		if err != nil {
-			return fmt.Errorf("unable to decode message#95ef6f2b: field report_delivery_until_date: %w", err)
+			return fmt.Errorf("unable to decode message#7600b9d3: field report_delivery_until_date: %w", err)
 		}
 		m.ReportDeliveryUntilDate = value
 	}
 	if m.Flags2.Has(6) {
 		value, err := b.Long()
 		if err != nil {
-			return fmt.Errorf("unable to decode message#95ef6f2b: field paid_message_stars: %w", err)
+			return fmt.Errorf("unable to decode message#7600b9d3: field paid_message_stars: %w", err)
 		}
 		m.PaidMessageStars = value
 	}
 	if m.Flags2.Has(7) {
 		if err := m.SuggestedPost.Decode(b); err != nil {
-			return fmt.Errorf("unable to decode message#95ef6f2b: field suggested_post: %w", err)
+			return fmt.Errorf("unable to decode message#7600b9d3: field suggested_post: %w", err)
 		}
 	}
 	if m.Flags2.Has(10) {
 		value, err := b.Int()
 		if err != nil {
-			return fmt.Errorf("unable to decode message#95ef6f2b: field schedule_repeat_period: %w", err)
+			return fmt.Errorf("unable to decode message#7600b9d3: field schedule_repeat_period: %w", err)
 		}
 		m.ScheduleRepeatPeriod = value
 	}
 	if m.Flags2.Has(11) {
 		value, err := b.String()
 		if err != nil {
-			return fmt.Errorf("unable to decode message#95ef6f2b: field summary_from_language: %w", err)
+			return fmt.Errorf("unable to decode message#7600b9d3: field summary_from_language: %w", err)
 		}
 		m.SummaryFromLanguage = value
+	}
+	if m.Flags2.Has(13) {
+		if err := m.RichMessage.Decode(b); err != nil {
+			return fmt.Errorf("unable to decode message#7600b9d3: field rich_message: %w", err)
+		}
 	}
 	return nil
 }
@@ -2571,6 +2601,24 @@ func (m *Message) GetSummaryFromLanguage() (value string, ok bool) {
 	return m.SummaryFromLanguage, true
 }
 
+// SetRichMessage sets value of RichMessage conditional field.
+func (m *Message) SetRichMessage(value RichMessage) {
+	m.Flags2.Set(13)
+	m.RichMessage = value
+}
+
+// GetRichMessage returns value of RichMessage conditional field and
+// boolean which is true if field was set.
+func (m *Message) GetRichMessage() (value RichMessage, ok bool) {
+	if m == nil {
+		return
+	}
+	if !m.Flags2.Has(13) {
+		return value, false
+	}
+	return m.RichMessage, true
+}
+
 // MapEntities returns field Entities wrapped in MessageEntityClassArray helper.
 func (m *Message) MapEntities() (value MessageEntityClassArray, ok bool) {
 	if !m.Flags.Has(7) {
@@ -3353,7 +3401,7 @@ const MessageClassName = "Message"
 //	}
 //	switch v := g.(type) {
 //	case *tg.MessageEmpty: // messageEmpty#90a6ca84
-//	case *tg.Message: // message#95ef6f2b
+//	case *tg.Message: // message#7600b9d3
 //	case *tg.MessageService: // messageService#7a800e0a
 //	default: panic(v)
 //	}
@@ -3512,7 +3560,7 @@ func DecodeMessage(buf *bin.Buffer) (MessageClass, error) {
 		}
 		return &v, nil
 	case MessageTypeID:
-		// Decoding message#95ef6f2b.
+		// Decoding message#7600b9d3.
 		v := Message{}
 		if err := v.Decode(buf); err != nil {
 			return nil, fmt.Errorf("unable to decode MessageClass: %w", err)

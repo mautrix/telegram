@@ -67,12 +67,16 @@ func (m *Manager) ImportInvite(ctx context.Context, hash string) (Peer, error) {
 }
 
 func (m *Manager) importInvite(ctx context.Context, hash string) (tg.ChatClass, error) {
-	u, err := m.api.MessagesImportChatInvite(ctx, hash)
+	b, err := m.api.MessagesImportChatInvite(ctx, hash)
 	if err != nil {
 		return nil, errors.Wrap(err, "import invite")
 	}
+	u, ok := b.(*tg.MessagesChatInviteJoinResultOk)
+	if !ok {
+		return nil, errors.Errorf("bad result %T type", b)
+	}
 
-	updates, ok := u.(updateWithChats)
+	updates, ok := u.Updates.(updateWithChats)
 	if !ok {
 		return nil, errors.Errorf("bad result %T type", u)
 	}

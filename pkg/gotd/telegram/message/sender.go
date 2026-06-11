@@ -238,7 +238,8 @@ func (s *Sender) importChatInvite(
 	ctx context.Context,
 	hash string,
 ) (tg.UpdatesClass, error) {
-	return s.raw.MessagesImportChatInvite(ctx, hash)
+	//return s.raw.MessagesImportChatInvite(ctx, hash)
+	return nil, nil
 }
 
 // joinChannel joins a channel/supergroup.
@@ -246,7 +247,8 @@ func (s *Sender) joinChannel(
 	ctx context.Context,
 	input tg.InputChannelClass,
 ) (tg.UpdatesClass, error) {
-	return s.raw.ChannelsJoinChannel(ctx, input)
+	//return s.raw.ChannelsJoinChannel(ctx, input)
+	return nil, nil
 }
 
 // leaveChannel leaves a channel/supergroup.

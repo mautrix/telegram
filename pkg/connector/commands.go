@@ -141,7 +141,7 @@ func fnJoin(ce *commands.Event) {
 		}
 	}
 	t := login.Client.(*TelegramClient)
-	var resp tg.UpdatesClass
+	var resp tg.MessagesChatInviteJoinResultClass
 	var chatName string
 	if usernameMatch := usernameLinkRe.FindStringSubmatch(ce.Args[0]); usernameMatch != nil {
 		resolve, err := t.client.API().ContactsResolveUsername(ce.Ctx, &tg.ContactsResolveUsernameRequest{Username: usernameMatch[1]})
@@ -208,13 +208,20 @@ func fnJoin(ce *commands.Event) {
 		ce.Reply("Invalid invite link format")
 		return
 	}
-	err := t.dispatcher.Handle(ce.Ctx, resp)
-	if err != nil {
-		ce.Log.Err(err).Msg("Failed to handle updates from joining chat with invite link")
-	} else {
-		ce.Log.Debug().Msg("Finished handling updates from joining chat with invite link")
+	switch realResp := resp.(type) {
+	case *tg.MessagesChatInviteJoinResultOk:
+		err := t.dispatcher.Handle(ce.Ctx, realResp.Updates)
+		if err != nil {
+			ce.Log.Err(err).Msg("Failed to handle updates from joining chat with invite link")
+		} else {
+			ce.Log.Debug().Msg("Finished handling updates from joining chat with invite link")
+		}
+		ce.Reply("Successfully joined %s", html.EscapeString(chatName))
+	case *tg.MessagesChatInviteJoinResultWebView:
+		ce.Reply("The chat wants you to open a webview to join. Please use the native Telegram app.")
+	default:
+		ce.Reply("Unexpected response for join request")
 	}
-	ce.Reply("Successfully joined %s", html.EscapeString(chatName))
 }
 
 var cmdEmojiPack = &commands.FullHandler{

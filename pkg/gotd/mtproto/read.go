@@ -123,6 +123,9 @@ func (c *Conn) handleAuthKeyNotFound(ctx context.Context) error {
 		// this code branch should be unreachable.
 		c.log.Warn("BUG: zero session id found")
 	}
+	// TODO the client can sometimes get stuck in a "rpc error code 400: CONNECTION_NOT_INITED"
+	//      loop after this. Maybe force reconnect or something?
+	//      Somehow it does *not* necessarily mean the client is logged out
 	c.log.Warn("Re-generating keys (server not found key that we provided)")
 	if err := c.createAuthKey(ctx); err != nil {
 		return errors.Wrap(err, "unable to create auth key")
