@@ -22,6 +22,7 @@ import (
 
 	"github.com/rs/zerolog"
 	"golang.org/x/exp/maps"
+	"maunium.net/go/mautrix/bridgev2"
 	"maunium.net/go/mautrix/bridgev2/networkid"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
@@ -37,10 +38,12 @@ type UserInfo struct {
 }
 
 type FormatParams struct {
+	Bridge                *bridgev2.Bridge
 	CustomEmojis          map[networkid.EmojiID]emojis.EmojiInfo
 	GetUserInfoByUsername func(ctx context.Context, username string) (UserInfo, error)
 	GetUserInfoByID       func(ctx context.Context, id int64) (UserInfo, error)
 	NormalizeURL          func(ctx context.Context, url string) string
+	MakePortalKeyFromID   func(peerType ids.PeerType, chatID int64, topicID int) networkid.PortalKey
 }
 
 func (fp FormatParams) WithCustomEmojis(emojis map[networkid.EmojiID]emojis.EmojiInfo) FormatParams {
@@ -49,6 +52,7 @@ func (fp FormatParams) WithCustomEmojis(emojis map[networkid.EmojiID]emojis.Emoj
 		GetUserInfoByUsername: fp.GetUserInfoByUsername,
 		GetUserInfoByID:       fp.GetUserInfoByID,
 		NormalizeURL:          fp.NormalizeURL,
+		MakePortalKeyFromID:   fp.MakePortalKeyFromID,
 	}
 }
 

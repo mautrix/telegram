@@ -20,6 +20,8 @@ import (
 	"fmt"
 	"strings"
 	"unicode/utf16"
+
+	"go.mau.fi/mautrix-telegram/pkg/connector/emojis"
 )
 
 func (m Mention) Format(message string) string {
@@ -59,21 +61,28 @@ func (s Style) Format(message string) string {
 	case StyleTextURL, StyleURL:
 		return fmt.Sprintf(`<a href="%s">%s</a>`, s.URL, message)
 	case StyleCustomEmoji:
-		if s.EmojiInfo.Emoji != "" {
-			return s.EmojiInfo.Emoji
-		} else if s.EmojiInfo.EmojiURI != "" {
-			return fmt.Sprintf(
-				`<img data-mx-emoticon src="%s" height="32" width="32" alt="%s" title="%s"/>`,
-				s.EmojiInfo.EmojiURI, message, message,
-			)
-		}
-		return message
-	case StyleBotCommand, StyleHashtag, StyleCashtag, StylePhone:
-		return fmt.Sprintf(`<font color="#3771bb">%s</font>`, message)
+		return emojiInfoToHTML(s.EmojiInfo, message)
+	case StyleBotCommand, StyleHashtag, StyleCashtag, StylePhone, StyleBankCard:
+		return fmt.Sprintf(`<span data-mx-color="%s">%s</font>`, hashColor, message)
 	default:
 		return message
 	}
 }
+
+func emojiInfoToHTML(info emojis.EmojiInfo, fallback string) string {
+	if info.Emoji != "" {
+		return info.Emoji
+	} else if info.EmojiURI != "" {
+		return fmt.Sprintf(
+			`<img data-mx-emoticon src="%s" height="32" width="32" alt="%s" title="%s"/>`,
+			info.EmojiURI, fallback, fallback,
+		)
+	}
+	return fallback
+}
+
+const hashColor = "#3771bb"
+const highlightBackgroundColor = "#fff4a3"
 
 type UTF16String []uint16
 

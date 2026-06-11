@@ -177,7 +177,15 @@ func (tc *TelegramClient) convertToMatrix(
 
 	cm = &bridgev2.ConvertedMessage{}
 	hasher := sha256.New()
-	if len(msg.Message) > 0 {
+	if rm, ok := msg.GetRichMessage(); ok {
+		// TODO this probably won't write anything, add a better hasher
+		hasher.Write([]byte(msg.Message))
+		content := tc.parseRichText(ctx, &rm)
+		cm.Parts = []*bridgev2.ConvertedMessagePart{{
+			Type:    event.EventMessage,
+			Content: content,
+		}}
+	} else if len(msg.Message) > 0 || (msg.Media != nil && msg.Media.TypeID() == tg.MessageMediaWebPageTypeID) {
 		hasher.Write([]byte(msg.Message))
 
 		content := tc.parseBodyAndHTML(ctx, msg.Message, msg.Entities)
@@ -441,6 +449,17 @@ func (tc *TelegramClient) parseBodyAndHTML(ctx context.Context, message string, 
 			Msg("Failed to transfer custom emojis to Matrix")
 	}
 	return telegramfmt.Parse(ctx, message, entities, tc.telegramFmtParams.WithCustomEmojis(customEmojis))
+}
+
+func (tc *TelegramClient) parseRichText(ctx context.Context, message *tg.RichMessage) *event.MessageEventContent {
+	customEmojiIDs := telegramfmt.FindRichTextCustomEmojis(message.Blocks)
+	customEmojis, err := tc.transferEmojisToMatrix(ctx, customEmojiIDs)
+	if err != nil {
+		zerolog.Ctx(ctx).Err(err).
+			Ints64("emoji_ids", customEmojiIDs).
+			Msg("Failed to transfer custom emojis to Matrix")
+	}
+	return telegramfmt.ParseRichText(ctx, message, tc.telegramFmtParams.WithCustomEmojis(customEmojis))
 }
 
 func (tc *TelegramClient) webpageToBeeperLinkPreview(ctx context.Context, portal *bridgev2.Portal, intent bridgev2.MatrixAPI, msg *tg.Message, msgMedia tg.MessageMediaClass) (preview *event.BeeperLinkPreview, err error) {
