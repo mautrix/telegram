@@ -73,6 +73,8 @@ func mediaHashID(ctx context.Context, m tg.MessageMediaClass) []byte {
 		} else {
 			zerolog.Ctx(ctx).Debug().Msg("Attempted to get hash for nil document")
 		}
+	case *tg.MessageMediaWebPage:
+		return nil
 	default:
 		zerolog.Ctx(ctx).Debug().Type("media_type", m).Msg("Attempted to get hash for unsupported media type ID")
 	}
@@ -92,6 +94,10 @@ func (tc *TelegramClient) mediaToMatrix(
 
 	switch media.TypeID() {
 	case tg.MessageMediaWebPageTypeID:
+		if tc.main.Config.VideoURLPreviewAsFile && unwrapWebPage(media) != nil {
+			converted, disappearingSetting := tc.convertMediaRequiringUpload(ctx, portal, intent, msg.ID, media, true)
+			return converted, disappearingSetting, mediaHashID(ctx, media)
+		}
 		// Already handled in the message handling
 		return nil, nil, nil
 	case tg.MessageMediaUnsupportedTypeID:
@@ -476,7 +482,7 @@ func (tc *TelegramClient) webpageToBeeperLinkPreview(ctx context.Context, portal
 		},
 	}
 
-	if photo, ok := webpage.Photo.(*tg.Photo); ok {
+	if photo, ok := webpage.Photo.(*tg.Photo); ok && (!tc.main.Config.VideoURLPreviewAsFile || unwrapWebPage(msgMedia) == nil) {
 		var fileInfo *event.FileInfo
 		transferer := media.NewTransferer(tc.client.API()).WithPhoto(photo)
 		if tc.main.useDirectMedia {
@@ -497,6 +503,26 @@ func (tc *TelegramClient) webpageToBeeperLinkPreview(ctx context.Context, portal
 	}
 
 	return preview, nil
+}
+
+func unwrapWebPage(msgMedia tg.MessageMediaClass) *tg.MessageMediaDocument {
+	mediaWebPage, ok := msgMedia.(*tg.MessageMediaWebPage)
+	if !ok || mediaWebPage.Webpage == nil {
+		return nil
+	}
+	webpage, ok := mediaWebPage.Webpage.(*tg.WebPage)
+	if !ok || webpage.Document == nil {
+		return nil
+	}
+	doc, ok := webpage.Document.AsNotEmpty()
+	if !ok {
+		return nil
+	}
+	return &tg.MessageMediaDocument{
+		Video:      true,
+		Document:   doc,
+		VideoCover: webpage.Photo,
+	}
 }
 
 func (tc *TelegramClient) convertMediaRequiringUpload(
@@ -522,6 +548,12 @@ func (tc *TelegramClient) convertMediaRequiringUpload(
 
 	transferer := media.NewTransferer(tc.client.API()).WithRoomID(portal.MXID)
 	var mediaTransferer *media.ReadyTransferer
+
+	isWebPage := false
+	if unwrapped := unwrapWebPage(msgMedia); unwrapped != nil {
+		msgMedia = unwrapped
+		isWebPage = true
+	}
 
 	if t, ok := msgMedia.(ttlable); ok {
 		if ttl, ok := t.GetTTLSeconds(); ok {
@@ -709,30 +741,34 @@ func (tc *TelegramClient) convertMediaRequiringUpload(
 			}
 		}
 
+		var thumbnailURL id.ContentURIString
+		var thumbnailFile *event.EncryptedFileInfo
+		var thumbnailInfo *event.FileInfo
+		var err error
+		var thumbnailTransferer *media.ReadyTransferer
 		if _, ok := document.GetThumbs(); ok && eventType != event.EventSticker {
-			var thumbnailURL id.ContentURIString
-			var thumbnailFile *event.EncryptedFileInfo
-			var thumbnailInfo *event.FileInfo
-			var err error
-
-			thumbnailTransferer := media.NewTransferer(tc.client.API()).
+			thumbnailTransferer = media.NewTransferer(tc.client.API()).
 				WithRoomID(portal.MXID).
 				WithDocument(document, true)
-			if tc.main.useDirectMedia {
-				thumbnailURL, thumbnailInfo, err = thumbnailTransferer.DirectDownloadURL(ctx, tc.telegramUserID, portal, msgID, true, document.ID)
-				if err != nil {
-					log.Err(err).Msg("Failed to create direct download URL for thumbnail")
-				}
+		} else if msgMedia.VideoCover != nil && isWebPage {
+			thumbnailTransferer = media.NewTransferer(tc.client.API()).
+				WithRoomID(portal.MXID).
+				WithPhoto(msgMedia.VideoCover.(*tg.Photo))
+		}
+		if tc.main.useDirectMedia && thumbnailTransferer != nil {
+			thumbnailURL, thumbnailInfo, err = thumbnailTransferer.DirectDownloadURL(ctx, tc.telegramUserID, portal, msgID, true, document.ID)
+			if err != nil {
+				log.Err(err).Msg("Failed to create direct download URL for thumbnail")
 			}
-			if thumbnailURL == "" {
-				thumbnailURL, thumbnailFile, thumbnailInfo, err = thumbnailTransferer.Transfer(ctx, tc.main.Store, intent)
-				if err != nil {
-					log.Err(err).Msg("Failed to transfer thumbnail")
-				}
+		}
+		if thumbnailURL == "" && thumbnailTransferer != nil {
+			thumbnailURL, thumbnailFile, thumbnailInfo, err = thumbnailTransferer.Transfer(ctx, tc.main.Store, intent)
+			if err != nil {
+				log.Err(err).Msg("Failed to transfer thumbnail")
 			}
-			if thumbnailURL != "" || thumbnailFile != nil {
-				transferer = transferer.WithThumbnail(thumbnailURL, thumbnailFile, thumbnailInfo)
-			}
+		}
+		if thumbnailURL != "" || thumbnailFile != nil {
+			transferer = transferer.WithThumbnail(thumbnailURL, thumbnailFile, thumbnailInfo)
 		}
 
 		mediaTransferer = transferer.

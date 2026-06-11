@@ -192,7 +192,12 @@ func (tc *TelegramConnector) Download(ctx context.Context, mediaID networkid.Med
 				return nil, fmt.Errorf("not a *tg.WebPage: %T", msgMedia.Webpage)
 			}
 
-			if pc, ok := webpage.GetPhoto(); ok && pc.TypeID() == tg.PhotoTypeID {
+			if doc, ok := webpage.GetDocument(); ok && !info.Thumbnail && doc.TypeID() == tg.DocumentTypeID {
+				log.Debug().
+					Int64("document_id", doc.GetID()).
+					Msg("downloading webpage document")
+				readyTransferer = transferer.WithDocument(doc, false)
+			} else if pc, ok := webpage.GetPhoto(); ok && pc.TypeID() == tg.PhotoTypeID {
 				log.Debug().
 					Int64("photo_id", pc.GetID()).
 					Msg("downloading webpage photo")
