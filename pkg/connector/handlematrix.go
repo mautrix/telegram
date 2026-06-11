@@ -55,7 +55,6 @@ import (
 	"maunium.net/go/mautrix/id"
 
 	"go.mau.fi/mautrix-telegram/pkg/connector/media"
-	"go.mau.fi/mautrix-telegram/pkg/gotd/telegram/message"
 	"go.mau.fi/mautrix-telegram/pkg/gotd/telegram/uploader"
 	"go.mau.fi/mautrix-telegram/pkg/gotd/tg"
 	"go.mau.fi/mautrix-telegram/pkg/gotd/tgerr"
@@ -775,11 +774,20 @@ func (tc *TelegramClient) HandleMatrixMessageRemove(ctx context.Context, msg *br
 		return err
 	} else if peer, _, err := tc.inputPeerForPortalID(ctx, msg.Portal.ID); err != nil {
 		return err
+	} else if ch, ok := peer.(*tg.InputPeerChannel); ok {
+		_, err = tc.client.API().ChannelsDeleteMessages(ctx, &tg.ChannelsDeleteMessagesRequest{
+			Channel: &tg.InputChannel{
+				ChannelID:  ch.ChannelID,
+				AccessHash: ch.AccessHash,
+			},
+			ID: []int{messageID},
+		})
+		return err
 	} else {
-		_, err := message.NewSender(tc.client.API()).
-			To(peer).
-			Revoke().
-			Messages(ctx, messageID)
+		_, err = tc.client.API().MessagesDeleteMessages(ctx, &tg.MessagesDeleteMessagesRequest{
+			Revoke: true,
+			ID:     []int{messageID},
+		})
 		return err
 	}
 }

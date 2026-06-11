@@ -2,25 +2,16 @@ package telegram_test
 
 import (
 	"context"
-	"os"
-	"strconv"
-	"strings"
 	"testing"
 	"time"
 
-	"github.com/go-faster/errors"
 	"github.com/stretchr/testify/require"
-	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
 	"go.uber.org/zap/zaptest"
 
 	"go.mau.fi/mautrix-telegram/pkg/gotd/session"
-	"go.mau.fi/mautrix-telegram/pkg/gotd/tdsync"
 	"go.mau.fi/mautrix-telegram/pkg/gotd/telegram"
 	"go.mau.fi/mautrix-telegram/pkg/gotd/telegram/dcs"
-	"go.mau.fi/mautrix-telegram/pkg/gotd/telegram/internal/e2etest"
 	"go.mau.fi/mautrix-telegram/pkg/gotd/testutil"
-	"go.mau.fi/mautrix-telegram/pkg/gotd/tg"
 	"go.mau.fi/mautrix-telegram/pkg/gotd/transport"
 )
 
@@ -64,57 +55,4 @@ func TestExternalE2EConnect(t *testing.T) {
 
 	wsOpts := dcs.WebsocketOptions{}
 	t.Run("Websocket", testTransportExternal(dcs.Websocket(wsOpts), storage))
-}
-
-const dialog = `— Да?
-— Алё!
-— Да да?
-— Ну как там с деньгами?
-— А?
-— Как с деньгами-то там?
-— Чё с деньгами?
-— Чё?
-— Куда ты звонишь?
-— Тебе звоню.
-— Кому?
-— Ну тебе.`
-
-func TestExternalE2EUsersDialog(t *testing.T) {
-	testutil.SkipExternal(t)
-	if v, _ := strconv.ParseBool(os.Getenv("GOTD_E2E_DIALOGS_BROKEN")); v {
-		// TODO(ernado): enable when fixed
-		t.Skip("Dialogs are broken.")
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
-	defer cancel()
-	log := zaptest.NewLogger(t).WithOptions(zap.IncreaseLevel(zapcore.InfoLevel))
-
-	cfg := e2etest.TestOptions{
-		Logger: log,
-	}
-	suite := e2etest.NewSuite(t, cfg)
-
-	auth := make(chan *tg.User, 1)
-	g := tdsync.NewLogGroup(ctx, log.Named("group"))
-
-	g.Go("echobot", func(ctx context.Context) error {
-		if err := e2etest.NewEchoBot(suite, auth).Run(ctx); err != nil {
-			return errors.Wrap(err, "echo bot")
-		}
-		return nil
-	})
-
-	user, ok := <-auth
-	if ok {
-		g.Go("terentyev", func(ctx context.Context) error {
-			defer g.Cancel()
-			if err := e2etest.NewUser(suite, strings.Split(dialog, "\n"), user.Username).Run(ctx); err != nil {
-				return errors.Wrap(err, "user")
-			}
-			return nil
-		})
-	}
-
-	require.NoError(t, g.Wait())
 }
