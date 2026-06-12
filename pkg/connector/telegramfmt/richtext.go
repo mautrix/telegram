@@ -231,8 +231,7 @@ func (r *rtParser) parseBlock(ctx context.Context, block tg.PageBlockClass) {
 	case *tg.PageBlockDivider:
 		r.buf.WriteString("<hr/>")
 	case *tg.PageBlockAnchor:
-		// Ignore the anchor link as those won't work in Matrix anyway
-		r.printEscaped(v.Name)
+		// Ignored, this is just the target of an anchor link, but those won't work in Matrix
 	case *tg.PageBlockList:
 		r.parseList(ctx, v)
 	case *tg.PageBlockTable:
@@ -241,6 +240,13 @@ func (r *rtParser) parseBlock(ctx context.Context, block tg.PageBlockClass) {
 		r.parseOrderedList(ctx, v)
 	case *tg.PageBlockBlockquote:
 		r.writeWrappedItem(ctx, "blockquote", v.Text)
+		if v.Caption != nil {
+			r.writeWrappedItem(ctx, "p", v.Caption)
+		}
+	case *tg.PageBlockBlockquoteBlocks:
+		r.buf.WriteString("<blockquote>")
+		r.parseBlocks(ctx, v.Blocks)
+		r.buf.WriteString("</blockquote>")
 		if v.Caption != nil {
 			r.writeWrappedItem(ctx, "p", v.Caption)
 		}
@@ -298,8 +304,6 @@ func (r *rtParser) parseBlock(ctx context.Context, block tg.PageBlockClass) {
 	//case *tg.PageBlockCollage:
 	//case *tg.PageBlockSlideshow:
 	//case *tg.PageBlockMap:
-	//case *tg.InputPageBlockMap:
-	//case *tg.PageBlockBlockquoteBlocks:
 	default:
 		r.printf("<p>Unsupported block type: <code>%T</code></p>", v)
 	}
