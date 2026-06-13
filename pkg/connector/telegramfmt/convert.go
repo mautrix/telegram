@@ -48,6 +48,7 @@ type FormatParams struct {
 
 func (fp FormatParams) WithCustomEmojis(emojis map[networkid.EmojiID]emojis.EmojiInfo) FormatParams {
 	return FormatParams{
+		Bridge:                fp.Bridge,
 		CustomEmojis:          emojis,
 		GetUserInfoByUsername: fp.GetUserInfoByUsername,
 		GetUserInfoByID:       fp.GetUserInfoByID,

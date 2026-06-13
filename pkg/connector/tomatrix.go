@@ -184,9 +184,9 @@ func (tc *TelegramClient) convertToMatrix(
 	cm = &bridgev2.ConvertedMessage{}
 	hasher := sha256.New()
 	if rm, ok := msg.GetRichMessage(); ok {
-		// TODO this probably won't write anything, add a better hasher
-		hasher.Write([]byte(msg.Message))
 		content := tc.parseRichText(ctx, &rm)
+		// TODO might be better to hash the raw data instead of the converted one
+		hasher.Write([]byte(content.FormattedBody))
 		cm.Parts = []*bridgev2.ConvertedMessagePart{{
 			Type:    event.EventMessage,
 			Content: content,

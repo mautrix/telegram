@@ -239,22 +239,26 @@ func (r *rtParser) parseBlock(ctx context.Context, block tg.PageBlockClass) {
 	case *tg.PageBlockOrderedList:
 		r.parseOrderedList(ctx, v)
 	case *tg.PageBlockBlockquote:
-		r.writeWrappedItem(ctx, "blockquote", v.Text)
+		r.buf.WriteString("<blockquote>")
+		r.writeWrappedItem(ctx, "p", v.Text)
 		if v.Caption != nil {
 			r.writeWrappedItem(ctx, "p", v.Caption)
 		}
+		r.buf.WriteString("</blockquote>")
 	case *tg.PageBlockBlockquoteBlocks:
 		r.buf.WriteString("<blockquote>")
 		r.parseBlocks(ctx, v.Blocks)
+		if v.Caption != nil {
+			r.writeWrappedItem(ctx, "p", v.Caption)
+		}
 		r.buf.WriteString("</blockquote>")
-		if v.Caption != nil {
-			r.writeWrappedItem(ctx, "p", v.Caption)
-		}
 	case *tg.PageBlockPullquote:
-		r.writeWrappedItem(ctx, "blockquote", v.Text, html.Attribute{Key: "data-tg-pullquote"})
+		r.buf.WriteString("<blockquote data-tg-pullquote>")
+		r.writeWrappedItem(ctx, "p", v.Text)
 		if v.Caption != nil {
 			r.writeWrappedItem(ctx, "p", v.Caption)
 		}
+		r.buf.WriteString("</blockquote>")
 	case *tg.PageBlockParagraph:
 		r.writeWrappedItem(ctx, "p", v.Text)
 	case *tg.PageBlockKicker:
