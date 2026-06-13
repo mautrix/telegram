@@ -16,7 +16,6 @@ require (
 	github.com/go-faster/jx v1.2.0
 	github.com/go-faster/xor v1.0.0
 	github.com/go-openapi/inflect v0.21.5
-	github.com/gorilla/websocket v1.5.0
 	github.com/gotd/getdoc v0.51.0
 	github.com/gotd/ige v0.2.2
 	github.com/gotd/neo v0.1.5
