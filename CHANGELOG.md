@@ -1,3 +1,16 @@
+# v26.06
+
+* Removed support for legacy /v1 provisioning API.
+* Updated Telegram API to layer 227.
+* Added support for new rich text messages from Telegram.
+* Added support for sending arbitrary Lottie stickers to Telegram.
+* Added option to bridge videos in Telegram URL previews as normal video
+  messages to Matrix.
+* Fixed support for MTProxy proxies.
+* Fixed handling too large files from Telegram.
+* Fixed usernames getting cleared incorrectly from the bridge database.
+* Fixed using imported emoji packs when direct media is enabled.
+
 # v26.05
 
 * Updated Telegram API to layer 225.
