@@ -43,6 +43,7 @@ const (
 	LoginFlowIDPhone    = "phone"
 	LoginFlowIDQR       = "qr"
 	LoginFlowIDBotToken = "bot"
+	LoginFlowIDManual   = "manual"
 
 	LoginStepIDComplete = "fi.mau.telegram.login.complete"
 )
@@ -79,8 +80,13 @@ func (tc *TelegramConnector) GetLoginFlows() []bridgev2.LoginFlow {
 		},
 		{
 			Name:        "Bot token",
-			Description: "Log in as a bot using the bot token provided by BotFather.",
+			Description: "Log in as a bot using the bot token provided by BotFather",
 			ID:          LoginFlowIDBotToken,
+		},
+		{
+			Name:        "Manual",
+			Description: "Log in using existing session credentials (advanced, do not use)",
+			ID:          LoginFlowIDManual,
 		},
 	}
 }
@@ -98,6 +104,8 @@ func (tc *TelegramConnector) CreateLogin(ctx context.Context, user *bridgev2.Use
 		return &PhoneLogin{baseLogin: bl}, nil
 	case LoginFlowIDQR:
 		return &QRLogin{baseLogin: bl}, nil
+	case LoginFlowIDManual:
+		return &ManualLogin{baseLogin: bl}, nil
 	default:
 		return nil, fmt.Errorf("unknown flow ID %s", flowID)
 	}
@@ -212,18 +220,26 @@ func (bl *baseLogin) finalizeLogin(
 	authorization *tg.AuthAuthorization,
 	metadata *UserLoginMetadata,
 ) (*bridgev2.LoginStep, error) {
-	self, err := bl.client.Self(ctx)
-	bl.Cancel()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get self: %w", err)
+	var self *tg.User
+	if authorization != nil {
+		self, _ = authorization.User.AsNotEmpty()
 	}
+	if self == nil {
+		var err error
+		self, err = bl.client.Self(ctx)
+		if err != nil {
+			bl.Cancel()
+			return nil, fmt.Errorf("failed to get self: %w", err)
+		}
+	}
+	bl.Cancel()
 	if metadata == nil {
 		metadata = &UserLoginMetadata{}
 	}
 	metadata.Session = bl.session
 	metadata.LoginMethod = bl.flowID
 	profile, name := bl.main.userToRemoteProfile(self, nil, nil)
-	userLoginID := ids.MakeUserLoginID(authorization.User.GetID())
+	userLoginID := ids.MakeUserLoginID(self.ID)
 	ul, err := bl.user.NewLogin(ctx, &database.UserLogin{
 		ID:            userLoginID,
 		Metadata:      metadata,

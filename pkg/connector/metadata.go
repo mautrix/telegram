@@ -118,7 +118,6 @@ type UserLoginSession struct {
 	AuthKey       []byte `json:"auth_key,omitempty"`
 	Datacenter    int    `json:"dc_id,omitempty"`
 	ServerAddress string `json:"server_address,omitempty"`
-	ServerPort    int    `json:"port,omitempty"`
 	Salt          int64  `json:"salt,omitempty"`
 }
 
