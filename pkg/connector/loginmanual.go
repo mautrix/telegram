@@ -45,7 +45,7 @@ func (ml *ManualLogin) Start(ctx context.Context) (*bridgev2.LoginStep, error) {
 				Type:    bridgev2.LoginInputFieldTypeToken,
 				ID:      LoginStepIDManualSession,
 				Name:    "Session data JSON",
-				Pattern: `^\{[a-zA-Z0-9/+=":, ]+\}$`,
+				Pattern: `^\{[a-zA-Z0-9/+=":,. ]+\}$`,
 			}},
 		},
 	}, nil
