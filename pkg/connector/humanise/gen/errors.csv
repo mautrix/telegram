@@ -473,7 +473,7 @@ UNTIL_DATE_INVALID,400,That date cannot be specified in this request (try using 
 UPDATE_APP_TO_LOGIN,406,
 URL_INVALID,400,The URL used was invalid (e.g. when answering a callback with a URL that's not t.me/yourbot or your game's URL)
 USAGE_LIMIT_INVALID,400,The specified usage limit is invalid
-USERNAME_INVALID,400,"Nobody is using this username, or the username is unacceptable. If the latter, it must match r""[a-zA-Z][\w\d]{3,30}[a-zA-Z\d]"""
+USERNAME_INVALID,400,Nobody is using this username or the username is unacceptable
 USERNAME_NOT_MODIFIED,400,The username is not different from the current username
 USERNAME_NOT_OCCUPIED,400,The username is not in use by anyone else yet
 USERNAME_OCCUPIED,400,The username is already taken
@@ -527,3 +527,8 @@ WORKER_BUSY_TOO_LONG_RETRY,500,Telegram workers are too busy to respond immediat
 YOU_BLOCKED_USER,400,You blocked this user
 FROZEN_METHOD_INVALID,420,You tried to use a method that is not available for frozen accounts
 FROZEN_PARTICIPANT_MISSING,400,Your account is frozen and can't access the chat
+CHAT_SEND_VOICES_FORBIDDEN,403,You cannot send voices results in this chat
+CHAT_SEND_PHOTOS_FORBIDDEN,403,You cannot send photos results in this chat
+CHAT_SEND_VIDEOS_FORBIDDEN,403,You cannot send videos results in this Chat
+CHAT_SEND_PLAIN_FORBIDDEN,403,You cannot send plain results in this chat
+CHAT_MEMBER_ADD_FAILED,400,Telegram refused to add one or more users to the chat

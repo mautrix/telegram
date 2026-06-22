@@ -955,7 +955,7 @@ func Error(err error) string {
 	case tgerr.Is(err, "USAGE_LIMIT_INVALID"):
 		return "The specified usage limit is invalid"
 	case tgerr.Is(err, "USERNAME_INVALID"):
-		return "Nobody is using this username, or the username is unacceptable. If the latter, it must match r\"[a-zA-Z][\\w\\d]{3,30}[a-zA-Z\\d]\""
+		return "Nobody is using this username or the username is unacceptable"
 	case tgerr.Is(err, "USERNAME_NOT_MODIFIED"):
 		return "The username is not different from the current username"
 	case tgerr.Is(err, "USERNAME_NOT_OCCUPIED"):
@@ -1062,6 +1062,16 @@ func Error(err error) string {
 		return "You tried to use a method that is not available for frozen accounts"
 	case tgerr.Is(err, "FROZEN_PARTICIPANT_MISSING"):
 		return "Your account is frozen and can't access the chat"
+	case tgerr.Is(err, "CHAT_SEND_VOICES_FORBIDDEN"):
+		return "You cannot send voices results in this chat"
+	case tgerr.Is(err, "CHAT_SEND_PHOTOS_FORBIDDEN"):
+		return "You cannot send photos results in this chat"
+	case tgerr.Is(err, "CHAT_SEND_VIDEOS_FORBIDDEN"):
+		return "You cannot send videos results in this Chat"
+	case tgerr.Is(err, "CHAT_SEND_PLAIN_FORBIDDEN"):
+		return "You cannot send plain results in this chat"
+	case tgerr.Is(err, "CHAT_MEMBER_ADD_FAILED"):
+		return "Telegram refused to add one or more users to the chat"
 	}
 	return err.Error()
 }
