@@ -27,12 +27,15 @@ import (
 
 	"github.com/rs/zerolog"
 	"go.mau.fi/util/ptr"
+	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/bridgev2"
 
+	"go.mau.fi/mautrix-telegram/pkg/connector/humanise"
 	"go.mau.fi/mautrix-telegram/pkg/connector/ids"
 	"go.mau.fi/mautrix-telegram/pkg/connector/store"
 	"go.mau.fi/mautrix-telegram/pkg/gotd/telegram/query/hasher"
 	"go.mau.fi/mautrix-telegram/pkg/gotd/tg"
+	"go.mau.fi/mautrix-telegram/pkg/gotd/tgerr"
 )
 
 var (
@@ -109,6 +112,17 @@ func (tc *TelegramClient) resolveUserID(ctx context.Context, userID int64) (resp
 	return
 }
 
+func wrapUnknownError(thing string, err error) error {
+	if te, ok := tgerr.As(err); ok {
+		respErr := mautrix.MUnknown.WithMessage(humanise.Error(te)).WithInternalError(err)
+		if te.Code >= 400 && te.Code <= 500 {
+			respErr = respErr.WithStatus(te.Code)
+		}
+		return respErr
+	}
+	return fmt.Errorf("%s: %w", thing, err)
+}
+
 func (tc *TelegramClient) resolveUsername(ctx context.Context, username string, expectedID int64) (*bridgev2.ResolveIdentifierResponse, error) {
 	resolved, err := APICallWithUpdates(ctx, tc, func() (*tg.ContactsResolvedPeer, error) {
 		return tc.client.API().ContactsResolveUsername(ctx, &tg.ContactsResolveUsernameRequest{
@@ -126,7 +140,7 @@ func (tc *TelegramClient) resolveUsername(ctx context.Context, username string, 
 		}
 		return nil, nil
 	} else if err != nil {
-		return nil, fmt.Errorf("failed to resolve username: %w", err)
+		return nil, wrapUnknownError("failed to resolve username", err)
 	}
 	peer, ok := resolved.GetPeer().(*tg.PeerUser)
 	if !ok {
@@ -299,7 +313,7 @@ func (tc *TelegramClient) CreateGroup(ctx context.Context, params *bridgev2.Grou
 	}
 	invitedUsers, err := tc.client.API().MessagesCreateChat(ctx, &req)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create chat: %w", err)
+		return nil, wrapUnknownError("failed to create chat", err)
 	}
 	invited, ok := invitedUsers.Updates.(interface {
 		GetChats() (value []tg.ChatClass)
