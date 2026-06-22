@@ -344,7 +344,6 @@ func (tc *TelegramClient) wrapFullChatInfo(portalID networkid.PortalID, fullChat
 					newAllowedReactions = append(newAllowedReactions, emoji.Emoticon)
 				}
 			}
-			slices.Sort(newAllowedReactions)
 		}
 	}
 	if ttl, ok := fullChat.FullChat.GetTTLPeriod(); ok {

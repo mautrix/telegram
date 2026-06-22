@@ -28,8 +28,8 @@ import (
 
 	"github.com/rs/zerolog"
 	"go.mau.fi/util/exfmt"
+	"go.mau.fi/util/exmaps"
 	"go.mau.fi/util/ptr"
-	"golang.org/x/exp/maps"
 	"maunium.net/go/mautrix/bridgev2"
 	"maunium.net/go/mautrix/bridgev2/database"
 	"maunium.net/go/mautrix/bridgev2/networkid"
@@ -1284,7 +1284,7 @@ func (tc *TelegramClient) getAvailableReactionsForCapability(ctx context.Context
 	return tc.availableReactionsList, tc.isPremiumCache.Load()
 }
 
-func (tc *TelegramClient) getAvailableReactions(ctx context.Context) (map[string]struct{}, error) {
+func (tc *TelegramClient) getAvailableReactions(ctx context.Context) (exmaps.Set[string], error) {
 	if tc.metadata.IsBot {
 		return nil, nil
 	} else if !tc.IsLoggedIn() {
@@ -1313,10 +1313,13 @@ func (tc *TelegramClient) getAvailableReactions(ctx context.Context) (map[string
 			if err != nil {
 				log.Err(err).Msg("failed to get own ghost")
 			}
-			tc.availableReactions = make(map[string]struct{}, len(availableReactions.Reactions))
+			tc.availableReactions = make(exmaps.Set[string], len(availableReactions.Reactions))
+			tc.availableReactionsList = make([]string, 0, len(availableReactions.Reactions))
 			for _, reaction := range availableReactions.Reactions {
 				if !reaction.Inactive && (myGhost.Metadata.(*GhostMetadata).IsPremium || !reaction.Premium) {
-					tc.availableReactions[reaction.Reaction] = struct{}{}
+					if tc.availableReactions.Add(reaction.Reaction) {
+						tc.availableReactionsList = append(tc.availableReactionsList, reaction.Reaction)
+					}
 				}
 			}
 
@@ -1326,9 +1329,7 @@ func (tc *TelegramClient) getAvailableReactions(ctx context.Context) (map[string
 				tc.availableReactionsList = nil
 				tc.isPremiumCache.Store(true)
 			} else {
-				tc.availableReactionsList = maps.Keys(tc.availableReactions)
 				tc.isPremiumCache.Store(false)
-				slices.Sort(tc.availableReactionsList)
 			}
 		case *tg.MessagesAvailableReactionsNotModified:
 			log.Debug().Msg("Available reactions not modified")

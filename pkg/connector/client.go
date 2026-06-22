@@ -31,6 +31,7 @@ import (
 	"time"
 
 	"github.com/rs/zerolog"
+	"go.mau.fi/util/exmaps"
 	"go.mau.fi/util/exsync"
 	"go.mau.fi/zerozap"
 	"go.uber.org/zap"
@@ -90,7 +91,7 @@ type TelegramClient struct {
 	appConfigHash int
 
 	availableReactionsLock    sync.Mutex
-	availableReactions        map[string]struct{}
+	availableReactions        exmaps.Set[string]
 	availableReactionsHash    int
 	availableReactionsFetched time.Time
 	availableReactionsList    []string
