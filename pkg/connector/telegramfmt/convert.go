@@ -94,7 +94,7 @@ func Parse(ctx context.Context, message string, entities []tg.MessageEntityClass
 			// TODO support channel links (link to room if exists)
 			userInfo, err := params.GetUserInfoByUsername(ctx, username)
 			if err != nil {
-				log.Debug().Err(err).Str("username", username).Msg("Failed to get user info for mention")
+				log.Debug().Err(err).Str("username", username).Msg("Failed to get user info for username mention")
 				continue // Skip this mention
 			}
 			mentions[userInfo.MXID] = struct{}{}
@@ -120,7 +120,7 @@ func Parse(ctx context.Context, message string, entities []tg.MessageEntityClass
 		case *tg.MessageEntityMentionName:
 			userInfo, err := params.GetUserInfoByID(ctx, entity.UserID)
 			if err != nil {
-				log.Warn().Err(err).Int64("user_id", entity.UserID).Msg("Failed to get user info for mention")
+				log.Warn().Err(err).Int64("user_id", entity.UserID).Msg("Failed to get user info for user ID mention")
 				continue // Skip this mention
 			}
 			mentions[userInfo.MXID] = struct{}{}

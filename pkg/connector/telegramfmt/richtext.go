@@ -144,10 +144,11 @@ func (r *rtParser) parseItem(ctx context.Context, text tg.RichTextClass) {
 	case *tg.TextMention:
 		plain, ok := v.Text.(*tg.TextPlain)
 		if ok {
+			username := strings.TrimPrefix(plain.Text, "@")
 			// TODO support channel links (link to room if exists)
-			userInfo, err := r.GetUserInfoByUsername(ctx, plain.Text)
+			userInfo, err := r.GetUserInfoByUsername(ctx, username)
 			if err != nil {
-				zerolog.Ctx(ctx).Debug().Err(err).Str("username", plain.Text).Msg("Failed to get user info for mention")
+				zerolog.Ctx(ctx).Debug().Err(err).Str("username", username).Msg("Failed to get user info for rich text mention")
 				ok = false
 			} else {
 				r.mentions.Add(userInfo.MXID)
@@ -155,7 +156,7 @@ func (r *rtParser) parseItem(ctx context.Context, text tg.RichTextClass) {
 			}
 		}
 		if !ok {
-			r.parseItem(ctx, text)
+			r.parseItem(ctx, v.Text)
 		}
 	case *tg.TextMentionName:
 		ghost, err := r.Bridge.GetGhostByID(ctx, ids.MakeUserID(v.UserID))
