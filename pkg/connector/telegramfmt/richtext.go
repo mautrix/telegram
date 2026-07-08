@@ -228,7 +228,9 @@ func (r *rtParser) parseBlock(ctx context.Context, block tg.PageBlockClass) {
 		r.writeWrappedItem(ctx, "code", v.Text, attrs...)
 		r.buf.WriteString("</pre>")
 	case *tg.PageBlockFooter:
-		r.writeWrappedItem(ctx, "footer", v.Text)
+		r.buf.WriteString("<footer>")
+		r.writeWrappedItem(ctx, "p", v.Text)
+		r.buf.WriteString("</footer>")
 	case *tg.PageBlockDivider:
 		r.buf.WriteString("<hr/>")
 	case *tg.PageBlockAnchor:
