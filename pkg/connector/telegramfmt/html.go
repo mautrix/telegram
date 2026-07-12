@@ -63,7 +63,7 @@ func (s Style) Format(message string) string {
 	case StyleCustomEmoji:
 		return emojiInfoToHTML(s.EmojiInfo, message)
 	case StyleBotCommand, StyleHashtag, StyleCashtag, StylePhone, StyleBankCard:
-		return fmt.Sprintf(`<span data-mx-color="%s">%s</font>`, hashColor, message)
+		return fmt.Sprintf(`<span data-mx-color="%s">%s</span>`, hashColor, message)
 	default:
 		return message
 	}
