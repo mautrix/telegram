@@ -1,3 +1,9 @@
+# v26.07
+
+* Updated Docker image to Alpine 3.24.
+* Fixed some rich text parsing issues.
+* Improved error messages for starting new chats.
+
 # v26.06
 
 * Removed support for legacy /v1 provisioning API.
