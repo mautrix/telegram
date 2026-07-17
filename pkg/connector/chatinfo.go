@@ -124,15 +124,6 @@ func (tc *TelegramClient) getDMChatInfo(ctx context.Context, userID int64) (*bri
 	return &chatInfo, nil
 }
 
-func isBroadcastChannel(chat tg.ChatClass) bool {
-	switch c := chat.(type) {
-	case *tg.Channel:
-		return c.Broadcast
-	default:
-		return false
-	}
-}
-
 type memberFetchMeta struct {
 	Input              *tg.InputChannel
 	IsBroadcast        bool

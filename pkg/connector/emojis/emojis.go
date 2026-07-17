@@ -38,7 +38,7 @@ var reverseUnicodemojiPack = map[int64]string{}
 
 func doInit() {
 	if err := json.Unmarshal(exstrings.UnsafeBytes(unicodemojiPackJSON), &unicodemojiPack); err != nil {
-		panic(fmt.Errorf("Failed to unmarshal unicodemojipack: %w", err))
+		panic(fmt.Errorf("failed to unmarshal unicodemojipack: %w", err))
 	}
 
 	for k, v := range unicodemojiPack {

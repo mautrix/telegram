@@ -133,6 +133,6 @@ func TestExternalE2EMTProxy(t *testing.T) {
 	m := mtg{path: mtgPath, addr: addr}
 	// TODO(tdakkota): test all proxy types (mtg v2 supports only faketls)
 	for _, secretType := range []string{"tls"} {
-		t.Run(strings.Title(secretType), testMTProxy(secretType, m, storage))
+		t.Run(secretType, testMTProxy(secretType, m, storage))
 	}
 }

@@ -9,6 +9,7 @@ import (
 	"github.com/go-faster/errors"
 	"go.uber.org/multierr"
 
+	"go.mau.fi/mautrix-telegram/pkg/gotd/telegram"
 	"go.mau.fi/mautrix-telegram/pkg/gotd/tg"
 )
 
@@ -64,7 +65,7 @@ func (b *Builder) Stream(ctx context.Context, output io.Writer) (tg.StorageFileT
 // NB: in this mode download can't be parallel.
 func (b *Builder) StreamToReader(ctx context.Context) (tg.StorageFileTypeClass, io.Reader, error) {
 	var tgDC int
-	ctx = context.WithValue(ctx, "tg_dc", &tgDC)
+	ctx = context.WithValue(ctx, telegram.InvokeContextKeyDC, &tgDC)
 	return b.downloader.streamToReader(ctx, b.reader())
 }
 

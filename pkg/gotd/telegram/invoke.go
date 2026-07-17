@@ -50,11 +50,18 @@ func (c *Client) Invoke(ctx context.Context, input bin.Encoder, output bin.Decod
 	return c.invoker.Invoke(ctx, input, output)
 }
 
+type dlContextKey int
+
+const (
+	invokeContextKeyDCInner dlContextKey = iota
+	InvokeContextKeyDC
+)
+
 // invokeDirect directly invokes RPC method, automatically handling datacenter redirects.
 func (c *Client) invokeDirect(ctx context.Context, input bin.Encoder, output bin.Decoder) error {
-	contextDC, _ := ctx.Value("tg_dc").(*int)
+	contextDC, _ := ctx.Value(InvokeContextKeyDC).(*int)
 
-	if _, ok := ctx.Value("tg_dc_inner").(bool); !ok {
+	if _, ok := ctx.Value(invokeContextKeyDCInner).(bool); !ok {
 		if contextDC != nil && *contextDC > 0 {
 			c.log.With(zap.Int("context_dc", *contextDC)).Debug("Invoking on context DC")
 			return c.invokeSub(ctx, *contextDC, input, output)
@@ -77,7 +84,7 @@ func (c *Client) invokeDirect(ctx context.Context, input bin.Encoder, output bin
 				if contextDC != nil {
 					log.Debug("Setting context DC")
 					*contextDC = targetDC
-					ctx = context.WithValue(ctx, "tg_dc_inner", true)
+					ctx = context.WithValue(ctx, invokeContextKeyDCInner, true)
 				}
 				return c.invokeSub(ctx, targetDC, input, output)
 			}

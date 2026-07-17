@@ -1,10 +1,10 @@
 package updates
 
 import (
+	"context"
 	"fmt"
 
 	"go.uber.org/zap"
-	"golang.org/x/net/context"
 
 	"go.mau.fi/mautrix-telegram/pkg/gotd/tg"
 )

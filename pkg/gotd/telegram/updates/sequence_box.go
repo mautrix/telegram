@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"go.opentelemetry.io/otel/trace"
+	"go.opentelemetry.io/otel/trace/noop"
 	"go.uber.org/zap"
 )
 
@@ -35,7 +36,7 @@ func newSequenceBox(cfg sequenceConfig) *sequenceBox {
 		cfg.Logger = zap.NewNop()
 	}
 	if cfg.Tracer == nil {
-		cfg.Tracer = trace.NewNoopTracerProvider().Tracer("")
+		cfg.Tracer = noop.NewTracerProvider().Tracer("")
 	}
 
 	cfg.Logger.Debug("Initialized", zap.Int("internalState", cfg.InitialState))

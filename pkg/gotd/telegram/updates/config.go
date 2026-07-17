@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"go.opentelemetry.io/otel/trace"
+	"go.opentelemetry.io/otel/trace/noop"
 	"go.uber.org/zap"
 
 	"go.mau.fi/mautrix-telegram/pkg/gotd/telegram"
@@ -50,7 +51,7 @@ func (cfg *Config) setDefaults() {
 		cfg.Logger = zap.NewNop()
 	}
 	if cfg.TracerProvider == nil {
-		cfg.TracerProvider = trace.NewNoopTracerProvider()
+		cfg.TracerProvider = noop.NewTracerProvider()
 	}
 	if cfg.Storage == nil {
 		cfg.Storage = newMemStorage()

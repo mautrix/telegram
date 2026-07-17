@@ -610,7 +610,6 @@ func (tc *TelegramClient) convertMediaRequiringUpload(
 			content.MsgType = event.MsgVideo
 			content.Body = strings.Replace(content.Body, "image", "live_photo", 1)
 			telegramMediaID = video.GetID()
-			mediaTransferer = transferer.WithLivePhoto(photo, video)
 			extraInfo["fi.mau.telegram.live_photo"] = true
 
 			// TODO deduplicate with document thumbnail code
@@ -623,7 +622,7 @@ func (tc *TelegramClient) convertMediaRequiringUpload(
 				WithRoomID(portal.MXID).
 				WithPhoto(photo)
 			if tc.main.useDirectMedia {
-				thumbnailURL, thumbnailInfo, err = thumbnailTransferer.DirectDownloadURL(ctx, tc.telegramUserID, portal, msgID, false, photo.ID)
+				thumbnailURL, thumbnailInfo, err = thumbnailTransferer.DirectDownloadURL(ctx, tc.telegramUserID, portal, msgID, true, photo.ID)
 				if err != nil {
 					log.Err(err).Msg("Failed to create direct download URL for thumbnail")
 				}
@@ -637,6 +636,7 @@ func (tc *TelegramClient) convertMediaRequiringUpload(
 			if thumbnailURL != "" || thumbnailFile != nil {
 				transferer = transferer.WithThumbnail(thumbnailURL, thumbnailFile, thumbnailInfo)
 			}
+			mediaTransferer = transferer.WithLivePhoto(photo, video)
 		} else {
 			telegramMediaID = photo.GetID()
 			mediaTransferer = transferer.WithPhoto(photo)

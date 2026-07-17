@@ -23,7 +23,6 @@ import (
 
 type Future[T any] struct {
 	value T
-	err   error
 	ready chan struct{}
 	once  sync.Once
 }

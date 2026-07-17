@@ -46,11 +46,6 @@ const LoginStepIDShowQR = "fi.mau.telegram.login.show_qr"
 var _ bridgev2.LoginProcessDisplayAndWait = (*QRLogin)(nil) // For showing QR code
 var _ bridgev2.LoginProcessUserInput = (*QRLogin)(nil)      // For asking for password
 
-func waitContextDone(ctx context.Context) error {
-	<-ctx.Done()
-	return ctx.Err()
-}
-
 const LoginTimeout = 10 * time.Minute
 
 var ErrLoginTimeout = errors.New("login process timed out")

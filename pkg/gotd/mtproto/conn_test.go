@@ -62,7 +62,7 @@ func newTestClient(h testHandler, opts ...testClientOption) *Conn {
 //
 //	client.trace.OnMessage = newCorpusTracer(t)
 //
-// nolint: deadcode,unused // optional
+//lint:ignore U1000 optional
 func newCorpusTracer(t testing.TB) func(b *bin.Buffer) {
 	types := tmap.New(
 		mt.TypesMap(),

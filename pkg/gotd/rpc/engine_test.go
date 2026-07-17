@@ -1,6 +1,7 @@
 package rpc
 
 import (
+	"context"
 	"sync"
 	"testing"
 	"time"
@@ -8,7 +9,6 @@ import (
 	"github.com/go-faster/errors"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zaptest"
-	"golang.org/x/net/context"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/gotd/neo"

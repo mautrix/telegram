@@ -10,14 +10,14 @@ import (
 )
 
 func TestMain(m *testing.M) {
-	os.Exit(testscript.RunMain(m, map[string]func() int{
-		"rsagen": func() int {
+	testscript.Main(m, map[string]func(){
+		"rsagen": func() {
 			if err := run(); err != nil {
-				return 1
+				os.Exit(1)
 			}
-			return 0
+			os.Exit(0)
 		},
-	}))
+	})
 }
 
 func TestScript(t *testing.T) {

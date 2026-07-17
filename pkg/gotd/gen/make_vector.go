@@ -32,7 +32,7 @@ func (g *Generator) makeVector(className string) (class classBinding, err error)
 	}
 	f.Comment = []string{"Elements of " + className}
 
-	goName := strings.Title(goElementName) + "Vector"
+	goName := goElementName + "Vector"
 	class = classBinding{
 		Name:     goName,
 		Func:     f.Type,
