@@ -263,6 +263,7 @@ func (tc *TelegramClient) FetchMessages(ctx context.Context, fetchParams bridgev
 	var backfillMessages []*bridgev2.BackfillMessage
 	for _, msg := range messages {
 		log := log.With().Int("message_id", msg.GetID()).Logger()
+		ctx := log.WithContext(ctx)
 		if stopAt > 0 {
 			if fetchParams.Forward && msg.GetID() <= stopAt {
 				// If we are doing forward backfill and we get to the anchor
@@ -308,19 +309,20 @@ func (tc *TelegramClient) FetchMessages(ctx context.Context, fetchParams bridgev
 			}
 
 			for _, reaction := range reactionsList {
-				peer, ok := reaction.PeerID.(*tg.PeerUser)
-				if !ok {
-					return nil, fmt.Errorf("unknown peer type %T", reaction.PeerID)
+				reactionSender := tc.computeReactionSender(ctx, reaction)
+				if reactionSender.Sender == "" {
+					continue
 				}
 
 				emojiID, emoji, err := computeEmojiAndID(reaction.Reaction, customEmojis)
 				if err != nil {
-					return nil, fmt.Errorf("failed to compute emoji and ID: %w", err)
+					log.Err(err).Msg("Failed to compute emoji and ID for backfill reaction")
+					continue
 				}
 
 				backfillMessage.Reactions = append(backfillMessage.Reactions, &bridgev2.BackfillReaction{
 					Timestamp: time.Unix(int64(reaction.Date), 0),
-					Sender:    tc.senderForUserID(peer.UserID),
+					Sender:    reactionSender,
 					EmojiID:   emojiID,
 					Emoji:     emoji,
 				})

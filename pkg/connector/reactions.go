@@ -90,19 +90,35 @@ func (tc *TelegramClient) computeReactionsList(ctx context.Context, peer tg.Peer
 }
 
 func computeEmojiAndID(reaction tg.ReactionClass, customEmojis map[networkid.EmojiID]emojis.EmojiInfo) (emojiID networkid.EmojiID, emoji string, err error) {
-	if r, ok := reaction.(*tg.ReactionCustomEmoji); ok {
+	switch r := reaction.(type) {
+	case *tg.ReactionCustomEmoji:
 		emojiID = ids.MakeEmojiIDFromDocumentID(r.DocumentID)
 		emoji = customEmojis[emojiID].Emoji
 		if emoji == "" {
 			emoji = string(customEmojis[emojiID].EmojiURI)
 		}
-	} else if r, ok := reaction.(*tg.ReactionEmoji); ok {
+	case *tg.ReactionEmoji:
 		emojiID = ids.MakeEmojiIDFromEmoticon(r.Emoticon)
 		emoji = r.Emoticon
-	} else {
-		return "", "", fmt.Errorf("invalid reaction type %T", reaction)
+	default:
+		err = fmt.Errorf("invalid reaction type %T", reaction)
 	}
 	return
+}
+
+func (tc *TelegramClient) computeReactionSender(ctx context.Context, reaction tg.MessagePeerReaction) bridgev2.EventSender {
+	switch senderPeer := reaction.PeerID.(type) {
+	case *tg.PeerUser:
+		return tc.senderForUserID(senderPeer.UserID)
+	case *tg.PeerChannel:
+		return bridgev2.EventSender{
+			Sender:   ids.MakeChannelUserID(senderPeer.ChannelID),
+			IsFromMe: reaction.My && tc.main.Bridge.Config.SplitPortals,
+		}
+	default:
+		zerolog.Ctx(ctx).Debug().Type("peer_type", reaction.PeerID).Msg("Ignoring reaction from non-user peer")
+		return bridgev2.EventSender{}
+	}
 }
 
 func (tc *TelegramClient) prepareReactionSync(ctx context.Context, peer tg.PeerClass, msgID int, reactions tg.MessageReactions) (*bridgev2.ReactionSyncData, error) {
@@ -114,22 +130,11 @@ func (tc *TelegramClient) prepareReactionSync(ctx context.Context, peer tg.PeerC
 	log := zerolog.Ctx(ctx)
 	users := map[networkid.UserID]*bridgev2.ReactionSyncUser{}
 	for _, reaction := range reactionsList {
-		var userID networkid.UserID
-		var eventSender bridgev2.EventSender
-		switch senderPeer := reaction.PeerID.(type) {
-		case *tg.PeerUser:
-			userID = ids.MakeUserID(senderPeer.UserID)
-			eventSender = tc.senderForUserID(senderPeer.UserID)
-		case *tg.PeerChannel:
-			userID = ids.MakeChannelUserID(senderPeer.ChannelID)
-			eventSender = bridgev2.EventSender{
-				Sender:   userID,
-				IsFromMe: reaction.My && tc.main.Bridge.Config.SplitPortals,
-			}
-		default:
-			log.Debug().Type("peer_type", reaction.PeerID).Msg("Ignoring reaction from non-user peer")
+		eventSender := tc.computeReactionSender(ctx, reaction)
+		if eventSender.Sender == "" {
 			continue
 		}
+		userID := eventSender.Sender
 		reactionLimit, err := tc.getReactionLimit(ctx, userID)
 		if err != nil {
 			reactionLimit = 1
