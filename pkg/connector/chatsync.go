@@ -275,7 +275,8 @@ func (tc *TelegramClient) handleDialogs(ctx context.Context, dialogList []tg.Dia
 				var mfm *memberFetchMeta
 				chatInfo, mfm, err = tc.wrapChatInfo(portal.ID, channel)
 				if err != nil {
-					return fmt.Errorf("failed to get chat info for %s: %w", portalKey, err)
+					log.Warn().Err(err).Msg("Failed to wrap channel info")
+					continue
 				}
 				err = tc.fillChannelMembers(ctx, mfm, chatInfo.Members)
 				if err != nil {
