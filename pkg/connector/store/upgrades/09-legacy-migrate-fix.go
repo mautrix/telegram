@@ -22,19 +22,17 @@ import (
 	"go.mau.fi/util/dbutil"
 )
 
-func init() {
-	Table.Register(-1, 9, 2, "Fix bug in legacy migration", dbutil.TxnModeOn, func(ctx context.Context, db *dbutil.Database) error {
-		if db.Dialect != dbutil.SQLite {
-			return nil
-		}
-		exists, err := db.TableExists(ctx, "new_mx_room_state")
-		if !exists || err != nil {
-			return err
-		}
-		_, err = db.Exec(ctx, `
-			DROP TABLE mx_room_state;
-			ALTER TABLE new_mx_room_state RENAME TO mx_room_state;
-		`)
+var upgradeV9 = dbutil.WrapUpgrade(-1, 9, 2, "Fix bug in legacy migration", dbutil.TxnModeOn, func(ctx context.Context, db *dbutil.Database) error {
+	if db.Dialect != dbutil.SQLite {
+		return nil
+	}
+	exists, err := db.TableExists(ctx, "new_mx_room_state")
+	if !exists || err != nil {
 		return err
-	})
-}
+	}
+	_, err = db.Exec(ctx, `
+		DROP TABLE mx_room_state;
+		ALTER TABLE new_mx_room_state RENAME TO mx_room_state;
+	`)
+	return err
+})
