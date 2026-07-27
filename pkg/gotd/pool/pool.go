@@ -207,11 +207,9 @@ retry:
 	case <-c.stuck.Ready():
 		c.log.Debug("Some connection dead, try to create new connection, cancel waiting")
 
-		c.freeReq.delete(key)
-		select {
-		default:
-		case conn, ok := <-ch:
-			if ok && conn != nil {
+		if !c.freeReq.delete(key) {
+			// transfer took the request, so a connection is on its way and must not be dropped.
+			if conn, ok := <-ch; ok && conn != nil {
 				return conn, nil
 			}
 		}
@@ -224,11 +222,10 @@ retry:
 	}
 
 	// Executed only if at least one of context is Done.
-	c.freeReq.delete(key)
-	select {
-	default:
-	case conn, ok := <-ch:
-		if ok && conn != nil {
+	if !c.freeReq.delete(key) {
+		// transfer took the request, so a connection is on its way and must be given back to the
+		// pool instead of being left in the channel.
+		if conn, ok := <-ch; ok && conn != nil {
 			c.release(conn)
 		}
 	}
