@@ -131,7 +131,8 @@ func (tc *TelegramClient) onUpdateChannel(ctx context.Context, e tg.Entities, up
 
 	// TODO is using the info in entities safe?
 	channel, ok := e.Channels[update.ChannelID]
-	if !ok {
+	community, communityOK := e.Communities[update.ChannelID]
+	if !ok && !communityOK {
 		log.Debug().Msg("Fetching channel due to UpdateChannel event")
 		chats, err := APICallWithOnlyChatUpdates(ctx, tc, func() (tg.MessagesChatsClass, error) {
 			if accessHash, err := tc.ScopedStore.GetAccessHash(ctx, ids.PeerTypeChannel, update.ChannelID); err != nil {
@@ -151,12 +152,19 @@ func (tc *TelegramClient) onUpdateChannel(ctx context.Context, e tg.Entities, up
 		} else if len(chats.GetChats()) != 1 {
 			log.Warn().Int("chat_count", len(chats.GetChats())).Msg("Got more than 1 chat in GetChannels response")
 			return nil
-		} else if channel, ok = chats.GetChats()[0].(*tg.Channel); !ok {
-			log.Error().Type("chat_type", chats.GetChats()[0]).Msg("Expected channel, got something else. Leaving the channel.")
+		}
+		firstChat := chats.GetChats()[0]
+		switch typedChat := firstChat.(type) {
+		case *tg.Channel:
+			channel = typedChat
+		case *tg.Community:
+			community = typedChat
+		default:
+			log.Error().Type("chat_type", firstChat).Msg("Expected channel, got something else. Leaving the channel.")
 			return tc.selfLeaveChat(ctx, portalKey, fmt.Errorf("channel not returned in getChannels after UpdateChannel"))
 		}
 	}
-	if channel.Left {
+	if (channel != nil && channel.Left) || (community != nil && community.Left) {
 		log.Debug().Msg("Update was for a left channel. Leaving the channel.")
 		return tc.selfLeaveChat(ctx, portalKey, fmt.Errorf("channel has left=true after UpdateChannel"))
 	}
@@ -170,7 +178,15 @@ func (tc *TelegramClient) onUpdateChannel(ctx context.Context, e tg.Entities, up
 			},
 		},
 		GetChatInfoFunc: func(ctx context.Context, portal *bridgev2.Portal) (*bridgev2.ChatInfo, error) {
-			chatInfo, mfm, err := tc.wrapChatInfo(portal.ID, channel)
+			var chatInfoClass tg.ChatClass
+			if channel != nil {
+				chatInfoClass = channel
+			} else if community != nil {
+				chatInfoClass = community
+			} else {
+				return nil, nil
+			}
+			chatInfo, mfm, err := tc.wrapChatInfo(portal.ID, chatInfoClass)
 			if err != nil {
 				return nil, err
 			}
@@ -330,11 +346,25 @@ func (tc *TelegramClient) handleServiceMessage(ctx context.Context, msg *tg.Mess
 		default:
 			return nil
 		}
-
 	case *tg.MessageActionChatDeletePhoto:
 		res := tc.main.Bridge.QueueRemoteEvent(tc.userLogin, &simplevent.ChatInfoChange{
 			EventMeta:      eventMeta.WithType(bridgev2.RemoteEventChatInfoChange),
 			ChatInfoChange: &bridgev2.ChatInfoChange{ChatInfo: &bridgev2.ChatInfo{Avatar: &bridgev2.Avatar{Remove: true}}},
+		})
+		return resultToError(res)
+	case *tg.MessageActionChangeCommunity:
+		if !tc.main.Config.BridgeCommunities {
+			return nil
+		}
+		var newParentID networkid.PortalID
+		if action.CommunityID != 0 {
+			newParentID = ids.MakePortalID(ids.PeerTypeChannel, action.CommunityID)
+		}
+		res := tc.main.Bridge.QueueRemoteEvent(tc.userLogin, &simplevent.ChatInfoChange{
+			EventMeta: eventMeta.WithType(bridgev2.RemoteEventChatInfoChange),
+			ChatInfoChange: &bridgev2.ChatInfoChange{ChatInfo: &bridgev2.ChatInfo{
+				ParentID: &newParentID,
+			}},
 		})
 		return resultToError(res)
 	case *tg.MessageActionChatAddUser:
@@ -629,7 +659,6 @@ func (tc *TelegramClient) handleServiceMessage(ctx context.Context, msg *tg.Mess
 			GetChatInfoFunc: tc.GetChatInfo,
 		})
 		return resultToError(res)
-
 	default:
 		log.Warn().
 			Type("action_type", action).

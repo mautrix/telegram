@@ -173,7 +173,7 @@ func (g *ContactsGetContactIDsRequest) GetHash() (value int64) {
 //
 // See https://core.telegram.org/method/contacts.getContactIDs for reference.
 func (c *Client) ContactsGetContactIDs(ctx context.Context, hash int64) ([]int, error) {
-	var result IntVector
+	var result intVector
 
 	request := &ContactsGetContactIDsRequest{
 		Hash: hash,

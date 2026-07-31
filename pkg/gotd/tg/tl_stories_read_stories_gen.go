@@ -212,7 +212,7 @@ func (r *StoriesReadStoriesRequest) GetMaxID() (value int) {
 //
 // See https://core.telegram.org/method/stories.readStories for reference.
 func (c *Client) StoriesReadStories(ctx context.Context, request *StoriesReadStoriesRequest) ([]int, error) {
-	var result IntVector
+	var result intVector
 
 	if err := c.rpc.Invoke(ctx, request, &result); err != nil {
 		return nil, err

@@ -155,18 +155,27 @@ func fnJoin(ce *commands.Event) {
 			ce.Reply("That username does not belong to a channel or supergroup")
 			return
 		}
-		var ch *tg.Channel
+		var inputChannel *tg.InputChannel
 		for _, chat := range resolve.Chats {
 			if chat.GetID() == peer.ChannelID {
-				ch = chat.(*tg.Channel)
+				switch typedChat := chat.(type) {
+				case *tg.Channel:
+					inputChannel = typedChat.AsInput()
+					chatName = typedChat.Title
+				case *tg.Community:
+					chatName = typedChat.Title
+					inputChannel = &tg.InputChannel{
+						ChannelID:  typedChat.ID,
+						AccessHash: typedChat.AccessHash,
+					}
+				}
 			}
 		}
-		if ch == nil {
+		if inputChannel == nil {
 			ce.Reply("Channel information not found in resolve response")
 			return
 		}
-		chatName = ch.Title
-		resp, err = t.client.API().ChannelsJoinChannel(ce.Ctx, ch.AsInput())
+		resp, err = t.client.API().ChannelsJoinChannel(ce.Ctx, inputChannel)
 		if err != nil {
 			ce.Log.Err(err).Msg("Failed to join chat with invite link")
 			ce.Reply("Failed to join chat: %v", err)

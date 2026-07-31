@@ -426,7 +426,8 @@ func (r *rtParser) writeRichTextChannel(ctx context.Context, v tg.ChatClass) {
 		} else {
 			url = fmt.Sprintf("https://t.me/c/%d", ch.ID)
 		}
-	case *tg.ChatEmpty, *tg.ChatForbidden:
+	//case *tg.Community: TODO?
+	case *tg.ChatEmpty, *tg.ChatForbidden, *tg.CommunityForbidden:
 		// no-op
 		return
 	default:

@@ -225,7 +225,7 @@ func (d *StoriesDeleteStoriesRequest) GetID() (value []int) {
 //
 // See https://core.telegram.org/method/stories.deleteStories for reference.
 func (c *Client) StoriesDeleteStories(ctx context.Context, request *StoriesDeleteStoriesRequest) ([]int, error) {
-	var result IntVector
+	var result intVector
 
 	if err := c.rpc.Invoke(ctx, request, &result); err != nil {
 		return nil, err

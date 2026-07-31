@@ -189,7 +189,7 @@ func (d *PhotosDeletePhotosRequest) MapID() (value InputPhotoClassArray) {
 //
 // See https://core.telegram.org/method/photos.deletePhotos for reference.
 func (c *Client) PhotosDeletePhotos(ctx context.Context, id []InputPhotoClass) ([]int64, error) {
-	var result LongVector
+	var result longVector
 
 	request := &PhotosDeletePhotosRequest{
 		ID: id,

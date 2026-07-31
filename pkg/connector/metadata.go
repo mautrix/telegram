@@ -57,6 +57,7 @@ func (gm *GhostMetadata) IsMin() bool {
 type PortalMetadata struct {
 	IsSuperGroup      bool          `json:"is_supergroup,omitempty"`
 	IsForumGeneral    bool          `json:"is_forum_general,omitempty"`
+	IsCommunity       bool          `json:"is_community,omitempty"`
 	ReadUpTo          int           `json:"read_up_to,omitempty"` // FIXME this shouldn't be here
 	AllowedReactions  []string      `json:"allowed_reactions"`
 	LastSync          jsontime.Unix `json:"last_sync,omitempty"`
@@ -75,6 +76,12 @@ type PortalMetadata struct {
 func (pm *PortalMetadata) SetIsSuperGroup(isSupergroup bool) (changed bool) {
 	changed = pm.IsSuperGroup != isSupergroup
 	pm.IsSuperGroup = isSupergroup
+	return changed
+}
+
+func (pm *PortalMetadata) SetIsCommunity(isCommunity bool) (changed bool) {
+	changed = pm.IsCommunity != isCommunity
+	pm.IsCommunity = isCommunity
 	return changed
 }
 

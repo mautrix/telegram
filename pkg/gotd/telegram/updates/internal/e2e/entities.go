@@ -7,6 +7,7 @@ type Entities struct {
 	Users             map[int64]*tg.User
 	Chats             map[int64]*tg.Chat
 	Channels          map[int64]*tg.Channel
+	Communities       map[int64]*tg.Community
 	ChannelsForbidden map[int64]*tg.ChannelForbidden
 }
 
@@ -16,6 +17,7 @@ func NewEntities() *Entities {
 		Users:             map[int64]*tg.User{},
 		Chats:             map[int64]*tg.Chat{},
 		Channels:          map[int64]*tg.Channel{},
+		Communities:       map[int64]*tg.Community{},
 		ChannelsForbidden: map[int64]*tg.ChannelForbidden{},
 	}
 }
@@ -38,6 +40,10 @@ func (e *Entities) Merge(from *Entities) {
 		e.Channels[channelID] = channel
 	}
 
+	for communityID, community := range from.Communities {
+		e.Communities[communityID] = community
+	}
+
 	for channelID, channel := range from.ChannelsForbidden {
 		e.ChannelsForbidden[channelID] = channel
 	}
@@ -51,6 +57,7 @@ func (e *Entities) FromUpdates(u interface {
 }) *Entities {
 	u.MapChats().FillChatMap(e.Chats)
 	u.MapChats().FillChannelMap(e.Channels)
+	u.MapChats().FillCommunityMap(e.Communities)
 	u.MapChats().FillChannelForbiddenMap(e.ChannelsForbidden)
 	u.MapUsers().FillUserMap(e.Users)
 	return e

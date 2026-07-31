@@ -117,6 +117,8 @@ disable_view_once: false
 # Should video URL previews be bridged as m.video messages to Matrix?
 # By default, video URL previews will not be bridged.
 video_url_preview_as_file: false
+# Should communities on Telegram be bridged as Matrix spaces?
+bridge_communities: true
 # Displayname template for Telegram users.
 # {{ .FullName }} - the full name of the Telegram user
 # {{ .FirstName }} - the first name of the Telegram user

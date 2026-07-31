@@ -222,7 +222,7 @@ func (c *PhoneCheckGroupCallRequest) GetSources() (value []int) {
 //
 // See https://core.telegram.org/method/phone.checkGroupCall for reference.
 func (c *Client) PhoneCheckGroupCall(ctx context.Context, request *PhoneCheckGroupCallRequest) ([]int, error) {
-	var result IntVector
+	var result intVector
 
 	if err := c.rpc.Invoke(ctx, request, &result); err != nil {
 		return nil, err

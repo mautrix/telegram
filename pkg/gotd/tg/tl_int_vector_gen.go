@@ -31,24 +31,24 @@ var (
 	_ = tdjson.Encoder{}
 )
 
-// IntVector is a box for Vector<int>
-type IntVector struct {
+// intVector is a box for Vector<int>
+type intVector struct {
 	// Elements of Vector<int>
 	Elems []int
 }
 
-// IntVectorTypeID is TL type id of IntVector.
-const IntVectorTypeID = bin.TypeVector
+// intVectorTypeID is TL type id of intVector.
+const intVectorTypeID = bin.TypeVector
 
-// Ensuring interfaces in compile-time for IntVector.
+// Ensuring interfaces in compile-time for intVector.
 var (
-	_ bin.Encoder     = &IntVector{}
-	_ bin.Decoder     = &IntVector{}
-	_ bin.BareEncoder = &IntVector{}
-	_ bin.BareDecoder = &IntVector{}
+	_ bin.Encoder     = &intVector{}
+	_ bin.Decoder     = &intVector{}
+	_ bin.BareEncoder = &intVector{}
+	_ bin.BareDecoder = &intVector{}
 )
 
-func (vec *IntVector) Zero() bool {
+func (vec *intVector) Zero() bool {
 	if vec == nil {
 		return true
 	}
@@ -60,16 +60,16 @@ func (vec *IntVector) Zero() bool {
 }
 
 // String implements fmt.Stringer.
-func (vec *IntVector) String() string {
+func (vec *intVector) String() string {
 	if vec == nil {
-		return "IntVector(nil)"
+		return "intVector(nil)"
 	}
-	type Alias IntVector
-	return fmt.Sprintf("IntVector%+v", Alias(*vec))
+	type Alias intVector
+	return fmt.Sprintf("intVector%+v", Alias(*vec))
 }
 
-// FillFrom fills IntVector from given interface.
-func (vec *IntVector) FillFrom(from interface {
+// FillFrom fills intVector from given interface.
+func (vec *intVector) FillFrom(from interface {
 	GetElems() (value []int)
 }) {
 	vec.Elems = from.GetElems()
@@ -78,20 +78,20 @@ func (vec *IntVector) FillFrom(from interface {
 // TypeID returns type id in TL schema.
 //
 // See https://core.telegram.org/mtproto/TL-tl#remarks.
-func (*IntVector) TypeID() uint32 {
-	return IntVectorTypeID
+func (*intVector) TypeID() uint32 {
+	return intVectorTypeID
 }
 
 // TypeName returns name of type in TL schema.
-func (*IntVector) TypeName() string {
+func (*intVector) TypeName() string {
 	return ""
 }
 
 // TypeInfo returns info about TL type.
-func (vec *IntVector) TypeInfo() tdp.Type {
+func (vec *intVector) TypeInfo() tdp.Type {
 	typ := tdp.Type{
 		Name: "",
-		ID:   IntVectorTypeID,
+		ID:   intVectorTypeID,
 	}
 	if vec == nil {
 		typ.Null = true
@@ -107,7 +107,7 @@ func (vec *IntVector) TypeInfo() tdp.Type {
 }
 
 // Encode implements bin.Encoder.
-func (vec *IntVector) Encode(b *bin.Buffer) error {
+func (vec *intVector) Encode(b *bin.Buffer) error {
 	if vec == nil {
 		return fmt.Errorf("can't encode Vector<int> as nil")
 	}
@@ -116,7 +116,7 @@ func (vec *IntVector) Encode(b *bin.Buffer) error {
 }
 
 // EncodeBare implements bin.BareEncoder.
-func (vec *IntVector) EncodeBare(b *bin.Buffer) error {
+func (vec *intVector) EncodeBare(b *bin.Buffer) error {
 	if vec == nil {
 		return fmt.Errorf("can't encode Vector<int> as nil")
 	}
@@ -128,7 +128,7 @@ func (vec *IntVector) EncodeBare(b *bin.Buffer) error {
 }
 
 // Decode implements bin.Decoder.
-func (vec *IntVector) Decode(b *bin.Buffer) error {
+func (vec *intVector) Decode(b *bin.Buffer) error {
 	if vec == nil {
 		return fmt.Errorf("can't decode Vector<int> to nil")
 	}
@@ -137,7 +137,7 @@ func (vec *IntVector) Decode(b *bin.Buffer) error {
 }
 
 // DecodeBare implements bin.BareDecoder.
-func (vec *IntVector) DecodeBare(b *bin.Buffer) error {
+func (vec *intVector) DecodeBare(b *bin.Buffer) error {
 	if vec == nil {
 		return fmt.Errorf("can't decode Vector<int> to nil")
 	}
@@ -162,7 +162,7 @@ func (vec *IntVector) DecodeBare(b *bin.Buffer) error {
 }
 
 // GetElems returns value of Elems field.
-func (vec *IntVector) GetElems() (value []int) {
+func (vec *intVector) GetElems() (value []int) {
 	if vec == nil {
 		return
 	}

@@ -31,24 +31,24 @@ var (
 	_ = tdjson.Encoder{}
 )
 
-// LongVector is a box for Vector<long>
-type LongVector struct {
+// longVector is a box for Vector<long>
+type longVector struct {
 	// Elements of Vector<long>
 	Elems []int64
 }
 
-// LongVectorTypeID is TL type id of LongVector.
-const LongVectorTypeID = bin.TypeVector
+// longVectorTypeID is TL type id of longVector.
+const longVectorTypeID = bin.TypeVector
 
-// Ensuring interfaces in compile-time for LongVector.
+// Ensuring interfaces in compile-time for longVector.
 var (
-	_ bin.Encoder     = &LongVector{}
-	_ bin.Decoder     = &LongVector{}
-	_ bin.BareEncoder = &LongVector{}
-	_ bin.BareDecoder = &LongVector{}
+	_ bin.Encoder     = &longVector{}
+	_ bin.Decoder     = &longVector{}
+	_ bin.BareEncoder = &longVector{}
+	_ bin.BareDecoder = &longVector{}
 )
 
-func (vec *LongVector) Zero() bool {
+func (vec *longVector) Zero() bool {
 	if vec == nil {
 		return true
 	}
@@ -60,16 +60,16 @@ func (vec *LongVector) Zero() bool {
 }
 
 // String implements fmt.Stringer.
-func (vec *LongVector) String() string {
+func (vec *longVector) String() string {
 	if vec == nil {
-		return "LongVector(nil)"
+		return "longVector(nil)"
 	}
-	type Alias LongVector
-	return fmt.Sprintf("LongVector%+v", Alias(*vec))
+	type Alias longVector
+	return fmt.Sprintf("longVector%+v", Alias(*vec))
 }
 
-// FillFrom fills LongVector from given interface.
-func (vec *LongVector) FillFrom(from interface {
+// FillFrom fills longVector from given interface.
+func (vec *longVector) FillFrom(from interface {
 	GetElems() (value []int64)
 }) {
 	vec.Elems = from.GetElems()
@@ -78,20 +78,20 @@ func (vec *LongVector) FillFrom(from interface {
 // TypeID returns type id in TL schema.
 //
 // See https://core.telegram.org/mtproto/TL-tl#remarks.
-func (*LongVector) TypeID() uint32 {
-	return LongVectorTypeID
+func (*longVector) TypeID() uint32 {
+	return longVectorTypeID
 }
 
 // TypeName returns name of type in TL schema.
-func (*LongVector) TypeName() string {
+func (*longVector) TypeName() string {
 	return ""
 }
 
 // TypeInfo returns info about TL type.
-func (vec *LongVector) TypeInfo() tdp.Type {
+func (vec *longVector) TypeInfo() tdp.Type {
 	typ := tdp.Type{
 		Name: "",
-		ID:   LongVectorTypeID,
+		ID:   longVectorTypeID,
 	}
 	if vec == nil {
 		typ.Null = true
@@ -107,7 +107,7 @@ func (vec *LongVector) TypeInfo() tdp.Type {
 }
 
 // Encode implements bin.Encoder.
-func (vec *LongVector) Encode(b *bin.Buffer) error {
+func (vec *longVector) Encode(b *bin.Buffer) error {
 	if vec == nil {
 		return fmt.Errorf("can't encode Vector<long> as nil")
 	}
@@ -116,7 +116,7 @@ func (vec *LongVector) Encode(b *bin.Buffer) error {
 }
 
 // EncodeBare implements bin.BareEncoder.
-func (vec *LongVector) EncodeBare(b *bin.Buffer) error {
+func (vec *longVector) EncodeBare(b *bin.Buffer) error {
 	if vec == nil {
 		return fmt.Errorf("can't encode Vector<long> as nil")
 	}
@@ -128,7 +128,7 @@ func (vec *LongVector) EncodeBare(b *bin.Buffer) error {
 }
 
 // Decode implements bin.Decoder.
-func (vec *LongVector) Decode(b *bin.Buffer) error {
+func (vec *longVector) Decode(b *bin.Buffer) error {
 	if vec == nil {
 		return fmt.Errorf("can't decode Vector<long> to nil")
 	}
@@ -137,7 +137,7 @@ func (vec *LongVector) Decode(b *bin.Buffer) error {
 }
 
 // DecodeBare implements bin.BareDecoder.
-func (vec *LongVector) DecodeBare(b *bin.Buffer) error {
+func (vec *longVector) DecodeBare(b *bin.Buffer) error {
 	if vec == nil {
 		return fmt.Errorf("can't decode Vector<long> to nil")
 	}
@@ -162,7 +162,7 @@ func (vec *LongVector) DecodeBare(b *bin.Buffer) error {
 }
 
 // GetElems returns value of Elems field.
-func (vec *LongVector) GetElems() (value []int64) {
+func (vec *longVector) GetElems() (value []int64) {
 	if vec == nil {
 		return
 	}

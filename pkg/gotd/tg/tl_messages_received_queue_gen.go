@@ -175,7 +175,7 @@ func (r *MessagesReceivedQueueRequest) GetMaxQts() (value int) {
 //
 // See https://core.telegram.org/method/messages.receivedQueue for reference.
 func (c *Client) MessagesReceivedQueue(ctx context.Context, maxqts int) ([]int64, error) {
-	var result LongVector
+	var result longVector
 
 	request := &MessagesReceivedQueueRequest{
 		MaxQts: maxqts,

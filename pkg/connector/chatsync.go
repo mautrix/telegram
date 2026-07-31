@@ -33,6 +33,15 @@ import (
 	"go.mau.fi/mautrix-telegram/pkg/gotd/tgerr"
 )
 
+type peerfulDialog interface {
+	GetPeer() tg.PeerClass
+}
+
+var (
+	_ peerfulDialog = (*tg.Dialog)(nil)
+	_ peerfulDialog = (*tg.DialogFolder)(nil)
+)
+
 func (tc *TelegramClient) syncChats(ctx context.Context, takeoutID int64, onLogin, restart bool) error {
 	if takeoutID != 0 && !tc.main.Config.Takeout.DialogSync {
 		return nil
@@ -142,7 +151,7 @@ func (tc *TelegramClient) syncChats(ctx context.Context, takeoutID int64, onLogi
 		updateLimit = subtractLimit(updateLimit, len(dialogList))
 		createLimit = subtractLimit(createLimit, len(dialogList))
 
-		cursorPortalKey := tc.makePortalKeyFromPeer(dialogList[len(dialogList)-1].GetPeer(), 0)
+		cursorPortalKey := tc.dialogToPortalKey(dialogList[len(dialogList)-1])
 		if tc.metadata.DialogSyncCursor == cursorPortalKey.ID {
 			log.Debug().Msg("No more dialogs found (last dialog is same as old cursor)")
 			break
@@ -170,6 +179,19 @@ func (tc *TelegramClient) syncChats(ctx context.Context, takeoutID int64, onLogi
 	return nil
 }
 
+func (tc *TelegramClient) dialogToPortalKey(dialog tg.DialogClass) networkid.PortalKey {
+	switch v := dialog.(type) {
+	case *tg.Dialog:
+		return tc.makePortalKeyFromPeer(v.Peer, 0)
+	case *tg.DialogFolder:
+		return tc.makePortalKeyFromPeer(v.Peer, 0)
+	case *tg.DialogCommunity:
+		return tc.makePortalKeyFromID(ids.PeerTypeChannel, v.CommunityID, 0)
+	default:
+		panic(fmt.Errorf("unknown dialog type %T", dialog))
+	}
+}
+
 func subtractLimit(limit, count int) int {
 	if limit < 0 {
 		return limit
@@ -185,16 +207,16 @@ func (tc *TelegramClient) resetPinnedDialogs(ctx context.Context, dialogs []tg.D
 	tc.metadata.PinnedDialogs = nil
 	for _, dialog := range dialogs {
 		if dialog.GetPinned() {
-			portalKey := tc.makePortalKeyFromPeer(dialog.GetPeer(), 0)
+			portalKey := tc.dialogToPortalKey(dialog)
 			tc.metadata.PinnedDialogs = append(tc.metadata.PinnedDialogs, portalKey.ID)
 		}
 	}
 	return tc.userLogin.Save(ctx)
 }
 
-func (tc *TelegramClient) handleDialogs(ctx context.Context, dialogList []tg.DialogClass, meta tg.ModifiedMessagesDialogs, createLimit int) error {
-	log := zerolog.Ctx(ctx)
-
+func (tc *TelegramClient) handleDialogs(
+	ctx context.Context, dialogList []tg.DialogClass, meta tg.ModifiedMessagesDialogs, createLimit int,
+) error {
 	users := map[int64]tg.UserClass{}
 	for _, user := range meta.GetUsers() {
 		users[user.GetID()] = user
@@ -209,155 +231,218 @@ func (tc *TelegramClient) handleDialogs(ctx context.Context, dialogList []tg.Dia
 	}
 
 	for i, d := range dialogList {
-		dialog, ok := d.(*tg.Dialog)
-		if !ok {
+		var err error
+		switch dialog := d.(type) {
+		case *tg.Dialog:
+			err = tc.syncNormalDialog(ctx, dialog, createLimit < 0 || i < createLimit, users, chats, messages)
+		case *tg.DialogCommunity:
+			err = tc.syncCommunityDialog(ctx, dialog, chats)
+		//case *tg.DialogFolder:
+		default:
 			continue
 		}
-
-		log := log.With().
-			Stringer("peer", dialog.Peer).
-			Int("top_message", dialog.TopMessage).
-			Logger()
-		log.Debug().Msg("Syncing dialog")
-
-		portalKey := tc.makePortalKeyFromPeer(dialog.GetPeer(), 0)
-		portal, err := tc.main.Bridge.GetPortalByKey(ctx, portalKey)
 		if err != nil {
-			return err
-		}
-		if dialog.UnreadCount == 0 && !dialog.UnreadMark {
-			portal.Metadata.(*PortalMetadata).ReadUpTo = dialog.TopMessage
-		}
-
-		var chatInfo *bridgev2.ChatInfo
-		switch peer := dialog.Peer.(type) {
-		case *tg.PeerUser:
-			switch user := users[peer.UserID].(type) {
-			case *tg.User:
-				if user.GetDeleted() {
-					log.Debug().Int64("user_id", peer.UserID).Msg("Not syncing portal because user is deleted")
-					continue
-				}
-				chatInfo, err = tc.getDMChatInfo(ctx, peer.UserID)
-				if err != nil {
-					return fmt.Errorf("failed to get dm info for %d: %w", peer.UserID, err)
-				}
-			default:
-				log.Debug().
-					Int64("user_id", peer.UserID).
-					Type("user_type", user).
-					Msg("Not syncing portal because user type is unsupported")
-				continue
-			}
-		case *tg.PeerChat:
-			switch chat := chats[peer.ChatID].(type) {
-			case *tg.Chat:
-				// Need to get full chat info to get the member list
-				chatInfo, err = tc.GetChatInfo(ctx, portal)
-				if err != nil {
-					return fmt.Errorf("failed to get chat info for %s: %w", portalKey, err)
-				}
-			case *tg.ChatForbidden:
-				log.Debug().
-					Int64("chat_id", peer.ChatID).
-					Msg("Not syncing portal because chat is forbidden")
-				continue
-			default:
-				log.Debug().
-					Int64("chat_id", peer.ChatID).
-					Type("chat_type", chat).
-					Msg("Not syncing portal because chat type is unsupported")
-				continue
-			}
-		case *tg.PeerChannel:
-			switch channel := chats[peer.ChannelID].(type) {
-			case *tg.Channel:
-				var mfm *memberFetchMeta
-				chatInfo, mfm, err = tc.wrapChatInfo(portal.ID, channel)
-				if err != nil {
-					log.Warn().Err(err).Msg("Failed to wrap channel info")
-					continue
-				}
-				err = tc.fillChannelMembers(ctx, mfm, chatInfo.Members)
-				if err != nil {
-					log.Err(err).Msg("Failed to get channel members")
-				}
-			case *tg.ChannelForbidden:
-				log.Debug().
-					Int64("channel_id", peer.ChannelID).
-					Msg("Not syncing portal because channel is forbidden")
-				continue
-			default:
-				log.Debug().
-					Int64("channel_id", peer.ChannelID).
-					Type("channel_type", channel).
-					Msg("Not syncing portal because channel type is unsupported")
-				continue
-			}
-		}
-
-		if portal.MXID == "" {
-			// Check what the latest message is
-			topMessage := messages[ids.MakeMessageID(dialog.Peer, dialog.TopMessage)]
-			if topMessage == nil {
-				if dialog.TopMessage == 0 {
-					log.Debug().Msg("Not syncing portal because there are no messages")
-					continue
-				}
-				log.Warn().Msg("TopMessage of dialog not in messages map")
-			} else if topMessage.TypeID() == tg.MessageServiceTypeID {
-				action := topMessage.(*tg.MessageService).Action
-				if action.TypeID() == tg.MessageActionContactSignUpTypeID || action.TypeID() == tg.MessageActionHistoryClearTypeID {
-					log.Debug().Str("action_type", action.TypeName()).Msg("Not syncing portal because it's a contact sign up or history clear")
-					continue
-				}
-			}
-
-			if createLimit >= 0 && i >= createLimit {
-				continue
-			}
-		}
-
-		tc.fillUserLocalMeta(chatInfo, dialog)
-
-		res := tc.main.Bridge.QueueRemoteEvent(tc.userLogin, &simplevent.ChatResync{
-			ChatInfo: chatInfo,
-			EventMeta: simplevent.EventMeta{
-				Type: bridgev2.RemoteEventChatResync,
-				LogContext: func(c zerolog.Context) zerolog.Context {
-					return c.Str("update", "sync")
-				},
-				PortalKey:    portalKey,
-				CreatePortal: true,
-			},
-			CheckNeedsBackfillFunc: func(ctx context.Context, latestMessage *database.Message) (bool, error) {
-				if latestMessage == nil {
-					return true, nil
-				}
-				_, latestMessageID, err := ids.ParseMessageID(latestMessage.ID)
-				if err != nil {
-					panic(err)
-				}
-				return dialog.TopMessage > latestMessageID, nil
-			},
-		})
-		if err = resultToError(res); err != nil {
-			return err
-		}
-
-		// Generate a read receipt from the last known read message id
-		res = tc.main.Bridge.QueueRemoteEvent(tc.userLogin, &simplevent.Receipt{
-			EventMeta: simplevent.EventMeta{
-				Type:      bridgev2.RemoteEventReadReceipt,
-				PortalKey: portalKey,
-				Sender:    tc.mySender(),
-			},
-			LastTarget:          ids.MakeMessageID(portalKey, dialog.ReadInboxMaxID),
-			ReadUpToStreamOrder: int64(dialog.ReadInboxMaxID),
-		})
-		if err = resultToError(res); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+func (tc *TelegramClient) syncNormalDialog(
+	ctx context.Context, dialog *tg.Dialog, allowCreate bool,
+	users map[int64]tg.UserClass,
+	chats map[int64]tg.ChatClass,
+	messages map[networkid.MessageID]tg.MessageClass,
+) error {
+	log := zerolog.Ctx(ctx).With().
+		Stringer("peer", dialog.Peer).
+		Int("top_message", dialog.TopMessage).
+		Logger()
+	log.Debug().Msg("Syncing dialog")
+
+	portalKey := tc.makePortalKeyFromPeer(dialog.GetPeer(), 0)
+	portal, err := tc.main.Bridge.GetPortalByKey(ctx, portalKey)
+	if err != nil {
+		return err
+	}
+	if dialog.UnreadCount == 0 && !dialog.UnreadMark {
+		portal.Metadata.(*PortalMetadata).ReadUpTo = dialog.TopMessage
+	}
+
+	var chatInfo *bridgev2.ChatInfo
+	switch peer := dialog.Peer.(type) {
+	case *tg.PeerUser:
+		switch user := users[peer.UserID].(type) {
+		case *tg.User:
+			if user.GetDeleted() {
+				log.Debug().Int64("user_id", peer.UserID).Msg("Not syncing portal because user is deleted")
+				return nil
+			}
+			chatInfo, err = tc.getDMChatInfo(ctx, peer.UserID)
+			if err != nil {
+				return fmt.Errorf("failed to get dm info for %d: %w", peer.UserID, err)
+			}
+		default:
+			log.Debug().
+				Int64("user_id", peer.UserID).
+				Type("user_type", user).
+				Msg("Not syncing portal because user type is unsupported")
+			return nil
+		}
+	case *tg.PeerChat:
+		switch chat := chats[peer.ChatID].(type) {
+		case *tg.Chat:
+			// Need to get full chat info to get the member list
+			chatInfo, err = tc.GetChatInfo(ctx, portal)
+			if err != nil {
+				return fmt.Errorf("failed to get chat info for %s: %w", portalKey, err)
+			}
+		case *tg.ChatForbidden:
+			log.Debug().
+				Int64("chat_id", peer.ChatID).
+				Msg("Not syncing portal because chat is forbidden")
+			return nil
+		default:
+			log.Debug().
+				Int64("chat_id", peer.ChatID).
+				Type("chat_type", chat).
+				Msg("Not syncing portal because chat type is unsupported")
+			return nil
+		}
+	case *tg.PeerChannel:
+		switch channel := chats[peer.ChannelID].(type) {
+		case *tg.Channel:
+			var mfm *memberFetchMeta
+			chatInfo, mfm, err = tc.wrapChatInfo(portal.ID, channel)
+			if err != nil {
+				log.Warn().Err(err).Msg("Failed to wrap channel info")
+				return nil
+			}
+			err = tc.fillChannelMembers(ctx, mfm, chatInfo.Members)
+			if err != nil {
+				log.Err(err).Msg("Failed to get channel members")
+			}
+		case *tg.ChannelForbidden:
+			log.Debug().
+				Int64("channel_id", peer.ChannelID).
+				Msg("Not syncing portal because channel is forbidden")
+			return nil
+		default:
+			log.Debug().
+				Int64("channel_id", peer.ChannelID).
+				Type("channel_type", channel).
+				Msg("Not syncing portal because channel type is unsupported")
+			return nil
+		}
+	}
+
+	if portal.MXID == "" {
+		// Check what the latest message is
+		topMessage := messages[ids.MakeMessageID(dialog.Peer, dialog.TopMessage)]
+		if topMessage == nil {
+			if dialog.TopMessage == 0 {
+				log.Debug().Msg("Not syncing portal because there are no messages")
+				return nil
+			}
+			log.Warn().Msg("TopMessage of dialog not in messages map")
+		} else if topMessage.TypeID() == tg.MessageServiceTypeID {
+			action := topMessage.(*tg.MessageService).Action
+			if action.TypeID() == tg.MessageActionContactSignUpTypeID || action.TypeID() == tg.MessageActionHistoryClearTypeID {
+				log.Debug().Str("action_type", action.TypeName()).Msg("Not syncing portal because it's a contact sign up or history clear")
+				return nil
+			}
+		}
+
+		if !allowCreate {
+			return nil
+		}
+	}
+
+	tc.fillUserLocalMeta(chatInfo, dialog)
+
+	res := tc.main.Bridge.QueueRemoteEvent(tc.userLogin, &simplevent.ChatResync{
+		ChatInfo: chatInfo,
+		EventMeta: simplevent.EventMeta{
+			Type: bridgev2.RemoteEventChatResync,
+			LogContext: func(c zerolog.Context) zerolog.Context {
+				return c.Str("update", "sync")
+			},
+			PortalKey:    portalKey,
+			CreatePortal: true,
+		},
+		CheckNeedsBackfillFunc: func(ctx context.Context, latestMessage *database.Message) (bool, error) {
+			if latestMessage == nil {
+				return true, nil
+			}
+			_, latestMessageID, err := ids.ParseMessageID(latestMessage.ID)
+			if err != nil {
+				panic(err)
+			}
+			return dialog.TopMessage > latestMessageID, nil
+		},
+	})
+	if err = resultToError(res); err != nil {
+		return err
+	}
+
+	// Generate a read receipt from the last known read message id
+	res = tc.main.Bridge.QueueRemoteEvent(tc.userLogin, &simplevent.Receipt{
+		EventMeta: simplevent.EventMeta{
+			Type:      bridgev2.RemoteEventReadReceipt,
+			PortalKey: portalKey,
+			Sender:    tc.mySender(),
+		},
+		LastTarget:          ids.MakeMessageID(portalKey, dialog.ReadInboxMaxID),
+		ReadUpToStreamOrder: int64(dialog.ReadInboxMaxID),
+	})
+	if err = resultToError(res); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (tc *TelegramClient) syncCommunityDialog(ctx context.Context, dialog *tg.DialogCommunity, chats map[int64]tg.ChatClass) error {
+	log := zerolog.Ctx(ctx).With().
+		Int64("community_id", dialog.CommunityID).
+		Logger()
+	log.Debug().Msg("Syncing community dialog")
+	portalKey := tc.makePortalKeyFromID(ids.PeerTypeChannel, dialog.CommunityID, 0)
+	portal, err := tc.main.Bridge.GetPortalByKey(ctx, portalKey)
+	if err != nil {
+		return err
+	}
+	var chatInfo *bridgev2.ChatInfo
+	switch channel := chats[dialog.CommunityID].(type) {
+	case *tg.Community:
+		chatInfo, _, err = tc.wrapChatInfo(portal.ID, channel)
+		if err != nil {
+			log.Warn().Err(err).Msg("Failed to wrap community info")
+			return nil
+		}
+	case *tg.CommunityForbidden:
+		log.Debug().
+			Msg("Not syncing portal because community is forbidden")
+		return nil
+	default:
+		log.Debug().
+			Int64("community_id", dialog.CommunityID).
+			Type("chat_type", channel).
+			Msg("Not syncing portal because community type is unsupported")
+		return nil
+	}
+
+	tc.fillUserLocalMeta(chatInfo, dialog)
+
+	res := tc.main.Bridge.QueueRemoteEvent(tc.userLogin, &simplevent.ChatResync{
+		ChatInfo: chatInfo,
+		EventMeta: simplevent.EventMeta{
+			Type: bridgev2.RemoteEventChatResync,
+			LogContext: func(c zerolog.Context) zerolog.Context {
+				return c.Str("update", "sync")
+			},
+			PortalKey:    portalKey,
+			CreatePortal: true,
+		},
+	})
+	return resultToError(res)
 }

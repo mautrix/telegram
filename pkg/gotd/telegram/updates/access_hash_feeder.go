@@ -43,6 +43,25 @@ func (s *internalState) saveChannelHashes(ctx context.Context, chats []tg.ChatCl
 			if err := s.hasher.SetChannelAccessHash(ctx, s.selfID, c.ID, c.AccessHash); err != nil {
 				s.log.Error("SetChannelAccessHash error", zap.Error(err))
 			}
+		case *tg.Community:
+			if c.Min {
+				continue
+			}
+			if hash, ok := c.GetAccessHash(); ok && !s.savedCommunities.Has(c.ID) {
+				if err := s.hasher.SetChannelAccessHash(ctx, s.selfID, c.ID, hash); err != nil {
+					s.log.Error("SetChannelAccessHash error", zap.Error(err))
+				} else {
+					s.savedCommunities.Add(c.ID)
+				}
+			}
+		case *tg.CommunityForbidden:
+			if hash, ok := c.GetAccessHash(); ok && !s.savedCommunities.Has(c.ID) {
+				if err := s.hasher.SetChannelAccessHash(ctx, s.selfID, c.ID, hash); err != nil {
+					s.log.Error("SetChannelAccessHash error", zap.Error(err))
+				} else {
+					s.savedCommunities.Add(c.ID)
+				}
+			}
 		}
 	}
 }

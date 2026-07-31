@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/go-faster/errors"
+	"go.mau.fi/util/exmaps"
 	"go.mau.fi/util/exsync"
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
@@ -49,6 +50,7 @@ type internalState struct {
 	channels             map[int64]*channelState
 	channelsLock         sync.Mutex
 	recentlyLeftChannels *exsync.Set[int64]
+	savedCommunities     exmaps.Set[int64]
 
 	// Immutable fields.
 	client    API
@@ -88,6 +90,7 @@ func newState(ctx context.Context, cfg stateConfig) *internalState {
 
 		channels:             make(map[int64]*channelState),
 		recentlyLeftChannels: exsync.NewSet[int64](),
+		savedCommunities:     make(exmaps.Set[int64]),
 
 		client:    cfg.RawClient,
 		log:       cfg.Logger,

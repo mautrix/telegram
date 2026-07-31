@@ -25,38 +25,42 @@ import (
 	"go.mau.fi/util/jsontime"
 	"go.mau.fi/util/ptr"
 	"go.mau.fi/util/variationselector"
+
 	"maunium.net/go/mautrix/bridgev2"
 	"maunium.net/go/mautrix/event"
 
 	"go.mau.fi/mautrix-telegram/pkg/connector/ids"
 )
 
-func (tc *TelegramConnector) GetCapabilities() *bridgev2.NetworkGeneralCapabilities {
-	return &bridgev2.NetworkGeneralCapabilities{
-		DisappearingMessages: true,
-		Provisioning: bridgev2.ProvisioningCapabilities{
-			ImagePackImport: true,
-			ResolveIdentifier: bridgev2.ResolveIdentifierCapabilities{
-				CreateDM:       true,
-				LookupPhone:    true,
-				LookupUsername: true,
-				ContactList:    true,
-				Search:         true,
-			},
-			GroupCreation: map[string]bridgev2.GroupTypeCapabilities{
-				"group": {
-					TypeDescription: "a normal group",
-					Name:            bridgev2.GroupFieldCapability{Allowed: true, Required: true, MaxLength: 255},
-					Participants:    bridgev2.GroupFieldCapability{Allowed: true, Required: true, MinLength: 1, MaxLength: 200},
-					// TODO implement
-					//Disappear:       bridgev2.GroupFieldCapability{Allowed: true},
-				},
-				// TODO
-				//"channel": {},
-				//"supergroup": {},
-			},
+var generalCaps = &bridgev2.NetworkGeneralCapabilities{
+	DisappearingMessages:     true,
+	NetworkIsImmediateParent: true,
+	Provisioning: bridgev2.ProvisioningCapabilities{
+		ImagePackImport: true,
+		ResolveIdentifier: bridgev2.ResolveIdentifierCapabilities{
+			CreateDM:       true,
+			LookupPhone:    true,
+			LookupUsername: true,
+			ContactList:    true,
+			Search:         true,
 		},
-	}
+		GroupCreation: map[string]bridgev2.GroupTypeCapabilities{
+			"group": {
+				TypeDescription: "a normal group",
+				Name:            bridgev2.GroupFieldCapability{Allowed: true, Required: true, MaxLength: 255},
+				Participants:    bridgev2.GroupFieldCapability{Allowed: true, Required: true, MinLength: 1, MaxLength: 200},
+				// TODO implement
+				//Disappear:       bridgev2.GroupFieldCapability{Allowed: true},
+			},
+			// TODO
+			//"channel": {},
+			//"supergroup": {},
+		},
+	},
+}
+
+func (tc *TelegramConnector) GetCapabilities() *bridgev2.NetworkGeneralCapabilities {
+	return generalCaps
 }
 
 func (tc *TelegramConnector) GetBridgeInfoVersion() (info, capabilities int) {

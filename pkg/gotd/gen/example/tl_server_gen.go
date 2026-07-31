@@ -136,7 +136,7 @@ func (s *ServerDispatcher) OnEchoVector(f func(ctx context.Context, ids []int) (
 		if err != nil {
 			return nil, err
 		}
-		return &IntVector{Elems: response}, nil
+		return &intVector{Elems: response}, nil
 	}
 
 	s.handlers[EchoVectorRequestTypeID] = handler

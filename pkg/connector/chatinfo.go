@@ -73,7 +73,7 @@ func adminRightsToPowerLevel(rights tg.ChatAdminRights) *int {
 		return manageCallPowerLevel
 	} else if rights.InviteUsers {
 		return inviteUsersPowerLevel
-	} else if rights.ChangeInfo {
+	} else if rights.ChangeInfo || rights.ManageLinkedPeers {
 		return changeInfoPowerLevel
 	} else if rights.DeleteStories {
 		return deleteStoriesPowerLevel
@@ -142,7 +142,7 @@ func (tc *TelegramClient) wrapChatInfo(portalID networkid.PortalID, rawChat tg.C
 		ExcludeChangesFromTimeline: true,
 	}
 	var mfm memberFetchMeta
-	var isMegagroup, isForumGeneral, left bool
+	var isMegagroup, isForumGeneral, isCommunity, left bool
 	var avatarErr error
 	var ownPL *int
 	switch chat := rawChat.(type) {
@@ -174,6 +174,12 @@ func (tc *TelegramClient) wrapChatInfo(portalID networkid.PortalID, rawChat tg.C
 		} else {
 			ownPL = anyonePowerLevel
 		}
+		if chat.LinkedCommunityID != 0 && tc.main.Config.BridgeCommunities {
+			// Note: must be set before forum child check, as the forum parent will overwrite this
+			info.ParentID = ptr.Ptr(ids.MakePortalID(ids.PeerTypeChannel, chat.LinkedCommunityID))
+		} else {
+			info.ParentID = ptr.Ptr(networkid.PortalID(""))
+		}
 		_, _, topicID, _ := ids.ParsePortalID(portalID)
 		if chat.Forum {
 			if topicID == ids.TopicIDSpaceRoom {
@@ -199,6 +205,28 @@ func (tc *TelegramClient) wrapChatInfo(portalID networkid.PortalID, rawChat tg.C
 			// TODO change this to a better error whenever that is implemented in mautrix-go
 			return nil, nil, fmt.Errorf("too many participants (%d) in chat %d", chat.ParticipantsCount, chat.GetID())
 		}
+	case *tg.Community:
+		if !tc.main.Config.BridgeCommunities {
+			return nil, nil, fmt.Errorf("community bridging is disabled in the config")
+		}
+		info.Type = ptr.Ptr(database.RoomTypeSpace)
+		mfm.ParticipantsHidden = true
+		isCommunity = true
+		left = chat.Left
+		info.CanBackfill = false
+		info.Name = &chat.Title
+		info.Avatar, avatarErr = tc.convertChatPhoto(&tg.InputPeerChannel{
+			ChannelID:  chat.ID,
+			AccessHash: chat.AccessHash,
+		}, chat.Photo)
+		info.Members.PowerLevels = tc.getPowerLevelOverridesFromBannedRights(chat, chat.DefaultBannedRights)
+		if chat.Creator {
+			ownPL = creatorPowerLevel
+		} else if rights, isAdmin := chat.GetAdminRights(); isAdmin {
+			ownPL = adminRightsToPowerLevel(rights)
+		} else {
+			ownPL = anyonePowerLevel
+		}
 	default:
 		return nil, nil, fmt.Errorf("unsupported chat type %T", rawChat)
 	}
@@ -212,6 +240,7 @@ func (tc *TelegramClient) wrapChatInfo(portalID networkid.PortalID, rawChat tg.C
 		meta := portal.Metadata.(*PortalMetadata)
 		_ = updatePortalLastSyncAt(ctx, portal)
 		changed := meta.SetIsSuperGroup(isMegagroup)
+		changed = meta.SetIsCommunity(isCommunity) || changed
 		changed = meta.SetIsForumGeneral(isForumGeneral) || changed
 		if info.Members.TotalMemberCount != 0 && meta.ParticipantsCount != info.Members.TotalMemberCount {
 			meta.ParticipantsCount = info.Members.TotalMemberCount
@@ -291,17 +320,38 @@ func (tc *TelegramClient) fillChannelMembers(ctx context.Context, mfm *memberFet
 	return nil
 }
 
-func (tc *TelegramClient) fillUserLocalMeta(info *bridgev2.ChatInfo, dialog *tg.Dialog) {
+type userLocalDialog interface {
+	GetNotifySettings() tg.PeerNotifySettings
+	GetPinned() bool
+}
+
+var (
+	_ userLocalDialog = (*tg.Dialog)(nil)
+	_ userLocalDialog = (*tg.DialogCommunity)(nil)
+)
+
+func (tc *TelegramClient) fillUserLocalMeta(info *bridgev2.ChatInfo, dialog userLocalDialog) {
 	info.UserLocal = &bridgev2.UserLocalPortalInfo{}
-	if mu, ok := dialog.NotifySettings.GetMuteUntil(); ok {
+	notifySettings := dialog.GetNotifySettings()
+	if mu, ok := notifySettings.GetMuteUntil(); ok {
 		info.UserLocal.MutedUntil = ptr.Ptr(time.Unix(int64(mu), 0))
 	} else {
 		info.UserLocal.MutedUntil = &bridgev2.Unmuted
 	}
-	if dialog.Pinned {
+	if dialog.GetPinned() {
 		info.UserLocal.Tag = ptr.Ptr(event.RoomTagFavourite)
 	}
 }
+
+type realFullChat interface {
+	GetAvailableReactions() (value tg.ChatReactionsClass, ok bool)
+	GetTTLPeriod() (value int, ok bool)
+}
+
+var (
+	_ realFullChat = (*tg.ChatFull)(nil)
+	_ realFullChat = (*tg.ChannelFull)(nil)
+)
 
 func (tc *TelegramClient) wrapFullChatInfo(portalID networkid.PortalID, fullChat *tg.MessagesChatFull) (*bridgev2.ChatInfo, *memberFetchMeta, error) {
 	var chat tg.ChatClass
@@ -321,26 +371,29 @@ func (tc *TelegramClient) wrapFullChatInfo(portalID networkid.PortalID, fullChat
 	}
 
 	var newAllowedReactions []string
-	if reactions, ok := fullChat.FullChat.GetAvailableReactions(); ok {
-		switch typedReactions := reactions.(type) {
-		case *tg.ChatReactionsAll:
-			newAllowedReactions = nil
-		case *tg.ChatReactionsNone:
-			newAllowedReactions = []string{}
-		case *tg.ChatReactionsSome:
-			newAllowedReactions = make([]string, 0, len(typedReactions.Reactions))
-			for _, react := range typedReactions.Reactions {
-				emoji, ok := react.(*tg.ReactionEmoji)
-				if ok {
-					newAllowedReactions = append(newAllowedReactions, emoji.Emoticon)
+	rfc, ok := fullChat.FullChat.(realFullChat)
+	if ok {
+		if reactions, ok := rfc.GetAvailableReactions(); ok {
+			switch typedReactions := reactions.(type) {
+			case *tg.ChatReactionsAll:
+				newAllowedReactions = nil
+			case *tg.ChatReactionsNone:
+				newAllowedReactions = []string{}
+			case *tg.ChatReactionsSome:
+				newAllowedReactions = make([]string, 0, len(typedReactions.Reactions))
+				for _, react := range typedReactions.Reactions {
+					emoji, ok := react.(*tg.ReactionEmoji)
+					if ok {
+						newAllowedReactions = append(newAllowedReactions, emoji.Emoticon)
+					}
 				}
 			}
 		}
-	}
-	if ttl, ok := fullChat.FullChat.GetTTLPeriod(); ok {
-		info.Disappear = &database.DisappearingSetting{
-			Type:  event.DisappearingTypeAfterSend,
-			Timer: time.Duration(ttl) * time.Second,
+		if ttl, ok := rfc.GetTTLPeriod(); ok {
+			info.Disappear = &database.DisappearingSetting{
+				Type:  event.DisappearingTypeAfterSend,
+				Timer: time.Duration(ttl) * time.Second,
+			}
 		}
 	}
 	if about := fullChat.FullChat.GetAbout(); about != "" {
@@ -380,6 +433,7 @@ func (tc *TelegramClient) wrapFullChatInfo(portalID networkid.PortalID, fullChat
 		}
 	case *tg.ChannelFull:
 		mfm.ParticipantsHidden = !typedFullChat.CanViewParticipants || typedFullChat.ParticipantsHidden
+	case *tg.CommunityFull:
 	}
 
 	return info, mfm, nil
@@ -614,6 +668,15 @@ func (tc *TelegramClient) getPowerLevelOverridesFromBannedRights(entity tg.ChatC
 		event.StateHistoryVisibility:       85,
 		event.StateBeeperDisappearingTimer: 85,
 		event.BeeperDeleteChat:             *creatorPowerLevel,
+	}
+
+	if _, isCommunity := entity.(*tg.Community); isCommunity {
+		plo.EventsDefault = nobodyPowerLevel
+		if dbr.ManageLinkedPeers {
+			plo.Events[event.StateSpaceChild] = *changeInfoPowerLevel
+		} else {
+			plo.Events[event.StateSpaceChild] = 0
+		}
 	}
 
 	if dbr.ChangeInfo {

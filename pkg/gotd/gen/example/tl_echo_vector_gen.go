@@ -170,7 +170,7 @@ func (e *EchoVectorRequest) GetIDs() (value []int) {
 //
 // See https://localhost:80/doc/method/echoVector for reference.
 func (c *Client) EchoVector(ctx context.Context, ids []int) ([]int, error) {
-	var result IntVector
+	var result intVector
 
 	request := &EchoVectorRequest{
 		IDs: ids,

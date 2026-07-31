@@ -242,7 +242,7 @@ func (t *StoriesTogglePinnedRequest) GetPinned() (value bool) {
 //
 // See https://core.telegram.org/method/stories.togglePinned for reference.
 func (c *Client) StoriesTogglePinned(ctx context.Context, request *StoriesTogglePinnedRequest) ([]int, error) {
-	var result IntVector
+	var result intVector
 
 	if err := c.rpc.Invoke(ctx, request, &result); err != nil {
 		return nil, err
