@@ -994,6 +994,8 @@ func (tc *TelegramClient) onUpdate(ctx context.Context, e tg.Entities, upd tg.Up
 		return tc.onNotifySettings(ctx, e, update)
 	case *tg.UpdatePinnedDialogs:
 		return tc.onPinnedDialogs(ctx, e, update)
+	case *tg.UpdateFolderPeers:
+		return tc.onFolderPeers(ctx, update)
 	case *tg.UpdateChatDefaultBannedRights:
 		return tc.onChatDefaultBannedRights(ctx, e, update)
 	case *tg.UpdatePeerBlocked:
@@ -1471,6 +1473,40 @@ func (tc *TelegramClient) onNotifySettings(ctx context.Context, e tg.Entities, u
 		},
 	})
 	return resultToError(res)
+}
+
+func (tc *TelegramClient) onFolderPeers(ctx context.Context, update *tg.UpdateFolderPeers) error {
+	for _, folderPeer := range update.FolderPeers {
+		portalKey := tc.makePortalKeyFromPeer(folderPeer.Peer, 0)
+		tag := getUserLocalTag(
+			slices.Contains(tc.metadata.PinnedDialogs, portalKey.ID),
+			folderPeer.FolderID,
+		)
+
+		res := tc.main.Bridge.QueueRemoteEvent(tc.userLogin, &simplevent.ChatInfoChange{
+			ChatInfoChange: &bridgev2.ChatInfoChange{
+				ChatInfo: &bridgev2.ChatInfo{
+					UserLocal: &bridgev2.UserLocalPortalInfo{
+						Tag: &tag,
+					},
+				},
+			},
+			EventMeta: simplevent.EventMeta{
+				Type:      bridgev2.RemoteEventChatInfoChange,
+				PortalKey: portalKey,
+				LogContext: func(c zerolog.Context) zerolog.Context {
+					return c.
+						Str("tg_event", "updateFolderPeers").
+						Int("folder_id", folderPeer.FolderID).
+						Stringer("tag", tag)
+				},
+			},
+		})
+		if err := resultToError(res); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (tc *TelegramClient) onPinnedDialogs(ctx context.Context, e tg.Entities, msg *tg.UpdatePinnedDialogs) error {
