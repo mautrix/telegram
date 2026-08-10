@@ -529,7 +529,7 @@ func (tc *TelegramClient) runInBackground(ctx context.Context) {
 		tc.clientInitialized.Set()
 		// If takeout dialog sync is enabled, we assume it'll resume from a getTakeoutID call.
 		// If not, resume dialog sync manually here.
-		if !tc.isNewLogin && !tc.main.Config.Takeout.DialogSync {
+		if !tc.isNewLogin && !tc.main.Config.Takeout.DialogSync && !tc.metadata.IsBot {
 			go func() {
 				if err := tc.syncChats(log.WithContext(tc.clientCtx), 0, false, false); err != nil {
 					log.Err(err).Msg("Failed to resume chat sync")
