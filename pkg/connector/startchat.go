@@ -300,6 +300,7 @@ func (tc *TelegramClient) CreateGroup(ctx context.Context, params *bridgev2.Grou
 	req := tg.MessagesCreateChatRequest{
 		Title: ptr.Val(params.Name).Name,
 	}
+	participantIDs := make([]int64, 0, len(params.Participants))
 	for _, networkUserID := range params.Participants {
 		if peerType, userID, err := ids.ParseUserID(networkUserID); err != nil {
 			return nil, fmt.Errorf("failed to parse user ID: %w", err)
@@ -309,6 +310,7 @@ func (tc *TelegramClient) CreateGroup(ctx context.Context, params *bridgev2.Grou
 			return nil, fmt.Errorf("failed to get input user: %w", err)
 		} else {
 			req.Users = append(req.Users, inputUser)
+			participantIDs = append(participantIDs, userID)
 		}
 	}
 	invitedUsers, err := tc.client.API().MessagesCreateChat(ctx, &req)
@@ -330,6 +332,24 @@ func (tc *TelegramClient) CreateGroup(ctx context.Context, params *bridgev2.Grou
 		return nil, fmt.Errorf("unexpected chat type: %T", chats[0])
 	} else {
 		portalKey := tc.makePortalKeyFromID(ids.PeerTypeChat, chat.ID, 0)
+		info, _, err := tc.wrapChatInfo(portalKey.ID, chat)
+		if err != nil {
+			return nil, fmt.Errorf("failed to wrap created chat info: %w", err)
+		}
+		missingInvitees := make(map[int64]struct{}, len(invitedUsers.MissingInvitees))
+		for _, invitee := range invitedUsers.MissingInvitees {
+			missingInvitees[invitee.UserID] = struct{}{}
+		}
+		for _, userID := range participantIDs {
+			if _, missing := missingInvitees[userID]; missing {
+				continue
+			}
+			info.Members.MemberMap.Set(bridgev2.ChatMember{
+				EventSender: tc.senderForUserID(userID),
+				PowerLevel:  anyonePowerLevel,
+			})
+		}
+		info.Members.IsFull = true
 		if params.RoomID != "" {
 			portal, err := tc.main.Bridge.GetPortalByKey(ctx, portalKey)
 			if err != nil {
@@ -350,7 +370,8 @@ func (tc *TelegramClient) CreateGroup(ctx context.Context, params *bridgev2.Grou
 			}
 		}
 		return &bridgev2.CreateChatResponse{
-			PortalKey: portalKey,
+			PortalKey:  portalKey,
+			PortalInfo: info,
 		}, nil
 	}
 }
