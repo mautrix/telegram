@@ -1,3 +1,10 @@
+# v26.08
+
+* Updated Telegram API to layer 228.
+* Added support for bridging communities as spaces.
+* Fixed bridge unnecessarily trying to sync dialogs when logged in as a bot.
+* Fixed unrecognized reactions in backfill causing the entire backfill to fail.
+
 # v26.07
 
 * Updated Docker image to Alpine 3.24.
