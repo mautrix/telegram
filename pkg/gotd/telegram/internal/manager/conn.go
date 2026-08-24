@@ -135,6 +135,8 @@ func (c *Conn) trackInvoke() func(bin.Encoder, bin.Decoder, *error) {
 		}
 		if f, isFile := input.(*tg.UploadSaveFilePartRequest); isFile {
 			reqField = zap.String("request_payload", fmt.Sprintf("%d bytes for part %d of %d", len(f.Bytes), f.FilePart, f.FileID))
+		} else if f, isFile := input.(*tg.UploadSaveBigFilePartRequest); isFile {
+			reqField = zap.String("request_payload", fmt.Sprintf("%d bytes for big part %d of %d", len(f.Bytes), f.FilePart, f.FileID))
 		} else {
 			reqField = zap.Any("request_payload", input)
 		}
