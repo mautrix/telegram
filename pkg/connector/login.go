@@ -17,7 +17,6 @@
 package connector
 
 import (
-	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -165,9 +164,12 @@ func (bl *baseLogin) makeClient(ctx context.Context, dispatcher *tg.UpdateDispat
 
 	log.Debug().Msg("Waiting for client to connect")
 	connErr, ctxErr := connectResult.Get(ctx)
-	if err := cmp.Or(connErr, ctxErr); err != nil {
+	if connErr != nil {
 		bl.Cancel()
 		return err
+	} else if ctxErr != nil {
+		bl.Cancel()
+		return ctxErr
 	}
 	return nil
 }

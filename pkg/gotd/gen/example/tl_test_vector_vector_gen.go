@@ -160,7 +160,7 @@ func (t *TestVectorVector) DecodeBare(b *bin.Buffer) error {
 			if innerLen > 0 {
 				row = make([]string, 0, innerLen%bin.PreallocateLimit)
 			}
-			for innerIndex := 0; innerIndex < innerLen; innerLen++ {
+			for innerIndex := 0; innerIndex < innerLen; innerIndex++ {
 				value, err := b.String()
 				if err != nil {
 					return fmt.Errorf("unable to decode testVectorVector#69e8846c: field value: %w", err)

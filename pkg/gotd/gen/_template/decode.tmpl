@@ -48,7 +48,7 @@ func ({{ $s.Receiver }} *{{ $s.Name }}) DecodeBare({{ $s.BufArg }} *bin.Buffer) 
                 if innerLen > 0 {
                     row = make([]{{ $f.Type }}, 0, innerLen % bin.PreallocateLimit)
                 }
-                for innerIndex := 0; innerIndex < innerLen; innerLen++ {
+                for innerIndex := 0; innerIndex < innerLen; innerIndex++ {
             {{- end }}
             {{- if $f.Interface }}
                 value, err := Decode{{ $f.InterfaceFunc }}({{ $s.BufArg }})
