@@ -56,8 +56,12 @@ func (r *reqMap) transfer(c *poolConn) bool {
 	return true
 }
 
-func (r *reqMap) delete(key reqKey) {
+// delete removes the pending request. It returns false if transfer already claimed the request,
+// which means a connection is about to be sent to the request channel.
+func (r *reqMap) delete(key reqKey) bool {
 	r.mux.Lock()
+	_, ok := r.m[key]
 	delete(r.m, key)
 	r.mux.Unlock()
+	return ok
 }
