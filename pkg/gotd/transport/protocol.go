@@ -77,10 +77,10 @@ func (p Protocol) Pipe() (a, b Conn) {
 	p1, p2 := net.Pipe()
 
 	return &connection{
-			conn:  p1,
-			codec: p.codec(),
-		}, &connection{
-			conn:  p2,
-			codec: p.codec(),
-		}
+		conn:  p1,
+		codec: p.codec(),
+	}, &connection{
+		conn:  p2,
+		codec: p.codec(),
+	}
 }
