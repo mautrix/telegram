@@ -82,6 +82,8 @@ var (
 	_ bridgev2.MembershipHandlingNetworkAPI     = (*TelegramClient)(nil)
 )
 
+const telegramMediaUploadThreads = 4
+
 func getMediaFilename(content *event.MessageEventContent) (filename string) {
 	if content.FileName != "" {
 		filename = content.FileName
@@ -329,7 +331,10 @@ func (tc *TelegramClient) transferMediaToTelegram(ctx context.Context, content *
 			info.MimeType = "image/jpeg"
 		}
 
-		upload, err = uploader.NewUploader(tc.client.API()).FromPath(ctx, uploadFilename, filename)
+		upload, err = uploader.NewUploader(tc.client.API()).
+			WithThreads(telegramMediaUploadThreads).
+			WithPartSize(uploader.MaximumPartSize).
+			FromPath(ctx, uploadFilename, filename)
 		return
 	})
 	if err != nil {
