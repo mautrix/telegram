@@ -99,9 +99,9 @@ func (ql *QRLogin) Start(ctx context.Context) (*bridgev2.LoginStep, error) {
 		}, nil
 	case <-ctx.Done():
 		ql.Cancel()
-		return nil, ctx.Err()
+		return nil, loginContextError(ctx)
 	case <-ql.ctx.Done():
-		return nil, ql.ctx.Err()
+		return nil, loginContextError(ql.ctx)
 	}
 }
 
@@ -127,15 +127,15 @@ func (ql *QRLogin) Wait(ctx context.Context) (*bridgev2.LoginStep, error) {
 			return passwordLoginStep, nil
 		} else if authResult.Error != nil {
 			ql.Cancel()
-			return nil, fmt.Errorf("failed to authenticate: %w", authResult.Error)
+			return nil, loginRespError(fmt.Errorf("failed to authenticate: %w", authResult.Error))
 		}
 
 		return ql.finalizeLogin(ctx, authResult.Authorization, nil)
 	case <-ctx.Done():
 		ql.Cancel()
-		return nil, ctx.Err()
+		return nil, loginContextError(ctx)
 	case <-ql.ctx.Done():
-		return nil, ql.ctx.Err()
+		return nil, loginContextError(ql.ctx)
 	}
 }
 
