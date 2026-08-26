@@ -116,7 +116,7 @@ var phoneCodeIncorrectStep = &bridgev2.LoginStep{
 
 func (pl *PhoneLogin) submitNumber(ctx context.Context, phone string) (*bridgev2.LoginStep, error) {
 	if phone == "" {
-		return nil, fmt.Errorf("phone number is empty")
+		return nil, ErrPhoneNumberNotProvided
 	}
 	log := zerolog.Ctx(ctx).With().Str("component", "phone login").Logger()
 	ctx = log.WithContext(ctx)
@@ -128,7 +128,7 @@ func (pl *PhoneLogin) submitNumber(ctx context.Context, phone string) (*bridgev2
 
 	sentCode, err := pl.client.Auth().SendCode(ctx, pl.phone, auth.SendCodeOptions{})
 	if err != nil {
-		return nil, err
+		return nil, loginRespError(err)
 	}
 	switch s := sentCode.(type) {
 	case *tg.AuthSentCode:
@@ -161,7 +161,7 @@ func (pl *PhoneLogin) submitCode(ctx context.Context, code string) (*bridgev2.Lo
 	} else if errors.Is(err, &auth.SignUpRequired{}) {
 		return nil, ErrSignUpNotSupported
 	} else if err != nil {
-		return nil, fmt.Errorf("failed to submit code: %w", err)
+		return nil, loginRespError(fmt.Errorf("failed to submit code: %w", err))
 	}
 	return pl.finalizeLogin(ctx, authorization, &UserLoginMetadata{LoginPhone: pl.phone})
 }

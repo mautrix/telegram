@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -31,11 +32,13 @@ import (
 	"maunium.net/go/mautrix/bridgev2"
 	"maunium.net/go/mautrix/bridgev2/database"
 
+	"go.mau.fi/mautrix-telegram/pkg/connector/humanise"
 	"go.mau.fi/mautrix-telegram/pkg/connector/ids"
 	"go.mau.fi/mautrix-telegram/pkg/gotd/telegram"
 	"go.mau.fi/mautrix-telegram/pkg/gotd/telegram/auth"
 	"go.mau.fi/mautrix-telegram/pkg/gotd/telegram/updates"
 	"go.mau.fi/mautrix-telegram/pkg/gotd/tg"
+	"go.mau.fi/mautrix-telegram/pkg/gotd/tgerr"
 )
 
 const (
@@ -63,7 +66,48 @@ var (
 		Err:        "New account creation is not supported",
 		StatusCode: http.StatusBadRequest,
 	}
+	ErrPhoneNumberNotProvided = bridgev2.RespError{
+		ErrCode:    "FI.MAU.TELEGRAM.PHONE_NUMBER_NOT_PROVIDED",
+		Err:        "Phone number not provided",
+		StatusCode: http.StatusBadRequest,
+	}
+	ErrPasswordNotProvided = bridgev2.RespError{
+		ErrCode:    "FI.MAU.TELEGRAM.PASSWORD_NOT_PROVIDED",
+		Err:        "Password not provided",
+		StatusCode: http.StatusBadRequest,
+	}
+	ErrLoginTimedOut = bridgev2.RespError{
+		ErrCode:    "FI.MAU.TELEGRAM.LOGIN_TIMED_OUT",
+		Err:        "The login process timed out, please start over",
+		StatusCode: http.StatusGone,
+	}
 )
+
+func loginRespError(err error) error {
+	tgErr, ok := tgerr.As(err)
+	if !ok {
+		return err
+	}
+	statusCode := tgErr.Code
+	switch {
+	case tgErr.Code == 420 || strings.HasSuffix(tgErr.Type, "_FLOOD"):
+		statusCode = http.StatusTooManyRequests
+	case tgErr.Code < 400 || tgErr.Code >= 500:
+		return err
+	}
+	return bridgev2.RespError{
+		ErrCode:    "FI.MAU.TELEGRAM." + tgErr.Type,
+		Err:        humanise.Error(err),
+		StatusCode: statusCode,
+	}
+}
+
+func loginContextError(ctx context.Context) error {
+	if errors.Is(context.Cause(ctx), ErrLoginTimeout) || errors.Is(ctx.Err(), context.DeadlineExceeded) {
+		return ErrLoginTimedOut
+	}
+	return ctx.Err()
+}
 
 func (tc *TelegramConnector) GetLoginFlows() []bridgev2.LoginFlow {
 	return []bridgev2.LoginFlow{
@@ -204,7 +248,7 @@ func (bl *baseLogin) submitPassword(ctx context.Context, password, loginPhone st
 	if bl.client == nil {
 		return nil, fmt.Errorf("unexpected state: client is nil when submitting password")
 	} else if password == "" {
-		return nil, fmt.Errorf("password not provided")
+		return nil, ErrPasswordNotProvided
 	}
 	authorization, err := bl.client.Auth().Password(ctx, password)
 	if err != nil {
@@ -212,7 +256,7 @@ func (bl *baseLogin) submitPassword(ctx context.Context, password, loginPhone st
 			return passwordIncorrectLoginStep, nil
 		}
 		bl.Cancel()
-		return nil, fmt.Errorf("failed to submit password: %w", err)
+		return nil, loginRespError(fmt.Errorf("failed to submit password: %w", err))
 	}
 	return bl.finalizeLogin(ctx, authorization, &UserLoginMetadata{LoginPhone: loginPhone})
 }
