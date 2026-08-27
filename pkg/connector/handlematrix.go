@@ -22,9 +22,11 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/base64"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"image"
+	"image/color"
 	"image/jpeg"
 	_ "image/jpeg"
 	_ "image/png"
@@ -83,6 +85,189 @@ var (
 )
 
 const telegramMediaUploadThreads = 4
+
+// decodeImageWithOrientation decodes an image and applies its EXIF orientation to
+// the pixels. The returned image no longer depends on the receiver honoring EXIF,
+// which is important because Telegram drops the tag when it processes uploads.
+func decodeImageWithOrientation(input io.ReadSeeker) (image.Image, string, error) {
+	orientation := readEXIFOrientation(input)
+	// readEXIFOrientation restores the position too, but seek explicitly here so
+	// this function remains correct if the metadata reader changes in the future.
+	if _, err := input.Seek(0, io.SeekStart); err != nil {
+		return nil, "", fmt.Errorf("failed to seek image to beginning: %w", err)
+	}
+	img, format, err := image.Decode(input)
+	// Orientation 1 is already stored in display order. Invalid values are treated
+	// the same way instead of rejecting an otherwise valid image.
+	if err != nil || orientation <= 1 || orientation > 8 {
+		return img, format, err
+	}
+	bounds := img.Bounds()
+	width, height := bounds.Dx(), bounds.Dy()
+	dstWidth, dstHeight := width, height
+	// Orientations 5-8 exchange the horizontal and vertical axes.
+	if orientation >= 5 {
+		dstWidth, dstHeight = height, width
+	}
+	// Use concrete pixel readers for the image types produced by the JPEG decoder.
+	// Calling At and Set through the image interfaces for every pixel causes
+	// millions of small allocations for typical phone photos.
+	var readPixel func(x, y int) (r, g, b, a uint8)
+	switch src := img.(type) {
+	case *image.YCbCr:
+		readPixel = func(x, y int) (r, g, b, a uint8) {
+			pixel := src.YCbCrAt(bounds.Min.X+x, bounds.Min.Y+y)
+			r, g, b = color.YCbCrToRGB(pixel.Y, pixel.Cb, pixel.Cr)
+			return r, g, b, 255
+		}
+	case *image.Gray:
+		readPixel = func(x, y int) (r, g, b, a uint8) {
+			value := src.GrayAt(bounds.Min.X+x, bounds.Min.Y+y).Y
+			return value, value, value, 255
+		}
+	case *image.CMYK:
+		readPixel = func(x, y int) (r, g, b, a uint8) {
+			pixel := src.CMYKAt(bounds.Min.X+x, bounds.Min.Y+y)
+			r, g, b = color.CMYKToRGB(pixel.C, pixel.M, pixel.Y, pixel.K)
+			return r, g, b, 255
+		}
+	default:
+		readPixel = func(x, y int) (r, g, b, a uint8) {
+			pixel := color.NRGBAModel.Convert(img.At(bounds.Min.X+x, bounds.Min.Y+y)).(color.NRGBA)
+			return pixel.R, pixel.G, pixel.B, pixel.A
+		}
+	}
+	dst := image.NewNRGBA(image.Rect(0, 0, dstWidth, dstHeight))
+	// Map each destination pixel back to its source coordinate. This handles
+	// rotations and mirrored orientations in one pass without an extra image copy.
+	for y := range dstHeight {
+		for x := range dstWidth {
+			var srcX, srcY int
+			switch orientation {
+			case 2: // Mirror horizontally.
+				srcX, srcY = width-1-x, y
+			case 3: // Rotate 180 degrees.
+				srcX, srcY = width-1-x, height-1-y
+			case 4: // Mirror vertically.
+				srcX, srcY = x, height-1-y
+			case 5: // Transpose across the top-left to bottom-right axis.
+				srcX, srcY = y, x
+			case 6: // Rotate 90 degrees clockwise.
+				srcX, srcY = y, height-1-x
+			case 7: // Transpose across the top-right to bottom-left axis.
+				srcX, srcY = width-1-y, height-1-x
+			case 8: // Rotate 90 degrees counterclockwise.
+				srcX, srcY = width-1-y, x
+			}
+			dstOffset := dst.PixOffset(x, y)
+			dst.Pix[dstOffset], dst.Pix[dstOffset+1], dst.Pix[dstOffset+2], dst.Pix[dstOffset+3] = readPixel(srcX, srcY)
+		}
+	}
+	return dst, format, nil
+}
+
+// readEXIFOrientation scans the metadata segments at the start of a JPEG. It
+// returns orientation 1 for non-JPEG, missing, or malformed metadata and always
+// restores the input position so callers can decode or upload the same file.
+func readEXIFOrientation(input io.ReadSeeker) int {
+	defer func() { _, _ = input.Seek(0, io.SeekStart) }()
+	if _, err := input.Seek(0, io.SeekStart); err != nil {
+		return 1
+	}
+	var header [2]byte
+	if _, err := io.ReadFull(input, header[:]); err != nil || header != [2]byte{0xff, 0xd8} {
+		return 1
+	}
+	for {
+		var marker [1]byte
+		// JPEG markers start with 0xff. Skip any padding before and between them.
+		for marker[0] != 0xff {
+			if _, err := io.ReadFull(input, marker[:]); err != nil {
+				return 1
+			}
+		}
+		// A marker may contain multiple 0xff fill bytes before its marker code.
+		for marker[0] == 0xff {
+			if _, err := io.ReadFull(input, marker[:]); err != nil {
+				return 1
+			}
+		}
+		if marker[0] == 0x00 {
+			continue
+		} else if marker[0] == 0xda || marker[0] == 0xd9 {
+			// Image data and end-of-image markers mean there are no more metadata
+			// segments that are safe or useful to scan.
+			return 1
+		} else if marker[0] == 0x01 || marker[0] >= 0xd0 && marker[0] <= 0xd7 {
+			// TEM and restart markers don't have a length or payload.
+			continue
+		}
+		var sizeBytes [2]byte
+		if _, err := io.ReadFull(input, sizeBytes[:]); err != nil {
+			return 1
+		}
+		size := int(binary.BigEndian.Uint16(sizeBytes[:])) - 2
+		if size < 0 {
+			return 1
+		}
+		segment := make([]byte, size)
+		if _, err := io.ReadFull(input, segment); err != nil {
+			return 1
+		}
+		// EXIF is stored in an APP1 (0xe1) segment. Other APP1 payloads, such as
+		// XMP, are rejected by parseEXIFOrientation and scanning continues.
+		if marker[0] == 0xe1 {
+			if orientation := parseEXIFOrientation(segment); orientation != 1 {
+				return orientation
+			}
+		}
+	}
+}
+
+// parseEXIFOrientation extracts tag 0x0112 from the first TIFF image file
+// directory in an EXIF APP1 payload. No other EXIF fields are needed here.
+func parseEXIFOrientation(segment []byte) int {
+	if len(segment) < 14 || string(segment[:6]) != "Exif\x00\x00" {
+		return 1
+	}
+	tiff := segment[6:]
+	var order binary.ByteOrder
+	switch string(tiff[:2]) {
+	case "II":
+		order = binary.LittleEndian
+	case "MM":
+		order = binary.BigEndian
+	default:
+		return 1
+	}
+	if order.Uint16(tiff[2:4]) != 42 {
+		return 1
+	}
+	// TIFF offsets are relative to the start of the TIFF header, not the APP1
+	// segment or the six-byte EXIF signature.
+	ifdOffset := int(order.Uint32(tiff[4:8]))
+	if ifdOffset < 0 || ifdOffset+2 > len(tiff) {
+		return 1
+	}
+	entryCount := int(order.Uint16(tiff[ifdOffset : ifdOffset+2]))
+	entriesStart := ifdOffset + 2
+	if entryCount > (len(tiff)-entriesStart)/12 {
+		return 1
+	}
+	for i := range entryCount {
+		entry := tiff[entriesStart+i*12 : entriesStart+(i+1)*12]
+		// Orientation is tag 0x0112 with one inline SHORT value. Requiring the
+		// documented type and count avoids interpreting malformed offsets as data.
+		if order.Uint16(entry[:2]) == 0x0112 && order.Uint16(entry[2:4]) == 3 && order.Uint32(entry[4:8]) == 1 {
+			orientation := int(order.Uint16(entry[8:10]))
+			if orientation >= 1 && orientation <= 8 {
+				return orientation
+			}
+			return 1
+		}
+	}
+	return 1
+}
 
 func getMediaFilename(content *event.MessageEventContent) (filename string) {
 	if content.FileName != "" {
@@ -257,6 +442,10 @@ func (tc *TelegramClient) transferMediaToTelegram(ctx context.Context, content *
 	}
 	err := tc.main.Bridge.Bot.DownloadMediaToFile(ctx, content.URL, content.File, false, func(f *os.File) (err error) {
 		uploadFilename := f.Name()
+		orientation := 1
+		if !sticker && (content.MsgType == event.MsgImage || content.MsgType == event.MsgFile) {
+			orientation = readEXIFOrientation(f)
+		}
 		if sticker && (info.MimeType == "image/png" || info.MimeType == "image/jpeg") {
 			tempFile, err := os.CreateTemp("", "telegram-sticker-*.webp")
 			if err != nil {
@@ -308,7 +497,9 @@ func (tc *TelegramClient) transferMediaToTelegram(ctx context.Context, content *
 				aspectRatio > 20 ||
 				cfg.Height+cfg.Width > 10000
 		}
-		if !forceDocument && !sticker && content.MsgType == event.MsgImage {
+		// Telegram doesn't apply EXIF orientation to document previews, so m.image
+		// events forced to documents and JPEGs sent as m.file must also be normalized.
+		if !sticker && ((content.MsgType == event.MsgImage && !forceDocument) || orientation != 1) {
 			_, err = f.Seek(0, io.SeekStart)
 			if err != nil {
 				return err
@@ -321,13 +512,16 @@ func (tc *TelegramClient) transferMediaToTelegram(ctx context.Context, content *
 				_ = tempFile.Close()
 				_ = os.Remove(tempFile.Name())
 			}()
-			if img, _, err := image.Decode(f); err != nil {
-				return fmt.Errorf("failed to decode non-sticker webp image: %w", err)
+			if img, _, err := decodeImageWithOrientation(f); err != nil {
+				return fmt.Errorf("failed to decode non-sticker image: %w", err)
 			} else if err := jpeg.Encode(tempFile, img, nil); err != nil {
 				return fmt.Errorf("failed to encode non-sticker jpeg image: %w", err)
 			}
 			uploadFilename = tempFile.Name()
-			filename += ".jpeg"
+			lowerFilename := strings.ToLower(filename)
+			if !strings.HasSuffix(lowerFilename, ".jpg") && !strings.HasSuffix(lowerFilename, ".jpeg") {
+				filename += ".jpeg"
+			}
 			info.MimeType = "image/jpeg"
 		}
 
