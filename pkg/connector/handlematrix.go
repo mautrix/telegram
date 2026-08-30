@@ -93,7 +93,7 @@ func getMediaFilename(content *event.MessageEventContent) (filename string) {
 	if filename == "" {
 		return "image.jpg" // Assume it's a JPEG image
 	}
-	if content.MsgType == event.MsgImage && (!strings.HasSuffix(filename, ".jpg") && !strings.HasSuffix(filename, ".jpeg") && !strings.HasSuffix(filename, ".png")) {
+	if content.MsgType == event.MsgImage && (!strings.HasSuffix(filename, ".jpg") && !strings.HasSuffix(filename, ".jpeg") && !strings.HasSuffix(filename, ".png") && !strings.HasSuffix(filename, ".gif")) {
 		if content.Info != nil && content.Info.MimeType != "" {
 			return filename + "." + strings.TrimPrefix(content.Info.MimeType, "image/")
 		}
@@ -246,6 +246,7 @@ func (tc *TelegramClient) pollSponsoredMessage(ctx context.Context, portal *brid
 
 func (tc *TelegramClient) transferMediaToTelegram(ctx context.Context, content *event.MessageEventContent, sticker, forceRetry, forceDocument bool) (tg.InputMediaClass, error) {
 	var upload tg.InputFileClass
+	var isGIF bool
 	filename := getMediaFilename(content)
 	info := content.GetInfo()
 	if sticker {
@@ -287,8 +288,11 @@ func (tc *TelegramClient) transferMediaToTelegram(ctx context.Context, content *
 			}
 			defer os.Remove(uploadFilename)
 			info.MimeType = "image/webp"
-		} else if cfg, _, err := image.DecodeConfig(f); err != nil {
+		} else if cfg, format, err := image.DecodeConfig(f); err != nil {
 			forceDocument = true
+		} else if format == "gif" && !forceDocument && content.MsgType == event.MsgImage {
+			isGIF = true
+			info.MimeType = "image/gif"
 		} else if fileInfo, err := f.Stat(); err != nil {
 			return err
 		} else {
@@ -308,7 +312,7 @@ func (tc *TelegramClient) transferMediaToTelegram(ctx context.Context, content *
 				aspectRatio > 20 ||
 				cfg.Height+cfg.Width > 10000
 		}
-		if !forceDocument && !sticker && content.MsgType == event.MsgImage {
+		if !forceDocument && !sticker && !isGIF && content.MsgType == event.MsgImage {
 			_, err = f.Seek(0, io.SeekStart)
 			if err != nil {
 				return err
@@ -352,7 +356,7 @@ func (tc *TelegramClient) transferMediaToTelegram(ctx context.Context, content *
 		attributes = append(attributes, &tg.DocumentAttributeImageSize{W: info.Width, H: info.Height})
 	}
 
-	if info.MauGIF {
+	if info.MauGIF || isGIF {
 		attributes = append(attributes, &tg.DocumentAttributeAnimated{})
 	}
 
