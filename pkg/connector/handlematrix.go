@@ -291,7 +291,7 @@ func (tc *TelegramClient) transferMediaToTelegram(ctx context.Context, content *
 				aspectRatio > 20 ||
 				cfg.Height+cfg.Width > 10000
 		}
-		if !forceDocument && !sticker && content.MsgType == event.MsgImage && content.Info.MimeType == "image/webp" {
+		if !forceDocument && content.MsgType == event.MsgImage && content.Info.MimeType == "image/webp" {
 			_, err = f.Seek(0, io.SeekStart)
 			if err != nil {
 				return err
@@ -313,14 +313,13 @@ func (tc *TelegramClient) transferMediaToTelegram(ctx context.Context, content *
 			filename += ".jpg"
 			info.MimeType = "image/jpeg"
 		}
-		if !forceDocument && !sticker && content.MsgType == event.MsgImage {
+		if sticker {
+			filename = "sticker" + exmime.ExtensionFromMimetype(info.MimeType)
+		} else if !forceDocument && content.MsgType == event.MsgImage {
 			expectedExtension := exmime.ExtensionFromMimetype(content.Info.MimeType)
 			if !strings.HasSuffix(filename, expectedExtension) {
 				filename += expectedExtension
 			}
-		}
-		if sticker {
-			filename = "sticker" + exmime.ExtensionFromMimetype(info.MimeType)
 		}
 
 		upload, err = uploader.NewUploader(tc.client.API()).
@@ -511,7 +510,7 @@ func (tc *TelegramClient) HandleMatrixMessage(ctx context.Context, msg *bridgev2
 			ReplyTo:  replyTo,
 			RandomID: randomID,
 		}
-		mediaReq.Media, err = tc.transferMediaToTelegram(ctx, msg.Content, true, false, false)
+		mediaReq.Media, err = tc.transferMediaToTelegram(ctx, msg.Content, true, false, true)
 		if err != nil {
 			return nil, err
 		}
