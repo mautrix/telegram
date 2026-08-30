@@ -291,7 +291,7 @@ func (tc *TelegramClient) transferMediaToTelegram(ctx context.Context, content *
 				aspectRatio > 20 ||
 				cfg.Height+cfg.Width > 10000
 		}
-		if !forceDocument && !sticker && content.MsgType == event.MsgImage {
+		if !forceDocument && !sticker && content.MsgType == event.MsgImage && content.Info.MimeType == "image/webp" {
 			_, err = f.Seek(0, io.SeekStart)
 			if err != nil {
 				return err
