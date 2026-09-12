@@ -87,6 +87,68 @@ func TestSequenceBox(t *testing.T) {
 	require.False(t, box.gaps.Has())
 }
 
+func TestSequenceBoxTrimStaleOnStateJump(t *testing.T) {
+	ctx := context.Background()
+	box := newSequenceBox(sequenceConfig{
+		InitialState: 5,
+		Apply: func(ctx context.Context, s int, u []update) error {
+			return nil
+		},
+		Logger: zaptest.NewLogger(t),
+	})
+
+	// Diff update arrives ahead of the current state and is parked.
+	require.Nil(t, box.Handle(ctx, update{Value: "payload", State: 8, Count: 1}))
+	require.Equal(t, []update{{Value: "payload", State: 8, Count: 1}}, box.pending)
+
+	// getDifference: gap is cleared and state jumps past the parked update.
+	require.Equal(t, []gap{{from: 5, to: 7}}, box.gaps.gaps)
+	box.gaps.Clear()
+	require.False(t, box.gaps.Has())
+	box.SetState(9, "updates.channelDifference")
+
+	// The outdated update must be released even though no further
+	// contiguous update ever arrives for the quiet channel.
+	require.Empty(t, box.pending)
+
+	// A pending update that is still in the future must be kept.
+	require.Nil(t, box.Handle(ctx, update{Value: "future", State: 11, Count: 1}))
+	box.gaps.Clear()
+	box.SetState(10, "updates.channelDifference")
+	require.Equal(t, []update{{Value: "future", State: 11, Count: 1}}, box.pending)
+	// A future update must survive the trim and be applied without panic,
+	// advancing the state instead of clobbering it to 0.
+	require.Nil(t, box.applyPending(ctx))
+	require.Equal(t, 11, box.State())
+}
+
+func TestSequenceBoxTrimStaleOnOutdatedUpdate(t *testing.T) {
+	ctx := context.Background()
+	box := newSequenceBox(sequenceConfig{
+		InitialState: 5,
+		Apply: func(ctx context.Context, s int, u []update) error {
+			return nil
+		},
+		Logger: zaptest.NewLogger(t),
+	})
+
+	require.Nil(t, box.Handle(ctx, update{Value: "payload", State: 8, Count: 1}))
+	require.Equal(t, []update{{Value: "payload", State: 8, Count: 1}}, box.pending)
+
+	// An outdated update arrives without any state jump; the parked
+	// update is still in the future, so it must be kept.
+	require.Nil(t, box.Handle(ctx, update{Value: 1, State: 3, Count: 1}))
+	require.Equal(t, []update{{Value: "payload", State: 8, Count: 1}}, box.pending)
+
+	// A further state jump makes the parked update outdated.
+	box.SetState(9, "updates.channelDifference")
+	require.Empty(t, box.pending)
+
+	// Subsequent outdated updates keep trimming.
+	require.Nil(t, box.Handle(ctx, update{Value: 2, State: 2, Count: 1}))
+	require.Empty(t, box.pending)
+}
+
 func TestSequenceBoxApplyPending(t *testing.T) {
 	tests := []struct {
 		InitialState int

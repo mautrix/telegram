@@ -59,6 +59,7 @@ func (s *sequenceBox) Handle(ctx context.Context, u update) error {
 	log := s.log.With(zap.Int("upd_from", u.start()), zap.Int("upd_to", u.end()))
 	if checkGap(s.state, u.State, u.Count) == gapIgnore {
 		log.Debug("Outdated update, skipping", zap.Int("internalState", s.state))
+		s.trimStale()
 		return nil
 	}
 
@@ -173,6 +174,21 @@ loop:
 	return nil
 }
 
+// trimStale releases pending updates that are already outdated, which would otherwise stay pinned until the next contiguous update arrives.
+func (s *sequenceBox) trimStale() {
+	cursor := 0
+	for _, u := range s.pending {
+		if checkGap(s.state, u.State, u.Count) != gapIgnore {
+			s.pending[cursor] = u
+			cursor++
+		}
+	}
+	// Trim processed updates. Clearing the rest
+	// of the slice lets GC collect referenced objects.
+	clear(s.pending[cursor:])
+	s.pending = s.pending[:cursor]
+}
+
 func (s *sequenceBox) State() int { return s.state }
 
 func (s *sequenceBox) SetState(state int, reason string) {
@@ -187,4 +203,5 @@ func (s *sequenceBox) setState(state int, reason string) {
 		zap.Int("new", state),
 		zap.String("reason", reason),
 	)
+	s.trimStale()
 }
