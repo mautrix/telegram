@@ -325,9 +325,14 @@ type userLocalDialog interface {
 	GetPinned() bool
 }
 
+type folderedDialog interface {
+	GetFolderID() (int, bool)
+}
+
 var (
 	_ userLocalDialog = (*tg.Dialog)(nil)
 	_ userLocalDialog = (*tg.DialogCommunity)(nil)
+	_ folderedDialog  = (*tg.Dialog)(nil)
 )
 
 func (tc *TelegramClient) fillUserLocalMeta(info *bridgev2.ChatInfo, dialog userLocalDialog) {
@@ -338,9 +343,23 @@ func (tc *TelegramClient) fillUserLocalMeta(info *bridgev2.ChatInfo, dialog user
 	} else {
 		info.UserLocal.MutedUntil = &bridgev2.Unmuted
 	}
-	if dialog.GetPinned() {
-		info.UserLocal.Tag = ptr.Ptr(event.RoomTagFavourite)
+	folderID := 0
+	if dialog, ok := dialog.(folderedDialog); ok {
+		folderID, _ = dialog.GetFolderID()
 	}
+	tag := getUserLocalTag(dialog.GetPinned(), folderID)
+	info.UserLocal.Tag = &tag
+}
+
+const telegramArchiveFolderID = 1
+
+func getUserLocalTag(pinned bool, folderID int) event.RoomTag {
+	if pinned {
+		return event.RoomTagFavourite
+	} else if folderID == telegramArchiveFolderID {
+		return event.RoomTagLowPriority
+	}
+	return ""
 }
 
 type realFullChat interface {
