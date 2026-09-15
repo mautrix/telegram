@@ -1,3 +1,14 @@
+# v26.09 (unreleased)
+
+* Bumped minimum Go version to 1.26.
+* Changed media bridging to use multiple connections when uploading to Telegram
+  (thanks to [@Katze-942] in [#1091]).
+* Fixed accidental conversion of gifs when sending to Telegram.
+* Fixed edge case where connections to other datacenters could get stuck.
+
+[@Katze-942]: https://github.com/Katze-942
+[#1091]: https://github.com/mautrix/telegram/pull/1091
+
 # v26.08
 
 * Updated Telegram API to layer 228.
