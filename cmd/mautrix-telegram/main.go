@@ -43,7 +43,7 @@ var m = mxmain.BridgeMain{
 	Name:        "mautrix-telegram",
 	URL:         "https://github.com/mautrix/telegram",
 	Description: "A Matrix-Telegram puppeting bridge.",
-	Version:     "26.08",
+	Version:     "26.09",
 	SemCalVer:   true,
 
 	Connector: c,

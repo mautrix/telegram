@@ -1,4 +1,4 @@
-# v26.09 (unreleased)
+# v26.09
 
 * Bumped minimum Go version to 1.26.
 * Changed media bridging to use multiple connections when uploading to Telegram
