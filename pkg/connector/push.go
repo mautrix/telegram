@@ -45,6 +45,7 @@ var (
 )
 
 var PushAppSandbox = false
+var PushConfig = &bridgev2.PushConfig{Native: true}
 
 type PushCustomData struct {
 	MessageID int `json:"msg_id,string"`
@@ -258,6 +259,15 @@ var FullSyncOnConnectBackground = false
 
 func (tc *TelegramClient) ConnectBackground(ctx context.Context, params *bridgev2.ConnectBackgroundParams) error {
 	data, _ := params.ExtraData.(*PushNotificationData)
+	if data == nil && len(params.RawData) > 0 {
+		loginID, parsed, err := tc.main.ParsePushNotification(ctx, params.RawData)
+		if err != nil {
+			return err
+		} else if loginID != tc.userLogin.ID {
+			return fmt.Errorf("push notification belongs to a different login")
+		}
+		data = parsed.(*PushNotificationData)
+	}
 	var relatedPortal *bridgev2.Portal
 	var sender *bridgev2.Ghost
 	var messageID networkid.MessageID
@@ -330,6 +340,9 @@ func (tc *TelegramClient) ConnectBackground(ctx context.Context, params *bridgev
 
 func (tc *TelegramConnector) ParsePushNotification(ctx context.Context, data json.RawMessage) (networkid.UserLoginID, any, error) {
 	val := gjson.GetBytes(data, "p")
+	if !val.Exists() {
+		val = gjson.GetBytes(data, "data.p")
+	}
 	if val.Type != gjson.String {
 		return "", nil, fmt.Errorf("missing or invalid p field")
 	}
@@ -418,7 +431,7 @@ func (tc *TelegramClient) RegisterPushNotifications(ctx context.Context, pushTyp
 	default:
 		return fmt.Errorf("unsupported push type %s", pushType)
 	}
-	_, err := tc.client.API().AccountRegisterDevice(ctx, &tg.AccountRegisterDeviceRequest{
+	registered, err := tc.client.API().AccountRegisterDevice(ctx, &tg.AccountRegisterDeviceRequest{
 		NoMuted:    true,
 		TokenType:  tokenType,
 		Token:      token,
@@ -426,9 +439,12 @@ func (tc *TelegramClient) RegisterPushNotifications(ctx context.Context, pushTyp
 		Secret:     meta.PushEncryptionKey,
 		OtherUIDs:  nil, // TODO set properly
 	})
+	if err == nil && !registered {
+		return fmt.Errorf("server rejected push registration")
+	}
 	return err
 }
 
 func (tc *TelegramClient) GetPushConfigs() *bridgev2.PushConfig {
-	return &bridgev2.PushConfig{Native: true}
+	return PushConfig
 }
