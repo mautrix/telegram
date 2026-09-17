@@ -62,11 +62,14 @@ func (ql *QRLogin) Start(ctx context.Context) (*bridgev2.LoginStep, error) {
 	log := zerolog.Ctx(ctx).With().Str("component", "qr login").Logger()
 	ctx = log.WithContext(ctx)
 
-	loggedIn := make(chan struct{})
+	loggedIn := make(chan struct{}, 1)
 	dispatcher := tg.NewUpdateDispatcher()
 	dispatcher.OnLoginToken(func(ctx context.Context, e tg.Entities, update *tg.UpdateLoginToken) error {
 		log.Debug().Msg("Received updateLoginToken")
-		close(loggedIn)
+		select {
+		case loggedIn <- struct{}{}:
+		default:
+		}
 		return nil
 	})
 	err := ql.makeClient(ctx, &dispatcher)
