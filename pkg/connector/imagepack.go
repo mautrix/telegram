@@ -665,6 +665,8 @@ func (tc *TelegramClient) stickerSourceFromAttribute(ctx context.Context, docume
 				Int64("pack_id", set.ID).
 				Msg("Failed to get sticker pack by ID to fill info")
 			return nil
+		} else if pack == nil {
+			return nil
 		}
 		shortName = pack.meta.ShortName
 	case *tg.InputStickerSetShortName:
