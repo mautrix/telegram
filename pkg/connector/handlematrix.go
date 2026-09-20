@@ -81,6 +81,7 @@ var (
 	_ bridgev2.RoomNameHandlingNetworkAPI       = (*TelegramClient)(nil)
 	_ bridgev2.RoomAvatarHandlingNetworkAPI     = (*TelegramClient)(nil)
 	_ bridgev2.MembershipHandlingNetworkAPI     = (*TelegramClient)(nil)
+	_ bridgev2.PinHandlingNetworkAPI            = (*TelegramClient)(nil)
 )
 
 const telegramMediaUploadThreads = 4
@@ -1235,6 +1236,57 @@ func (tc *TelegramClient) HandleMatrixDeleteChat(ctx context.Context, chat *brid
 		return fmt.Errorf("unknown peer type %s", peerType)
 	}
 	return nil
+}
+
+// HandleMatrixPinnedEvents bridges m.room.pinned_events changes to Telegram.
+//
+// Telegram pins one message at a time, so the diff is applied message by message.
+func (tc *TelegramClient) HandleMatrixPinnedEvents(ctx context.Context, msg *bridgev2.MatrixRoomPinnedEvents) (bool, error) {
+	if msg.Portal.RoomType == database.RoomTypeSpace {
+		return false, fmt.Errorf("can't pin messages in space portals")
+	}
+	peer, _, err := tc.inputPeerForPortalID(ctx, msg.Portal.ID)
+	if err != nil {
+		return false, err
+	}
+	log := zerolog.Ctx(ctx).With().
+		Str("conversion_direction", "to_telegram").
+		Str("handler", "handle_matrix_pinned_events").
+		Logger()
+
+	var errs []error
+	updatePin := func(dbMsg *database.Message, unpin bool) {
+		_, messageID, err := ids.ParseMessageID(dbMsg.ID)
+		if err != nil {
+			errs = append(errs, err)
+			return
+		}
+		_, err = tc.client.API().MessagesUpdatePinnedMessage(ctx, &tg.MessagesUpdatePinnedMessageRequest{
+			Peer:      peer,
+			ID:        messageID,
+			Unpin:     unpin,
+			PmOneside: false,
+			Silent:    true,
+		})
+		if err != nil {
+			log.Err(err).Int("message_id", messageID).Bool("unpin", unpin).
+				Msg("Failed to update pinned message")
+			errs = append(errs, err)
+			return
+		}
+		log.Debug().Int("message_id", messageID).Bool("unpin", unpin).Msg("Updated pinned message")
+	}
+
+	// Unpin first so that pinning a replacement doesn't briefly exceed any server-side limits.
+	for _, dbMsg := range msg.Removed {
+		updatePin(dbMsg, true)
+	}
+	// Telegram shows the most recently pinned message first, and bridgev2 gives the new pins
+	// newest first, so pin them in reverse to end up with the same order.
+	for i := len(msg.Added) - 1; i >= 0; i-- {
+		updatePin(msg.Added[i], false)
+	}
+	return false, errors.Join(errs...)
 }
 
 func (tc *TelegramClient) HandleMatrixRoomName(ctx context.Context, msg *bridgev2.MatrixRoomName) (bool, error) {
