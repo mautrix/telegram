@@ -33,6 +33,7 @@ import (
 
 	"go.mau.fi/mautrix-telegram/pkg/connector/ids"
 	"go.mau.fi/mautrix-telegram/pkg/gotd/tg"
+	"go.mau.fi/mautrix-telegram/pkg/gotd/tgerr"
 )
 
 var (
@@ -227,6 +228,8 @@ func (tc *TelegramClient) wrapChatInfo(portalID networkid.PortalID, rawChat tg.C
 		} else {
 			ownPL = anyonePowerLevel
 		}
+	case *tg.ChatForbidden:
+		return nil, nil, fmt.Errorf("%w: %d", ErrChatForbidden, chat.ID)
 	default:
 		return nil, nil, fmt.Errorf("unsupported chat type %T", rawChat)
 	}
@@ -541,14 +544,23 @@ func (tc *TelegramClient) GetChatInfo(ctx context.Context, portal *bridgev2.Port
 	case ids.PeerTypeUser:
 		return tc.getDMChatInfo(ctx, id)
 	case ids.PeerTypeChat:
-		fullChat, err := APICallWithUpdates(ctx, tc, func() (*tg.MessagesChatFull, error) {
-			return tc.client.API().MessagesGetFullChat(ctx, id)
-		})
-		if err != nil {
-			return nil, err
+		var fullChat *tg.MessagesChatFull
+		for attempts := 0; attempts < 5; attempts++ {
+			fullChat, err = APICallWithUpdates(ctx, tc, func() (*tg.MessagesChatFull, error) {
+				return tc.client.API().MessagesGetFullChat(ctx, id)
+			})
+			if err == nil {
+				info, _, err := tc.wrapFullChatInfo(portal.ID, fullChat)
+				return info, err
+			}
+			if attempts == 4 {
+				break
+			}
+			if retry, waitErr := tgerr.FloodWait(ctx, err); !retry {
+				return nil, waitErr
+			}
 		}
-		info, _, err := tc.wrapFullChatInfo(portal.ID, fullChat)
-		return info, err
+		return nil, err
 	case ids.PeerTypeChannel:
 		accessHash, err := tc.ScopedStore.GetAccessHash(ctx, ids.PeerTypeChannel, id)
 		if err != nil {
