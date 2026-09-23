@@ -293,13 +293,10 @@ func (tc *TelegramClient) syncNormalDialog(
 		switch chat := chats[peer.ChatID].(type) {
 		case *tg.Chat:
 			// Need to get full chat info to get the member list
-			retry := true
-			for attempts := 0; retry && attempts < 5; attempts++ {
-				chatInfo, err = tc.GetChatInfo(ctx, portal)
-				retry, err = tgerr.FloodWait(ctx, err)
-			}
+			chatInfo, err = tc.GetChatInfo(ctx, portal)
 			if err != nil {
-				return fmt.Errorf("failed to get chat info for %s: %w", portalKey, err)
+				log.Warn().Err(err).Msg("Not syncing portal because chat info is unavailable")
+				return nil
 			}
 		case *tg.ChatForbidden:
 			log.Debug().

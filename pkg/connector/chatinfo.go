@@ -33,6 +33,7 @@ import (
 
 	"go.mau.fi/mautrix-telegram/pkg/connector/ids"
 	"go.mau.fi/mautrix-telegram/pkg/gotd/tg"
+	"go.mau.fi/mautrix-telegram/pkg/gotd/tgerr"
 )
 
 var (
@@ -531,7 +532,24 @@ func (tc *TelegramClient) filterChannelParticipants(participants []tg.ChannelPar
 	}
 }
 
-func (tc *TelegramClient) GetChatInfo(ctx context.Context, portal *bridgev2.Portal) (*bridgev2.ChatInfo, error) {
+func (tc *TelegramClient) GetChatInfo(ctx context.Context, portal *bridgev2.Portal) (info *bridgev2.ChatInfo, err error) {
+	for attempts := 0; attempts < 5; attempts++ {
+		info, err = tc.getChatInfo(ctx, portal)
+		if err == nil || attempts == 4 {
+			break
+		}
+		if retry, waitErr := tgerr.FloodWait(ctx, err); !retry {
+			err = waitErr
+			break
+		}
+	}
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", ErrChatInfoUnavailable, err)
+	}
+	return info, nil
+}
+
+func (tc *TelegramClient) getChatInfo(ctx context.Context, portal *bridgev2.Portal) (*bridgev2.ChatInfo, error) {
 	peerType, id, topicID, err := ids.ParsePortalID(portal.ID)
 	if err != nil {
 		return nil, err
