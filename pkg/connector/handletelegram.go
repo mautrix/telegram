@@ -187,14 +187,11 @@ func (tc *TelegramClient) onUpdateChannel(ctx context.Context, e tg.Entities, up
 				return nil, nil
 			}
 			chatInfo, mfm, err := tc.wrapChatInfo(portal.ID, chatInfoClass)
-			if err != nil {
-				return nil, err
-			}
-			if portal.MXID == "" {
+			if err == nil && portal.MXID == "" {
 				err = tc.fillChannelMembers(ctx, mfm, chatInfo.Members)
-				if err != nil {
-					return nil, err
-				}
+			}
+			if err != nil {
+				return nil, fmt.Errorf("%w: %w", ErrChatInfoUnavailable, err)
 			}
 			return chatInfo, nil
 		},
@@ -923,6 +920,10 @@ func (tc *TelegramClient) onUpdateWrapper(ctx context.Context, e tg.Entities, up
 						"update_reason": "finished processing slow update",
 					},
 				})
+			}
+			if errors.Is(err, ErrChatInfoUnavailable) {
+				zerolog.Ctx(ctx).Warn().Err(err).Msg("Update handling failed due to chat info fetch error")
+				return nil
 			}
 			return err
 		}

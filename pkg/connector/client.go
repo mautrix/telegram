@@ -55,8 +55,9 @@ import (
 )
 
 var (
-	ErrNoAuthKey        = errors.New("user does not have auth key")
-	ErrFailToQueueEvent = errors.New("failed to queue event")
+	ErrNoAuthKey           = errors.New("user does not have auth key")
+	ErrFailToQueueEvent    = errors.New("failed to queue event")
+	ErrChatInfoUnavailable = errors.New("failed to get chat info")
 )
 
 func resultToError(res bridgev2.EventHandlingResult) error {
