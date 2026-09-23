@@ -922,7 +922,7 @@ func (tc *TelegramClient) onUpdateWrapper(ctx context.Context, e tg.Entities, up
 				})
 			}
 			if errors.Is(err, ErrChatInfoUnavailable) {
-				zerolog.Ctx(ctx).Warn().Err(err).Msg("Skipping update because chat info is unavailable")
+				zerolog.Ctx(ctx).Warn().Err(err).Msg("Update handling failed due to chat info fetch error")
 				return nil
 			}
 			return err
