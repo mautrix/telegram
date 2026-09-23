@@ -533,15 +533,10 @@ func (tc *TelegramClient) filterChannelParticipants(participants []tg.ChannelPar
 }
 
 func (tc *TelegramClient) GetChatInfo(ctx context.Context, portal *bridgev2.Portal) (info *bridgev2.ChatInfo, err error) {
-	for attempts := 0; attempts < 5; attempts++ {
+	retry := true
+	for attempts := 0; retry && attempts < 5; attempts++ {
 		info, err = tc.getChatInfo(ctx, portal)
-		if err == nil || attempts == 4 {
-			break
-		}
-		if retry, waitErr := tgerr.FloodWait(ctx, err); !retry {
-			err = waitErr
-			break
-		}
+		retry, err = tgerr.FloodWait(ctx, err)
 	}
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrChatInfoUnavailable, err)
