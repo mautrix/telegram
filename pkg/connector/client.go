@@ -57,14 +57,11 @@ import (
 var (
 	ErrNoAuthKey           = errors.New("user does not have auth key")
 	ErrFailToQueueEvent    = errors.New("failed to queue event")
-	ErrChatInfoUnavailable = errors.New("chat info unavailable")
+	ErrChatInfoUnavailable = errors.New("failed to get chat info")
 )
 
 func resultToError(res bridgev2.EventHandlingResult) error {
 	if !res.Success {
-		if errors.Is(res.Error, ErrChatInfoUnavailable) {
-			return nil
-		}
 		if res.Error != nil {
 			return fmt.Errorf("%w: %w", ErrFailToQueueEvent, res.Error)
 		}
