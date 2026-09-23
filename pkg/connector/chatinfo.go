@@ -545,19 +545,22 @@ func (tc *TelegramClient) GetChatInfo(ctx context.Context, portal *bridgev2.Port
 		return tc.getDMChatInfo(ctx, id)
 	case ids.PeerTypeChat:
 		var fullChat *tg.MessagesChatFull
-		for {
+		for attempts := 0; attempts < 5; attempts++ {
 			fullChat, err = APICallWithUpdates(ctx, tc, func() (*tg.MessagesChatFull, error) {
 				return tc.client.API().MessagesGetFullChat(ctx, id)
 			})
-			if retry, waitErr := tgerr.FloodWait(ctx, err); retry {
-				continue
-			} else if waitErr != nil {
+			if err == nil {
+				info, _, err := tc.wrapFullChatInfo(portal.ID, fullChat)
+				return info, err
+			}
+			if attempts == 4 {
+				break
+			}
+			if retry, waitErr := tgerr.FloodWait(ctx, err); !retry {
 				return nil, waitErr
 			}
-			break
 		}
-		info, _, err := tc.wrapFullChatInfo(portal.ID, fullChat)
-		return info, err
+		return nil, err
 	case ids.PeerTypeChannel:
 		accessHash, err := tc.ScopedStore.GetAccessHash(ctx, ids.PeerTypeChannel, id)
 		if err != nil {
