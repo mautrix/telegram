@@ -100,8 +100,14 @@ func (m *Manager) checkParticipant(ctx context.Context, api API, userID, channel
 			return true, nil
 		}
 	} else {
-		switch pcp.Participant.(type) {
-		case *tg.ChannelParticipantLeft, *tg.ChannelParticipantBanned:
+		switch participant := pcp.Participant.(type) {
+		case *tg.ChannelParticipantLeft:
+			lg.Warn("Removing update state for channel as user has left")
+		case *tg.ChannelParticipantBanned:
+			if !participant.Left && !participant.BannedRights.ViewMessages {
+				lg.Debug("Membership confirmed (restricted)", zap.Any("participant", participant))
+				return true, nil
+			}
 			lg.Warn("Removing update state for channel as user is left or banned")
 		default:
 			lg.Debug("Membership confirmed", zap.Any("participant", pcp.Participant))
