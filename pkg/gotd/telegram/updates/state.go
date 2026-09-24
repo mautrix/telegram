@@ -68,6 +68,7 @@ type internalState struct {
 type stateConfig struct {
 	State            State
 	Channels         map[int64]PtsAccessHashTuple
+	LeftChannels     []int64
 	RawClient        API
 	Logger           *zap.Logger
 	Tracer           trace.Tracer
@@ -89,7 +90,7 @@ func newState(ctx context.Context, cfg stateConfig) *internalState {
 		idleTimeout: time.NewTimer(idleTimeout),
 
 		channels:             make(map[int64]*channelState),
-		recentlyLeftChannels: exsync.NewSet[int64](),
+		recentlyLeftChannels: exsync.NewSetWithItems(cfg.LeftChannels),
 		savedCommunities:     make(exmaps.Set[int64]),
 
 		client:    cfg.RawClient,
@@ -361,6 +362,7 @@ func (s *internalState) handleChannel(ctx context.Context, channelID int64, date
 			case *tg.Channel:
 				if te.Left {
 					s.log.Info("Not adding new channel state for left channel", zap.Int64("channel_id", channelID))
+					s.recentlyLeftChannels.Add(channelID)
 					return nil
 				}
 				s.recentlyLeftChannels.Remove(channelID)
@@ -431,6 +433,7 @@ func (s *internalState) RemoveChannel(channelID int64, reason error) {
 	if s == nil {
 		return
 	}
+	s.recentlyLeftChannels.Add(channelID)
 	s.channelsLock.Lock()
 	state, ok := s.channels[channelID]
 	s.channelsLock.Unlock()

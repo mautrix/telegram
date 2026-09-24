@@ -151,8 +151,10 @@ func (m *Manager) Run(ctx context.Context, api API, userID int64, opt AuthOption
 			return errors.Wrap(err, "load internalState")
 		}
 		channels := make(map[int64]PtsAccessHashTuple)
+		var leftChannels []int64
 		if err := m.cfg.Storage.ForEachChannels(ctx, userID, func(ctx context.Context, channelID int64, pts int) error {
 			if pts == -1 {
+				leftChannels = append(leftChannels, channelID)
 				return nil
 			}
 			hash, found, err := m.cfg.AccessHasher.GetChannelAccessHash(ctx, userID, channelID)
@@ -163,6 +165,7 @@ func (m *Manager) Run(ctx context.Context, api API, userID int64, opt AuthOption
 			} else if isMember, err := m.checkParticipant(ctx, api, userID, channelID, hash); err != nil {
 				return fmt.Errorf("failed to check if user is participant: %w", err)
 			} else if !isMember {
+				leftChannels = append(leftChannels, channelID)
 				return nil
 			}
 			channels[channelID] = PtsAccessHashTuple{Pts: pts, AccessHash: hash}
@@ -179,6 +182,7 @@ func (m *Manager) Run(ctx context.Context, api API, userID int64, opt AuthOption
 		m.state = newState(ctx, stateConfig{
 			State:            state,
 			Channels:         channels,
+			LeftChannels:     leftChannels,
 			RawClient:        api,
 			Tracer:           m.tracer,
 			Logger:           m.cfg.Logger,
