@@ -214,7 +214,7 @@ func makeTimerList() []jsontime.Milliseconds {
 var telegramTimers = makeTimerList()
 
 func (tc *TelegramClient) GetCapabilities(ctx context.Context, portal *bridgev2.Portal) *event.RoomFeatures {
-	baseID := "fi.mau.telegram.capabilities.2026_05_27"
+	baseID := "fi.mau.telegram.capabilities.2026_09_20"
 	feat := &event.RoomFeatures{
 		Formatting:          formattingCaps,
 		File:                fileCaps,
@@ -228,6 +228,7 @@ func (tc *TelegramClient) GetCapabilities(ctx context.Context, portal *bridgev2.
 		ReactionCount:       1,
 		ReadReceipts:        true,
 		TypingNotifications: true,
+		PinnedMessages:      true,
 
 		DisappearingTimer: &event.DisappearingTimerCapability{
 			Types:  []event.DisappearingType{event.DisappearingTypeAfterSend},
@@ -237,6 +238,7 @@ func (tc *TelegramClient) GetCapabilities(ctx context.Context, portal *bridgev2.
 			event.StateRoomName.Type:                {Level: event.CapLevelFullySupported},
 			event.StateRoomAvatar.Type:              {Level: event.CapLevelFullySupported},
 			event.StateBeeperDisappearingTimer.Type: {Level: event.CapLevelFullySupported},
+			event.StatePinnedEvents.Type:            {Level: event.CapLevelFullySupported},
 		},
 	}
 	// TODO non-admins can only edit messages within 48 hours
