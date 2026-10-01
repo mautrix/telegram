@@ -25,6 +25,7 @@ import (
 	"maunium.net/go/mautrix/bridgev2"
 	"maunium.net/go/mautrix/bridgev2/database"
 	"maunium.net/go/mautrix/bridgev2/networkid"
+	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 
 	"go.mau.fi/mautrix-telegram/pkg/gotd/crypto"
@@ -92,8 +93,9 @@ func (pm *PortalMetadata) SetIsForumGeneral(isForumGeneral bool) (changed bool) 
 }
 
 type MessageMetadata struct {
-	ContentHash []byte              `json:"content_hash,omitempty"`
-	ContentURI  id.ContentURIString `json:"content_uri,omitempty"`
+	ViewLimited *event.BeeperViewLimitedMedia `json:"view_limited,omitempty"`
+	ContentHash []byte                        `json:"content_hash,omitempty"`
+	ContentURI  id.ContentURIString           `json:"content_uri,omitempty"`
 }
 
 type UserLoginMetadata struct {
