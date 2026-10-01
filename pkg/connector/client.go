@@ -98,7 +98,9 @@ type TelegramClient struct {
 	availableReactionsList    []string
 	isPremiumCache            atomic.Bool
 
-	recentMessageRooms *exsync.RingBuffer[networkid.MessageID, networkid.PortalKey]
+	recentMessageRooms   *exsync.RingBuffer[networkid.MessageID, networkid.PortalKey]
+	viewLimitedReadsLock sync.Mutex
+	viewLimitedReads     map[networkid.MessageID]*pendingViewLimitedRead
 
 	telegramFmtParams *telegramfmt.FormatParams
 	matrixParser      *matrixfmt.HTMLParser

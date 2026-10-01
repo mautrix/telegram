@@ -291,6 +291,9 @@ func (tc *TelegramClient) transferMediaToTelegram(ctx context.Context, content *
 				aspectRatio > 20 ||
 				cfg.Height+cfg.Width > 10000
 		}
+		if forceDocument && content.MsgType == event.MsgImage && content.BeeperViewLimited != nil {
+			return bridgev2.ErrUnsupportedViewLimitedType
+		}
 		if !forceDocument && content.MsgType == event.MsgImage && content.Info.MimeType == "image/webp" {
 			_, err = f.Seek(0, io.SeekStart)
 			if err != nil {
@@ -460,6 +463,12 @@ func (tc *TelegramClient) HandleMatrixMessage(ctx context.Context, msg *bridgev2
 	if msg.Portal.RoomType == database.RoomTypeSpace {
 		return nil, fmt.Errorf("can't send messages to space portals")
 	}
+	var viewLimitedTTL int
+	if msg.Content.BeeperViewLimited != nil {
+		if viewLimitedTTL, err = tc.getViewLimitedMessageTTL(msg); err != nil {
+			return nil, err
+		}
+	}
 	// Handle Matrix events only after initial connection has been established to avoid deadlocking gotd
 	err = tc.clientInitialized.Wait(ctx)
 	if err != nil {
@@ -540,6 +549,9 @@ func (tc *TelegramClient) HandleMatrixMessage(ctx context.Context, msg *bridgev2
 			media, err = tc.transferMediaToTelegram(ctx, msg.Content, false, false, forceDocument)
 			if err != nil {
 				return nil, err
+			}
+			if viewLimitedTTL > 0 {
+				media.(interface{ SetTTLSeconds(int) }).SetTTLSeconds(viewLimitedTTL)
 			}
 			updates, err = tc.client.API().MessagesSendMedia(ctx, &tg.MessagesSendMediaRequest{
 				Peer:     peer,
@@ -656,14 +668,21 @@ func (tc *TelegramClient) HandleMatrixMessage(ctx context.Context, msg *bridgev2
 			Metadata: &MessageMetadata{
 				ContentHash: hash,
 				ContentURI:  contentURI,
+				ViewLimited: msg.Content.BeeperViewLimited,
 			},
 		},
 		StreamOrder: int64(tgMessageID),
+		PostSave: func(ctx context.Context, _ *database.Message) {
+			tc.applyViewLimitedMediaRead(ctx, msg.Portal, messageID)
+		},
 	}
 	return
 }
 
 func (tc *TelegramClient) HandleMatrixEdit(ctx context.Context, msg *bridgev2.MatrixEdit) error {
+	if msg.Content.BeeperViewLimited != nil || msg.EditTarget.Metadata.(*MessageMetadata).ViewLimited != nil {
+		return bridgev2.ErrUnsupportedViewLimitedType
+	}
 	if msg.Portal.RoomType == database.RoomTypeSpace {
 		return fmt.Errorf("can't send messages to space portals")
 	}
