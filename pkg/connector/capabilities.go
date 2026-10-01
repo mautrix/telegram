@@ -210,6 +210,21 @@ func makeTimerList() []jsontime.Milliseconds {
 	}
 }
 
+func (tc *TelegramClient) viewLimitedFileCaps(base event.FileFeatureMap) event.FileFeatureMap {
+	limits := make([]*event.BeeperViewLimitedMedia, 0, 61)
+	if !tc.main.Config.DisableViewOnce {
+		limits = append(limits, telegramViewLimit(telegramViewOnceTTL))
+	}
+	for ttl := 1; ttl <= 60; ttl++ {
+		limits = append(limits, telegramViewLimit(ttl))
+	}
+	result := base.Clone()
+	for _, msgType := range []event.CapabilityMsgType{event.MsgImage, event.MsgVideo, event.CapMsgVoice} {
+		result[msgType].ViewLimitedTypes = limits
+	}
+	return result
+}
+
 var telegramTimers = makeTimerList()
 
 func (tc *TelegramClient) GetCapabilities(ctx context.Context, portal *bridgev2.Portal) *event.RoomFeatures {
@@ -293,6 +308,13 @@ func (tc *TelegramClient) GetCapabilities(ctx context.Context, portal *bridgev2.
 		feat.ReportSpam = feat.BlockUser
 		if !feat.BlockUser {
 			baseID += "+no_block"
+		}
+		if !tc.metadata.IsBot && portal.ID != ids.MakePortalID(ids.PeerTypeUser, tc.telegramUserID) {
+			baseID += "+view_limited"
+			feat.File = tc.viewLimitedFileCaps(feat.File)
+			if tc.main.Config.DisableViewOnce {
+				baseID += "+view_once_disabled"
+			}
 		}
 		feat.DeleteChat = true
 		feat.DeleteChatForEveryone = true
