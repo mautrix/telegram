@@ -230,6 +230,8 @@ func (tc *TelegramClient) onUpdateNewMessage(ctx context.Context, entities tg.En
 		}
 
 		topicID := tc.getTopicID(ctx, msg.PeerID, msg.ReplyTo)
+		portalKey := tc.makePortalKeyFromPeer(msg.PeerID, topicID)
+		msgID := ids.GetMessageIDFromMessage(msg)
 		res := tc.main.Bridge.QueueRemoteEvent(tc.userLogin, &simplevent.Message[*tg.Message]{
 			EventMeta: simplevent.EventMeta{
 				Type: bridgev2.RemoteEventMessage,
@@ -242,15 +244,16 @@ func (tc *TelegramClient) onUpdateNewMessage(ctx context.Context, entities tg.En
 						Stringer("peer_id", msg.PeerID)
 				},
 				Sender:       sender,
-				PortalKey:    tc.makePortalKeyFromPeer(msg.PeerID, topicID),
+				PortalKey:    portalKey,
 				CreatePortal: true,
 				Timestamp:    time.Unix(int64(msg.Date), 0),
 				StreamOrder:  int64(msg.GetID()),
 			},
-			ID:                 ids.GetMessageIDFromMessage(msg),
+			ID:                 msgID,
 			Data:               msg,
 			ConvertMessageFunc: tc.convertToMatrix,
 		})
+		tc.recentMessageRooms.Push(msgID, portalKey)
 
 		if err := resultToError(res); err != nil {
 			return err
@@ -261,8 +264,9 @@ func (tc *TelegramClient) onUpdateNewMessage(ctx context.Context, entities tg.En
 		}
 		return nil
 	case *tg.MessageService:
-		return tc.handleServiceMessage(ctx, msg)
-
+		err := tc.handleServiceMessage(ctx, msg)
+		tc.recentMessageRooms.Push(ids.GetMessageIDFromMessage(msg), tc.makePortalKeyFromPeer(msg.PeerID, tc.getTopicID(ctx, msg.PeerID, msg.ReplyTo)))
+		return err
 	default:
 		log.Warn().
 			Type("action_type", msg).
