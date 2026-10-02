@@ -232,7 +232,6 @@ func (tc *TelegramClient) onUpdateNewMessage(ctx context.Context, entities tg.En
 		topicID := tc.getTopicID(ctx, msg.PeerID, msg.ReplyTo)
 		portalKey := tc.makePortalKeyFromPeer(msg.PeerID, topicID)
 		msgID := ids.GetMessageIDFromMessage(msg)
-		var releaseViewLimitedRead func()
 		res := tc.main.Bridge.QueueRemoteEvent(tc.userLogin, &simplevent.Message[*tg.Message]{
 			EventMeta: simplevent.EventMeta{
 				Type: bridgev2.RemoteEventMessage,
@@ -249,20 +248,6 @@ func (tc *TelegramClient) onUpdateNewMessage(ctx context.Context, entities tg.En
 				CreatePortal: true,
 				Timestamp:    time.Unix(int64(msg.Date), 0),
 				StreamOrder:  int64(msg.GetID()),
-				PreHandleFunc: func(ctx context.Context, _ *bridgev2.Portal) {
-					media, _ := msg.GetMedia()
-					if ttlMedia, ok := media.(ttlable); ok {
-						if ttl, ok := ttlMedia.GetTTLSeconds(); ok && ttl > 0 {
-							releaseViewLimitedRead = tc.pinViewLimitedMediaRead(ctx, ids.GetMessageIDFromMessage(msg))
-						}
-					}
-				},
-				PostHandleFunc: func(ctx context.Context, portal *bridgev2.Portal) {
-					tc.applyViewLimitedMediaRead(ctx, portal, ids.GetMessageIDFromMessage(msg))
-					if releaseViewLimitedRead != nil {
-						releaseViewLimitedRead()
-					}
-				},
 			},
 			ID:                 msgID,
 			Data:               msg,
