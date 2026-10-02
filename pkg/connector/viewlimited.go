@@ -20,7 +20,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"sync"
 	"time"
 
 	"github.com/rs/zerolog"
@@ -28,7 +27,7 @@ import (
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/bridgev2"
 	"maunium.net/go/mautrix/bridgev2/database"
-	"maunium.net/go/mautrix/bridgev2/networkid"
+	"maunium.net/go/mautrix/bridgev2/simplevent"
 	"maunium.net/go/mautrix/event"
 
 	"go.mau.fi/mautrix-telegram/pkg/gotd/tg"
@@ -36,7 +35,7 @@ import (
 	"go.mau.fi/mautrix-telegram/pkg/connector/ids"
 )
 
-const telegramViewOnceTTL = 2147483647
+const telegramViewOnceTTL = 0x7FFFFFFF
 
 var _ bridgev2.ViewLimitedMediaHandlingNetworkAPI = (*TelegramClient)(nil)
 
@@ -57,43 +56,9 @@ func telegramMediaTTL(limit *event.BeeperViewLimitedMedia) (int, error) {
 		return telegramViewOnceTTL, nil
 	}
 	if limit.Type == "time" && limit.Count == 0 && limit.Time.Duration >= time.Second && limit.Time.Duration <= time.Minute && limit.Time.Duration%time.Second == 0 {
-		return int(limit.Time.Duration / time.Second), nil
+		return int(limit.Time.Duration.Seconds()), nil
 	}
 	return 0, bridgev2.ErrUnsupportedViewLimitedType
-}
-
-func (tc *TelegramClient) getViewLimitedMessageTTL(msg *bridgev2.MatrixMessage) (int, error) {
-	limit := msg.Content.BeeperViewLimited
-	ttl, err := telegramMediaTTL(limit)
-	if err != nil {
-		return 0, err
-	}
-	peerType, peerID, _, err := ids.ParsePortalID(msg.Portal.ID)
-	if err != nil {
-		return 0, err
-	}
-	if tc.metadata.IsBot || peerType != ids.PeerTypeUser || peerID == tc.telegramUserID || (ttl == telegramViewOnceTTL && tc.main.Config.DisableViewOnce) || msg.Event.Type == event.EventSticker {
-		return 0, bridgev2.ErrUnsupportedViewLimitedType
-	}
-	switch msg.Content.MsgType {
-	case event.MsgImage:
-		forceDocument, _ := msg.Event.Content.Raw["fi.mau.telegram.force_document"].(bool)
-		mime := msg.Content.GetInfo().MimeType
-		if forceDocument || (mime != "image/jpeg" && mime != "image/png" && mime != "image/webp") {
-			return 0, bridgev2.ErrUnsupportedViewLimitedType
-		}
-	case event.MsgVideo:
-		if msg.Content.GetInfo().MauGIF {
-			return 0, bridgev2.ErrUnsupportedViewLimitedType
-		}
-	case event.MsgAudio:
-		if msg.Content.MSC3245Voice == nil {
-			return 0, bridgev2.ErrUnsupportedViewLimitedType
-		}
-	default:
-		return 0, bridgev2.ErrUnsupportedViewLimitedType
-	}
-	return ttl, nil
 }
 
 func (tc *TelegramClient) HandleMatrixViewLimitedMedia(ctx context.Context, msg *bridgev2.MatrixViewLimitedMedia) error {
@@ -105,12 +70,8 @@ func (tc *TelegramClient) HandleMatrixViewLimitedMedia(ctx context.Context, msg 
 	if err != nil || channelID != 0 || messageID <= 0 || tc.metadata.IsBot {
 		return mautrix.MInvalidParam.WithMessage("Invalid view-limited media message")
 	}
-	if meta.ViewLimited.Type == "count" && tc.main.Config.DisableViewOnce {
-		return mautrix.MForbidden.WithMessage("View-once media is disabled")
-	}
-	// Telegram only accepts content-read receipts for incoming messages.
 	if msg.Message.SenderID == tc.userID {
-		return nil
+		return mautrix.MInvalidParam.WithMessage("Outgoing media is not view-limited")
 	}
 	if err = tc.clientInitialized.Wait(ctx); err != nil {
 		return err
@@ -129,130 +90,43 @@ func (tc *TelegramClient) onViewLimitedMediaRead(ctx context.Context, update *tg
 	}
 	for _, msgID := range update.Messages {
 		messageID := ids.MakeMessageID(int64(0), msgID)
-		tc.rememberViewLimitedMediaRead(messageID, viewedAt)
-		err = errors.Join(err, tc.applyViewLimitedMediaRead(ctx, nil, messageID))
-	}
-	return err
-}
-
-type pendingViewLimitedRead struct {
-	viewedAt time.Time
-	timer    *time.Timer
-	retry    *time.Timer
-	active   int
-}
-
-func (tc *TelegramClient) rememberViewLimitedMediaRead(messageID networkid.MessageID, viewedAt time.Time) {
-	tc.viewLimitedReadsLock.Lock()
-	defer tc.viewLimitedReadsLock.Unlock()
-	pending := tc.getPendingViewLimitedRead(messageID)
-	if pending.viewedAt.IsZero() || viewedAt.Before(pending.viewedAt) {
-		pending.viewedAt = viewedAt
-	}
-}
-
-// getPendingViewLimitedRead must be called with viewLimitedReadsLock held.
-func (tc *TelegramClient) getPendingViewLimitedRead(messageID networkid.MessageID) *pendingViewLimitedRead {
-	if pending := tc.viewLimitedReads[messageID]; pending != nil {
-		return pending
-	}
-	if tc.viewLimitedReads == nil {
-		tc.viewLimitedReads = make(map[networkid.MessageID]*pendingViewLimitedRead)
-	}
-	pending := &pendingViewLimitedRead{}
-	tc.viewLimitedReads[messageID] = pending
-	// Difference updates may report reads before new messages; uploads may also still be running.
-	// Limit retention for reads whose messages will never be bridged.
-	pending.timer = time.AfterFunc(30*time.Minute, func() {
-		tc.viewLimitedReadsLock.Lock()
-		defer tc.viewLimitedReadsLock.Unlock()
-		if tc.viewLimitedReads[messageID] == pending {
-			if pending.active > 0 {
-				return
+		portalKey, ok := tc.recentMessageRooms.Get(messageID)
+		if !ok {
+			msg, dbErr := tc.main.Bridge.DB.Message.GetFirstPartByID(ctx, tc.loginID, messageID)
+			if dbErr != nil {
+				err = errors.Join(err, dbErr)
+				continue
+			} else if msg == nil {
+				continue
 			}
-			if pending.retry != nil {
-				pending.retry.Stop()
-			}
-			delete(tc.viewLimitedReads, messageID)
+			portalKey = msg.Room
 		}
-	})
-	return pending
-}
-
-func (tc *TelegramClient) pinViewLimitedMediaRead(ctx context.Context, messageID networkid.MessageID) func() {
-	tc.viewLimitedReadsLock.Lock()
-	pending := tc.getPendingViewLimitedRead(messageID)
-	pending.active++
-	tc.viewLimitedReadsLock.Unlock()
-	release := sync.OnceFunc(func() {
-		tc.viewLimitedReadsLock.Lock()
-		defer tc.viewLimitedReadsLock.Unlock()
-		pending.active--
-		if tc.viewLimitedReads[messageID] == pending && pending.active == 0 {
-			if pending.viewedAt.IsZero() {
-				pending.timer.Stop()
-				delete(tc.viewLimitedReads, messageID)
-			} else {
-				pending.timer.Reset(30 * time.Minute)
-			}
-		}
-	})
-	stop := context.AfterFunc(ctx, release)
-	return func() { stop(); release() }
-}
-
-func (tc *TelegramClient) applyViewLimitedMediaRead(ctx context.Context, portal *bridgev2.Portal, messageID networkid.MessageID) (err error) {
-	tc.viewLimitedReadsLock.Lock()
-	defer tc.viewLimitedReadsLock.Unlock()
-	pending := tc.viewLimitedReads[messageID]
-	if pending == nil || pending.viewedAt.IsZero() {
-		return nil
-	}
-	defer func() {
-		if err != nil {
-			zerolog.Ctx(ctx).Err(err).Msg("Failed to queue viewed media expiry")
-			if pending.retry == nil {
-				pending.retry = time.AfterFunc(5*time.Second, func() {
-					tc.viewLimitedReadsLock.Lock()
-					if tc.viewLimitedReads[messageID] != pending {
-						tc.viewLimitedReadsLock.Unlock()
-						return
-					}
-					pending.retry = nil
-					tc.viewLimitedReadsLock.Unlock()
-					tc.applyViewLimitedMediaRead(tc.main.Bridge.BackgroundCtx, nil, messageID)
-				})
-			}
-		}
-	}()
-	msg, err := tc.main.Bridge.DB.Message.GetFirstPartByID(ctx, tc.loginID, messageID)
-	if err != nil || msg == nil {
-		return err
-	}
-	if meta := msg.Metadata.(*MessageMetadata); meta.ViewLimited != nil {
-		if portal == nil {
-			portal, err = tc.main.Bridge.GetExistingPortalByKey(ctx, msg.Room)
-			if err != nil || portal == nil {
-				return err
-			}
-		}
-		if portal.MXID == "" {
-			return nil
-		}
-		err = tc.main.Bridge.DisappearLoop.Add(ctx, &database.DisappearingMessage{
-			RoomID: portal.MXID, EventID: msg.MXID, Timestamp: msg.Timestamp,
-			DisappearingSetting: database.DisappearingSetting{
-				Type: "view_limited", DisappearAt: pending.viewedAt.Add(meta.ViewLimited.Time.Duration),
+		res := tc.main.Bridge.QueueRemoteEvent(tc.userLogin, &simplevent.EventMeta{
+			Type:      bridgev2.RemoteEventUnknown,
+			PortalKey: portalKey,
+			PreHandleFunc: func(ctx context.Context, portal *bridgev2.Portal) {
+				msg, dbErr := tc.main.Bridge.DB.Message.GetFirstPartByID(ctx, tc.loginID, messageID)
+				if dbErr != nil {
+					zerolog.Ctx(ctx).Err(dbErr).Msg("Failed to get viewed media")
+					return
+				} else if msg == nil || msg.SenderID == tc.userID {
+					return
+				}
+				limit := msg.Metadata.(*MessageMetadata).ViewLimited
+				if limit == nil {
+					return
+				}
+				if addErr := tc.main.Bridge.DisappearLoop.Add(ctx, &database.DisappearingMessage{
+					RoomID: portal.MXID, EventID: msg.MXID, Timestamp: msg.Timestamp,
+					DisappearingSetting: database.DisappearingSetting{
+						Type: "view_limited", DisappearAt: viewedAt.Add(limit.Time.Duration),
+					},
+				}); addErr != nil {
+					zerolog.Ctx(ctx).Err(addErr).Msg("Failed to queue viewed media expiry")
+				}
 			},
 		})
-		if err != nil {
-			return err
-		}
+		err = errors.Join(err, resultToError(res))
 	}
-	pending.timer.Stop()
-	if pending.retry != nil {
-		pending.retry.Stop()
-	}
-	delete(tc.viewLimitedReads, messageID)
-	return nil
+	return err
 }

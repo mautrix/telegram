@@ -465,7 +465,7 @@ func (tc *TelegramClient) HandleMatrixMessage(ctx context.Context, msg *bridgev2
 	}
 	var viewLimitedTTL int
 	if msg.Content.BeeperViewLimited != nil {
-		if viewLimitedTTL, err = tc.getViewLimitedMessageTTL(msg); err != nil {
+		if viewLimitedTTL, err = telegramMediaTTL(msg.Content.BeeperViewLimited); err != nil {
 			return nil, err
 		}
 	}
@@ -668,13 +668,9 @@ func (tc *TelegramClient) HandleMatrixMessage(ctx context.Context, msg *bridgev2
 			Metadata: &MessageMetadata{
 				ContentHash: hash,
 				ContentURI:  contentURI,
-				ViewLimited: msg.Content.BeeperViewLimited,
 			},
 		},
 		StreamOrder: int64(tgMessageID),
-		PostSave: func(ctx context.Context, _ *database.Message) {
-			tc.applyViewLimitedMediaRead(ctx, msg.Portal, messageID)
-		},
 	}
 	return
 }
