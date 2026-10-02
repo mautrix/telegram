@@ -33,6 +33,7 @@ func noopOnTransfer(ctx context.Context, _ *Client, fn func(context.Context) err
 // See https://core.telegram.org/api/datacenter#authorization-transfer.
 func (c *Client) transfer(ctx context.Context, to *tg.Client, dc int) (tg.AuthAuthorizationClass, error) {
 	var out tg.AuthAuthorizationClass
+	ctx = context.WithValue(ctx, invokeContextKeyDCInner, true)
 	if err := c.onTransfer(ctx, c, func(ctx context.Context) error {
 		auth, err := c.exportAuth(ctx, dc)
 		if err != nil {
