@@ -999,6 +999,10 @@ func (tc *TelegramClient) onUpdate(ctx context.Context, e tg.Entities, upd tg.Up
 		return tc.onNotifySettings(ctx, e, update)
 	case *tg.UpdatePinnedDialogs:
 		return tc.onPinnedDialogs(ctx, e, update)
+	case *tg.UpdatePinnedMessages:
+		return tc.onPinnedMessages(ctx, tc.makePortalKeyFromPeer(update.Peer, 0), update.Messages, update.Pinned)
+	case *tg.UpdatePinnedChannelMessages:
+		return tc.onPinnedMessages(ctx, tc.makePortalKeyFromID(ids.PeerTypeChannel, update.ChannelID, 0), update.Messages, update.Pinned)
 	case *tg.UpdateChatDefaultBannedRights:
 		return tc.onChatDefaultBannedRights(ctx, e, update)
 	case *tg.UpdatePeerBlocked:
@@ -1476,6 +1480,35 @@ func (tc *TelegramClient) onNotifySettings(ctx context.Context, e tg.Entities, u
 		},
 	})
 	return resultToError(res)
+}
+
+func (tc *TelegramClient) onPinnedMessages(ctx context.Context, portalKey networkid.PortalKey, messages []int, pinned bool) error {
+	if len(messages) == 0 && pinned {
+		return nil
+	}
+	messageIDs := make([]networkid.MessageID, len(messages))
+	for i, messageID := range messages {
+		messageIDs[i] = ids.MakeMessageID(portalKey, messageID)
+	}
+	evt := &simplevent.PinnedMessages{
+		EventMeta: simplevent.EventMeta{
+			Type:      bridgev2.RemoteEventPinnedMessages,
+			PortalKey: portalKey,
+			LogContext: func(c zerolog.Context) zerolog.Context {
+				return c.
+					Str("tg_event", "updatePinnedMessages").
+					Bool("pinned", pinned).
+					Ints("message_ids", messages)
+			},
+		},
+	}
+	if pinned {
+		evt.Pinned = messageIDs
+	} else if len(messageIDs) > 0 {
+		evt.Unpinned = messageIDs
+	}
+	// An unpin without message IDs means everything was unpinned, which is an empty full list.
+	return resultToError(tc.main.Bridge.QueueRemoteEvent(tc.userLogin, evt))
 }
 
 func (tc *TelegramClient) onPinnedDialogs(ctx context.Context, e tg.Entities, msg *tg.UpdatePinnedDialogs) error {
