@@ -29,6 +29,7 @@ import (
 	"github.com/rs/zerolog"
 	"go.mau.fi/util/exfmt"
 	"go.mau.fi/util/exmaps"
+	"go.mau.fi/util/jsontime"
 	"go.mau.fi/util/ptr"
 	"maunium.net/go/mautrix/bridgev2"
 	"maunium.net/go/mautrix/bridgev2/database"
@@ -197,6 +198,63 @@ func (tc *TelegramClient) onUpdateChannel(ctx context.Context, e tg.Entities, up
 		},
 	})
 	return resultToError(res)
+}
+
+func telegramViewLimit(ttl int) *event.BeeperViewLimitedMedia {
+	if ttl == telegramViewOnceTTL {
+		return &event.BeeperViewLimitedMedia{Type: "count", Count: 1}
+	} else if ttl > 0 {
+		return &event.BeeperViewLimitedMedia{Type: "time", Time: jsontime.MS(time.Duration(ttl) * time.Second)}
+	}
+	return nil
+}
+
+func (tc *TelegramClient) onViewLimitedMediaRead(ctx context.Context, update *tg.UpdateReadMessagesContents) (err error) {
+	viewedAt := time.Now()
+	if date, ok := update.GetDate(); ok && date > 0 {
+		viewedAt = time.Unix(int64(date), 0)
+	}
+	for _, msgID := range update.Messages {
+		messageID := ids.MakeMessageID(int64(0), msgID)
+		portalKey, ok := tc.recentMessageRooms.Get(messageID)
+		if !ok {
+			msg, dbErr := tc.main.Bridge.DB.Message.GetFirstPartByID(ctx, tc.loginID, messageID)
+			if dbErr != nil {
+				err = errors.Join(err, dbErr)
+				continue
+			} else if msg == nil {
+				continue
+			}
+			portalKey = msg.Room
+		}
+		res := tc.main.Bridge.QueueRemoteEvent(tc.userLogin, &simplevent.EventMeta{
+			Type:      bridgev2.RemoteEventUnknown,
+			PortalKey: portalKey,
+			PreHandleFunc: func(ctx context.Context, portal *bridgev2.Portal) {
+				msg, dbErr := tc.main.Bridge.DB.Message.GetFirstPartByID(ctx, tc.loginID, messageID)
+				if dbErr != nil {
+					zerolog.Ctx(ctx).Err(dbErr).Msg("Failed to get viewed media")
+					return
+				} else if msg == nil || msg.SenderID == tc.userID {
+					return
+				}
+				limit := msg.Metadata.(*MessageMetadata).ViewLimited
+				if limit == nil {
+					return
+				}
+				if addErr := tc.main.Bridge.DisappearLoop.Add(ctx, &database.DisappearingMessage{
+					RoomID: portal.MXID, EventID: msg.MXID, Timestamp: msg.Timestamp,
+					DisappearingSetting: database.DisappearingSetting{
+						Type: "view_limited", DisappearAt: viewedAt.Add(limit.Time.Duration),
+					},
+				}); addErr != nil {
+					zerolog.Ctx(ctx).Err(addErr).Msg("Failed to queue viewed media expiry")
+				}
+			},
+		})
+		err = errors.Join(err, resultToError(res))
+	}
+	return err
 }
 
 func (tc *TelegramClient) onUpdateNewMessage(ctx context.Context, entities tg.Entities, update IGetMessage) error {
