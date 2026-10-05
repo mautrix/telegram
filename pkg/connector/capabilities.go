@@ -25,7 +25,6 @@ import (
 	"go.mau.fi/util/jsontime"
 	"go.mau.fi/util/ptr"
 	"go.mau.fi/util/variationselector"
-
 	"maunium.net/go/mautrix/bridgev2"
 	"maunium.net/go/mautrix/event"
 
@@ -64,7 +63,7 @@ func (tc *TelegramConnector) GetCapabilities() *bridgev2.NetworkGeneralCapabilit
 }
 
 func (tc *TelegramConnector) GetBridgeInfoVersion() (info, capabilities int) {
-	return 1, 11
+	return 1, 12
 }
 
 // TODO get these from getConfig instead of hardcoding?
@@ -214,7 +213,7 @@ func makeTimerList() []jsontime.Milliseconds {
 var telegramTimers = makeTimerList()
 
 func (tc *TelegramClient) GetCapabilities(ctx context.Context, portal *bridgev2.Portal) *event.RoomFeatures {
-	baseID := "fi.mau.telegram.capabilities.2026_05_27"
+	baseID := "fi.mau.telegram.capabilities.2026_10_01"
 	feat := &event.RoomFeatures{
 		Formatting:          formattingCaps,
 		File:                fileCaps,
@@ -264,7 +263,7 @@ func (tc *TelegramClient) GetCapabilities(ctx context.Context, portal *bridgev2.
 		feat.ReactionCount = 3
 	}
 	portalMetadata := portal.Metadata.(*PortalMetadata)
-	peerType, _, topicID, _ := ids.ParsePortalID(portal.ID)
+	peerType, id, topicID, _ := ids.ParsePortalID(portal.ID)
 	switch peerType {
 	case ids.PeerTypeChat:
 		feat.ID += "minigroup"
@@ -290,6 +289,11 @@ func (tc *TelegramClient) GetCapabilities(ctx context.Context, portal *bridgev2.
 		}
 	case ids.PeerTypeUser:
 		baseID += "+dm"
+		feat.BlockUser = !tc.metadata.IsBot && id != tc.telegramUserID
+		feat.ReportSpam = feat.BlockUser
+		if !feat.BlockUser {
+			baseID += "+no_block"
+		}
 		feat.DeleteChat = true
 		feat.DeleteChatForEveryone = true
 		feat.State = event.StateFeatureMap{

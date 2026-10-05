@@ -55,16 +55,15 @@ import (
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 
-	"go.mau.fi/mautrix-telegram/pkg/connector/media"
-	"go.mau.fi/mautrix-telegram/pkg/gotd/telegram/uploader"
-	"go.mau.fi/mautrix-telegram/pkg/gotd/tg"
-	"go.mau.fi/mautrix-telegram/pkg/gotd/tgerr"
-
 	"go.mau.fi/mautrix-telegram/pkg/connector/emojis"
 	"go.mau.fi/mautrix-telegram/pkg/connector/humanise"
 	"go.mau.fi/mautrix-telegram/pkg/connector/ids"
 	"go.mau.fi/mautrix-telegram/pkg/connector/matrixfmt"
+	"go.mau.fi/mautrix-telegram/pkg/connector/media"
 	"go.mau.fi/mautrix-telegram/pkg/connector/waveform"
+	"go.mau.fi/mautrix-telegram/pkg/gotd/telegram/uploader"
+	"go.mau.fi/mautrix-telegram/pkg/gotd/tg"
+	"go.mau.fi/mautrix-telegram/pkg/gotd/tgerr"
 )
 
 var (
@@ -81,6 +80,7 @@ var (
 	_ bridgev2.RoomNameHandlingNetworkAPI       = (*TelegramClient)(nil)
 	_ bridgev2.RoomAvatarHandlingNetworkAPI     = (*TelegramClient)(nil)
 	_ bridgev2.MembershipHandlingNetworkAPI     = (*TelegramClient)(nil)
+	_ bridgev2.UserBlockingNetworkAPI           = (*TelegramClient)(nil)
 )
 
 const telegramMediaUploadThreads = 4
@@ -1485,4 +1485,33 @@ func (tc *TelegramClient) HandleMatrixMembership(ctx context.Context, msg *bridg
 		}
 	}
 	return nil, err
+}
+
+func (tc *TelegramClient) HandleMatrixBlockUser(ctx context.Context, msg *bridgev2.MatrixBlockUser) error {
+	peerType, userID, _, err := ids.ParsePortalID(msg.Portal.ID)
+	if err != nil {
+		return err
+	}
+	if peerType != ids.PeerTypeUser {
+		return bridgev2.ErrNonDMBlockUser
+	}
+	peer, err := tc.getInputPeerUser(ctx, userID)
+	if err != nil {
+		return err
+	}
+	if msg.Content.Block {
+		_, err = tc.client.API().ContactsBlock(ctx, &tg.ContactsBlockRequest{ID: peer})
+	} else {
+		_, err = tc.client.API().ContactsUnblock(ctx, &tg.ContactsUnblockRequest{ID: peer})
+	}
+	if err != nil {
+		return err
+	}
+	if msg.Content.ReportSpam {
+		_, err = tc.client.API().MessagesReportSpam(ctx, peer)
+		if err != nil {
+			return fmt.Errorf("failed to report spam: %w", err)
+		}
+	}
+	return nil
 }

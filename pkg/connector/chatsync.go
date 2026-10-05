@@ -167,6 +167,7 @@ func (tc *TelegramClient) syncChats(ctx context.Context, takeoutID int64, onLogi
 			return fmt.Errorf("failed to get input peer for pagination: %w", err)
 		}
 	}
+	// TODO fetch and sync block list too
 	if isFullSync {
 		tc.metadata.DialogSyncComplete = true
 		tc.metadata.DialogSyncCursor = ""
