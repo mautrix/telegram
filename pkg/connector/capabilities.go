@@ -63,7 +63,7 @@ func (tc *TelegramConnector) GetCapabilities() *bridgev2.NetworkGeneralCapabilit
 }
 
 func (tc *TelegramConnector) GetBridgeInfoVersion() (info, capabilities int) {
-	return 1, 12
+	return 1, 13
 }
 
 // TODO get these from getConfig instead of hardcoding?
@@ -210,10 +210,24 @@ func makeTimerList() []jsontime.Milliseconds {
 	}
 }
 
+func viewLimitedFileCaps(base event.FileFeatureMap) event.FileFeatureMap {
+	limits := []*event.BeeperViewLimitedMedia{
+		telegramViewLimit(telegramViewOnceTTL),
+		telegramViewLimit(3),
+		telegramViewLimit(10),
+		telegramViewLimit(30),
+	}
+	result := base.Clone()
+	for _, msgType := range []event.CapabilityMsgType{event.MsgImage, event.MsgVideo, event.CapMsgVoice} {
+		result[msgType].ViewLimitedTypes = limits
+	}
+	return result
+}
+
 var telegramTimers = makeTimerList()
 
 func (tc *TelegramClient) GetCapabilities(ctx context.Context, portal *bridgev2.Portal) *event.RoomFeatures {
-	baseID := "fi.mau.telegram.capabilities.2026_10_01"
+	baseID := "fi.mau.telegram.capabilities.2026_10_05"
 	feat := &event.RoomFeatures{
 		Formatting:          formattingCaps,
 		File:                fileCaps,
@@ -293,6 +307,10 @@ func (tc *TelegramClient) GetCapabilities(ctx context.Context, portal *bridgev2.
 		feat.ReportSpam = feat.BlockUser
 		if !feat.BlockUser {
 			baseID += "+no_block"
+		}
+		if !tc.metadata.IsBot && portal.ID != ids.MakePortalID(ids.PeerTypeUser, tc.telegramUserID) {
+			baseID += "+view_limited"
+			feat.File = viewLimitedFileCaps(feat.File)
 		}
 		feat.DeleteChat = true
 		feat.DeleteChatForEveryone = true

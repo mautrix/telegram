@@ -48,6 +48,7 @@ import (
 	"golang.org/x/exp/maps"
 	_ "golang.org/x/image/webp"
 	"golang.org/x/net/html"
+	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/bridgev2"
 	"maunium.net/go/mautrix/bridgev2/database"
 	"maunium.net/go/mautrix/bridgev2/networkid"
@@ -67,20 +68,21 @@ import (
 )
 
 var (
-	_ bridgev2.EditHandlingNetworkAPI           = (*TelegramClient)(nil)
-	_ bridgev2.ReactionHandlingNetworkAPI       = (*TelegramClient)(nil)
-	_ bridgev2.RedactionHandlingNetworkAPI      = (*TelegramClient)(nil)
-	_ bridgev2.ReadReceiptHandlingNetworkAPI    = (*TelegramClient)(nil)
-	_ bridgev2.TypingHandlingNetworkAPI         = (*TelegramClient)(nil)
-	_ bridgev2.DisappearTimerChangingNetworkAPI = (*TelegramClient)(nil)
-	_ bridgev2.MuteHandlingNetworkAPI           = (*TelegramClient)(nil)
-	_ bridgev2.TagHandlingNetworkAPI            = (*TelegramClient)(nil)
-	_ bridgev2.ChatViewingNetworkAPI            = (*TelegramClient)(nil)
-	_ bridgev2.DeleteChatHandlingNetworkAPI     = (*TelegramClient)(nil)
-	_ bridgev2.RoomNameHandlingNetworkAPI       = (*TelegramClient)(nil)
-	_ bridgev2.RoomAvatarHandlingNetworkAPI     = (*TelegramClient)(nil)
-	_ bridgev2.MembershipHandlingNetworkAPI     = (*TelegramClient)(nil)
-	_ bridgev2.UserBlockingNetworkAPI           = (*TelegramClient)(nil)
+	_ bridgev2.ViewLimitedMediaHandlingNetworkAPI = (*TelegramClient)(nil)
+	_ bridgev2.EditHandlingNetworkAPI             = (*TelegramClient)(nil)
+	_ bridgev2.ReactionHandlingNetworkAPI         = (*TelegramClient)(nil)
+	_ bridgev2.RedactionHandlingNetworkAPI        = (*TelegramClient)(nil)
+	_ bridgev2.ReadReceiptHandlingNetworkAPI      = (*TelegramClient)(nil)
+	_ bridgev2.TypingHandlingNetworkAPI           = (*TelegramClient)(nil)
+	_ bridgev2.DisappearTimerChangingNetworkAPI   = (*TelegramClient)(nil)
+	_ bridgev2.MuteHandlingNetworkAPI             = (*TelegramClient)(nil)
+	_ bridgev2.TagHandlingNetworkAPI              = (*TelegramClient)(nil)
+	_ bridgev2.ChatViewingNetworkAPI              = (*TelegramClient)(nil)
+	_ bridgev2.DeleteChatHandlingNetworkAPI       = (*TelegramClient)(nil)
+	_ bridgev2.RoomNameHandlingNetworkAPI         = (*TelegramClient)(nil)
+	_ bridgev2.RoomAvatarHandlingNetworkAPI       = (*TelegramClient)(nil)
+	_ bridgev2.MembershipHandlingNetworkAPI       = (*TelegramClient)(nil)
+	_ bridgev2.UserBlockingNetworkAPI             = (*TelegramClient)(nil)
 )
 
 const telegramMediaUploadThreads = 4
@@ -291,6 +293,9 @@ func (tc *TelegramClient) transferMediaToTelegram(ctx context.Context, content *
 				aspectRatio > 20 ||
 				cfg.Height+cfg.Width > 10000
 		}
+		if forceDocument && content.MsgType == event.MsgImage && content.BeeperViewLimited != nil {
+			return fmt.Errorf("%w: force_document not allowed", bridgev2.ErrUnsupportedViewLimitedType)
+		}
 		if !forceDocument && content.MsgType == event.MsgImage && content.Info.MimeType == "image/webp" {
 			_, err = f.Seek(0, io.SeekStart)
 			if err != nil {
@@ -460,6 +465,10 @@ func (tc *TelegramClient) HandleMatrixMessage(ctx context.Context, msg *bridgev2
 	if msg.Portal.RoomType == database.RoomTypeSpace {
 		return nil, fmt.Errorf("can't send messages to space portals")
 	}
+	viewLimitedTTL, err := telegramMediaTTL(msg.Content.BeeperViewLimited)
+	if err != nil {
+		return nil, err
+	}
 	// Handle Matrix events only after initial connection has been established to avoid deadlocking gotd
 	err = tc.clientInitialized.Wait(ctx)
 	if err != nil {
@@ -540,6 +549,9 @@ func (tc *TelegramClient) HandleMatrixMessage(ctx context.Context, msg *bridgev2
 			media, err = tc.transferMediaToTelegram(ctx, msg.Content, false, false, forceDocument)
 			if err != nil {
 				return nil, err
+			}
+			if viewLimitedTTL > 0 {
+				media.(interface{ SetTTLSeconds(int) }).SetTTLSeconds(viewLimitedTTL)
 			}
 			updates, err = tc.client.API().MessagesSendMedia(ctx, &tg.MessagesSendMediaRequest{
 				Peer:     peer,
@@ -663,7 +675,47 @@ func (tc *TelegramClient) HandleMatrixMessage(ctx context.Context, msg *bridgev2
 	return
 }
 
+const telegramViewOnceTTL = 0x7FFFFFFF
+
+func telegramMediaTTL(limit *event.BeeperViewLimitedMedia) (int, error) {
+	if limit == nil {
+		return 0, nil
+	}
+	if limit.Type == "count" && limit.Count == 1 && limit.Time.IsZero() {
+		return telegramViewOnceTTL, nil
+	}
+	if limit.Type == "time" && limit.Count == 0 && limit.Time.Duration >= time.Second && limit.Time.Duration <= time.Minute && limit.Time.Duration%time.Second == 0 {
+		return int(limit.Time.Duration.Seconds()), nil
+	}
+	return 0, bridgev2.ErrUnsupportedViewLimitedType
+}
+
+func (tc *TelegramClient) HandleMatrixViewLimitedMedia(ctx context.Context, msg *bridgev2.MatrixViewLimitedMedia) error {
+	meta, ok := msg.Message.Metadata.(*MessageMetadata)
+	if !ok || meta.ViewLimited == nil || msg.Content == nil || *meta.ViewLimited != *msg.Content {
+		return mautrix.MInvalidParam.WithMessage("View limit does not match the message")
+	}
+	channelID, messageID, err := ids.ParseMessageID(msg.Message.ID)
+	if err != nil || channelID != 0 || messageID <= 0 || tc.metadata.IsBot {
+		return mautrix.MInvalidParam.WithMessage("Invalid view-limited media message")
+	}
+	if msg.Message.SenderID == tc.userID {
+		return mautrix.MInvalidParam.WithMessage("Outgoing media is not view-limited")
+	}
+	if err = tc.clientInitialized.Wait(ctx); err != nil {
+		return err
+	}
+	_, err = tc.client.API().MessagesReadMessageContents(ctx, []int{messageID})
+	if err != nil {
+		return fmt.Errorf("failed to mark view-limited media as viewed: %w", err)
+	}
+	return nil
+}
+
 func (tc *TelegramClient) HandleMatrixEdit(ctx context.Context, msg *bridgev2.MatrixEdit) error {
+	if msg.Content.BeeperViewLimited != nil || msg.EditTarget.Metadata.(*MessageMetadata).ViewLimited != nil {
+		return fmt.Errorf("%w: edits not allowed", bridgev2.ErrUnsupportedViewLimitedType)
+	}
 	if msg.Portal.RoomType == database.RoomTypeSpace {
 		return fmt.Errorf("can't send messages to space portals")
 	}
