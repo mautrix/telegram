@@ -316,15 +316,19 @@ func (tc *TelegramClient) ConnectBackground(ctx context.Context, params *bridgev
 		if relatedPortal != nil && data.Custom.MessageID != 0 {
 			messageID = ids.MakeMessageID(relatedPortal.PortalKey, data.Custom.MessageID)
 		}
-		notifs.DisplayNotification(ctx, &bridgev2.DirectNotificationData{
-			Portal:    relatedPortal,
-			Sender:    sender,
-			Message:   messageText,
-			MessageID: messageID,
+		if messageID == "" && messageText == "" && notificationText == "" {
+			zerolog.Ctx(ctx).Debug().Str("loc_key", data.LocKey).Msg("Not displaying push notification without message content")
+		} else {
+			notifs.DisplayNotification(ctx, &bridgev2.DirectNotificationData{
+				Portal:    relatedPortal,
+				Sender:    sender,
+				Message:   messageText,
+				MessageID: messageID,
 
-			FormattedNotification: notificationText,
-			FormattedTitle:        notificationTitle,
-		})
+				FormattedNotification: notificationText,
+				FormattedTitle:        notificationTitle,
+			})
+		}
 	}
 	if FullSyncOnConnectBackground {
 		tc.Connect(ctx)
