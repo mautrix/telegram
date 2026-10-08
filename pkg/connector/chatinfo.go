@@ -634,6 +634,7 @@ func getTopicInfoFromResponse(resp *tg.MessagesForumTopics, channelID int64, top
 
 func (tc *TelegramClient) getDMPowerLevels() *bridgev2.PowerLevelOverrides {
 	var plo bridgev2.PowerLevelOverrides
+	plo.Redact = anyonePowerLevel
 	plo.EventsDefault = anyonePowerLevel
 	plo.Events = map[event.Type]int{
 		event.StateRoomName:                0,
