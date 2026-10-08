@@ -312,7 +312,7 @@ func (tc *TelegramClient) syncNormalDialog(
 				log.Debug().Int64("user_id", peer.UserID).Msg("Not syncing portal because user is deleted")
 				return nil
 			}
-			chatInfo, err = tc.getDMChatInfo(ctx, peer.UserID)
+			chatInfo, err = tc.getDMChatInfo(peer.UserID)
 			if err != nil {
 				return fmt.Errorf("failed to get dm info for %d: %w", peer.UserID, err)
 			}
