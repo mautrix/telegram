@@ -66,9 +66,9 @@ var (
 		Err:        "New account creation is not supported",
 		StatusCode: http.StatusBadRequest,
 	}
-	ErrLoginEmailSetupRequired = bridgev2.RespError{
-		ErrCode:    "FI.MAU.TELEGRAM.LOGIN_EMAIL_SETUP_REQUIRED",
-		Err:        "Telegram requires a login email to be set up for this account, which is not supported. Please log in with a QR code instead.",
+	ErrLoginEmailRequired = bridgev2.RespError{
+		ErrCode:    "FI.MAU.TELEGRAM.LOGIN_EMAIL_REQUIRED",
+		Err:        "Telegram requires setting up a login email, please log in with a QR code instead",
 		StatusCode: http.StatusBadRequest,
 	}
 	ErrPhoneNumberNotProvided = bridgev2.RespError{
