@@ -66,6 +66,8 @@ func (tc *TelegramClient) syncChats(ctx context.Context, takeoutID int64, onLogi
 		tc.metadata.DialogSyncCount = 0
 		tc.metadata.DialogSyncComplete = false
 		tc.metadata.DialogSyncCursor = ""
+		tc.metadata.DialogSyncOffsetID = 0
+		tc.metadata.DialogSyncOffsetDate = 0
 	} else if tc.metadata.DialogSyncComplete {
 		log.Debug().Msg("Dialogs already synced")
 		return nil
@@ -88,6 +90,8 @@ func (tc *TelegramClient) syncChats(ctx context.Context, takeoutID int64, onLogi
 		if err != nil {
 			return fmt.Errorf("failed to get input peer for pagination: %w", err)
 		}
+		req.OffsetID = tc.metadata.DialogSyncOffsetID
+		req.OffsetDate = tc.metadata.DialogSyncOffsetDate
 	} else {
 		req.OffsetPeer = &tg.InputPeerEmpty{}
 	}
@@ -157,6 +161,7 @@ func (tc *TelegramClient) syncChats(ctx context.Context, takeoutID int64, onLogi
 			break
 		}
 		tc.metadata.DialogSyncCursor = cursorPortalKey.ID
+		tc.metadata.DialogSyncOffsetID, tc.metadata.DialogSyncOffsetDate = getDialogOffset(dialogList, dialogs.GetMessages())
 		tc.metadata.DialogSyncCount += len(dialogList)
 		if err = tc.userLogin.Save(ctx); err != nil {
 			return fmt.Errorf("failed to save user login to update cursor: %w", err)
@@ -166,12 +171,16 @@ func (tc *TelegramClient) syncChats(ctx context.Context, takeoutID int64, onLogi
 		if err != nil {
 			return fmt.Errorf("failed to get input peer for pagination: %w", err)
 		}
+		req.OffsetID = tc.metadata.DialogSyncOffsetID
+		req.OffsetDate = tc.metadata.DialogSyncOffsetDate
 	}
 	// TODO fetch and sync block list too
 	if isFullSync {
 		tc.metadata.DialogSyncComplete = true
 		tc.metadata.DialogSyncCursor = ""
 		tc.metadata.DialogSyncCount = 0
+		tc.metadata.DialogSyncOffsetID = 0
+		tc.metadata.DialogSyncOffsetDate = 0
 		if err := tc.userLogin.Save(ctx); err != nil {
 			return fmt.Errorf("failed to save user login after successful sync: %w", err)
 		}
@@ -191,6 +200,30 @@ func (tc *TelegramClient) dialogToPortalKey(dialog tg.DialogClass) networkid.Por
 	default:
 		panic(fmt.Errorf("unknown dialog type %T", dialog))
 	}
+}
+
+// getDialogOffset returns the ID and date of the last dialog's top message.
+// Telegram ignores offset_peer unless offset_id and offset_date are also set.
+func getDialogOffset(dialogList []tg.DialogClass, messages []tg.MessageClass) (offsetID, offsetDate int) {
+	for i := len(dialogList) - 1; i >= 0; i-- {
+		var peer tg.PeerClass
+		var topMessage int
+		switch typedDialog := dialogList[i].(type) {
+		case *tg.Dialog:
+			peer, topMessage = typedDialog.Peer, typedDialog.TopMessage
+		case *tg.DialogFolder:
+			peer, topMessage = typedDialog.Peer, typedDialog.TopMessage
+		default:
+			continue
+		}
+		msgID := ids.MakeMessageID(peer, topMessage)
+		for _, msg := range messages {
+			if notEmpty, ok := msg.AsNotEmpty(); ok && ids.GetMessageIDFromMessage(msg) == msgID {
+				return topMessage, notEmpty.GetDate()
+			}
+		}
+	}
+	return 0, 0
 }
 
 func subtractLimit(limit, count int) int {

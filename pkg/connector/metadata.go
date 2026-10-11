@@ -105,9 +105,11 @@ type UserLoginMetadata struct {
 	Session     UserLoginSession `json:"session"`
 	TakeoutID   int64            `json:"takeout_id,omitempty"`
 
-	DialogSyncComplete bool               `json:"takeout_portal_crawl_done,omitempty"`
-	DialogSyncCursor   networkid.PortalID `json:"takeout_portal_crawl_cursor,omitempty"`
-	DialogSyncCount    int                `json:"dialog_sync_count,omitempty"`
+	DialogSyncComplete   bool               `json:"takeout_portal_crawl_done,omitempty"`
+	DialogSyncCursor     networkid.PortalID `json:"takeout_portal_crawl_cursor,omitempty"`
+	DialogSyncCount      int                `json:"dialog_sync_count,omitempty"`
+	DialogSyncOffsetID   int                `json:"dialog_sync_offset_id,omitempty"`
+	DialogSyncOffsetDate int                `json:"dialog_sync_offset_date,omitempty"`
 
 	PinnedDialogs []networkid.PortalID `json:"pinned_dialogs,omitempty"`
 
@@ -120,6 +122,8 @@ func (u *UserLoginMetadata) ResetOnLogout() {
 	u.DialogSyncComplete = false
 	u.DialogSyncCursor = networkid.PortalID("")
 	u.DialogSyncCount = 0
+	u.DialogSyncOffsetID = 0
+	u.DialogSyncOffsetDate = 0
 	u.PushEncryptionKey = nil
 }
 
