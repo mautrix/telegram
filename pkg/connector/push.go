@@ -51,7 +51,7 @@ type PushCustomData struct {
 	MessageID int `json:"msg_id,string"`
 
 	ChannelID int64 `json:"channel_id,string"`
-	TopicID   int   `json:"top_msg_id,string"`
+	TopicID   int   `json:"topic_id,string"`
 	ChatID    int64 `json:"chat_id,string"`
 	FromID    int64 `json:"from_id,string"`
 
