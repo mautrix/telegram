@@ -559,7 +559,33 @@ func (tc *TelegramClient) convertMediaRequiringUpload(
 
 	if t, ok := msgMedia.(ttlable); ok && !msg.Out {
 		if ttl, ok := t.GetTTLSeconds(); ok && ttl > 0 {
-			content.BeeperViewLimited = telegramViewLimit(ttl)
+			if tc.main.Bridge.Config.ViewLimitedMedia {
+				content.BeeperViewLimited = telegramViewLimit(ttl)
+			} else {
+				if ttl == telegramViewOnceTTL {
+					if tc.main.Config.DisableViewOnce {
+						typeName := "photo"
+						if msgMedia.TypeID() == tg.MessageMediaDocumentTypeID {
+							typeName = "file"
+						}
+						converted = &bridgev2.ConvertedMessagePart{
+							Type: event.EventMessage,
+							Content: &event.MessageEventContent{
+								MsgType: event.MsgNotice,
+								Body:    fmt.Sprintf("You received a view once %s. For added privacy, you can only open it on the Telegram app.", typeName),
+							},
+						}
+						return
+					}
+					// Set a low TTL for view-once media
+					ttl = 15
+				}
+				disappearingSetting = &database.DisappearingSetting{
+					// Even though normal message TTLs are after send, media is after read
+					Type:  event.DisappearingTypeAfterRead,
+					Timer: time.Duration(ttl) * time.Second,
+				}
+			}
 		}
 	}
 
