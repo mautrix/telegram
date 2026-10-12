@@ -63,7 +63,7 @@ func (tc *TelegramConnector) GetCapabilities() *bridgev2.NetworkGeneralCapabilit
 }
 
 func (tc *TelegramConnector) GetBridgeInfoVersion() (info, capabilities int) {
-	return 1, 13
+	return 1, 14
 }
 
 // TODO get these from getConfig instead of hardcoding?
@@ -227,7 +227,7 @@ func viewLimitedFileCaps(base event.FileFeatureMap) event.FileFeatureMap {
 var telegramTimers = makeTimerList()
 
 func (tc *TelegramClient) GetCapabilities(ctx context.Context, portal *bridgev2.Portal) *event.RoomFeatures {
-	baseID := "fi.mau.telegram.capabilities.2026_10_05"
+	baseID := "fi.mau.telegram.capabilities.2026_10_11"
 	feat := &event.RoomFeatures{
 		Formatting:          formattingCaps,
 		File:                fileCaps,
@@ -287,7 +287,8 @@ func (tc *TelegramClient) GetCapabilities(ctx context.Context, portal *bridgev2.
 			event.MemberActionLeave:  event.CapLevelFullySupported,
 			// Note: unban and kick are not supported
 		}
-		// Minigroups can always be deleted
+		// Minigroups can always be deleted, non-creators leave instead
+		feat.DeleteChat = true
 		feat.DeleteChatForEveryone = true
 	case ids.PeerTypeChannel:
 		feat.ID += "channel"
@@ -301,6 +302,8 @@ func (tc *TelegramClient) GetCapabilities(ctx context.Context, portal *bridgev2.
 		if portalMetadata.ParticipantsCount < 1000 || topicID > 0 {
 			feat.DeleteChatForEveryone = true
 		}
+		// Anyone can delete a non-topic channel for themselves by leaving it
+		feat.DeleteChat = topicID == 0
 	case ids.PeerTypeUser:
 		baseID += "+dm"
 		feat.BlockUser = !tc.metadata.IsBot && id != tc.telegramUserID

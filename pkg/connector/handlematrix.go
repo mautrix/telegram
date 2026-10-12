@@ -1246,26 +1246,35 @@ func (tc *TelegramClient) HandleMatrixDeleteChat(ctx context.Context, chat *brid
 			return err
 		}
 	case ids.PeerTypeChat:
-		if !chat.Content.DeleteForEveryone {
-			return fmt.Errorf("chats can only be deleted for everyone or left")
+		if chat.Content.DeleteForEveryone {
+			result, err := tc.client.API().MessagesDeleteChat(ctx, id)
+			if err == nil && !result {
+				return fmt.Errorf("failed to delete chat %d", id)
+			} else if !tgerr.Is(err, tg.ErrChatAdminRequired) {
+				return err
+			}
+			zerolog.Ctx(ctx).Debug().Msg("Not allowed to delete chat for everyone, leaving instead")
 		}
-		result, err := tc.client.API().MessagesDeleteChat(ctx, id)
+		_, err = tc.client.API().MessagesDeleteChatUser(ctx, &tg.MessagesDeleteChatUserRequest{
+			ChatID: id,
+			UserID: &tg.InputUserSelf{},
+		})
 		if err != nil {
-			return err
+			return tc.humaniseSendError(err)
 		}
-		if !result {
-			return fmt.Errorf("failed to delete chat %d", id)
-		}
-		return nil
+		_, err = tc.client.API().MessagesDeleteHistory(ctx, &tg.MessagesDeleteHistoryRequest{
+			Peer: &tg.InputPeerChat{ChatID: id},
+		})
+		return err
 	case ids.PeerTypeChannel:
-		if !chat.Content.DeleteForEveryone {
-			return fmt.Errorf("channels can only be deleted for everyone or left")
-		}
 		accessHash, err := tc.ScopedStore.GetAccessHash(ctx, peerType, id)
 		if err != nil {
 			return err
 		}
 		if topicID > 0 {
+			if !chat.Content.DeleteForEveryone {
+				return fmt.Errorf("topics can only be deleted for everyone")
+			}
 			_, err = tc.client.API().MessagesDeleteTopicHistory(ctx, &tg.MessagesDeleteTopicHistoryRequest{
 				Peer: &tg.InputPeerChannel{
 					ChannelID:  id,
@@ -1273,16 +1282,18 @@ func (tc *TelegramClient) HandleMatrixDeleteChat(ctx context.Context, chat *brid
 				},
 				TopMsgID: topicID,
 			})
-		} else {
-			_, err = tc.client.API().ChannelsDeleteChannel(ctx, &tg.InputChannel{
-				ChannelID:  id,
-				AccessHash: accessHash,
-			})
-		}
-		if err != nil {
 			return err
 		}
-		return nil
+		inputChannel := &tg.InputChannel{ChannelID: id, AccessHash: accessHash}
+		if chat.Content.DeleteForEveryone {
+			_, err = tc.client.API().ChannelsDeleteChannel(ctx, inputChannel)
+			if !tgerr.Is(err, tg.ErrChatAdminRequired) {
+				return err
+			}
+			zerolog.Ctx(ctx).Debug().Msg("Not allowed to delete channel for everyone, leaving instead")
+		}
+		_, err = tc.client.API().ChannelsLeaveChannel(ctx, inputChannel)
+		return tc.humaniseSendError(err)
 	default:
 		return fmt.Errorf("unknown peer type %s", peerType)
 	}
