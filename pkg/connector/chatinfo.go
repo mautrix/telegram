@@ -643,6 +643,11 @@ func (tc *TelegramClient) getDMPowerLevels() *bridgev2.PowerLevelOverrides {
 		event.StateBeeperDisappearingTimer: 0,
 		event.BeeperDeleteChat:             0,
 	}
+	// Telegram lets either side of a private chat delete any message for
+	// both participants, and HandleMatrixMessageRemove already revokes with
+	// Revoke: true, but the default redact level (50) blocked redacting the
+	// other person's messages from Matrix.
+	plo.Redact = anyonePowerLevel
 	return &plo
 }
 
