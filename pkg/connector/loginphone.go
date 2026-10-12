@@ -88,17 +88,32 @@ func (pl *PhoneLogin) SubmitUserInput(ctx context.Context, input map[string]stri
 	}
 }
 
-var phoneLoginStep = &bridgev2.LoginStep{
-	Type:   bridgev2.LoginStepTypeUserInput,
-	StepID: LoginStepIDCode,
-	UserInputParams: &bridgev2.LoginUserInputParams{
-		Fields: []bridgev2.LoginInputDataField{{
-			Type:        bridgev2.LoginInputFieldType2FACode,
-			ID:          LoginStepIDCode,
-			Name:        "Code",
-			Description: "The code was sent to the Telegram app on your phone",
-		}},
-	},
+func phoneCodeStep(codeType tg.AuthSentCodeTypeClass) (*bridgev2.LoginStep, error) {
+	description := "The code was sent to the Telegram app on your phone"
+	switch typedCodeType := codeType.(type) {
+	case *tg.AuthSentCodeTypeSMS, *tg.AuthSentCodeTypeSMSWord, *tg.AuthSentCodeTypeSMSPhrase:
+		description = "The code was sent to your phone via SMS"
+	case *tg.AuthSentCodeTypeCall:
+		description = "The code will be read to you in a phone call"
+	case *tg.AuthSentCodeTypeEmailCode:
+		description = fmt.Sprintf("The code was sent to your email (%s)", typedCodeType.EmailPattern)
+	case *tg.AuthSentCodeTypeFragmentSMS:
+		description = fmt.Sprintf("The code was sent to your Fragment account (%s)", typedCodeType.URL)
+	case *tg.AuthSentCodeTypeSetUpEmailRequired:
+		return nil, ErrLoginEmailRequired
+	}
+	return &bridgev2.LoginStep{
+		Type:   bridgev2.LoginStepTypeUserInput,
+		StepID: LoginStepIDCode,
+		UserInputParams: &bridgev2.LoginUserInputParams{
+			Fields: []bridgev2.LoginInputDataField{{
+				Type:        bridgev2.LoginInputFieldType2FACode,
+				ID:          LoginStepIDCode,
+				Name:        "Code",
+				Description: description,
+			}},
+		},
+	}, nil
 }
 
 var phoneCodeIncorrectStep = &bridgev2.LoginStep{
@@ -133,7 +148,12 @@ func (pl *PhoneLogin) submitNumber(ctx context.Context, phone string) (*bridgev2
 	switch s := sentCode.(type) {
 	case *tg.AuthSentCode:
 		pl.hash = s.PhoneCodeHash
-		return phoneLoginStep, nil
+		log.Debug().
+			Type("code_type", s.Type).
+			Type("next_type", s.NextType).
+			Int("timeout", s.Timeout).
+			Msg("Login code sent")
+		return phoneCodeStep(s.Type)
 	case *tg.AuthSentCodeSuccess:
 		switch authorization := s.Authorization.(type) {
 		case *tg.AuthAuthorization:
