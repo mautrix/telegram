@@ -670,6 +670,7 @@ func (tc *TelegramClient) handleServiceMessage(ctx context.Context, msg *tg.Mess
 			Int64("channel_id", action.ChannelID).
 			Msg("MessageActionChatMigrateTo")
 		newPortalKey := tc.makePortalKeyFromID(ids.PeerTypeChannel, action.ChannelID, 0)
+		tc.chatMigrateSender.Set(action.ChannelID, sender)
 		if err := tc.migrateChat(ctx, eventMeta.PortalKey, newPortalKey); err != nil {
 			log.Err(err).Msg("Failed to migrate chat to channel")
 			return err
@@ -680,6 +681,15 @@ func (tc *TelegramClient) handleServiceMessage(ctx context.Context, msg *tg.Mess
 		oldPortalKey := tc.makePortalKeyFromID(ids.PeerTypeChat, action.ChatID, 0)
 		if err := tc.migrateChat(ctx, oldPortalKey, eventMeta.PortalKey); err != nil {
 			return err
+		}
+		// We want the message id of MigrateFrom with the sender of MigrateTo,
+		// because MigrateFrom has no sender and MigrateTo has a message ID in the old scope.
+		ch, ok := msg.PeerID.(*tg.PeerChannel)
+		if ok {
+			senderOverride, ok := tc.chatMigrateSender.Pop(ch.ChannelID)
+			if ok {
+				eventMeta = eventMeta.WithSender(senderOverride)
+			}
 		}
 		res := tc.main.Bridge.QueueRemoteEvent(tc.userLogin, &simplevent.Message[any]{
 			EventMeta: eventMeta.
@@ -692,6 +702,10 @@ func (tc *TelegramClient) handleServiceMessage(ctx context.Context, msg *tg.Mess
 						Content: &event.MessageEventContent{
 							MsgType: event.MsgNotice,
 							Body:    "Upgraded this group to a supergroup",
+
+							BeeperActionMessage: &event.BeeperActionMessage{
+								Type: "telegram_supergroup_upgrade",
+							},
 						},
 					}},
 				}, nil

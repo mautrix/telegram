@@ -114,6 +114,8 @@ func MakePaginationCursorID(messageID int) networkid.PaginationCursor {
 func ParseMessageID(networkID networkid.MessageID) (channelID int64, messageID int, err error) {
 	if strings.HasPrefix(string(networkID), "migrated:") {
 		return 0, 0, fmt.Errorf("message ID is migrated from pre-supergroup chat")
+	} else if strings.HasPrefix(string(networkID), "call:") {
+		return 0, 0, fmt.Errorf("message ID is a call log message")
 	}
 	parts := strings.Split(string(networkID), ".")
 	if len(parts) == 1 {
