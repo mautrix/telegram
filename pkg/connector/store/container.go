@@ -21,6 +21,7 @@ import (
 
 	"go.mau.fi/util/dbutil"
 	"go.mau.fi/util/exsync"
+	"maunium.net/go/mautrix/bridgev2/networkid"
 
 	"go.mau.fi/mautrix-telegram/pkg/connector/store/upgrades"
 )
@@ -51,4 +52,16 @@ func (c *Container) Upgrade(ctx context.Context) error {
 
 func (c *Container) GetScopedStore(telegramUserID int64) *ScopedStore {
 	return &ScopedStore{c.Database, telegramUserID}
+}
+
+func (c *Container) NamespaceMigratedMessages(ctx context.Context, bridgeID networkid.BridgeID, portalKey networkid.PortalKey) (int64, error) {
+	res, err := c.Exec(
+		ctx,
+		upgrades.NamespaceMigratedMessagesQuery+` AND bridge_id=$2 AND room_id=$3 AND room_receiver=$4`,
+		portalKey.Receiver, bridgeID, portalKey.ID, portalKey.Receiver,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return res.RowsAffected()
 }

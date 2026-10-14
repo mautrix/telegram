@@ -48,6 +48,10 @@ func (tc *TelegramConnector) Start(ctx context.Context) error {
 	return tc.Store.Upgrade(ctx)
 }
 
+func (tc *TelegramConnector) PreSplitPortalMigrate(ctx context.Context) error {
+	return tc.Store.Upgrade(ctx)
+}
+
 func (tc *TelegramConnector) LoadUserLogin(ctx context.Context, login *bridgev2.UserLogin) (err error) {
 	login.Client, err = NewTelegramClient(ctx, tc, login)
 	return

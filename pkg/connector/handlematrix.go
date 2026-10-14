@@ -495,10 +495,11 @@ func (tc *TelegramClient) HandleMatrixMessage(ctx context.Context, msg *bridgev2
 	if msg.ReplyTo != nil {
 		_, messageID, err := ids.ParseMessageID(msg.ReplyTo.ID)
 		if err != nil {
-			log.Warn().Msg("failed to parse replied-to message ID")
-			return nil, err
+			log.Warn().Err(err).Str("reply_to_id", string(msg.ReplyTo.ID)).
+				Msg("failed to parse replied-to message ID")
+		} else {
+			replyTo = &tg.InputReplyToMessage{ReplyToMsgID: messageID}
 		}
-		replyTo = &tg.InputReplyToMessage{ReplyToMsgID: messageID}
 	}
 	if topicID > 0 {
 		if replyTo == nil {

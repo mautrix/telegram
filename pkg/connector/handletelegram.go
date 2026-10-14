@@ -670,14 +670,29 @@ func (tc *TelegramClient) handleServiceMessage(ctx context.Context, msg *tg.Mess
 			Int64("channel_id", action.ChannelID).
 			Msg("MessageActionChatMigrateTo")
 		newPortalKey := tc.makePortalKeyFromID(ids.PeerTypeChannel, action.ChannelID, 0)
+		tc.chatMigrateSender.Set(action.ChannelID, sender)
 		if err := tc.migrateChat(ctx, eventMeta.PortalKey, newPortalKey); err != nil {
 			log.Err(err).Msg("Failed to migrate chat to channel")
 			return err
 		}
+		return nil
+
+	case *tg.MessageActionChannelMigrateFrom:
+		oldPortalKey := tc.makePortalKeyFromID(ids.PeerTypeChat, action.ChatID, 0)
+		if err := tc.migrateChat(ctx, oldPortalKey, eventMeta.PortalKey); err != nil {
+			return err
+		}
+		// We want the message id of MigrateFrom with the sender of MigrateTo,
+		// because MigrateFrom has no sender and MigrateTo has a message ID in the old scope.
+		ch, ok := msg.PeerID.(*tg.PeerChannel)
+		if ok {
+			senderOverride, ok := tc.chatMigrateSender.Pop(ch.ChannelID)
+			if ok {
+				eventMeta = eventMeta.WithSender(senderOverride)
+			}
+		}
 		res := tc.main.Bridge.QueueRemoteEvent(tc.userLogin, &simplevent.Message[any]{
 			EventMeta: eventMeta.
-				WithPortalKey(newPortalKey).
-				WithStreamOrder(0).
 				WithType(bridgev2.RemoteEventMessage),
 			ID: ids.GetMessageIDFromMessage(msg),
 			ConvertMessageFunc: func(ctx context.Context, portal *bridgev2.Portal, intent bridgev2.MatrixAPI, data any) (*bridgev2.ConvertedMessage, error) {
@@ -687,6 +702,10 @@ func (tc *TelegramClient) handleServiceMessage(ctx context.Context, msg *tg.Mess
 						Content: &event.MessageEventContent{
 							MsgType: event.MsgNotice,
 							Body:    "Upgraded this group to a supergroup",
+
+							BeeperActionMessage: &event.BeeperActionMessage{
+								Type: "telegram_supergroup_upgrade",
+							},
 						},
 					}},
 				}, nil
@@ -727,6 +746,16 @@ func (tc *TelegramClient) handleServiceMessage(ctx context.Context, msg *tg.Mess
 }
 
 func (tc *TelegramClient) migrateChat(ctx context.Context, oldPortalKey, newPortalKey networkid.PortalKey) error {
+	if affected, err := tc.main.Store.NamespaceMigratedMessages(ctx, tc.main.Bridge.ID, oldPortalKey); err != nil {
+		return fmt.Errorf("failed to namespace pre-migration messages: %w", err)
+	} else if affected > 0 {
+		zerolog.Ctx(ctx).Debug().
+			Stringer("old_portal_key", oldPortalKey).
+			Stringer("new_portal_key", newPortalKey).
+			Int64("affected_messages", affected).
+			Msg("Namespaced messages from pre-migration minigroup")
+	}
+
 	if tc.main.Config.AlwaysTombstoneOnSupergroupMigration {
 		newPortal, err := tc.main.Bridge.GetPortalByKey(ctx, newPortalKey)
 		if err != nil {
@@ -1689,7 +1718,7 @@ func (tc *TelegramClient) onPhoneCall(ctx context.Context, e tg.Entities, update
 				return c.Str("tg_event", "updatePhoneCall")
 			},
 		},
-		ID: networkid.MessageID(fmt.Sprintf("requested-%d", call.ID)),
+		ID: networkid.MessageID(fmt.Sprintf("call:requested-%d", call.ID)),
 		ConvertMessageFunc: func(ctx context.Context, portal *bridgev2.Portal, intent bridgev2.MatrixAPI, data any) (*bridgev2.ConvertedMessage, error) {
 			return &bridgev2.ConvertedMessage{
 				Parts: []*bridgev2.ConvertedMessagePart{

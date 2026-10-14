@@ -265,12 +265,15 @@ func (tc *TelegramClient) pollForReactions(ctx context.Context, portalKey networ
 		return err
 	}
 
-	messageIDs := make([]int, len(messages))
-	for i, msg := range messages {
-		_, messageIDs[i], err = ids.ParseMessageID(msg.ID)
-		if err != nil {
-			return err
+	messageIDs := make([]int, 0, len(messages))
+	for _, msg := range messages {
+		_, msgID, _ := ids.ParseMessageID(msg.ID)
+		if msgID != 0 {
+			messageIDs = append(messageIDs, msgID)
 		}
+	}
+	if len(messageIDs) == 0 {
+		return nil
 	}
 
 	updates, err := APICallWithUpdates(ctx, tc, func() (*tg.Updates, error) {
