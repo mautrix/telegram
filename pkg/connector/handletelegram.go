@@ -674,10 +674,15 @@ func (tc *TelegramClient) handleServiceMessage(ctx context.Context, msg *tg.Mess
 			log.Err(err).Msg("Failed to migrate chat to channel")
 			return err
 		}
+		return nil
+
+	case *tg.MessageActionChannelMigrateFrom:
+		oldPortalKey := tc.makePortalKeyFromID(ids.PeerTypeChat, action.ChatID, 0)
+		if err := tc.migrateChat(ctx, oldPortalKey, eventMeta.PortalKey); err != nil {
+			return err
+		}
 		res := tc.main.Bridge.QueueRemoteEvent(tc.userLogin, &simplevent.Message[any]{
 			EventMeta: eventMeta.
-				WithPortalKey(newPortalKey).
-				WithStreamOrder(0).
 				WithType(bridgev2.RemoteEventMessage),
 			ID: ids.GetMessageIDFromMessage(msg),
 			ConvertMessageFunc: func(ctx context.Context, portal *bridgev2.Portal, intent bridgev2.MatrixAPI, data any) (*bridgev2.ConvertedMessage, error) {
@@ -727,6 +732,16 @@ func (tc *TelegramClient) handleServiceMessage(ctx context.Context, msg *tg.Mess
 }
 
 func (tc *TelegramClient) migrateChat(ctx context.Context, oldPortalKey, newPortalKey networkid.PortalKey) error {
+	if affected, err := tc.main.Store.NamespaceMigratedMessages(ctx, tc.main.Bridge.ID, oldPortalKey); err != nil {
+		return fmt.Errorf("failed to namespace pre-migration messages: %w", err)
+	} else if affected > 0 {
+		zerolog.Ctx(ctx).Debug().
+			Stringer("old_portal_key", oldPortalKey).
+			Stringer("new_portal_key", newPortalKey).
+			Int64("affected_messages", affected).
+			Msg("Namespaced messages from pre-migration minigroup")
+	}
+
 	if tc.main.Config.AlwaysTombstoneOnSupergroupMigration {
 		newPortal, err := tc.main.Bridge.GetPortalByKey(ctx, newPortalKey)
 		if err != nil {
@@ -1689,7 +1704,7 @@ func (tc *TelegramClient) onPhoneCall(ctx context.Context, e tg.Entities, update
 				return c.Str("tg_event", "updatePhoneCall")
 			},
 		},
-		ID: networkid.MessageID(fmt.Sprintf("requested-%d", call.ID)),
+		ID: networkid.MessageID(fmt.Sprintf("call:requested-%d", call.ID)),
 		ConvertMessageFunc: func(ctx context.Context, portal *bridgev2.Portal, intent bridgev2.MatrixAPI, data any) (*bridgev2.ConvertedMessage, error) {
 			return &bridgev2.ConvertedMessage{
 				Parts: []*bridgev2.ConvertedMessagePart{

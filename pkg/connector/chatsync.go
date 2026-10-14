@@ -282,6 +282,27 @@ func (tc *TelegramClient) handleDialogs(
 	return nil
 }
 
+func (tc *TelegramClient) checkDialogMigrated(ctx context.Context, dialog *tg.Dialog, chats map[int64]tg.ChatClass) (bool, error) {
+	peer, ok := dialog.Peer.(*tg.PeerChat)
+	if !ok {
+		return false, nil
+	}
+	chat, ok := chats[peer.ChatID].(*tg.Chat)
+	if !ok {
+		return false, nil
+	}
+	channel, ok := chat.MigratedTo.(*tg.InputChannel)
+	if !ok {
+		return false, nil
+	}
+	zerolog.Ctx(ctx).Debug().Msg("Found migrated chat in dialog list, migrating portal and skipping sync")
+	return true, tc.migrateChat(
+		ctx,
+		tc.makePortalKeyFromID(ids.PeerTypeChat, peer.ChatID, 0),
+		tc.makePortalKeyFromID(ids.PeerTypeChannel, channel.ChannelID, 0),
+	)
+}
+
 func (tc *TelegramClient) syncNormalDialog(
 	ctx context.Context, dialog *tg.Dialog, allowCreate bool,
 	users map[int64]tg.UserClass,
@@ -292,7 +313,14 @@ func (tc *TelegramClient) syncNormalDialog(
 		Stringer("peer", dialog.Peer).
 		Int("top_message", dialog.TopMessage).
 		Logger()
+	ctx = log.WithContext(ctx)
 	log.Debug().Msg("Syncing dialog")
+
+	if migrated, err := tc.checkDialogMigrated(ctx, dialog, chats); err != nil {
+		return fmt.Errorf("failed to migrate chat from dialogs: %w", err)
+	} else if migrated {
+		return nil
+	}
 
 	portalKey := tc.makePortalKeyFromPeer(dialog.GetPeer(), 0)
 	portal, err := tc.main.Bridge.GetPortalByKey(ctx, portalKey)
@@ -371,9 +399,9 @@ func (tc *TelegramClient) syncNormalDialog(
 		}
 	}
 
+	topMessage := messages[ids.MakeMessageID(dialog.Peer, dialog.TopMessage)]
 	if portal.MXID == "" {
 		// Check what the latest message is
-		topMessage := messages[ids.MakeMessageID(dialog.Peer, dialog.TopMessage)]
 		if topMessage == nil {
 			if dialog.TopMessage == 0 {
 				log.Debug().Msg("Not syncing portal because there are no messages")
@@ -411,7 +439,15 @@ func (tc *TelegramClient) syncNormalDialog(
 			}
 			_, latestMessageID, err := ids.ParseMessageID(latestMessage.ID)
 			if err != nil {
-				panic(err)
+				// The latest bridged message is a call log or pre-supergroup-migration message
+				if topMessage == nil {
+					return false, nil
+				}
+				serviceMsg, ok := topMessage.(*tg.MessageService)
+				if ok && serviceMsg.Action.TypeID() == tg.MessageActionChannelMigrateFromTypeID {
+					return false, nil
+				}
+				return true, nil
 			}
 			return dialog.TopMessage > latestMessageID, nil
 		},

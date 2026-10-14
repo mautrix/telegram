@@ -28,4 +28,5 @@ var rawUpgrades embed.FS
 var Table = dbutil.BuildUpgradeTable().
 	WithFS(rawUpgrades).
 	With(upgradeV9).
+	With(upgradeV10).
 	Finish()
