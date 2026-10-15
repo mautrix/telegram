@@ -251,8 +251,10 @@ func (tc *TelegramClient) convertToMatrix(
 		cm.Parts[0].Content.AddPerMessageProfileFallback()
 	}
 	var botButtons BotButtons
+	var botKeyboardHidden bool
 	if tc.main.Config.BotButtons.Enabled && cm.Parts[0].Type == event.EventMessage {
 		botButtons = convertReplyMarkup(msg.ReplyMarkup)
+		_, botKeyboardHidden = msg.ReplyMarkup.(*tg.ReplyKeyboardHide)
 		if len(botButtons) > 0 {
 			hasher.Write(botButtons.hashData())
 		}
@@ -262,6 +264,8 @@ func (tc *TelegramClient) convertToMatrix(
 		ContentURI:  contentURI,
 		ViewLimited: cm.Parts[0].Content.BeeperViewLimited,
 		BotButtons:  botButtons,
+
+		BotKeyboardHidden: botKeyboardHidden,
 	}
 
 	if fwd, isForwarded := msg.GetFwdFrom(); isForwarded {

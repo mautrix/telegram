@@ -157,3 +157,44 @@ func TestBotButtons_HasKeyboardButtons(t *testing.T) {
 	assert.False(t, BotButtons{{{Type: BotButtonCallback}}}.hasKeyboardButtons())
 	assert.True(t, BotButtons{{{Type: BotButtonUnsupported}}, {{Type: BotButtonText}}}.hasKeyboardButtons())
 }
+
+func TestFindActiveBotButtons(t *testing.T) {
+	const me, bot = networkid.UserID("me"), networkid.UserID("bot")
+	keyboard := BotButtons{{{Type: BotButtonText, Text: "Menu"}}}
+	inline := BotButtons{{{Type: BotButtonCallback, Text: "Yes"}}}
+	msg := func(sender networkid.UserID, meta *MessageMetadata) *database.Message {
+		return &database.Message{SenderID: sender, Metadata: meta}
+	}
+	tests := []struct {
+		name     string
+		recent   []*database.Message
+		expected int
+	}{
+		{"latest inline", []*database.Message{
+			msg(me, &MessageMetadata{}), msg(bot, &MessageMetadata{BotButtons: inline}),
+		}, 1},
+		{"old inline", []*database.Message{
+			msg(bot, &MessageMetadata{}), msg(bot, &MessageMetadata{BotButtons: inline}),
+		}, -1},
+		{"old keyboard", []*database.Message{
+			msg(bot, &MessageMetadata{}), msg(me, &MessageMetadata{}), msg(bot, &MessageMetadata{BotButtons: keyboard}),
+		}, 2},
+		{"newer keyboard wins", []*database.Message{
+			msg(bot, &MessageMetadata{}), msg(bot, &MessageMetadata{BotButtons: keyboard}), msg(bot, &MessageMetadata{BotButtons: keyboard}),
+		}, 1},
+		{"hidden keyboard", []*database.Message{
+			msg(bot, &MessageMetadata{}), msg(bot, &MessageMetadata{BotKeyboardHidden: true}), msg(bot, &MessageMetadata{BotButtons: keyboard}),
+		}, -1},
+		{"no buttons", []*database.Message{msg(bot, &MessageMetadata{}), msg(me, &MessageMetadata{})}, -1},
+	}
+	for _, test := range tests {
+		buttons, target := findActiveBotButtons(test.recent, me)
+		if test.expected < 0 {
+			assert.Nil(t, buttons, test.name)
+			assert.Nil(t, target, test.name)
+		} else {
+			assert.Equal(t, test.recent[test.expected], target, test.name)
+			assert.Equal(t, test.recent[test.expected].Metadata.(*MessageMetadata).BotButtons, buttons, test.name)
+		}
+	}
+}

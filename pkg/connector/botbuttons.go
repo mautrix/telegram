@@ -27,6 +27,7 @@ import (
 	"github.com/rs/zerolog"
 	"maunium.net/go/mautrix/bridgev2"
 	"maunium.net/go/mautrix/bridgev2/database"
+	"maunium.net/go/mautrix/bridgev2/networkid"
 	"maunium.net/go/mautrix/event"
 
 	"go.mau.fi/mautrix-telegram/pkg/connector/ids"
@@ -228,16 +229,25 @@ func (tc *TelegramClient) findBotButtonPress(ctx context.Context, msg *bridgev2.
 		zerolog.Ctx(ctx).Err(err).Msg("Failed to get recent messages to find bot buttons")
 		return nil, nil
 	}
+	buttons, target := findActiveBotButtons(recent, tc.userID)
+	return buttons.Get(number), target
+}
+
+// findActiveBotButtons finds the buttons that are currently usable in a chat
+// from its recent messages (newest first). Inline buttons can only be pressed
+// on the latest message from the bot, while reply keyboards stay active until
+// the bot replaces or hides them.
+func findActiveBotButtons(recent []*database.Message, ownUserID networkid.UserID) (BotButtons, *database.Message) {
 	isLatest := true
 	for _, dbMsg := range recent {
 		meta, ok := dbMsg.Metadata.(*MessageMetadata)
-		if !ok || dbMsg.SenderID == tc.userID {
+		if !ok || dbMsg.SenderID == ownUserID {
 			continue
 		}
-		// Inline buttons can only be pressed on the latest message from the bot,
-		// while reply keyboards stay active until the bot replaces them.
 		if (isLatest && len(meta.BotButtons) > 0) || meta.BotButtons.hasKeyboardButtons() {
-			return meta.BotButtons.Get(number), dbMsg
+			return meta.BotButtons, dbMsg
+		} else if meta.BotKeyboardHidden {
+			return nil, nil
 		}
 		isLatest = false
 	}
