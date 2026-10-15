@@ -55,6 +55,11 @@ type DeviceInfo struct {
 	LangCode       string `yaml:"lang_code"`
 }
 
+type BotButtonsConfig struct {
+	Enabled      bool `yaml:"enabled"`
+	PlainNumbers bool `yaml:"plain_numbers"`
+}
+
 type ProxyConfig struct {
 	Type     string `yaml:"type"`
 	Address  string `yaml:"address"`
@@ -100,6 +105,7 @@ type TelegramConfig struct {
 	DisableViewOnce                      bool                `yaml:"disable_view_once"`
 	VideoURLPreviewAsFile                bool                `yaml:"video_url_preview_as_file"`
 	BridgeCommunities                    bool                `yaml:"bridge_communities"`
+	BotButtons                           BotButtonsConfig    `yaml:"bot_buttons"`
 	DisplaynameTemplate                  string              `yaml:"displayname_template"`
 	displaynameTemplate                  *template.Template  `yaml:"-"`
 }
@@ -193,6 +199,8 @@ func upgradeConfig(helper up.Helper) {
 	helper.Copy(up.Bool, "disable_view_once")
 	helper.Copy(up.Bool, "video_url_preview_as_file")
 	helper.Copy(up.Bool, "bridge_communities")
+	helper.Copy(up.Bool, "bot_buttons", "enabled")
+	helper.Copy(up.Bool, "bot_buttons", "plain_numbers")
 	helper.Copy(up.Str, "displayname_template")
 }
 
@@ -207,6 +215,7 @@ func (tc *TelegramConnector) GetConfig() (example string, data any, upgrader up.
 			{"proxy"},
 			{"sync"},
 			{"takeout"},
+			{"bot_buttons"},
 			{"max_member_count"},
 		},
 		Base: ExampleConfig,
