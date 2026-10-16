@@ -1,6 +1,6 @@
 # v26.10
 
-* Removd legacy migration. Upgrading from the Python bridge directly to v26.10
+* Removed legacy migration. Upgrading from the Python bridge directly to v26.10
   is not supported, you have to run an older version (v26.04 - v26.09) first.
 * Added support for blocking and unblocking users on Telegram.
 * Added support for new view-limited media interface in bridgev2.
