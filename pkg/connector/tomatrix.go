@@ -250,10 +250,22 @@ func (tc *TelegramClient) convertToMatrix(
 		cm.Parts[0].Content.BeeperPerMessageProfile = perMessageProfile
 		cm.Parts[0].Content.AddPerMessageProfileFallback()
 	}
+	var botButtons BotButtons
+	var botKeyboardHidden bool
+	if tc.main.Config.BotButtons.Enabled && cm.Parts[0].Type == event.EventMessage {
+		botButtons = convertReplyMarkup(msg.ReplyMarkup)
+		_, botKeyboardHidden = msg.ReplyMarkup.(*tg.ReplyKeyboardHide)
+		if len(botButtons) > 0 {
+			hasher.Write(botButtons.hashData())
+		}
+	}
 	cm.Parts[0].DBMetadata = &MessageMetadata{
 		ContentHash: hasher.Sum(nil),
 		ContentURI:  contentURI,
 		ViewLimited: cm.Parts[0].Content.BeeperViewLimited,
+		BotButtons:  botButtons,
+
+		BotKeyboardHidden: botKeyboardHidden,
 	}
 
 	if fwd, isForwarded := msg.GetFwdFrom(); isForwarded {
@@ -288,6 +300,9 @@ func (tc *TelegramClient) convertToMatrix(
 		default:
 			log.Warn().Type("reply_to", replyTo).Msg("unhandled reply to type")
 		}
+	}
+	if len(botButtons) > 0 {
+		botButtons.addToContent(cm.Parts[0].Content)
 	}
 	if cm.Parts[0].Extra == nil {
 		cm.Parts[0].Extra = make(map[string]any)
