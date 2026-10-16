@@ -1,3 +1,20 @@
+# v26.10
+
+* Removd legacy migration. Upgrading from the Python bridge directly to v26.10
+  is not supported, you have to run an older version (v26.04 - v26.09) first.
+* Added support for blocking and unblocking users on Telegram.
+* Added support for new view-limited media interface in bridgev2.
+* Changed login flow to tell where the login code was sent.
+* Changed power levels to allow both parties in DMs to redact messages, which
+  matches what Telegram allows.
+* Fixed minigroups sometimes being bridged even after they're upgraded to a
+  supergroup.
+* Fixed startup chat sync treating permission restrictions as the user having
+  left the chat.
+* Fixed connection deadlock if a media download is retried after a DC transfer.
+* Fixed chat sync failing if fetching the chat info for an individual chat got
+  a flood wait.
+
 # v26.09
 
 * Bumped minimum Go version to 1.26.
