@@ -97,6 +97,7 @@ type TelegramClient struct {
 	availableReactionsFetched time.Time
 	availableReactionsList    []string
 	isPremiumCache            atomic.Bool
+	reactionCapsStale         atomic.Bool
 
 	recentMessageRooms *exsync.RingBuffer[networkid.MessageID, networkid.PortalKey]
 	chatMigrateSender  *exsync.Map[int64, bridgev2.EventSender]
@@ -530,6 +531,9 @@ func (tc *TelegramClient) runInBackground(ctx context.Context) {
 	log := zerolog.Ctx(ctx)
 	err := tc.client.Run(ctx, func(ctx context.Context) error {
 		tc.clientInitialized.Set()
+		if tc.reactionCapsStale.CompareAndSwap(true, false) {
+			go tc.resendCapabilities(ctx)
+		}
 		// If takeout dialog sync is enabled, we assume it'll resume from a getTakeoutID call.
 		// If not, resume dialog sync manually here.
 		if !tc.isNewLogin && !tc.main.Config.Takeout.DialogSync && !tc.metadata.IsBot {
