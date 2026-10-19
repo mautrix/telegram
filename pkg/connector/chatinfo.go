@@ -686,6 +686,8 @@ func (tc *TelegramClient) getPowerLevelOverridesFromBannedRights(entity tg.ChatC
 		event.StateHistoryVisibility:       85,
 		event.StateBeeperDisappearingTimer: 85,
 		event.BeeperDeleteChat:             *creatorPowerLevel,
+		// Telegram already enforces who can post, so never let Matrix power levels drop bridged messages
+		event.EventEncrypted: *anyonePowerLevel,
 	}
 
 	if _, isCommunity := entity.(*tg.Community); isCommunity {
