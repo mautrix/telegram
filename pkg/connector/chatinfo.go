@@ -313,6 +313,18 @@ func (tc *TelegramClient) fillChannelMembers(ctx context.Context, mfm *memberFet
 			remaining -= len(participants.Participants)
 		}
 	}
+
+	admins, err := tc.getChannelParticipants(ctx, &tg.ChannelsGetParticipantsRequest{
+		Channel: mfm.Input,
+		Filter:  &tg.ChannelParticipantsAdmins{},
+		Limit:   100,
+	})
+	if err != nil || admins == nil {
+		return err
+	}
+	for participant := range tc.filterChannelParticipants(admins.Participants, len(admins.Participants)) {
+		info.MemberMap.Set(participant)
+	}
 	return nil
 }
 
