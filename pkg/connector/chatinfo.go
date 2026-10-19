@@ -314,6 +314,9 @@ func (tc *TelegramClient) fillChannelMembers(ctx context.Context, mfm *memberFet
 		}
 	}
 
+	if info.IsFull {
+		return nil
+	}
 	admins, err := tc.getChannelParticipants(ctx, &tg.ChannelsGetParticipantsRequest{
 		Channel: mfm.Input,
 		Filter:  &tg.ChannelParticipantsAdmins{},
