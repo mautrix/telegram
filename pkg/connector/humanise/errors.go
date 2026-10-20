@@ -1,11 +1,21 @@
 package humanise
 
-import "go.mau.fi/mautrix-telegram/pkg/gotd/tgerr"
+import (
+	"fmt"
+
+	"go.mau.fi/mautrix-telegram/pkg/gotd/tgerr"
+)
 
 func Error(err error) string {
+	rpcErr, ok := tgerr.As(err)
+	if !ok {
+		return err.Error()
+	} else if rpcErr.Code >= 500 || rpcErr.Code < 0 {
+		return "Telegram is having internal issues, please try again later."
+	}
 	switch {
-	case tgerr.Is(err, "2FA_CONFIRM_WAIT_X"):
-		return "The account is 2FA protected so it will be deleted in a week. Otherwise it can be reset in {seconds}"
+	case tgerr.Is(err, "2FA_CONFIRM_WAIT"):
+		return fmt.Sprintf("The account is 2FA protected so it will be deleted in a week. Otherwise it can be reset in %d", rpcErr.Argument)
 	case tgerr.Is(err, "ABOUT_TOO_LONG"):
 		return "The provided bio is too long"
 	case tgerr.Is(err, "ACCESS_TOKEN_EXPIRED"):
@@ -270,8 +280,8 @@ func Error(err error) string {
 		return "The given email is invalid"
 	case tgerr.Is(err, "EMAIL_UNCONFIRMED"):
 		return "Email unconfirmed"
-	case tgerr.Is(err, "EMAIL_UNCONFIRMED_X"):
-		return "Email unconfirmed, the length of the code must be {code_length}"
+	case tgerr.Is(err, "EMAIL_UNCONFIRMED"):
+		return fmt.Sprintf("Email unconfirmed, the length of the code must be %d", rpcErr.Argument)
 	case tgerr.Is(err, "EMAIL_VERIFY_EXPIRED"):
 		return "The verification email has expired"
 	case tgerr.Is(err, "EMOJI_INVALID"):
@@ -324,8 +334,8 @@ func Error(err error) string {
 		return "An empty file was provided"
 	case tgerr.Is(err, "FILE_ID_INVALID"):
 		return "The provided file id is invalid. Make sure all parameters are present, have the correct type and are not empty (ID, access hash, file reference, thumb size ...)"
-	case tgerr.Is(err, "FILE_MIGRATE_X"):
-		return "The file to be accessed is currently stored in DC {new_dc}"
+	case tgerr.Is(err, "FILE_MIGRATE"):
+		return fmt.Sprintf("The file to be accessed is currently stored in DC %d", rpcErr.Argument)
 	case tgerr.Is(err, "FILE_PARTS_INVALID"):
 		return "The number of file parts is invalid"
 	case tgerr.Is(err, "FILE_PART_0_MISSING"):
@@ -342,8 +352,8 @@ func Error(err error) string {
 		return "The provided file part size is invalid"
 	case tgerr.Is(err, "FILE_PART_TOO_BIG"):
 		return "The uploaded file part is too big"
-	case tgerr.Is(err, "FILE_PART_X_MISSING"):
-		return "Part {which} of the file is missing from storage"
+	case tgerr.Is(err, "FILE_PART_MISSING"):
+		return fmt.Sprintf("Part %d of the file is missing from storage", rpcErr.Argument)
 	case tgerr.Is(err, "FILE_REFERENCE_EMPTY"):
 		return "The file reference must exist to access the media and it cannot be empty"
 	case tgerr.Is(err, "FILE_REFERENCE_EXPIRED"):
@@ -362,12 +372,12 @@ func Error(err error) string {
 		return "The title field of the filter is empty"
 	case tgerr.Is(err, "FIRSTNAME_INVALID"):
 		return "The first name is invalid"
-	case tgerr.Is(err, "FLOOD_TEST_PHONE_WAIT_X"):
-		return "A wait of {seconds} seconds is required in the test servers"
-	case tgerr.Is(err, "FLOOD_WAIT_X"):
-		return "A wait of {seconds} seconds is required"
-	case tgerr.Is(err, "FLOOD_PREMIUM_WAIT_X"):
-		return "A wait of {seconds} seconds is required in non-premium accounts"
+	case tgerr.Is(err, "FLOOD_TEST_PHONE_WAIT"):
+		return fmt.Sprintf("A wait of %d seconds is required in the test servers", rpcErr.Argument)
+	case tgerr.Is(err, "FLOOD_WAIT"):
+		return fmt.Sprintf("A wait of %d seconds is required", rpcErr.Argument)
+	case tgerr.Is(err, "FLOOD_PREMIUM_WAIT"):
+		return fmt.Sprintf("A wait of %d seconds is required in non-premium accounts", rpcErr.Argument)
 	case tgerr.Is(err, "FOLDER_ID_EMPTY"):
 		return "The folder you tried to delete was already empty"
 	case tgerr.Is(err, "FOLDER_ID_INVALID"):
@@ -452,10 +462,10 @@ func Error(err error) string {
 		return "The specified text is empty"
 	case tgerr.Is(err, "INPUT_USER_DEACTIVATED"):
 		return "The specified user was deleted"
-	case tgerr.Is(err, "INTERDC_X_CALL_ERROR"):
-		return "An error occurred while communicating with DC {dc}"
-	case tgerr.Is(err, "INTERDC_X_CALL_RICH_ERROR"):
-		return "A rich error occurred while communicating with DC {dc}"
+	case tgerr.Is(err, "INTERDC_CALL_ERROR"):
+		return fmt.Sprintf("An error occurred while communicating with DC %d", rpcErr.Argument)
+	case tgerr.Is(err, "INTERDC_CALL_RICH_ERROR"):
+		return fmt.Sprintf("A rich error occurred while communicating with DC %d", rpcErr.Argument)
 	case tgerr.Is(err, "INVITE_FORBIDDEN_WITH_JOINAS"):
 		return "If the user has anonymously joined a group call as a channel, they can't invite other users to the group call because that would cause deanonymization, because the invite would be sent using the original user ID, not the anonymized channel ID"
 	case tgerr.Is(err, "INVITE_HASH_EMPTY"):
@@ -556,8 +566,8 @@ func Error(err error) string {
 		return "The provided chat is invalid"
 	case tgerr.Is(err, "NEED_MEMBER_INVALID"):
 		return "The provided member is invalid or does not exist (for example a thumb size)"
-	case tgerr.Is(err, "NETWORK_MIGRATE_X"):
-		return "The source IP address is associated with DC {new_dc}"
+	case tgerr.Is(err, "NETWORK_MIGRATE"):
+		return fmt.Sprintf("The source IP address is associated with DC %d", rpcErr.Argument)
 	case tgerr.Is(err, "NEW_SALT_INVALID"):
 		return "The new salt is invalid"
 	case tgerr.Is(err, "NEW_SETTINGS_EMPTY"):
@@ -604,8 +614,8 @@ func Error(err error) string {
 		return "No email was set, can't recover password via email"
 	case tgerr.Is(err, "PASSWORD_REQUIRED"):
 		return "The account must have 2-factor authentication enabled (a password) before this method can be used"
-	case tgerr.Is(err, "PASSWORD_TOO_FRESH_X"):
-		return "The password was added too recently and {seconds} seconds must pass before using the method"
+	case tgerr.Is(err, "PASSWORD_TOO_FRESH"):
+		return fmt.Sprintf("The password was added too recently and %d seconds must pass before using the method", rpcErr.Argument)
 	case tgerr.Is(err, "PAYMENT_PROVIDER_INVALID"):
 		return "The payment provider was not recognised or its token was invalid"
 	case tgerr.Is(err, "PEER_FLOOD"):
@@ -632,8 +642,8 @@ func Error(err error) string {
 		return "The phone code entered was invalid"
 	case tgerr.Is(err, "PHONE_HASH_EXPIRED"):
 		return "An invalid or expired `phone_code_hash` was provided"
-	case tgerr.Is(err, "PHONE_MIGRATE_X"):
-		return "The phone number a user is trying to use for authorization is associated with DC {new_dc}"
+	case tgerr.Is(err, "PHONE_MIGRATE"):
+		return fmt.Sprintf("The phone number a user is trying to use for authorization is associated with DC %d", rpcErr.Argument)
 	case tgerr.Is(err, "PHONE_NOT_OCCUPIED"):
 		return "No user is associated to the specified phone number"
 	case tgerr.Is(err, "PHONE_NUMBER_APP_SIGNUP_FORBIDDEN"):
@@ -814,8 +824,8 @@ func Error(err error) string {
 		return "Two-steps verification is enabled and a password is required"
 	case tgerr.Is(err, "SESSION_REVOKED"):
 		return "The authorization has been invalidated, because of the user terminating all sessions"
-	case tgerr.Is(err, "SESSION_TOO_FRESH_X"):
-		return "The session logged in too recently and {seconds} seconds must pass before calling the method"
+	case tgerr.Is(err, "SESSION_TOO_FRESH"):
+		return fmt.Sprintf("The session logged in too recently and %d seconds must pass before calling the method", rpcErr.Argument)
 	case tgerr.Is(err, "SETTINGS_INVALID"):
 		return "Invalid settings were provided"
 	case tgerr.Is(err, "SHA256_HASH_INVALID"):
@@ -830,8 +840,8 @@ func Error(err error) string {
 		return "Failure while signing in"
 	case tgerr.Is(err, "SLOWMODE_MULTI_MSGS_DISABLED"):
 		return "Slowmode is enabled, you cannot forward multiple messages to this group"
-	case tgerr.Is(err, "SLOWMODE_WAIT_X"):
-		return "A wait of {seconds} seconds is required before sending another message in this chat"
+	case tgerr.Is(err, "SLOWMODE_WAIT"):
+		return fmt.Sprintf("A wait of %d seconds is required before sending another message in this chat", rpcErr.Argument)
 	case tgerr.Is(err, "SMS_CODE_CREATE_FAILED"):
 		return "An error occurred while creating the SMS code"
 	case tgerr.Is(err, "SRP_ID_INVALID"):
@@ -844,8 +854,8 @@ func Error(err error) string {
 		return "Start parameter invalid"
 	case tgerr.Is(err, "START_PARAM_TOO_LONG"):
 		return "Start parameter is too long"
-	case tgerr.Is(err, "STATS_MIGRATE_X"):
-		return "The channel statistics must be fetched from DC {dc}"
+	case tgerr.Is(err, "STATS_MIGRATE"):
+		return fmt.Sprintf("The channel statistics must be fetched from DC %d", rpcErr.Argument)
 	case tgerr.Is(err, "STICKERPACK_STICKERS_TOO_MUCH"):
 		return "There are too many stickers in this stickerpack, you can't add any more"
 	case tgerr.Is(err, "STICKERSET_INVALID"):
@@ -894,8 +904,8 @@ func Error(err error) string {
 		return ""
 	case tgerr.Is(err, "SWITCH_PM_TEXT_EMPTY"):
 		return "The switch_pm.text field was empty"
-	case tgerr.Is(err, "TAKEOUT_INIT_DELAY_X"):
-		return "A wait of {seconds} seconds is required before being able to initiate the takeout"
+	case tgerr.Is(err, "TAKEOUT_INIT_DELAY"):
+		return fmt.Sprintf("A wait of %d seconds is required before being able to initiate the takeout", rpcErr.Argument)
 	case tgerr.Is(err, "TAKEOUT_INVALID"):
 		return "The takeout session has been invalidated by another data export session"
 	case tgerr.Is(err, "TAKEOUT_REQUIRED"):
@@ -1008,8 +1018,8 @@ func Error(err error) string {
 		return "Bots can't send messages to other bots"
 	case tgerr.Is(err, "USER_KICKED"):
 		return "This user was kicked from this supergroup/channel"
-	case tgerr.Is(err, "USER_MIGRATE_X"):
-		return "The user whose identity is being used to execute queries is associated with DC {new_dc}"
+	case tgerr.Is(err, "USER_MIGRATE"):
+		return fmt.Sprintf("The user whose identity is being used to execute queries is associated with DC %d", rpcErr.Argument)
 	case tgerr.Is(err, "USER_NOT_MUTUAL_CONTACT"):
 		return "The provided user is not a mutual contact"
 	case tgerr.Is(err, "USER_NOT_PARTICIPANT"):
