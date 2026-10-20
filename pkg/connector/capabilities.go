@@ -22,6 +22,7 @@ import (
 	"encoding/hex"
 	"time"
 
+	"github.com/rs/zerolog"
 	"go.mau.fi/util/jsontime"
 	"go.mau.fi/util/ptr"
 	"go.mau.fi/util/variationselector"
@@ -334,4 +335,21 @@ func (tc *TelegramClient) GetCapabilities(ctx context.Context, portal *bridgev2.
 
 	feat.ID = baseID
 	return feat
+}
+
+func (tc *TelegramClient) resendCapabilities(ctx context.Context) {
+	log := zerolog.Ctx(ctx)
+	userPortals, err := tc.main.Bridge.DB.UserPortal.GetAllForLogin(ctx, tc.userLogin.UserLogin)
+	if err != nil {
+		log.Err(err).Msg("Failed to get portals to resend capabilities")
+		return
+	}
+	for _, up := range userPortals {
+		portal, err := tc.main.Bridge.GetExistingPortalByKey(ctx, up.Portal)
+		if err != nil {
+			log.Err(err).Object("portal_key", up.Portal).Msg("Failed to get portal to resend capabilities")
+		} else if portal != nil {
+			portal.UpdateCapabilities(ctx, tc.userLogin, true)
+		}
+	}
 }

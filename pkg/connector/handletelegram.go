@@ -1403,6 +1403,7 @@ func (tc *TelegramClient) getAvailableReactionsForCapability(ctx context.Context
 	_, err := tc.getAvailableReactions(ctx)
 	if err != nil {
 		zerolog.Ctx(ctx).Warn().Err(err).Msg("Failed to get available reactions for capability listing")
+		tc.reactionCapsStale.Store(true)
 	}
 	return tc.availableReactionsList, tc.isPremiumCache.Load()
 }
