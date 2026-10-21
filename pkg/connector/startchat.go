@@ -27,15 +27,12 @@ import (
 
 	"github.com/rs/zerolog"
 	"go.mau.fi/util/ptr"
-	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/bridgev2"
 
-	"go.mau.fi/mautrix-telegram/pkg/connector/humanise"
 	"go.mau.fi/mautrix-telegram/pkg/connector/ids"
 	"go.mau.fi/mautrix-telegram/pkg/connector/store"
 	"go.mau.fi/mautrix-telegram/pkg/gotd/telegram/query/hasher"
 	"go.mau.fi/mautrix-telegram/pkg/gotd/tg"
-	"go.mau.fi/mautrix-telegram/pkg/gotd/tgerr"
 )
 
 var (
@@ -97,7 +94,7 @@ func (tc *TelegramClient) resolveUserID(ctx context.Context, userID int64) (resp
 	} else if resp.Ghost == nil || resp.Ghost.Name == "" {
 		// Try to fetch the user from Telegram
 		if user, err := tc.getSingleUser(ctx, userID); err != nil {
-			return nil, fmt.Errorf("failed to get user with ID %d: %w", userID, err)
+			return nil, wrapUnknownError(fmt.Sprintf("failed to get user with ID %d", userID), err)
 		} else if user.TypeID() != tg.UserTypeID {
 			return nil, fmt.Errorf("unexpected user type: %T", user)
 		} else if userInfo, err := tc.updateGhost(ctx, userID, user.(*tg.User)); err != nil {
@@ -113,14 +110,7 @@ func (tc *TelegramClient) resolveUserID(ctx context.Context, userID int64) (resp
 }
 
 func wrapUnknownError(thing string, err error) error {
-	if te, ok := tgerr.As(err); ok {
-		respErr := mautrix.MUnknown.WithMessage(humanise.Error(te)).WithInternalError(err)
-		if te.Code >= 400 && te.Code <= 500 {
-			respErr = respErr.WithStatus(te.Code)
-		}
-		return respErr
-	}
-	return fmt.Errorf("%s: %w", thing, err)
+	return loginRespError(fmt.Errorf("%s: %w", thing, err))
 }
 
 func (tc *TelegramClient) resolveUsername(ctx context.Context, username string, expectedID int64) (*bridgev2.ResolveIdentifierResponse, error) {
