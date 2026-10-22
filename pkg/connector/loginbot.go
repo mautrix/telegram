@@ -23,12 +23,15 @@ import (
 	"net/http"
 
 	"github.com/rs/zerolog"
+	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/bridgev2"
 )
 
 const (
 	LoginStepIDBotToken = "fi.mau.telegram.login.bot_token"
 )
+
+var ErrInvalidBotToken = bridgev2.RespError(mautrix.MInvalidParam.WithMessage("Invalid bot token"))
 
 type BotLogin struct {
 	*baseLogin
@@ -84,7 +87,7 @@ func (bl *BotLogin) SubmitUserInput(ctx context.Context, input map[string]string
 	authorization, err := bl.client.Auth().Bot(ctx, botToken)
 	if err != nil {
 		bl.Cancel()
-		return nil, err
+		return nil, loginRespError(ctx, err)
 	}
 	return bl.finalizeLogin(ctx, authorization, &UserLoginMetadata{IsBot: true})
 }
@@ -110,6 +113,9 @@ func logoutBotAPI(ctx context.Context, token string, client *http.Client) error 
 	if err != nil {
 		return fmt.Errorf("failed to decode response: %w", err)
 	} else if !respData.OK && respData.Description != "Logged out" {
+		if respData.ErrorCode == http.StatusUnauthorized || respData.ErrorCode == http.StatusNotFound {
+			return fmt.Errorf("%w: response error %d: %s", ErrInvalidBotToken, respData.ErrorCode, respData.Description)
+		}
 		return fmt.Errorf("response error %d: %s", respData.ErrorCode, respData.Description)
 	}
 	return nil

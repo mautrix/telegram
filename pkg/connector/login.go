@@ -29,6 +29,7 @@ import (
 	"go.mau.fi/util/ptr"
 	"go.mau.fi/zerozap"
 	"go.uber.org/zap"
+	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/bridgev2"
 	"maunium.net/go/mautrix/bridgev2/database"
 
@@ -88,23 +89,30 @@ var (
 	}
 )
 
-func loginRespError(err error) error {
+func loginRespError(ctx context.Context, err error) error {
 	tgErr, ok := tgerr.As(err)
 	if !ok {
 		return err
 	}
-	statusCode := tgErr.Code
+	zerolog.Ctx(ctx).Err(err).Msg("Telegram request failed")
+	var mapped bridgev2.RespError
 	switch {
 	case tgErr.Code == 420 || strings.HasSuffix(tgErr.Type, "_FLOOD"):
-		statusCode = http.StatusTooManyRequests
-	case tgErr.Code < 400 || tgErr.Code >= 500:
-		return err
+		mapped = bridgev2.RespError(mautrix.MLimitExceeded.WithMessage(humanise.Error(err)).WithStatus(http.StatusBadRequest))
+	case tgErr.Code >= 400 && tgErr.Code < 500:
+		statusCode := http.StatusBadRequest
+		if tgErr.Code == http.StatusForbidden {
+			statusCode = http.StatusForbidden
+		}
+		mapped = bridgev2.RespError{
+			ErrCode:    "FI.MAU.TELEGRAM." + tgErr.Type,
+			Err:        humanise.Error(err),
+			StatusCode: statusCode,
+		}
+	default:
+		mapped = bridgev2.RespError(mautrix.MUnknown.WithMessage("Telegram returned an internal error"))
 	}
-	return bridgev2.RespError{
-		ErrCode:    "FI.MAU.TELEGRAM." + tgErr.Type,
-		Err:        humanise.Error(err),
-		StatusCode: statusCode,
-	}
+	return mapped.WithInternalError(err)
 }
 
 func loginContextError(ctx context.Context) error {
@@ -155,7 +163,7 @@ func (tc *TelegramConnector) CreateLogin(ctx context.Context, user *bridgev2.Use
 	case LoginFlowIDManual:
 		return &ManualLogin{baseLogin: bl}, nil
 	default:
-		return nil, fmt.Errorf("unknown flow ID %s", flowID)
+		return nil, fmt.Errorf("%w: %s", bridgev2.ErrInvalidLoginFlowID, flowID)
 	}
 }
 
@@ -215,7 +223,7 @@ func (bl *baseLogin) makeClient(ctx context.Context, dispatcher *tg.UpdateDispat
 	connErr, ctxErr := connectResult.Get(ctx)
 	if connErr != nil {
 		bl.Cancel()
-		return err
+		return loginRespError(ctx, fmt.Errorf("failed to connect to Telegram: %w", connErr))
 	} else if ctxErr != nil {
 		bl.Cancel()
 		return ctxErr
@@ -261,7 +269,7 @@ func (bl *baseLogin) submitPassword(ctx context.Context, password, loginPhone st
 			return passwordIncorrectLoginStep, nil
 		}
 		bl.Cancel()
-		return nil, loginRespError(fmt.Errorf("failed to submit password: %w", err))
+		return nil, loginRespError(ctx, fmt.Errorf("failed to submit password: %w", err))
 	}
 	return bl.finalizeLogin(ctx, authorization, &UserLoginMetadata{LoginPhone: loginPhone})
 }
@@ -280,7 +288,7 @@ func (bl *baseLogin) finalizeLogin(
 		self, err = bl.client.Self(ctx)
 		if err != nil {
 			bl.Cancel()
-			return nil, fmt.Errorf("failed to get self: %w", err)
+			return nil, loginRespError(ctx, fmt.Errorf("failed to get self: %w", err))
 		}
 	}
 	bl.Cancel()

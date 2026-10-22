@@ -60,6 +60,14 @@ var (
 	ErrChatInfoUnavailable = errors.New("failed to get chat info")
 )
 
+func init() {
+	status.BridgeStateHumanErrors.Update(status.BridgeStateErrorMap{
+		"tg-client-dead":        "Disconnected from Telegram, reconnecting",
+		"tg-connectivity-error": "Lost connection to Telegram, reconnecting",
+		"tg-unknown-error":      "The Telegram connection failed unexpectedly",
+	})
+}
+
 func resultToError(res bridgev2.EventHandlingResult) error {
 	if !res.Success {
 		if res.Error != nil {
@@ -377,7 +385,7 @@ func (tc *TelegramClient) onDead() {
 	}
 	tc.userLogin.BridgeState.Send(status.BridgeState{
 		StateEvent: status.StateTransientDisconnect,
-		Message:    "Telegram client disconnected",
+		Error:      "tg-client-dead",
 	})
 }
 
@@ -387,12 +395,15 @@ func (tc *TelegramClient) sendBadCredentialsOrUnknownError(err error) {
 			StateEvent: status.StateBadCredentials,
 			Error:      "tg-no-auth",
 			Message:    humanise.Error(err),
+			UserAction: status.UserActionRelogin,
+			Info: map[string]any{
+				"go_error": err.Error(),
+			},
 		})
 	} else {
 		tc.userLogin.BridgeState.Send(status.BridgeState{
 			StateEvent: status.StateUnknownError,
 			Error:      "tg-unknown-error",
-			Message:    humanise.Error(err),
 			Info: map[string]any{
 				"go_error": err.Error(),
 			},
@@ -416,8 +427,10 @@ func (tc *TelegramClient) onPing() {
 		// Keep as transient; gotd's backoff will reconnect.
 		tc.userLogin.BridgeState.Send(status.BridgeState{
 			StateEvent: status.StateTransientDisconnect,
-			Error:      "connectivity-error",
-			Message:    humanise.Error(err),
+			Error:      "tg-connectivity-error",
+			Info: map[string]any{
+				"go_error": err.Error(),
+			},
 		})
 	} else if err != nil {
 		tc.sendBadCredentialsOrUnknownError(err)
