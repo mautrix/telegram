@@ -94,7 +94,7 @@ func (tc *TelegramClient) resolveUserID(ctx context.Context, userID int64) (resp
 	} else if resp.Ghost == nil || resp.Ghost.Name == "" {
 		// Try to fetch the user from Telegram
 		if user, err := tc.getSingleUser(ctx, userID); err != nil {
-			return nil, wrapUnknownError(fmt.Sprintf("failed to get user with ID %d", userID), err)
+			return nil, wrapUnknownError(ctx, fmt.Sprintf("failed to get user with ID %d", userID), err)
 		} else if user.TypeID() != tg.UserTypeID {
 			return nil, fmt.Errorf("unexpected user type: %T", user)
 		} else if userInfo, err := tc.updateGhost(ctx, userID, user.(*tg.User)); err != nil {
@@ -109,8 +109,8 @@ func (tc *TelegramClient) resolveUserID(ctx context.Context, userID int64) (resp
 	return
 }
 
-func wrapUnknownError(thing string, err error) error {
-	return loginRespError(fmt.Errorf("%s: %w", thing, err))
+func wrapUnknownError(ctx context.Context, thing string, err error) error {
+	return loginRespError(ctx, fmt.Errorf("%s: %w", thing, err))
 }
 
 func (tc *TelegramClient) resolveUsername(ctx context.Context, username string, expectedID int64) (*bridgev2.ResolveIdentifierResponse, error) {
@@ -130,7 +130,7 @@ func (tc *TelegramClient) resolveUsername(ctx context.Context, username string, 
 		}
 		return nil, nil
 	} else if err != nil {
-		return nil, wrapUnknownError("failed to resolve username", err)
+		return nil, wrapUnknownError(ctx, "failed to resolve username", err)
 	}
 	peer, ok := resolved.GetPeer().(*tg.PeerUser)
 	if !ok {
@@ -305,7 +305,7 @@ func (tc *TelegramClient) CreateGroup(ctx context.Context, params *bridgev2.Grou
 	}
 	invitedUsers, err := tc.client.API().MessagesCreateChat(ctx, &req)
 	if err != nil {
-		return nil, wrapUnknownError("failed to create chat", err)
+		return nil, wrapUnknownError(ctx, "failed to create chat", err)
 	}
 	invited, ok := invitedUsers.Updates.(interface {
 		GetChats() (value []tg.ChatClass)

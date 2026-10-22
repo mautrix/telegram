@@ -130,7 +130,7 @@ func (ql *QRLogin) Wait(ctx context.Context) (*bridgev2.LoginStep, error) {
 			return passwordLoginStep, nil
 		} else if authResult.Error != nil {
 			ql.Cancel()
-			return nil, loginRespError(fmt.Errorf("failed to authenticate: %w", authResult.Error))
+			return nil, loginRespError(ctx, fmt.Errorf("failed to authenticate: %w", authResult.Error))
 		}
 
 		return ql.finalizeLogin(ctx, authResult.Authorization, nil)

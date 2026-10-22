@@ -743,7 +743,7 @@ func (tc *TelegramClient) HandleMatrixViewLimitedMedia(ctx context.Context, msg 
 	}
 	_, err = tc.client.API().MessagesReadMessageContents(ctx, []int{messageID})
 	if err != nil {
-		return wrapUnknownError("failed to mark view-limited media as viewed", err)
+		return wrapUnknownError(ctx, "failed to mark view-limited media as viewed", err)
 	}
 	return nil
 }

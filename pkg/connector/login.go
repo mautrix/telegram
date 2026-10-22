@@ -89,11 +89,12 @@ var (
 	}
 )
 
-func loginRespError(err error) error {
+func loginRespError(ctx context.Context, err error) error {
 	tgErr, ok := tgerr.As(err)
 	if !ok {
 		return err
 	}
+	zerolog.Ctx(ctx).Err(err).Msg("Telegram request failed")
 	var mapped bridgev2.RespError
 	switch {
 	case tgErr.Code == 420 || strings.HasSuffix(tgErr.Type, "_FLOOD"):
@@ -222,7 +223,7 @@ func (bl *baseLogin) makeClient(ctx context.Context, dispatcher *tg.UpdateDispat
 	connErr, ctxErr := connectResult.Get(ctx)
 	if connErr != nil {
 		bl.Cancel()
-		return loginRespError(fmt.Errorf("failed to connect to Telegram: %w", connErr))
+		return loginRespError(ctx, fmt.Errorf("failed to connect to Telegram: %w", connErr))
 	} else if ctxErr != nil {
 		bl.Cancel()
 		return ctxErr
@@ -268,7 +269,7 @@ func (bl *baseLogin) submitPassword(ctx context.Context, password, loginPhone st
 			return passwordIncorrectLoginStep, nil
 		}
 		bl.Cancel()
-		return nil, loginRespError(fmt.Errorf("failed to submit password: %w", err))
+		return nil, loginRespError(ctx, fmt.Errorf("failed to submit password: %w", err))
 	}
 	return bl.finalizeLogin(ctx, authorization, &UserLoginMetadata{LoginPhone: loginPhone})
 }
@@ -287,7 +288,7 @@ func (bl *baseLogin) finalizeLogin(
 		self, err = bl.client.Self(ctx)
 		if err != nil {
 			bl.Cancel()
-			return nil, loginRespError(fmt.Errorf("failed to get self: %w", err))
+			return nil, loginRespError(ctx, fmt.Errorf("failed to get self: %w", err))
 		}
 	}
 	bl.Cancel()

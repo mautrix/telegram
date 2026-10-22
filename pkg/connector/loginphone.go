@@ -143,7 +143,7 @@ func (pl *PhoneLogin) submitNumber(ctx context.Context, phone string) (*bridgev2
 
 	sentCode, err := pl.client.Auth().SendCode(ctx, pl.phone, auth.SendCodeOptions{})
 	if err != nil {
-		return nil, loginRespError(err)
+		return nil, loginRespError(ctx, err)
 	}
 	switch s := sentCode.(type) {
 	case *tg.AuthSentCode:
@@ -181,7 +181,7 @@ func (pl *PhoneLogin) submitCode(ctx context.Context, code string) (*bridgev2.Lo
 	} else if errors.Is(err, &auth.SignUpRequired{}) {
 		return nil, ErrSignUpNotSupported
 	} else if err != nil {
-		return nil, loginRespError(fmt.Errorf("failed to submit code: %w", err))
+		return nil, loginRespError(ctx, fmt.Errorf("failed to submit code: %w", err))
 	}
 	return pl.finalizeLogin(ctx, authorization, &UserLoginMetadata{LoginPhone: pl.phone})
 }

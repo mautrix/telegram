@@ -87,7 +87,7 @@ func (bl *BotLogin) SubmitUserInput(ctx context.Context, input map[string]string
 	authorization, err := bl.client.Auth().Bot(ctx, botToken)
 	if err != nil {
 		bl.Cancel()
-		return nil, loginRespError(err)
+		return nil, loginRespError(ctx, err)
 	}
 	return bl.finalizeLogin(ctx, authorization, &UserLoginMetadata{IsBot: true})
 }
