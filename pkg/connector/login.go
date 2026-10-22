@@ -111,7 +111,7 @@ func loginRespError(err error) error {
 	default:
 		mapped = bridgev2.RespError(mautrix.MUnknown.WithMessage("Telegram returned an internal error"))
 	}
-	return fmt.Errorf("%w: %w", mapped, err)
+	return mapped.WithInternalError(err)
 }
 
 func loginContextError(ctx context.Context) error {
