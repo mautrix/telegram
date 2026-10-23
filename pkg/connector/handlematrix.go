@@ -526,6 +526,17 @@ func (tc *TelegramClient) HandleMatrixMessage(ctx context.Context, msg *bridgev2
 
 	message, entities := matrixfmt.Parse(ctx, tc.matrixParser, msg.Content, msg.Portal, tc.getMaxMessageLength(ctx, msg.Content.MsgType.IsMedia()))
 
+	if tc.main.Config.BotButtons.Enabled {
+		if button, target := tc.findBotButtonPress(ctx, msg); button == nil {
+			// Not a button press, send normally
+		} else if button.Type == BotButtonText {
+			// Reply keyboard buttons just send their text as a message
+			message, entities = button.Text, nil
+		} else {
+			return tc.pressBotButton(ctx, msg, peer, button, target)
+		}
+	}
+
 	var replyTo tg.InputReplyToClass
 	if msg.ReplyTo != nil {
 		_, messageID, err := ids.ParseMessageID(msg.ReplyTo.ID)
