@@ -64,7 +64,7 @@ func (tc *TelegramConnector) GetCapabilities() *bridgev2.NetworkGeneralCapabilit
 }
 
 func (tc *TelegramConnector) GetBridgeInfoVersion() (info, capabilities int) {
-	return 1, 14
+	return 1, 15
 }
 
 // TODO get these from getConfig instead of hardcoding?
@@ -281,7 +281,7 @@ func (tc *TelegramClient) GetCapabilities(ctx context.Context, portal *bridgev2.
 	peerType, id, topicID, _ := ids.ParsePortalID(portal.ID)
 	switch peerType {
 	case ids.PeerTypeChat:
-		feat.ID += "minigroup"
+		baseID += "+minigroup"
 		feat.MemberActions = map[event.MemberAction]event.CapabilitySupportLevel{
 			event.MemberActionBan:    event.CapLevelFullySupported,
 			event.MemberActionInvite: event.CapLevelFullySupported,
@@ -292,7 +292,7 @@ func (tc *TelegramClient) GetCapabilities(ctx context.Context, portal *bridgev2.
 		feat.DeleteChat = true
 		feat.DeleteChatForEveryone = true
 	case ids.PeerTypeChannel:
-		feat.ID += "channel"
+		baseID += "+channel"
 		feat.MemberActions = map[event.MemberAction]event.CapabilitySupportLevel{
 			event.MemberActionBan:    event.CapLevelFullySupported,
 			event.MemberActionKick:   event.CapLevelFullySupported,
@@ -302,6 +302,8 @@ func (tc *TelegramClient) GetCapabilities(ctx context.Context, portal *bridgev2.
 		// Group creators can delete the chat for everyone, unless it's a large channel
 		if portalMetadata.ParticipantsCount < 1000 || topicID > 0 {
 			feat.DeleteChatForEveryone = true
+		} else {
+			baseID += "+large"
 		}
 		// Anyone can delete a non-topic channel for themselves by leaving it
 		feat.DeleteChat = topicID == 0
