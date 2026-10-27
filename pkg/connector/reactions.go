@@ -30,6 +30,7 @@ import (
 	"go.mau.fi/mautrix-telegram/pkg/connector/emojis"
 	"go.mau.fi/mautrix-telegram/pkg/connector/ids"
 	"go.mau.fi/mautrix-telegram/pkg/gotd/tg"
+	"go.mau.fi/mautrix-telegram/pkg/gotd/tgerr"
 )
 
 func (tc *TelegramClient) computeReactionsList(ctx context.Context, peer tg.PeerClass, msgID int, msgReactions tg.MessageReactions) (reactions []tg.MessagePeerReaction, isFull bool, customEmojis map[networkid.EmojiID]emojis.EmojiInfo, err error) {
@@ -69,10 +70,14 @@ func (tc *TelegramClient) computeReactionsList(ctx context.Context, peer tg.Peer
 					Peer: peer, ID: msgID, Limit: 100,
 				})
 			})
-			if err != nil {
+			if wait, ok := tgerr.AsFloodWait(err); ok {
+				// Waiting here would stall update handling, so fall back to the recent reactions (a partial list).
+				log.Warn().Err(err).Stringer("wait", wait).Msg("Flood wait fetching reactions list, using recent reactions")
+			} else if err != nil {
 				return nil, false, nil, fmt.Errorf("failed to get reactions list: %w", err)
+			} else {
+				reactionsList = reactions.Reactions
 			}
-			reactionsList = reactions.Reactions
 		}
 	}
 
