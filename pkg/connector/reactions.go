@@ -242,7 +242,7 @@ func (tc *TelegramClient) maybePollForReactions(ctx context.Context, portal *bri
 
 	tc.prevReactionPollLock.Lock()
 	prev, ok := tc.prevReactionPoll[portal.PortalKey]
-	if ok && time.Since(prev) > 20*time.Second {
+	if !ok || time.Since(prev) > 20*time.Second {
 		ok = false
 		tc.prevReactionPoll[portal.PortalKey] = time.Now()
 	}
