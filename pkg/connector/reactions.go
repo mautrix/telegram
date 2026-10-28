@@ -309,7 +309,7 @@ func (tc *TelegramClient) pollForReactions(ctx context.Context, portalKey networ
 		if err != nil {
 			return fmt.Errorf("failed to get message from database: %w", err)
 		} else if dbMsg == nil {
-			return fmt.Errorf("message not found in database: %w", err)
+			continue
 		}
 
 		data, err := tc.prepareReactionSync(ctx, reaction.Peer, reaction.MsgID, reaction.Reactions)
