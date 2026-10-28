@@ -57,7 +57,16 @@ func (c *Container) GetScopedStore(telegramUserID int64) *ScopedStore {
 func (c *Container) NamespaceMigratedMessages(ctx context.Context, bridgeID networkid.BridgeID, portalKey networkid.PortalKey) (int64, error) {
 	res, err := c.Exec(
 		ctx,
-		upgrades.NamespaceMigratedMessagesQuery+` AND bridge_id=$2 AND room_id=$3 AND room_receiver=$4`,
+		upgrades.NamespaceMigratedMessagesQuery+`
+			AND bridge_id=$2 AND room_id=$3 AND room_receiver=$4
+			AND NOT EXISTS (
+				SELECT 1 FROM message existing
+				WHERE existing.bridge_id=message.bridge_id
+					AND existing.room_receiver=message.room_receiver
+					AND existing.id='migrated:' || message.id || ':' || $1
+					AND existing.part_id=message.part_id
+			)
+		`,
 		portalKey.Receiver, bridgeID, portalKey.ID, portalKey.Receiver,
 	)
 	if err != nil {
