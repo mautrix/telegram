@@ -493,7 +493,12 @@ func (s *internalState) getDifferenceWithRetry(ctx context.Context, date int) (d
 		if ok {
 			s.log.Warn("Flood wait error while getting difference", zap.Duration("wait", dur))
 		} else {
-			s.log.Error("Failed to get difference, retrying in 5 seconds...", zap.Error(err))
+			s.log.Error("Failed to get difference, retrying in 5 seconds...",
+				zap.Error(err),
+				zap.Int("pts", s.pts.State()),
+				zap.Int("qts", s.qts.State()),
+				zap.Int("date", date),
+			)
 			dur = 5 * time.Second
 		}
 		select {
