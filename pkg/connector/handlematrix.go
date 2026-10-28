@@ -1077,7 +1077,7 @@ func (tc *TelegramClient) HandleMatrixReadReceipt(ctx context.Context, msg *brid
 		if isBot {
 			return
 		}
-		_, readMentionsErr = tc.client.API().MessagesReadReactions(ctx, &tg.MessagesReadReactionsRequest{
+		_, readReactionsErr = tc.client.API().MessagesReadReactions(ctx, &tg.MessagesReadReactionsRequest{
 			Peer:     inputPeer,
 			TopMsgID: topicID,
 		})
