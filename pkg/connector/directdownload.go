@@ -19,6 +19,8 @@ package connector
 import (
 	"context"
 	"fmt"
+	"net/http"
+	"strings"
 
 	"github.com/rs/zerolog"
 	"maunium.net/go/mautrix"
@@ -29,6 +31,7 @@ import (
 	"go.mau.fi/mautrix-telegram/pkg/connector/ids"
 	"go.mau.fi/mautrix-telegram/pkg/connector/media"
 	"go.mau.fi/mautrix-telegram/pkg/gotd/tg"
+	"go.mau.fi/mautrix-telegram/pkg/gotd/tgerr"
 )
 
 var _ bridgev2.DirectMediableNetwork = (*TelegramConnector)(nil)
@@ -225,7 +228,7 @@ func (tc *TelegramConnector) Download(ctx context.Context, mediaID networkid.Med
 	} else if info.PeerType == ids.FakePeerTypeEmoji {
 		customEmojiDocuments, err := client.client.API().MessagesGetCustomEmojiDocuments(ctx, []int64{info.ID})
 		if err != nil {
-			return nil, fmt.Errorf("failed to get custom emoji documents: %w", err)
+			return nil, directMediaError(fmt.Errorf("failed to get custom emoji documents: %w", err))
 		}
 		if len(customEmojiDocuments) == 0 {
 			return nil, fmt.Errorf("emoji id did not result in a document")
@@ -236,7 +239,30 @@ func (tc *TelegramConnector) Download(ctx context.Context, mediaID networkid.Med
 			WithDocument(customEmojiDocuments[0], false)
 	}
 
-	return readyTransferer.ToDirectMediaResponse(ctx)
+	resp, err := readyTransferer.ToDirectMediaResponse(ctx)
+	if err != nil {
+		return nil, directMediaError(err)
+	}
+	return resp, nil
+}
+
+func directMediaError(err error) error {
+	tgErr, ok := tgerr.As(err)
+	if !ok {
+		return err
+	}
+	var mapped mautrix.RespError
+	switch {
+	case tgErr.Code == 420 || strings.HasSuffix(tgErr.Type, "_FLOOD"):
+		mapped = mautrix.MLimitExceeded.WithMessage("Telegram is rate limiting media downloads").WithCanRetry(true)
+	case tgErr.Code == http.StatusUnauthorized || tgErr.Code == http.StatusForbidden:
+		mapped = mautrix.MForbidden.WithMessage("Telegram denied access to the media")
+	case tgErr.Code == http.StatusBadRequest || tgErr.Code == http.StatusNotFound || tgErr.Code == http.StatusNotAcceptable:
+		mapped = mautrix.MNotFound.WithMessage("Media is no longer available on Telegram")
+	default:
+		mapped = mautrix.MUnknown.WithMessage("Telegram failed to provide the media").WithStatus(http.StatusBadGateway).WithCanRetry(true)
+	}
+	return mapped.WithInternalError(err)
 }
 
 func (tc *TelegramConnector) SetUseDirectMedia() {
