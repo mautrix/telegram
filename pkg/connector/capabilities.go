@@ -245,6 +245,7 @@ func (tc *TelegramClient) GetCapabilities(ctx context.Context, portal *bridgev2.
 		Poll:                event.CapLevelFullySupported,
 		PollMaxOptions:      12,
 		PollOptionMaxLength: 100,
+		PollResultsAPI:      true,
 
 		DisappearingTimer: &event.DisappearingTimerCapability{
 			Types:  []event.DisappearingType{event.DisappearingTypeAfterSend},
@@ -296,10 +297,6 @@ func (tc *TelegramClient) GetCapabilities(ctx context.Context, portal *bridgev2.
 		feat.DeleteChatForEveryone = true
 	case ids.PeerTypeChannel:
 		baseID += "+channel"
-		if !portalMetadata.IsSuperGroup {
-			baseID += "+broadcast"
-			feat.Poll = event.CapLevelRejected
-		}
 		feat.MemberActions = map[event.MemberAction]event.CapabilitySupportLevel{
 			event.MemberActionBan:    event.CapLevelFullySupported,
 			event.MemberActionKick:   event.CapLevelFullySupported,

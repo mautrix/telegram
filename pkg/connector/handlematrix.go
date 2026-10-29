@@ -107,10 +107,6 @@ func (tc *TelegramClient) HandleMatrixViewingChat(ctx context.Context, msg *brid
 	if err != nil {
 		return err
 	}
-	err = tc.maybeRefreshPolls(ctx, msg.Portal)
-	if err != nil {
-		return err
-	}
 	err = tc.pollSponsoredMessage(ctx, msg.Portal)
 	if err != nil {
 		return err
@@ -1175,10 +1171,6 @@ func (tc *TelegramClient) HandleMatrixReadReceipt(ctx context.Context, msg *brid
 		err := tc.maybePollForReactions(ctx, msg.Portal)
 		if err != nil {
 			log.Err(err).Msg("failed to poll for reactions after read receipt")
-		}
-		err = tc.maybeRefreshPolls(ctx, msg.Portal)
-		if err != nil {
-			log.Err(err).Msg("failed to refresh polls after read receipt")
 		}
 		err = tc.pollSponsoredMessage(ctx, msg.Portal)
 		if err != nil {

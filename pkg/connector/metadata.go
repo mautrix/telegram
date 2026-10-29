@@ -100,9 +100,7 @@ type MessageMetadata struct {
 }
 
 type PollMetadata struct {
-	MatrixAnswerIDs map[string]string             `json:"matrix_answer_ids,omitempty"`
-	Votes           map[networkid.UserID][]string `json:"votes,omitempty"`
-	Ended           bool                          `json:"ended,omitempty"`
+	MatrixAnswerIDs map[string]string `json:"matrix_answer_ids,omitempty"`
 }
 
 type UserLoginMetadata struct {

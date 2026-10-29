@@ -119,7 +119,7 @@ func (tc *TelegramClient) mediaToMatrix(
 	case tg.MessageMediaGeoTypeID, tg.MessageMediaGeoLiveTypeID, tg.MessageMediaVenueTypeID:
 		return convertLocation(media), nil, nil
 	case tg.MessageMediaPollTypeID:
-		return tc.convertPoll(msg, media), nil, nil
+		return tc.convertPoll(media), nil, nil
 	case tg.MessageMediaDiceTypeID:
 		return convertDice(media), nil, nil
 	case tg.MessageMediaGameTypeID:
@@ -255,8 +255,13 @@ func (tc *TelegramClient) convertToMatrix(
 		ContentURI:  contentURI,
 		ViewLimited: cm.Parts[0].Content.BeeperViewLimited,
 	}
-	if cm.Parts[0].Type == event.EventUnstablePollStart {
-		cm.Parts[0].DBMetadata.(*MessageMetadata).Poll = &PollMetadata{}
+	for _, part := range cm.Parts {
+		if part.Type != event.EventUnstablePollStart {
+			continue
+		} else if part.DBMetadata == nil {
+			part.DBMetadata = &MessageMetadata{}
+		}
+		part.DBMetadata.(*MessageMetadata).Poll = &PollMetadata{}
 	}
 
 	if fwd, isForwarded := msg.GetFwdFrom(); isForwarded {
@@ -961,7 +966,7 @@ func convertLocation(media tg.MessageMediaClass) *bridgev2.ConvertedMessagePart 
 	}
 }
 
-func (tc *TelegramClient) convertPoll(msg *tg.Message, media tg.MessageMediaClass) *bridgev2.ConvertedMessagePart {
+func (tc *TelegramClient) convertPoll(media tg.MessageMediaClass) *bridgev2.ConvertedMessagePart {
 	poll := media.(*tg.MessageMediaPoll)
 	var textAnswers []string
 	var htmlAnswers strings.Builder
@@ -987,7 +992,7 @@ func (tc *TelegramClient) convertPoll(msg *tg.Message, media tg.MessageMediaClas
 			FormattedBody: fmt.Sprintf(`<strong>Poll</strong>: %s<ol>%s</ol>Open the Telegram app to vote.`, event.TextToHTML(poll.Poll.Question.Text), htmlAnswers.String()),
 		},
 	}
-	if !tc.canBridgePollVotes(msg, &poll.Poll) || len(msc3381Answers) != len(poll.Poll.Answers) {
+	if !tc.main.Config.ExtEvPolls || tc.metadata.IsBot || len(msc3381Answers) != len(poll.Poll.Answers) {
 		return part
 	}
 	maxSelections := 1

@@ -20,16 +20,13 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
-	"slices"
 	"strconv"
-	"time"
 
 	"github.com/rs/zerolog"
+	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/bridgev2"
 	"maunium.net/go/mautrix/bridgev2/database"
 	"maunium.net/go/mautrix/bridgev2/networkid"
-	"maunium.net/go/mautrix/bridgev2/simplevent"
-	"maunium.net/go/mautrix/event"
 
 	"go.mau.fi/mautrix-telegram/pkg/connector/ids"
 	"go.mau.fi/mautrix-telegram/pkg/gotd/tg"
@@ -37,13 +34,10 @@ import (
 
 const pollVotePartPrefix = "vote:"
 
-var _ bridgev2.PollHandlingNetworkAPI = (*TelegramClient)(nil)
-
-type pollVote struct {
-	Sender    bridgev2.EventSender
-	Options   [][]byte
-	Timestamp time.Time
-}
+var (
+	_ bridgev2.PollHandlingNetworkAPI        = (*TelegramClient)(nil)
+	_ bridgev2.PollResultsFetchingNetworkAPI = (*TelegramClient)(nil)
+)
 
 func pollAnswerID(meta *PollMetadata, option []byte) string {
 	answerID := base64.RawURLEncoding.EncodeToString(option)
@@ -64,342 +58,79 @@ func pollOption(meta *PollMetadata, answerID string) ([]byte, error) {
 	return base64.RawURLEncoding.DecodeString(answerID)
 }
 
-func (tc *TelegramClient) canBridgePollVotes(msg *tg.Message, poll *tg.Poll) bool {
-	_, isForwarded := msg.GetFwdFrom()
-	return tc.main.Config.ExtEvPolls && !tc.metadata.IsBot && poll.PublicVoters && !poll.Closed && !isForwarded
-}
-
-func (tc *TelegramClient) pollVoteSender(userID networkid.UserID) bridgev2.EventSender {
-	if peerType, id, err := ids.ParseUserID(userID); err == nil && peerType == ids.PeerTypeUser {
-		return tc.senderForUserID(id)
+func (tc *TelegramClient) FetchPollResults(ctx context.Context, portal *bridgev2.Portal, msg *database.Message) (*bridgev2.PollResults, error) {
+	pollMeta := msg.Metadata.(*MessageMetadata).Poll
+	if pollMeta == nil {
+		return nil, mautrix.MNotFound.WithMessage("Message is not a poll")
 	}
-	return bridgev2.EventSender{Sender: userID}
-}
-
-func (tc *TelegramClient) onMessagePoll(ctx context.Context, update *tg.UpdateMessagePoll) error {
-	peer, ok := update.GetPeer()
-	if !ok {
-		return nil
-	}
-	msgID, _ := update.GetMsgID()
-	return tc.handlePollResults(ctx, ids.MakeMessageID(peer, msgID), update)
-}
-
-func (tc *TelegramClient) handlePollResults(ctx context.Context, messageID networkid.MessageID, update *tg.UpdateMessagePoll) error {
-	ctx = zerolog.Ctx(ctx).With().
-		Str("handler", "poll_results").
-		Str("message_id", string(messageID)).
-		Int64("poll_id", update.PollID).
-		Logger().WithContext(ctx)
-	parts, err := tc.main.Bridge.DB.Message.GetAllPartsByID(ctx, tc.loginID, messageID)
-	if err != nil {
-		return err
-	}
-	pollIdx := slices.IndexFunc(parts, func(part *database.Message) bool {
-		return part.Metadata.(*MessageMetadata).Poll != nil
-	})
-	if pollIdx < 0 {
-		return nil
-	}
-	portalKey := parts[pollIdx].Room
-	_, msgID, err := ids.ParseMessageID(messageID)
-	if err != nil {
-		return err
-	}
-
-	_, ownVoted := parts[pollIdx].Metadata.(*MessageMetadata).Poll.Votes[tc.userID]
-	votes, complete := tc.getPollVotes(ctx, portalKey, msgID, &update.Results, ownVoted)
-	poll, hasPoll := update.GetPoll()
-	closed := hasPoll && poll.Closed
-	return resultToError(tc.main.Bridge.QueueRemoteEvent(tc.userLogin, &simplevent.Message[[]pollVote]{
-		EventMeta: simplevent.EventMeta{
-			Type:      bridgev2.RemoteEventMessageUpsert,
-			PortalKey: portalKey,
-			LogContext: func(c zerolog.Context) zerolog.Context {
-				return c.Int("message_id", msgID).Str("tg_event", "updateMessagePoll")
-			},
-		},
-		ID:   messageID,
-		Data: votes,
-		ConvertMessageFunc: func(ctx context.Context, portal *bridgev2.Portal, intent bridgev2.MatrixAPI, data []pollVote) (*bridgev2.ConvertedMessage, error) {
-			return nil, fmt.Errorf("%w: poll message not found", bridgev2.ErrIgnoringRemoteEvent)
-		},
-		HandleExistingFunc: func(ctx context.Context, portal *bridgev2.Portal, intent bridgev2.MatrixAPI, existing []*database.Message, data []pollVote) (bridgev2.UpsertResult, error) {
-			return tc.syncPollVotes(ctx, portal, existing, data, complete, closed)
-		},
-	}))
-}
-
-func (tc *TelegramClient) maybeRefreshPolls(ctx context.Context, portal *bridgev2.Portal) error {
-	if tc.metadata.IsBot || portal == nil || portal.RoomType == database.RoomTypeSpace {
-		return nil
-	}
-	tc.prevPollRefreshLock.Lock()
-	prev, ok := tc.prevPollRefresh[portal.PortalKey]
-	if !ok || time.Since(prev) > 20*time.Second {
-		ok = false
-		tc.prevPollRefresh[portal.PortalKey] = time.Now()
-	}
-	tc.prevPollRefreshLock.Unlock()
-	if ok {
-		return nil
-	}
-
-	messages, err := tc.main.Bridge.DB.Message.GetLastNInPortal(ctx, portal.PortalKey, 20)
-	if err != nil {
-		return err
-	}
-	var inputPeer tg.InputPeerClass
-	refreshed := make(map[networkid.MessageID]struct{})
-	for _, msg := range messages {
-		meta := msg.Metadata.(*MessageMetadata).Poll
-		if _, ok := refreshed[msg.ID]; ok || meta == nil || meta.Ended {
-			continue
-		}
-		refreshed[msg.ID] = struct{}{}
-		_, msgID, err := ids.ParseMessageID(msg.ID)
-		if err != nil {
-			continue
-		}
-		if inputPeer == nil {
-			inputPeer, _, err = tc.inputPeerForPortalID(ctx, portal.ID)
-			if err != nil {
-				return err
-			}
-		}
-		updates, err := tc.client.API().MessagesGetPollResults(ctx, &tg.MessagesGetPollResultsRequest{
-			Peer:  inputPeer,
-			MsgID: msgID,
-		})
-		if err == nil {
-			err = tc.handlePollResultUpdates(ctx, msg.ID, updates)
-		}
-		if err != nil {
-			zerolog.Ctx(ctx).Err(err).Str("message_id", string(msg.ID)).Msg("Failed to refresh poll results")
-		}
-	}
-	return nil
-}
-
-func (tc *TelegramClient) handlePollResultUpdates(ctx context.Context, messageID networkid.MessageID, updates tg.UpdatesClass) error {
-	typedUpdates, ok := updates.(*tg.Updates)
-	if !ok {
-		return nil
-	}
-	err := handleUserUpdates[*tg.Updates](ctx, tc, typedUpdates)
-	if err != nil {
-		return err
-	}
-	for _, update := range typedUpdates.Updates {
-		if pollUpdate, ok := update.(*tg.UpdateMessagePoll); ok {
-			err = tc.handlePollResults(ctx, messageID, pollUpdate)
-			if err != nil {
-				return err
-			}
-		}
-	}
-	return nil
-}
-
-func (tc *TelegramClient) getPollVotes(ctx context.Context, portalKey networkid.PortalKey, msgID int, results *tg.PollResults, ownVoted bool) ([]pollVote, bool) {
-	answers, ok := results.GetResults()
-	if !ok {
-		return nil, false
-	}
-	var mine *pollVote
-	if !results.Min {
-		mine = &pollVote{Sender: tc.mySender()}
-		for _, answer := range answers {
-			if answer.Chosen {
-				mine.Options = append(mine.Options, answer.Option)
-			}
-		}
-	}
-
-	complete := true
-	var votes []pollVote
-	voteIndexes := make(map[networkid.UserID]int)
-	addVote := func(peer tg.PeerClass, options [][]byte, date int) {
-		sender := tc.getPeerSender(peer)
-		var ts time.Time
-		if date > 0 {
-			ts = time.Unix(int64(date), 0)
-		}
-		if idx, ok := voteIndexes[sender.Sender]; ok {
-			votes[idx].Options = append(votes[idx].Options, options...)
-		} else {
-			voteIndexes[sender.Sender] = len(votes)
-			votes = append(votes, pollVote{Sender: sender, Options: options, Timestamp: ts})
-		}
-	}
-	for _, answer := range answers {
-		if len(answer.RecentVoters) < answer.Voters {
-			complete = false
-		}
-		for _, voter := range answer.RecentVoters {
-			addVote(voter, [][]byte{answer.Option}, 0)
-		}
-	}
-	if !complete {
-		votes = votes[:0]
-		clear(voteIndexes)
-		if mine != nil && len(mine.Options) == 0 {
-			return []pollVote{*mine}, false
-		} else if mine == nil && !ownVoted {
-			return nil, false
-		}
-		votesList, err := tc.fetchPollVotes(ctx, portalKey, msgID)
-		if err != nil {
-			zerolog.Ctx(ctx).Warn().Err(err).Msg("Failed to get poll votes")
-		} else {
-			for _, vote := range votesList.Votes {
-				switch typedVote := vote.(type) {
-				case *tg.MessagePeerVote:
-					addVote(typedVote.Peer, [][]byte{typedVote.Option}, typedVote.Date)
-				case *tg.MessagePeerVoteMultiple:
-					addVote(typedVote.Peer, typedVote.Options, typedVote.Date)
-				}
-			}
-			_, hasMore := votesList.GetNextOffset()
-			complete = !hasMore && len(votes) >= votesList.Count
-		}
-	}
-	if mine != nil {
-		if idx, ok := voteIndexes[tc.userID]; ok {
-			votes[idx].Options = mine.Options
-		} else {
-			votes = append(votes, *mine)
-		}
-	}
-	return votes, complete
-}
-
-func (tc *TelegramClient) fetchPollVotes(ctx context.Context, portalKey networkid.PortalKey, msgID int) (*tg.MessagesVotesList, error) {
-	inputPeer, _, err := tc.inputPeerForPortalID(ctx, portalKey.ID)
+	_, tgMsgID, err := ids.ParseMessageID(msg.ID)
 	if err != nil {
 		return nil, err
 	}
-	return APICallWithUpdates(ctx, tc, func() (*tg.MessagesVotesList, error) {
-		return tc.client.API().MessagesGetPollVotes(ctx, &tg.MessagesGetPollVotesRequest{
-			Peer:  inputPeer,
-			ID:    msgID,
-			Limit: 100,
+	peer, _, err := tc.inputPeerForPortalID(ctx, portal.ID)
+	if err != nil {
+		return nil, err
+	}
+	updates, err := APICallWithUpdates(ctx, tc, func() (*tg.Updates, error) {
+		u, err := tc.client.API().MessagesGetPollResults(ctx, &tg.MessagesGetPollResultsRequest{
+			Peer:  peer,
+			MsgID: tgMsgID,
 		})
-	})
-}
-
-func (tc *TelegramClient) syncPollVotes(
-	ctx context.Context,
-	portal *bridgev2.Portal,
-	existing []*database.Message,
-	votes []pollVote,
-	complete, closed bool,
-) (bridgev2.UpsertResult, error) {
-	log := zerolog.Ctx(ctx)
-	pollIdx := slices.IndexFunc(existing, func(part *database.Message) bool {
-		return part.Metadata.(*MessageMetadata).Poll != nil
-	})
-	if pollIdx < 0 {
-		return bridgev2.UpsertResult{}, nil
-	}
-	pollMsg := existing[pollIdx]
-	meta := pollMsg.Metadata.(*MessageMetadata).Poll
-	if meta.Ended {
-		return bridgev2.UpsertResult{}, nil
-	}
-	if meta.Votes == nil {
-		meta.Votes = make(map[networkid.UserID][]string)
-	}
-	var changed bool
-	updateVote := func(sender bridgev2.EventSender, answers []string, ts time.Time) {
-		prev, voted := meta.Votes[sender.Sender]
-		if slices.Equal(prev, answers) || (!voted && len(answers) == 0) {
-			return
-		}
-		err := tc.sendPollResponse(ctx, portal, pollMsg, sender, answers, ts)
 		if err != nil {
-			log.Err(err).Str("voter_id", string(sender.Sender)).Msg("Failed to send poll response")
-			return
-		}
-		if len(answers) == 0 {
-			delete(meta.Votes, sender.Sender)
+			return nil, err
+		} else if updates, ok := u.(*tg.Updates); ok {
+			return updates, nil
 		} else {
-			meta.Votes[sender.Sender] = answers
+			return nil, fmt.Errorf("unexpected updates type %T", u)
 		}
-		changed = true
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get poll results: %w", err)
 	}
-
-	seen := make(map[networkid.UserID]struct{}, len(votes))
-	for _, vote := range votes {
-		seen[vote.Sender.Sender] = struct{}{}
-		answers := make([]string, len(vote.Options))
-		for i, option := range vote.Options {
-			answers[i] = pollAnswerID(meta, option)
-		}
-		slices.Sort(answers)
-		updateVote(vote.Sender, answers, vote.Timestamp)
-	}
-	if complete {
-		for userID := range meta.Votes {
-			if _, ok := seen[userID]; !ok {
-				updateVote(tc.pollVoteSender(userID), nil, time.Time{})
-			}
+	for _, update := range updates.Updates {
+		if pollUpdate, ok := update.(*tg.UpdateMessagePoll); ok {
+			return tc.convertPollResults(pollMeta, pollUpdate), nil
 		}
 	}
-	if closed {
-		intent, ok := portal.GetIntentFor(ctx, tc.pollVoteSender(pollMsg.SenderID), tc.userLogin, bridgev2.RemoteEventMessage)
-		if ok {
-			_, err := intent.SendMessage(ctx, portal.MXID, event.EventUnstablePollEnd, &event.Content{
-				Parsed: &event.MessageEventContent{
-					RelatesTo: &event.RelatesTo{
-						Type:    event.RelReference,
-						EventID: pollMsg.MXID,
-					},
-				},
-				Raw: map[string]any{
-					"org.matrix.msc3381.poll.end": map[string]any{},
-				},
-			}, nil)
-			if err != nil {
-				log.Err(err).Msg("Failed to send poll end")
-			} else {
-				meta.Ended = true
-				changed = true
-			}
-		}
-	}
-	return bridgev2.UpsertResult{SaveParts: changed}, nil
+	return nil, fmt.Errorf("no poll results in response")
 }
 
-func (tc *TelegramClient) sendPollResponse(
-	ctx context.Context,
-	portal *bridgev2.Portal,
-	pollMsg *database.Message,
-	sender bridgev2.EventSender,
-	answers []string,
-	ts time.Time,
-) error {
-	intent, ok := portal.GetIntentFor(ctx, sender, tc.userLogin, bridgev2.RemoteEventMessage)
-	if !ok {
-		return fmt.Errorf("failed to get intent for voter")
+func (tc *TelegramClient) convertPollResults(meta *PollMetadata, update *tg.UpdateMessagePoll) *bridgev2.PollResults {
+	answerResults := make(map[string]tg.PollAnswerVoters, len(update.Results.Results))
+	for _, answer := range update.Results.Results {
+		answerResults[string(answer.Option)] = answer
 	}
-	if answers == nil {
-		answers = []string{}
+	var options [][]byte
+	poll, hasPoll := update.GetPoll()
+	if hasPoll {
+		for _, answer := range poll.Answers {
+			if typedAnswer, ok := answer.(*tg.PollAnswer); ok {
+				options = append(options, typedAnswer.Option)
+			}
+		}
+	} else {
+		for _, answer := range update.Results.Results {
+			options = append(options, answer.Option)
+		}
 	}
-	_, err := intent.SendMessage(ctx, portal.MXID, event.EventUnstablePollResponse, &event.Content{
-		Parsed: &event.MessageEventContent{
-			RelatesTo: &event.RelatesTo{
-				Type:    event.RelReference,
-				EventID: pollMsg.MXID,
-			},
-		},
-		Raw: map[string]any{
-			"org.matrix.msc3381.poll.response": map[string]any{
-				"answers": answers,
-			},
-		},
-	}, &bridgev2.MatrixSendExtra{Timestamp: ts})
-	return err
+	results := &bridgev2.PollResults{
+		Closed:      hasPoll && poll.Closed,
+		TotalVoters: update.Results.TotalVoters,
+		Answers:     make([]*bridgev2.PollAnswerResult, len(options)),
+	}
+	for i, option := range options {
+		answer := answerResults[string(option)]
+		results.Answers[i] = &bridgev2.PollAnswerResult{
+			ID:           pollAnswerID(meta, option),
+			Voters:       answer.Voters,
+			Chosen:       answer.Chosen && !update.Results.Min,
+			RecentVoters: make([]networkid.UserID, len(answer.RecentVoters)),
+		}
+		for j, voter := range answer.RecentVoters {
+			results.Answers[i].RecentVoters[j] = tc.getPeerSender(voter).Sender
+		}
+	}
+	return results
 }
 
 func (tc *TelegramClient) HandleMatrixPollStart(ctx context.Context, msg *bridgev2.MatrixPollStart) (*bridgev2.MatrixMessageResponse, error) {
@@ -427,7 +158,7 @@ func (tc *TelegramClient) HandleMatrixPollStart(ctx context.Context, msg *bridge
 		Peer: peer,
 		Media: &tg.InputMediaPoll{
 			Poll: tg.Poll{
-				PublicVoters:   true,
+				PublicVoters:   !isBroadcastPortal(msg.Portal),
 				MultipleChoice: msg.Content.PollStart.MaxSelections != 1,
 				Question:       tg.TextWithEntities{Text: msg.Content.PollStart.Question.GetText()},
 				Answers:        answers,
@@ -483,7 +214,7 @@ func (tc *TelegramClient) HandleMatrixPollVote(ctx context.Context, msg *bridgev
 			return nil, fmt.Errorf("unknown poll answer ID %q: %w", answer, err)
 		}
 	}
-	updates, err := tc.client.API().MessagesSendVote(ctx, &tg.MessagesSendVoteRequest{
+	_, err = tc.client.API().MessagesSendVote(ctx, &tg.MessagesSendVoteRequest{
 		Peer:    peer,
 		MsgID:   tgMsgID,
 		Options: options,
@@ -491,28 +222,6 @@ func (tc *TelegramClient) HandleMatrixPollVote(ctx context.Context, msg *bridgev
 	if err != nil {
 		return nil, tc.humaniseSendError(err)
 	}
-
-	answers := slices.Clone(msg.Content.Response.Answers)
-	slices.Sort(answers)
-	if pollMeta.Votes == nil {
-		pollMeta.Votes = make(map[networkid.UserID][]string)
-	}
-	if len(answers) == 0 {
-		delete(pollMeta.Votes, tc.userID)
-	} else {
-		pollMeta.Votes[tc.userID] = answers
-	}
-	err = tc.main.Bridge.DB.Message.Update(ctx, msg.VoteTo)
-	if err != nil {
-		zerolog.Ctx(ctx).Err(err).Msg("Failed to save own poll vote")
-	}
-
-	go func() {
-		err := tc.handlePollResultUpdates(ctx, msg.VoteTo.ID, updates)
-		if err != nil {
-			zerolog.Ctx(ctx).Err(err).Msg("Failed to sync poll votes after voting")
-		}
-	}()
 
 	return &bridgev2.MatrixMessageResponse{
 		DB: &database.Message{
@@ -523,4 +232,9 @@ func (tc *TelegramClient) HandleMatrixPollVote(ctx context.Context, msg *bridgev
 			Metadata:  &MessageMetadata{},
 		},
 	}, nil
+}
+
+func isBroadcastPortal(portal *bridgev2.Portal) bool {
+	peerType, _, _, err := ids.ParsePortalID(portal.ID)
+	return err == nil && peerType == ids.PeerTypeChannel && !portal.Metadata.(*PortalMetadata).IsSuperGroup
 }
