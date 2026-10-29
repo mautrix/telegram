@@ -62,6 +62,7 @@ import (
 	"go.mau.fi/mautrix-telegram/pkg/connector/matrixfmt"
 	"go.mau.fi/mautrix-telegram/pkg/connector/media"
 	"go.mau.fi/mautrix-telegram/pkg/connector/waveform"
+	"go.mau.fi/mautrix-telegram/pkg/gotd/constant"
 	"go.mau.fi/mautrix-telegram/pkg/gotd/telegram/uploader"
 	"go.mau.fi/mautrix-telegram/pkg/gotd/tg"
 	"go.mau.fi/mautrix-telegram/pkg/gotd/tgerr"
@@ -86,6 +87,14 @@ var (
 )
 
 const telegramMediaUploadThreads = 4
+
+func uploadPartSize(size int64) int {
+	partSize := 128 * 1024
+	for partSize < uploader.MaximumPartSize && int64(partSize)*constant.UploadMaxParts < size {
+		partSize *= 2
+	}
+	return partSize
+}
 
 func (tc *TelegramClient) HandleMatrixViewingChat(ctx context.Context, msg *bridgev2.MatrixViewingChat) error {
 	if msg.Portal == nil {
@@ -327,8 +336,13 @@ func (tc *TelegramClient) transferMediaToTelegram(ctx context.Context, content *
 			}
 		}
 
+		uploadInfo, err := os.Stat(uploadFilename)
+		if err != nil {
+			return err
+		}
 		upload, err = uploader.NewUploader(tc.client.API()).
 			WithThreads(telegramMediaUploadThreads).
+			WithPartSize(uploadPartSize(uploadInfo.Size())).
 			FromPath(ctx, uploadFilename, filename)
 		return tc.humaniseSendError(err)
 	})
