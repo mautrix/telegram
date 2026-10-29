@@ -107,7 +107,8 @@ func (tc *TelegramClient) handlePollResults(ctx context.Context, messageID netwo
 		return err
 	}
 
-	votes, complete := tc.getPollVotes(ctx, portalKey, msgID, &update.Results)
+	_, ownVoted := parts[pollIdx].Metadata.(*MessageMetadata).Poll.Votes[tc.userID]
+	votes, complete := tc.getPollVotes(ctx, portalKey, msgID, &update.Results, ownVoted)
 	poll, hasPoll := update.GetPoll()
 	closed := hasPoll && poll.Closed
 	return resultToError(tc.main.Bridge.QueueRemoteEvent(tc.userLogin, &simplevent.Message[[]pollVote]{
@@ -200,7 +201,7 @@ func (tc *TelegramClient) handlePollResultUpdates(ctx context.Context, messageID
 	return nil
 }
 
-func (tc *TelegramClient) getPollVotes(ctx context.Context, portalKey networkid.PortalKey, msgID int, results *tg.PollResults) ([]pollVote, bool) {
+func (tc *TelegramClient) getPollVotes(ctx context.Context, portalKey networkid.PortalKey, msgID int, results *tg.PollResults, ownVoted bool) ([]pollVote, bool) {
 	answers, ok := results.GetResults()
 	if !ok {
 		return nil, false
@@ -244,6 +245,8 @@ func (tc *TelegramClient) getPollVotes(ctx context.Context, portalKey networkid.
 		clear(voteIndexes)
 		if mine != nil && len(mine.Options) == 0 {
 			return []pollVote{*mine}, false
+		} else if mine == nil && !ownVoted {
+			return nil, false
 		}
 		votesList, err := tc.fetchPollVotes(ctx, portalKey, msgID)
 		if err != nil {
