@@ -119,6 +119,17 @@ disable_view_once: false
 video_url_preview_as_file: false
 # Should communities on Telegram be bridged as Matrix spaces?
 bridge_communities: true
+# Bridging of bot keyboards (inline buttons and reply keyboards).
+bot_buttons:
+    # Should bot buttons be rendered as a numbered list below the message?
+    # Replying to the message with just a button number (e.g. "2" or "[2]")
+    # presses that button.
+    enabled: false
+    # Should button numbers without a reply also press buttons in private chats?
+    # They apply to the latest bot message or the bot's current reply keyboard.
+    # Numbers that don't match a button are still sent as text, but numbers that
+    # do can only be sent as text by replying to a message without buttons.
+    plain_numbers: false
 # Displayname template for Telegram users.
 # {{ .FullName }} - the full name of the Telegram user
 # {{ .FirstName }} - the first name of the Telegram user
