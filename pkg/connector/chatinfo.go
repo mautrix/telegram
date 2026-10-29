@@ -591,11 +591,15 @@ func (tc *TelegramClient) getChatInfo(ctx context.Context, portal *bridgev2.Port
 			if err != nil {
 				return nil, err
 			}
-			info, _, err := tc.wrapChatInfo(portal.ID, channel)
+			info, mfm, err := tc.wrapChatInfo(portal.ID, channel)
 			if err != nil {
 				return nil, err
 			}
 			tc.overrideChatInfoWithTopic(info, topic)
+			err = tc.fillChannelMembers(ctx, mfm, info.Members)
+			if err != nil {
+				zerolog.Ctx(ctx).Err(err).Msg("Failed to get channel members")
+			}
 			return info, nil
 		}
 		fullChat, err := APICallWithUpdates(ctx, tc, func() (*tg.MessagesChatFull, error) {
