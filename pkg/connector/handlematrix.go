@@ -107,6 +107,10 @@ func (tc *TelegramClient) HandleMatrixViewingChat(ctx context.Context, msg *brid
 	if err != nil {
 		return err
 	}
+	err = tc.maybeRefreshPolls(ctx, msg.Portal)
+	if err != nil {
+		return err
+	}
 	err = tc.pollSponsoredMessage(ctx, msg.Portal)
 	if err != nil {
 		return err
@@ -526,24 +530,7 @@ func (tc *TelegramClient) HandleMatrixMessage(ctx context.Context, msg *bridgev2
 
 	message, entities := matrixfmt.Parse(ctx, tc.matrixParser, msg.Content, msg.Portal, tc.getMaxMessageLength(ctx, msg.Content.MsgType.IsMedia()))
 
-	var replyTo tg.InputReplyToClass
-	if msg.ReplyTo != nil {
-		_, messageID, err := ids.ParseMessageID(msg.ReplyTo.ID)
-		if err != nil {
-			log.Warn().Err(err).Str("reply_to_id", string(msg.ReplyTo.ID)).
-				Msg("failed to parse replied-to message ID")
-		} else {
-			replyTo = &tg.InputReplyToMessage{ReplyToMsgID: messageID}
-		}
-	}
-	if topicID > 0 {
-		if replyTo == nil {
-			replyTo = &tg.InputReplyToMessage{ReplyToMsgID: topicID}
-		} else {
-			replyTo.(*tg.InputReplyToMessage).TopMsgID = topicID
-		}
-	}
-
+	replyTo := makeInputReplyTo(ctx, msg.ReplyTo, topicID)
 	randomID := parseRandomID(msg.InputTransactionID)
 
 	var updates tg.UpdatesClass
@@ -626,18 +613,54 @@ func (tc *TelegramClient) HandleMatrixMessage(ctx context.Context, msg *bridgev2
 		log.Err(err).Msg("failed to send message to Telegram")
 		return nil, tc.humaniseSendError(err)
 	}
+	resp, _, err = tc.makeSendResponse(ctx, msg.Portal, updates, randomID, msg.Content.Body, contentURI)
+	return
+}
 
+func makeInputReplyTo(ctx context.Context, replyToMsg *database.Message, topicID int) tg.InputReplyToClass {
+	var replyTo *tg.InputReplyToMessage
+	if replyToMsg != nil {
+		_, messageID, err := ids.ParseMessageID(replyToMsg.ID)
+		if err != nil {
+			zerolog.Ctx(ctx).Warn().Err(err).Str("reply_to_id", string(replyToMsg.ID)).
+				Msg("failed to parse replied-to message ID")
+		} else {
+			replyTo = &tg.InputReplyToMessage{ReplyToMsgID: messageID}
+		}
+	}
+	if topicID > 0 {
+		if replyTo == nil {
+			replyTo = &tg.InputReplyToMessage{ReplyToMsgID: topicID}
+		} else {
+			replyTo.TopMsgID = topicID
+		}
+	}
+	if replyTo == nil {
+		return nil
+	}
+	return replyTo
+}
+
+func (tc *TelegramClient) makeSendResponse(
+	ctx context.Context,
+	portal *bridgev2.Portal,
+	updates tg.UpdatesClass,
+	randomID int64,
+	body string,
+	contentURI id.ContentURIString,
+) (*bridgev2.MatrixMessageResponse, *tg.Message, error) {
+	log := zerolog.Ctx(ctx)
 	hasher := sha256.New()
 
 	var tgMessageID, tgDate int
+	var realSentMessage *tg.Message
 	switch sentMessage := updates.(type) {
 	case *tg.UpdateShortSentMessage:
 		tgMessageID = sentMessage.ID
 		tgDate = sentMessage.Date
-		hasher.Write([]byte(msg.Content.Body))
+		hasher.Write([]byte(body))
 		hasher.Write(mediaHashID(ctx, sentMessage.Media))
 	case *tg.Updates:
-		var realSentMessage *tg.Message
 		for _, u := range sentMessage.Updates {
 			switch update := u.(type) {
 			case *tg.UpdateMessageID:
@@ -676,17 +699,17 @@ func (tc *TelegramClient) HandleMatrixMessage(ctx context.Context, msg *bridgev2
 			hasher.Write([]byte(realSentMessage.Message))
 			hasher.Write(mediaHashID(ctx, realSentMessage.Media))
 		} else {
-			hasher.Write([]byte(msg.Content.Body))
+			hasher.Write([]byte(body))
 			tgDate = sentMessage.Date
 		}
 		if tgMessageID == 0 {
-			return nil, fmt.Errorf("couldn't find update message ID update")
+			return nil, nil, fmt.Errorf("couldn't find update message ID update")
 		}
 	default:
-		return nil, fmt.Errorf("unknown update from message response %T", updates)
+		return nil, nil, fmt.Errorf("unknown update from message response %T", updates)
 	}
 
-	messageID := ids.MakeMessageID(msg.Portal.PortalKey, tgMessageID)
+	messageID := ids.MakeMessageID(portal.PortalKey, tgMessageID)
 	timestamp := time.Unix(int64(tgDate), 0)
 	hash := hasher.Sum(nil)
 	log.Info().
@@ -696,7 +719,7 @@ func (tc *TelegramClient) HandleMatrixMessage(ctx context.Context, msg *bridgev2
 		Str("content_hash", base64.StdEncoding.EncodeToString(hash)).
 		Msg("sent message successfully")
 
-	resp = &bridgev2.MatrixMessageResponse{
+	return &bridgev2.MatrixMessageResponse{
 		DB: &database.Message{
 			ID:        messageID,
 			SenderID:  tc.userID,
@@ -707,8 +730,7 @@ func (tc *TelegramClient) HandleMatrixMessage(ctx context.Context, msg *bridgev2
 			},
 		},
 		StreamOrder: int64(tgMessageID),
-	}
-	return
+	}, realSentMessage, nil
 }
 
 const telegramViewOnceTTL = 0x7FFFFFFF
@@ -854,6 +876,8 @@ func (tc *TelegramClient) HandleMatrixMessageRemove(ctx context.Context, msg *br
 		return errSpacePortal
 	} else if dbMsg, err := tc.main.Bridge.DB.Message.GetPartByMXID(ctx, msg.TargetMessage.MXID); err != nil {
 		return err
+	} else if strings.HasPrefix(string(dbMsg.PartID), pollVotePartPrefix) {
+		return fmt.Errorf("%w: poll votes can't be deleted", bridgev2.ErrUnsupportedMessageType)
 	} else if _, messageID, err := ids.ParseMessageID(dbMsg.ID); err != nil {
 		return err
 	} else if peer, _, err := tc.inputPeerForPortalID(ctx, msg.Portal.ID); err != nil {
@@ -1151,6 +1175,10 @@ func (tc *TelegramClient) HandleMatrixReadReceipt(ctx context.Context, msg *brid
 		err := tc.maybePollForReactions(ctx, msg.Portal)
 		if err != nil {
 			log.Err(err).Msg("failed to poll for reactions after read receipt")
+		}
+		err = tc.maybeRefreshPolls(ctx, msg.Portal)
+		if err != nil {
+			log.Err(err).Msg("failed to refresh polls after read receipt")
 		}
 		err = tc.pollSponsoredMessage(ctx, msg.Portal)
 		if err != nil {

@@ -96,6 +96,13 @@ type MessageMetadata struct {
 	ViewLimited *event.BeeperViewLimitedMedia `json:"view_limited,omitempty"`
 	ContentHash []byte                        `json:"content_hash,omitempty"`
 	ContentURI  id.ContentURIString           `json:"content_uri,omitempty"`
+	Poll        *PollMetadata                 `json:"poll,omitempty"`
+}
+
+type PollMetadata struct {
+	MatrixAnswerIDs map[string]string             `json:"matrix_answer_ids,omitempty"`
+	Votes           map[networkid.UserID][]string `json:"votes,omitempty"`
+	Ended           bool                          `json:"ended,omitempty"`
 }
 
 type UserLoginMetadata struct {

@@ -119,7 +119,7 @@ func (tc *TelegramClient) mediaToMatrix(
 	case tg.MessageMediaGeoTypeID, tg.MessageMediaGeoLiveTypeID, tg.MessageMediaVenueTypeID:
 		return convertLocation(media), nil, nil
 	case tg.MessageMediaPollTypeID:
-		return convertPoll(media), nil, nil
+		return tc.convertPoll(msg, media), nil, nil
 	case tg.MessageMediaDiceTypeID:
 		return convertDice(media), nil, nil
 	case tg.MessageMediaGameTypeID:
@@ -254,6 +254,9 @@ func (tc *TelegramClient) convertToMatrix(
 		ContentHash: hasher.Sum(nil),
 		ContentURI:  contentURI,
 		ViewLimited: cm.Parts[0].Content.BeeperViewLimited,
+	}
+	if cm.Parts[0].Type == event.EventUnstablePollStart {
+		cm.Parts[0].DBMetadata.(*MessageMetadata).Poll = &PollMetadata{}
 	}
 
 	if fwd, isForwarded := msg.GetFwdFrom(); isForwarded {
@@ -958,27 +961,59 @@ func convertLocation(media tg.MessageMediaClass) *bridgev2.ConvertedMessagePart 
 	}
 }
 
-func convertPoll(media tg.MessageMediaClass) *bridgev2.ConvertedMessagePart {
-	// TODO (PLAT-25224) make this richer in the future once megabridge has support for polls
-
+func (tc *TelegramClient) convertPoll(msg *tg.Message, media tg.MessageMediaClass) *bridgev2.ConvertedMessagePart {
 	poll := media.(*tg.MessageMediaPoll)
 	var textAnswers []string
 	var htmlAnswers strings.Builder
+	msc3381Answers := make([]map[string]any, 0, len(poll.Poll.Answers))
 	for i, opt := range poll.Poll.Answers {
-		text := opt.GetText()
-		textAnswers = append(textAnswers, fmt.Sprintf("%d. %s", i+1, text.Text))
-		htmlAnswers.WriteString(fmt.Sprintf("<li>%s</li>", text.Text))
+		text := opt.GetText().Text
+		textAnswers = append(textAnswers, fmt.Sprintf("%d. %s", i+1, text))
+		htmlAnswers.WriteString(fmt.Sprintf("<li>%s</li>", event.TextToHTML(text)))
+		if answer, ok := opt.(*tg.PollAnswer); ok {
+			msc3381Answers = append(msc3381Answers, map[string]any{
+				"id":                      pollAnswerID(nil, answer.Option),
+				"org.matrix.msc1767.text": text,
+			})
+		}
 	}
 
-	return &bridgev2.ConvertedMessagePart{
+	part := &bridgev2.ConvertedMessagePart{
 		Type: event.EventMessage,
 		Content: &event.MessageEventContent{
 			MsgType:       event.MsgText,
 			Body:          fmt.Sprintf("Poll: %s\n%s\nOpen the Telegram app to vote.", poll.Poll.Question.Text, strings.Join(textAnswers, "\n")),
 			Format:        event.FormatHTML,
-			FormattedBody: fmt.Sprintf(`<strong>Poll</strong>: %s<ol>%s</ol>Open the Telegram app to vote.`, poll.Poll.Question.Text, htmlAnswers.String()),
+			FormattedBody: fmt.Sprintf(`<strong>Poll</strong>: %s<ol>%s</ol>Open the Telegram app to vote.`, event.TextToHTML(poll.Poll.Question.Text), htmlAnswers.String()),
 		},
 	}
+	if !tc.canBridgePollVotes(msg, &poll.Poll) || len(msc3381Answers) != len(poll.Poll.Answers) {
+		return part
+	}
+	maxSelections := 1
+	if poll.Poll.MultipleChoice {
+		maxSelections = len(msc3381Answers)
+	}
+	kind := "org.matrix.msc3381.poll.disclosed"
+	if poll.Poll.HideResultsUntilClose {
+		kind = "org.matrix.msc3381.poll.undisclosed"
+	}
+	part.Type = event.EventUnstablePollStart
+	part.Extra = map[string]any{
+		"org.matrix.msc1767.message": []map[string]any{
+			{"mimetype": "text/html", "body": part.Content.FormattedBody},
+			{"mimetype": "text/plain", "body": part.Content.Body},
+		},
+		"org.matrix.msc3381.poll.start": map[string]any{
+			"kind":           kind,
+			"max_selections": maxSelections,
+			"question": map[string]any{
+				"org.matrix.msc1767.text": poll.Poll.Question.Text,
+			},
+			"answers": msc3381Answers,
+		},
+	}
+	return part
 }
 
 func convertDice(media tg.MessageMediaClass) *bridgev2.ConvertedMessagePart {

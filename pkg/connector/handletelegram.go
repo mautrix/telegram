@@ -1068,6 +1068,8 @@ func (tc *TelegramClient) onUpdate(ctx context.Context, e tg.Entities, upd tg.Up
 		return tc.onMessageReactions(ctx, update)
 	case *tg.UpdateBotMessageReaction:
 		return tc.onBotMessageReaction(ctx, update)
+	case *tg.UpdateMessagePoll:
+		return tc.onMessagePoll(ctx, update)
 	case *tg.UpdateUserTyping:
 		return tc.handleTyping(tc.makePortalKeyFromID(ids.PeerTypeUser, update.UserID, 0), tc.senderForUserID(update.UserID), update.Action)
 	case *tg.UpdateChatUserTyping:

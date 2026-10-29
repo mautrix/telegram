@@ -755,5 +755,10 @@ func (tc *TelegramClient) getPowerLevelOverridesFromBannedRights(entity tg.ChatC
 		plo.Events[event.EventSticker] = 0
 	}
 
+	if dbr.SendPolls {
+		plo.Events[event.EventUnstablePollStart] = *postMessagesPowerLevel
+	}
+	plo.Events[event.EventUnstablePollResponse] = 0
+
 	return &plo
 }
