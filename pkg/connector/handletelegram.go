@@ -24,6 +24,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/rs/zerolog"
@@ -942,6 +943,7 @@ func (tc *TelegramClient) onDeleteMessages(ctx context.Context, channelID int64,
 		if err := resultToError(res); err != nil {
 			return err
 		}
+		markUpdateProgress(ctx)
 	}
 	return nil
 }
@@ -980,22 +982,35 @@ func (tc *TelegramClient) updateChannel(ctx context.Context, channel *tg.Channel
 
 const updateHandlerStuck status.BridgeStateErrorCode = "tg-update-handler-stuck"
 
+type updateProgressKey struct{}
+
+func markUpdateProgress(ctx context.Context) {
+	if lastProgress, ok := ctx.Value(updateProgressKey{}).(*atomic.Int64); ok {
+		lastProgress.Store(time.Now().UnixNano())
+	}
+}
+
 func (tc *TelegramClient) onUpdateWrapper(ctx context.Context, e tg.Entities, upd tg.UpdateClass) error {
+	startedAt := time.Now()
+	var lastProgress atomic.Int64
+	lastProgress.Store(startedAt.UnixNano())
+	ctx = context.WithValue(ctx, updateProgressKey{}, &lastProgress)
 	doneChan := make(chan error, 1)
 	go func() {
 		doneChan <- tc.onUpdate(ctx, e, upd)
 	}()
 	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
-	startedAt := time.Now()
 	bridgeStateUpdated := false
 	for {
 		select {
 		case <-ticker.C:
+			lastProgressAt := time.Unix(0, lastProgress.Load())
 			zerolog.Ctx(ctx).Warn().
 				Time("started_at", startedAt).
+				Time("last_progress_at", lastProgressAt).
 				Msg("Telegram update handling is taking long")
-			if time.Since(startedAt) > 3*time.Minute && !bridgeStateUpdated {
+			if time.Since(lastProgressAt) > 3*time.Minute && !bridgeStateUpdated {
 				bridgeStateUpdated = true
 				tc.userLogin.BridgeState.Send(status.BridgeState{
 					StateEvent: status.StateUnknownError,
