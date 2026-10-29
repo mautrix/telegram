@@ -130,7 +130,7 @@ func (tc *TelegramClient) handlePollResults(ctx context.Context, messageID netwo
 }
 
 func (tc *TelegramClient) maybeRefreshPolls(ctx context.Context, portal *bridgev2.Portal) error {
-	if !tc.main.Config.ExtEvPolls || tc.metadata.IsBot || portal == nil || portal.RoomType == database.RoomTypeSpace {
+	if tc.metadata.IsBot || portal == nil || portal.RoomType == database.RoomTypeSpace {
 		return nil
 	}
 	tc.prevPollRefreshLock.Lock()
@@ -170,12 +170,11 @@ func (tc *TelegramClient) maybeRefreshPolls(ctx context.Context, portal *bridgev
 			Peer:  inputPeer,
 			MsgID: msgID,
 		})
-		if err != nil {
-			return fmt.Errorf("failed to get poll results: %w", err)
+		if err == nil {
+			err = tc.handlePollResultUpdates(ctx, msg.ID, updates)
 		}
-		err = tc.handlePollResultUpdates(ctx, msg.ID, updates)
 		if err != nil {
-			return err
+			zerolog.Ctx(ctx).Err(err).Str("message_id", string(msg.ID)).Msg("Failed to refresh poll results")
 		}
 	}
 	return nil
@@ -241,12 +240,15 @@ func (tc *TelegramClient) getPollVotes(ctx context.Context, portalKey networkid.
 		}
 	}
 	if !complete {
+		votes = votes[:0]
+		clear(voteIndexes)
+		if mine != nil && len(mine.Options) == 0 {
+			return []pollVote{*mine}, false
+		}
 		votesList, err := tc.fetchPollVotes(ctx, portalKey, msgID)
 		if err != nil {
-			zerolog.Ctx(ctx).Warn().Err(err).Msg("Failed to get poll votes, using recent voters")
+			zerolog.Ctx(ctx).Warn().Err(err).Msg("Failed to get poll votes")
 		} else {
-			votes = votes[:0]
-			clear(voteIndexes)
 			for _, vote := range votesList.Votes {
 				switch typedVote := vote.(type) {
 				case *tg.MessagePeerVote:
