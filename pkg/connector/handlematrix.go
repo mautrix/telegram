@@ -329,7 +329,6 @@ func (tc *TelegramClient) transferMediaToTelegram(ctx context.Context, content *
 
 		upload, err = uploader.NewUploader(tc.client.API()).
 			WithThreads(telegramMediaUploadThreads).
-			WithPartSize(uploader.MaximumPartSize).
 			FromPath(ctx, uploadFilename, filename)
 		return tc.humaniseSendError(err)
 	})
