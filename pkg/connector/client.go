@@ -120,6 +120,9 @@ type TelegramClient struct {
 
 	dcTransferLock sync.Mutex
 
+	topicMembersLock sync.Mutex
+	topicMembers     map[int64]cachedChannelMembers
+
 	takeoutLock        sync.Mutex
 	takeoutAccepted    *exsync.Event
 	stopTakeoutTimer   *time.Timer

@@ -21,6 +21,7 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"iter"
+	"maps"
 	"slices"
 	"time"
 
@@ -331,6 +332,35 @@ func (tc *TelegramClient) fillChannelMembers(ctx context.Context, mfm *memberFet
 	return nil
 }
 
+type cachedChannelMembers struct {
+	members   bridgev2.ChatMemberMap
+	isFull    bool
+	fetchedAt time.Time
+}
+
+func (tc *TelegramClient) fillTopicMembers(ctx context.Context, channelID int64, mfm *memberFetchMeta, info *bridgev2.ChatMemberList) error {
+	tc.topicMembersLock.Lock()
+	defer tc.topicMembersLock.Unlock()
+	cached, ok := tc.topicMembers[channelID]
+	if !ok || time.Since(cached.fetchedAt) > 10*time.Minute {
+		fetched := &bridgev2.ChatMemberList{
+			MemberMap:        bridgev2.ChatMemberMap{},
+			TotalMemberCount: info.TotalMemberCount,
+		}
+		if err := tc.fillChannelMembers(ctx, mfm, fetched); err != nil {
+			return err
+		}
+		cached = cachedChannelMembers{members: fetched.MemberMap, isFull: fetched.IsFull, fetchedAt: time.Now()}
+		if tc.topicMembers == nil {
+			tc.topicMembers = make(map[int64]cachedChannelMembers)
+		}
+		tc.topicMembers[channelID] = cached
+	}
+	maps.Copy(info.MemberMap, cached.members)
+	info.IsFull = cached.isFull
+	return nil
+}
+
 type userLocalDialog interface {
 	GetNotifySettings() tg.PeerNotifySettings
 	GetPinned() bool
@@ -591,11 +621,15 @@ func (tc *TelegramClient) getChatInfo(ctx context.Context, portal *bridgev2.Port
 			if err != nil {
 				return nil, err
 			}
-			info, _, err := tc.wrapChatInfo(portal.ID, channel)
+			info, mfm, err := tc.wrapChatInfo(portal.ID, channel)
 			if err != nil {
 				return nil, err
 			}
 			tc.overrideChatInfoWithTopic(info, topic)
+			err = tc.fillTopicMembers(ctx, id, mfm, info.Members)
+			if err != nil {
+				zerolog.Ctx(ctx).Err(err).Msg("Failed to get channel members")
+			}
 			return info, nil
 		}
 		fullChat, err := APICallWithUpdates(ctx, tc, func() (*tg.MessagesChatFull, error) {
