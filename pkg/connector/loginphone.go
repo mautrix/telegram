@@ -42,6 +42,7 @@ type PhoneLogin struct {
 	phone         string
 	hash          string
 	codeSubmitted bool
+	codeType      tg.AuthSentCodeTypeClass
 }
 
 var (
@@ -103,8 +104,9 @@ func phoneCodeStep(codeType tg.AuthSentCodeTypeClass) (*bridgev2.LoginStep, erro
 		return nil, ErrLoginEmailRequired
 	}
 	return &bridgev2.LoginStep{
-		Type:   bridgev2.LoginStepTypeUserInput,
-		StepID: LoginStepIDCode,
+		Type:         bridgev2.LoginStepTypeUserInput,
+		StepID:       LoginStepIDCode,
+		Instructions: "Enter the login code Telegram sent you",
 		UserInputParams: &bridgev2.LoginUserInputParams{
 			Fields: []bridgev2.LoginInputDataField{{
 				Type:        bridgev2.LoginInputFieldType2FACode,
@@ -148,6 +150,7 @@ func (pl *PhoneLogin) submitNumber(ctx context.Context, phone string) (*bridgev2
 	switch s := sentCode.(type) {
 	case *tg.AuthSentCode:
 		pl.hash = s.PhoneCodeHash
+		pl.codeType = s.Type
 		log.Debug().
 			Type("code_type", s.Type).
 			Type("next_type", s.NextType).
@@ -171,6 +174,8 @@ func (pl *PhoneLogin) submitNumber(ctx context.Context, phone string) (*bridgev2
 func (pl *PhoneLogin) submitCode(ctx context.Context, code string) (*bridgev2.LoginStep, error) {
 	if pl.client == nil {
 		return nil, fmt.Errorf("unexpected state: client is nil when submitting phone code")
+	} else if code == "" {
+		return phoneCodeStep(pl.codeType)
 	}
 	authorization, err := pl.client.Auth().SignIn(ctx, pl.phone, code, pl.hash)
 	if errors.Is(err, auth.ErrPasswordAuthNeeded) {
