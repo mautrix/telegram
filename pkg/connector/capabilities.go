@@ -340,6 +340,12 @@ func (tc *TelegramClient) GetCapabilities(ctx context.Context, portal *bridgev2.
 		feat = &event.RoomFeatures{}
 	}
 
+	if tc.metadata.IsBot {
+		baseID += "+bot"
+		feat.Poll = event.CapLevelUnsupported
+		feat.PollResultsAPI = false
+	}
+
 	feat.ID = baseID
 	return feat
 }
