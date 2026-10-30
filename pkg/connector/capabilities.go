@@ -313,7 +313,11 @@ func (tc *TelegramClient) GetCapabilities(ctx context.Context, portal *bridgev2.
 		feat.DeleteChat = topicID == 0
 	case ids.PeerTypeUser:
 		baseID += "+dm"
-		feat.Poll = event.CapLevelRejected
+		if id == tc.telegramUserID || tc.isBotUser(ctx, id) {
+			baseID += "+polls"
+		} else {
+			feat.Poll = event.CapLevelRejected
+		}
 		feat.BlockUser = !tc.metadata.IsBot && id != tc.telegramUserID
 		feat.ReportSpam = feat.BlockUser
 		if !feat.BlockUser {

@@ -27,8 +27,10 @@ import (
 	"maunium.net/go/mautrix/bridgev2"
 	"maunium.net/go/mautrix/bridgev2/database"
 	"maunium.net/go/mautrix/bridgev2/networkid"
+	"maunium.net/go/mautrix/event"
 
 	"go.mau.fi/mautrix-telegram/pkg/connector/ids"
+	"go.mau.fi/mautrix-telegram/pkg/connector/matrixfmt"
 	"go.mau.fi/mautrix-telegram/pkg/gotd/tg"
 )
 
@@ -39,7 +41,7 @@ var (
 	_ bridgev2.PollResultsFetchingNetworkAPI = (*TelegramClient)(nil)
 )
 
-func pollAnswerID(meta *PollMetadata, option []byte) string {
+func telegramToMatrixAnswerID(meta *PollMetadata, option []byte) string {
 	answerID := base64.RawURLEncoding.EncodeToString(option)
 	if meta != nil {
 		if mxID, ok := meta.MatrixAnswerIDs[answerID]; ok {
@@ -49,7 +51,7 @@ func pollAnswerID(meta *PollMetadata, option []byte) string {
 	return answerID
 }
 
-func pollOption(meta *PollMetadata, answerID string) ([]byte, error) {
+func matrixToTelegramPollOption(meta *PollMetadata, answerID string) ([]byte, error) {
 	for option, mxID := range meta.MatrixAnswerIDs {
 		if mxID == answerID {
 			return base64.RawURLEncoding.DecodeString(option)
@@ -121,7 +123,7 @@ func (tc *TelegramClient) convertPollResults(meta *PollMetadata, update *tg.Upda
 	for i, option := range options {
 		answer := answerResults[string(option)]
 		results.Answers[i] = &bridgev2.PollAnswerResult{
-			ID:           pollAnswerID(meta, option),
+			ID:           telegramToMatrixAnswerID(meta, option),
 			Voters:       answer.Voters,
 			Chosen:       answer.Chosen && !update.Results.Min,
 			RecentVoters: make([]networkid.UserID, len(answer.RecentVoters)),
@@ -149,7 +151,7 @@ func (tc *TelegramClient) HandleMatrixPollStart(ctx context.Context, msg *bridge
 	answers := make([]tg.PollAnswerClass, len(msg.Content.PollStart.Answers))
 	for i, answer := range msg.Content.PollStart.Answers {
 		answers[i] = &tg.PollAnswer{
-			Text:   tg.TextWithEntities{Text: answer.GetText()},
+			Text:   tc.matrixToTelegramText(ctx, msg.Portal, &answer.MSC1767Message),
 			Option: []byte(strconv.Itoa(i)),
 		}
 	}
@@ -160,7 +162,7 @@ func (tc *TelegramClient) HandleMatrixPollStart(ctx context.Context, msg *bridge
 			Poll: tg.Poll{
 				PublicVoters:   !isBroadcastPortal(msg.Portal),
 				MultipleChoice: msg.Content.PollStart.MaxSelections != 1,
-				Question:       tg.TextWithEntities{Text: msg.Content.PollStart.Question.GetText()},
+				Question:       tc.matrixToTelegramText(ctx, msg.Portal, &msg.Content.PollStart.Question),
 				Answers:        answers,
 			},
 		},
@@ -183,7 +185,7 @@ func (tc *TelegramClient) HandleMatrixPollStart(ctx context.Context, msg *bridge
 	pollMeta := &PollMetadata{MatrixAnswerIDs: make(map[string]string, len(answers))}
 	for i, answer := range answers {
 		if typedAnswer, ok := answer.(*tg.PollAnswer); ok {
-			pollMeta.MatrixAnswerIDs[pollAnswerID(nil, typedAnswer.Option)] = msg.Content.PollStart.Answers[i].ID
+			pollMeta.MatrixAnswerIDs[telegramToMatrixAnswerID(nil, typedAnswer.Option)] = msg.Content.PollStart.Answers[i].ID
 		}
 	}
 	resp.DB.Metadata.(*MessageMetadata).Poll = pollMeta
@@ -209,7 +211,7 @@ func (tc *TelegramClient) HandleMatrixPollVote(ctx context.Context, msg *bridgev
 	}
 	options := make([][]byte, len(msg.Content.Response.Answers))
 	for i, answer := range msg.Content.Response.Answers {
-		options[i], err = pollOption(pollMeta, answer)
+		options[i], err = matrixToTelegramPollOption(pollMeta, answer)
 		if err != nil {
 			return nil, fmt.Errorf("unknown poll answer ID %q: %w", answer, err)
 		}
@@ -237,4 +239,23 @@ func (tc *TelegramClient) HandleMatrixPollVote(ctx context.Context, msg *bridgev
 func isBroadcastPortal(portal *bridgev2.Portal) bool {
 	peerType, _, _, err := ids.ParsePortalID(portal.ID)
 	return err == nil && peerType == ids.PeerTypeChannel && !portal.Metadata.(*PortalMetadata).IsSuperGroup
+}
+
+func (tc *TelegramClient) matrixToTelegramText(ctx context.Context, portal *bridgev2.Portal, text *event.MSC1767Message) tg.TextWithEntities {
+	content := &event.MessageEventContent{MsgType: event.MsgText, Body: text.GetText()}
+	if html := text.GetHTML(); html != "" {
+		content.Format = event.FormatHTML
+		content.FormattedBody = html
+	}
+	message, entities := matrixfmt.Parse(ctx, tc.matrixParser, content, portal, tc.getMaxMessageLength(ctx, false))
+	return tg.TextWithEntities{Text: message, Entities: entities}
+}
+
+func (tc *TelegramClient) isBotUser(ctx context.Context, userID int64) bool {
+	ghost, err := tc.main.Bridge.GetGhostByID(ctx, ids.MakeUserID(userID))
+	if err != nil {
+		zerolog.Ctx(ctx).Err(err).Int64("user_id", userID).Msg("Failed to get ghost to check if user is a bot")
+		return false
+	}
+	return ghost.IsBot
 }

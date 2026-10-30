@@ -119,7 +119,7 @@ func (tc *TelegramClient) mediaToMatrix(
 	case tg.MessageMediaGeoTypeID, tg.MessageMediaGeoLiveTypeID, tg.MessageMediaVenueTypeID:
 		return convertLocation(media), nil, nil
 	case tg.MessageMediaPollTypeID:
-		return tc.convertPoll(media), nil, nil
+		return tc.convertPoll(ctx, media), nil, nil
 	case tg.MessageMediaDiceTypeID:
 		return convertDice(media), nil, nil
 	case tg.MessageMediaGameTypeID:
@@ -966,19 +966,20 @@ func convertLocation(media tg.MessageMediaClass) *bridgev2.ConvertedMessagePart 
 	}
 }
 
-func (tc *TelegramClient) convertPoll(media tg.MessageMediaClass) *bridgev2.ConvertedMessagePart {
+func (tc *TelegramClient) convertPoll(ctx context.Context, media tg.MessageMediaClass) *bridgev2.ConvertedMessagePart {
 	poll := media.(*tg.MessageMediaPoll)
+	question, questionHTML := tc.telegramToMatrixText(ctx, poll.Poll.Question)
 	var textAnswers []string
 	var htmlAnswers strings.Builder
-	msc3381Answers := make([]map[string]any, 0, len(poll.Poll.Answers))
+	msc3381Answers := make([]event.PollOption, 0, len(poll.Poll.Answers))
 	for i, opt := range poll.Poll.Answers {
-		text := opt.GetText().Text
-		textAnswers = append(textAnswers, fmt.Sprintf("%d. %s", i+1, text))
-		htmlAnswers.WriteString(fmt.Sprintf("<li>%s</li>", event.TextToHTML(text)))
+		text, html := tc.telegramToMatrixText(ctx, opt.GetText())
+		textAnswers = append(textAnswers, fmt.Sprintf("%d. %s", i+1, text.Text))
+		htmlAnswers.WriteString(fmt.Sprintf("<li>%s</li>", html))
 		if answer, ok := opt.(*tg.PollAnswer); ok {
-			msc3381Answers = append(msc3381Answers, map[string]any{
-				"id":                      pollAnswerID(nil, answer.Option),
-				"org.matrix.msc1767.text": text,
+			msc3381Answers = append(msc3381Answers, event.PollOption{
+				ID:             telegramToMatrixAnswerID(nil, answer.Option),
+				MSC1767Message: text,
 			})
 		}
 	}
@@ -987,9 +988,9 @@ func (tc *TelegramClient) convertPoll(media tg.MessageMediaClass) *bridgev2.Conv
 		Type: event.EventMessage,
 		Content: &event.MessageEventContent{
 			MsgType:       event.MsgText,
-			Body:          fmt.Sprintf("Poll: %s\n%s\nOpen the Telegram app to vote.", poll.Poll.Question.Text, strings.Join(textAnswers, "\n")),
+			Body:          fmt.Sprintf("Poll: %s\n%s\nOpen the Telegram app to vote.", question.Text, strings.Join(textAnswers, "\n")),
 			Format:        event.FormatHTML,
-			FormattedBody: fmt.Sprintf(`<strong>Poll</strong>: %s<ol>%s</ol>Open the Telegram app to vote.`, event.TextToHTML(poll.Poll.Question.Text), htmlAnswers.String()),
+			FormattedBody: fmt.Sprintf(`<strong>Poll</strong>: %s<ol>%s</ol>Open the Telegram app to vote.`, questionHTML, htmlAnswers.String()),
 		},
 	}
 	if !tc.main.Config.ExtEvPolls || tc.metadata.IsBot || len(msc3381Answers) != len(poll.Poll.Answers) {
@@ -1005,20 +1006,26 @@ func (tc *TelegramClient) convertPoll(media tg.MessageMediaClass) *bridgev2.Conv
 	}
 	part.Type = event.EventUnstablePollStart
 	part.Extra = map[string]any{
-		"org.matrix.msc1767.message": []map[string]any{
-			{"mimetype": "text/html", "body": part.Content.FormattedBody},
-			{"mimetype": "text/plain", "body": part.Content.Body},
-		},
-		"org.matrix.msc3381.poll.start": map[string]any{
-			"kind":           kind,
-			"max_selections": maxSelections,
-			"question": map[string]any{
-				"org.matrix.msc1767.text": poll.Poll.Question.Text,
-			},
-			"answers": msc3381Answers,
+		"org.matrix.msc3381.poll.start": &event.PollStart{
+			Kind:          kind,
+			MaxSelections: maxSelections,
+			Question:      question,
+			Answers:       msc3381Answers,
 		},
 	}
 	return part
+}
+
+func (tc *TelegramClient) telegramToMatrixText(ctx context.Context, text tg.TextWithEntities) (msg event.MSC1767Message, html string) {
+	content := tc.parseBodyAndHTML(ctx, text.Text, text.Entities)
+	msg.Text = content.Body
+	if content.Format == event.FormatHTML && content.FormattedBody != "" {
+		msg.HTML = content.FormattedBody
+		html = content.FormattedBody
+	} else {
+		html = event.TextToHTML(content.Body)
+	}
+	return
 }
 
 func convertDice(media tg.MessageMediaClass) *bridgev2.ConvertedMessagePart {
