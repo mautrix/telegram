@@ -54,11 +54,11 @@ const (
 			date=excluded.date,
 			seq=excluded.seq
 	`
-	setPtsQuery     = "UPDATE telegram_user_state SET pts=$1 WHERE user_id=$2"
-	setQtsQuery     = "UPDATE telegram_user_state SET qts=$1 WHERE user_id=$2"
-	setDateQuery    = "UPDATE telegram_user_state SET date=$1 WHERE user_id=$2"
-	setSeqQuery     = "UPDATE telegram_user_state SET seq=$1 WHERE user_id=$2"
-	setDateSeqQuery = "UPDATE telegram_user_state SET date=$1, seq=$2 WHERE user_id=$3"
+	setPtsQuery     = "UPDATE telegram_user_state SET pts=$2 WHERE user_id=$1"
+	setQtsQuery     = "UPDATE telegram_user_state SET qts=$2 WHERE user_id=$1"
+	setDateQuery    = "UPDATE telegram_user_state SET date=$2 WHERE user_id=$1"
+	setSeqQuery     = "UPDATE telegram_user_state SET seq=$2 WHERE user_id=$1"
+	setDateSeqQuery = "UPDATE telegram_user_state SET date=$2, seq=$3 WHERE user_id=$1"
 
 	deleteChannelStateForUserQuery = "DELETE FROM telegram_channel_state WHERE user_id=$1"
 	deleteUserStateForUserQuery    = "DELETE FROM telegram_user_state WHERE user_id=$1"
