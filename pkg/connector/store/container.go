@@ -18,6 +18,7 @@ package store
 
 import (
 	"context"
+	"time"
 
 	"go.mau.fi/util/dbutil"
 	"go.mau.fi/util/exsync"
@@ -58,7 +59,7 @@ func (c *Container) NamespaceMigratedMessages(ctx context.Context, bridgeID netw
 	res, err := c.Exec(
 		ctx,
 		upgrades.NamespaceMigratedMessagesQuery+` AND bridge_id=$2 AND room_id=$3 AND room_receiver=$4`,
-		portalKey.Receiver, bridgeID, portalKey.ID, portalKey.Receiver,
+		time.Now().UnixMilli(), bridgeID, portalKey.ID, portalKey.Receiver,
 	)
 	if err != nil {
 		return 0, err
