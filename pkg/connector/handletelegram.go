@@ -912,7 +912,17 @@ func (tc *TelegramClient) onUserName(ctx context.Context, e tg.Entities, update 
 }
 
 func (tc *TelegramClient) onDeleteMessages(ctx context.Context, channelID int64, update IGetMessages) error {
-	for _, messageID := range update.GetMessages() {
+	messages := update.GetMessages()
+
+	if !tc.main.Config.ShouldBridgeDeletion(len(messages)) {
+		zerolog.Ctx(ctx).Debug().
+			Int64("channel_id", channelID).
+			Int("deleted_message_count", len(messages)).
+			Msg("Ignoring delete message event with too many targets")
+		return nil
+	}
+
+	for _, messageID := range messages {
 		wrappedMessageID := ids.MakeMessageID(channelID, messageID)
 		var portalKey networkid.PortalKey
 		var ok bool
