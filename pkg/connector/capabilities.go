@@ -64,7 +64,7 @@ func (tc *TelegramConnector) GetCapabilities() *bridgev2.NetworkGeneralCapabilit
 }
 
 func (tc *TelegramConnector) GetBridgeInfoVersion() (info, capabilities int) {
-	return 1, 15
+	return 1, 16
 }
 
 // TODO get these from getConfig instead of hardcoding?
@@ -228,7 +228,7 @@ func viewLimitedFileCaps(base event.FileFeatureMap) event.FileFeatureMap {
 var telegramTimers = makeTimerList()
 
 func (tc *TelegramClient) GetCapabilities(ctx context.Context, portal *bridgev2.Portal) *event.RoomFeatures {
-	baseID := "fi.mau.telegram.capabilities.2026_10_11"
+	baseID := "fi.mau.telegram.capabilities.2026_10_29"
 	feat := &event.RoomFeatures{
 		Formatting:          formattingCaps,
 		File:                fileCaps,
@@ -242,6 +242,10 @@ func (tc *TelegramClient) GetCapabilities(ctx context.Context, portal *bridgev2.
 		ReactionCount:       1,
 		ReadReceipts:        true,
 		TypingNotifications: true,
+		Poll:                event.CapLevelFullySupported,
+		PollMaxOptions:      12,
+		PollOptionMaxLength: 100,
+		PollResultsAPI:      true,
 
 		DisappearingTimer: &event.DisappearingTimerCapability{
 			Types:  []event.DisappearingType{event.DisappearingTypeAfterSend},
@@ -309,6 +313,11 @@ func (tc *TelegramClient) GetCapabilities(ctx context.Context, portal *bridgev2.
 		feat.DeleteChat = topicID == 0
 	case ids.PeerTypeUser:
 		baseID += "+dm"
+		if id == tc.telegramUserID || tc.isBotUser(ctx, id) {
+			baseID += "+polls"
+		} else {
+			feat.Poll = event.CapLevelRejected
+		}
 		feat.BlockUser = !tc.metadata.IsBot && id != tc.telegramUserID
 		feat.ReportSpam = feat.BlockUser
 		if !feat.BlockUser {
@@ -333,6 +342,12 @@ func (tc *TelegramClient) GetCapabilities(ctx context.Context, portal *bridgev2.
 	} else if topicID == ids.TopicIDSpaceRoom {
 		baseID += "+spaceroom"
 		feat = &event.RoomFeatures{}
+	}
+
+	if tc.metadata.IsBot {
+		baseID += "+bot"
+		feat.Poll = event.CapLevelUnsupported
+		feat.PollResultsAPI = false
 	}
 
 	feat.ID = baseID
