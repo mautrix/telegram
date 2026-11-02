@@ -18,7 +18,6 @@ package connector
 
 import (
 	"context"
-	"fmt"
 
 	"go.mau.fi/mautrix-telegram/pkg/gotd/tg"
 )
@@ -40,7 +39,7 @@ func handleUserUpdates[U hasUserUpdates](ctx context.Context, t *TelegramClient,
 	for _, user := range resp.GetUsers() {
 		user, ok := user.(*tg.User)
 		if !ok {
-			return fmt.Errorf("user is %T not *tg.User", user)
+			continue
 		}
 		_, err := t.updateGhost(ctx, user.ID, user)
 		if err != nil {
