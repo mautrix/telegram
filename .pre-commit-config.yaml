@@ -22,9 +22,11 @@ repos:
       - id: go-mod-tidy
 
   - repo: https://github.com/beeper/pre-commit-go
-    rev: v0.4.2
+    rev: v0.5.0
     hooks:
       - id: prevent-literal-http-methods
       - id: zerolog-ban-global-log
       - id: zerolog-ban-msgf
       - id: zerolog-use-stringer
+      - id: bridgelint
+        verbose: true
