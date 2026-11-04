@@ -114,26 +114,13 @@ func (c *Conn) noUpdates(err error) bool {
 	return false
 }
 
-func (c *Conn) handleAuthKeyNotFound(ctx context.Context) error {
+func (c *Conn) handleAuthKeyNotFound() {
 	if c.session().ID == 0 {
 		// The 404 error can also be caused by zero session id.
 		// See https://github.com/gotd/td/issues/107
-		//
-		// We should recover from this in createAuthKey, but in general
-		// this code branch should be unreachable.
 		c.log.Warn("BUG: zero session id found")
 	}
-	// TODO the client can sometimes get stuck in a "rpc error code 400: CONNECTION_NOT_INITED"
-	//      loop after this. Maybe force reconnect or something?
-	//      Somehow it does *not* necessarily mean the client is logged out
-	c.log.Warn("Re-generating keys (server not found key that we provided)")
-	if err := c.createAuthKey(ctx); err != nil {
-		return errors.Wrap(err, "unable to create auth key")
-	}
-	c.log.Info("Re-created auth keys")
-	// Request will be retried by ack loop.
-	// Probably we can speed-up this.
-	return nil
+	c.log.Warn("Server didn't find our auth key, reconnecting")
 }
 
 func (c *Conn) readLoop(ctx context.Context) (err error) {
@@ -185,11 +172,8 @@ func (c *Conn) readLoop(ctx context.Context) (err error) {
 
 			var protoErr *codec.ProtocolErr
 			if errors.As(err, &protoErr) && protoErr.Code == codec.CodeAuthKeyNotFound {
-				if err := c.handleAuthKeyNotFound(ctx); err != nil {
-					return errors.Wrap(err, "auth key not found")
-				}
-
-				continue
+				c.handleAuthKeyNotFound()
+				return errors.Wrap(err, "auth key not found")
 			}
 
 			select {
