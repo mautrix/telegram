@@ -681,21 +681,37 @@ func (tc *TelegramClient) makeSendResponse(
 						Msg("Random ID in response does not match sent random ID")
 				}
 			case *tg.UpdateNewMessage:
+				newMessage, ok := update.Message.(*tg.Message)
+				if !ok {
+					log.Debug().
+						Type("message_type", update.Message).
+						Int("message_id", update.Message.GetID()).
+						Msg("Ignoring non-message in send response")
+					continue
+				}
 				if realSentMessage != nil {
 					log.Warn().
 						Int("prev_id", realSentMessage.ID).
-						Int("new_id", update.Message.GetID()).
+						Int("new_id", newMessage.ID).
 						Msg("Multiple messages in send response")
 				}
-				realSentMessage = update.Message.(*tg.Message)
+				realSentMessage = newMessage
 			case *tg.UpdateNewChannelMessage:
+				newMessage, ok := update.Message.(*tg.Message)
+				if !ok {
+					log.Debug().
+						Type("message_type", update.Message).
+						Int("message_id", update.Message.GetID()).
+						Msg("Ignoring non-message in send response")
+					continue
+				}
 				if realSentMessage != nil {
 					log.Warn().
 						Int("prev_id", realSentMessage.ID).
-						Int("new_id", update.Message.GetID()).
+						Int("new_id", newMessage.ID).
 						Msg("Multiple messages in send response")
 				}
-				realSentMessage = update.Message.(*tg.Message)
+				realSentMessage = newMessage
 			case *tg.UpdateReadChannelInbox, *tg.UpdateReadHistoryInbox, *tg.UpdateReadMonoForumInbox,
 				*tg.UpdateReadHistoryOutbox, *tg.UpdateReadChannelOutbox:
 				// ignore
@@ -845,21 +861,37 @@ func (tc *TelegramClient) HandleMatrixEdit(ctx context.Context, msg *bridgev2.Ma
 		for _, u := range sentMessage.Updates {
 			switch update := u.(type) {
 			case *tg.UpdateNewMessage:
+				newMessage, ok := update.Message.(*tg.Message)
+				if !ok {
+					log.Debug().
+						Type("message_type", update.Message).
+						Int("message_id", update.Message.GetID()).
+						Msg("Ignoring non-message in edit response")
+					continue
+				}
 				if realSentMessage != nil {
 					log.Warn().
 						Int("prev_id", realSentMessage.ID).
-						Int("new_id", update.Message.GetID()).
+						Int("new_id", newMessage.ID).
 						Msg("Multiple messages in edit response")
 				}
-				realSentMessage = update.Message.(*tg.Message)
+				realSentMessage = newMessage
 			case *tg.UpdateNewChannelMessage:
+				newMessage, ok := update.Message.(*tg.Message)
+				if !ok {
+					log.Debug().
+						Type("message_type", update.Message).
+						Int("message_id", update.Message.GetID()).
+						Msg("Ignoring non-message in edit response")
+					continue
+				}
 				if realSentMessage != nil {
 					log.Warn().
 						Int("prev_id", realSentMessage.ID).
-						Int("new_id", update.Message.GetID()).
+						Int("new_id", newMessage.ID).
 						Msg("Multiple messages in edit response")
 				}
-				realSentMessage = update.Message.(*tg.Message)
+				realSentMessage = newMessage
 			default:
 				log.Warn().Type("update_type", update).Msg("Unexpected update type in edit message response")
 			}
