@@ -498,28 +498,6 @@ func (s *internalState) getDifferenceWithRetry(ctx context.Context, date int) (d
 		if err == nil || isFatalError(err) {
 			return diff, err
 		}
-		if tg.IsPersistentTimestampEmpty(err) || tg.IsPersistentTimestampInvalid(err) {
-			s.log.Warn("Local update state rejected, resetting to remote state",
-				zap.Error(err),
-				zap.Int("pts", s.pts.State()),
-				zap.Int("qts", s.qts.State()),
-				zap.Int("date", date),
-			)
-			var remote *tg.UpdatesState
-			if remote, err = s.client.UpdatesGetState(ctx); err == nil {
-				if err = s.storage.SetState(ctx, s.selfID, State{}.fromRemote(remote)); err != nil {
-					s.log.Warn("SetState error", zap.Error(err))
-				}
-				s.pts.SetState(remote.Pts, "updates.getState")
-				s.qts.SetState(remote.Qts, "updates.getState")
-				s.seq.SetState(remote.Seq, "updates.getState")
-				s.date = remote.Date
-				date = remote.Date
-				continue
-			} else if isFatalError(err) {
-				return nil, err
-			}
-		}
 		dur, ok := tgerr.AsFloodWait(err)
 		if ok {
 			s.log.Warn("Flood wait error while getting difference", zap.Duration("wait", dur))
