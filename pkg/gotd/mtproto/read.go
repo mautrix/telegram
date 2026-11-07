@@ -114,15 +114,6 @@ func (c *Conn) noUpdates(err error) bool {
 	return false
 }
 
-func (c *Conn) handleAuthKeyNotFound() {
-	if c.session().ID == 0 {
-		// The 404 error can also be caused by zero session id.
-		// See https://github.com/gotd/td/issues/107
-		c.log.Warn("BUG: zero session id found")
-	}
-	c.log.Warn("Server didn't find our auth key, reconnecting")
-}
-
 func (c *Conn) readLoop(ctx context.Context) (err error) {
 	log := c.log.Named("read")
 	log.Debug("Read loop started")
@@ -172,7 +163,12 @@ func (c *Conn) readLoop(ctx context.Context) (err error) {
 
 			var protoErr *codec.ProtocolErr
 			if errors.As(err, &protoErr) && protoErr.Code == codec.CodeAuthKeyNotFound {
-				c.handleAuthKeyNotFound()
+				if c.session().ID == 0 {
+					// The 404 error can also be caused by zero session id.
+					// See https://github.com/gotd/td/issues/107
+					c.log.Warn("BUG: zero session id found")
+				}
+				c.log.Warn("Server didn't find our auth key, reconnecting")
 				return errors.Wrap(err, "auth key not found")
 			}
 
