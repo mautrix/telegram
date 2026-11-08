@@ -167,10 +167,14 @@ func (tc *TelegramConnector) Download(ctx context.Context, mediaID networkid.Med
 					Msg("downloading live photo")
 				readyTransferer = transferer.WithDocument(msgMedia.Video, false)
 			} else {
+				photo, ok := msgMedia.Photo.(*tg.Photo)
+				if !ok {
+					return nil, mautrix.MNotFound.WithMessage("Media is no longer available on Telegram")
+				}
 				log.Debug().
-					Int64("photo_id", msgMedia.Photo.GetID()).
+					Int64("photo_id", photo.GetID()).
 					Msg("downloading photo")
-				readyTransferer = transferer.WithPhoto(msgMedia.Photo)
+				readyTransferer = transferer.WithPhoto(photo)
 			}
 		case *tg.MessageMediaDocument:
 			document, ok := msgMedia.Document.(*tg.Document)
