@@ -707,8 +707,17 @@ func (tc *TelegramClient) getPowerLevelOverridesFromBannedRights(entity tg.ChatC
 	}
 	plo.StateDefault = superadminPowerLevel
 	plo.UsersDefault = anyonePowerLevel
-	if c, ok := entity.(*tg.Channel); (ok && !c.Megagroup) || dbr.SendMessages {
+	channel, isChannel := entity.(*tg.Channel)
+	if isChannel && !channel.Megagroup {
 		plo.EventsDefault = postMessagesPowerLevel
+	} else if dbr.SendMessages {
+		plo.EventsDefault = otherPowerLevel
+		if isChannel {
+			anonymousAdminMXID := tc.main.Bridge.Matrix.FormatGhostMXID(ids.MakeChannelUserID(channel.ID))
+			plo.Custom = func(content *event.PowerLevelsEventContent) bool {
+				return content.EnsureUserLevel(anonymousAdminMXID, *anonymousPowerLevel)
+			}
+		}
 	} else {
 		plo.EventsDefault = anyonePowerLevel
 	}
