@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"slices"
+	"strconv"
 	"sync"
 	"time"
 
@@ -151,6 +152,14 @@ func (tc *TelegramClient) FetchMessages(ctx context.Context, fetchParams bridgev
 			// This can happen if the oldest message is something like a call log
 			log.Warn().Err(err).Msg("Failed to parse anchor message ID")
 			aggressiveDedup = true
+		}
+	}
+	if !fetchParams.Forward && fetchParams.Cursor != "" {
+		cursorID, err := strconv.Atoi(string(fetchParams.Cursor))
+		if err != nil {
+			log.Warn().Err(err).Str("cursor", string(fetchParams.Cursor)).Msg("Failed to parse pagination cursor")
+		} else if offsetID == 0 || cursorID < offsetID {
+			offsetID = cursorID
 		}
 	}
 	origOffsetID := offsetID
