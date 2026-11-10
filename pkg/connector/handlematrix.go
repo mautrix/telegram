@@ -1477,7 +1477,7 @@ func (tc *TelegramClient) HandleMatrixRoomTopic(ctx context.Context, msg *bridge
 		Peer:  peer,
 		About: msg.Content.Topic,
 	})
-	if err != nil {
+	if err != nil && !tg.IsChatAboutNotModified(err) {
 		return false, tc.humaniseSendError(err)
 	}
 	msg.Portal.Topic = msg.Content.Topic
