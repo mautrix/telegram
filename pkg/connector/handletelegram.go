@@ -1196,7 +1196,11 @@ func (tc *TelegramClient) onMessageEdit(ctx context.Context, update IGetMessage)
 	if !ok {
 		if svcMsg, ok := update.GetMessage().(*tg.MessageService); ok {
 			if _, isChannel := svcMsg.PeerID.(*tg.PeerChannel); !isChannel {
-				return tc.handleTelegramReactions(ctx, svcMsg.PeerID, 0, svcMsg.ID, svcMsg.Reactions, "updateMessageEdit")
+				err := tc.handleTelegramReactions(ctx, svcMsg.PeerID, 0, svcMsg.ID, svcMsg.Reactions, "updateMessageEdit")
+				if err != nil {
+					zerolog.Ctx(ctx).Err(err).Msg("Failed to handle reactions on edited service message")
+				}
+				return nil
 			}
 		}
 		zerolog.Ctx(ctx).Warn().
