@@ -19,6 +19,7 @@ package telegramfmt
 import (
 	"context"
 	"html"
+	"net/url"
 
 	"github.com/rs/zerolog"
 	"golang.org/x/exp/maps"
@@ -95,10 +96,11 @@ func Parse(ctx context.Context, message string, entities []tg.MessageEntityClass
 			userInfo, err := params.GetUserInfoByUsername(ctx, username)
 			if err != nil {
 				log.Debug().Err(err).Str("username", username).Msg("Failed to get user info for username mention")
-				continue // Skip this mention
+				br.Value = Style{Type: StyleURL, URL: "https://t.me/" + url.PathEscape(username)}
+			} else {
+				mentions[userInfo.MXID] = struct{}{}
+				br.Value = Mention{UserInfo: userInfo, Username: username}
 			}
-			mentions[userInfo.MXID] = struct{}{}
-			br.Value = Mention{UserInfo: userInfo, Username: username}
 		case *tg.MessageEntityHashtag:
 			br.Value = Style{Type: StyleHashtag}
 		case *tg.MessageEntityBotCommand:
