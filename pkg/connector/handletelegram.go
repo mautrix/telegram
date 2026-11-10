@@ -261,7 +261,7 @@ func (tc *TelegramClient) onUpdateNewMessage(ctx context.Context, entities tg.En
 	log := *zerolog.Ctx(ctx)
 	switch msg := update.GetMessage().(type) {
 	case *tg.Message:
-		var isBroadcastChannel bool
+		var isBroadcastChannel, isSupergroup bool
 		switch peer := msg.PeerID.(type) {
 		case *tg.PeerChannel:
 			log = log.With().Int64("channel_id", peer.ChannelID).Logger()
@@ -270,6 +270,8 @@ func (tc *TelegramClient) onUpdateNewMessage(ctx context.Context, entities tg.En
 				return nil
 			} else if ok && !c.GetMegagroup() {
 				isBroadcastChannel = true
+			} else if ok {
+				isSupergroup = true
 			}
 		case *tg.PeerChat:
 			log = log.With().Int64("chat_id", peer.ChatID).Logger()
@@ -280,6 +282,10 @@ func (tc *TelegramClient) onUpdateNewMessage(ctx context.Context, entities tg.En
 		}
 
 		sender := tc.getEventSender(msg, isBroadcastChannel)
+		var preHandle func(context.Context, *bridgev2.Portal)
+		if isSupergroup && !sender.IsFromMe {
+			preHandle = tc.ensureSenderCanPost(sender)
+		}
 
 		if media, ok := msg.GetMedia(); ok && media.TypeID() == tg.MessageMediaContactTypeID {
 			contact := media.(*tg.MessageMediaContact)
@@ -301,11 +307,12 @@ func (tc *TelegramClient) onUpdateNewMessage(ctx context.Context, entities tg.En
 						Bool("is_from_me", sender.IsFromMe).
 						Stringer("peer_id", msg.PeerID)
 				},
-				Sender:       sender,
-				PortalKey:    portalKey,
-				CreatePortal: true,
-				Timestamp:    time.Unix(int64(msg.Date), 0),
-				StreamOrder:  int64(msg.GetID()),
+				Sender:        sender,
+				PortalKey:     portalKey,
+				CreatePortal:  true,
+				Timestamp:     time.Unix(int64(msg.Date), 0),
+				StreamOrder:   int64(msg.GetID()),
+				PreHandleFunc: preHandle,
 			},
 			ID:                 msgID,
 			Data:               msg,

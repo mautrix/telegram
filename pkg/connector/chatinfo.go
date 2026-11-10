@@ -251,7 +251,7 @@ func (tc *TelegramClient) wrapChatInfo(portalID networkid.PortalID, rawChat tg.C
 func (tc *TelegramClient) overrideChatInfoWithTopic(info *bridgev2.ChatInfo, topic *tg.ForumTopic) {
 	info.Name = ptr.Ptr(topic.Title + " - " + *info.Name)
 	if topic.Closed {
-		info.Members.PowerLevels.EventsDefault = nobodyPowerLevel
+		info.Members.PowerLevels.EventsDefault = manageTopicsPowerLevel
 	}
 }
 
@@ -695,6 +695,30 @@ func (tc *TelegramClient) getDMPowerLevels() *bridgev2.PowerLevelOverrides {
 	return &plo
 }
 
+func (tc *TelegramClient) ensureSenderCanPost(sender bridgev2.EventSender) func(context.Context, *bridgev2.Portal) {
+	return func(ctx context.Context, portal *bridgev2.Portal) {
+		intent, ok := portal.GetIntentFor(ctx, sender, tc.userLogin, bridgev2.RemoteEventMessage)
+		if !ok {
+			return
+		}
+		pl, err := tc.main.Bridge.Matrix.GetPowerLevels(ctx, portal.MXID)
+		if err != nil {
+			zerolog.Ctx(ctx).Err(err).Msg("Failed to get power levels to check sender level")
+			return
+		}
+		senderMXID := intent.GetMXID()
+		level := pl.GetEventLevel(event.EventMessage)
+		if pl.GetUserLevel(senderMXID) >= level {
+			return
+		}
+		pl.SetUserLevel(senderMXID, level)
+		_, err = tc.main.Bridge.Bot.SendState(ctx, portal.MXID, event.StatePowerLevels, "", &event.Content{Parsed: pl}, time.Time{})
+		if err != nil {
+			zerolog.Ctx(ctx).Err(err).Stringer("sender_mxid", senderMXID).Msg("Failed to raise sender power level")
+		}
+	}
+}
+
 func (tc *TelegramClient) getPowerLevelOverridesFromBannedRights(entity tg.ChatClass, dbr tg.ChatBannedRights) *bridgev2.PowerLevelOverrides {
 	var plo bridgev2.PowerLevelOverrides
 	plo.Ban = banUsersPowerLevel
@@ -707,8 +731,10 @@ func (tc *TelegramClient) getPowerLevelOverridesFromBannedRights(entity tg.ChatC
 	}
 	plo.StateDefault = superadminPowerLevel
 	plo.UsersDefault = anyonePowerLevel
+	restrictedPowerLevel := otherPowerLevel
 	channel, isChannel := entity.(*tg.Channel)
 	if isChannel && !channel.Megagroup {
+		restrictedPowerLevel = postMessagesPowerLevel
 		plo.EventsDefault = postMessagesPowerLevel
 	} else if dbr.SendMessages {
 		plo.EventsDefault = otherPowerLevel
@@ -759,13 +785,13 @@ func (tc *TelegramClient) getPowerLevelOverridesFromBannedRights(entity tg.ChatC
 	}
 
 	if dbr.SendStickers {
-		plo.Events[event.EventSticker] = *postMessagesPowerLevel
+		plo.Events[event.EventSticker] = *restrictedPowerLevel
 	} else {
 		plo.Events[event.EventSticker] = 0
 	}
 
 	if dbr.SendPolls {
-		plo.Events[event.EventUnstablePollStart] = *postMessagesPowerLevel
+		plo.Events[event.EventUnstablePollStart] = *restrictedPowerLevel
 	}
 	plo.Events[event.EventUnstablePollResponse] = 0
 
