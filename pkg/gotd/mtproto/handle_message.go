@@ -17,7 +17,7 @@ func (c *Conn) handleMessage(msgID int64, b *bin.Buffer) error {
 
 	switch id {
 	case mt.NewSessionCreatedTypeID:
-		return c.handleSessionCreated(b)
+		return c.handleSessionCreated(msgID, b)
 	case mt.BadMsgNotificationTypeID, mt.BadServerSaltTypeID:
 		return c.handleBadMsg(msgID, b)
 	case mt.FutureSaltsTypeID:
