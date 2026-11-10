@@ -112,8 +112,8 @@ var ErrRemoveChannelState = errors.New("remove channel state")
 func (s *channelState) Run(ctx context.Context) error {
 	defer s.stop(nil)
 	if s.resyncOnStart {
-		if err := s.onTooLong(s.channelID); err != nil {
-			s.log.Error("Failed to resync channel without stored pts", zap.Error(err))
+		if err := s.resync(s.runCtx); err != nil {
+			return err
 		}
 	}
 	// Subscribe to channel updates.
@@ -140,6 +140,25 @@ func (s *channelState) Run(ctx context.Context) error {
 			s.log.Debug("Idle timeout")
 			s.resetIdleTimer()
 			s.getDifferenceLogger(s.runCtx)
+		}
+	}
+}
+
+func (s *channelState) resync(ctx context.Context) error {
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		if err := s.onTooLong(s.channelID); err != nil {
+			s.log.Error("Failed to resync channel without stored pts", zap.Error(err))
+		}
+	}()
+	for {
+		select {
+		case <-done:
+			return nil
+		case <-s.updates:
+		case <-ctx.Done():
+			return context.Cause(ctx)
 		}
 	}
 }
