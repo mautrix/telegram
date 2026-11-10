@@ -55,32 +55,34 @@ type internalState struct {
 	savedCommunities     exmaps.Set[int64]
 
 	// Immutable fields.
-	client    API
-	log       *zap.Logger
-	handler   telegram.UpdateHandler
-	onTooLong func(channelID int64) error
-	storage   StateStorage
-	hasher    AccessHasher
-	selfID    int64
-	diffLim   int
-	wg        *errgroup.Group
-	tracer    trace.Tracer
+	client        API
+	log           *zap.Logger
+	handler       telegram.UpdateHandler
+	onTooLong     func(channelID int64) error
+	onDiffTooLong func()
+	storage       StateStorage
+	hasher        AccessHasher
+	selfID        int64
+	diffLim       int
+	wg            *errgroup.Group
+	tracer        trace.Tracer
 }
 
 type stateConfig struct {
-	State            State
-	Channels         map[int64]PtsAccessHashTuple
-	LeftChannels     []int64
-	RawClient        API
-	Logger           *zap.Logger
-	Tracer           trace.Tracer
-	Handler          telegram.UpdateHandler
-	OnChannelTooLong func(channelID int64) error
-	Storage          StateStorage
-	Hasher           AccessHasher
-	SelfID           int64
-	DiffLimit        int
-	WorkGroup        *errgroup.Group
+	State               State
+	Channels            map[int64]PtsAccessHashTuple
+	LeftChannels        []int64
+	RawClient           API
+	Logger              *zap.Logger
+	Tracer              trace.Tracer
+	Handler             telegram.UpdateHandler
+	OnChannelTooLong    func(channelID int64) error
+	OnDifferenceTooLong func()
+	Storage             StateStorage
+	Hasher              AccessHasher
+	SelfID              int64
+	DiffLimit           int
+	WorkGroup           *errgroup.Group
 }
 
 func newState(ctx context.Context, cfg stateConfig) *internalState {
@@ -95,16 +97,17 @@ func newState(ctx context.Context, cfg stateConfig) *internalState {
 		recentlyLeftChannels: exsync.NewSetWithItems(cfg.LeftChannels),
 		savedCommunities:     make(exmaps.Set[int64]),
 
-		client:    cfg.RawClient,
-		log:       cfg.Logger,
-		handler:   cfg.Handler,
-		onTooLong: cfg.OnChannelTooLong,
-		storage:   cfg.Storage,
-		hasher:    cfg.Hasher,
-		selfID:    cfg.SelfID,
-		diffLim:   cfg.DiffLimit,
-		wg:        cfg.WorkGroup,
-		tracer:    cfg.Tracer,
+		client:        cfg.RawClient,
+		log:           cfg.Logger,
+		handler:       cfg.Handler,
+		onTooLong:     cfg.OnChannelTooLong,
+		onDiffTooLong: cfg.OnDifferenceTooLong,
+		storage:       cfg.Storage,
+		hasher:        cfg.Hasher,
+		selfID:        cfg.SelfID,
+		diffLim:       cfg.DiffLimit,
+		wg:            cfg.WorkGroup,
+		tracer:        cfg.Tracer,
 	}
 	s.pts = newSequenceBox(sequenceConfig{
 		InitialState: cfg.State.Pts,
@@ -633,6 +636,7 @@ func (s *internalState) getDifference(ctx context.Context) error {
 			s.log.Error("SetPts error", zap.Error(err))
 		}
 		s.pts.SetState(diff.Pts, "updates.differenceTooLong")
+		s.onDiffTooLong()
 		return s.getDifference(ctx)
 
 	default:
