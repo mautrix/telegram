@@ -31,6 +31,8 @@ import (
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 
+	"go.mau.fi/util/variationselector"
+
 	"go.mau.fi/mautrix-telegram/pkg/connector/emojis"
 	"go.mau.fi/mautrix-telegram/pkg/connector/ids"
 	"go.mau.fi/mautrix-telegram/pkg/connector/store"
@@ -475,6 +477,13 @@ func (parser *HTMLParser) linkToString(node *html.Node, ctx Context) *EntityStri
 	}
 }
 
+func customEmojiFallback(alt string) string {
+	if _, ok := emojis.GetEmojiDocumentID(variationselector.Remove(alt)); ok {
+		return alt
+	}
+	return "\u2728\ufe0f"
+}
+
 func (parser *HTMLParser) imgToString(node *html.Node, ctx Context) *EntityString {
 	src := parser.getAttribute(node, "src")
 	alt := parser.getAttribute(node, "alt")
@@ -487,13 +496,11 @@ func (parser *HTMLParser) imgToString(node *html.Node, ctx Context) *EntityStrin
 		// Note: the sticker peer type is only allowed here because custom emoji packs
 		// used to be accidentally imported with the wrong type.
 		if err == nil && (parsedMediaInfo.PeerType == ids.FakePeerTypeEmoji || parsedMediaInfo.PeerType == ids.FakePeerTypeSticker) {
-			return NewEntityString("\u2728\ufe0f").Format(telegramfmt.Style{Type: telegramfmt.StyleCustomEmoji, EmojiInfo: emojis.EmojiInfo{DocumentID: parsedMediaInfo.ID}})
+			return NewEntityString(customEmojiFallback(alt)).Format(telegramfmt.Style{Type: telegramfmt.StyleCustomEmoji, EmojiInfo: emojis.EmojiInfo{DocumentID: parsedMediaInfo.ID}})
 		}
 	} else if file, _ := parser.Store.TelegramFile.GetByMXC(ctx.Ctx, id.ContentURIString(src)); file != nil {
 		if documentID, err := strconv.ParseInt(string(file.LocationID), 10, 64); err == nil {
-			// Hardcode to a sparkle emoji because telegram requires the custom emoji fallback to be an emoji,
-			// but we don't know the actual emoji that should be used.
-			return NewEntityString("\u2728\ufe0f").Format(telegramfmt.Style{Type: telegramfmt.StyleCustomEmoji, EmojiInfo: emojis.EmojiInfo{DocumentID: documentID}})
+			return NewEntityString(customEmojiFallback(alt)).Format(telegramfmt.Style{Type: telegramfmt.StyleCustomEmoji, EmojiInfo: emojis.EmojiInfo{DocumentID: documentID}})
 		}
 	}
 	return NewEntityString(alt)
