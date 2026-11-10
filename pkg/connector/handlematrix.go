@@ -1360,8 +1360,9 @@ func (tc *TelegramClient) HandleMatrixDeleteChat(ctx context.Context, chat *brid
 		}
 		err = deleteAllHistory(ctx, func() (*tg.MessagesAffectedHistory, error) {
 			return tc.client.API().MessagesDeleteHistory(ctx, &tg.MessagesDeleteHistoryRequest{
-				Peer:   &tg.InputPeerUser{UserID: id, AccessHash: accessHash},
-				Revoke: chat.Content.DeleteForEveryone,
+				Peer:      &tg.InputPeerUser{UserID: id, AccessHash: accessHash},
+				JustClear: !chat.Content.DeleteForEveryone,
+				Revoke:    chat.Content.DeleteForEveryone,
 			})
 		})
 		if err != nil {
