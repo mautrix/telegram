@@ -114,6 +114,7 @@ func newMigrationClient(t *testing.T, h migrationTestHandler) *Client {
 		ctx:              context.Background(),
 		cancel:           func(error) {},
 		migrationTimeout: 10 * time.Second,
+		updateHandler:    UpdateHandlerFunc(func(ctx context.Context, u tg.UpdatesClass) error { return nil }),
 	}
 	client.init()
 	client.conn = client.createConn(0, manager.ConnModeUpdates, nil, nil, nil)
