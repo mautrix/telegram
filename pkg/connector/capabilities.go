@@ -186,6 +186,14 @@ func hashEmojiList(emojis []string) string {
 	return hex.EncodeToString(hasher.Sum(nil))[:8]
 }
 
+func addVariationSelectors(emojis []string) []string {
+	output := make([]string, len(emojis))
+	for i, emoji := range emojis {
+		output[i] = variationselector.Add(emoji)
+	}
+	return output
+}
+
 func makeTimerList() []jsontime.Milliseconds {
 	const day = 24 * time.Hour
 	const week = 7 * day
@@ -262,7 +270,9 @@ func (tc *TelegramClient) GetCapabilities(ctx context.Context, portal *bridgev2.
 	reactions := portal.Metadata.(*PortalMetadata).AllowedReactions
 	if reactions == nil {
 		baseID += "+reactions_any"
-		feat.AllowedReactions, feat.CustomEmojiReactions = tc.getAvailableReactionsForCapability(ctx)
+		var availableReactions []string
+		availableReactions, feat.CustomEmojiReactions = tc.getAvailableReactionsForCapability(ctx)
+		feat.AllowedReactions = addVariationSelectors(availableReactions)
 		if len(feat.AllowedReactions) > 0 {
 			baseID += "+any_list_" + hashEmojiList(feat.AllowedReactions)
 		}
@@ -270,11 +280,8 @@ func (tc *TelegramClient) GetCapabilities(ctx context.Context, portal *bridgev2.
 		baseID += "+reactions_none"
 		feat.Reaction = event.CapLevelRejected
 	} else {
-		baseID += "+reactions_" + hashEmojiList(reactions)
-		feat.AllowedReactions = reactions
-	}
-	for i, react := range feat.AllowedReactions {
-		feat.AllowedReactions[i] = variationselector.Add(react)
+		feat.AllowedReactions = addVariationSelectors(reactions)
+		baseID += "+reactions_" + hashEmojiList(feat.AllowedReactions)
 	}
 	if tc.isPremiumCache.Load() {
 		baseID += "+premium"
