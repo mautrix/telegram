@@ -85,8 +85,6 @@ func (tc *TelegramClient) computeReactionsList(ctx context.Context, peer tg.Peer
 	for _, reaction := range reactionsList {
 		if e, ok := reaction.Reaction.(*tg.ReactionCustomEmoji); ok {
 			customEmojiIDs = append(customEmojiIDs, e.DocumentID)
-		} else if reaction.Reaction.TypeID() != tg.ReactionEmojiTypeID {
-			return nil, false, nil, fmt.Errorf("unsupported reaction type %T", reaction.Reaction)
 		}
 	}
 
