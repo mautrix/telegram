@@ -534,14 +534,14 @@ func (tc *TelegramClient) handleServiceMessage(ctx context.Context, msg *tg.Mess
 		} else {
 			body.WriteString("Call ")
 		}
-		switch action.Reason.TypeID() {
-		case tg.PhoneCallDiscardReasonMissedTypeID:
+		switch action.Reason.(type) {
+		case *tg.PhoneCallDiscardReasonMissed:
 			body.WriteString("missed")
-		case tg.PhoneCallDiscardReasonDisconnectTypeID:
+		case *tg.PhoneCallDiscardReasonDisconnect:
 			body.WriteString("disconnected")
-		case tg.PhoneCallDiscardReasonHangupTypeID:
+		case *tg.PhoneCallDiscardReasonHangup, nil:
 			body.WriteString("ended")
-		case tg.PhoneCallDiscardReasonBusyTypeID:
+		case *tg.PhoneCallDiscardReasonBusy:
 			body.WriteString("rejected")
 		default:
 			log.Warn().Stringer("end_reason", action.Reason).Msg("Unknown call end reason")
