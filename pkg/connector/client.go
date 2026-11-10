@@ -207,6 +207,7 @@ func NewTelegramClient(ctx context.Context, tc *TelegramConnector, login *bridge
 
 	client.dispatcher = tg.NewUpdateDispatcher()
 	client.dispatcher.OnFallback(client.onUpdateWrapper)
+	client.dispatcher.OnEntities(client.onEntitiesWrapper)
 
 	client.updatesManager = updates.New(updates.Config{
 		OnNotChannelMember: client.onNotChannelMember,
@@ -227,7 +228,7 @@ func NewTelegramClient(ctx context.Context, tc *TelegramConnector, login *bridge
 
 			return resultToError(res)
 		},
-		Handler:      telegram.UpdateHandlerFunc(client.handleUpdates),
+		Handler:      client.dispatcher,
 		Logger:       zaplog.Named("gaps"),
 		Storage:      client.ScopedStore,
 		AccessHasher: client.ScopedStore,

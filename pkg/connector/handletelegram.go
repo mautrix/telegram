@@ -990,32 +990,10 @@ func (tc *TelegramClient) updateChannel(ctx context.Context, channel *tg.Channel
 
 const updateHandlerStuck status.BridgeStateErrorCode = "tg-update-handler-stuck"
 
-func (tc *TelegramClient) handleUpdates(ctx context.Context, u tg.UpdatesClass) error {
-	var e tg.Entities
-	switch u := u.(type) {
-	case *tg.Updates:
-		if len(u.Updates) == 0 {
-			return nil
-		}
-		e.Users = u.MapUsers().NotEmptyToMap()
-		chats := u.MapChats()
-		e.Chats = chats.ChatToMap()
-		e.Channels = chats.ChannelToMap()
-	case *tg.UpdatesCombined:
-		if len(u.Updates) == 0 {
-			return nil
-		}
-		e.Users = u.MapUsers().NotEmptyToMap()
-		chats := u.MapChats()
-		e.Chats = chats.ChatToMap()
-		e.Channels = chats.ChannelToMap()
-	}
-	if err := tc.runWithStuckCheck(ctx, func() error {
+func (tc *TelegramClient) onEntitiesWrapper(ctx context.Context, e tg.Entities) error {
+	return tc.runWithStuckCheck(ctx, func() error {
 		return tc.onEntities(ctx, e)
-	}); err != nil {
-		return err
-	}
-	return tc.dispatcher.Handle(ctx, u)
+	})
 }
 
 func (tc *TelegramClient) onUpdateWrapper(ctx context.Context, e tg.Entities, upd tg.UpdateClass) error {

@@ -1675,3 +1675,8 @@ func (u UpdateDispatcher) OnBotStarsSubscription(handler BotStarsSubscriptionHan
 func (u *UpdateDispatcher) OnFallback(handler Handler) {
 	u.fallback = handler
 }
+
+// OnEntities sets handler that is called once with the entities of each batch of updates.
+func (u *UpdateDispatcher) OnEntities(handler func(context.Context, Entities) error) {
+	u.entities = handler
+}

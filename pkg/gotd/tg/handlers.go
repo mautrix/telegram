@@ -11,6 +11,7 @@ type Handler = func(context.Context, Entities, UpdateClass) error
 type UpdateDispatcher struct {
 	handlers map[uint32]Handler
 	fallback Handler
+	entities func(context.Context, Entities) error
 }
 
 func NewUpdateDispatcher() UpdateDispatcher {
@@ -66,6 +67,12 @@ func (u UpdateDispatcher) Handle(ctx context.Context, updates UpdatesClass) erro
 		// *UpdateShortSentMessage
 		// *UpdatesTooLong
 		return nil
+	}
+
+	if u.entities != nil && len(upds) > 0 {
+		if err := u.entities(ctx, e); err != nil {
+			return err
+		}
 	}
 
 	var err error

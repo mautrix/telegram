@@ -96,7 +96,7 @@ func fnUpgrade(ce *commands.Event) {
 		ce.Log.Trace().Any("response", resp).Msg("Updates from chat upgrade")
 		ce.Log.Info().Int64("old_chat_id", chatID).Msg("Successfully upgraded chat")
 		ce.React("\u2705\ufe0f")
-		err = login.Client.(*TelegramClient).handleUpdates(ce.Ctx, resp)
+		err = login.Client.(*TelegramClient).dispatcher.Handle(ce.Ctx, resp)
 		if err != nil {
 			ce.Log.Err(err).Msg("Failed to handle updates from chat upgrade")
 		} else {
@@ -219,7 +219,7 @@ func fnJoin(ce *commands.Event) {
 	}
 	switch realResp := resp.(type) {
 	case *tg.MessagesChatInviteJoinResultOk:
-		err := t.handleUpdates(ce.Ctx, realResp.Updates)
+		err := t.dispatcher.Handle(ce.Ctx, realResp.Updates)
 		if err != nil {
 			ce.Log.Err(err).Msg("Failed to handle updates from joining chat with invite link")
 		} else {
