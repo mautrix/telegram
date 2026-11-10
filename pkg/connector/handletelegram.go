@@ -777,9 +777,16 @@ func (tc *TelegramClient) handleServiceMessage(ctx context.Context, msg *tg.Mess
 		}
 		return tc.queueServiceNotice(eventMeta, msg, withGiftMessage(body, action.Message))
 	case *tg.MessageActionStarGiftUnique:
-		body := "Transferred a gift"
+		body := "Unique collectible"
 		if action.Upgrade {
 			body = "Turned the gift into a unique collectible"
+		} else if resale, ok := action.GetResaleAmount(); ok {
+			body = "Sent a gift"
+			if stars, ok := resale.(*tg.StarsAmount); ok {
+				body = "Sent a gift for " + starsText(stars.Amount)
+			}
+		} else if action.Transferred {
+			body = "Transferred a gift"
 		}
 		if gift, ok := action.Gift.(*tg.StarGiftUnique); ok {
 			body += fmt.Sprintf(": %s #%d", gift.Title, gift.Num)
