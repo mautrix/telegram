@@ -283,7 +283,7 @@ func (tc *TelegramClient) onUpdateNewMessage(ctx context.Context, entities tg.En
 
 		sender := tc.getEventSender(msg, isBroadcastChannel)
 		convert := tc.convertToMatrix
-		if isSupergroup && !sender.IsFromMe {
+		if isSupergroup && !sender.IsFromMe && tc.main.Config.RaiseSenderPowerLevels {
 			convert = tc.convertAndLetSenderPost
 		}
 

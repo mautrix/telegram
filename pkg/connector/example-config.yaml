@@ -110,6 +110,12 @@ contact_avatars: false
 # Should contact names be updated from any source even if a name is already set?
 # Note that contact names will still be used if there's no other name available.
 contact_names: false
+# Should the bridge raise a Telegram user's power level when they send a message in a supergroup
+# that their current power level doesn't allow? Power levels can lag behind Telegram rights
+# (e.g. admins promoted after the room was created, or users exempt from the group's restrictions),
+# in which case the homeserver rejects the message. Raised levels may grant more than the user's
+# Telegram rights, since Matrix power levels can't represent every combination of them.
+raise_sender_power_levels: false
 # Should the bridge send all unicode reactions as custom emoji reactions to
 # Telegram? By default, the bridge only uses custom emojis for unicode emojis
 # that aren't allowed in reactions.
