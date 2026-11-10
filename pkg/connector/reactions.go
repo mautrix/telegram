@@ -89,7 +89,10 @@ func (tc *TelegramClient) computeReactionsList(ctx context.Context, peer tg.Peer
 	}
 
 	customEmojis, err = tc.transferEmojisToMatrix(ctx, customEmojiIDs)
-	return reactionsList, len(reactionsList) == totalCount, customEmojis, err
+	if err != nil {
+		return nil, false, nil, err
+	}
+	return reactionsList, len(reactionsList) == totalCount, customEmojis, nil
 }
 
 func computeEmojiAndID(reaction tg.ReactionClass, customEmojis map[networkid.EmojiID]emojis.EmojiInfo) (emojiID networkid.EmojiID, emoji string, err error) {
