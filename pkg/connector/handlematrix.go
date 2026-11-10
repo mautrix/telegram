@@ -1330,9 +1330,15 @@ func (tc *TelegramClient) HandleRoomTag(ctx context.Context, msg *bridgev2.Matri
 	return err
 }
 
-func deleteAllHistory(deleteHistory func() (*tg.MessagesAffectedHistory, error)) error {
+func deleteAllHistory(ctx context.Context, deleteHistory func() (*tg.MessagesAffectedHistory, error)) error {
 	for {
-		resp, err := deleteHistory()
+		var resp *tg.MessagesAffectedHistory
+		var err error
+		retry := true
+		for attempts := 0; retry && attempts < 5; attempts++ {
+			resp, err = deleteHistory()
+			retry, err = tgerr.FloodWait(ctx, err)
+		}
 		if err != nil {
 			return err
 		} else if resp.Offset <= 0 {
@@ -1352,7 +1358,7 @@ func (tc *TelegramClient) HandleMatrixDeleteChat(ctx context.Context, chat *brid
 		if err != nil {
 			return err
 		}
-		err = deleteAllHistory(func() (*tg.MessagesAffectedHistory, error) {
+		err = deleteAllHistory(ctx, func() (*tg.MessagesAffectedHistory, error) {
 			return tc.client.API().MessagesDeleteHistory(ctx, &tg.MessagesDeleteHistoryRequest{
 				Peer:   &tg.InputPeerUser{UserID: id, AccessHash: accessHash},
 				Revoke: chat.Content.DeleteForEveryone,
@@ -1378,7 +1384,7 @@ func (tc *TelegramClient) HandleMatrixDeleteChat(ctx context.Context, chat *brid
 		if err != nil {
 			return tc.humaniseSendError(err)
 		}
-		err = deleteAllHistory(func() (*tg.MessagesAffectedHistory, error) {
+		err = deleteAllHistory(ctx, func() (*tg.MessagesAffectedHistory, error) {
 			return tc.client.API().MessagesDeleteHistory(ctx, &tg.MessagesDeleteHistoryRequest{
 				Peer: &tg.InputPeerChat{ChatID: id},
 			})
@@ -1394,7 +1400,7 @@ func (tc *TelegramClient) HandleMatrixDeleteChat(ctx context.Context, chat *brid
 				return wrapUnsupportedError(errors.New("topics can only be deleted for everyone")).
 					WithMessage("topics can only be deleted for everyone")
 			}
-			err = deleteAllHistory(func() (*tg.MessagesAffectedHistory, error) {
+			err = deleteAllHistory(ctx, func() (*tg.MessagesAffectedHistory, error) {
 				return tc.client.API().MessagesDeleteTopicHistory(ctx, &tg.MessagesDeleteTopicHistoryRequest{
 					Peer: &tg.InputPeerChannel{
 						ChannelID:  id,
