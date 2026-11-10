@@ -846,7 +846,9 @@ func (tc *TelegramClient) HandleMatrixEdit(ctx context.Context, msg *bridgev2.Ma
 		return fmt.Errorf("%w %s", bridgev2.ErrUnsupportedMessageType, msg.Content.MsgType)
 	}
 	updates, err := tc.client.API().MessagesEditMessage(ctx, &req)
-	if err != nil {
+	if tg.IsMessageNotModified(err) {
+		return nil
+	} else if err != nil {
 		return tc.humaniseSendError(err)
 	}
 
@@ -1049,7 +1051,7 @@ func (tc *TelegramClient) HandleMatrixReaction(ctx context.Context, msg *bridgev
 			WithStatus(event.MessageStatusFail).
 			WithIsCertain(true).
 			WithMessage("Unsupported reaction")
-	} else if err != nil {
+	} else if err != nil && !tg.IsMessageNotModified(err) {
 		return nil, tc.humaniseSendError(err)
 	}
 	return &database.Reaction{}, nil
@@ -1093,6 +1095,9 @@ func (tc *TelegramClient) HandleMatrixReactionRemove(ctx context.Context, msg *b
 		MsgID:       messageID,
 		Reaction:    newReactions,
 	})
+	if tg.IsMessageNotModified(err) {
+		return nil
+	}
 	return tc.humaniseSendError(err)
 }
 
