@@ -120,6 +120,8 @@ type TelegramClient struct {
 
 	dcTransferLock sync.Mutex
 
+	fetchMessagesLock sync.Mutex
+
 	topicMembersLock sync.Mutex
 	topicMembers     map[int64]cachedChannelMembers
 
