@@ -19,3 +19,13 @@ package humanise
 
 //go:generate go run ./gen
 //go:generate goimports -w errors.go
+
+import (
+	"time"
+
+	"go.mau.fi/util/exfmt"
+)
+
+func waitDuration(seconds int) string {
+	return exfmt.Duration(time.Duration(max(seconds, 1)) * time.Second)
+}
