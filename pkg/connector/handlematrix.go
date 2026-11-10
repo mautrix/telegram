@@ -582,6 +582,10 @@ func (tc *TelegramClient) HandleMatrixMessage(ctx context.Context, msg *bridgev2
 			if err != nil {
 				return nil, err
 			}
+			contentURI = msg.Content.URL
+			if contentURI == "" {
+				contentURI = msg.Content.File.URL
+			}
 			if viewLimitedTTL > 0 {
 				media.(interface{ SetTTLSeconds(int) }).SetTTLSeconds(viewLimitedTTL)
 			}
