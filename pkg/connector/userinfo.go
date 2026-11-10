@@ -266,6 +266,8 @@ func (tc *TelegramClient) wrapUserInfo(ctx context.Context, u tg.UserClass, ghos
 		if err != nil {
 			return nil, err
 		}
+	} else if !ok && (!user.Min || user.ApplyMinPhoto) && (oldMeta.ContactSource == 0 || oldMeta.ContactSource == tc.telegramUserID) {
+		avatar = &bridgev2.Avatar{Remove: true}
 	}
 
 	name := tc.main.Config.FormatDisplayname(user.FirstName, user.LastName, user.Username, user.Deleted, user.ID)
