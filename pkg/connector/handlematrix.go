@@ -1223,7 +1223,7 @@ func (tc *TelegramClient) HandleMatrixReadReceipt(ctx context.Context, msg *brid
 		}
 	}()
 
-	if peerType == ids.PeerTypeChannel && !msg.Portal.Metadata.(*PortalMetadata).FullSynced {
+	if peerType == ids.PeerTypeChannel && (topicID == 0 || msg.Portal.Metadata.(*PortalMetadata).IsForumGeneral) && !msg.Portal.Metadata.(*PortalMetadata).FullSynced {
 		log.Debug().Msg("Scheduling chat resync on read receipt because channel has never got a full sync")
 		go tc.userLogin.QueueRemoteEvent(&simplevent.ChatResync{
 			EventMeta: simplevent.EventMeta{
