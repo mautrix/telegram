@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -31,7 +32,6 @@ import (
 
 	"go.mau.fi/mautrix-telegram/pkg/connector/ids"
 	"go.mau.fi/mautrix-telegram/pkg/connector/store"
-	"go.mau.fi/mautrix-telegram/pkg/gotd/telegram/query/hasher"
 	"go.mau.fi/mautrix-telegram/pkg/gotd/tg"
 )
 
@@ -234,6 +234,17 @@ func (tc *TelegramClient) SearchUsers(ctx context.Context, query string) (resp [
 	return resp, nil
 }
 
+func contactsHash(savedCount int, userIDs []int64) int64 {
+	hash := uint64(savedCount)
+	for _, id := range userIDs {
+		hash ^= hash >> 21
+		hash ^= hash << 35
+		hash ^= hash >> 4
+		hash += uint64(id)
+	}
+	return int64(hash)
+}
+
 func (tc *TelegramClient) GetContactList(ctx context.Context) (resp []*bridgev2.ResolveIdentifierResponse, err error) {
 	tc.contactsLock.Lock()
 	defer tc.contactsLock.Unlock()
@@ -247,11 +258,12 @@ func (tc *TelegramClient) GetContactList(ctx context.Context) (resp []*bridgev2.
 			switch typedResp := c.(type) {
 			case *tg.ContactsContacts:
 				tc.cachedContacts = typedResp
-				var h hasher.Hasher
-				for _, contact := range tc.cachedContacts.Contacts {
-					h.Update(uint32(contact.UserID))
+				hashIDs := make([]int64, 0, len(typedResp.Contacts)+1)
+				for _, contact := range typedResp.Contacts {
+					hashIDs = append(hashIDs, contact.UserID)
 				}
-				tc.cachedContactsHash = h.Sum()
+				slices.Sort(hashIDs)
+				tc.cachedContactsHash = contactsHash(typedResp.SavedCount, hashIDs)
 			case *tg.ContactsContactsNotModified:
 				// No changes
 			default:
