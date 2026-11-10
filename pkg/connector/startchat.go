@@ -32,6 +32,7 @@ import (
 
 	"go.mau.fi/mautrix-telegram/pkg/connector/ids"
 	"go.mau.fi/mautrix-telegram/pkg/connector/store"
+	"go.mau.fi/mautrix-telegram/pkg/gotd/telegram/query/hasher"
 	"go.mau.fi/mautrix-telegram/pkg/gotd/tg"
 )
 
@@ -234,65 +235,58 @@ func (tc *TelegramClient) SearchUsers(ctx context.Context, query string) (resp [
 	return resp, nil
 }
 
-func contactsHash(savedCount int, userIDs []int64) int64 {
-	hash := uint64(savedCount)
-	for _, id := range userIDs {
-		hash ^= hash >> 21
-		hash ^= hash << 35
-		hash ^= hash >> 4
-		hash += uint64(id)
-	}
-	return int64(hash)
-}
-
 func (tc *TelegramClient) GetContactList(ctx context.Context) (resp []*bridgev2.ResolveIdentifierResponse, err error) {
 	tc.contactsLock.Lock()
 	defer tc.contactsLock.Unlock()
-	var fresh bool
+	var contacts *tg.ContactsContacts
 	if time.Since(tc.lastContactReq) > 10*time.Minute {
-		c, err := tc.client.API().ContactsGetContacts(ctx, tc.cachedContactsHash)
-		if err != nil {
-			return nil, wrapUnknownError(ctx, "failed to get contacts", err)
-		}
-		switch typedResp := c.(type) {
-		case *tg.ContactsContacts:
-			if err = handleUserUpdates[*tg.ContactsContacts](ctx, tc, typedResp); err != nil {
-				return nil, err
-			}
-			tc.cachedContacts = typedResp
-			hashIDs := make([]int64, 0, len(typedResp.Contacts))
-			for _, contact := range typedResp.Contacts {
-				hashIDs = append(hashIDs, contact.UserID)
-			}
-			slices.Sort(hashIDs)
-			tc.cachedContactsHash = contactsHash(typedResp.SavedCount, hashIDs)
-			fresh = true
-		case *tg.ContactsContactsNotModified:
-			// No changes
-		default:
-			return nil, fmt.Errorf("unexpected contacts type: %T", c)
-		}
-		tc.lastContactReq = time.Now()
-	}
-	users := map[int64]tg.UserClass{}
-	for _, user := range tc.cachedContacts.GetUsers() {
-		users[user.GetID()] = user
-	}
-
-	for _, contact := range tc.cachedContacts.Contacts {
-		user, ok := users[contact.UserID]
-		if !ok {
-			return nil, fmt.Errorf("contact user not found in contact list response")
-		} else if fresh {
-			r, err := tc.resolveUser(ctx, user)
+		contacts, err = APICallWithOnlyUserUpdates(ctx, tc, func() (*tg.ContactsContacts, error) {
+			c, err := tc.client.API().ContactsGetContacts(ctx, tc.cachedContactsHash)
 			if err != nil {
 				return nil, err
 			}
-			resp = append(resp, r)
-		} else if ghost, err := tc.main.Bridge.GetGhostByID(ctx, ids.MakeUserID(user.GetID())); err != nil {
-			return nil, fmt.Errorf("failed to get ghost: %w", err)
+			switch typedResp := c.(type) {
+			case *tg.ContactsContacts:
+				tc.cachedContacts = typedResp
+				userIDs := make([]int64, len(typedResp.Contacts))
+				for i, contact := range typedResp.Contacts {
+					userIDs[i] = contact.UserID
+				}
+				slices.Sort(userIDs)
+				var h hasher.Hasher
+				h.Update(uint64(typedResp.SavedCount))
+				for _, userID := range userIDs {
+					h.Update(uint64(userID))
+				}
+				tc.cachedContactsHash = h.Sum()
+			case *tg.ContactsContactsNotModified:
+				// No changes
+			default:
+				return nil, fmt.Errorf("unexpected contacts type: %T", c)
+			}
+			return tc.cachedContacts, nil
+		})
+		if err != nil {
+			return nil, err
+		}
+		tc.lastContactReq = time.Now()
+	} else {
+		contacts = tc.cachedContacts
+	}
+	users := map[int64]tg.UserClass{}
+	for _, user := range contacts.GetUsers() {
+		users[user.GetID()] = user
+	}
+
+	for _, contact := range contacts.Contacts {
+		if user, ok := users[contact.UserID]; ok {
+			if r, err := tc.resolveUser(ctx, user); err != nil {
+				return nil, err
+			} else {
+				resp = append(resp, r)
+			}
 		} else {
-			resp = append(resp, tc.makeResolveIdentifierResponse(ghost, user, nil))
+			return nil, fmt.Errorf("contact user not found in contact list response")
 		}
 	}
 	return resp, nil
