@@ -147,6 +147,27 @@ func (tc *TelegramClient) resolveUsername(ctx context.Context, username string, 
 	return nil, fmt.Errorf("peer user not found in contact resolved response")
 }
 
+func (tc *TelegramClient) resolvePhone(ctx context.Context, phone string) (*bridgev2.ResolveIdentifierResponse, error) {
+	resolved, err := APICallWithUpdates(ctx, tc, func() (*tg.ContactsResolvedPeer, error) {
+		return tc.client.API().ContactsResolvePhone(ctx, phone)
+	})
+	if tg.IsPhoneNotOccupied(err) {
+		return nil, nil
+	} else if err != nil {
+		return nil, wrapUnknownError(ctx, "failed to resolve phone number", err)
+	}
+	peer, ok := resolved.GetPeer().(*tg.PeerUser)
+	if !ok {
+		return nil, fmt.Errorf("unexpected peer type: %T", resolved.GetPeer())
+	}
+	for _, user := range resolved.GetUsers() {
+		if user.GetID() == peer.GetUserID() {
+			return tc.resolveUser(ctx, user)
+		}
+	}
+	return nil, fmt.Errorf("peer user not found in contact resolved response")
+}
+
 // Parses user links or usernames with or without the @ sign in front of the username.
 // This verifies the following restrictions:
 // - Usernames must be at least 5 characters long
@@ -172,7 +193,7 @@ func (tc *TelegramClient) ResolveIdentifier(ctx context.Context, identifier stri
 			return nil, fmt.Errorf("failed to get user ID by phone number: %w", err)
 		} else if userID == 0 {
 			log.Info().Msg("Phone number not found in database")
-			return nil, nil
+			return tc.resolvePhone(ctx, normalized)
 		} else {
 			return tc.resolveUserID(ctx, userID)
 		}
