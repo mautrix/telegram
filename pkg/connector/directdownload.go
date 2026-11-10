@@ -153,6 +153,8 @@ func (tc *TelegramConnector) Download(ctx context.Context, mediaID networkid.Med
 			WithStickerConfig(tc.Config.AnimatedSticker).
 			WithForceWebmStickerConvert(pack.meta.Emojis).
 			WithDocument(doc, info.Thumbnail)
+	} else if info.PeerType == ids.FakePeerTypeMinUser {
+		readyTransferer = transferer.WithPeerPhoto(&tg.InputPeerUser{UserID: info.PeerID, AccessHash: info.MessageID}, info.ID)
 	} else if info.MessageID > 0 {
 		rawMsgMedia, err := client.refetchMedia(ctx, info.PeerType, info.PeerID, int(info.MessageID))
 		if err != nil {
@@ -213,7 +215,6 @@ func (tc *TelegramConnector) Download(ctx context.Context, mediaID networkid.Med
 			return nil, fmt.Errorf("unhandled media type %T", msgMedia)
 		}
 	} else if info.PeerType == ids.PeerTypeUser {
-		// TODO this needs to be able to use min access hashes
 		readyTransferer, err = transferer.WithUserPhoto(ctx, client.ScopedStore, info.PeerID, info.ID)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create user photo transferer: %w", err)
