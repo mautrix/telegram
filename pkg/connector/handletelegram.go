@@ -892,10 +892,6 @@ func (tc *TelegramClient) onUserName(ctx context.Context, e tg.Entities, update 
 
 	ghost.UpdateInfo(ctx, &userInfo)
 	if ghost.ID == tc.userID {
-		var firstUsername string
-		if len(update.Usernames) > 0 {
-			firstUsername = update.Usernames[0].Username
-		}
 		tc.updateRemoteProfile(ctx, &tg.User{
 			Self:      true,
 			ID:        update.UserID,
