@@ -712,7 +712,7 @@ func (tc *TelegramClient) convertAndLetSenderPost(ctx context.Context, portal *b
 	for _, part := range cm.Parts {
 		level = max(level, pl.GetEventLevel(part.Type))
 	}
-	if pl.GetUserLevel(intent.GetMXID()) >= level {
+	if level >= *nobodyPowerLevel || pl.GetUserLevel(intent.GetMXID()) >= level {
 		return cm, nil
 	}
 	pl.SetUserLevel(intent.GetMXID(), level)
