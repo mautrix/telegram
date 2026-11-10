@@ -269,6 +269,7 @@ func (tc *TelegramClient) GetContactList(ctx context.Context) (resp []*bridgev2.
 			return tc.cachedContacts, nil
 		})
 		if err != nil {
+			tc.cachedContactsHash = 0
 			return nil, err
 		}
 		tc.lastContactReq = time.Now()
