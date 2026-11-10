@@ -1079,15 +1079,15 @@ func (tc *TelegramClient) onUpdate(ctx context.Context, e tg.Entities, upd tg.Up
 	case *tg.UpdateBotMessageReaction:
 		return tc.onBotMessageReaction(ctx, update)
 	case *tg.UpdateUserTyping:
-		return tc.handleTyping(tc.makePortalKeyFromID(ids.PeerTypeUser, update.UserID, 0), tc.senderForUserID(update.UserID), update.Action)
+		return tc.handleTyping(ctx, tc.makePortalKeyFromID(ids.PeerTypeUser, update.UserID, 0), tc.senderForUserID(update.UserID), update.Action)
 	case *tg.UpdateChatUserTyping:
 		if update.FromID.TypeID() != tg.PeerUserTypeID {
 			zerolog.Ctx(ctx).Warn().Str("from_id_type", update.FromID.TypeName()).Msg("unsupported from_id type")
 			return nil
 		}
-		return tc.handleTyping(tc.makePortalKeyFromID(ids.PeerTypeChat, update.ChatID, 0), tc.getPeerSender(update.FromID), update.Action)
+		return tc.handleTyping(ctx, tc.makePortalKeyFromID(ids.PeerTypeChat, update.ChatID, 0), tc.getPeerSender(update.FromID), update.Action)
 	case *tg.UpdateChannelUserTyping:
-		return tc.handleTyping(tc.makePortalKeyFromID(ids.PeerTypeChannel, update.ChannelID, update.TopMsgID), tc.getPeerSender(update.FromID), update.Action)
+		return tc.handleTyping(ctx, tc.makePortalKeyFromID(ids.PeerTypeChannel, update.ChannelID, update.TopMsgID), tc.getPeerSender(update.FromID), update.Action)
 	case *tg.UpdateReadHistoryOutbox:
 		return tc.updateReadReceipt(ctx, e, update)
 	case *tg.UpdateReadHistoryInbox:
@@ -1282,8 +1282,13 @@ func (tc *TelegramClient) onMessageEdit(ctx context.Context, update IGetMessage)
 	return resultToError(res)
 }
 
-func (tc *TelegramClient) handleTyping(portal networkid.PortalKey, sender bridgev2.EventSender, action tg.SendMessageActionClass) error {
+func (tc *TelegramClient) handleTyping(ctx context.Context, portal networkid.PortalKey, sender bridgev2.EventSender, action tg.SendMessageActionClass) error {
 	if sender.IsFromMe || (sender.Sender == tc.userID && sender.SenderLogin == tc.userLogin.ID) {
+		return nil
+	}
+	if ghost, err := tc.main.Bridge.GetExistingGhostByID(ctx, sender.Sender); err != nil {
+		return err
+	} else if ghost == nil || ghost.Name == "" {
 		return nil
 	}
 	timeout := time.Duration(6) * time.Second
