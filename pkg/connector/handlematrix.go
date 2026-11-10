@@ -668,6 +668,7 @@ func (tc *TelegramClient) makeSendResponse(
 		tgMessageID = sentMessage.ID
 		tgDate = sentMessage.Date
 		hasher.Write([]byte(body))
+		hasher.Write(webPageHashURL(sentMessage.Media))
 		hasher.Write(mediaHashID(ctx, sentMessage.Media))
 	case *tg.Updates:
 		for _, u := range sentMessage.Updates {
@@ -722,6 +723,7 @@ func (tc *TelegramClient) makeSendResponse(
 		if realSentMessage != nil {
 			tgDate = realSentMessage.Date
 			hasher.Write([]byte(realSentMessage.Message))
+			hasher.Write(webPageHashURL(realSentMessage.Media))
 			hasher.Write(mediaHashID(ctx, realSentMessage.Media))
 		} else {
 			hasher.Write([]byte(body))
@@ -855,49 +857,44 @@ func (tc *TelegramClient) HandleMatrixEdit(ctx context.Context, msg *bridgev2.Ma
 	switch sentMessage := updates.(type) {
 	case *tg.UpdateShortSentMessage:
 		hasher.Write([]byte(msg.Content.Body))
+		hasher.Write(webPageHashURL(sentMessage.Media))
 		hasher.Write(mediaHashID(ctx, sentMessage.Media))
 	case *tg.Updates:
 		var realSentMessage *tg.Message
 		for _, u := range sentMessage.Updates {
+			var msgClass tg.MessageClass
 			switch update := u.(type) {
+			case *tg.UpdateEditMessage:
+				msgClass = update.Message
+			case *tg.UpdateEditChannelMessage:
+				msgClass = update.Message
 			case *tg.UpdateNewMessage:
-				newMessage, ok := update.Message.(*tg.Message)
-				if !ok {
-					log.Debug().
-						Type("message_type", update.Message).
-						Int("message_id", update.Message.GetID()).
-						Msg("Ignoring non-message in edit response")
-					continue
-				}
-				if realSentMessage != nil {
-					log.Warn().
-						Int("prev_id", realSentMessage.ID).
-						Int("new_id", newMessage.ID).
-						Msg("Multiple messages in edit response")
-				}
-				realSentMessage = newMessage
+				msgClass = update.Message
 			case *tg.UpdateNewChannelMessage:
-				newMessage, ok := update.Message.(*tg.Message)
-				if !ok {
-					log.Debug().
-						Type("message_type", update.Message).
-						Int("message_id", update.Message.GetID()).
-						Msg("Ignoring non-message in edit response")
-					continue
-				}
-				if realSentMessage != nil {
-					log.Warn().
-						Int("prev_id", realSentMessage.ID).
-						Int("new_id", newMessage.ID).
-						Msg("Multiple messages in edit response")
-				}
-				realSentMessage = newMessage
+				msgClass = update.Message
 			default:
 				log.Warn().Type("update_type", update).Msg("Unexpected update type in edit message response")
+				continue
 			}
+			newMessage, ok := msgClass.(*tg.Message)
+			if !ok {
+				log.Debug().
+					Type("message_type", msgClass).
+					Int("message_id", msgClass.GetID()).
+					Msg("Ignoring non-message in edit response")
+				continue
+			}
+			if realSentMessage != nil {
+				log.Warn().
+					Int("prev_id", realSentMessage.ID).
+					Int("new_id", newMessage.ID).
+					Msg("Multiple messages in edit response")
+			}
+			realSentMessage = newMessage
 		}
 		if realSentMessage != nil {
 			hasher.Write([]byte(realSentMessage.Message))
+			hasher.Write(webPageHashURL(realSentMessage.Media))
 			hasher.Write(mediaHashID(ctx, realSentMessage.Media))
 		} else {
 			hasher.Write([]byte(msg.Content.Body))
