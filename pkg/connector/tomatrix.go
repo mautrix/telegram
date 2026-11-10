@@ -282,17 +282,44 @@ func (tc *TelegramClient) convertToMatrix(
 					cm.ReplyTo.MessageID = ids.MakeMessageID(portal.PortalKey, replyTo.ReplyToMsgID)
 				}
 			}
+			var replySource string
+			replyPeer, hasReplyPeer := replyTo.GetReplyToPeerID()
+			replyFrom, hasReplyFrom := replyTo.GetReplyFrom()
+			if hasReplyFrom || (hasReplyPeer && tc.makePortalKeyFromPeer(replyPeer, 0) != tc.makePortalKeyFromPeer(msg.PeerID, 0)) {
+				if !hasReplyFrom {
+					replyFrom = tg.MessageFwdHeader{FromID: replyPeer}
+				}
+				_, sourceHTML, err := tc.getFwdHeaderSource(ctx, replyFrom)
+				if err != nil {
+					return nil, fmt.Errorf("failed to get reply source: %w", err)
+				}
+				replySource = fmt.Sprintf("In reply to %s", sourceHTML)
+			}
+			existingPart := cm.Parts[0]
 			if replyTo.Quote {
 				parsedQuote := tc.parseBodyAndHTML(ctx, replyTo.QuoteText, replyTo.QuoteEntities)
 				parsedQuote.EnsureHasHTML()
-				existingPart := cm.Parts[0]
+				if replySource != "" {
+					parsedQuote.FormattedBody = fmt.Sprintf("%s:<br>%s", replySource, parsedQuote.FormattedBody)
+				}
 				existingPart.Content.EnsureHasHTML()
 				existingPart.Content.FormattedBody = fmt.Sprintf(
 					"<blockquote data-telegram-partial-reply>%s</blockquote>%s",
 					parsedQuote.FormattedBody,
 					existingPart.Content.FormattedBody,
 				)
+			} else if replySource != "" {
+				existingPart.Content.EnsureHasHTML()
+				existingPart.Content.FormattedBody = fmt.Sprintf("<blockquote>%s</blockquote>%s", replySource, existingPart.Content.FormattedBody)
 			}
+		case *tg.MessageReplyStoryHeader:
+			_, sourceHTML, err := tc.getFwdHeaderSource(ctx, tg.MessageFwdHeader{FromID: replyTo.Peer})
+			if err != nil {
+				return nil, fmt.Errorf("failed to get story reply source: %w", err)
+			}
+			existingPart := cm.Parts[0]
+			existingPart.Content.EnsureHasHTML()
+			existingPart.Content.FormattedBody = fmt.Sprintf("<blockquote>In reply to a story by %s</blockquote>%s", sourceHTML, existingPart.Content.FormattedBody)
 		default:
 			log.Warn().Type("reply_to", replyTo).Msg("unhandled reply to type")
 		}
@@ -337,8 +364,7 @@ func getMessageLink(msg *tg.Message) string {
 	return fmt.Sprintf("https://t.me/c/%d/%d", chatID, msg.ID)
 }
 
-func (tc *TelegramClient) addForwardHeader(ctx context.Context, part *bridgev2.ConvertedMessagePart, fwd tg.MessageFwdHeader) error {
-	var fwdFromText, fwdFromHTML string
+func (tc *TelegramClient) getFwdHeaderSource(ctx context.Context, fwd tg.MessageFwdHeader) (fwdFromText, fwdFromHTML string, err error) {
 	switch from := fwd.FromID.(type) {
 	case *tg.PeerUser:
 		user := tc.main.Bridge.GetCachedUserLoginByID(ids.MakeUserLoginID(from.UserID))
@@ -347,7 +373,7 @@ func (tc *TelegramClient) addForwardHeader(ctx context.Context, part *bridgev2.C
 			mxid = user.UserMXID
 			fwdFromText = cmp.Or(user.RemoteName, user.UserMXID.String())
 		} else if ghost, err := tc.main.Bridge.GetGhostByID(ctx, ids.MakeUserID(from.UserID)); err != nil {
-			return err
+			return "", "", err
 		} else {
 			if ghost.Name == "" {
 				info, err := tc.GetUserInfo(ctx, ghost)
@@ -374,7 +400,7 @@ func (tc *TelegramClient) addForwardHeader(ctx context.Context, part *bridgev2.C
 		}
 		portal, err := tc.main.Bridge.GetExistingPortalByKey(ctx, tc.makePortalKeyFromPeer(from, 0))
 		if err != nil {
-			return err
+			return "", "", err
 		} else if portal != nil && portal.MXID != "" {
 			fwdFromText = cmp.Or(portal.Name, fwd.FromName, unknownType)
 			fwdFromHTML = fmt.Sprintf(
@@ -392,7 +418,7 @@ func (tc *TelegramClient) addForwardHeader(ctx context.Context, part *bridgev2.C
 		if channelID != 0 && fwdFromText == unknownType {
 			ghost, err := tc.main.Bridge.GetExistingGhostByID(ctx, ids.MakeChannelUserID(channelID))
 			if err != nil {
-				return err
+				return "", "", err
 			} else if ghost != nil && ghost.Name != "" {
 				fwdFromText = ghost.Name
 				fwdFromHTML = fmt.Sprintf(
@@ -411,6 +437,14 @@ func (tc *TelegramClient) addForwardHeader(ctx context.Context, part *bridgev2.C
 	if fwdFromText == "" {
 		fwdFromText = "unknown source"
 		fwdFromHTML = fwdFromText
+	}
+	return
+}
+
+func (tc *TelegramClient) addForwardHeader(ctx context.Context, part *bridgev2.ConvertedMessagePart, fwd tg.MessageFwdHeader) error {
+	fwdFromText, fwdFromHTML, err := tc.getFwdHeaderSource(ctx, fwd)
+	if err != nil {
+		return err
 	}
 
 	if part.Content.MsgType.IsMedia() {
