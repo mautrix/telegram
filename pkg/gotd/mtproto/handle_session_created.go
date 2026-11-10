@@ -1,13 +1,12 @@
 package mtproto
 
 import (
-	"time"
-
 	"github.com/go-faster/errors"
 	"go.uber.org/zap"
 
 	"go.mau.fi/mautrix-telegram/pkg/gotd/bin"
 	"go.mau.fi/mautrix-telegram/pkg/gotd/mt"
+	"go.mau.fi/mautrix-telegram/pkg/gotd/proto"
 )
 
 func (c *Conn) handleSessionCreated(msgID int64, b *bin.Buffer) error {
@@ -17,7 +16,7 @@ func (c *Conn) handleSessionCreated(msgID int64, b *bin.Buffer) error {
 	}
 	c.gotSession.Signal()
 
-	created := time.Unix(msgID>>32, int64(uint32(msgID))*int64(time.Second)>>32)
+	created := proto.MessageID(msgID).Time()
 	now := c.clock.Now()
 	hasServerTimeOffset := c.hasServerTimeOffset()
 	c.log.Debug("Session created",
