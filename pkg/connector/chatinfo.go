@@ -389,17 +389,22 @@ func (tc *TelegramClient) getDefaultNotifySettings(ctx context.Context, scope tg
 	if settings, ok := tc.notifyDefaults[scope.TypeID()]; ok {
 		return settings
 	}
-	var settings tg.PeerNotifySettings
-	if resp, err := tc.client.API().AccountGetNotifySettings(ctx, scope); err != nil {
+	var settings *tg.PeerNotifySettings
+	var err error
+	retry := true
+	for attempts := 0; retry && attempts < 5; attempts++ {
+		settings, err = tc.client.API().AccountGetNotifySettings(ctx, scope)
+		retry, err = tgerr.FloodWait(ctx, err)
+	}
+	if err != nil {
 		zerolog.Ctx(ctx).Err(err).Str("scope", scope.TypeName()).Msg("Failed to get default notification settings")
-	} else {
-		settings = *resp
+		return tg.PeerNotifySettings{}
 	}
 	if tc.notifyDefaults == nil {
 		tc.notifyDefaults = make(map[uint32]tg.PeerNotifySettings)
 	}
-	tc.notifyDefaults[scope.TypeID()] = settings
-	return settings
+	tc.notifyDefaults[scope.TypeID()] = *settings
+	return *settings
 }
 
 func (tc *TelegramClient) fillUserLocalMeta(ctx context.Context, info *bridgev2.ChatInfo, dialog userLocalDialog, scope tg.InputNotifyPeerClass) {

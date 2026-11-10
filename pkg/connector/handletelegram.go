@@ -1537,9 +1537,19 @@ func (tc *TelegramClient) transferEmojisToMatrix(ctx context.Context, customEmoj
 
 func (tc *TelegramClient) onNotifySettings(ctx context.Context, e tg.Entities, update *tg.UpdateNotifySettings) error {
 	var portalKey networkid.PortalKey
+	var scope tg.InputNotifyPeerClass
 	switch typedPeer := update.Peer.(type) {
 	case *tg.NotifyPeer:
 		portalKey = tc.makePortalKeyFromPeer(typedPeer.Peer, 0)
+		scope = notifyScopeForPeer(typedPeer.Peer, nil)
+		if _, isChannel := typedPeer.Peer.(*tg.PeerChannel); isChannel {
+			portal, err := tc.main.Bridge.GetExistingPortalByKey(ctx, portalKey)
+			if err != nil {
+				return err
+			} else if portal != nil && !portal.Metadata.(*PortalMetadata).IsSuperGroup && !portal.Metadata.(*PortalMetadata).IsCommunity {
+				scope = &tg.InputNotifyBroadcasts{}
+			}
+		}
 	case *tg.NotifyForumTopic:
 		portalKey = tc.makePortalKeyFromPeer(typedPeer.Peer, typedPeer.TopMsgID)
 	case *tg.NotifyUsers, *tg.NotifyChats, *tg.NotifyBroadcasts:
@@ -1555,11 +1565,14 @@ func (tc *TelegramClient) onNotifySettings(ctx context.Context, e tg.Entities, u
 		return nil
 	}
 
-	var mutedUntil *time.Time
-	if mu, ok := update.NotifySettings.GetMuteUntil(); ok {
+	mu, ok := update.NotifySettings.GetMuteUntil()
+	if !ok && scope != nil {
+		defaults := tc.getDefaultNotifySettings(ctx, scope)
+		mu, ok = defaults.GetMuteUntil()
+	}
+	mutedUntil := &bridgev2.Unmuted
+	if ok {
 		mutedUntil = ptr.Ptr(time.Unix(int64(mu), 0))
-	} else {
-		mutedUntil = &bridgev2.Unmuted
 	}
 
 	res := tc.main.Bridge.QueueRemoteEvent(tc.userLogin, &simplevent.ChatInfoChange{
