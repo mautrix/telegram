@@ -307,27 +307,27 @@ func (tc *TelegramClient) FetchMessages(ctx context.Context, fetchParams bridgev
 		if reactions, ok := message.GetReactions(); ok {
 			reactionsList, _, customEmojis, err := tc.computeReactionsList(ctx, message.PeerID, message.ID, reactions)
 			if err != nil {
-				log.Err(err).Int("message_id", message.ID).Msg("Failed to get reactions for backfill message")
-			} else {
-				for _, reaction := range reactionsList {
-					reactionSender := tc.computeReactionSender(ctx, reaction)
-					if reactionSender.Sender == "" {
-						continue
-					}
+				log.Err(err).Msg("Failed to get reactions for backfill message")
+			}
 
-					emojiID, emoji, err := computeEmojiAndID(reaction.Reaction, customEmojis)
-					if err != nil {
-						log.Err(err).Msg("Failed to compute emoji and ID for backfill reaction")
-						continue
-					}
-
-					backfillMessage.Reactions = append(backfillMessage.Reactions, &bridgev2.BackfillReaction{
-						Timestamp: time.Unix(int64(reaction.Date), 0),
-						Sender:    reactionSender,
-						EmojiID:   emojiID,
-						Emoji:     emoji,
-					})
+			for _, reaction := range reactionsList {
+				reactionSender := tc.computeReactionSender(ctx, reaction)
+				if reactionSender.Sender == "" {
+					continue
 				}
+
+				emojiID, emoji, err := computeEmojiAndID(reaction.Reaction, customEmojis)
+				if err != nil {
+					log.Err(err).Msg("Failed to compute emoji and ID for backfill reaction")
+					continue
+				}
+
+				backfillMessage.Reactions = append(backfillMessage.Reactions, &bridgev2.BackfillReaction{
+					Timestamp: time.Unix(int64(reaction.Date), 0),
+					Sender:    reactionSender,
+					EmojiID:   emojiID,
+					Emoji:     emoji,
+				})
 			}
 		}
 
