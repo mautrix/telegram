@@ -27,7 +27,6 @@ import (
 
 	"go.mau.fi/mautrix-telegram/pkg/gotd/telegram/auth"
 	"go.mau.fi/mautrix-telegram/pkg/gotd/tg"
-	"go.mau.fi/mautrix-telegram/pkg/gotd/tgerr"
 )
 
 const (
@@ -162,7 +161,7 @@ func (pl *PhoneLogin) submitNumber(ctx context.Context, phone string) (*bridgev2
 	}
 
 	sentCode, err := pl.client.Auth().SendCode(ctx, pl.phone, auth.SendCodeOptions{})
-	if tgerr.Is(err, "PHONE_NUMBER_INVALID") {
+	if tg.IsPhoneNumberInvalid(err) {
 		return phoneNumberInvalidStep, nil
 	} else if err != nil {
 		return nil, loginRespError(ctx, err)
