@@ -282,44 +282,32 @@ func (tc *TelegramClient) convertToMatrix(
 					cm.ReplyTo.MessageID = ids.MakeMessageID(portal.PortalKey, replyTo.ReplyToMsgID)
 				}
 			}
-			var replySource string
+			var sourceText, sourceHTML string
 			replyPeer, hasReplyPeer := replyTo.GetReplyToPeerID()
 			replyFrom, hasReplyFrom := replyTo.GetReplyFrom()
 			if hasReplyFrom || (hasReplyPeer && tc.makePortalKeyFromPeer(replyPeer, 0) != tc.makePortalKeyFromPeer(msg.PeerID, 0)) {
 				if !hasReplyFrom {
 					replyFrom = tg.MessageFwdHeader{FromID: replyPeer}
 				}
-				_, sourceHTML, err := tc.getFwdHeaderSource(ctx, replyFrom)
+				name, nameHTML, err := tc.getFwdHeaderSource(ctx, replyFrom)
 				if err != nil {
 					return nil, fmt.Errorf("failed to get reply source: %w", err)
 				}
-				replySource = fmt.Sprintf("In reply to %s", sourceHTML)
+				sourceText, sourceHTML = "In reply to "+name, "In reply to "+nameHTML
 			}
-			existingPart := cm.Parts[0]
+			var quoteHTML string
 			if replyTo.Quote {
 				parsedQuote := tc.parseBodyAndHTML(ctx, replyTo.QuoteText, replyTo.QuoteEntities)
 				parsedQuote.EnsureHasHTML()
-				if replySource != "" {
-					parsedQuote.FormattedBody = fmt.Sprintf("%s:<br>%s", replySource, parsedQuote.FormattedBody)
-				}
-				existingPart.Content.EnsureHasHTML()
-				existingPart.Content.FormattedBody = fmt.Sprintf(
-					"<blockquote data-telegram-partial-reply>%s</blockquote>%s",
-					parsedQuote.FormattedBody,
-					existingPart.Content.FormattedBody,
-				)
-			} else if replySource != "" {
-				existingPart.Content.EnsureHasHTML()
-				existingPart.Content.FormattedBody = fmt.Sprintf("<blockquote>%s</blockquote>%s", replySource, existingPart.Content.FormattedBody)
+				quoteHTML = parsedQuote.FormattedBody
 			}
+			addReplyContext(cm.Parts[0], sourceText, sourceHTML, quoteHTML)
 		case *tg.MessageReplyStoryHeader:
-			_, sourceHTML, err := tc.getFwdHeaderSource(ctx, tg.MessageFwdHeader{FromID: replyTo.Peer})
+			name, nameHTML, err := tc.getFwdHeaderSource(ctx, tg.MessageFwdHeader{FromID: replyTo.Peer})
 			if err != nil {
 				return nil, fmt.Errorf("failed to get story reply source: %w", err)
 			}
-			existingPart := cm.Parts[0]
-			existingPart.Content.EnsureHasHTML()
-			existingPart.Content.FormattedBody = fmt.Sprintf("<blockquote>In reply to a story by %s</blockquote>%s", sourceHTML, existingPart.Content.FormattedBody)
+			addReplyContext(cm.Parts[0], "In reply to a story by "+name, "In reply to a story by "+nameHTML, "")
 		default:
 			log.Warn().Type("reply_to", replyTo).Msg("unhandled reply to type")
 		}
@@ -362,6 +350,32 @@ func getMessageLink(msg *tg.Message) string {
 		return fmt.Sprintf("https://t.me/c/%d/%d/%d", chatID, topicID, msg.ID)
 	}
 	return fmt.Sprintf("https://t.me/c/%d/%d", chatID, msg.ID)
+}
+
+func addReplyContext(part *bridgev2.ConvertedMessagePart, sourceText, sourceHTML, quoteHTML string) {
+	if sourceText == "" && quoteHTML == "" {
+		return
+	}
+	if sourceText != "" && part.Content.MsgType.IsMedia() {
+		if part.Content.FileName == "" {
+			part.Content.FileName = part.Content.Body
+		}
+		if part.Content.Body == part.Content.FileName {
+			part.Content.Body = ""
+		}
+	}
+	part.Content.EnsureHasHTML()
+	if quoteHTML != "" {
+		if sourceHTML != "" {
+			quoteHTML = fmt.Sprintf("%s:<br>%s", sourceHTML, quoteHTML)
+		}
+		part.Content.FormattedBody = fmt.Sprintf("<blockquote data-telegram-partial-reply>%s</blockquote>%s", quoteHTML, part.Content.FormattedBody)
+	} else {
+		part.Content.FormattedBody = fmt.Sprintf("<blockquote>%s</blockquote>%s", sourceHTML, part.Content.FormattedBody)
+	}
+	if sourceText != "" {
+		part.Content.Body = strings.TrimSpace(fmt.Sprintf("%s\n\n%s", sourceText, part.Content.Body))
+	}
 }
 
 func (tc *TelegramClient) getFwdHeaderSource(ctx context.Context, fwd tg.MessageFwdHeader) (fwdFromText, fwdFromHTML string, err error) {
