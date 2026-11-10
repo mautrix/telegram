@@ -210,27 +210,11 @@ func NewTelegramClient(ctx context.Context, tc *TelegramConnector, login *bridge
 
 	client.updatesManager = updates.New(updates.Config{
 		OnNotChannelMember: client.onNotChannelMember,
-		OnChannelTooLong: func(channelID int64) error {
-			// TODO resync topics?
-			res := tc.Bridge.QueueRemoteEvent(login, &simplevent.ChatResync{
-				EventMeta: simplevent.EventMeta{
-					Type: bridgev2.RemoteEventChatResync,
-					LogContext: func(c zerolog.Context) zerolog.Context {
-						return c.Str("update", "channel_too_long").Int64("channel_id", channelID)
-					},
-					PortalKey: client.makePortalKeyFromID(ids.PeerTypeChannel, channelID, 0),
-				},
-				CheckNeedsBackfillFunc: func(ctx context.Context, latestMessage *database.Message) (bool, error) {
-					return true, nil
-				},
-			})
-
-			return resultToError(res)
-		},
-		Handler:      client.dispatcher,
-		Logger:       zaplog.Named("gaps"),
-		Storage:      client.ScopedStore,
-		AccessHasher: client.ScopedStore,
+		OnChannelTooLong:   client.onChannelTooLong,
+		Handler:            client.dispatcher,
+		Logger:             zaplog.Named("gaps"),
+		Storage:            client.ScopedStore,
+		AccessHasher:       client.ScopedStore,
 	})
 	resolver, err := GetProxyResolver(tc.Config.ProxyConfig)
 	if err != nil {
@@ -371,6 +355,35 @@ func NewTelegramClient(ctx context.Context, tc *TelegramConnector, login *bridge
 	}
 
 	return &client, err
+}
+
+func (tc *TelegramClient) onChannelTooLong(channelID int64) error {
+	ctx := tc.userLogin.Log.WithContext(tc.main.Bridge.BackgroundCtx)
+	topics, err := tc.main.Store.Topic.GetAll(ctx, channelID)
+	if err != nil {
+		return fmt.Errorf("failed to get topics of channel: %w", err)
+	}
+	for _, topicID := range append([]int{0}, topics...) {
+		evt := &simplevent.ChatResync{
+			EventMeta: simplevent.EventMeta{
+				Type: bridgev2.RemoteEventChatResync,
+				LogContext: func(c zerolog.Context) zerolog.Context {
+					return c.Str("update", "channel_too_long").Int64("channel_id", channelID).Int("topic_id", topicID)
+				},
+				PortalKey: tc.makePortalKeyFromID(ids.PeerTypeChannel, channelID, topicID),
+			},
+			CheckNeedsBackfillFunc: func(ctx context.Context, latestMessage *database.Message) (bool, error) {
+				return true, nil
+			},
+		}
+		if topicID == 0 && len(topics) > 0 {
+			evt.GetChatInfoFunc = tc.GetChatInfo
+		}
+		if err = resultToError(tc.main.Bridge.QueueRemoteEvent(tc.userLogin, evt)); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (tc *TelegramClient) onDead() {
