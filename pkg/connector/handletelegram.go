@@ -282,9 +282,9 @@ func (tc *TelegramClient) onUpdateNewMessage(ctx context.Context, entities tg.En
 		}
 
 		sender := tc.getEventSender(msg, isBroadcastChannel)
-		var preHandle func(context.Context, *bridgev2.Portal)
+		convert := tc.convertToMatrix
 		if isSupergroup && !sender.IsFromMe {
-			preHandle = tc.ensureSenderCanPost(sender)
+			convert = tc.convertAndLetSenderPost
 		}
 
 		if media, ok := msg.GetMedia(); ok && media.TypeID() == tg.MessageMediaContactTypeID {
@@ -307,16 +307,15 @@ func (tc *TelegramClient) onUpdateNewMessage(ctx context.Context, entities tg.En
 						Bool("is_from_me", sender.IsFromMe).
 						Stringer("peer_id", msg.PeerID)
 				},
-				Sender:        sender,
-				PortalKey:     portalKey,
-				CreatePortal:  true,
-				Timestamp:     time.Unix(int64(msg.Date), 0),
-				StreamOrder:   int64(msg.GetID()),
-				PreHandleFunc: preHandle,
+				Sender:       sender,
+				PortalKey:    portalKey,
+				CreatePortal: true,
+				Timestamp:    time.Unix(int64(msg.Date), 0),
+				StreamOrder:  int64(msg.GetID()),
 			},
 			ID:                 msgID,
 			Data:               msg,
-			ConvertMessageFunc: tc.convertToMatrix,
+			ConvertMessageFunc: convert,
 		})
 		tc.recentMessageRooms.Push(msgID, portalKey)
 

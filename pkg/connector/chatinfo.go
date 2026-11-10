@@ -695,28 +695,29 @@ func (tc *TelegramClient) getDMPowerLevels() *bridgev2.PowerLevelOverrides {
 	return &plo
 }
 
-func (tc *TelegramClient) ensureSenderCanPost(sender bridgev2.EventSender) func(context.Context, *bridgev2.Portal) {
-	return func(ctx context.Context, portal *bridgev2.Portal) {
-		intent, ok := portal.GetIntentFor(ctx, sender, tc.userLogin, bridgev2.RemoteEventMessage)
-		if !ok {
-			return
-		}
-		pl, err := tc.main.Bridge.Matrix.GetPowerLevels(ctx, portal.MXID)
-		if err != nil {
-			zerolog.Ctx(ctx).Err(err).Msg("Failed to get power levels to check sender level")
-			return
-		}
-		senderMXID := intent.GetMXID()
-		level := pl.GetEventLevel(event.EventMessage)
-		if pl.GetUserLevel(senderMXID) >= level {
-			return
-		}
-		pl.SetUserLevel(senderMXID, level)
-		_, err = tc.main.Bridge.Bot.SendState(ctx, portal.MXID, event.StatePowerLevels, "", &event.Content{Parsed: pl}, time.Time{})
-		if err != nil {
-			zerolog.Ctx(ctx).Err(err).Stringer("sender_mxid", senderMXID).Msg("Failed to raise sender power level")
-		}
+func (tc *TelegramClient) convertAndLetSenderPost(ctx context.Context, portal *bridgev2.Portal, intent bridgev2.MatrixAPI, msg *tg.Message) (*bridgev2.ConvertedMessage, error) {
+	cm, err := tc.convertToMatrix(ctx, portal, intent, msg)
+	if err != nil || cm == nil || !tc.main.Bridge.IsGhostMXID(intent.GetMXID()) {
+		return cm, err
 	}
+	pl, err := tc.main.Bridge.Matrix.GetPowerLevels(ctx, portal.MXID)
+	if err != nil {
+		zerolog.Ctx(ctx).Err(err).Msg("Failed to get power levels to check sender level")
+		return cm, nil
+	}
+	var level int
+	for _, part := range cm.Parts {
+		level = max(level, pl.GetEventLevel(part.Type))
+	}
+	if pl.GetUserLevel(intent.GetMXID()) >= level {
+		return cm, nil
+	}
+	pl.SetUserLevel(intent.GetMXID(), level)
+	_, err = tc.main.Bridge.Bot.SendState(ctx, portal.MXID, event.StatePowerLevels, "", &event.Content{Parsed: pl}, time.Time{})
+	if err != nil {
+		zerolog.Ctx(ctx).Err(err).Stringer("sender_mxid", intent.GetMXID()).Msg("Failed to raise sender power level")
+	}
+	return cm, nil
 }
 
 func (tc *TelegramClient) getPowerLevelOverridesFromBannedRights(entity tg.ChatClass, dbr tg.ChatBannedRights) *bridgev2.PowerLevelOverrides {
