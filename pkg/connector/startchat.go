@@ -238,9 +238,8 @@ func (tc *TelegramClient) SearchUsers(ctx context.Context, query string) (resp [
 func (tc *TelegramClient) GetContactList(ctx context.Context) (resp []*bridgev2.ResolveIdentifierResponse, err error) {
 	tc.contactsLock.Lock()
 	defer tc.contactsLock.Unlock()
-	var contacts *tg.ContactsContacts
 	if time.Since(tc.lastContactReq) > 10*time.Minute {
-		contacts, err = APICallWithOnlyUserUpdates(ctx, tc, func() (*tg.ContactsContacts, error) {
+		_, err = APICallWithOnlyUserUpdates(ctx, tc, func() (*tg.ContactsContacts, error) {
 			c, err := tc.client.API().ContactsGetContacts(ctx, tc.cachedContactsHash)
 			if err != nil {
 				return nil, err
@@ -261,6 +260,7 @@ func (tc *TelegramClient) GetContactList(ctx context.Context) (resp []*bridgev2.
 				tc.cachedContactsHash = h.Sum()
 			case *tg.ContactsContactsNotModified:
 				// No changes
+				return &tg.ContactsContacts{}, nil
 			default:
 				return nil, fmt.Errorf("unexpected contacts type: %T", c)
 			}
@@ -270,9 +270,8 @@ func (tc *TelegramClient) GetContactList(ctx context.Context) (resp []*bridgev2.
 			return nil, err
 		}
 		tc.lastContactReq = time.Now()
-	} else {
-		contacts = tc.cachedContacts
 	}
+	contacts := tc.cachedContacts
 	users := map[int64]tg.UserClass{}
 	for _, user := range contacts.GetUsers() {
 		users[user.GetID()] = user
