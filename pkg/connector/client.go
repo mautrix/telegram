@@ -227,7 +227,7 @@ func NewTelegramClient(ctx context.Context, tc *TelegramConnector, login *bridge
 
 			return resultToError(res)
 		},
-		Handler:      client.dispatcher,
+		Handler:      telegram.UpdateHandlerFunc(client.handleUpdates),
 		Logger:       zaplog.Named("gaps"),
 		Storage:      client.ScopedStore,
 		AccessHasher: client.ScopedStore,

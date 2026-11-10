@@ -990,10 +990,44 @@ func (tc *TelegramClient) updateChannel(ctx context.Context, channel *tg.Channel
 
 const updateHandlerStuck status.BridgeStateErrorCode = "tg-update-handler-stuck"
 
+func (tc *TelegramClient) handleUpdates(ctx context.Context, u tg.UpdatesClass) error {
+	var e tg.Entities
+	switch u := u.(type) {
+	case *tg.Updates:
+		if len(u.Updates) == 0 {
+			return nil
+		}
+		e.Users = u.MapUsers().NotEmptyToMap()
+		chats := u.MapChats()
+		e.Chats = chats.ChatToMap()
+		e.Channels = chats.ChannelToMap()
+	case *tg.UpdatesCombined:
+		if len(u.Updates) == 0 {
+			return nil
+		}
+		e.Users = u.MapUsers().NotEmptyToMap()
+		chats := u.MapChats()
+		e.Chats = chats.ChatToMap()
+		e.Channels = chats.ChannelToMap()
+	}
+	if err := tc.runWithStuckCheck(ctx, func() error {
+		return tc.onEntities(ctx, e)
+	}); err != nil {
+		return err
+	}
+	return tc.dispatcher.Handle(ctx, u)
+}
+
 func (tc *TelegramClient) onUpdateWrapper(ctx context.Context, e tg.Entities, upd tg.UpdateClass) error {
+	return tc.runWithStuckCheck(ctx, func() error {
+		return tc.onUpdate(ctx, e, upd)
+	})
+}
+
+func (tc *TelegramClient) runWithStuckCheck(ctx context.Context, fn func() error) error {
 	doneChan := make(chan error, 1)
 	go func() {
-		doneChan <- tc.onUpdate(ctx, e, upd)
+		doneChan <- fn()
 	}()
 	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
@@ -1031,8 +1065,7 @@ func (tc *TelegramClient) onUpdateWrapper(ctx context.Context, e tg.Entities, up
 	}
 }
 
-func (tc *TelegramClient) onUpdate(ctx context.Context, e tg.Entities, upd tg.UpdateClass) error {
-	zerolog.Ctx(ctx).Trace().Stringer("update", upd).Msg("Raw update")
+func (tc *TelegramClient) onEntities(ctx context.Context, e tg.Entities) error {
 	for userID, user := range e.Users {
 		zerolog.Ctx(ctx).Trace().Stringer("user", user).Msg("Raw user info in update")
 		if _, err := tc.updateGhost(ctx, userID, user); err != nil {
@@ -1055,6 +1088,11 @@ func (tc *TelegramClient) onUpdate(ctx context.Context, e tg.Entities, upd tg.Up
 			return err
 		}
 	}
+	return nil
+}
+
+func (tc *TelegramClient) onUpdate(ctx context.Context, e tg.Entities, upd tg.UpdateClass) error {
+	zerolog.Ctx(ctx).Trace().Stringer("update", upd).Msg("Raw update")
 	switch update := upd.(type) {
 	case *tg.UpdateNewMessage:
 		return tc.onUpdateNewMessage(ctx, e, update)
