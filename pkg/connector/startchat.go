@@ -252,7 +252,7 @@ func (tc *TelegramClient) GetContactList(ctx context.Context) (resp []*bridgev2.
 	if time.Since(tc.lastContactReq) > 10*time.Minute {
 		c, err := tc.client.API().ContactsGetContacts(ctx, tc.cachedContactsHash)
 		if err != nil {
-			return nil, err
+			return nil, wrapUnknownError(ctx, "failed to get contacts", err)
 		}
 		switch typedResp := c.(type) {
 		case *tg.ContactsContacts:
