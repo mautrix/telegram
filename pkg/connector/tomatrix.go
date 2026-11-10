@@ -124,13 +124,32 @@ func (tc *TelegramClient) mediaToMatrix(
 		return convertDice(media), nil, nil
 	case tg.MessageMediaGameTypeID:
 		return convertGame(media), nil, nil
+	case tg.MessageMediaEmptyTypeID:
+		return nil, nil, nil
 	default:
+		var name string
+		switch media.TypeID() {
+		case tg.MessageMediaToDoTypeID:
+			name = "Checklists"
+		case tg.MessageMediaStoryTypeID:
+			name = "Stories"
+		case tg.MessageMediaInvoiceTypeID:
+			name = "Invoices"
+		case tg.MessageMediaPaidMediaTypeID:
+			name = "Paid media"
+		case tg.MessageMediaGiveawayTypeID, tg.MessageMediaGiveawayResultsTypeID:
+			name = "Giveaways"
+		case tg.MessageMediaVideoStreamTypeID:
+			name = "Live streams"
+		default:
+			name = media.TypeName()
+		}
 		// TODO: support these properly
 		return &bridgev2.ConvertedMessagePart{
 			Type: event.EventMessage,
 			Content: &event.MessageEventContent{
 				MsgType: event.MsgNotice,
-				Body:    fmt.Sprintf("%s are not yet supported. Open Telegram to view.", media.TypeName()),
+				Body:    fmt.Sprintf("%s are not yet supported. Open Telegram to view.", name),
 			},
 			Extra: map[string]any{
 				"fi.mau.telegram.unsupported": true,
