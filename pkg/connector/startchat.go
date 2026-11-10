@@ -151,7 +151,7 @@ func (tc *TelegramClient) resolvePhone(ctx context.Context, phone string) (*brid
 	resolved, err := APICallWithUpdates(ctx, tc, func() (*tg.ContactsResolvedPeer, error) {
 		return tc.client.API().ContactsResolvePhone(ctx, phone)
 	})
-	if tg.IsPhoneNotOccupied(err) {
+	if tg.IsPhoneNotOccupied(err) || tg.IsPhoneNumberInvalid(err) {
 		return nil, nil
 	} else if err != nil {
 		return nil, wrapUnknownError(ctx, "failed to resolve phone number", err)
@@ -188,8 +188,15 @@ func (tc *TelegramClient) ResolveIdentifier(ctx context.Context, identifier stri
 	}
 
 	if identifier[0] == '+' {
-		normalized := strings.TrimPrefix(identifier, "+")
-		if userID, err := tc.main.Store.PhoneNumber.GetUserID(ctx, normalized); err != nil {
+		normalized := strings.Map(func(r rune) rune {
+			if r >= '0' && r <= '9' {
+				return r
+			}
+			return -1
+		}, identifier)
+		if normalized == "" {
+			return nil, nil
+		} else if userID, err := tc.main.Store.PhoneNumber.GetUserID(ctx, normalized); err != nil {
 			return nil, fmt.Errorf("failed to get user ID by phone number: %w", err)
 		} else if userID == 0 {
 			log.Info().Msg("Phone number not found in database")
