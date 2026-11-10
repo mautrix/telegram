@@ -266,7 +266,7 @@ func (tc *TelegramClient) wrapUserInfo(ctx context.Context, u tg.UserClass, ghos
 		if err != nil {
 			return nil, err
 		}
-	} else if !ok && (!user.Min || user.ApplyMinPhoto) && (oldMeta.ContactSource == 0 || oldMeta.ContactSource == tc.telegramUserID) {
+	} else if !ok && (!user.Min || user.ApplyMinPhoto) && (user.Contact || len(tc.main.Bridge.GetAllCachedUserLogins()) == 1) {
 		avatar = &bridgev2.Avatar{Remove: true}
 	}
 
