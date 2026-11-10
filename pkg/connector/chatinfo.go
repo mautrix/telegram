@@ -498,6 +498,33 @@ func reactionUpdater(newAllowedReactions []string) bridgev2.ExtraUpdater[*bridge
 	}
 }
 
+const currentPortalInfoVersion = 1
+
+func markInfoVersion(ctx context.Context, portal *bridgev2.Portal) bool {
+	meta := portal.Metadata.(*PortalMetadata)
+	if meta.InfoVersion != currentPortalInfoVersion {
+		meta.InfoVersion = currentPortalInfoVersion
+		return true
+	}
+	return false
+}
+
+func (tc *TelegramClient) resyncOutdatedSupergroupInfo(ctx context.Context, portal *bridgev2.Portal) {
+	meta := portal.Metadata.(*PortalMetadata)
+	if portal.MXID == "" || !meta.IsSuperGroup || meta.InfoVersion >= currentPortalInfoVersion ||
+		!tc.infoVersionResyncs.Add(portal.PortalKey) {
+		return
+	}
+	log := zerolog.Ctx(ctx)
+	log.Debug().Int("info_version", meta.InfoVersion).Msg("Resyncing supergroup info synced by an older version before handling event")
+	info, err := tc.GetChatInfo(ctx, portal)
+	if err != nil {
+		log.Err(err).Msg("Failed to get chat info for outdated supergroup portal")
+		return
+	}
+	portal.UpdateInfo(ctx, info, tc.userLogin, nil, time.Time{})
+}
+
 func markFullSynced(ctx context.Context, portal *bridgev2.Portal) bool {
 	meta := portal.Metadata.(*PortalMetadata)
 	if !meta.FullSynced {
@@ -629,6 +656,8 @@ func (tc *TelegramClient) getChatInfo(ctx context.Context, portal *bridgev2.Port
 			err = tc.fillTopicMembers(ctx, id, mfm, info.Members)
 			if err != nil {
 				zerolog.Ctx(ctx).Err(err).Msg("Failed to get channel members")
+			} else {
+				info.ExtraUpdates = bridgev2.MergeExtraUpdaters(info.ExtraUpdates, markInfoVersion)
 			}
 			return info, nil
 		}
@@ -645,6 +674,8 @@ func (tc *TelegramClient) getChatInfo(ctx context.Context, portal *bridgev2.Port
 		err = tc.fillChannelMembers(ctx, mfm, info.Members)
 		if err != nil {
 			zerolog.Ctx(ctx).Err(err).Msg("Failed to get channel members")
+		} else {
+			info.ExtraUpdates = bridgev2.MergeExtraUpdaters(info.ExtraUpdates, markInfoVersion)
 		}
 		return info, nil
 	default:

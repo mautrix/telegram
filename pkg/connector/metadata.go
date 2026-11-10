@@ -63,6 +63,7 @@ type PortalMetadata struct {
 	AllowedReactions  []string      `json:"allowed_reactions"`
 	LastSync          jsontime.Unix `json:"last_sync,omitempty"`
 	FullSynced        bool          `json:"full_synced,omitempty"`
+	InfoVersion       int           `json:"info_version,omitempty"`
 	ParticipantsCount int           `json:"member_count,omitempty"`
 
 	SponsoredMessagePollTS    jsontime.Unix       `json:"sponsored_message_poll_ts,omitempty"`
