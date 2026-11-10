@@ -42,7 +42,6 @@ import (
 	"maunium.net/go/mautrix/bridgev2/simplevent"
 	"maunium.net/go/mautrix/bridgev2/status"
 
-	"go.mau.fi/mautrix-telegram/pkg/connector/humanise"
 	"go.mau.fi/mautrix-telegram/pkg/connector/ids"
 	"go.mau.fi/mautrix-telegram/pkg/connector/matrixfmt"
 	"go.mau.fi/mautrix-telegram/pkg/connector/store"
@@ -52,6 +51,7 @@ import (
 	"go.mau.fi/mautrix-telegram/pkg/gotd/telegram/auth"
 	"go.mau.fi/mautrix-telegram/pkg/gotd/telegram/updates"
 	"go.mau.fi/mautrix-telegram/pkg/gotd/tg"
+	"go.mau.fi/mautrix-telegram/pkg/gotd/tgerr"
 )
 
 var (
@@ -65,6 +65,9 @@ func init() {
 		"tg-client-dead":        "Disconnected from Telegram, reconnecting",
 		"tg-connectivity-error": "Lost connection to Telegram, reconnecting",
 		"tg-unknown-error":      "The Telegram connection failed unexpectedly",
+		"tg-logged-out":         "You were logged out of Telegram. Relogin to continue using the bridge.",
+		"tg-not-logged-in":      "You're not logged into Telegram. Relogin to continue using the bridge.",
+		"tg-user-deactivated":   "Your Telegram account was deleted or banned.",
 	})
 }
 
@@ -393,11 +396,20 @@ func (tc *TelegramClient) onDead() {
 }
 
 func (tc *TelegramClient) sendBadCredentialsOrUnknownError(err error) {
-	if auth.IsUnauthorized(err) || errors.Is(err, ErrNoAuthKey) {
+	if errors.Is(err, ErrNoAuthKey) {
 		tc.userLogin.BridgeState.Send(status.BridgeState{
 			StateEvent: status.StateBadCredentials,
-			Error:      "tg-no-auth",
-			Message:    humanise.Error(err),
+			Error:      "tg-not-logged-in",
+			UserAction: status.UserActionRelogin,
+		})
+	} else if auth.IsUnauthorized(err) {
+		errorCode := status.BridgeStateErrorCode("tg-logged-out")
+		if tgerr.Is(err, "USER_DEACTIVATED", "USER_DEACTIVATED_BAN") {
+			errorCode = "tg-user-deactivated"
+		}
+		tc.userLogin.BridgeState.Send(status.BridgeState{
+			StateEvent: status.StateBadCredentials,
+			Error:      errorCode,
 			UserAction: status.UserActionRelogin,
 			Info: map[string]any{
 				"go_error": err.Error(),
