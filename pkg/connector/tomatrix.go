@@ -356,6 +356,10 @@ func addReplyContext(part *bridgev2.ConvertedMessagePart, sourceText, sourceHTML
 	if sourceText == "" && quoteHTML == "" {
 		return
 	}
+	if sourceText != "" && part.Type == event.EventSticker {
+		part.Type = event.EventMessage
+		part.Content.MsgType = event.MsgImage
+	}
 	if sourceText != "" && part.Content.MsgType.IsMedia() {
 		if part.Content.FileName == "" {
 			part.Content.FileName = part.Content.Body
