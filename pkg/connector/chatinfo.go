@@ -371,10 +371,46 @@ var (
 	_ userLocalDialog = (*tg.DialogCommunity)(nil)
 )
 
-func (tc *TelegramClient) fillUserLocalMeta(info *bridgev2.ChatInfo, dialog userLocalDialog) {
+func notifyScopeForPeer(peer tg.PeerClass, chats map[int64]tg.ChatClass) tg.InputNotifyPeerClass {
+	switch typedPeer := peer.(type) {
+	case *tg.PeerUser:
+		return &tg.InputNotifyUsers{}
+	case *tg.PeerChannel:
+		if channel, ok := chats[typedPeer.ChannelID].(*tg.Channel); ok && channel.Broadcast {
+			return &tg.InputNotifyBroadcasts{}
+		}
+	}
+	return &tg.InputNotifyChats{}
+}
+
+func (tc *TelegramClient) getDefaultNotifySettings(ctx context.Context, scope tg.InputNotifyPeerClass) tg.PeerNotifySettings {
+	tc.notifyDefaultsLock.Lock()
+	defer tc.notifyDefaultsLock.Unlock()
+	if settings, ok := tc.notifyDefaults[scope.TypeID()]; ok {
+		return settings
+	}
+	var settings tg.PeerNotifySettings
+	if resp, err := tc.client.API().AccountGetNotifySettings(ctx, scope); err != nil {
+		zerolog.Ctx(ctx).Err(err).Str("scope", scope.TypeName()).Msg("Failed to get default notification settings")
+	} else {
+		settings = *resp
+	}
+	if tc.notifyDefaults == nil {
+		tc.notifyDefaults = make(map[uint32]tg.PeerNotifySettings)
+	}
+	tc.notifyDefaults[scope.TypeID()] = settings
+	return settings
+}
+
+func (tc *TelegramClient) fillUserLocalMeta(ctx context.Context, info *bridgev2.ChatInfo, dialog userLocalDialog, scope tg.InputNotifyPeerClass) {
 	info.UserLocal = &bridgev2.UserLocalPortalInfo{}
 	notifySettings := dialog.GetNotifySettings()
-	if mu, ok := notifySettings.GetMuteUntil(); ok {
+	mu, ok := notifySettings.GetMuteUntil()
+	if !ok {
+		defaults := tc.getDefaultNotifySettings(ctx, scope)
+		mu, ok = defaults.GetMuteUntil()
+	}
+	if ok {
 		info.UserLocal.MutedUntil = ptr.Ptr(time.Unix(int64(mu), 0))
 	} else {
 		info.UserLocal.MutedUntil = &bridgev2.Unmuted

@@ -123,6 +123,9 @@ type TelegramClient struct {
 	topicMembersLock sync.Mutex
 	topicMembers     map[int64]cachedChannelMembers
 
+	notifyDefaultsLock sync.Mutex
+	notifyDefaults     map[uint32]tg.PeerNotifySettings
+
 	takeoutLock        sync.Mutex
 	takeoutAccepted    *exsync.Event
 	stopTakeoutTimer   *time.Timer
