@@ -758,12 +758,61 @@ func (tc *TelegramClient) handleServiceMessage(ctx context.Context, msg *tg.Mess
 		return tc.queueServiceNotice(eventMeta, msg, body)
 	case *tg.MessageActionSetChatWallPaper:
 		return tc.queueServiceNotice(eventMeta, msg, "Set a new wallpaper for this chat")
+	case *tg.MessageActionGiftPremium:
+		return tc.queueServiceNotice(eventMeta, msg, withGiftMessage("Sent a gift: "+premiumMonthsText(action.Days), action.Message))
+	case *tg.MessageActionGiftCode:
+		return tc.queueServiceNotice(eventMeta, msg, withGiftMessage("Sent a gift: "+premiumMonthsText(action.Days), action.Message))
+	case *tg.MessageActionGiftStars:
+		return tc.queueServiceNotice(eventMeta, msg, "Sent a gift: "+starsText(action.Stars))
+	case *tg.MessageActionStarGift:
+		body := "Sent a gift"
+		switch gift := action.Gift.(type) {
+		case *tg.StarGift:
+			body = "Sent a gift for " + starsText(gift.Stars)
+			if gift.Title != "" {
+				body += ": " + gift.Title
+			}
+		case *tg.StarGiftUnique:
+			body = fmt.Sprintf("Sent a unique collectible item: %s #%d", gift.Title, gift.Num)
+		}
+		return tc.queueServiceNotice(eventMeta, msg, withGiftMessage(body, action.Message))
+	case *tg.MessageActionStarGiftUnique:
+		body := "Transferred a gift"
+		if action.Upgrade {
+			body = "Turned the gift into a unique collectible"
+		}
+		if gift, ok := action.Gift.(*tg.StarGiftUnique); ok {
+			body += fmt.Sprintf(": %s #%d", gift.Title, gift.Num)
+		}
+		return tc.queueServiceNotice(eventMeta, msg, body)
 	default:
 		log.Warn().
 			Type("action_type", action).
 			Msg("ignoring unknown action type")
 		return nil
 	}
+}
+
+func premiumMonthsText(days int) string {
+	months := days / 30
+	if months == 1 {
+		return "1 Month Premium"
+	}
+	return fmt.Sprintf("%d Months Premium", months)
+}
+
+func starsText(stars int64) string {
+	if stars == 1 {
+		return "1 Star"
+	}
+	return fmt.Sprintf("%d Stars", stars)
+}
+
+func withGiftMessage(body string, message tg.TextWithEntities) string {
+	if message.Text == "" {
+		return body
+	}
+	return body + "\n\n" + message.Text
 }
 
 func (tc *TelegramClient) queueServiceNotice(eventMeta simplevent.EventMeta, msg *tg.MessageService, body string) error {
