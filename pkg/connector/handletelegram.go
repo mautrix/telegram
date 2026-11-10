@@ -1552,10 +1552,14 @@ func (tc *TelegramClient) onNotifySettings(ctx context.Context, e tg.Entities, u
 		}
 	case *tg.NotifyForumTopic:
 		portalKey = tc.makePortalKeyFromPeer(typedPeer.Peer, typedPeer.TopMsgID)
-	case *tg.NotifyUsers, *tg.NotifyChats, *tg.NotifyBroadcasts:
-		tc.notifyDefaultsLock.Lock()
-		tc.notifyDefaults = nil
-		tc.notifyDefaultsLock.Unlock()
+	case *tg.NotifyUsers:
+		tc.setDefaultNotifySettings(&tg.InputNotifyUsers{}, update.NotifySettings)
+		return nil
+	case *tg.NotifyChats:
+		tc.setDefaultNotifySettings(&tg.InputNotifyChats{}, update.NotifySettings)
+		return nil
+	case *tg.NotifyBroadcasts:
+		tc.setDefaultNotifySettings(&tg.InputNotifyBroadcasts{}, update.NotifySettings)
 		return nil
 	default:
 		zerolog.Ctx(ctx).Debug().
