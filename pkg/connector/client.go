@@ -228,6 +228,9 @@ func NewTelegramClient(ctx context.Context, tc *TelegramConnector, login *bridge
 			return resultToError(res)
 		},
 		OnDifferenceTooLong: func() {
+			if client.metadata.IsBot {
+				return
+			}
 			go func() {
 				log := login.Log.With().Str("action", "resync chats after difference too long").Logger()
 				if err := client.syncChats(log.WithContext(client.clientCtx), 0, false, true); err != nil {
