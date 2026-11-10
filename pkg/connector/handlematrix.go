@@ -303,30 +303,34 @@ func (tc *TelegramClient) transferMediaToTelegram(ctx context.Context, content *
 				aspectRatio > 20 ||
 				cfg.Height+cfg.Width > 10000
 		}
-		if forceDocument && content.MsgType == event.MsgImage && content.BeeperViewLimited != nil {
-			return fmt.Errorf("%w: force_document not allowed", bridgev2.ErrUnsupportedViewLimitedType)
-		}
 		if !forceDocument && content.MsgType == event.MsgImage && content.Info.MimeType == "image/webp" {
 			_, err = f.Seek(0, io.SeekStart)
 			if err != nil {
 				return err
 			}
-			tempFile, err := os.CreateTemp("", "telegram-nonsticker-*.jpeg")
-			if err != nil {
-				return err
-			}
-			defer func() {
-				_ = tempFile.Close()
-				_ = os.Remove(tempFile.Name())
-			}()
 			if img, _, err := image.Decode(f); err != nil {
-				return fmt.Errorf("%w: failed to decode non-sticker webp image: %w", bridgev2.ErrMediaConvertFailed, err)
-			} else if err := jpeg.Encode(tempFile, img, nil); err != nil {
-				return fmt.Errorf("%w: failed to encode non-sticker jpeg image: %w", bridgev2.ErrMediaConvertFailed, err)
+				zerolog.Ctx(ctx).Debug().Err(err).Msg("Failed to decode non-sticker webp image, sending as file")
+				forceDocument = true
+				forceFile = true
+			} else {
+				tempFile, err := os.CreateTemp("", "telegram-nonsticker-*.jpeg")
+				if err != nil {
+					return err
+				}
+				defer func() {
+					_ = tempFile.Close()
+					_ = os.Remove(tempFile.Name())
+				}()
+				if err := jpeg.Encode(tempFile, img, nil); err != nil {
+					return fmt.Errorf("%w: failed to encode non-sticker jpeg image: %w", bridgev2.ErrMediaConvertFailed, err)
+				}
+				uploadFilename = tempFile.Name()
+				filename += ".jpg"
+				info.MimeType = "image/jpeg"
 			}
-			uploadFilename = tempFile.Name()
-			filename += ".jpg"
-			info.MimeType = "image/jpeg"
+		}
+		if forceDocument && content.MsgType == event.MsgImage && content.BeeperViewLimited != nil {
+			return fmt.Errorf("%w: force_document not allowed", bridgev2.ErrUnsupportedViewLimitedType)
 		}
 		if sticker {
 			filename = "sticker" + exmime.ExtensionFromMimetype(info.MimeType)
