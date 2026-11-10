@@ -1194,6 +1194,11 @@ func (tc *TelegramClient) onBotMessageReaction(ctx context.Context, update *tg.U
 func (tc *TelegramClient) onMessageEdit(ctx context.Context, update IGetMessage) error {
 	msg, ok := update.GetMessage().(*tg.Message)
 	if !ok {
+		if svcMsg, ok := update.GetMessage().(*tg.MessageService); ok {
+			if _, isChannel := svcMsg.PeerID.(*tg.PeerChannel); !isChannel {
+				return tc.handleTelegramReactions(ctx, svcMsg.PeerID, 0, svcMsg.ID, svcMsg.Reactions, "updateMessageEdit")
+			}
+		}
 		zerolog.Ctx(ctx).Warn().
 			Str("type_name", update.GetMessage().TypeName()).
 			Msg("edit message is not *tg.Message")
