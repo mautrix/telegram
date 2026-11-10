@@ -198,6 +198,7 @@ func NewTelegramClient(ctx context.Context, tc *TelegramConnector, login *bridge
 		stickerPacksByID:   map[int64]*stickerPackCache{},
 
 		recentMessageRooms: exsync.NewRingBuffer[networkid.MessageID, networkid.PortalKey](32),
+		notifyDefaults:     map[uint32]tg.PeerNotifySettings{},
 		chatMigrateSender:  exsync.NewMap[int64, bridgev2.EventSender](),
 
 		clientInitialized: exsync.NewEvent(),
@@ -549,6 +550,9 @@ func (tc *TelegramClient) Connect(ctx context.Context) {
 func (tc *TelegramClient) runInBackground(ctx context.Context) {
 	log := zerolog.Ctx(ctx)
 	err := tc.client.Run(ctx, func(ctx context.Context) error {
+		if !tc.metadata.IsBot {
+			tc.fetchNotifyDefaults(ctx)
+		}
 		tc.clientInitialized.Set()
 		if tc.reactionCapsStale.CompareAndSwap(true, false) {
 			go tc.resendCapabilities(ctx)

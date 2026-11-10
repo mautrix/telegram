@@ -1541,25 +1541,25 @@ func (tc *TelegramClient) onNotifySettings(ctx context.Context, e tg.Entities, u
 	switch typedPeer := update.Peer.(type) {
 	case *tg.NotifyPeer:
 		portalKey = tc.makePortalKeyFromPeer(typedPeer.Peer, 0)
-		scope = notifyScopeForPeer(typedPeer.Peer, nil)
+		var broadcast bool
 		if _, isChannel := typedPeer.Peer.(*tg.PeerChannel); isChannel {
 			portal, err := tc.main.Bridge.GetExistingPortalByKey(ctx, portalKey)
 			if err != nil {
 				return err
-			} else if portal != nil && !portal.Metadata.(*PortalMetadata).IsSuperGroup && !portal.Metadata.(*PortalMetadata).IsCommunity {
-				scope = &tg.InputNotifyBroadcasts{}
 			}
+			broadcast = portal != nil && !portal.Metadata.(*PortalMetadata).IsSuperGroup && !portal.Metadata.(*PortalMetadata).IsCommunity
 		}
+		scope = notifyScopeForPeer(typedPeer.Peer, broadcast)
 	case *tg.NotifyForumTopic:
 		portalKey = tc.makePortalKeyFromPeer(typedPeer.Peer, typedPeer.TopMsgID)
 	case *tg.NotifyUsers:
-		tc.setDefaultNotifySettings(&tg.InputNotifyUsers{}, update.NotifySettings)
+		tc.setNotifyDefaults(&tg.InputNotifyUsers{}, update.NotifySettings)
 		return nil
 	case *tg.NotifyChats:
-		tc.setDefaultNotifySettings(&tg.InputNotifyChats{}, update.NotifySettings)
+		tc.setNotifyDefaults(&tg.InputNotifyChats{}, update.NotifySettings)
 		return nil
 	case *tg.NotifyBroadcasts:
-		tc.setDefaultNotifySettings(&tg.InputNotifyBroadcasts{}, update.NotifySettings)
+		tc.setNotifyDefaults(&tg.InputNotifyBroadcasts{}, update.NotifySettings)
 		return nil
 	default:
 		zerolog.Ctx(ctx).Debug().
@@ -1569,15 +1569,7 @@ func (tc *TelegramClient) onNotifySettings(ctx context.Context, e tg.Entities, u
 		return nil
 	}
 
-	mu, ok := update.NotifySettings.GetMuteUntil()
-	if !ok && scope != nil {
-		defaults := tc.getDefaultNotifySettings(ctx, scope)
-		mu, ok = defaults.GetMuteUntil()
-	}
-	mutedUntil := &bridgev2.Unmuted
-	if ok {
-		mutedUntil = ptr.Ptr(time.Unix(int64(mu), 0))
-	}
+	mutedUntil := tc.getMutedUntil(update.NotifySettings, scope)
 
 	res := tc.main.Bridge.QueueRemoteEvent(tc.userLogin, &simplevent.ChatInfoChange{
 		ChatInfoChange: &bridgev2.ChatInfoChange{
