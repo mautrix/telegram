@@ -352,21 +352,27 @@ func getMessageLink(msg *tg.Message) string {
 	return fmt.Sprintf("https://t.me/c/%d/%d", chatID, msg.ID)
 }
 
-func addReplyContext(part *bridgev2.ConvertedMessagePart, sourceText, sourceHTML, quoteHTML string) {
-	if sourceText == "" && quoteHTML == "" {
-		return
-	}
-	if sourceText != "" && part.Type == event.EventSticker {
+func prepareMediaForCaption(part *bridgev2.ConvertedMessagePart) {
+	if part.Type == event.EventSticker {
 		part.Type = event.EventMessage
 		part.Content.MsgType = event.MsgImage
 	}
-	if sourceText != "" && part.Content.MsgType.IsMedia() {
+	if part.Content.MsgType.IsMedia() {
 		if part.Content.FileName == "" {
 			part.Content.FileName = part.Content.Body
 		}
 		if part.Content.Body == part.Content.FileName {
 			part.Content.Body = ""
 		}
+	}
+}
+
+func addReplyContext(part *bridgev2.ConvertedMessagePart, sourceText, sourceHTML, quoteHTML string) {
+	if sourceText == "" && quoteHTML == "" {
+		return
+	}
+	if sourceText != "" {
+		prepareMediaForCaption(part)
 	}
 	part.Content.EnsureHasHTML()
 	if quoteHTML != "" {
@@ -465,14 +471,7 @@ func (tc *TelegramClient) addForwardHeader(ctx context.Context, part *bridgev2.C
 		return err
 	}
 
-	if part.Content.MsgType.IsMedia() {
-		if part.Content.FileName == "" {
-			part.Content.FileName = part.Content.Body
-		}
-		if part.Content.Body == part.Content.FileName {
-			part.Content.Body = ""
-		}
-	}
+	prepareMediaForCaption(part)
 
 	part.Content.EnsureHasHTML()
 	existingBodyLines := strings.Split(part.Content.Body, "\n")
