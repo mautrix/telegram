@@ -860,26 +860,24 @@ func (tc *TelegramClient) onUserName(ctx context.Context, e tg.Entities, update 
 	}
 	meta := ghost.Metadata.(*GhostMetadata)
 
-	var userInfo bridgev2.UserInfo
+	userInfo := bridgev2.UserInfo{Identifiers: []string{}}
 
 	var firstUsername string
-	if len(update.Usernames) > 0 {
-		for _, ident := range ghost.Identifiers {
-			if !strings.HasPrefix(ident, "telegram:") {
-				userInfo.Identifiers = append(userInfo.Identifiers, ident)
-			}
+	for _, ident := range ghost.Identifiers {
+		if !strings.HasPrefix(ident, "telegram:") {
+			userInfo.Identifiers = append(userInfo.Identifiers, ident)
 		}
-
-		for i, username := range update.Usernames {
-			if i == 0 {
-				firstUsername = username.Username
-			}
-			userInfo.Identifiers = append(userInfo.Identifiers, fmt.Sprintf("telegram:%s", username.Username))
-		}
-
-		slices.Sort(userInfo.Identifiers)
-		userInfo.Identifiers = slices.Compact(userInfo.Identifiers)
 	}
+	for _, username := range update.Usernames {
+		if !username.Active {
+			continue
+		} else if firstUsername == "" {
+			firstUsername = username.Username
+		}
+		userInfo.Identifiers = append(userInfo.Identifiers, fmt.Sprintf("telegram:%s", username.Username))
+	}
+	slices.Sort(userInfo.Identifiers)
+	userInfo.Identifiers = slices.Compact(userInfo.Identifiers)
 	err = tc.main.Store.Username.Set(ctx, ids.PeerTypeUser, update.UserID, firstUsername)
 	if err != nil {
 		return fmt.Errorf("failed to store username: %w", err)
