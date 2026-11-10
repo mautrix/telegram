@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/rs/zerolog"
+	"go.mau.fi/util/exslices"
 	"go.mau.fi/util/jsontime"
 	"go.mau.fi/util/ptr"
 	"go.mau.fi/util/variationselector"
@@ -186,14 +187,6 @@ func hashEmojiList(emojis []string) string {
 	return hex.EncodeToString(hasher.Sum(nil))[:8]
 }
 
-func addVariationSelectors(emojis []string) []string {
-	output := make([]string, len(emojis))
-	for i, emoji := range emojis {
-		output[i] = variationselector.Add(emoji)
-	}
-	return output
-}
-
 func makeTimerList() []jsontime.Milliseconds {
 	const day = 24 * time.Hour
 	const week = 7 * day
@@ -272,7 +265,7 @@ func (tc *TelegramClient) GetCapabilities(ctx context.Context, portal *bridgev2.
 		baseID += "+reactions_any"
 		var availableReactions []string
 		availableReactions, feat.CustomEmojiReactions = tc.getAvailableReactionsForCapability(ctx)
-		feat.AllowedReactions = addVariationSelectors(availableReactions)
+		feat.AllowedReactions = exslices.CastFunc(availableReactions, variationselector.Add)
 		if len(feat.AllowedReactions) > 0 {
 			baseID += "+any_list_" + hashEmojiList(feat.AllowedReactions)
 		}
@@ -280,7 +273,7 @@ func (tc *TelegramClient) GetCapabilities(ctx context.Context, portal *bridgev2.
 		baseID += "+reactions_none"
 		feat.Reaction = event.CapLevelRejected
 	} else {
-		feat.AllowedReactions = addVariationSelectors(reactions)
+		feat.AllowedReactions = exslices.CastFunc(reactions, variationselector.Add)
 		baseID += "+reactions_" + hashEmojiList(feat.AllowedReactions)
 	}
 	if tc.isPremiumCache.Load() {
