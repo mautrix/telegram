@@ -212,7 +212,7 @@ func splitDMReactionCounts(res []tg.ReactionCount, theirUserID, myUserID int64) 
 func (tc *TelegramClient) getReactionLimit(ctx context.Context, sender networkid.UserID) (limit int, err error) {
 	config, err := tc.getAppConfigCached(ctx)
 	if err != nil {
-		return 0, err
+		zerolog.Ctx(ctx).Warn().Err(err).Msg("Failed to get app config, using default reaction limit")
 	}
 
 	ghost, err := tc.main.Bridge.GetGhostByID(ctx, sender)
