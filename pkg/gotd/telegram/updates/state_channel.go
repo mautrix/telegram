@@ -226,39 +226,12 @@ func (s *channelState) getDifference(ctx context.Context) error {
 	if now := time.Now(); now.Before(s.diffTimeout) {
 		dur := s.diffTimeout.Sub(now)
 		s.log.Debug("GetChannelDifference timeout", zap.Duration("duration", dur))
-		if err := func() error {
-			afterC := time.After(dur)
-			for {
-				select {
-				case <-afterC:
-					return nil
-				case _, ok := <-s.updates:
-					if !ok {
-						continue
-					}
-
-					// Ignoring updates to prevent *internalState worker from blocking.
-					// All ignored updates should be restored by future getChannelDifference call.
-					// At least I hope so...
-					s.log.Debug("Ignoring update due to getChannelDifference timeout") // , zap.Any("update", u.update))
-				case <-ctx.Done():
-					return ctx.Err()
-				}
-			}
-		}(); err != nil {
+		if err := s.waitIgnoringUpdates(ctx, dur); err != nil {
 			return err
 		}
 	}
 
-	diff, err := s.client.UpdatesGetChannelDifference(ctx, &tg.UpdatesGetChannelDifferenceRequest{
-		Channel: &tg.InputChannel{
-			ChannelID:  s.channelID,
-			AccessHash: s.accessHash,
-		},
-		Filter: &tg.ChannelMessagesFilterEmpty{},
-		Pts:    s.pts.State(),
-		Limit:  s.diffLim,
-	})
+	diff, err := s.getDifferenceWithRetry(ctx)
 	if err != nil {
 		if tgerr.Is(err, tg.ErrChannelPrivate) || tgerr.Is(err, tg.ErrChannelInvalid) {
 			if err := s.storage.SetChannelPts(ctx, s.selfID, s.channelID, -1); err != nil {
@@ -343,6 +316,59 @@ func (s *channelState) getDifference(ctx context.Context) error {
 
 	default:
 		return errors.Errorf("unexpected channel diff type: %T", diff)
+	}
+}
+
+func (s *channelState) getDifferenceWithRetry(ctx context.Context) (diff tg.UpdatesChannelDifferenceClass, err error) {
+	for {
+		diff, err = s.client.UpdatesGetChannelDifference(ctx, &tg.UpdatesGetChannelDifferenceRequest{
+			Channel: &tg.InputChannel{
+				ChannelID:  s.channelID,
+				AccessHash: s.accessHash,
+			},
+			Filter: &tg.ChannelMessagesFilterEmpty{},
+			Pts:    s.pts.State(),
+			Limit:  s.diffLim,
+		})
+		if err == nil {
+			return diff, nil
+		}
+		dur, ok := tgerr.AsFloodWait(err)
+		if ok {
+			s.log.Warn("Flood wait error while getting channel difference", zap.Duration("wait", dur))
+		} else if rpcErr, ok := tgerr.As(err); ok && (rpcErr.Code >= 500 || rpcErr.Code < 0) {
+			s.log.Error("Failed to get channel difference, retrying in 5 seconds...",
+				zap.Error(err),
+				zap.Int("pts", s.pts.State()),
+			)
+			dur = 5 * time.Second
+		} else {
+			return nil, err
+		}
+		if err = s.waitIgnoringUpdates(ctx, dur); err != nil {
+			return nil, err
+		}
+	}
+}
+
+func (s *channelState) waitIgnoringUpdates(ctx context.Context, dur time.Duration) error {
+	afterC := time.After(dur)
+	for {
+		select {
+		case <-afterC:
+			return nil
+		case _, ok := <-s.updates:
+			if !ok {
+				continue
+			}
+
+			// Ignoring updates to prevent *internalState worker from blocking.
+			// All ignored updates should be restored by future getChannelDifference call.
+			// At least I hope so...
+			s.log.Debug("Ignoring update due to getChannelDifference timeout") // , zap.Any("update", u.update))
+		case <-ctx.Done():
+			return ctx.Err()
+		}
 	}
 }
 
