@@ -384,6 +384,8 @@ func (tc *TelegramClient) syncNormalDialog(
 			err = tc.fillChannelMembers(ctx, mfm, chatInfo.Members)
 			if err != nil {
 				log.Err(err).Msg("Failed to get channel members")
+			} else {
+				chatInfo.ExtraUpdates = bridgev2.MergeExtraUpdaters(chatInfo.ExtraUpdates, markInfoVersion)
 			}
 		case *tg.ChannelForbidden:
 			log.Debug().

@@ -511,13 +511,16 @@ func markInfoVersion(ctx context.Context, portal *bridgev2.Portal) bool {
 
 func (tc *TelegramClient) resyncOutdatedSupergroupInfo(ctx context.Context, portal *bridgev2.Portal) {
 	meta := portal.Metadata.(*PortalMetadata)
-	if portal.MXID == "" || !meta.IsSuperGroup || meta.InfoVersion >= currentPortalInfoVersion ||
-		!tc.infoVersionResyncs.Add(portal.PortalKey) {
+	if portal.MXID == "" || !meta.IsSuperGroup || meta.InfoVersion >= currentPortalInfoVersion {
+		return
+	}
+	if prev, ok := tc.infoVersionResyncs.Swap(portal.PortalKey, time.Now()); ok && time.Since(prev) < time.Hour {
+		tc.infoVersionResyncs.Set(portal.PortalKey, prev)
 		return
 	}
 	log := zerolog.Ctx(ctx)
 	log.Debug().Int("info_version", meta.InfoVersion).Msg("Resyncing supergroup info synced by an older version before handling event")
-	info, err := tc.GetChatInfo(ctx, portal)
+	info, err := tc.getChatInfo(ctx, portal)
 	if err != nil {
 		log.Err(err).Msg("Failed to get chat info for outdated supergroup portal")
 		return

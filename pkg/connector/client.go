@@ -123,7 +123,7 @@ type TelegramClient struct {
 	topicMembersLock sync.Mutex
 	topicMembers     map[int64]cachedChannelMembers
 
-	infoVersionResyncs *exsync.Set[networkid.PortalKey]
+	infoVersionResyncs *exsync.Map[networkid.PortalKey, time.Time]
 
 	takeoutLock        sync.Mutex
 	takeoutAccepted    *exsync.Event
@@ -198,7 +198,7 @@ func NewTelegramClient(ctx context.Context, tc *TelegramConnector, login *bridge
 
 		recentMessageRooms: exsync.NewRingBuffer[networkid.MessageID, networkid.PortalKey](32),
 		chatMigrateSender:  exsync.NewMap[int64, bridgev2.EventSender](),
-		infoVersionResyncs: exsync.NewSet[networkid.PortalKey](),
+		infoVersionResyncs: exsync.NewMap[networkid.PortalKey, time.Time](),
 
 		clientInitialized: exsync.NewEvent(),
 		clientDone:        exsync.NewEvent(),
