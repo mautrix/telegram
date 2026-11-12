@@ -312,6 +312,7 @@ func (tc *TelegramClient) onUpdateNewMessage(ctx context.Context, entities tg.En
 			ConvertMessageFunc: tc.convertToMatrix,
 		})
 		tc.recentMessageRooms.Push(msgID, portalKey)
+		tc.trackPendingWebPage(msg)
 
 		if err := resultToError(res); err != nil {
 			return err
@@ -1106,6 +1107,10 @@ func (tc *TelegramClient) onUpdate(ctx context.Context, e tg.Entities, upd tg.Up
 		return tc.onChat(ctx, e, update)
 	case *tg.UpdatePhoneCall:
 		return tc.onPhoneCall(ctx, e, update)
+	case *tg.UpdateWebPage:
+		return tc.onWebPage(ctx, update.Webpage)
+	case *tg.UpdateChannelWebPage:
+		return tc.onWebPage(ctx, update.Webpage)
 	case *tg.UpdateUserStatus:
 		// ignored
 		return nil
@@ -1199,6 +1204,7 @@ func (tc *TelegramClient) onMessageEdit(ctx context.Context, update IGetMessage)
 			Msg("edit message is not *tg.Message")
 		return nil
 	}
+	tc.trackPendingWebPage(msg)
 
 	topicID := tc.getTopicID(ctx, msg.PeerID, msg.ReplyTo)
 	// Channels don't use edits to signal reactions, and when sending the first reaction they send a no-op edit
@@ -1210,7 +1216,10 @@ func (tc *TelegramClient) onMessageEdit(ctx context.Context, update IGetMessage)
 			zerolog.Ctx(ctx).Err(err).Msg("Failed to handle reactions on edited message")
 		}
 	}
+	return tc.queueMessageEdit(ctx, msg, topicID, time.Unix(int64(msg.EditDate), 0))
+}
 
+func (tc *TelegramClient) queueMessageEdit(ctx context.Context, msg *tg.Message, topicID int, timestamp time.Time) error {
 	portalKey := tc.makePortalKeyFromPeer(msg.PeerID, topicID)
 	portal, err := tc.main.Bridge.GetPortalByKey(ctx, portalKey)
 	if err != nil {
@@ -1240,7 +1249,7 @@ func (tc *TelegramClient) onMessageEdit(ctx context.Context, update IGetMessage)
 			},
 			Sender:    sender,
 			PortalKey: portalKey,
-			Timestamp: time.Unix(int64(msg.EditDate), 0),
+			Timestamp: timestamp,
 		},
 		ID:            ids.GetMessageIDFromMessage(msg),
 		TargetMessage: ids.GetMessageIDFromMessage(msg),
@@ -1280,6 +1289,48 @@ func (tc *TelegramClient) onMessageEdit(ctx context.Context, update IGetMessage)
 		},
 	})
 	return resultToError(res)
+}
+
+func (tc *TelegramClient) trackPendingWebPage(msg *tg.Message) {
+	msgID := ids.GetMessageIDFromMessage(msg)
+	if media, ok := msg.Media.(*tg.MessageMediaWebPage); ok && media.Webpage.TypeID() == tg.WebPagePendingTypeID {
+		if !tc.pendingWebPages.Replace(msgID, msg) {
+			tc.pendingWebPages.Push(msgID, msg)
+		}
+	} else {
+		tc.pendingWebPages.Replace(msgID, nil)
+	}
+}
+
+func (tc *TelegramClient) onWebPage(ctx context.Context, rawWebpage tg.WebPageClass) error {
+	webpage, ok := rawWebpage.(*tg.WebPage)
+	if !ok {
+		return nil
+	}
+	var messages []*tg.Message
+	tc.pendingWebPages.Iter(func(_ networkid.MessageID, msg *tg.Message) error {
+		if msg == nil {
+			return nil
+		}
+		pending, ok := msg.Media.(*tg.MessageMediaWebPage).Webpage.(*tg.WebPagePending)
+		if ok && pending.ID == webpage.ID {
+			messages = append(messages, msg)
+		}
+		return nil
+	})
+	for _, msg := range messages {
+		tc.pendingWebPages.Replace(ids.GetMessageIDFromMessage(msg), nil)
+		media := *msg.Media.(*tg.MessageMediaWebPage)
+		media.Webpage = webpage
+		edited := *msg
+		edited.Media = &media
+		edited.EditHide = true
+		err := tc.queueMessageEdit(ctx, &edited, rawGetTopicID(msg.ReplyTo), time.Time{})
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (tc *TelegramClient) handleTyping(portal networkid.PortalKey, sender bridgev2.EventSender, action tg.SendMessageActionClass) error {
