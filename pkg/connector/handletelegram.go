@@ -737,12 +737,105 @@ func (tc *TelegramClient) handleServiceMessage(ctx context.Context, msg *tg.Mess
 			GetChatInfoFunc: tc.GetChatInfo,
 		})
 		return resultToError(res)
+	case *tg.MessageActionContactSignUp:
+		return tc.queueServiceNotice(eventMeta, msg, "Joined Telegram")
+	case *tg.MessageActionScreenshotTaken:
+		return tc.queueServiceNotice(eventMeta, msg, "Took a screenshot")
+	case *tg.MessageActionCustomAction:
+		return tc.queueServiceNotice(eventMeta, msg, action.Message)
+	case *tg.MessageActionBoostApply:
+		if action.Boosts > 1 {
+			return tc.queueServiceNotice(eventMeta, msg, fmt.Sprintf("Boosted the group %d times", action.Boosts))
+		}
+		return tc.queueServiceNotice(eventMeta, msg, "Boosted the group")
+	case *tg.MessageActionSetChatTheme:
+		body := "Changed the chat theme"
+		if theme, ok := action.Theme.(*tg.ChatTheme); ok && theme.Emoticon == "" {
+			body = "Disabled the chat theme"
+		} else if ok {
+			body = fmt.Sprintf("Changed the chat theme to %s", theme.Emoticon)
+		}
+		return tc.queueServiceNotice(eventMeta, msg, body)
+	case *tg.MessageActionSetChatWallPaper:
+		return tc.queueServiceNotice(eventMeta, msg, "Set a new wallpaper for this chat")
+	case *tg.MessageActionGiftPremium:
+		return tc.queueServiceNotice(eventMeta, msg, withGiftMessage("Sent a gift: "+premiumMonthsText(action.Days), action.Message))
+	case *tg.MessageActionGiftCode:
+		return tc.queueServiceNotice(eventMeta, msg, withGiftMessage("Sent a gift: "+premiumMonthsText(action.Days), action.Message))
+	case *tg.MessageActionGiftStars:
+		return tc.queueServiceNotice(eventMeta, msg, "Sent a gift: "+starsText(action.Stars))
+	case *tg.MessageActionStarGift:
+		body := "Sent a gift"
+		switch gift := action.Gift.(type) {
+		case *tg.StarGift:
+			body = "Sent a gift for " + starsText(gift.Stars)
+			if gift.Title != "" {
+				body += ": " + gift.Title
+			}
+		case *tg.StarGiftUnique:
+			body = fmt.Sprintf("Sent a unique collectible item: %s #%d", gift.Title, gift.Num)
+		}
+		return tc.queueServiceNotice(eventMeta, msg, withGiftMessage(body, action.Message))
+	case *tg.MessageActionStarGiftUnique:
+		body := "Unique collectible"
+		if action.Upgrade {
+			body = "Turned the gift into a unique collectible"
+		} else if resale, ok := action.GetResaleAmount(); ok {
+			body = "Sent a gift"
+			if stars, ok := resale.(*tg.StarsAmount); ok {
+				body = "Sent a gift for " + starsText(stars.Amount)
+			}
+		} else if action.Transferred {
+			body = "Transferred a gift"
+		}
+		if gift, ok := action.Gift.(*tg.StarGiftUnique); ok {
+			body += fmt.Sprintf(": %s #%d", gift.Title, gift.Num)
+		}
+		return tc.queueServiceNotice(eventMeta, msg, body)
 	default:
 		log.Warn().
 			Type("action_type", action).
 			Msg("ignoring unknown action type")
 		return nil
 	}
+}
+
+func premiumMonthsText(days int) string {
+	months := days / 30
+	if months == 1 {
+		return "1 Month Premium"
+	}
+	return fmt.Sprintf("%d Months Premium", months)
+}
+
+func starsText(stars int64) string {
+	if stars == 1 {
+		return "1 Star"
+	}
+	return fmt.Sprintf("%d Stars", stars)
+}
+
+func withGiftMessage(body string, message tg.TextWithEntities) string {
+	if message.Text == "" {
+		return body
+	}
+	return body + "\n\n" + message.Text
+}
+
+func (tc *TelegramClient) queueServiceNotice(eventMeta simplevent.EventMeta, msg *tg.MessageService, body string) error {
+	res := tc.main.Bridge.QueueRemoteEvent(tc.userLogin, &simplevent.Message[any]{
+		EventMeta: eventMeta.WithType(bridgev2.RemoteEventMessage),
+		ID:        ids.GetMessageIDFromMessage(msg),
+		ConvertMessageFunc: func(ctx context.Context, portal *bridgev2.Portal, intent bridgev2.MatrixAPI, data any) (*bridgev2.ConvertedMessage, error) {
+			return &bridgev2.ConvertedMessage{
+				Parts: []*bridgev2.ConvertedMessagePart{{
+					Type:    event.EventMessage,
+					Content: &event.MessageEventContent{MsgType: event.MsgNotice, Body: body},
+				}},
+			}, nil
+		},
+	})
+	return resultToError(res)
 }
 
 func (tc *TelegramClient) migrateChat(ctx context.Context, oldPortalKey, newPortalKey networkid.PortalKey) error {
