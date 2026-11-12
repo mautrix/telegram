@@ -180,19 +180,20 @@ func (m *Manager) Run(ctx context.Context, api API, userID int64, opt AuthOption
 		}
 
 		m.state = newState(ctx, stateConfig{
-			State:            state,
-			Channels:         channels,
-			LeftChannels:     leftChannels,
-			RawClient:        api,
-			Tracer:           m.tracer,
-			Logger:           m.cfg.Logger,
-			Handler:          m.cfg.Handler,
-			OnChannelTooLong: m.cfg.OnChannelTooLong,
-			Storage:          m.cfg.Storage,
-			Hasher:           m.cfg.AccessHasher,
-			SelfID:           userID,
-			DiffLimit:        diffLim,
-			WorkGroup:        wg,
+			State:               state,
+			Channels:            channels,
+			LeftChannels:        leftChannels,
+			RawClient:           api,
+			Tracer:              m.tracer,
+			Logger:              m.cfg.Logger,
+			Handler:             m.cfg.Handler,
+			OnChannelTooLong:    m.cfg.OnChannelTooLong,
+			OnDifferenceTooLong: m.cfg.OnDifferenceTooLong,
+			Storage:             m.cfg.Storage,
+			Hasher:              m.cfg.AccessHasher,
+			SelfID:              userID,
+			DiffLimit:           diffLim,
+			WorkGroup:           wg,
 		})
 
 		return nil
