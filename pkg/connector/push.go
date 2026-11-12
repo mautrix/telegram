@@ -338,7 +338,7 @@ func (tc *TelegramClient) ConnectBackground(ctx context.Context, params *bridgev
 		case <-time.After(20 * time.Second):
 		case <-ctx.Done():
 		}
-	} else if messageID != "" && relatedPortal.MXID != "" && tc.metadata.Session.HasAuthKey() {
+	} else if messageID != "" && relatedPortal.MXID != "" && tc.main.useDirectMedia && tc.metadata.Session.HasAuthKey() {
 		err := tc.bridgePushedMessage(ctx, relatedPortal.PortalKey, data.Custom.MessageID)
 		if err != nil {
 			zerolog.Ctx(ctx).Err(err).Msg("Failed to bridge message from push notification")
