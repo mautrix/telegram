@@ -56,7 +56,10 @@ func (s *internalState) applyCombined(ctx context.Context, comb *tg.UpdatesCombi
 			st, ok := s.channels[u.ChannelID]
 			s.channelsLock.Unlock()
 			if !ok {
-				s.log.Info("ChannelTooLong for channel that is not in the internalState, update ignored", zap.Int64("channel_id", u.ChannelID))
+				s.log.Info("ChannelTooLong for channel that is not in the internalState, resyncing", zap.Int64("channel_id", u.ChannelID))
+				if err := s.onTooLong(u.ChannelID); err != nil {
+					s.log.Error("Failed to handle ChannelTooLong", zap.Int64("channel_id", u.ChannelID), zap.Error(err))
+				}
 				continue
 			}
 			if err := s.pushToChannel(ctx, st, channelUpdate{
