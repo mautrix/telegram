@@ -323,8 +323,6 @@ func (tc *TelegramClient) convertToMatrix(
 func getMessageLink(msg *tg.Message) string {
 	var chatID int64
 	switch peer := msg.PeerID.(type) {
-	case *tg.PeerChat:
-		chatID = peer.ChatID
 	case *tg.PeerChannel:
 		chatID = peer.ChannelID
 	default: // also PeerUser
