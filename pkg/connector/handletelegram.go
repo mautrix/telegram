@@ -1579,6 +1579,9 @@ func (tc *TelegramClient) onNotifySettings(ctx context.Context, e tg.Entities, u
 }
 
 func (tc *TelegramClient) onPinnedDialogs(ctx context.Context, e tg.Entities, msg *tg.UpdatePinnedDialogs) error {
+	if _, hasOrder := msg.GetOrder(); msg.FolderID != 0 || !hasOrder {
+		return nil
+	}
 	needsUnpinning := map[networkid.PortalKey]struct{}{}
 	for _, portalID := range tc.metadata.PinnedDialogs {
 		pt, id, _, err := ids.ParsePortalID(portalID)
