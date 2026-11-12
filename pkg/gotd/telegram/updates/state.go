@@ -37,7 +37,7 @@ type internalState struct {
 	// Updates channel.
 	externalQueue chan tracedUpdate
 
-	deferredExternal []tracedUpdate
+	deferred []tracedUpdate
 
 	// Updates from channel states
 	// during updates.getChannelDifference.
@@ -177,11 +177,11 @@ func (s *internalState) Run(ctx context.Context) error {
 	}
 
 	for {
-		for len(s.deferredExternal) > 0 {
-			u := s.deferredExternal[0]
-			s.deferredExternal = s.deferredExternal[1:]
+		for len(s.deferred) > 0 {
+			u := s.deferred[0]
+			s.deferred = s.deferred[1:]
 			if err = s.handleUpdates(trace.ContextWithSpanContext(ctx, u.span), u.update); err != nil {
-				return fmt.Errorf("handleUpdates for deferred external update failed: %w", err)
+				return fmt.Errorf("handleUpdates for deferred update failed: %w", err)
 			}
 		}
 		select {
@@ -435,7 +435,24 @@ func (s *internalState) handleChannel(ctx context.Context, channelID int64, date
 		state = s.createAndRunChannelState(ctx, channelID, accessHash, localPts)
 	}
 
-	return state.Push(ctx, cu)
+	return s.pushToChannel(ctx, state, cu)
+}
+
+func (s *internalState) pushToChannel(ctx context.Context, state *channelState, cu channelUpdate) error {
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-state.runCtx.Done():
+			return nil
+		case state.updates <- cu:
+			return nil
+		case u := <-s.externalQueue:
+			s.deferred = append(s.deferred, u)
+		case u := <-s.internalQueue:
+			s.deferred = append(s.deferred, u)
+		}
+	}
 }
 
 func (s *internalState) RemoveChannel(channelID int64, reason error) {
@@ -524,7 +541,9 @@ func (s *internalState) waitToRetryDifference(ctx context.Context, dur time.Dura
 		case <-timer.C:
 			return nil
 		case u := <-s.externalQueue:
-			s.deferredExternal = append(s.deferredExternal, u)
+			s.deferred = append(s.deferred, u)
+		case u := <-s.internalQueue:
+			s.deferred = append(s.deferred, u)
 		case <-ctx.Done():
 			return fmt.Errorf("context canceled while waiting to retry: %w", ctx.Err())
 		}
