@@ -737,12 +737,49 @@ func (tc *TelegramClient) handleServiceMessage(ctx context.Context, msg *tg.Mess
 			GetChatInfoFunc: tc.GetChatInfo,
 		})
 		return resultToError(res)
+	case *tg.MessageActionContactSignUp:
+		return tc.queueServiceNotice(eventMeta, msg, "Joined Telegram")
+	case *tg.MessageActionScreenshotTaken:
+		return tc.queueServiceNotice(eventMeta, msg, "Took a screenshot")
+	case *tg.MessageActionCustomAction:
+		return tc.queueServiceNotice(eventMeta, msg, action.Message)
+	case *tg.MessageActionBoostApply:
+		if action.Boosts > 1 {
+			return tc.queueServiceNotice(eventMeta, msg, fmt.Sprintf("Boosted the group %d times", action.Boosts))
+		}
+		return tc.queueServiceNotice(eventMeta, msg, "Boosted the group")
+	case *tg.MessageActionSetChatTheme:
+		body := "Changed the chat theme"
+		if theme, ok := action.Theme.(*tg.ChatTheme); ok && theme.Emoticon == "" {
+			body = "Disabled the chat theme"
+		} else if ok {
+			body = fmt.Sprintf("Changed the chat theme to %s", theme.Emoticon)
+		}
+		return tc.queueServiceNotice(eventMeta, msg, body)
+	case *tg.MessageActionSetChatWallPaper:
+		return tc.queueServiceNotice(eventMeta, msg, "Set a new wallpaper for this chat")
 	default:
 		log.Warn().
 			Type("action_type", action).
 			Msg("ignoring unknown action type")
 		return nil
 	}
+}
+
+func (tc *TelegramClient) queueServiceNotice(eventMeta simplevent.EventMeta, msg *tg.MessageService, body string) error {
+	res := tc.main.Bridge.QueueRemoteEvent(tc.userLogin, &simplevent.Message[any]{
+		EventMeta: eventMeta.WithType(bridgev2.RemoteEventMessage),
+		ID:        ids.GetMessageIDFromMessage(msg),
+		ConvertMessageFunc: func(ctx context.Context, portal *bridgev2.Portal, intent bridgev2.MatrixAPI, data any) (*bridgev2.ConvertedMessage, error) {
+			return &bridgev2.ConvertedMessage{
+				Parts: []*bridgev2.ConvertedMessagePart{{
+					Type:    event.EventMessage,
+					Content: &event.MessageEventContent{MsgType: event.MsgNotice, Body: body},
+				}},
+			}, nil
+		},
+	})
+	return resultToError(res)
 }
 
 func (tc *TelegramClient) migrateChat(ctx context.Context, oldPortalKey, newPortalKey networkid.PortalKey) error {
