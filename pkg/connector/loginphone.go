@@ -30,11 +30,12 @@ import (
 )
 
 const (
-	LoginStepIDPhoneNumber       = "fi.mau.telegram.login.phone_number"
-	LoginStepIDCode              = "fi.mau.telegram.login.code"
-	LoginStepIDCodeIncorrect     = "fi.mau.telegram.login.code.incorrect"
-	LoginStepIDPassword          = "fi.mau.telegram.login.password"
-	LoginStepIDPasswordIncorrect = "fi.mau.telegram.login.password.incorrect"
+	LoginStepIDPhoneNumber        = "fi.mau.telegram.login.phone_number"
+	LoginStepIDPhoneNumberInvalid = "fi.mau.telegram.login.phone_number.invalid"
+	LoginStepIDCode               = "fi.mau.telegram.login.code"
+	LoginStepIDCodeIncorrect      = "fi.mau.telegram.login.code.incorrect"
+	LoginStepIDPassword           = "fi.mau.telegram.login.password"
+	LoginStepIDPasswordIncorrect  = "fi.mau.telegram.login.password.incorrect"
 )
 
 type PhoneLogin struct {
@@ -79,8 +80,22 @@ func (pl *PhoneLogin) Start(ctx context.Context) (*bridgev2.LoginStep, error) {
 	}, nil
 }
 
+var phoneNumberInvalidStep = &bridgev2.LoginStep{
+	Type:         bridgev2.LoginStepTypeUserInput,
+	StepID:       LoginStepIDPhoneNumberInvalid,
+	Instructions: "Invalid phone number, please try again",
+	UserInputParams: &bridgev2.LoginUserInputParams{
+		Fields: []bridgev2.LoginInputDataField{{
+			Type:        bridgev2.LoginInputFieldTypePhoneNumber,
+			ID:          LoginStepIDPhoneNumber,
+			Name:        "Phone number",
+			Description: "Include the country code with +",
+		}},
+	},
+}
+
 func (pl *PhoneLogin) SubmitUserInput(ctx context.Context, input map[string]string) (*bridgev2.LoginStep, error) {
-	if pl.client == nil {
+	if pl.hash == "" {
 		return pl.submitNumber(ctx, input[LoginStepIDPhoneNumber])
 	} else if pl.codeSubmitted {
 		return pl.submitPassword(ctx, input[LoginStepIDPassword], pl.phone)
@@ -138,13 +153,17 @@ func (pl *PhoneLogin) submitNumber(ctx context.Context, phone string) (*bridgev2
 	log := zerolog.Ctx(ctx).With().Str("component", "phone login").Logger()
 	ctx = log.WithContext(ctx)
 	pl.phone = phone
-	err := pl.makeClient(ctx, nil)
-	if err != nil {
-		return nil, err
+	if pl.client == nil {
+		err := pl.makeClient(ctx, nil)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	sentCode, err := pl.client.Auth().SendCode(ctx, pl.phone, auth.SendCodeOptions{})
-	if err != nil {
+	if tg.IsPhoneNumberInvalid(err) {
+		return phoneNumberInvalidStep, nil
+	} else if err != nil {
 		return nil, loginRespError(ctx, err)
 	}
 	switch s := sentCode.(type) {
