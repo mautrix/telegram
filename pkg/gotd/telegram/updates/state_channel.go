@@ -160,16 +160,8 @@ func (s *channelState) handleTooLong(ctx context.Context, long *tg.UpdateChannel
 	ctx, span := s.tracer.Start(ctx, "channelState.handleTooLong")
 	defer span.End()
 
-	remotePts, ok := long.GetPts()
-	if !ok {
+	if _, ok := long.GetPts(); !ok {
 		s.log.Warn("Got UpdateChannelTooLong without pts field")
-		return s.getDifference(ctx)
-	}
-
-	// Note: we still can fetch latest diffLim updates.
-	// Should we do?
-	if remotePts-s.pts.State() > s.diffLim {
-		return s.onTooLong(s.channelID)
 	}
 
 	return s.getDifference(ctx)
