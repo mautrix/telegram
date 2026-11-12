@@ -301,12 +301,11 @@ func (tc *TelegramClient) onUpdateNewMessage(ctx context.Context, entities tg.En
 						Bool("is_from_me", sender.IsFromMe).
 						Stringer("peer_id", msg.PeerID)
 				},
-				Sender:        sender,
-				PortalKey:     portalKey,
-				CreatePortal:  true,
-				Timestamp:     time.Unix(int64(msg.Date), 0),
-				StreamOrder:   int64(msg.GetID()),
-				PreHandleFunc: tc.resyncOutdatedSupergroupInfo,
+				Sender:       sender,
+				PortalKey:    portalKey,
+				CreatePortal: true,
+				Timestamp:    time.Unix(int64(msg.Date), 0),
+				StreamOrder:  int64(msg.GetID()),
 			},
 			ID:                 msgID,
 			Data:               msg,

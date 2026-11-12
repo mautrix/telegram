@@ -19,6 +19,7 @@ package connector
 import (
 	"context"
 	"crypto/sha256"
+	"errors"
 	"fmt"
 	"iter"
 	"maps"
@@ -27,6 +28,7 @@ import (
 
 	"github.com/rs/zerolog"
 	"go.mau.fi/util/ptr"
+	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/bridgev2"
 	"maunium.net/go/mautrix/bridgev2/database"
 	"maunium.net/go/mautrix/bridgev2/networkid"
@@ -498,36 +500,6 @@ func reactionUpdater(newAllowedReactions []string) bridgev2.ExtraUpdater[*bridge
 	}
 }
 
-const currentPortalInfoVersion = 1
-
-func markInfoVersion(ctx context.Context, portal *bridgev2.Portal) bool {
-	meta := portal.Metadata.(*PortalMetadata)
-	if meta.InfoVersion != currentPortalInfoVersion {
-		meta.InfoVersion = currentPortalInfoVersion
-		return true
-	}
-	return false
-}
-
-func (tc *TelegramClient) resyncOutdatedSupergroupInfo(ctx context.Context, portal *bridgev2.Portal) {
-	meta := portal.Metadata.(*PortalMetadata)
-	if portal.MXID == "" || !meta.IsSuperGroup || meta.InfoVersion >= currentPortalInfoVersion {
-		return
-	}
-	if prev, ok := tc.infoVersionResyncs.Swap(portal.PortalKey, time.Now()); ok && time.Since(prev) < time.Hour {
-		tc.infoVersionResyncs.Set(portal.PortalKey, prev)
-		return
-	}
-	log := zerolog.Ctx(ctx)
-	log.Debug().Int("info_version", meta.InfoVersion).Msg("Resyncing supergroup info synced by an older version before handling event")
-	info, err := tc.getChatInfo(ctx, portal)
-	if err != nil {
-		log.Err(err).Msg("Failed to get chat info for outdated supergroup portal")
-		return
-	}
-	portal.UpdateInfo(ctx, info, tc.userLogin, nil, time.Time{})
-}
-
 func markFullSynced(ctx context.Context, portal *bridgev2.Portal) bool {
 	meta := portal.Metadata.(*PortalMetadata)
 	if !meta.FullSynced {
@@ -659,8 +631,6 @@ func (tc *TelegramClient) getChatInfo(ctx context.Context, portal *bridgev2.Port
 			err = tc.fillTopicMembers(ctx, id, mfm, info.Members)
 			if err != nil {
 				zerolog.Ctx(ctx).Err(err).Msg("Failed to get channel members")
-			} else {
-				info.ExtraUpdates = bridgev2.MergeExtraUpdaters(info.ExtraUpdates, markInfoVersion)
 			}
 			return info, nil
 		}
@@ -677,8 +647,6 @@ func (tc *TelegramClient) getChatInfo(ctx context.Context, portal *bridgev2.Port
 		err = tc.fillChannelMembers(ctx, mfm, info.Members)
 		if err != nil {
 			zerolog.Ctx(ctx).Err(err).Msg("Failed to get channel members")
-		} else {
-			info.ExtraUpdates = bridgev2.MergeExtraUpdaters(info.ExtraUpdates, markInfoVersion)
 		}
 		return info, nil
 	default:
@@ -727,6 +695,76 @@ func (tc *TelegramClient) getDMPowerLevels() *bridgev2.PowerLevelOverrides {
 		event.BeeperDeleteChat:             0,
 	}
 	return &plo
+}
+
+func (tc *TelegramClient) HandleMatrixSendError(ctx context.Context, sendErr *bridgev2.MatrixSendError) bool {
+	if !errors.Is(sendErr.Err, mautrix.MForbidden) || !sendErr.Portal.Metadata.(*PortalMetadata).IsSuperGroup {
+		return false
+	}
+	peerType, channelID, _, err := ids.ParsePortalID(sendErr.Portal.ID)
+	if err != nil || peerType != ids.PeerTypeChannel {
+		return false
+	}
+	ghostID, ok := tc.main.Bridge.Matrix.ParseGhostMXID(sendErr.Intent.GetMXID())
+	if !ok {
+		return false
+	}
+	senderType, userID, err := ids.ParseUserID(ghostID)
+	if err != nil || senderType != ids.PeerTypeUser {
+		return false
+	}
+	checkKey := fmt.Sprintf("%s/%d", sendErr.Portal.ID, userID)
+	if prev, ok := tc.forbiddenSenderChecks.Get(checkKey); ok {
+		if time.Since(prev) < time.Hour {
+			return false
+		}
+		tc.forbiddenSenderChecks.Delete(checkKey)
+	}
+	log := zerolog.Ctx(ctx).With().Int64("forbidden_sender_id", userID).Logger()
+	accessHash, err := tc.ScopedStore.GetAccessHash(ctx, ids.PeerTypeChannel, channelID)
+	if err != nil {
+		log.Err(err).Msg("Failed to get channel access hash to check forbidden sender")
+		return false
+	}
+	inputPeer, err := tc.getInputPeerUser(ctx, userID)
+	if err != nil {
+		log.Err(err).Msg("Failed to get input peer to check forbidden sender")
+		return false
+	}
+	resp, err := APICallWithUpdates(ctx, tc, func() (*tg.ChannelsChannelParticipant, error) {
+		return tc.client.API().ChannelsGetParticipant(ctx, &tg.ChannelsGetParticipantRequest{
+			Channel:     &tg.InputChannel{ChannelID: channelID, AccessHash: accessHash},
+			Participant: inputPeer,
+		})
+	})
+	if err != nil {
+		log.Err(err).Msg("Failed to get participant info for forbidden sender")
+		return false
+	}
+	tc.forbiddenSenderChecks.Set(checkKey, time.Now())
+	pl, err := tc.main.Bridge.Matrix.GetPowerLevels(ctx, sendErr.Portal.MXID)
+	if err != nil {
+		log.Err(err).Msg("Failed to get power levels to check forbidden sender")
+		return false
+	}
+	for member := range tc.filterChannelParticipants([]tg.ChannelParticipantClass{resp.Participant}, 1) {
+		requiredLevel := max(pl.GetEventLevel(sendErr.EventType), pl.GetEventLevel(event.EventEncrypted))
+		if member.PowerLevel == nil || *member.PowerLevel < requiredLevel ||
+			*member.PowerLevel <= pl.GetUserLevel(sendErr.Intent.GetMXID()) {
+			return false
+		}
+		log.Debug().Int("power_level", *member.PowerLevel).Msg("Updating power level of sender rejected by homeserver")
+		sendErr.Portal.UpdateInfo(ctx, &bridgev2.ChatInfo{
+			Members: &bridgev2.ChatMemberList{MemberMap: bridgev2.ChatMemberMap{}.Set(member)},
+		}, tc.userLogin, nil, time.Time{})
+		pl, err = tc.main.Bridge.Matrix.GetPowerLevels(ctx, sendErr.Portal.MXID)
+		if err != nil || pl.GetUserLevel(sendErr.Intent.GetMXID()) < requiredLevel {
+			return false
+		}
+		tc.forbiddenSenderChecks.Delete(checkKey)
+		return true
+	}
+	return false
 }
 
 func (tc *TelegramClient) getPowerLevelOverridesFromBannedRights(entity tg.ChatClass, dbr tg.ChatBannedRights) *bridgev2.PowerLevelOverrides {

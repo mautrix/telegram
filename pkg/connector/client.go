@@ -123,7 +123,7 @@ type TelegramClient struct {
 	topicMembersLock sync.Mutex
 	topicMembers     map[int64]cachedChannelMembers
 
-	infoVersionResyncs *exsync.Map[networkid.PortalKey, time.Time]
+	forbiddenSenderChecks *exsync.Map[string, time.Time]
 
 	takeoutLock        sync.Mutex
 	takeoutAccepted    *exsync.Event
@@ -140,7 +140,10 @@ type TelegramClient struct {
 	stickerPackCacheLock sync.Mutex
 }
 
-var _ bridgev2.NetworkAPI = (*TelegramClient)(nil)
+var (
+	_ bridgev2.NetworkAPI                        = (*TelegramClient)(nil)
+	_ bridgev2.MatrixSendErrorHandlingNetworkAPI = (*TelegramClient)(nil)
+)
 
 var messageLinkRegex = regexp.MustCompile(`^https?://t(?:elegram)?\.(?:me|dog)/([A-Za-z][A-Za-z0-9_]{3,31}[A-Za-z0-9]|[Cc]/[0-9]{1,20})/([0-9]{1,20})(?:/([0-9]{1,20}))?$`)
 
@@ -196,9 +199,9 @@ func NewTelegramClient(ctx context.Context, tc *TelegramConnector, login *bridge
 		stickerPacksByName: map[string]*stickerPackCache{},
 		stickerPacksByID:   map[int64]*stickerPackCache{},
 
-		recentMessageRooms: exsync.NewRingBuffer[networkid.MessageID, networkid.PortalKey](32),
-		chatMigrateSender:  exsync.NewMap[int64, bridgev2.EventSender](),
-		infoVersionResyncs: exsync.NewMap[networkid.PortalKey, time.Time](),
+		recentMessageRooms:    exsync.NewRingBuffer[networkid.MessageID, networkid.PortalKey](32),
+		chatMigrateSender:     exsync.NewMap[int64, bridgev2.EventSender](),
+		forbiddenSenderChecks: exsync.NewMap[string, time.Time](),
 
 		clientInitialized: exsync.NewEvent(),
 		clientDone:        exsync.NewEvent(),
