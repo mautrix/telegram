@@ -1116,12 +1116,19 @@ func (tc *TelegramClient) convertUserProfilePhoto(ctx context.Context, user *tg.
 	}
 
 	if tc.main.useDirectMedia {
-		mediaID, err := ids.DirectMediaInfo{
+		info := ids.DirectMediaInfo{
 			PeerType: ids.PeerTypeUser,
 			PeerID:   user.ID,
 			UserID:   tc.telegramUserID,
 			ID:       photo.PhotoID,
-		}.AsMediaID()
+		}
+		if accessHash, ok := user.GetAccessHash(); ok && user.Min {
+			info.PeerType = ids.FakePeerTypeMinUser
+			if !tc.metadata.IsBot {
+				info.MessageID = accessHash
+			}
+		}
+		mediaID, err := info.AsMediaID()
 		if err != nil {
 			return nil, err
 		}
