@@ -238,7 +238,7 @@ onNotFound:
 		return State{}, errors.Wrap(err, "restore local internalState")
 	}
 
-	if !found {
+	if !found || state.Pts == 0 {
 		forget = true
 		goto onNotFound
 	}
