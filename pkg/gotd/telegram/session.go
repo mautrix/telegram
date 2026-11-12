@@ -117,6 +117,12 @@ func (c *Client) onSession(cfg tg.Config, s mtproto.Session) error {
 	c.onReady()
 	c.connMux.Unlock()
 
+	if !c.noUpdatesMode {
+		if err := c.updateHandler.Handle(c.ctx, &tg.UpdatesTooLong{}); err != nil {
+			c.log.Warn("Failed to request difference after new session", zap.Error(err))
+		}
+	}
+
 	if err := c.saveSession(cfg, s); err != nil {
 		return errors.Wrap(err, "save")
 	}
