@@ -573,8 +573,17 @@ func (tc *TelegramClient) convertMediaRequiringUpload(
 				if ttl == telegramViewOnceTTL {
 					if tc.main.Config.DisableViewOnce {
 						typeName := "photo"
-						if msgMedia.TypeID() == tg.MessageMediaDocumentTypeID {
-							typeName = "file"
+						if doc, ok := msgMedia.(*tg.MessageMediaDocument); ok {
+							switch {
+							case doc.Voice:
+								typeName = "voice message"
+							case doc.Round:
+								typeName = "video message"
+							case doc.Video:
+								typeName = "video"
+							default:
+								typeName = "file"
+							}
 						}
 						converted = &bridgev2.ConvertedMessagePart{
 							Type: event.EventMessage,
