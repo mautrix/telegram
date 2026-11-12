@@ -1242,6 +1242,20 @@ func (tc *TelegramClient) HandleMatrixTyping(ctx context.Context, msg *bridgev2.
 	if msg.Portal.RoomType == database.RoomTypeSpace {
 		return nil
 	}
+	peerType, id, _, err := ids.ParsePortalID(msg.Portal.ID)
+	if err != nil {
+		return err
+	}
+	switch peerType {
+	case ids.PeerTypeUser:
+		if id == tc.telegramUserID {
+			return nil
+		}
+	case ids.PeerTypeChannel:
+		if !msg.Portal.Metadata.(*PortalMetadata).IsSuperGroup {
+			return nil
+		}
+	}
 	inputPeer, topicID, err := tc.inputPeerForPortalID(ctx, msg.Portal.ID)
 	if err != nil {
 		return err
