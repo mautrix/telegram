@@ -96,14 +96,16 @@ func Parse(ctx context.Context, parser *HTMLParser, content *event.MessageEventC
 		return "", nil
 	}
 
+	var parsed *EntityString
 	if content.Format != event.FormatHTML {
-		return content.Body, nil
-	}
-	parseCtx := NewContext(ctx, portal)
-	parseCtx.AllowedMentions = content.Mentions
-	parsed := parser.Parse(content.FormattedBody, parseCtx)
-	if parsed == nil {
-		return "", nil
+		parsed = NewEntityString(content.Body)
+	} else {
+		parseCtx := NewContext(ctx, portal)
+		parseCtx.AllowedMentions = content.Mentions
+		parsed = parser.Parse(content.FormattedBody, parseCtx)
+		if parsed == nil {
+			return "", nil
+		}
 	}
 	if len(parsed.String) > maxLength {
 		cutoffTextEntity := NewEntityString(cutoffText).Format(telegramfmt.Style{Type: telegramfmt.StyleItalic})
