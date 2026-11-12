@@ -338,8 +338,37 @@ func (tc *TelegramClient) ConnectBackground(ctx context.Context, params *bridgev
 		case <-time.After(20 * time.Second):
 		case <-ctx.Done():
 		}
+	} else if messageID != "" && relatedPortal.MXID != "" && tc.metadata.Session.HasAuthKey() {
+		err := tc.bridgePushedMessage(ctx, relatedPortal.PortalKey, data.Custom.MessageID)
+		if err != nil {
+			zerolog.Ctx(ctx).Err(err).Msg("Failed to bridge message from push notification")
+		}
 	}
 	return nil
+}
+
+func (tc *TelegramClient) bridgePushedMessage(ctx context.Context, portalKey networkid.PortalKey, msgID int) error {
+	peerType, peerID, _, err := ids.ParsePortalID(portalKey.ID)
+	if err != nil {
+		return err
+	}
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	return tc.client.Run(ctx, func(ctx context.Context) error {
+		resp, err := tc.getMessageByID(ctx, peerType, peerID, msgID)
+		if err != nil {
+			return err
+		}
+		chats := tg.ChatClassArray(resp.GetChats())
+		entities := tg.Entities{Chats: chats.ChatToMap(), Channels: chats.ChannelToMap()}
+		for _, msg := range resp.GetMessages() {
+			err = tc.onUpdateNewMessage(ctx, entities, &tg.UpdateNewMessage{Message: msg})
+			if err != nil {
+				return err
+			}
+		}
+		return nil
+	})
 }
 
 func (tc *TelegramConnector) ParsePushNotification(ctx context.Context, data json.RawMessage) (networkid.UserLoginID, any, error) {
