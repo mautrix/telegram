@@ -665,8 +665,6 @@ func (tc *TelegramClient) stickerSourceFromAttribute(ctx context.Context, docume
 				Int64("pack_id", set.ID).
 				Msg("Failed to get sticker pack by ID to fill info")
 			return nil
-		} else if pack == nil {
-			return nil
 		}
 		shortName = pack.meta.ShortName
 	case *tg.InputStickerSetShortName:
@@ -723,6 +721,8 @@ func (tc *TelegramClient) GetCachedStickerPack(ctx context.Context, shortName st
 			return nil, fmt.Errorf("unexpected response type for MessagesGetStickerSet: %T", resp)
 		}
 		cache = tc.addStickerPackToCache(set, false)
+	} else if cache == nil {
+		return nil, fmt.Errorf("sticker set is invalid")
 	}
 	return cache, nil
 }
