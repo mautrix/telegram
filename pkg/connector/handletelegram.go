@@ -890,6 +890,8 @@ func (tc *TelegramClient) onUserName(ctx context.Context, e tg.Entities, update 
 	if meta.ContactSource != 0 && meta.ContactSource != tc.telegramUserID && !tc.main.Config.ContactNames {
 		// TODO fetch full info to accurately detect if the user is a contact or not
 		userInfo.Name = nil
+	} else if meta.SourceIsContact && meta.ContactSource == tc.telegramUserID {
+		userInfo.Name = nil
 	}
 
 	ghost.UpdateInfo(ctx, &userInfo)
