@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/rs/zerolog"
+	"go.mau.fi/util/exslices"
 	"go.mau.fi/util/jsontime"
 	"go.mau.fi/util/ptr"
 	"go.mau.fi/util/variationselector"
@@ -262,7 +263,9 @@ func (tc *TelegramClient) GetCapabilities(ctx context.Context, portal *bridgev2.
 	reactions := portal.Metadata.(*PortalMetadata).AllowedReactions
 	if reactions == nil {
 		baseID += "+reactions_any"
-		feat.AllowedReactions, feat.CustomEmojiReactions = tc.getAvailableReactionsForCapability(ctx)
+		var availableReactions []string
+		availableReactions, feat.CustomEmojiReactions = tc.getAvailableReactionsForCapability(ctx)
+		feat.AllowedReactions = exslices.CastFunc(availableReactions, variationselector.Add)
 		if len(feat.AllowedReactions) > 0 {
 			baseID += "+any_list_" + hashEmojiList(feat.AllowedReactions)
 		}
@@ -270,11 +273,8 @@ func (tc *TelegramClient) GetCapabilities(ctx context.Context, portal *bridgev2.
 		baseID += "+reactions_none"
 		feat.Reaction = event.CapLevelRejected
 	} else {
-		baseID += "+reactions_" + hashEmojiList(reactions)
-		feat.AllowedReactions = reactions
-	}
-	for i, react := range feat.AllowedReactions {
-		feat.AllowedReactions[i] = variationselector.Add(react)
+		feat.AllowedReactions = exslices.CastFunc(reactions, variationselector.Add)
+		baseID += "+reactions_" + hashEmojiList(feat.AllowedReactions)
 	}
 	if tc.isPremiumCache.Load() {
 		baseID += "+premium"
