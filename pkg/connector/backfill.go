@@ -340,7 +340,7 @@ func (tc *TelegramClient) FetchMessages(ctx context.Context, fetchParams bridgev
 	return &bridgev2.FetchMessagesResponse{
 		Messages: backfillMessages,
 		Cursor:   cursor,
-		HasMore:  len(backfillMessages) > 0,
+		HasMore:  len(messages) > 0,
 		Forward:  fetchParams.Forward,
 		MarkRead: markRead,
 
