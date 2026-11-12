@@ -720,6 +720,7 @@ func (tc *TelegramClient) HandleMatrixSendError(ctx context.Context, sendErr *br
 		}
 		tc.forbiddenSenderChecks.Delete(checkKey)
 	}
+	tc.forbiddenSenderChecks.Set(checkKey, time.Now())
 	log := zerolog.Ctx(ctx).With().Int64("forbidden_sender_id", userID).Logger()
 	accessHash, err := tc.ScopedStore.GetAccessHash(ctx, ids.PeerTypeChannel, channelID)
 	if err != nil {
@@ -741,7 +742,6 @@ func (tc *TelegramClient) HandleMatrixSendError(ctx context.Context, sendErr *br
 		log.Err(err).Msg("Failed to get participant info for forbidden sender")
 		return false
 	}
-	tc.forbiddenSenderChecks.Set(checkKey, time.Now())
 	pl, err := tc.main.Bridge.Matrix.GetPowerLevels(ctx, sendErr.Portal.MXID)
 	if err != nil {
 		log.Err(err).Msg("Failed to get power levels to check forbidden sender")
