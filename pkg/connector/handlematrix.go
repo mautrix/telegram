@@ -1527,6 +1527,12 @@ func wrapUnsupportedError(err error) bridgev2.MessageStatus {
 var errSpacePortal = wrapUnsupportedError(errors.New("can't send messages to space portals")).
 	WithMessage("messages can't be sent to spaces")
 
+var errInvitePrivacyRestricted = bridgev2.WrapErrorInStatus(errors.New("user's privacy settings don't allow inviting them")).
+	WithErrorReason(event.MessageStatusNoPermission).
+	WithStatus(event.MessageStatusFail).
+	WithIsCertain(true).
+	WithMessage("This user's privacy settings don't allow adding them to groups")
+
 func (tc *TelegramClient) HandleMatrixMembership(ctx context.Context, msg *bridgev2.MatrixMembershipChange) (*bridgev2.MatrixMembershipResult, error) {
 	if (msg.Type.IsSelf && msg.OrigSender != nil) || msg.Type == bridgev2.ProfileChange {
 		return nil, nil
@@ -1614,11 +1620,16 @@ func (tc *TelegramClient) HandleMatrixMembership(ctx context.Context, msg *bridg
 			} else if tc.metadata.IsBot {
 				return nil, wrapUnsupportedError(fmt.Errorf("can't invite users as a bot"))
 			}
-			_, err = tc.client.API().ChannelsInviteToChannel(ctx, &tg.ChannelsInviteToChannelRequest{
+			var invited *tg.MessagesInvitedUsers
+			invited, err = tc.client.API().ChannelsInviteToChannel(ctx, &tg.ChannelsInviteToChannelRequest{
 				Channel: inputChannel,
 				Users:   []tg.InputUserClass{targetInputUser},
 			})
-			err = tc.humaniseSendError(err)
+			if err != nil {
+				err = tc.humaniseSendError(err)
+			} else if len(invited.MissingInvitees) > 0 {
+				err = errInvitePrivacyRestricted
+			}
 		case bridgev2.Join, bridgev2.Knock:
 			_, err = tc.client.API().ChannelsJoinChannel(ctx, inputChannel)
 			err = tc.humaniseSendError(err)
@@ -1643,12 +1654,17 @@ func (tc *TelegramClient) HandleMatrixMembership(ctx context.Context, msg *bridg
 			} else if tc.metadata.IsBot {
 				return nil, wrapUnsupportedError(fmt.Errorf("can't invite users as a bot"))
 			}
-			_, err = tc.client.API().MessagesAddChatUser(ctx, &tg.MessagesAddChatUserRequest{
+			var invited *tg.MessagesInvitedUsers
+			invited, err = tc.client.API().MessagesAddChatUser(ctx, &tg.MessagesAddChatUserRequest{
 				ChatID:   chatID,
 				UserID:   targetInputUser,
 				FwdLimit: 50,
 			})
-			err = tc.humaniseSendError(err)
+			if err != nil {
+				err = tc.humaniseSendError(err)
+			} else if len(invited.MissingInvitees) > 0 {
+				err = errInvitePrivacyRestricted
+			}
 		case bridgev2.Join, bridgev2.Knock:
 			// TODO could maybe join if there's a saved invite link in the bridge db?
 			fallthrough
