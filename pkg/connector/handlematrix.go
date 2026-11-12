@@ -82,6 +82,7 @@ var (
 	_ bridgev2.DeleteChatHandlingNetworkAPI       = (*TelegramClient)(nil)
 	_ bridgev2.RoomNameHandlingNetworkAPI         = (*TelegramClient)(nil)
 	_ bridgev2.RoomAvatarHandlingNetworkAPI       = (*TelegramClient)(nil)
+	_ bridgev2.RoomTopicHandlingNetworkAPI        = (*TelegramClient)(nil)
 	_ bridgev2.MembershipHandlingNetworkAPI       = (*TelegramClient)(nil)
 	_ bridgev2.UserBlockingNetworkAPI             = (*TelegramClient)(nil)
 )
@@ -1452,6 +1453,36 @@ func (tc *TelegramClient) HandleMatrixRoomName(ctx context.Context, msg *bridgev
 	default:
 		return false, fmt.Errorf("unsupported peer type %s for changing room name", peerType)
 	}
+}
+
+func (tc *TelegramClient) HandleMatrixRoomTopic(ctx context.Context, msg *bridgev2.MatrixRoomTopic) (bool, error) {
+	peerType, _, topicID, err := ids.ParsePortalID(msg.Portal.ID)
+	if err != nil {
+		return false, err
+	}
+
+	if peerType == ids.PeerTypeUser {
+		return false, wrapUnsupportedError(errors.New("changing user bio is not supported")).
+			WithMessage("changing the topic of a private chat is not supported")
+	} else if topicID > 0 {
+		return false, wrapUnsupportedError(errors.New("changing group topic description is not supported")).
+			WithMessage("changing the topic of a forum topic is not supported")
+	}
+
+	peer, _, err := tc.inputPeerForPortalID(ctx, msg.Portal.ID)
+	if err != nil {
+		return false, err
+	}
+	_, err = tc.client.API().MessagesEditChatAbout(ctx, &tg.MessagesEditChatAboutRequest{
+		Peer:  peer,
+		About: msg.Content.Topic,
+	})
+	if err != nil && !tg.IsChatAboutNotModified(err) {
+		return false, tc.humaniseSendError(err)
+	}
+	msg.Portal.Topic = msg.Content.Topic
+	msg.Portal.TopicSet = true
+	return true, nil
 }
 
 func (tc *TelegramClient) HandleMatrixRoomAvatar(ctx context.Context, msg *bridgev2.MatrixRoomAvatar) (bool, error) {
