@@ -98,6 +98,8 @@ type Client struct {
 	connBackoff atomic.Pointer[backoff.BackOff]
 	connMux     sync.Mutex
 
+	authKeyNotFoundSince time.Time
+
 	// Restart signal channel.
 	restart chan struct{} // immutable
 
