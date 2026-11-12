@@ -1330,6 +1330,23 @@ func (tc *TelegramClient) HandleRoomTag(ctx context.Context, msg *bridgev2.Matri
 	return err
 }
 
+func deleteAllHistory(ctx context.Context, deleteHistory func() (*tg.MessagesAffectedHistory, error)) error {
+	for {
+		var resp *tg.MessagesAffectedHistory
+		var err error
+		retry := true
+		for attempts := 0; retry && attempts < 5; attempts++ {
+			resp, err = deleteHistory()
+			retry, err = tgerr.FloodWait(ctx, err)
+		}
+		if err != nil {
+			return err
+		} else if resp.Offset <= 0 {
+			return nil
+		}
+	}
+}
+
 func (tc *TelegramClient) HandleMatrixDeleteChat(ctx context.Context, chat *bridgev2.MatrixDeleteChat) error {
 	peerType, id, topicID, err := ids.ParsePortalID(chat.Portal.ID)
 	if err != nil {
@@ -1341,11 +1358,12 @@ func (tc *TelegramClient) HandleMatrixDeleteChat(ctx context.Context, chat *brid
 		if err != nil {
 			return err
 		}
-		_, err = tc.client.API().MessagesDeleteHistory(ctx, &tg.MessagesDeleteHistoryRequest{
-			Peer:      &tg.InputPeerUser{UserID: id, AccessHash: accessHash},
-			JustClear: !chat.Content.DeleteForEveryone,
-			Revoke:    chat.Content.DeleteForEveryone,
-			MaxID:     0,
+		err = deleteAllHistory(ctx, func() (*tg.MessagesAffectedHistory, error) {
+			return tc.client.API().MessagesDeleteHistory(ctx, &tg.MessagesDeleteHistoryRequest{
+				Peer:      &tg.InputPeerUser{UserID: id, AccessHash: accessHash},
+				JustClear: !chat.Content.DeleteForEveryone,
+				Revoke:    chat.Content.DeleteForEveryone,
+			})
 		})
 		if err != nil {
 			return tc.humaniseSendError(err)
@@ -1367,8 +1385,10 @@ func (tc *TelegramClient) HandleMatrixDeleteChat(ctx context.Context, chat *brid
 		if err != nil {
 			return tc.humaniseSendError(err)
 		}
-		_, err = tc.client.API().MessagesDeleteHistory(ctx, &tg.MessagesDeleteHistoryRequest{
-			Peer: &tg.InputPeerChat{ChatID: id},
+		err = deleteAllHistory(ctx, func() (*tg.MessagesAffectedHistory, error) {
+			return tc.client.API().MessagesDeleteHistory(ctx, &tg.MessagesDeleteHistoryRequest{
+				Peer: &tg.InputPeerChat{ChatID: id},
+			})
 		})
 		return tc.humaniseSendError(err)
 	case ids.PeerTypeChannel:
@@ -1381,12 +1401,14 @@ func (tc *TelegramClient) HandleMatrixDeleteChat(ctx context.Context, chat *brid
 				return wrapUnsupportedError(errors.New("topics can only be deleted for everyone")).
 					WithMessage("topics can only be deleted for everyone")
 			}
-			_, err = tc.client.API().MessagesDeleteTopicHistory(ctx, &tg.MessagesDeleteTopicHistoryRequest{
-				Peer: &tg.InputPeerChannel{
-					ChannelID:  id,
-					AccessHash: accessHash,
-				},
-				TopMsgID: topicID,
+			err = deleteAllHistory(ctx, func() (*tg.MessagesAffectedHistory, error) {
+				return tc.client.API().MessagesDeleteTopicHistory(ctx, &tg.MessagesDeleteTopicHistoryRequest{
+					Peer: &tg.InputPeerChannel{
+						ChannelID:  id,
+						AccessHash: accessHash,
+					},
+					TopMsgID: topicID,
+				})
 			})
 			return tc.humaniseSendError(err)
 		}
