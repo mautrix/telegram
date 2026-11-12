@@ -710,10 +710,10 @@ func (tc *TelegramClient) HandleMatrixSendError(ctx context.Context, sendErr *br
 		return false
 	}
 	senderType, userID, err := ids.ParseUserID(ghostID)
-	if err != nil || senderType != ids.PeerTypeUser {
+	if err != nil || (senderType == ids.PeerTypeChannel && userID != channelID) {
 		return false
 	}
-	checkKey := fmt.Sprintf("%s/%d", sendErr.Portal.ID, userID)
+	checkKey := fmt.Sprintf("%s/%s", sendErr.Portal.ID, ghostID)
 	if prev, ok := tc.forbiddenSenderChecks.Get(checkKey); ok {
 		if time.Since(prev) < time.Hour {
 			return false
@@ -721,7 +721,31 @@ func (tc *TelegramClient) HandleMatrixSendError(ctx context.Context, sendErr *br
 		tc.forbiddenSenderChecks.Delete(checkKey)
 	}
 	tc.forbiddenSenderChecks.Set(checkKey, time.Now())
-	log := zerolog.Ctx(ctx).With().Int64("forbidden_sender_id", userID).Logger()
+	log := zerolog.Ctx(ctx).With().Str("forbidden_sender_id", string(ghostID)).Logger()
+	if senderType == ids.PeerTypeChannel {
+		pl, err := tc.main.Bridge.Matrix.GetPowerLevels(ctx, sendErr.Portal.MXID)
+		if err != nil {
+			log.Err(err).Msg("Failed to get power levels to check forbidden sender")
+			return false
+		} else if pl.GetUserLevel(sendErr.Intent.GetMXID()) >= max(pl.GetEventLevel(sendErr.EventType), pl.GetEventLevel(event.EventEncrypted)) {
+			return false
+		}
+		info, err := tc.getChatInfo(ctx, sendErr.Portal)
+		if err != nil {
+			log.Err(err).Msg("Failed to get chat info to check forbidden sender")
+			return false
+		}
+		log.Debug().Msg("Updating power levels after homeserver rejected anonymous admin message")
+		sendErr.Portal.UpdateInfo(ctx, &bridgev2.ChatInfo{
+			Members: &bridgev2.ChatMemberList{PowerLevels: info.Members.PowerLevels},
+		}, tc.userLogin, nil, time.Time{})
+		pl, err = tc.main.Bridge.Matrix.GetPowerLevels(ctx, sendErr.Portal.MXID)
+		if err != nil || pl.GetUserLevel(sendErr.Intent.GetMXID()) < max(pl.GetEventLevel(sendErr.EventType), pl.GetEventLevel(event.EventEncrypted)) {
+			return false
+		}
+		tc.forbiddenSenderChecks.Delete(checkKey)
+		return true
+	}
 	accessHash, err := tc.ScopedStore.GetAccessHash(ctx, ids.PeerTypeChannel, channelID)
 	if err != nil {
 		log.Err(err).Msg("Failed to get channel access hash to check forbidden sender")
