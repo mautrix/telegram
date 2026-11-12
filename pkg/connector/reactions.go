@@ -74,7 +74,7 @@ func (tc *TelegramClient) computeReactionsList(ctx context.Context, peer tg.Peer
 				// Waiting here would stall update handling, so fall back to the recent reactions (a partial list).
 				log.Warn().Err(err).Stringer("wait", wait).Msg("Flood wait fetching reactions list, using recent reactions")
 			} else if err != nil {
-				return nil, false, nil, fmt.Errorf("failed to get reactions list: %w", err)
+				log.Warn().Err(err).Msg("Failed to fetch reactions list, using recent reactions")
 			} else {
 				reactionsList = reactions.Reactions
 			}
