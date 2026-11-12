@@ -307,7 +307,7 @@ func (tc *TelegramClient) FetchMessages(ctx context.Context, fetchParams bridgev
 		if reactions, ok := message.GetReactions(); ok {
 			reactionsList, _, customEmojis, err := tc.computeReactionsList(ctx, message.PeerID, message.ID, reactions)
 			if err != nil {
-				return nil, err
+				log.Err(err).Msg("Failed to get reactions for backfill message")
 			}
 
 			for _, reaction := range reactionsList {
