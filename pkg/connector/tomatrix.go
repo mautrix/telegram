@@ -81,6 +81,15 @@ func mediaHashID(ctx context.Context, m tg.MessageMediaClass) []byte {
 	return nil
 }
 
+func webPageHashURL(m tg.MessageMediaClass) []byte {
+	if mediaWebPage, ok := m.(*tg.MessageMediaWebPage); ok {
+		if webpage, ok := mediaWebPage.Webpage.(*tg.WebPage); ok {
+			return []byte(webpage.URL)
+		}
+	}
+	return nil
+}
+
 func (tc *TelegramClient) mediaToMatrix(
 	ctx context.Context,
 	portal *bridgev2.Portal,
