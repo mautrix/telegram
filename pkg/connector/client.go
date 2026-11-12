@@ -620,7 +620,12 @@ func (tc *TelegramClient) LogoutRemote(ctx context.Context) {
 		ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 		defer cancel()
 
-		_, err := tc.client.API().AuthLogOut(ctx)
+		var err error
+		if tc.IsLoggedIn() {
+			_, err = tc.client.API().AuthLogOut(ctx)
+		} else {
+			err = tc.logoutWithNewClient(ctx)
+		}
 		if err != nil {
 			log.Err(err).Msg("failed to logout on Telegram")
 		}
@@ -646,6 +651,24 @@ func (tc *TelegramClient) LogoutRemote(ctx context.Context) {
 	}
 
 	log.Info().Msg("Logged out and deleted user state")
+}
+
+func (tc *TelegramClient) logoutWithNewClient(ctx context.Context) error {
+	resolver, err := GetProxyResolver(tc.main.Config.ProxyConfig)
+	if err != nil {
+		return err
+	}
+	client := telegram.NewClient(tc.main.Config.APIID, tc.main.Config.APIHash, telegram.Options{
+		CustomSessionStorage: &tc.metadata.Session,
+		Logger:               zap.New(zerozap.NewWithLevels(*zerolog.Ctx(ctx), zapLevelMap)),
+		Resolver:             resolver,
+		Device:               tc.main.deviceConfig(),
+		NoUpdates:            true,
+	})
+	return client.Run(ctx, func(ctx context.Context) error {
+		_, err := client.API().AuthLogOut(ctx)
+		return err
+	})
 }
 
 func (tc *TelegramClient) IsThisUser(ctx context.Context, userID networkid.UserID) bool {
