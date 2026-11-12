@@ -1082,6 +1082,18 @@ func Error(err error) string {
 		return "You cannot send plain results in this chat"
 	case tgerr.Is(err, "CHAT_MEMBER_ADD_FAILED"):
 		return "Telegram refused to add one or more users to the chat"
+	case tgerr.Is(err, "CHAT_SEND_AUDIOS_FORBIDDEN"):
+		return "You can't send audio messages in this chat"
+	case tgerr.Is(err, "CHAT_SEND_DOCS_FORBIDDEN"):
+		return "You can't send documents in this chat"
+	case tgerr.Is(err, "CHAT_SEND_ROUNDVIDEOS_FORBIDDEN"):
+		return "You can't send round videos in this chat"
+	case tgerr.Is(err, "PRIVACY_PREMIUM_REQUIRED"):
+		return "You need a Telegram Premium subscription to send a message to this user"
+	case tgerr.Is(err, "ALLOW_PAYMENT_REQUIRED"):
+		return fmt.Sprintf("This chat charges %d Telegram Stars per message, which can only be paid from the Telegram app", rpcErr.Argument)
+	case tgerr.Is(err, "TOPIC_CLOSED"):
+		return "This topic was closed, you can't send messages to it anymore"
 	}
 	return err.Error()
 }
