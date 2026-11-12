@@ -1180,6 +1180,14 @@ func (tc *TelegramClient) HandleMatrixReadReceipt(ctx context.Context, msg *brid
 				MaxID: maxID,
 			})
 		case ids.PeerTypeChannel:
+			if topicID != 0 {
+				_, readMessagesErr = tc.client.API().MessagesReadDiscussion(ctx, &tg.MessagesReadDiscussionRequest{
+					Peer:      inputPeer,
+					MsgID:     topicID,
+					ReadMaxID: maxID,
+				})
+				return
+			}
 			var accessHash int64
 			accessHash, readMessagesErr = tc.ScopedStore.GetAccessHash(ctx, ids.PeerTypeChannel, portalID)
 			if readMessagesErr != nil {

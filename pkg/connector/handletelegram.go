@@ -1094,6 +1094,8 @@ func (tc *TelegramClient) onUpdate(ctx context.Context, e tg.Entities, upd tg.Up
 		return tc.onOwnReadReceipt(tc.makePortalKeyFromPeer(update.Peer, update.TopMsgID), update.MaxID)
 	case *tg.UpdateReadChannelInbox:
 		return tc.onOwnReadReceipt(tc.makePortalKeyFromID(ids.PeerTypeChannel, update.ChannelID, 0), update.MaxID)
+	case *tg.UpdateReadChannelDiscussionInbox:
+		return tc.onReadChannelDiscussionInbox(ctx, update)
 	case *tg.UpdateNotifySettings:
 		return tc.onNotifySettings(ctx, e, update)
 	case *tg.UpdatePinnedDialogs:
@@ -1338,6 +1340,24 @@ func (tc *TelegramClient) updateReadReceipt(ctx context.Context, e tg.Entities, 
 		ReadUpToStreamOrder: int64(update.MaxID),
 	})
 	return resultToError(res)
+}
+
+func (tc *TelegramClient) onReadChannelDiscussionInbox(ctx context.Context, update *tg.UpdateReadChannelDiscussionInbox) error {
+	if update.BroadcastID != 0 {
+		return nil
+	}
+	topicID := update.TopMsgID
+	if topicID == 1 {
+		topicID = 0
+	}
+	portalKey := tc.makePortalKeyFromID(ids.PeerTypeChannel, update.ChannelID, topicID)
+	portal, err := tc.main.Bridge.GetExistingPortalByKey(ctx, portalKey)
+	if err != nil {
+		return err
+	} else if portal == nil || portal.MXID == "" || (topicID == 0 && !portal.Metadata.(*PortalMetadata).IsForumGeneral) {
+		return nil
+	}
+	return tc.onOwnReadReceipt(portalKey, update.ReadMaxID)
 }
 
 func (tc *TelegramClient) onOwnReadReceipt(portalKey networkid.PortalKey, maxID int) error {
