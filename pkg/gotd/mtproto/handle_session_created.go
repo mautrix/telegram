@@ -9,20 +9,20 @@ import (
 	"go.mau.fi/mautrix-telegram/pkg/gotd/proto"
 )
 
-func (c *Conn) handleSessionCreated(b *bin.Buffer) error {
+func (c *Conn) handleSessionCreated(msgID int64, b *bin.Buffer) error {
 	var s mt.NewSessionCreated
 	if err := s.Decode(b); err != nil {
 		return errors.Wrap(err, "decode")
 	}
 	c.gotSession.Signal()
 
-	created := proto.MessageID(s.FirstMsgID).Time()
+	created := proto.MessageID(msgID).Time()
 	now := c.clock.Now()
 	hasServerTimeOffset := c.hasServerTimeOffset()
 	c.log.Debug("Session created",
 		zap.Int64("unique_id", s.UniqueID),
 		zap.Int64("first_msg_id", s.FirstMsgID),
-		zap.Time("first_msg_time", created.Local()),
+		zap.Time("server_time", created.Local()),
 		zap.Bool("has_server_time_offset", hasServerTimeOffset),
 	)
 
