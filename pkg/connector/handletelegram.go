@@ -1109,6 +1109,12 @@ func (tc *TelegramClient) onUpdate(ctx context.Context, e tg.Entities, upd tg.Up
 	case *tg.UpdateUserStatus:
 		// ignored
 		return nil
+	case *tg.UpdateConfig:
+		tc.appConfigLock.Lock()
+		tc.appConfig = nil
+		tc.appConfigHash = 0
+		tc.appConfigLock.Unlock()
+		return nil
 	default:
 		zerolog.Ctx(ctx).Debug().Type("update_type", update).Msg("Unhandled update type")
 		return nil
