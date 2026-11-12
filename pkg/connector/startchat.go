@@ -132,16 +132,39 @@ func (tc *TelegramClient) resolveUsername(ctx context.Context, username string, 
 	} else if err != nil {
 		return nil, wrapUnknownError(ctx, "failed to resolve username", err)
 	}
+	user, err := resolvedPeerUser(resolved)
+	if err != nil {
+		return nil, err
+	} else if expectedID != 0 && user.GetID() != expectedID {
+		return nil, fmt.Errorf("%w: resolving %s returned %d instead of %d", bridgev2.ErrResolveIdentifierTryNext, username, user.GetID(), expectedID)
+	}
+	return tc.resolveUser(ctx, user)
+}
+
+func (tc *TelegramClient) resolvePhone(ctx context.Context, phone string) (*bridgev2.ResolveIdentifierResponse, error) {
+	resolved, err := APICallWithUpdates(ctx, tc, func() (*tg.ContactsResolvedPeer, error) {
+		return tc.client.API().ContactsResolvePhone(ctx, phone)
+	})
+	if tg.IsPhoneNotOccupied(err) || tg.IsPhoneNumberInvalid(err) {
+		return nil, nil
+	} else if err != nil {
+		return nil, wrapUnknownError(ctx, "failed to resolve phone number", err)
+	}
+	user, err := resolvedPeerUser(resolved)
+	if err != nil {
+		return nil, err
+	}
+	return tc.resolveUser(ctx, user)
+}
+
+func resolvedPeerUser(resolved *tg.ContactsResolvedPeer) (tg.UserClass, error) {
 	peer, ok := resolved.GetPeer().(*tg.PeerUser)
 	if !ok {
 		return nil, fmt.Errorf("unexpected peer type: %T", resolved.GetPeer())
 	}
-	if expectedID != 0 && peer.GetUserID() != expectedID {
-		return nil, fmt.Errorf("%w: resolving %s returned %d instead of %d", bridgev2.ErrResolveIdentifierTryNext, username, peer.GetUserID(), expectedID)
-	}
 	for _, user := range resolved.GetUsers() {
 		if user.GetID() == peer.GetUserID() {
-			return tc.resolveUser(ctx, user)
+			return user, nil
 		}
 	}
 	return nil, fmt.Errorf("peer user not found in contact resolved response")
@@ -167,12 +190,19 @@ func (tc *TelegramClient) ResolveIdentifier(ctx context.Context, identifier stri
 	}
 
 	if identifier[0] == '+' {
-		normalized := strings.TrimPrefix(identifier, "+")
-		if userID, err := tc.main.Store.PhoneNumber.GetUserID(ctx, normalized); err != nil {
+		normalized := strings.Map(func(r rune) rune {
+			if r >= '0' && r <= '9' {
+				return r
+			}
+			return -1
+		}, identifier)
+		if normalized == "" {
+			return nil, nil
+		} else if userID, err := tc.main.Store.PhoneNumber.GetUserID(ctx, normalized); err != nil {
 			return nil, fmt.Errorf("failed to get user ID by phone number: %w", err)
 		} else if userID == 0 {
 			log.Info().Msg("Phone number not found in database")
-			return nil, nil
+			return tc.resolvePhone(ctx, normalized)
 		} else {
 			return tc.resolveUserID(ctx, userID)
 		}
