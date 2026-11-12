@@ -18,6 +18,7 @@ package telegramfmt
 
 import (
 	"fmt"
+	"html"
 	"strings"
 	"unicode/utf16"
 
@@ -53,13 +54,13 @@ func (s Style) Format(message string) string {
 		return fmt.Sprintf("<blockquote>%s</blockquote>", message)
 	case StylePre:
 		if s.Language != "" {
-			return fmt.Sprintf(`<pre><code class="language-%s">%s</code></pre>`, s.Language, message)
+			return fmt.Sprintf(`<pre><code class="language-%s">%s</code></pre>`, html.EscapeString(s.Language), message)
 		}
 		return fmt.Sprintf("<pre><code>%s</code></pre>", message)
 	case StyleEmail:
 		return fmt.Sprintf(`<a href="mailto:%s">%s</a>`, message, message)
 	case StyleTextURL, StyleURL:
-		return fmt.Sprintf(`<a href="%s">%s</a>`, s.URL, message)
+		return fmt.Sprintf(`<a href="%s">%s</a>`, html.EscapeString(s.URL), message)
 	case StyleCustomEmoji:
 		return emojiInfoToHTML(s.EmojiInfo, message)
 	case StyleBotCommand, StyleHashtag, StyleCashtag, StylePhone, StyleBankCard:
