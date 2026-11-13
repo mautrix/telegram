@@ -37,7 +37,7 @@ type internalState struct {
 	// Updates channel.
 	externalQueue chan tracedUpdate
 
-	deferredExternal []tracedUpdate
+	deferred []tracedUpdate
 
 	// Updates from channel states
 	// during updates.getChannelDifference.
@@ -59,6 +59,7 @@ type internalState struct {
 	log       *zap.Logger
 	handler   telegram.UpdateHandler
 	onTooLong func(channelID int64) error
+	onStuck   func(stuck bool, err error)
 	storage   StateStorage
 	hasher    AccessHasher
 	selfID    int64
@@ -76,6 +77,7 @@ type stateConfig struct {
 	Tracer           trace.Tracer
 	Handler          telegram.UpdateHandler
 	OnChannelTooLong func(channelID int64) error
+	OnDiffStuck      func(stuck bool, err error)
 	Storage          StateStorage
 	Hasher           AccessHasher
 	SelfID           int64
@@ -99,6 +101,7 @@ func newState(ctx context.Context, cfg stateConfig) *internalState {
 		log:       cfg.Logger,
 		handler:   cfg.Handler,
 		onTooLong: cfg.OnChannelTooLong,
+		onStuck:   cfg.OnDiffStuck,
 		storage:   cfg.Storage,
 		hasher:    cfg.Hasher,
 		selfID:    cfg.SelfID,
@@ -177,11 +180,11 @@ func (s *internalState) Run(ctx context.Context) error {
 	}
 
 	for {
-		for len(s.deferredExternal) > 0 {
-			u := s.deferredExternal[0]
-			s.deferredExternal = s.deferredExternal[1:]
+		for len(s.deferred) > 0 {
+			u := s.deferred[0]
+			s.deferred = s.deferred[1:]
 			if err = s.handleUpdates(trace.ContextWithSpanContext(ctx, u.span), u.update); err != nil {
-				return fmt.Errorf("handleUpdates for deferred external update failed: %w", err)
+				return fmt.Errorf("handleUpdates for deferred update failed: %w", err)
 			}
 		}
 		select {
@@ -435,7 +438,24 @@ func (s *internalState) handleChannel(ctx context.Context, channelID int64, date
 		state = s.createAndRunChannelState(ctx, channelID, accessHash, localPts)
 	}
 
-	return state.Push(ctx, cu)
+	return s.pushToChannel(ctx, state, cu)
+}
+
+func (s *internalState) pushToChannel(ctx context.Context, state *channelState, cu channelUpdate) error {
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-state.runCtx.Done():
+			return nil
+		case state.updates <- cu:
+			return nil
+		case u := <-s.externalQueue:
+			s.deferred = append(s.deferred, u)
+		case u := <-s.internalQueue:
+			s.deferred = append(s.deferred, u)
+		}
+	}
 }
 
 func (s *internalState) RemoveChannel(channelID int64, reason error) {
@@ -489,26 +509,43 @@ func (s *internalState) createAndRunChannelState(ctx context.Context, channelID,
 }
 
 func (s *internalState) getDifferenceWithRetry(ctx context.Context, date int) (diff tg.UpdatesDifferenceClass, err error) {
+	var failingSince time.Time
+	reportedStuck := false
+	retryDelay := 5 * time.Second
 	for {
 		diff, err = s.client.UpdatesGetDifference(ctx, &tg.UpdatesGetDifferenceRequest{
 			Pts:  s.pts.State(),
 			Qts:  s.qts.State(),
 			Date: date,
 		})
-		if err == nil || isFatalError(err) {
-			return diff, err
+		if err == nil {
+			if reportedStuck {
+				s.onStuck(false, nil)
+			}
+			return diff, nil
+		} else if isFatalError(err) {
+			return nil, err
+		}
+		if failingSince.IsZero() {
+			failingSince = time.Now()
+		} else if !reportedStuck && time.Since(failingSince) > 3*time.Minute {
+			reportedStuck = true
+			s.onStuck(true, err)
 		}
 		dur, ok := tgerr.AsFloodWait(err)
 		if ok {
 			s.log.Warn("Flood wait error while getting difference", zap.Duration("wait", dur))
 		} else {
-			s.log.Error("Failed to get difference, retrying in 5 seconds...",
+			dur = retryDelay
+			retryDelay = min(retryDelay*2, time.Minute)
+			s.log.Error("Failed to get difference, retrying",
 				zap.Error(err),
+				zap.Duration("retry_in", dur),
+				zap.Time("failing_since", failingSince),
 				zap.Int("pts", s.pts.State()),
 				zap.Int("qts", s.qts.State()),
 				zap.Int("date", date),
 			)
-			dur = 5 * time.Second
 		}
 		if err = s.waitToRetryDifference(ctx, dur); err != nil {
 			return nil, err
@@ -524,7 +561,9 @@ func (s *internalState) waitToRetryDifference(ctx context.Context, dur time.Dura
 		case <-timer.C:
 			return nil
 		case u := <-s.externalQueue:
-			s.deferredExternal = append(s.deferredExternal, u)
+			s.deferred = append(s.deferred, u)
+		case u := <-s.internalQueue:
+			s.deferred = append(s.deferred, u)
 		case <-ctx.Done():
 			return fmt.Errorf("context canceled while waiting to retry: %w", ctx.Err())
 		}
