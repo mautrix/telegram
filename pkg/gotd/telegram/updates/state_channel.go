@@ -32,16 +32,17 @@ type channelState struct {
 	diffTimeout time.Time
 
 	// Immutable fields.
-	channelID  int64
-	accessHash int64
-	selfID     int64
-	diffLim    int
-	client     API
-	storage    StateStorage
-	log        *zap.Logger
-	tracer     trace.Tracer
-	handler    telegram.UpdateHandler
-	onTooLong  func(channelID int64) error
+	channelID     int64
+	accessHash    int64
+	selfID        int64
+	diffLim       int
+	client        API
+	storage       StateStorage
+	log           *zap.Logger
+	tracer        trace.Tracer
+	handler       telegram.UpdateHandler
+	onTooLong     func(channelID int64) error
+	resyncOnStart bool
 
 	runCtx context.Context
 	stop   context.CancelCauseFunc
@@ -50,6 +51,7 @@ type channelState struct {
 type channelStateConfig struct {
 	Out              chan tracedUpdate
 	InitialPts       int
+	ResyncOnStart    bool
 	ChannelID        int64
 	AccessHash       int64
 	SelfID           int64
@@ -69,16 +71,17 @@ func newChannelState(ctx context.Context, cfg channelStateConfig) *channelState 
 
 		idleTimeout: time.NewTimer(idleTimeout),
 
-		channelID:  cfg.ChannelID,
-		accessHash: cfg.AccessHash,
-		selfID:     cfg.SelfID,
-		diffLim:    cfg.DiffLimit,
-		client:     cfg.RawClient,
-		storage:    cfg.Storage,
-		log:        cfg.Logger,
-		handler:    cfg.Handler,
-		onTooLong:  cfg.OnChannelTooLong,
-		tracer:     cfg.Tracer,
+		channelID:     cfg.ChannelID,
+		accessHash:    cfg.AccessHash,
+		selfID:        cfg.SelfID,
+		diffLim:       cfg.DiffLimit,
+		client:        cfg.RawClient,
+		storage:       cfg.Storage,
+		log:           cfg.Logger,
+		handler:       cfg.Handler,
+		onTooLong:     cfg.OnChannelTooLong,
+		resyncOnStart: cfg.ResyncOnStart,
+		tracer:        cfg.Tracer,
 	}
 
 	state.pts = newSequenceBox(sequenceConfig{
@@ -97,6 +100,11 @@ var ErrRemoveChannelState = errors.New("remove channel state")
 
 func (s *channelState) Run(ctx context.Context) error {
 	defer s.stop(nil)
+	if s.resyncOnStart {
+		if err := s.resync(s.runCtx); err != nil {
+			return err
+		}
+	}
 	// Subscribe to channel updates.
 	if err := s.getDifference(s.runCtx); err != nil {
 		s.log.Error("Failed to subscribe to channel updates", zap.Error(err))
@@ -121,6 +129,25 @@ func (s *channelState) Run(ctx context.Context) error {
 			s.log.Debug("Idle timeout")
 			s.resetIdleTimer()
 			s.getDifferenceLogger(s.runCtx)
+		}
+	}
+}
+
+func (s *channelState) resync(ctx context.Context) error {
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		if err := s.onTooLong(s.channelID); err != nil {
+			s.log.Error("Failed to resync channel without stored pts", zap.Error(err))
+		}
+	}()
+	for {
+		select {
+		case <-done:
+			return nil
+		case <-s.updates:
+		case <-ctx.Done():
+			return context.Cause(ctx)
 		}
 	}
 }

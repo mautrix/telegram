@@ -131,7 +131,7 @@ func newState(ctx context.Context, cfg stateConfig) *internalState {
 		if info.Pts == -1 {
 			continue
 		}
-		s.createAndRunChannelState(ctx, id, info.AccessHash, info.Pts)
+		s.createAndRunChannelState(ctx, id, info.AccessHash, info.Pts, false)
 	}
 
 	return s
@@ -435,7 +435,7 @@ func (s *internalState) handleChannel(ctx context.Context, channelID int64, date
 		}
 
 		s.log.Info("Adding new channel state", zap.Int64("channel_id", channelID), zap.Int("local_pts", localPts), zap.Int("remote_pts", pts))
-		state = s.createAndRunChannelState(ctx, channelID, accessHash, localPts)
+		state = s.createAndRunChannelState(ctx, channelID, accessHash, localPts, !found)
 	}
 
 	return s.pushToChannel(ctx, state, cu)
@@ -472,10 +472,11 @@ func (s *internalState) RemoveChannel(channelID int64, reason error) {
 	state.stop(fmt.Errorf("%w: %w", ErrRemoveChannelState, reason))
 }
 
-func (s *internalState) createAndRunChannelState(ctx context.Context, channelID, accessHash int64, initialPts int) (state *channelState) {
+func (s *internalState) createAndRunChannelState(ctx context.Context, channelID, accessHash int64, initialPts int, resyncOnStart bool) (state *channelState) {
 	state = newChannelState(ctx, channelStateConfig{
 		Out:              s.internalQueue,
 		InitialPts:       initialPts,
+		ResyncOnStart:    resyncOnStart,
 		ChannelID:        channelID,
 		AccessHash:       accessHash,
 		SelfID:           s.selfID,
