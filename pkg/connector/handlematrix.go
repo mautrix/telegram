@@ -585,14 +585,23 @@ func (tc *TelegramClient) HandleMatrixMessage(ctx context.Context, msg *bridgev2
 			if viewLimitedTTL > 0 {
 				media.(interface{ SetTTLSeconds(int) }).SetTTLSeconds(viewLimitedTTL)
 			}
-			updates, err = tc.client.API().MessagesSendMedia(ctx, &tg.MessagesSendMediaRequest{
+			mediaReq := &tg.MessagesSendMediaRequest{
 				Peer:     peer,
 				Message:  message,
 				Entities: entities,
 				Media:    media,
 				ReplyTo:  replyTo,
 				RandomID: randomID,
-			})
+			}
+			updates, err = tc.client.API().MessagesSendMedia(ctx, mediaReq)
+			if tgerr.Is(err, tg.ErrImageProcessFailed) && !forceDocument && viewLimitedTTL == 0 && msg.Content.MsgType == event.MsgImage {
+				zerolog.Ctx(ctx).Warn().Err(err).Msg("Telegram failed to process image, retrying as file")
+				mediaReq.Media, err = tc.transferMediaToTelegram(ctx, msg.Content, false, false, true)
+				if err != nil {
+					return nil, err
+				}
+				updates, err = tc.client.API().MessagesSendMedia(ctx, mediaReq)
+			}
 		case event.MsgLocation:
 			var uri GeoURI
 			uri, err = ParseGeoURI(msg.Content.GeoURI)
