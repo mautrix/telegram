@@ -5,7 +5,7 @@ package hasher
 //
 // See https://core.telegram.org/api/offsets#hash-generation.
 type Hasher struct {
-	state uint32
+	state uint64
 }
 
 // Reset resets the Hasher to its initial state.
@@ -14,17 +14,14 @@ func (h *Hasher) Reset() {
 }
 
 // Update performs state change using given value.
-func (h *Hasher) Update(value uint32) {
-	h.state = (h.state * 20261) + value
-}
-
-// Update64 performs state change using given 64-bit value.
-func (h *Hasher) Update64(value uint64) {
-	h.Update(uint32(value >> 32))
-	h.Update(uint32(value & 0xFFFFFFFF))
+func (h *Hasher) Update(value uint64) {
+	h.state ^= h.state >> 21
+	h.state ^= h.state << 35
+	h.state ^= h.state >> 4
+	h.state += value
 }
 
 // Sum returns final sum.
 func (h *Hasher) Sum() int64 {
-	return int64(h.state & 0x7FFFFFFF)
+	return int64(h.state)
 }
