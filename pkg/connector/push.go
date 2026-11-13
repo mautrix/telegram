@@ -31,7 +31,9 @@ import (
 	"go.mau.fi/util/exslices"
 	"go.mau.fi/util/random"
 	"maunium.net/go/mautrix/bridgev2"
+	"maunium.net/go/mautrix/bridgev2/database"
 	"maunium.net/go/mautrix/bridgev2/networkid"
+	"maunium.net/go/mautrix/bridgev2/simplevent"
 
 	"go.mau.fi/mautrix-telegram/pkg/connector/ids"
 	"go.mau.fi/mautrix-telegram/pkg/gotd/bin"
@@ -339,35 +341,34 @@ func (tc *TelegramClient) ConnectBackground(ctx context.Context, params *bridgev
 		case <-ctx.Done():
 		}
 	} else if messageID != "" && relatedPortal.MXID != "" && tc.main.useDirectMedia && tc.metadata.Session.HasAuthKey() {
-		err := tc.bridgePushedMessage(ctx, relatedPortal.PortalKey, data.Custom.MessageID)
+		err := tc.backfillPushedMessage(ctx, relatedPortal.PortalKey, data.Custom.MessageID)
 		if err != nil {
-			zerolog.Ctx(ctx).Err(err).Msg("Failed to bridge message from push notification")
+			zerolog.Ctx(ctx).Err(err).Msg("Failed to backfill chat from push notification")
 		}
 	}
 	return nil
 }
 
-func (tc *TelegramClient) bridgePushedMessage(ctx context.Context, portalKey networkid.PortalKey, msgID int) error {
-	peerType, peerID, _, err := ids.ParsePortalID(portalKey.ID)
-	if err != nil {
-		return err
-	}
+func (tc *TelegramClient) backfillPushedMessage(ctx context.Context, portalKey networkid.PortalKey, msgID int) error {
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	return tc.client.Run(ctx, func(ctx context.Context) error {
-		resp, err := tc.getMessageByID(ctx, peerType, peerID, msgID)
-		if err != nil {
-			return err
-		}
-		chats := tg.ChatClassArray(resp.GetChats())
-		entities := tg.Entities{Chats: chats.ChatToMap(), Channels: chats.ChannelToMap()}
-		for _, msg := range resp.GetMessages() {
-			err = tc.onUpdateNewMessage(ctx, entities, &tg.UpdateNewMessage{Message: msg})
-			if err != nil {
-				return err
-			}
-		}
-		return nil
+		return resultToError(tc.main.Bridge.QueueRemoteEvent(tc.userLogin, &simplevent.ChatResync{
+			EventMeta: simplevent.EventMeta{
+				Type: bridgev2.RemoteEventChatResync,
+				LogContext: func(c zerolog.Context) zerolog.Context {
+					return c.Str("update", "push").Int("message_id", msgID)
+				},
+				PortalKey: portalKey,
+			},
+			CheckNeedsBackfillFunc: func(ctx context.Context, latestMessage *database.Message) (bool, error) {
+				if latestMessage == nil {
+					return true, nil
+				}
+				_, latestMessageID, err := ids.ParseMessageID(latestMessage.ID)
+				return err == nil && msgID > latestMessageID, nil
+			},
+		}))
 	})
 }
 

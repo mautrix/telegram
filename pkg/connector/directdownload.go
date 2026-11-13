@@ -37,10 +37,12 @@ import (
 
 var _ bridgev2.DirectMediableNetwork = (*TelegramConnector)(nil)
 
-func (tc *TelegramClient) getMessageByID(ctx context.Context, peerType ids.PeerType, peerID int64, msgID int) (tg.ModifiedMessagesMessages, error) {
+func (tc *TelegramClient) refetchMedia(ctx context.Context, peerType ids.PeerType, peerID int64, msgID int) (tg.MessageMediaClass, error) {
+	var messages tg.ModifiedMessagesMessages
+	var err error
 	switch peerType {
 	case ids.PeerTypeUser, ids.PeerTypeChat:
-		return APICallWithUpdates(ctx, tc, func() (tg.ModifiedMessagesMessages, error) {
+		messages, err = APICallWithUpdates(ctx, tc, func() (tg.ModifiedMessagesMessages, error) {
 			m, err := tc.client.API().MessagesGetMessages(ctx, []tg.InputMessageClass{
 				&tg.InputMessageID{ID: msgID},
 			})
@@ -53,11 +55,12 @@ func (tc *TelegramClient) getMessageByID(ctx context.Context, peerType ids.PeerT
 			}
 		})
 	case ids.PeerTypeChannel:
-		accessHash, err := tc.ScopedStore.GetAccessHash(ctx, ids.PeerTypeChannel, peerID)
+		var accessHash int64
+		accessHash, err = tc.ScopedStore.GetAccessHash(ctx, ids.PeerTypeChannel, peerID)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get channel access hash: %w", err)
 		}
-		return APICallWithUpdates(ctx, tc, func() (tg.ModifiedMessagesMessages, error) {
+		messages, err = APICallWithUpdates(ctx, tc, func() (tg.ModifiedMessagesMessages, error) {
 			m, err := tc.client.API().ChannelsGetMessages(ctx, &tg.ChannelsGetMessagesRequest{
 				Channel: &tg.InputChannel{ChannelID: peerID, AccessHash: accessHash},
 				ID: []tg.InputMessageClass{
@@ -75,10 +78,6 @@ func (tc *TelegramClient) getMessageByID(ctx context.Context, peerType ids.PeerT
 	default:
 		return nil, fmt.Errorf("unknown peer type %s", peerType)
 	}
-}
-
-func (tc *TelegramClient) refetchMedia(ctx context.Context, peerType ids.PeerType, peerID int64, msgID int) (tg.MessageMediaClass, error) {
-	messages, err := tc.getMessageByID(ctx, peerType, peerID, msgID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get message %d/%d for media info: %w", peerID, msgID, err)
 	}
