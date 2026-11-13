@@ -207,6 +207,7 @@ func NewTelegramClient(ctx context.Context, tc *TelegramConnector, login *bridge
 
 	client.dispatcher = tg.NewUpdateDispatcher()
 	client.dispatcher.OnFallback(client.onUpdateWrapper)
+	client.dispatcher.OnEntities(client.onEntitiesWrapper)
 
 	client.updatesManager = updates.New(updates.Config{
 		OnNotChannelMember: client.onNotChannelMember,
