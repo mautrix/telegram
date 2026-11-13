@@ -36,6 +36,7 @@ import (
 	"go.mau.fi/zerozap"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
+	"golang.org/x/sync/semaphore"
 	"maunium.net/go/mautrix/bridgev2"
 	"maunium.net/go/mautrix/bridgev2/database"
 	"maunium.net/go/mautrix/bridgev2/networkid"
@@ -120,6 +121,8 @@ type TelegramClient struct {
 
 	dcTransferLock sync.Mutex
 
+	fetchMessagesSema *semaphore.Weighted
+
 	topicMembersLock sync.Mutex
 	topicMembers     map[int64]cachedChannelMembers
 
@@ -188,7 +191,8 @@ func NewTelegramClient(ctx context.Context, tc *TelegramConnector, login *bridge
 		userLogin:      login,
 		metadata:       login.Metadata.(*UserLoginMetadata),
 
-		takeoutAccepted: exsync.NewEvent(),
+		takeoutAccepted:   exsync.NewEvent(),
+		fetchMessagesSema: semaphore.NewWeighted(1),
 
 		prevReactionPoll:   map[networkid.PortalKey]time.Time{},
 		stickerPacksByName: map[string]*stickerPackCache{},
