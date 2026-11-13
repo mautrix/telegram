@@ -59,6 +59,7 @@ type internalState struct {
 	log       *zap.Logger
 	handler   telegram.UpdateHandler
 	onTooLong func(channelID int64) error
+	onStuck   func(stuck bool, err error)
 	storage   StateStorage
 	hasher    AccessHasher
 	selfID    int64
@@ -76,6 +77,7 @@ type stateConfig struct {
 	Tracer           trace.Tracer
 	Handler          telegram.UpdateHandler
 	OnChannelTooLong func(channelID int64) error
+	OnDiffStuck      func(stuck bool, err error)
 	Storage          StateStorage
 	Hasher           AccessHasher
 	SelfID           int64
@@ -99,6 +101,7 @@ func newState(ctx context.Context, cfg stateConfig) *internalState {
 		log:       cfg.Logger,
 		handler:   cfg.Handler,
 		onTooLong: cfg.OnChannelTooLong,
+		onStuck:   cfg.OnDiffStuck,
 		storage:   cfg.Storage,
 		hasher:    cfg.Hasher,
 		selfID:    cfg.SelfID,
@@ -506,26 +509,43 @@ func (s *internalState) createAndRunChannelState(ctx context.Context, channelID,
 }
 
 func (s *internalState) getDifferenceWithRetry(ctx context.Context, date int) (diff tg.UpdatesDifferenceClass, err error) {
+	var failingSince time.Time
+	reportedStuck := false
+	retryDelay := 5 * time.Second
 	for {
 		diff, err = s.client.UpdatesGetDifference(ctx, &tg.UpdatesGetDifferenceRequest{
 			Pts:  s.pts.State(),
 			Qts:  s.qts.State(),
 			Date: date,
 		})
-		if err == nil || isFatalError(err) {
-			return diff, err
+		if err == nil {
+			if reportedStuck {
+				s.onStuck(false, nil)
+			}
+			return diff, nil
+		} else if isFatalError(err) {
+			return nil, err
+		}
+		if failingSince.IsZero() {
+			failingSince = time.Now()
+		} else if !reportedStuck && time.Since(failingSince) > 3*time.Minute {
+			reportedStuck = true
+			s.onStuck(true, err)
 		}
 		dur, ok := tgerr.AsFloodWait(err)
 		if ok {
 			s.log.Warn("Flood wait error while getting difference", zap.Duration("wait", dur))
 		} else {
-			s.log.Error("Failed to get difference, retrying in 5 seconds...",
+			dur = retryDelay
+			retryDelay = min(retryDelay*2, time.Minute)
+			s.log.Error("Failed to get difference, retrying",
 				zap.Error(err),
+				zap.Duration("retry_in", dur),
+				zap.Time("failing_since", failingSince),
 				zap.Int("pts", s.pts.State()),
 				zap.Int("qts", s.qts.State()),
 				zap.Int("date", date),
 			)
-			dur = 5 * time.Second
 		}
 		if err = s.waitToRetryDifference(ctx, dur); err != nil {
 			return nil, err
