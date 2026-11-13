@@ -30,6 +30,8 @@ import (
 	"github.com/tidwall/gjson"
 	"go.mau.fi/util/exslices"
 	"go.mau.fi/util/random"
+	"go.mau.fi/zerozap"
+	"go.uber.org/zap"
 	"maunium.net/go/mautrix/bridgev2"
 	"maunium.net/go/mautrix/bridgev2/database"
 	"maunium.net/go/mautrix/bridgev2/networkid"
@@ -38,6 +40,7 @@ import (
 	"go.mau.fi/mautrix-telegram/pkg/connector/ids"
 	"go.mau.fi/mautrix-telegram/pkg/gotd/bin"
 	"go.mau.fi/mautrix-telegram/pkg/gotd/crypto"
+	"go.mau.fi/mautrix-telegram/pkg/gotd/telegram"
 	"go.mau.fi/mautrix-telegram/pkg/gotd/tg"
 )
 
@@ -350,6 +353,21 @@ func (tc *TelegramClient) ConnectBackground(ctx context.Context, params *bridgev
 }
 
 func (tc *TelegramClient) backfillPushedMessage(ctx context.Context, portalKey networkid.PortalKey, msgID int) error {
+	resolver, err := GetProxyResolver(tc.main.Config.ProxyConfig)
+	if err != nil {
+		return err
+	}
+	prevClient := tc.client
+	defer func() {
+		tc.client = prevClient
+	}()
+	tc.client = telegram.NewClient(tc.main.Config.APIID, tc.main.Config.APIHash, telegram.Options{
+		CustomSessionStorage: &tc.metadata.Session,
+		Logger:               zap.New(zerozap.NewWithLevels(*zerolog.Ctx(ctx), zapLevelMap)),
+		Resolver:             resolver,
+		Device:               tc.main.deviceConfig(),
+		NoUpdates:            true,
+	})
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	return tc.client.Run(ctx, func(ctx context.Context) error {
