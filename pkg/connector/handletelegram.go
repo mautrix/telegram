@@ -941,6 +941,9 @@ func (tc *TelegramClient) onDeleteMessages(ctx context.Context, channelID int64,
 				Msg("Ignoring delete of unknown message")
 			continue
 		}
+		if !tc.shouldBridgePortalDeletion(ctx, portalKey) {
+			continue
+		}
 		res := tc.main.Bridge.QueueRemoteEvent(tc.userLogin, &simplevent.MessageRemove{
 			EventMeta: simplevent.EventMeta{
 				Type:      bridgev2.RemoteEventMessageRemove,
@@ -954,6 +957,43 @@ func (tc *TelegramClient) onDeleteMessages(ctx context.Context, channelID int64,
 		}
 	}
 	return nil
+}
+
+const recentDeleteWindow = 1 * time.Minute
+
+type recentDeleteCount struct {
+	count int
+	start time.Time
+}
+
+func (tc *TelegramClient) shouldBridgePortalDeletion(ctx context.Context, portalKey networkid.PortalKey) bool {
+	if tc.main.Config.MaxTelegramDelete < 0 {
+		return true
+	}
+	tc.recentDeletesLock.Lock()
+	defer tc.recentDeletesLock.Unlock()
+	now := time.Now()
+	if tc.recentDeletes == nil {
+		tc.recentDeletes = make(map[networkid.PortalKey]*recentDeleteCount)
+	}
+	counter, ok := tc.recentDeletes[portalKey]
+	if !ok || now.Sub(counter.start) > recentDeleteWindow {
+		for key, val := range tc.recentDeletes {
+			if now.Sub(val.start) > recentDeleteWindow {
+				delete(tc.recentDeletes, key)
+			}
+		}
+		counter = &recentDeleteCount{start: now}
+		tc.recentDeletes[portalKey] = counter
+	}
+	counter.count++
+	if counter.count == tc.main.Config.MaxTelegramDelete+1 {
+		zerolog.Ctx(ctx).Debug().
+			Object("portal_key", portalKey).
+			Int("max_telegram_delete", tc.main.Config.MaxTelegramDelete).
+			Msg("Ignoring further deletions in portal after too many within a minute")
+	}
+	return counter.count <= tc.main.Config.MaxTelegramDelete
 }
 
 func (tc *TelegramClient) updateGhost(ctx context.Context, userID int64, user *tg.User) (*bridgev2.UserInfo, error) {
