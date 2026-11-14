@@ -111,6 +111,9 @@ type TelegramClient struct {
 	recentMessageRooms *exsync.RingBuffer[networkid.MessageID, networkid.PortalKey]
 	chatMigrateSender  *exsync.Map[int64, bridgev2.EventSender]
 
+	recentDeletesLock sync.Mutex
+	recentDeletes     map[networkid.PortalKey]*recentDeleteCount
+
 	telegramFmtParams *telegramfmt.FormatParams
 	matrixParser      *matrixfmt.HTMLParser
 

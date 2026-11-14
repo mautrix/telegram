@@ -100,7 +100,9 @@ max_member_count: -1
 # When deleting an entire chat, Telegram sends a message delete event deleting
 # each message. Bridging those as individual redactions would be very slow and
 # there's no way to detect that the entire chat was deleted, so it's best to
-# ignore the deletion event entirely instead.
+# ignore the deletion event entirely instead. The same limit also applies to
+# the total number of deletions in one chat within a minute, because Telegram
+# can split a chat clear into many smaller delete events.
 #
 # -1 means no limit. The default of 100 is the maximum number of messages a user
 # can manually select to delete on Telegram.
