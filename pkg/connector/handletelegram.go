@@ -261,7 +261,7 @@ func (tc *TelegramClient) onUpdateNewMessage(ctx context.Context, entities tg.En
 	log := *zerolog.Ctx(ctx)
 	switch msg := update.GetMessage().(type) {
 	case *tg.Message:
-		var isBroadcastChannel bool
+		var isBroadcastChannel, isSupergroup bool
 		switch peer := msg.PeerID.(type) {
 		case *tg.PeerChannel:
 			log = log.With().Int64("channel_id", peer.ChannelID).Logger()
@@ -270,6 +270,8 @@ func (tc *TelegramClient) onUpdateNewMessage(ctx context.Context, entities tg.En
 				return nil
 			} else if ok && !c.GetMegagroup() {
 				isBroadcastChannel = true
+			} else if ok {
+				isSupergroup = true
 			}
 		case *tg.PeerChat:
 			log = log.With().Int64("chat_id", peer.ChatID).Logger()
@@ -280,6 +282,10 @@ func (tc *TelegramClient) onUpdateNewMessage(ctx context.Context, entities tg.En
 		}
 
 		sender := tc.getEventSender(msg, isBroadcastChannel)
+		convert := tc.convertToMatrix
+		if isSupergroup && !sender.IsFromMe && tc.main.Config.RaiseSenderPowerLevels {
+			convert = tc.convertAndLetSenderPost
+		}
 
 		if media, ok := msg.GetMedia(); ok && media.TypeID() == tg.MessageMediaContactTypeID {
 			contact := media.(*tg.MessageMediaContact)
@@ -309,7 +315,7 @@ func (tc *TelegramClient) onUpdateNewMessage(ctx context.Context, entities tg.En
 			},
 			ID:                 msgID,
 			Data:               msg,
-			ConvertMessageFunc: tc.convertToMatrix,
+			ConvertMessageFunc: convert,
 		})
 		tc.recentMessageRooms.Push(msgID, portalKey)
 

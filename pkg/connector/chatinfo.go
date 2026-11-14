@@ -252,6 +252,9 @@ func (tc *TelegramClient) overrideChatInfoWithTopic(info *bridgev2.ChatInfo, top
 	info.Name = ptr.Ptr(topic.Title + " - " + *info.Name)
 	if topic.Closed {
 		info.Members.PowerLevels.EventsDefault = nobodyPowerLevel
+		if tc.main.Config.RaiseSenderPowerLevels {
+			info.Members.PowerLevels.EventsDefault = manageTopicsPowerLevel
+		}
 	}
 }
 
@@ -693,6 +696,31 @@ func (tc *TelegramClient) getDMPowerLevels() *bridgev2.PowerLevelOverrides {
 		event.BeeperDeleteChat:             0,
 	}
 	return &plo
+}
+
+func (tc *TelegramClient) convertAndLetSenderPost(ctx context.Context, portal *bridgev2.Portal, intent bridgev2.MatrixAPI, msg *tg.Message) (*bridgev2.ConvertedMessage, error) {
+	cm, err := tc.convertToMatrix(ctx, portal, intent, msg)
+	if err != nil || cm == nil || !tc.main.Bridge.IsGhostMXID(intent.GetMXID()) {
+		return cm, err
+	}
+	pl, err := tc.main.Bridge.Matrix.GetPowerLevels(ctx, portal.MXID)
+	if err != nil {
+		zerolog.Ctx(ctx).Err(err).Msg("Failed to get power levels to check sender level")
+		return cm, nil
+	}
+	level := pl.GetEventLevel(event.EventEncrypted)
+	for _, part := range cm.Parts {
+		level = max(level, pl.GetEventLevel(part.Type))
+	}
+	if level >= *nobodyPowerLevel || pl.GetUserLevel(intent.GetMXID()) >= level {
+		return cm, nil
+	}
+	pl.SetUserLevel(intent.GetMXID(), level)
+	_, err = tc.main.Bridge.Bot.SendState(ctx, portal.MXID, event.StatePowerLevels, "", &event.Content{Parsed: pl}, time.Time{})
+	if err != nil {
+		zerolog.Ctx(ctx).Err(err).Stringer("sender_mxid", intent.GetMXID()).Msg("Failed to raise sender power level")
+	}
+	return cm, nil
 }
 
 func (tc *TelegramClient) getPowerLevelOverridesFromBannedRights(entity tg.ChatClass, dbr tg.ChatBannedRights) *bridgev2.PowerLevelOverrides {
