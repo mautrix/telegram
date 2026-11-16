@@ -93,17 +93,6 @@ func newChannelState(ctx context.Context, cfg channelStateConfig) *channelState 
 	return state
 }
 
-func (s *channelState) Push(ctx context.Context, u channelUpdate) error {
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	case <-s.runCtx.Done():
-		return nil
-	case s.updates <- u:
-		return nil
-	}
-}
-
 var ErrRemoveChannelState = errors.New("remove channel state")
 
 func (s *channelState) Run(ctx context.Context) error {
