@@ -198,6 +198,12 @@ func (tc *TelegramClient) FetchMessages(ctx context.Context, fetchParams bridgev
 		}
 		log.Info().Any("req", req).Msg("Fetching messages")
 		resp, err := APICallWithUpdates(ctx, tc, func() (tg.ModifiedMessagesMessages, error) {
+			if takeoutID == 0 {
+				if err := tc.fetchMessagesSema.Acquire(ctx, 1); err != nil {
+					return nil, err
+				}
+				defer tc.fetchMessagesSema.Release(1)
+			}
 			var box tg.MessagesMessagesBox
 			retry := true
 			attempts := 0
