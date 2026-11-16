@@ -377,9 +377,11 @@ func (t *ReadyTransferer) Transfer(ctx context.Context, db *store.Container, int
 			if converted != nil {
 				replacementFile = converted.NewPath
 				t.inner.fileInfo.MimeType = converted.MIMEType
-				t.inner.fileInfo.Width = converted.Width
-				t.inner.fileInfo.Height = converted.Height
-				t.inner.adjustStickerSize()
+				if converted.Width > 0 && converted.Height > 0 {
+					t.inner.fileInfo.Width = converted.Width
+					t.inner.fileInfo.Height = converted.Height
+					t.inner.adjustStickerSize()
+				}
 				t.inner.fileInfo.Size = converted.Size
 				thumbnailData = converted.ThumbnailData
 				thumbnailMIMEType = converted.ThumbnailMIMEType
