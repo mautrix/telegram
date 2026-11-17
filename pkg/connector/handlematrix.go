@@ -1298,9 +1298,9 @@ func (tc *TelegramClient) HandleMute(ctx context.Context, msg *bridgev2.MatrixMu
 	}
 
 	settings := tg.InputPeerNotifySettings{
-		Silent:    msg.Content.IsMuted(),
-		MuteUntil: int(max(0, min(msg.Content.GetMutedUntilTime().Unix(), math.MaxInt32))),
+		Silent: msg.Content.IsMuted(),
 	}
+	settings.SetMuteUntil(int(max(0, min(msg.Content.GetMutedUntilTime().Unix(), math.MaxInt32))))
 	var peer tg.InputNotifyPeerClass
 	if topicID > 0 {
 		peer = &tg.InputNotifyForumTopic{Peer: inputPeer, TopMsgID: topicID}
