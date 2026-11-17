@@ -714,11 +714,8 @@ func (tc *TelegramClient) HandleMatrixSendError(ctx context.Context, sendErr *br
 		return false
 	}
 	checkKey := fmt.Sprintf("%s/%s", sendErr.Portal.ID, ghostID)
-	if prev, ok := tc.forbiddenSenderChecks.Get(checkKey); ok {
-		if time.Since(prev) < time.Hour {
-			return false
-		}
-		tc.forbiddenSenderChecks.Delete(checkKey)
+	if prev, ok := tc.forbiddenSenderChecks.Get(checkKey); ok && time.Since(prev) < time.Hour {
+		return false
 	}
 	tc.forbiddenSenderChecks.Set(checkKey, time.Now())
 	log := zerolog.Ctx(ctx).With().Str("forbidden_sender_id", string(ghostID)).Logger()
