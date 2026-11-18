@@ -441,7 +441,7 @@ func (tc *TelegramClient) handleServiceMessage(ctx context.Context, msg *tg.Mess
 			ChatInfoChange: &bridgev2.ChatInfoChange{MemberChanges: memberChanges},
 		})
 		return resultToError(res)
-	case *tg.MessageActionChatJoinedByLink:
+	case *tg.MessageActionChatJoinedByLink, *tg.MessageActionChatJoinedByRequest:
 		res := tc.main.Bridge.QueueRemoteEvent(tc.userLogin, &simplevent.ChatInfoChange{
 			EventMeta: eventMeta.WithType(bridgev2.RemoteEventChatInfoChange),
 			ChatInfoChange: &bridgev2.ChatInfoChange{
@@ -534,14 +534,14 @@ func (tc *TelegramClient) handleServiceMessage(ctx context.Context, msg *tg.Mess
 		} else {
 			body.WriteString("Call ")
 		}
-		switch action.Reason.TypeID() {
-		case tg.PhoneCallDiscardReasonMissedTypeID:
+		switch action.Reason.(type) {
+		case *tg.PhoneCallDiscardReasonMissed:
 			body.WriteString("missed")
-		case tg.PhoneCallDiscardReasonDisconnectTypeID:
+		case *tg.PhoneCallDiscardReasonDisconnect:
 			body.WriteString("disconnected")
-		case tg.PhoneCallDiscardReasonHangupTypeID:
+		case *tg.PhoneCallDiscardReasonHangup, nil:
 			body.WriteString("ended")
-		case tg.PhoneCallDiscardReasonBusyTypeID:
+		case *tg.PhoneCallDiscardReasonBusy:
 			body.WriteString("rejected")
 		default:
 			log.Warn().Stringer("end_reason", action.Reason).Msg("Unknown call end reason")
@@ -731,7 +731,6 @@ func (tc *TelegramClient) handleServiceMessage(ctx context.Context, msg *tg.Mess
 		// TODO specific changes?
 		res := tc.main.Bridge.QueueRemoteEvent(tc.userLogin, &simplevent.ChatResync{
 			EventMeta: eventMeta.
-				WithPortalKey(tc.makePortalKeyFromPeer(msg.PeerID, msg.ID)).
 				WithType(bridgev2.RemoteEventChatResync).
 				WithCreatePortal(true),
 			GetChatInfoFunc: tc.GetChatInfo,
@@ -983,6 +982,8 @@ func (tc *TelegramClient) onUserName(ctx context.Context, e tg.Entities, update 
 	if meta.ContactSource != 0 && meta.ContactSource != tc.telegramUserID && !tc.main.Config.ContactNames {
 		// TODO fetch full info to accurately detect if the user is a contact or not
 		userInfo.Name = nil
+	} else if meta.SourceIsContact && meta.ContactSource == tc.telegramUserID {
+		userInfo.Name = nil
 	}
 
 	ghost.UpdateInfo(ctx, &userInfo)
@@ -1082,6 +1083,28 @@ func (tc *TelegramClient) updateChannel(ctx context.Context, channel *tg.Channel
 }
 
 const updateHandlerStuck status.BridgeStateErrorCode = "tg-update-handler-stuck"
+const getDifferenceStuck status.BridgeStateErrorCode = "tg-get-difference-stuck"
+
+func (tc *TelegramClient) onDifferenceStuck(stuck bool, err error) {
+	if stuck {
+		tc.userLogin.Log.Warn().Err(err).Msg("Getting difference has been failing for a while, sending bridge state")
+		tc.userLogin.BridgeState.Send(status.BridgeState{
+			StateEvent: status.StateUnknownError,
+			Error:      getDifferenceStuck,
+			Message:    "Telegram is failing to send new messages",
+			Info: map[string]any{
+				"go_error": err.Error(),
+			},
+		})
+	} else if tc.userLogin.BridgeState.GetPrevUnsent().Error == getDifferenceStuck {
+		tc.userLogin.BridgeState.Send(status.BridgeState{
+			StateEvent: status.StateConnected,
+			Info: map[string]any{
+				"update_reason": "getting difference succeeded",
+			},
+		})
+	}
+}
 
 func (tc *TelegramClient) onUpdateWrapper(ctx context.Context, e tg.Entities, upd tg.UpdateClass) error {
 	doneChan := make(chan error, 1)
@@ -1187,6 +1210,8 @@ func (tc *TelegramClient) onUpdate(ctx context.Context, e tg.Entities, upd tg.Up
 		return tc.onOwnReadReceipt(tc.makePortalKeyFromPeer(update.Peer, update.TopMsgID), update.MaxID)
 	case *tg.UpdateReadChannelInbox:
 		return tc.onOwnReadReceipt(tc.makePortalKeyFromID(ids.PeerTypeChannel, update.ChannelID, 0), update.MaxID)
+	case *tg.UpdateReadChannelDiscussionInbox:
+		return tc.onReadChannelDiscussionInbox(ctx, update)
 	case *tg.UpdateNotifySettings:
 		return tc.onNotifySettings(ctx, e, update)
 	case *tg.UpdatePinnedDialogs:
@@ -1433,6 +1458,24 @@ func (tc *TelegramClient) updateReadReceipt(ctx context.Context, e tg.Entities, 
 	return resultToError(res)
 }
 
+func (tc *TelegramClient) onReadChannelDiscussionInbox(ctx context.Context, update *tg.UpdateReadChannelDiscussionInbox) error {
+	if update.BroadcastID != 0 {
+		return nil
+	}
+	topicID := update.TopMsgID
+	if topicID == 1 {
+		topicID = 0
+	}
+	portalKey := tc.makePortalKeyFromID(ids.PeerTypeChannel, update.ChannelID, topicID)
+	portal, err := tc.main.Bridge.GetExistingPortalByKey(ctx, portalKey)
+	if err != nil {
+		return err
+	} else if portal == nil || portal.MXID == "" || (topicID == 0 && !portal.Metadata.(*PortalMetadata).IsForumGeneral) {
+		return nil
+	}
+	return tc.onOwnReadReceipt(portalKey, update.ReadMaxID)
+}
+
 func (tc *TelegramClient) onOwnReadReceipt(portalKey networkid.PortalKey, maxID int) error {
 	res := tc.main.Bridge.QueueRemoteEvent(tc.userLogin, &simplevent.Receipt{
 		EventMeta: simplevent.EventMeta{
@@ -1672,6 +1715,9 @@ func (tc *TelegramClient) onNotifySettings(ctx context.Context, e tg.Entities, u
 }
 
 func (tc *TelegramClient) onPinnedDialogs(ctx context.Context, e tg.Entities, msg *tg.UpdatePinnedDialogs) error {
+	if _, hasOrder := msg.GetOrder(); msg.FolderID != 0 || !hasOrder {
+		return nil
+	}
 	needsUnpinning := map[networkid.PortalKey]struct{}{}
 	for _, portalID := range tc.metadata.PinnedDialogs {
 		pt, id, _, err := ids.ParsePortalID(portalID)

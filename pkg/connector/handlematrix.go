@@ -82,6 +82,7 @@ var (
 	_ bridgev2.DeleteChatHandlingNetworkAPI       = (*TelegramClient)(nil)
 	_ bridgev2.RoomNameHandlingNetworkAPI         = (*TelegramClient)(nil)
 	_ bridgev2.RoomAvatarHandlingNetworkAPI       = (*TelegramClient)(nil)
+	_ bridgev2.RoomTopicHandlingNetworkAPI        = (*TelegramClient)(nil)
 	_ bridgev2.MembershipHandlingNetworkAPI       = (*TelegramClient)(nil)
 	_ bridgev2.UserBlockingNetworkAPI             = (*TelegramClient)(nil)
 )
@@ -241,6 +242,7 @@ func (tc *TelegramClient) pollSponsoredMessage(ctx context.Context, portal *brid
 func (tc *TelegramClient) transferMediaToTelegram(ctx context.Context, content *event.MessageEventContent, sticker, forceRetry, forceDocument bool) (tg.InputMediaClass, error) {
 	var upload tg.InputFileClass
 	info := content.GetInfo()
+	forceFile := !sticker && (forceDocument || content.MsgType == event.MsgFile)
 	if sticker {
 		if origFile, err := tc.findOriginalStickerDocument(ctx, info.BridgedSticker, forceRetry); err != nil {
 			zerolog.Ctx(ctx).Err(err).Msg("Failed to find original sticker document, falling back to reupload")
@@ -302,30 +304,34 @@ func (tc *TelegramClient) transferMediaToTelegram(ctx context.Context, content *
 				aspectRatio > 20 ||
 				cfg.Height+cfg.Width > 10000
 		}
-		if forceDocument && content.MsgType == event.MsgImage && content.BeeperViewLimited != nil {
-			return fmt.Errorf("%w: force_document not allowed", bridgev2.ErrUnsupportedViewLimitedType)
-		}
 		if !forceDocument && content.MsgType == event.MsgImage && content.Info.MimeType == "image/webp" {
 			_, err = f.Seek(0, io.SeekStart)
 			if err != nil {
 				return err
 			}
-			tempFile, err := os.CreateTemp("", "telegram-nonsticker-*.jpeg")
-			if err != nil {
-				return err
-			}
-			defer func() {
-				_ = tempFile.Close()
-				_ = os.Remove(tempFile.Name())
-			}()
 			if img, _, err := image.Decode(f); err != nil {
-				return fmt.Errorf("%w: failed to decode non-sticker webp image: %w", bridgev2.ErrMediaConvertFailed, err)
-			} else if err := jpeg.Encode(tempFile, img, nil); err != nil {
-				return fmt.Errorf("%w: failed to encode non-sticker jpeg image: %w", bridgev2.ErrMediaConvertFailed, err)
+				zerolog.Ctx(ctx).Debug().Err(err).Msg("Failed to decode non-sticker webp image, sending as file")
+				forceDocument = true
+				forceFile = true
+			} else {
+				tempFile, err := os.CreateTemp("", "telegram-nonsticker-*.jpeg")
+				if err != nil {
+					return err
+				}
+				defer func() {
+					_ = tempFile.Close()
+					_ = os.Remove(tempFile.Name())
+				}()
+				if err := jpeg.Encode(tempFile, img, nil); err != nil {
+					return fmt.Errorf("%w: failed to encode non-sticker jpeg image: %w", bridgev2.ErrMediaConvertFailed, err)
+				}
+				uploadFilename = tempFile.Name()
+				filename += ".jpg"
+				info.MimeType = "image/jpeg"
 			}
-			uploadFilename = tempFile.Name()
-			filename += ".jpg"
-			info.MimeType = "image/jpeg"
+		}
+		if forceDocument && content.MsgType == event.MsgImage && content.BeeperViewLimited != nil {
+			return fmt.Errorf("%w: force_document not allowed", bridgev2.ErrUnsupportedViewLimitedType)
 		}
 		if sticker {
 			filename = "sticker" + exmime.ExtensionFromMimetype(info.MimeType)
@@ -392,6 +398,7 @@ func (tc *TelegramClient) transferMediaToTelegram(ctx context.Context, content *
 
 	return &tg.InputMediaUploadedDocument{
 		File:       upload,
+		ForceFile:  forceFile,
 		MimeType:   cmp.Or(info.MimeType, "application/octet-stream"),
 		Attributes: attributes,
 	}, nil
@@ -581,6 +588,10 @@ func (tc *TelegramClient) HandleMatrixMessage(ctx context.Context, msg *bridgev2
 			media, err = tc.transferMediaToTelegram(ctx, msg.Content, false, false, forceDocument)
 			if err != nil {
 				return nil, err
+			}
+			contentURI = msg.Content.URL
+			if contentURI == "" {
+				contentURI = msg.Content.File.URL
 			}
 			if viewLimitedTTL > 0 {
 				media.(interface{ SetTTLSeconds(int) }).SetTTLSeconds(viewLimitedTTL)
@@ -1180,6 +1191,14 @@ func (tc *TelegramClient) HandleMatrixReadReceipt(ctx context.Context, msg *brid
 				MaxID: maxID,
 			})
 		case ids.PeerTypeChannel:
+			if topicID != 0 {
+				_, readMessagesErr = tc.client.API().MessagesReadDiscussion(ctx, &tg.MessagesReadDiscussionRequest{
+					Peer:      inputPeer,
+					MsgID:     topicID,
+					ReadMaxID: maxID,
+				})
+				return
+			}
 			var accessHash int64
 			accessHash, readMessagesErr = tc.ScopedStore.GetAccessHash(ctx, ids.PeerTypeChannel, portalID)
 			if readMessagesErr != nil {
@@ -1298,9 +1317,9 @@ func (tc *TelegramClient) HandleMute(ctx context.Context, msg *bridgev2.MatrixMu
 	}
 
 	settings := tg.InputPeerNotifySettings{
-		Silent:    msg.Content.IsMuted(),
-		MuteUntil: int(max(0, min(msg.Content.GetMutedUntilTime().Unix(), math.MaxInt32))),
+		Silent: msg.Content.IsMuted(),
 	}
+	settings.SetMuteUntil(int(max(0, min(msg.Content.GetMutedUntilTime().Unix(), math.MaxInt32))))
 	var peer tg.InputNotifyPeerClass
 	if topicID > 0 {
 		peer = &tg.InputNotifyForumTopic{Peer: inputPeer, TopMsgID: topicID}
@@ -1452,6 +1471,36 @@ func (tc *TelegramClient) HandleMatrixRoomName(ctx context.Context, msg *bridgev
 	default:
 		return false, fmt.Errorf("unsupported peer type %s for changing room name", peerType)
 	}
+}
+
+func (tc *TelegramClient) HandleMatrixRoomTopic(ctx context.Context, msg *bridgev2.MatrixRoomTopic) (bool, error) {
+	peerType, _, topicID, err := ids.ParsePortalID(msg.Portal.ID)
+	if err != nil {
+		return false, err
+	}
+
+	if peerType == ids.PeerTypeUser {
+		return false, wrapUnsupportedError(errors.New("changing user bio is not supported")).
+			WithMessage("changing the topic of a private chat is not supported")
+	} else if topicID > 0 {
+		return false, wrapUnsupportedError(errors.New("changing group topic description is not supported")).
+			WithMessage("changing the topic of a forum topic is not supported")
+	}
+
+	peer, _, err := tc.inputPeerForPortalID(ctx, msg.Portal.ID)
+	if err != nil {
+		return false, err
+	}
+	_, err = tc.client.API().MessagesEditChatAbout(ctx, &tg.MessagesEditChatAboutRequest{
+		Peer:  peer,
+		About: msg.Content.Topic,
+	})
+	if err != nil && !tg.IsChatAboutNotModified(err) {
+		return false, tc.humaniseSendError(err)
+	}
+	msg.Portal.Topic = msg.Content.Topic
+	msg.Portal.TopicSet = true
+	return true, nil
 }
 
 func (tc *TelegramClient) HandleMatrixRoomAvatar(ctx context.Context, msg *bridgev2.MatrixRoomAvatar) (bool, error) {
