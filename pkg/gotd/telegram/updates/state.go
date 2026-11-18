@@ -671,13 +671,13 @@ func (s *internalState) getDifference(ctx context.Context) error {
 
 	// The difference is too long, and the specified internalState must be used to refetch updates.
 	case *tg.UpdatesDifferenceTooLong:
+		if err := s.waitForDiffTooLong(ctx); err != nil {
+			return err
+		}
 		if err := s.storage.SetPts(ctx, s.selfID, diff.Pts); err != nil {
 			s.log.Error("SetPts error", zap.Error(err))
 		}
 		s.pts.SetState(diff.Pts, "updates.differenceTooLong")
-		if err := s.waitForDiffTooLong(ctx); err != nil {
-			return err
-		}
 		return s.getDifference(ctx)
 
 	default:
