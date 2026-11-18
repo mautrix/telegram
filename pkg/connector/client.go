@@ -465,8 +465,13 @@ func (tc *TelegramConnector) userToRemoteProfile(
 		profile.Phone = prevState.Phone
 	}
 	profile.Username = self.Username
-	if self.Username == "" && len(self.Usernames) > 0 {
-		profile.Username = self.Usernames[0].Username
+	if self.Username == "" {
+		for _, username := range self.Usernames {
+			if username.Active {
+				profile.Username = username.Username
+				break
+			}
+		}
 	}
 	if ghost != nil {
 		profile.Avatar = ghost.AvatarMXC
