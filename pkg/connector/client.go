@@ -379,7 +379,8 @@ func (tc *TelegramClient) onChannelTooLong(channelID int64) error {
 	if err != nil {
 		return fmt.Errorf("failed to get topics of channel: %w", err)
 	}
-	var lastMessageID int
+	lastMessageIDs := make(map[int]int, len(topics)+1)
+	var oldestLastMessageID int
 	for _, topicID := range append(topics, 0) {
 		msg, err := tc.main.Bridge.DB.Message.GetLastPartAtOrBeforeTime(ctx, tc.makePortalKeyFromID(ids.PeerTypeChannel, channelID, topicID), time.Now())
 		if err != nil {
@@ -387,7 +388,10 @@ func (tc *TelegramClient) onChannelTooLong(channelID int64) error {
 		} else if msg == nil {
 			continue
 		} else if _, msgID, err := ids.ParseMessageID(msg.ID); err == nil {
-			lastMessageID = max(lastMessageID, msgID)
+			lastMessageIDs[topicID] = msgID
+			if oldestLastMessageID == 0 || msgID < oldestLastMessageID {
+				oldestLastMessageID = msgID
+			}
 		}
 	}
 	res := tc.main.Bridge.QueueRemoteEvent(tc.userLogin, &simplevent.ChatResync{
@@ -405,7 +409,7 @@ func (tc *TelegramClient) onChannelTooLong(channelID int64) error {
 	})
 	if err = resultToError(res); err != nil {
 		return err
-	} else if lastMessageID == 0 || tc.metadata.IsBot {
+	} else if oldestLastMessageID == 0 || tc.metadata.IsBot {
 		return nil
 	}
 	channel, err := tc.getSingleChannel(ctx, channelID)
@@ -430,11 +434,11 @@ func (tc *TelegramClient) onChannelTooLong(channelID int64) error {
 				continue
 			}
 			lastTopic = topic
-			if topic.TopMessage <= lastMessageID {
+			if topic.TopMessage <= oldestLastMessageID {
 				continue
 			}
 			hasNewer = true
-			if topic.ID == 1 {
+			if lastMessageID, ok := lastMessageIDs[topic.ID]; topic.ID == 1 || (ok && topic.TopMessage <= lastMessageID) {
 				continue
 			}
 			if err = tc.main.Store.Topic.Add(ctx, channelID, topic.ID); err != nil {
