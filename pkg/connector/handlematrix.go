@@ -1267,8 +1267,26 @@ func (tc *TelegramClient) HandleMatrixReadReceipt(ctx context.Context, msg *brid
 		}
 	}()
 
+	meta := msg.Portal.Metadata.(*PortalMetadata)
+	needsResync := peerType == ids.PeerTypeChannel && (((topicID == 0 || meta.IsForumGeneral) && !meta.FullSynced) || meta.LastSync.Add(24*time.Hour).Before(time.Now()))
+	if needsResync {
+		log.Debug().
+			Bool("full_synced", meta.FullSynced).
+			Time("last_sync", meta.LastSync.Time).
+			Msg("Scheduling chat resync on read receipt")
+	}
+
 	// Poll for reactions (non-blocking to avoid deadlock when portal event buffer is disabled)
 	go func() {
+		if needsResync {
+			tc.userLogin.QueueRemoteEvent(&simplevent.ChatResync{
+				EventMeta: simplevent.EventMeta{
+					Type:      bridgev2.RemoteEventChatResync,
+					PortalKey: msg.Portal.PortalKey,
+				},
+				GetChatInfoFunc: tc.GetChatInfo,
+			})
+		}
 		err := tc.maybePollForReactions(ctx, msg.Portal)
 		if err != nil {
 			log.Err(err).Msg("failed to poll for reactions after read receipt")
@@ -1278,17 +1296,6 @@ func (tc *TelegramClient) HandleMatrixReadReceipt(ctx context.Context, msg *brid
 			log.Err(err).Msg("failed to poll for sponsored message after read receipt")
 		}
 	}()
-
-	if peerType == ids.PeerTypeChannel && (topicID == 0 || msg.Portal.Metadata.(*PortalMetadata).IsForumGeneral) && !msg.Portal.Metadata.(*PortalMetadata).FullSynced {
-		log.Debug().Msg("Scheduling chat resync on read receipt because channel has never got a full sync")
-		go tc.userLogin.QueueRemoteEvent(&simplevent.ChatResync{
-			EventMeta: simplevent.EventMeta{
-				Type:      bridgev2.RemoteEventChatResync,
-				PortalKey: msg.Portal.PortalKey,
-			},
-			GetChatInfoFunc: tc.GetChatInfo,
-		})
-	}
 
 	wg.Wait()
 	return errors.Join(readMentionsErr, readReactionsErr, readMessagesErr)
