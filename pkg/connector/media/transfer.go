@@ -377,8 +377,11 @@ func (t *ReadyTransferer) Transfer(ctx context.Context, db *store.Container, int
 			if converted != nil {
 				replacementFile = converted.NewPath
 				t.inner.fileInfo.MimeType = converted.MIMEType
-				t.inner.fileInfo.Width = converted.Width
-				t.inner.fileInfo.Height = converted.Height
+				if converted.Width > 0 && converted.Height > 0 {
+					t.inner.fileInfo.Width = converted.Width
+					t.inner.fileInfo.Height = converted.Height
+					t.inner.adjustStickerSize()
+				}
 				t.inner.fileInfo.Size = converted.Size
 				thumbnailData = converted.ThumbnailData
 				thumbnailMIMEType = converted.ThumbnailMIMEType
@@ -552,6 +555,7 @@ func (t *ReadyTransferer) StickerDirectDownloadURL(ctx context.Context, br *brid
 	}
 	if convertMime := t.expectedStickerConvertMime(); convertMime != "" {
 		t.inner.fileInfo.MimeType = convertMime
+		t.inner.fileInfo.Size = 0
 	}
 	return mxc, &t.inner.fileInfo, err
 }
@@ -579,6 +583,7 @@ func (t *ReadyTransferer) DirectDownloadURL(ctx context.Context, loggedInUserID 
 	}
 	if convertMime := t.expectedStickerConvertMime(); convertMime != "" {
 		t.inner.fileInfo.MimeType = convertMime
+		t.inner.fileInfo.Size = 0
 	}
 	return mxc, &t.inner.fileInfo, err
 }

@@ -39,7 +39,7 @@ func TestConn_handleSessionCreated(t *testing.T) {
 			UniqueID:   10,
 			ServerSalt: 10,
 		}))
-		a.NoError(conn.handleSessionCreated(&buf))
+		a.NoError(conn.handleSessionCreated(int64(msgID), &buf))
 
 		select {
 		case <-gotSession.Ready():
@@ -56,6 +56,6 @@ func TestConn_handleSessionCreated(t *testing.T) {
 		conn := Conn{}
 		buf := bin.Buffer{}
 		buf.PutID(mt.NewSessionCreatedTypeID)
-		require.Error(t, conn.handleSessionCreated(&buf))
+		require.Error(t, conn.handleSessionCreated(0, &buf))
 	})
 }
