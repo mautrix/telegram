@@ -114,8 +114,20 @@ func (c *Client) onSession(cfg tg.Config, s mtproto.Session) error {
 		AuthKey: s.Key,
 	})
 	c.cfg.Store(cfg)
+	var reconnected bool
+	select {
+	case <-c.ready.Ready():
+		reconnected = true
+	default:
+	}
 	c.onReady()
 	c.connMux.Unlock()
+
+	if reconnected && !c.noUpdatesMode {
+		if err := c.updateHandler.Handle(c.ctx, &tg.UpdatesTooLong{}); err != nil {
+			c.log.Warn("Failed to request difference after new session", zap.Error(err))
+		}
+	}
 
 	if err := c.saveSession(cfg, s); err != nil {
 		return errors.Wrap(err, "save")

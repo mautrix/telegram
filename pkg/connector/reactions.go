@@ -85,13 +85,14 @@ func (tc *TelegramClient) computeReactionsList(ctx context.Context, peer tg.Peer
 	for _, reaction := range reactionsList {
 		if e, ok := reaction.Reaction.(*tg.ReactionCustomEmoji); ok {
 			customEmojiIDs = append(customEmojiIDs, e.DocumentID)
-		} else if reaction.Reaction.TypeID() != tg.ReactionEmojiTypeID {
-			return nil, false, nil, fmt.Errorf("unsupported reaction type %T", reaction.Reaction)
 		}
 	}
 
 	customEmojis, err = tc.transferEmojisToMatrix(ctx, customEmojiIDs)
-	return reactionsList, len(reactionsList) == totalCount, customEmojis, err
+	if err != nil {
+		return nil, false, nil, err
+	}
+	return reactionsList, len(reactionsList) == totalCount, customEmojis, nil
 }
 
 func computeEmojiAndID(reaction tg.ReactionClass, customEmojis map[networkid.EmojiID]emojis.EmojiInfo) (emojiID networkid.EmojiID, emoji string, err error) {
@@ -212,7 +213,7 @@ func splitDMReactionCounts(res []tg.ReactionCount, theirUserID, myUserID int64) 
 func (tc *TelegramClient) getReactionLimit(ctx context.Context, sender networkid.UserID) (limit int, err error) {
 	config, err := tc.getAppConfigCached(ctx)
 	if err != nil {
-		return 0, err
+		zerolog.Ctx(ctx).Warn().Err(err).Msg("Failed to get app config, using default reaction limit")
 	}
 
 	ghost, err := tc.main.Bridge.GetGhostByID(ctx, sender)

@@ -233,7 +233,7 @@ func (tc *TelegramClient) synchronizeEmoji(
 	if img.Info.MimeType == "" {
 		img.Info.MimeType = http.DetectContentType(data)
 	}
-	origWidth, origHeight := img.Info.Width, img.Info.Height
+	origWidth, origHeight, origSize := img.Info.Width, img.Info.Height, len(data)
 	cfg, _, err := image.DecodeConfig(bytes.NewReader(data))
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to decode image config for %s: %w", shortcode, err)
@@ -278,7 +278,7 @@ func (tc *TelegramClient) synchronizeEmoji(
 			LocationID: store.TelegramFileLocationID(strconv.FormatInt(realDocID, 10)),
 			MXC:        img.URL,
 			MIMEType:   img.Info.MimeType,
-			Size:       len(data),
+			Size:       origSize,
 			Width:      origWidth,
 			Height:     origHeight,
 			Timestamp:  time.Now(),
@@ -665,8 +665,6 @@ func (tc *TelegramClient) stickerSourceFromAttribute(ctx context.Context, docume
 				Int64("pack_id", set.ID).
 				Msg("Failed to get sticker pack by ID to fill info")
 			return nil
-		} else if pack == nil {
-			return nil
 		}
 		shortName = pack.meta.ShortName
 	case *tg.InputStickerSetShortName:
@@ -723,6 +721,8 @@ func (tc *TelegramClient) GetCachedStickerPack(ctx context.Context, shortName st
 			return nil, fmt.Errorf("unexpected response type for MessagesGetStickerSet: %T", resp)
 		}
 		cache = tc.addStickerPackToCache(set, false)
+	} else if cache == nil {
+		return nil, fmt.Errorf("sticker set is invalid")
 	}
 	return cache, nil
 }
