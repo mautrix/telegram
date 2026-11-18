@@ -385,40 +385,40 @@ func notifyScopeForPeer(peer tg.PeerClass, broadcast bool) tg.InputNotifyPeerCla
 	return &tg.InputNotifyChats{}
 }
 
-func (tc *TelegramClient) fetchNotifyDefaults(ctx context.Context) {
-	for _, scope := range []tg.InputNotifyPeerClass{&tg.InputNotifyUsers{}, &tg.InputNotifyChats{}, &tg.InputNotifyBroadcasts{}} {
-		settings, err := tc.client.API().AccountGetNotifySettings(ctx, scope)
-		if err != nil {
-			zerolog.Ctx(ctx).Err(err).Str("scope", scope.TypeName()).Msg("Failed to get default notification settings")
-			continue
-		}
-		tc.setNotifyDefaults(scope, *settings)
-	}
-}
-
-func (tc *TelegramClient) setNotifyDefaults(scope tg.InputNotifyPeerClass, settings tg.PeerNotifySettings) {
+func (tc *TelegramClient) getNotifyDefaults(ctx context.Context, scope tg.InputNotifyPeerClass) (*tg.PeerNotifySettings, error) {
 	tc.notifyDefaultsLock.Lock()
-	tc.notifyDefaults[scope.TypeID()] = settings
-	tc.notifyDefaultsLock.Unlock()
-}
-
-func (tc *TelegramClient) getMutedUntil(settings tg.PeerNotifySettings, scope tg.InputNotifyPeerClass) *time.Time {
-	mu, ok := settings.GetMuteUntil()
-	if !ok && scope != nil {
-		tc.notifyDefaultsLock.Lock()
-		defaults := tc.notifyDefaults[scope.TypeID()]
-		tc.notifyDefaultsLock.Unlock()
-		mu, ok = defaults.GetMuteUntil()
-	}
+	defer tc.notifyDefaultsLock.Unlock()
+	settings, ok := tc.notifyDefaults[scope.TypeID()]
 	if !ok {
-		return &bridgev2.Unmuted
+		var err error
+		settings, err = tc.client.API().AccountGetNotifySettings(ctx, scope)
+		if err != nil {
+			return nil, err
+		}
+		tc.notifyDefaults[scope.TypeID()] = settings
 	}
-	return ptr.Ptr(time.Unix(int64(mu), 0))
+	return settings, nil
 }
 
-func (tc *TelegramClient) fillUserLocalMeta(info *bridgev2.ChatInfo, dialog userLocalDialog, scope tg.InputNotifyPeerClass) {
+func (tc *TelegramClient) getMutedUntil(ctx context.Context, scope tg.InputNotifyPeerClass, settings ...tg.PeerNotifySettings) *time.Time {
+	for _, s := range settings {
+		if mu, ok := s.GetMuteUntil(); ok {
+			return ptr.Ptr(time.Unix(int64(mu), 0))
+		}
+	}
+	defaults, err := tc.getNotifyDefaults(ctx, scope)
+	if err != nil {
+		zerolog.Ctx(ctx).Err(err).Str("scope", scope.TypeName()).Msg("Failed to get default notification settings")
+		return nil
+	} else if mu, ok := defaults.GetMuteUntil(); ok {
+		return ptr.Ptr(time.Unix(int64(mu), 0))
+	}
+	return &bridgev2.Unmuted
+}
+
+func (tc *TelegramClient) fillUserLocalMeta(ctx context.Context, info *bridgev2.ChatInfo, dialog userLocalDialog, scope tg.InputNotifyPeerClass) {
 	info.UserLocal = &bridgev2.UserLocalPortalInfo{
-		MutedUntil: tc.getMutedUntil(dialog.GetNotifySettings(), scope),
+		MutedUntil: tc.getMutedUntil(ctx, scope, dialog.GetNotifySettings()),
 	}
 	if dialog.GetPinned() {
 		info.UserLocal.Tag = ptr.Ptr(event.RoomTagFavourite)

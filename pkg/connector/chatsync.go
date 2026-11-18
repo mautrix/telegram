@@ -426,7 +426,7 @@ func (tc *TelegramClient) syncNormalDialog(
 		channel, ok := chats[peer.ChannelID].(*tg.Channel)
 		broadcast = ok && channel.Broadcast
 	}
-	tc.fillUserLocalMeta(chatInfo, dialog, notifyScopeForPeer(dialog.Peer, broadcast))
+	tc.fillUserLocalMeta(ctx, chatInfo, dialog, notifyScopeForPeer(dialog.Peer, broadcast))
 
 	res := tc.main.Bridge.QueueRemoteEvent(tc.userLogin, &simplevent.ChatResync{
 		ChatInfo: chatInfo,
@@ -507,7 +507,7 @@ func (tc *TelegramClient) syncCommunityDialog(ctx context.Context, dialog *tg.Di
 		return nil
 	}
 
-	tc.fillUserLocalMeta(chatInfo, dialog, &tg.InputNotifyChats{})
+	tc.fillUserLocalMeta(ctx, chatInfo, dialog, &tg.InputNotifyChats{})
 
 	res := tc.main.Bridge.QueueRemoteEvent(tc.userLogin, &simplevent.ChatResync{
 		ChatInfo: chatInfo,
