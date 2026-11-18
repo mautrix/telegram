@@ -472,11 +472,10 @@ func (s *internalState) RemoveChannel(channelID int64, reason error) {
 	state.stop(fmt.Errorf("%w: %w", ErrRemoveChannelState, reason))
 }
 
-func (s *internalState) createAndRunChannelState(ctx context.Context, channelID, accessHash int64, initialPts int, resyncOnStart bool) (state *channelState) {
+func (s *internalState) createAndRunChannelState(ctx context.Context, channelID, accessHash int64, initialPts int, resync bool) (state *channelState) {
 	state = newChannelState(ctx, channelStateConfig{
 		Out:              s.internalQueue,
 		InitialPts:       initialPts,
-		ResyncOnStart:    resyncOnStart,
 		ChannelID:        channelID,
 		AccessHash:       accessHash,
 		SelfID:           s.selfID,
@@ -492,7 +491,7 @@ func (s *internalState) createAndRunChannelState(ctx context.Context, channelID,
 	s.channels[channelID] = state
 	s.channelsLock.Unlock()
 	s.wg.Go(func() error {
-		err := state.Run(ctx)
+		err := state.Run(ctx, resync)
 		if errors.Is(err, ErrRemoveChannelState) {
 			s.channelsLock.Lock()
 			delete(s.channels, channelID)
