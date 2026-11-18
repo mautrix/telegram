@@ -224,6 +224,7 @@ func NewTelegramClient(ctx context.Context, tc *TelegramConnector, login *bridge
 
 	client.updatesManager = updates.New(updates.Config{
 		OnNotChannelMember: client.onNotChannelMember,
+		OnDiffTooLong:      client.onDifferenceTooLong,
 		OnDifferenceStuck:  client.onDifferenceStuck,
 		OnChannelTooLong: func(channelID int64) error {
 			// TODO resync topics?
@@ -241,17 +242,6 @@ func NewTelegramClient(ctx context.Context, tc *TelegramConnector, login *bridge
 			})
 
 			return resultToError(res)
-		},
-		OnDifferenceTooLong: func() {
-			if client.metadata.IsBot {
-				return
-			}
-			go func() {
-				log := login.Log.With().Str("action", "resync chats after difference too long").Logger()
-				if err := client.syncChats(log.WithContext(client.clientCtx), 0, false, true); err != nil {
-					log.Err(err).Msg("Failed to resync chats")
-				}
-			}()
 		},
 		Handler:      client.dispatcher,
 		Logger:       zaplog.Named("gaps"),

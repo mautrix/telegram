@@ -112,23 +112,7 @@ func (tc *TelegramClient) syncChats(ctx context.Context, takeoutID int64, onLogi
 			Int("update_limit", updateLimit).
 			Int("create_limit", createLimit).
 			Msg("Fetching dialogs")
-		dialogs, err := APICallWithUpdates(ctx, tc, func() (tg.ModifiedMessagesDialogs, error) {
-			var dialogs tg.MessagesDialogsBox
-			retry := true
-			attempts := 0
-			var err error
-			for retry && attempts < 5 {
-				retry, err = tgerr.FloodWait(ctx, tc.client.Invoke(ctx, wrappedReq, &dialogs))
-				attempts++
-			}
-			if err != nil {
-				return nil, err
-			} else if modified, ok := dialogs.Dialogs.AsModified(); !ok {
-				return nil, fmt.Errorf("unexpected response type: %T", dialogs.Dialogs)
-			} else {
-				return modified, nil
-			}
-		})
+		dialogs, err := tc.getDialogs(ctx, wrappedReq)
 		if err != nil {
 			return fmt.Errorf("failed to get dialogs: %w", err)
 		} else if len(dialogs.GetDialogs()) == 0 {
@@ -187,6 +171,71 @@ func (tc *TelegramClient) syncChats(ctx context.Context, takeoutID int64, onLogi
 	}
 	log.Info().Msg("Finished dialog sync")
 	return nil
+}
+
+func (tc *TelegramClient) getDialogs(ctx context.Context, req bin.Object) (tg.ModifiedMessagesDialogs, error) {
+	return APICallWithUpdates(ctx, tc, func() (tg.ModifiedMessagesDialogs, error) {
+		var dialogs tg.MessagesDialogsBox
+		retry := true
+		attempts := 0
+		var err error
+		for retry && attempts < 5 {
+			retry, err = tgerr.FloodWait(ctx, tc.client.Invoke(ctx, req, &dialogs))
+			attempts++
+		}
+		if err != nil {
+			return nil, err
+		} else if modified, ok := dialogs.Dialogs.AsModified(); !ok {
+			return nil, fmt.Errorf("unexpected response type: %T", dialogs.Dialogs)
+		} else {
+			return modified, nil
+		}
+	})
+}
+
+func (tc *TelegramClient) onDifferenceTooLong(ctx context.Context, date int) error {
+	if tc.metadata.IsBot {
+		return nil
+	}
+	log := tc.userLogin.Log.With().Str("action", "resync chats after difference too long").Int("since", date).Logger()
+	ctx = log.WithContext(ctx)
+	req := tg.MessagesGetDialogsRequest{OffsetPeer: &tg.InputPeerEmpty{}, Limit: 100}
+	for {
+		log.Debug().Stringer("request", &req).Msg("Fetching dialogs")
+		dialogs, err := tc.getDialogs(ctx, &req)
+		if err != nil {
+			return fmt.Errorf("failed to get dialogs: %w", err)
+		}
+		messageDates := make(map[networkid.MessageID]int, len(dialogs.GetMessages()))
+		for _, msg := range dialogs.GetMessages() {
+			if notEmpty, ok := msg.AsNotEmpty(); ok {
+				messageDates[ids.GetMessageIDFromMessage(msg)] = notEmpty.GetDate()
+			}
+		}
+		dialogList := dialogs.GetDialogs()
+		var changedDialogs []tg.DialogClass
+		hasNewer := false
+		for _, rawDialog := range dialogList {
+			dialog, ok := rawDialog.(*tg.Dialog)
+			if !ok || messageDates[ids.MakeMessageID(dialog.Peer, dialog.TopMessage)] < date {
+				continue
+			}
+			hasNewer = true
+			if _, isChannel := dialog.Peer.(*tg.PeerChannel); !isChannel {
+				changedDialogs = append(changedDialogs, dialog)
+			}
+		}
+		if err = tc.handleDialogs(ctx, changedDialogs, dialogs, -1); err != nil {
+			return fmt.Errorf("failed to handle dialogs: %w", err)
+		} else if !hasNewer || len(dialogList) < req.Limit {
+			return nil
+		}
+		req.OffsetPeer, _, err = tc.inputPeerForPortalID(ctx, tc.dialogToPortalKey(dialogList[len(dialogList)-1]).ID)
+		if err != nil {
+			return fmt.Errorf("failed to get input peer for pagination: %w", err)
+		}
+		req.OffsetID, req.OffsetDate = getDialogOffset(dialogList, dialogs.GetMessages())
+	}
 }
 
 func (tc *TelegramClient) dialogToPortalKey(dialog tg.DialogClass) networkid.PortalKey {

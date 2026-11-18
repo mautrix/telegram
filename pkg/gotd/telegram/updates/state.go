@@ -60,7 +60,7 @@ type internalState struct {
 	handler       telegram.UpdateHandler
 	onTooLong     func(channelID int64) error
 	onStuck       func(stuck bool, err error)
-	onDiffTooLong func()
+	onDiffTooLong func(ctx context.Context, date int) error
 	storage       StateStorage
 	hasher        AccessHasher
 	selfID        int64
@@ -70,21 +70,21 @@ type internalState struct {
 }
 
 type stateConfig struct {
-	State               State
-	Channels            map[int64]PtsAccessHashTuple
-	LeftChannels        []int64
-	RawClient           API
-	Logger              *zap.Logger
-	Tracer              trace.Tracer
-	Handler             telegram.UpdateHandler
-	OnChannelTooLong    func(channelID int64) error
-	OnDiffStuck         func(stuck bool, err error)
-	OnDifferenceTooLong func()
-	Storage             StateStorage
-	Hasher              AccessHasher
-	SelfID              int64
-	DiffLimit           int
-	WorkGroup           *errgroup.Group
+	State            State
+	Channels         map[int64]PtsAccessHashTuple
+	LeftChannels     []int64
+	RawClient        API
+	Logger           *zap.Logger
+	Tracer           trace.Tracer
+	Handler          telegram.UpdateHandler
+	OnChannelTooLong func(channelID int64) error
+	OnDiffStuck      func(stuck bool, err error)
+	OnDiffTooLong    func(ctx context.Context, date int) error
+	Storage          StateStorage
+	Hasher           AccessHasher
+	SelfID           int64
+	DiffLimit        int
+	WorkGroup        *errgroup.Group
 }
 
 func newState(ctx context.Context, cfg stateConfig) *internalState {
@@ -104,7 +104,7 @@ func newState(ctx context.Context, cfg stateConfig) *internalState {
 		handler:       cfg.Handler,
 		onTooLong:     cfg.OnChannelTooLong,
 		onStuck:       cfg.OnDiffStuck,
-		onDiffTooLong: cfg.OnDifferenceTooLong,
+		onDiffTooLong: cfg.OnDiffTooLong,
 		storage:       cfg.Storage,
 		hasher:        cfg.Hasher,
 		selfID:        cfg.SelfID,
@@ -675,11 +675,36 @@ func (s *internalState) getDifference(ctx context.Context) error {
 			s.log.Error("SetPts error", zap.Error(err))
 		}
 		s.pts.SetState(diff.Pts, "updates.differenceTooLong")
-		s.onDiffTooLong()
+		if err := s.waitForDiffTooLong(ctx); err != nil {
+			return err
+		}
 		return s.getDifference(ctx)
 
 	default:
 		return errors.Errorf("unexpected diff type: %T", diff)
+	}
+}
+
+func (s *internalState) waitForDiffTooLong(ctx context.Context) error {
+	date := s.date
+	done := make(chan error, 1)
+	go func() {
+		done <- s.onDiffTooLong(ctx, date)
+	}()
+	for {
+		select {
+		case err := <-done:
+			if err != nil {
+				s.log.Error("OnDiffTooLong error", zap.Error(err))
+			}
+			return nil
+		case u := <-s.externalQueue:
+			s.deferred = append(s.deferred, u)
+		case u := <-s.internalQueue:
+			s.deferred = append(s.deferred, u)
+		case <-ctx.Done():
+			return fmt.Errorf("context canceled while waiting for difference too long callback: %w", ctx.Err())
+		}
 	}
 }
 
