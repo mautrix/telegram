@@ -81,11 +81,18 @@ func (ql *QRLogin) Start(ctx context.Context) (*bridgev2.LoginStep, error) {
 	ql.auth = make(chan qrAuthResult)
 	go func() {
 		auth, err := ql.client.QR().Auth(ql.ctx, loggedIn, func(ctx context.Context, token qrlogin.Token) error {
-			ql.qrToken <- token
-			return nil
+			select {
+			case ql.qrToken <- token:
+				return nil
+			case <-ctx.Done():
+				return ctx.Err()
+			}
 		})
 
-		ql.auth <- qrAuthResult{auth, err}
+		select {
+		case ql.auth <- qrAuthResult{auth, err}:
+		case <-ql.ctx.Done():
+		}
 	}()
 
 	// Wait for the first QR token and show it to the user.:

@@ -62,7 +62,7 @@ func (s *internalState) applyCombined(ctx context.Context, comb *tg.UpdatesCombi
 				}
 				continue
 			}
-			if err := st.Push(ctx, channelUpdate{
+			if err := s.pushToChannel(ctx, st, channelUpdate{
 				update:   u,
 				entities: ents,
 				span:     trace.SpanContextFromContext(ctx),
