@@ -31,6 +31,7 @@ import (
 	"go.mau.fi/util/exmaps"
 	"go.mau.fi/util/jsontime"
 	"go.mau.fi/util/ptr"
+	"golang.org/x/net/html"
 	"maunium.net/go/mautrix/bridgev2"
 	"maunium.net/go/mautrix/bridgev2/database"
 	"maunium.net/go/mautrix/bridgev2/networkid"
@@ -598,32 +599,31 @@ func (tc *TelegramClient) handleServiceMessage(ctx context.Context, msg *tg.Mess
 		})
 		return resultToError(res)
 	case *tg.MessageActionInviteToGroupCall:
-		var body, html strings.Builder
+		var body, formatted strings.Builder
 		var mentions event.Mentions
 		body.WriteString("Invited ")
-		html.WriteString("Invited ")
+		formatted.WriteString("Invited ")
 		for i, userID := range action.Users {
 			if i > 0 {
 				body.WriteString(", ")
+				formatted.WriteString(", ")
 			}
 
 			if ghost, err := tc.main.Bridge.GetGhostByID(ctx, ids.MakeUserID(userID)); err != nil {
 				return err
 			} else {
-				var name string
-				if username, err := tc.main.Store.Username.Get(ctx, ids.PeerTypeUser, userID); err != nil {
+				name := ghost.Name
+				if username, err := tc.main.Store.Username.Get(ctx, ids.PeerTypeUser, userID); err == nil && username != "" {
 					name = "@" + username
-				} else {
-					name = ghost.Name
 				}
 
 				mentions.UserIDs = append(mentions.UserIDs, ghost.Intent.GetMXID())
 				body.WriteString(name)
-				html.WriteString(fmt.Sprintf(`<a href="%s">@%s</a>`, ghost.Intent.GetMXID().URI().MatrixToURL(), name))
+				formatted.WriteString(fmt.Sprintf(`<a href="%s">%s</a>`, ghost.Intent.GetMXID().URI().MatrixToURL(), html.EscapeString(name)))
 			}
 		}
 		body.WriteString(" to the video chat")
-		html.WriteString(" to the video chat")
+		formatted.WriteString(" to the video chat")
 		res := tc.main.Bridge.QueueRemoteEvent(tc.userLogin, &simplevent.Message[any]{
 			EventMeta: eventMeta.WithType(bridgev2.RemoteEventMessage),
 			ID:        ids.GetMessageIDFromMessage(msg),
@@ -635,7 +635,7 @@ func (tc *TelegramClient) handleServiceMessage(ctx context.Context, msg *tg.Mess
 							MsgType:       event.MsgNotice,
 							Body:          body.String(),
 							Format:        event.FormatHTML,
-							FormattedBody: html.String(),
+							FormattedBody: formatted.String(),
 							Mentions:      &mentions,
 						},
 					}},
