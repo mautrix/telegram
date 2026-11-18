@@ -1063,10 +1063,22 @@ func (tc *TelegramClient) onDifferenceStuck(stuck bool, err error) {
 	}
 }
 
-func (tc *TelegramClient) onEntitiesWrapper(ctx context.Context, e tg.Entities) error {
+func (tc *TelegramClient) onEntitiesWrapper(ctx context.Context, users []tg.UserClass, chats []tg.ChatClass) error {
+	if len(users) == 0 && len(chats) == 0 {
+		return nil
+	}
 	return tc.runWithStuckCheck(ctx, func() error {
-		return tc.onEntities(ctx, e)
+		return tc.onEntities(ctx, users, chats)
 	})
+}
+
+func (tc *TelegramClient) dispatchUpdates(ctx context.Context, updates tg.UpdatesClass) error {
+	if u, ok := updates.(*tg.Updates); ok {
+		if err := tc.onEntitiesWrapper(ctx, u.Users, u.Chats); err != nil {
+			return err
+		}
+	}
+	return tc.dispatcher.Handle(ctx, updates)
 }
 
 func (tc *TelegramClient) onUpdateWrapper(ctx context.Context, e tg.Entities, upd tg.UpdateClass) error {
@@ -1116,21 +1128,21 @@ func (tc *TelegramClient) runWithStuckCheck(ctx context.Context, fn func() error
 	}
 }
 
-func (tc *TelegramClient) onEntities(ctx context.Context, e tg.Entities) error {
-	for userID, user := range e.Users {
+func (tc *TelegramClient) onEntities(ctx context.Context, users []tg.UserClass, chats []tg.ChatClass) error {
+	for userID, user := range tg.UserClassArray(users).NotEmptyToMap() {
 		zerolog.Ctx(ctx).Trace().Stringer("user", user).Msg("Raw user info in update")
 		if _, err := tc.updateGhost(ctx, userID, user); err != nil {
 			return err
 		}
 	}
-	for chatID, chat := range e.Chats {
+	for chatID, chat := range tg.ChatClassArray(chats).ChatToMap() {
 		zerolog.Ctx(ctx).Trace().Stringer("chat", chat).Msg("Raw chat info in update")
 		if chat.GetLeft() {
 			// TODO don't ignore errors
 			tc.selfLeaveChat(ctx, tc.makePortalKeyFromID(ids.PeerTypeChat, chatID, 0), fmt.Errorf("left flag in entity update"))
 		}
 	}
-	for _, channel := range e.Channels {
+	for _, channel := range tg.ChatClassArray(chats).ChannelToMap() {
 		zerolog.Ctx(ctx).Trace().Stringer("channel", channel).Msg("Raw channel info in update")
 		if channel.GetLeft() {
 			tc.selfLeaveChat(ctx, tc.makePortalKeyFromID(ids.PeerTypeChannel, channel.ID, 0), fmt.Errorf("left flag in entity update"))
