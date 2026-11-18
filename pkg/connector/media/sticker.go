@@ -19,6 +19,7 @@ package media
 import (
 	"context"
 	"fmt"
+	"image"
 	"io"
 	"os"
 	"strconv"
@@ -161,14 +162,24 @@ func (c *AnimatedStickerConfig) convertWebm(ctx context.Context, src *os.File) *
 	} else {
 		outputSize = stat.Size()
 	}
+	var outputConfig image.Config
+	if outputFile, err := os.Open(newPath); err != nil {
+		log.Err(err).Msg("Failed to open converted sticker")
+	} else {
+		outputConfig, _, err = image.DecodeConfig(outputFile)
+		_ = outputFile.Close()
+		if err != nil {
+			log.Err(err).Msg("Failed to decode converted sticker dimensions")
+		}
+	}
 
 	_ = src.Close()
 	return &ConvertedSticker{
 		Success:  true,
 		NewPath:  newPath,
 		MIMEType: "image/" + c.Target,
-		Width:    c.Args.Width,
-		Height:   c.Args.Height,
+		Width:    outputConfig.Width,
+		Height:   outputConfig.Height,
 		Size:     int(outputSize),
 	}
 }

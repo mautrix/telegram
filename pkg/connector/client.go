@@ -49,6 +49,7 @@ import (
 	"go.mau.fi/mautrix-telegram/pkg/connector/store"
 	"go.mau.fi/mautrix-telegram/pkg/connector/telegramfmt"
 	"go.mau.fi/mautrix-telegram/pkg/gotd/pool"
+	"go.mau.fi/mautrix-telegram/pkg/gotd/rpc"
 	"go.mau.fi/mautrix-telegram/pkg/gotd/telegram"
 	"go.mau.fi/mautrix-telegram/pkg/gotd/telegram/auth"
 	"go.mau.fi/mautrix-telegram/pkg/gotd/telegram/updates"
@@ -118,6 +119,9 @@ type TelegramClient struct {
 	cachedContactsHash int64
 	contactsLock       sync.Mutex
 	lastContactReq     time.Time
+
+	resolvePhoneLock sync.Mutex
+	lastResolvePhone time.Time
 
 	dcTransferLock sync.Mutex
 
@@ -440,7 +444,11 @@ func (tc *TelegramClient) onPing() {
 	me, err := tc.client.Self(ctx)
 	if auth.IsUnauthorized(err) {
 		tc.onAuthError(err)
-	} else if errors.Is(err, syscall.EPIPE) || errors.Is(err, pool.ErrConnDead) {
+	} else if errors.Is(err, syscall.EPIPE) ||
+		errors.Is(err, pool.ErrConnDead) ||
+		errors.Is(err, rpc.ErrEngineClosed) ||
+		errors.Is(err, &rpc.RetryLimitReachedErr{}) ||
+		errors.Is(err, context.Canceled) {
 		// Connectivity error — connection died during the Self() call.
 		// Keep as transient; gotd's backoff will reconnect.
 		tc.userLogin.BridgeState.Send(status.BridgeState{
