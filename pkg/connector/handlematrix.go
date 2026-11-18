@@ -241,6 +241,7 @@ func (tc *TelegramClient) pollSponsoredMessage(ctx context.Context, portal *brid
 func (tc *TelegramClient) transferMediaToTelegram(ctx context.Context, content *event.MessageEventContent, sticker, forceRetry, forceDocument bool) (tg.InputMediaClass, error) {
 	var upload tg.InputFileClass
 	info := content.GetInfo()
+	forceFile := !sticker && (forceDocument || content.MsgType == event.MsgFile)
 	if sticker {
 		if origFile, err := tc.findOriginalStickerDocument(ctx, info.BridgedSticker, forceRetry); err != nil {
 			zerolog.Ctx(ctx).Err(err).Msg("Failed to find original sticker document, falling back to reupload")
@@ -392,6 +393,7 @@ func (tc *TelegramClient) transferMediaToTelegram(ctx context.Context, content *
 
 	return &tg.InputMediaUploadedDocument{
 		File:       upload,
+		ForceFile:  forceFile,
 		MimeType:   cmp.Or(info.MimeType, "application/octet-stream"),
 		Attributes: attributes,
 	}, nil
@@ -581,6 +583,10 @@ func (tc *TelegramClient) HandleMatrixMessage(ctx context.Context, msg *bridgev2
 			media, err = tc.transferMediaToTelegram(ctx, msg.Content, false, false, forceDocument)
 			if err != nil {
 				return nil, err
+			}
+			contentURI = msg.Content.URL
+			if contentURI == "" {
+				contentURI = msg.Content.File.URL
 			}
 			if viewLimitedTTL > 0 {
 				media.(interface{ SetTTLSeconds(int) }).SetTTLSeconds(viewLimitedTTL)
