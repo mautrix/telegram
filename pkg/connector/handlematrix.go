@@ -1211,8 +1211,29 @@ func (tc *TelegramClient) HandleMatrixReadReceipt(ctx context.Context, msg *brid
 		}
 	}()
 
+	meta := msg.Portal.Metadata.(*PortalMetadata)
+	needsResync := peerType == ids.PeerTypeChannel && (!meta.FullSynced || meta.LastSync.Add(24*time.Hour).Before(time.Now()))
+	if needsResync {
+		needsResync = tc.markReadReceiptResync(msg.Portal.PortalKey)
+	}
+	if needsResync {
+		log.Debug().
+			Bool("full_synced", meta.FullSynced).
+			Time("last_sync", meta.LastSync.Time).
+			Msg("Scheduling chat resync on read receipt")
+	}
+
 	// Poll for reactions (non-blocking to avoid deadlock when portal event buffer is disabled)
 	go func() {
+		if needsResync {
+			tc.userLogin.QueueRemoteEvent(&simplevent.ChatResync{
+				EventMeta: simplevent.EventMeta{
+					Type:      bridgev2.RemoteEventChatResync,
+					PortalKey: msg.Portal.PortalKey,
+				},
+				GetChatInfoFunc: tc.GetChatInfo,
+			})
+		}
 		err := tc.maybePollForReactions(ctx, msg.Portal)
 		if err != nil {
 			log.Err(err).Msg("failed to poll for reactions after read receipt")
@@ -1222,17 +1243,6 @@ func (tc *TelegramClient) HandleMatrixReadReceipt(ctx context.Context, msg *brid
 			log.Err(err).Msg("failed to poll for sponsored message after read receipt")
 		}
 	}()
-
-	if peerType == ids.PeerTypeChannel && !msg.Portal.Metadata.(*PortalMetadata).FullSynced {
-		log.Debug().Msg("Scheduling chat resync on read receipt because channel has never got a full sync")
-		go tc.userLogin.QueueRemoteEvent(&simplevent.ChatResync{
-			EventMeta: simplevent.EventMeta{
-				Type:      bridgev2.RemoteEventChatResync,
-				PortalKey: msg.Portal.PortalKey,
-			},
-			GetChatInfoFunc: tc.GetChatInfo,
-		})
-	}
 
 	wg.Wait()
 	return errors.Join(readMentionsErr, readReactionsErr, readMessagesErr)
@@ -1689,4 +1699,18 @@ func (tc *TelegramClient) HandleMatrixBlockUser(ctx context.Context, msg *bridge
 		}
 	}
 	return nil
+}
+
+func (tc *TelegramClient) markReadReceiptResync(portalKey networkid.PortalKey) bool {
+	tc.readReceiptResyncLock.Lock()
+	defer tc.readReceiptResyncLock.Unlock()
+	now := time.Now()
+	if last, ok := tc.readReceiptResyncAt[portalKey]; ok && now.Sub(last) < 24*time.Hour {
+		return false
+	}
+	if tc.readReceiptResyncAt == nil {
+		tc.readReceiptResyncAt = make(map[networkid.PortalKey]time.Time)
+	}
+	tc.readReceiptResyncAt[portalKey] = now
+	return true
 }

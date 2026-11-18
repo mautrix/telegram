@@ -119,6 +119,9 @@ type TelegramClient struct {
 	contactsLock       sync.Mutex
 	lastContactReq     time.Time
 
+	readReceiptResyncLock sync.Mutex
+	readReceiptResyncAt   map[networkid.PortalKey]time.Time
+
 	dcTransferLock sync.Mutex
 
 	fetchMessagesSema *semaphore.Weighted
