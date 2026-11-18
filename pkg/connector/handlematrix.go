@@ -82,6 +82,7 @@ var (
 	_ bridgev2.DeleteChatHandlingNetworkAPI       = (*TelegramClient)(nil)
 	_ bridgev2.RoomNameHandlingNetworkAPI         = (*TelegramClient)(nil)
 	_ bridgev2.RoomAvatarHandlingNetworkAPI       = (*TelegramClient)(nil)
+	_ bridgev2.RoomTopicHandlingNetworkAPI        = (*TelegramClient)(nil)
 	_ bridgev2.MembershipHandlingNetworkAPI       = (*TelegramClient)(nil)
 	_ bridgev2.UserBlockingNetworkAPI             = (*TelegramClient)(nil)
 )
@@ -303,30 +304,34 @@ func (tc *TelegramClient) transferMediaToTelegram(ctx context.Context, content *
 				aspectRatio > 20 ||
 				cfg.Height+cfg.Width > 10000
 		}
-		if forceDocument && content.MsgType == event.MsgImage && content.BeeperViewLimited != nil {
-			return fmt.Errorf("%w: force_document not allowed", bridgev2.ErrUnsupportedViewLimitedType)
-		}
 		if !forceDocument && content.MsgType == event.MsgImage && content.Info.MimeType == "image/webp" {
 			_, err = f.Seek(0, io.SeekStart)
 			if err != nil {
 				return err
 			}
-			tempFile, err := os.CreateTemp("", "telegram-nonsticker-*.jpeg")
-			if err != nil {
-				return err
-			}
-			defer func() {
-				_ = tempFile.Close()
-				_ = os.Remove(tempFile.Name())
-			}()
 			if img, _, err := image.Decode(f); err != nil {
-				return fmt.Errorf("%w: failed to decode non-sticker webp image: %w", bridgev2.ErrMediaConvertFailed, err)
-			} else if err := jpeg.Encode(tempFile, img, nil); err != nil {
-				return fmt.Errorf("%w: failed to encode non-sticker jpeg image: %w", bridgev2.ErrMediaConvertFailed, err)
+				zerolog.Ctx(ctx).Debug().Err(err).Msg("Failed to decode non-sticker webp image, sending as file")
+				forceDocument = true
+				forceFile = true
+			} else {
+				tempFile, err := os.CreateTemp("", "telegram-nonsticker-*.jpeg")
+				if err != nil {
+					return err
+				}
+				defer func() {
+					_ = tempFile.Close()
+					_ = os.Remove(tempFile.Name())
+				}()
+				if err := jpeg.Encode(tempFile, img, nil); err != nil {
+					return fmt.Errorf("%w: failed to encode non-sticker jpeg image: %w", bridgev2.ErrMediaConvertFailed, err)
+				}
+				uploadFilename = tempFile.Name()
+				filename += ".jpg"
+				info.MimeType = "image/jpeg"
 			}
-			uploadFilename = tempFile.Name()
-			filename += ".jpg"
-			info.MimeType = "image/jpeg"
+		}
+		if forceDocument && content.MsgType == event.MsgImage && content.BeeperViewLimited != nil {
+			return fmt.Errorf("%w: force_document not allowed", bridgev2.ErrUnsupportedViewLimitedType)
 		}
 		if sticker {
 			filename = "sticker" + exmime.ExtensionFromMimetype(info.MimeType)
@@ -591,14 +596,23 @@ func (tc *TelegramClient) HandleMatrixMessage(ctx context.Context, msg *bridgev2
 			if viewLimitedTTL > 0 {
 				media.(interface{ SetTTLSeconds(int) }).SetTTLSeconds(viewLimitedTTL)
 			}
-			updates, err = tc.client.API().MessagesSendMedia(ctx, &tg.MessagesSendMediaRequest{
+			mediaReq := &tg.MessagesSendMediaRequest{
 				Peer:     peer,
 				Message:  message,
 				Entities: entities,
 				Media:    media,
 				ReplyTo:  replyTo,
 				RandomID: randomID,
-			})
+			}
+			updates, err = tc.client.API().MessagesSendMedia(ctx, mediaReq)
+			if tgerr.Is(err, tg.ErrImageProcessFailed) && !forceDocument && viewLimitedTTL == 0 && msg.Content.MsgType == event.MsgImage {
+				zerolog.Ctx(ctx).Warn().Err(err).Msg("Telegram failed to process image, retrying as file")
+				mediaReq.Media, err = tc.transferMediaToTelegram(ctx, msg.Content, false, false, true)
+				if err != nil {
+					return nil, err
+				}
+				updates, err = tc.client.API().MessagesSendMedia(ctx, mediaReq)
+			}
 		case event.MsgLocation:
 			var uri GeoURI
 			uri, err = ParseGeoURI(msg.Content.GeoURI)
@@ -674,6 +688,7 @@ func (tc *TelegramClient) makeSendResponse(
 		tgMessageID = sentMessage.ID
 		tgDate = sentMessage.Date
 		hasher.Write([]byte(body))
+		hasher.Write(webPageHashURL(sentMessage.Media))
 		hasher.Write(mediaHashID(ctx, sentMessage.Media))
 	case *tg.Updates:
 		for _, u := range sentMessage.Updates {
@@ -728,6 +743,7 @@ func (tc *TelegramClient) makeSendResponse(
 		if realSentMessage != nil {
 			tgDate = realSentMessage.Date
 			hasher.Write([]byte(realSentMessage.Message))
+			hasher.Write(webPageHashURL(realSentMessage.Media))
 			hasher.Write(mediaHashID(ctx, realSentMessage.Media))
 		} else {
 			hasher.Write([]byte(body))
@@ -852,7 +868,9 @@ func (tc *TelegramClient) HandleMatrixEdit(ctx context.Context, msg *bridgev2.Ma
 		return fmt.Errorf("%w %s", bridgev2.ErrUnsupportedMessageType, msg.Content.MsgType)
 	}
 	updates, err := tc.client.API().MessagesEditMessage(ctx, &req)
-	if err != nil {
+	if tg.IsMessageNotModified(err) {
+		return nil
+	} else if err != nil {
 		return tc.humaniseSendError(err)
 	}
 
@@ -861,49 +879,44 @@ func (tc *TelegramClient) HandleMatrixEdit(ctx context.Context, msg *bridgev2.Ma
 	switch sentMessage := updates.(type) {
 	case *tg.UpdateShortSentMessage:
 		hasher.Write([]byte(msg.Content.Body))
+		hasher.Write(webPageHashURL(sentMessage.Media))
 		hasher.Write(mediaHashID(ctx, sentMessage.Media))
 	case *tg.Updates:
 		var realSentMessage *tg.Message
 		for _, u := range sentMessage.Updates {
+			var msgClass tg.MessageClass
 			switch update := u.(type) {
+			case *tg.UpdateEditMessage:
+				msgClass = update.Message
+			case *tg.UpdateEditChannelMessage:
+				msgClass = update.Message
 			case *tg.UpdateNewMessage:
-				newMessage, ok := update.Message.(*tg.Message)
-				if !ok {
-					log.Debug().
-						Type("message_type", update.Message).
-						Int("message_id", update.Message.GetID()).
-						Msg("Ignoring non-message in edit response")
-					continue
-				}
-				if realSentMessage != nil {
-					log.Warn().
-						Int("prev_id", realSentMessage.ID).
-						Int("new_id", newMessage.ID).
-						Msg("Multiple messages in edit response")
-				}
-				realSentMessage = newMessage
+				msgClass = update.Message
 			case *tg.UpdateNewChannelMessage:
-				newMessage, ok := update.Message.(*tg.Message)
-				if !ok {
-					log.Debug().
-						Type("message_type", update.Message).
-						Int("message_id", update.Message.GetID()).
-						Msg("Ignoring non-message in edit response")
-					continue
-				}
-				if realSentMessage != nil {
-					log.Warn().
-						Int("prev_id", realSentMessage.ID).
-						Int("new_id", newMessage.ID).
-						Msg("Multiple messages in edit response")
-				}
-				realSentMessage = newMessage
+				msgClass = update.Message
 			default:
 				log.Warn().Type("update_type", update).Msg("Unexpected update type in edit message response")
+				continue
 			}
+			newMessage, ok := msgClass.(*tg.Message)
+			if !ok {
+				log.Debug().
+					Type("message_type", msgClass).
+					Int("message_id", msgClass.GetID()).
+					Msg("Ignoring non-message in edit response")
+				continue
+			}
+			if realSentMessage != nil {
+				log.Warn().
+					Int("prev_id", realSentMessage.ID).
+					Int("new_id", newMessage.ID).
+					Msg("Multiple messages in edit response")
+			}
+			realSentMessage = newMessage
 		}
 		if realSentMessage != nil {
 			hasher.Write([]byte(realSentMessage.Message))
+			hasher.Write(webPageHashURL(realSentMessage.Media))
 			hasher.Write(mediaHashID(ctx, realSentMessage.Media))
 		} else {
 			hasher.Write([]byte(msg.Content.Body))
@@ -1055,7 +1068,7 @@ func (tc *TelegramClient) HandleMatrixReaction(ctx context.Context, msg *bridgev
 			WithStatus(event.MessageStatusFail).
 			WithIsCertain(true).
 			WithMessage("Unsupported reaction")
-	} else if err != nil {
+	} else if err != nil && !tg.IsMessageNotModified(err) {
 		return nil, tc.humaniseSendError(err)
 	}
 	return &database.Reaction{}, nil
@@ -1099,6 +1112,9 @@ func (tc *TelegramClient) HandleMatrixReactionRemove(ctx context.Context, msg *b
 		MsgID:       messageID,
 		Reaction:    newReactions,
 	})
+	if tg.IsMessageNotModified(err) {
+		return nil
+	}
 	return tc.humaniseSendError(err)
 }
 
@@ -1186,6 +1202,14 @@ func (tc *TelegramClient) HandleMatrixReadReceipt(ctx context.Context, msg *brid
 				MaxID: maxID,
 			})
 		case ids.PeerTypeChannel:
+			if topicID != 0 {
+				_, readMessagesErr = tc.client.API().MessagesReadDiscussion(ctx, &tg.MessagesReadDiscussionRequest{
+					Peer:      inputPeer,
+					MsgID:     topicID,
+					ReadMaxID: maxID,
+				})
+				return
+			}
 			var accessHash int64
 			accessHash, readMessagesErr = tc.ScopedStore.GetAccessHash(ctx, ids.PeerTypeChannel, portalID)
 			if readMessagesErr != nil {
@@ -1248,6 +1272,20 @@ func (tc *TelegramClient) HandleMatrixTyping(ctx context.Context, msg *bridgev2.
 	if msg.Portal.RoomType == database.RoomTypeSpace {
 		return nil
 	}
+	peerType, id, _, err := ids.ParsePortalID(msg.Portal.ID)
+	if err != nil {
+		return err
+	}
+	switch peerType {
+	case ids.PeerTypeUser:
+		if id == tc.telegramUserID {
+			return nil
+		}
+	case ids.PeerTypeChannel:
+		if !msg.Portal.Metadata.(*PortalMetadata).IsSuperGroup {
+			return nil
+		}
+	}
 	inputPeer, topicID, err := tc.inputPeerForPortalID(ctx, msg.Portal.ID)
 	if err != nil {
 		return err
@@ -1304,9 +1342,9 @@ func (tc *TelegramClient) HandleMute(ctx context.Context, msg *bridgev2.MatrixMu
 	}
 
 	settings := tg.InputPeerNotifySettings{
-		Silent:    msg.Content.IsMuted(),
-		MuteUntil: int(max(0, min(msg.Content.GetMutedUntilTime().Unix(), math.MaxInt32))),
+		Silent: msg.Content.IsMuted(),
 	}
+	settings.SetMuteUntil(int(max(0, min(msg.Content.GetMutedUntilTime().Unix(), math.MaxInt32))))
 	var peer tg.InputNotifyPeerClass
 	if topicID > 0 {
 		peer = &tg.InputNotifyForumTopic{Peer: inputPeer, TopMsgID: topicID}
@@ -1336,6 +1374,23 @@ func (tc *TelegramClient) HandleRoomTag(ctx context.Context, msg *bridgev2.Matri
 	return err
 }
 
+func deleteAllHistory(ctx context.Context, deleteHistory func() (*tg.MessagesAffectedHistory, error)) error {
+	for {
+		var resp *tg.MessagesAffectedHistory
+		var err error
+		retry := true
+		for attempts := 0; retry && attempts < 5; attempts++ {
+			resp, err = deleteHistory()
+			retry, err = tgerr.FloodWait(ctx, err)
+		}
+		if err != nil {
+			return err
+		} else if resp.Offset <= 0 {
+			return nil
+		}
+	}
+}
+
 func (tc *TelegramClient) HandleMatrixDeleteChat(ctx context.Context, chat *bridgev2.MatrixDeleteChat) error {
 	peerType, id, topicID, err := ids.ParsePortalID(chat.Portal.ID)
 	if err != nil {
@@ -1347,11 +1402,11 @@ func (tc *TelegramClient) HandleMatrixDeleteChat(ctx context.Context, chat *brid
 		if err != nil {
 			return err
 		}
-		_, err = tc.client.API().MessagesDeleteHistory(ctx, &tg.MessagesDeleteHistoryRequest{
-			Peer:      &tg.InputPeerUser{UserID: id, AccessHash: accessHash},
-			JustClear: !chat.Content.DeleteForEveryone,
-			Revoke:    chat.Content.DeleteForEveryone,
-			MaxID:     0,
+		err = deleteAllHistory(ctx, func() (*tg.MessagesAffectedHistory, error) {
+			return tc.client.API().MessagesDeleteHistory(ctx, &tg.MessagesDeleteHistoryRequest{
+				Peer:   &tg.InputPeerUser{UserID: id, AccessHash: accessHash},
+				Revoke: chat.Content.DeleteForEveryone,
+			})
 		})
 		if err != nil {
 			return tc.humaniseSendError(err)
@@ -1373,8 +1428,10 @@ func (tc *TelegramClient) HandleMatrixDeleteChat(ctx context.Context, chat *brid
 		if err != nil {
 			return tc.humaniseSendError(err)
 		}
-		_, err = tc.client.API().MessagesDeleteHistory(ctx, &tg.MessagesDeleteHistoryRequest{
-			Peer: &tg.InputPeerChat{ChatID: id},
+		err = deleteAllHistory(ctx, func() (*tg.MessagesAffectedHistory, error) {
+			return tc.client.API().MessagesDeleteHistory(ctx, &tg.MessagesDeleteHistoryRequest{
+				Peer: &tg.InputPeerChat{ChatID: id},
+			})
 		})
 		return tc.humaniseSendError(err)
 	case ids.PeerTypeChannel:
@@ -1387,12 +1444,14 @@ func (tc *TelegramClient) HandleMatrixDeleteChat(ctx context.Context, chat *brid
 				return wrapUnsupportedError(errors.New("topics can only be deleted for everyone")).
 					WithMessage("topics can only be deleted for everyone")
 			}
-			_, err = tc.client.API().MessagesDeleteTopicHistory(ctx, &tg.MessagesDeleteTopicHistoryRequest{
-				Peer: &tg.InputPeerChannel{
-					ChannelID:  id,
-					AccessHash: accessHash,
-				},
-				TopMsgID: topicID,
+			err = deleteAllHistory(ctx, func() (*tg.MessagesAffectedHistory, error) {
+				return tc.client.API().MessagesDeleteTopicHistory(ctx, &tg.MessagesDeleteTopicHistoryRequest{
+					Peer: &tg.InputPeerChannel{
+						ChannelID:  id,
+						AccessHash: accessHash,
+					},
+					TopMsgID: topicID,
+				})
 			})
 			return tc.humaniseSendError(err)
 		}
@@ -1458,6 +1517,36 @@ func (tc *TelegramClient) HandleMatrixRoomName(ctx context.Context, msg *bridgev
 	default:
 		return false, fmt.Errorf("unsupported peer type %s for changing room name", peerType)
 	}
+}
+
+func (tc *TelegramClient) HandleMatrixRoomTopic(ctx context.Context, msg *bridgev2.MatrixRoomTopic) (bool, error) {
+	peerType, _, topicID, err := ids.ParsePortalID(msg.Portal.ID)
+	if err != nil {
+		return false, err
+	}
+
+	if peerType == ids.PeerTypeUser {
+		return false, wrapUnsupportedError(errors.New("changing user bio is not supported")).
+			WithMessage("changing the topic of a private chat is not supported")
+	} else if topicID > 0 {
+		return false, wrapUnsupportedError(errors.New("changing group topic description is not supported")).
+			WithMessage("changing the topic of a forum topic is not supported")
+	}
+
+	peer, _, err := tc.inputPeerForPortalID(ctx, msg.Portal.ID)
+	if err != nil {
+		return false, err
+	}
+	_, err = tc.client.API().MessagesEditChatAbout(ctx, &tg.MessagesEditChatAboutRequest{
+		Peer:  peer,
+		About: msg.Content.Topic,
+	})
+	if err != nil && !tg.IsChatAboutNotModified(err) {
+		return false, tc.humaniseSendError(err)
+	}
+	msg.Portal.Topic = msg.Content.Topic
+	msg.Portal.TopicSet = true
+	return true, nil
 }
 
 func (tc *TelegramClient) HandleMatrixRoomAvatar(ctx context.Context, msg *bridgev2.MatrixRoomAvatar) (bool, error) {
@@ -1532,6 +1621,12 @@ func wrapUnsupportedError(err error) bridgev2.MessageStatus {
 
 var errSpacePortal = wrapUnsupportedError(errors.New("can't send messages to space portals")).
 	WithMessage("messages can't be sent to spaces")
+
+var errInvitePrivacyRestricted = bridgev2.WrapErrorInStatus(errors.New("user's privacy settings don't allow inviting them")).
+	WithErrorReason(event.MessageStatusNoPermission).
+	WithStatus(event.MessageStatusFail).
+	WithIsCertain(true).
+	WithMessage("This user's privacy settings don't allow adding them to groups")
 
 func (tc *TelegramClient) HandleMatrixMembership(ctx context.Context, msg *bridgev2.MatrixMembershipChange) (*bridgev2.MatrixMembershipResult, error) {
 	if (msg.Type.IsSelf && msg.OrigSender != nil) || msg.Type == bridgev2.ProfileChange {
@@ -1620,11 +1715,16 @@ func (tc *TelegramClient) HandleMatrixMembership(ctx context.Context, msg *bridg
 			} else if tc.metadata.IsBot {
 				return nil, wrapUnsupportedError(fmt.Errorf("can't invite users as a bot"))
 			}
-			_, err = tc.client.API().ChannelsInviteToChannel(ctx, &tg.ChannelsInviteToChannelRequest{
+			var invited *tg.MessagesInvitedUsers
+			invited, err = tc.client.API().ChannelsInviteToChannel(ctx, &tg.ChannelsInviteToChannelRequest{
 				Channel: inputChannel,
 				Users:   []tg.InputUserClass{targetInputUser},
 			})
-			err = tc.humaniseSendError(err)
+			if err != nil {
+				err = tc.humaniseSendError(err)
+			} else if len(invited.MissingInvitees) > 0 {
+				err = errInvitePrivacyRestricted
+			}
 		case bridgev2.Join, bridgev2.Knock:
 			_, err = tc.client.API().ChannelsJoinChannel(ctx, inputChannel)
 			err = tc.humaniseSendError(err)
@@ -1649,12 +1749,17 @@ func (tc *TelegramClient) HandleMatrixMembership(ctx context.Context, msg *bridg
 			} else if tc.metadata.IsBot {
 				return nil, wrapUnsupportedError(fmt.Errorf("can't invite users as a bot"))
 			}
-			_, err = tc.client.API().MessagesAddChatUser(ctx, &tg.MessagesAddChatUserRequest{
+			var invited *tg.MessagesInvitedUsers
+			invited, err = tc.client.API().MessagesAddChatUser(ctx, &tg.MessagesAddChatUserRequest{
 				ChatID:   chatID,
 				UserID:   targetInputUser,
 				FwdLimit: 50,
 			})
-			err = tc.humaniseSendError(err)
+			if err != nil {
+				err = tc.humaniseSendError(err)
+			} else if len(invited.MissingInvitees) > 0 {
+				err = errInvitePrivacyRestricted
+			}
 		case bridgev2.Join, bridgev2.Knock:
 			// TODO could maybe join if there's a saved invite link in the bridge db?
 			fallthrough

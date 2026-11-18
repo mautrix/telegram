@@ -31,6 +31,7 @@ import (
 	"go.mau.fi/util/exmaps"
 	"go.mau.fi/util/jsontime"
 	"go.mau.fi/util/ptr"
+	"golang.org/x/net/html"
 	"maunium.net/go/mautrix/bridgev2"
 	"maunium.net/go/mautrix/bridgev2/database"
 	"maunium.net/go/mautrix/bridgev2/networkid"
@@ -442,7 +443,7 @@ func (tc *TelegramClient) handleServiceMessage(ctx context.Context, msg *tg.Mess
 			ChatInfoChange: &bridgev2.ChatInfoChange{MemberChanges: memberChanges},
 		})
 		return resultToError(res)
-	case *tg.MessageActionChatJoinedByLink, *tg.MessageActionChatJoinedByRequest:
+	case *tg.MessageActionChatJoinedByLink, *tg.MessageActionChatJoinedByRequest, *tg.MessageActionChatJoinedViaCommunity:
 		res := tc.main.Bridge.QueueRemoteEvent(tc.userLogin, &simplevent.ChatInfoChange{
 			EventMeta: eventMeta.WithType(bridgev2.RemoteEventChatInfoChange),
 			ChatInfoChange: &bridgev2.ChatInfoChange{
@@ -535,14 +536,14 @@ func (tc *TelegramClient) handleServiceMessage(ctx context.Context, msg *tg.Mess
 		} else {
 			body.WriteString("Call ")
 		}
-		switch action.Reason.TypeID() {
-		case tg.PhoneCallDiscardReasonMissedTypeID:
+		switch action.Reason.(type) {
+		case *tg.PhoneCallDiscardReasonMissed:
 			body.WriteString("missed")
-		case tg.PhoneCallDiscardReasonDisconnectTypeID:
+		case *tg.PhoneCallDiscardReasonDisconnect:
 			body.WriteString("disconnected")
-		case tg.PhoneCallDiscardReasonHangupTypeID:
+		case *tg.PhoneCallDiscardReasonHangup, nil:
 			body.WriteString("ended")
-		case tg.PhoneCallDiscardReasonBusyTypeID:
+		case *tg.PhoneCallDiscardReasonBusy:
 			body.WriteString("rejected")
 		default:
 			log.Warn().Stringer("end_reason", action.Reason).Msg("Unknown call end reason")
@@ -599,32 +600,31 @@ func (tc *TelegramClient) handleServiceMessage(ctx context.Context, msg *tg.Mess
 		})
 		return resultToError(res)
 	case *tg.MessageActionInviteToGroupCall:
-		var body, html strings.Builder
+		var body, formatted strings.Builder
 		var mentions event.Mentions
 		body.WriteString("Invited ")
-		html.WriteString("Invited ")
+		formatted.WriteString("Invited ")
 		for i, userID := range action.Users {
 			if i > 0 {
 				body.WriteString(", ")
+				formatted.WriteString(", ")
 			}
 
 			if ghost, err := tc.main.Bridge.GetGhostByID(ctx, ids.MakeUserID(userID)); err != nil {
 				return err
 			} else {
-				var name string
-				if username, err := tc.main.Store.Username.Get(ctx, ids.PeerTypeUser, userID); err != nil {
+				name := ghost.Name
+				if username, err := tc.main.Store.Username.Get(ctx, ids.PeerTypeUser, userID); err == nil && username != "" {
 					name = "@" + username
-				} else {
-					name = ghost.Name
 				}
 
 				mentions.UserIDs = append(mentions.UserIDs, ghost.Intent.GetMXID())
 				body.WriteString(name)
-				html.WriteString(fmt.Sprintf(`<a href="%s">@%s</a>`, ghost.Intent.GetMXID().URI().MatrixToURL(), name))
+				formatted.WriteString(fmt.Sprintf(`<a href="%s">%s</a>`, ghost.Intent.GetMXID().URI().MatrixToURL(), html.EscapeString(name)))
 			}
 		}
 		body.WriteString(" to the video chat")
-		html.WriteString(" to the video chat")
+		formatted.WriteString(" to the video chat")
 		res := tc.main.Bridge.QueueRemoteEvent(tc.userLogin, &simplevent.Message[any]{
 			EventMeta: eventMeta.WithType(bridgev2.RemoteEventMessage),
 			ID:        ids.GetMessageIDFromMessage(msg),
@@ -636,7 +636,7 @@ func (tc *TelegramClient) handleServiceMessage(ctx context.Context, msg *tg.Mess
 							MsgType:       event.MsgNotice,
 							Body:          body.String(),
 							Format:        event.FormatHTML,
-							FormattedBody: html.String(),
+							FormattedBody: formatted.String(),
 							Mentions:      &mentions,
 						},
 					}},
@@ -728,6 +728,25 @@ func (tc *TelegramClient) handleServiceMessage(ctx context.Context, msg *tg.Mess
 			GetChatInfoFunc: tc.GetChatInfo,
 		})
 		return resultToError(res)
+	case *tg.MessageActionPinMessage:
+		var replyTo *networkid.MessageOptionalPartID
+		if header, ok := msg.ReplyTo.(*tg.MessageReplyHeader); ok && header.ReplyToMsgID != 0 {
+			replyTo = &networkid.MessageOptionalPartID{MessageID: ids.MakeMessageID(msg.PeerID, header.ReplyToMsgID)}
+		}
+		res := tc.main.Bridge.QueueRemoteEvent(tc.userLogin, &simplevent.Message[any]{
+			EventMeta: eventMeta.WithType(bridgev2.RemoteEventMessage),
+			ID:        ids.GetMessageIDFromMessage(msg),
+			ConvertMessageFunc: func(ctx context.Context, portal *bridgev2.Portal, intent bridgev2.MatrixAPI, data any) (*bridgev2.ConvertedMessage, error) {
+				return &bridgev2.ConvertedMessage{
+					ReplyTo: replyTo,
+					Parts: []*bridgev2.ConvertedMessagePart{{
+						Type:    event.EventMessage,
+						Content: &event.MessageEventContent{MsgType: event.MsgNotice, Body: "Pinned a message"},
+					}},
+				}, nil
+			},
+		})
+		return resultToError(res)
 	case *tg.MessageActionTopicEdit:
 		// TODO specific changes?
 		res := tc.main.Bridge.QueueRemoteEvent(tc.userLogin, &simplevent.ChatResync{
@@ -737,12 +756,49 @@ func (tc *TelegramClient) handleServiceMessage(ctx context.Context, msg *tg.Mess
 			GetChatInfoFunc: tc.GetChatInfo,
 		})
 		return resultToError(res)
+	case *tg.MessageActionContactSignUp:
+		return tc.queueServiceNotice(eventMeta, msg, "Joined Telegram")
+	case *tg.MessageActionScreenshotTaken:
+		return tc.queueServiceNotice(eventMeta, msg, "Took a screenshot")
+	case *tg.MessageActionCustomAction:
+		return tc.queueServiceNotice(eventMeta, msg, action.Message)
+	case *tg.MessageActionBoostApply:
+		if action.Boosts > 1 {
+			return tc.queueServiceNotice(eventMeta, msg, fmt.Sprintf("Boosted the group %d times", action.Boosts))
+		}
+		return tc.queueServiceNotice(eventMeta, msg, "Boosted the group")
+	case *tg.MessageActionSetChatTheme:
+		body := "Changed the chat theme"
+		if theme, ok := action.Theme.(*tg.ChatTheme); ok && theme.Emoticon == "" {
+			body = "Disabled the chat theme"
+		} else if ok {
+			body = fmt.Sprintf("Changed the chat theme to %s", theme.Emoticon)
+		}
+		return tc.queueServiceNotice(eventMeta, msg, body)
+	case *tg.MessageActionSetChatWallPaper:
+		return tc.queueServiceNotice(eventMeta, msg, "Set a new wallpaper for this chat")
 	default:
 		log.Warn().
 			Type("action_type", action).
 			Msg("ignoring unknown action type")
 		return nil
 	}
+}
+
+func (tc *TelegramClient) queueServiceNotice(eventMeta simplevent.EventMeta, msg *tg.MessageService, body string) error {
+	res := tc.main.Bridge.QueueRemoteEvent(tc.userLogin, &simplevent.Message[any]{
+		EventMeta: eventMeta.WithType(bridgev2.RemoteEventMessage),
+		ID:        ids.GetMessageIDFromMessage(msg),
+		ConvertMessageFunc: func(ctx context.Context, portal *bridgev2.Portal, intent bridgev2.MatrixAPI, data any) (*bridgev2.ConvertedMessage, error) {
+			return &bridgev2.ConvertedMessage{
+				Parts: []*bridgev2.ConvertedMessagePart{{
+					Type:    event.EventMessage,
+					Content: &event.MessageEventContent{MsgType: event.MsgNotice, Body: body},
+				}},
+			}, nil
+		},
+	})
+	return resultToError(res)
 }
 
 func (tc *TelegramClient) migrateChat(ctx context.Context, oldPortalKey, newPortalKey networkid.PortalKey) error {
@@ -860,26 +916,24 @@ func (tc *TelegramClient) onUserName(ctx context.Context, e tg.Entities, update 
 	}
 	meta := ghost.Metadata.(*GhostMetadata)
 
-	var userInfo bridgev2.UserInfo
+	userInfo := bridgev2.UserInfo{Identifiers: []string{}}
 
 	var firstUsername string
-	if len(update.Usernames) > 0 {
-		for _, ident := range ghost.Identifiers {
-			if !strings.HasPrefix(ident, "telegram:") {
-				userInfo.Identifiers = append(userInfo.Identifiers, ident)
-			}
+	for _, ident := range ghost.Identifiers {
+		if !strings.HasPrefix(ident, "telegram:") {
+			userInfo.Identifiers = append(userInfo.Identifiers, ident)
 		}
-
-		for i, username := range update.Usernames {
-			if i == 0 {
-				firstUsername = username.Username
-			}
-			userInfo.Identifiers = append(userInfo.Identifiers, fmt.Sprintf("telegram:%s", username.Username))
-		}
-
-		slices.Sort(userInfo.Identifiers)
-		userInfo.Identifiers = slices.Compact(userInfo.Identifiers)
 	}
+	for _, username := range update.Usernames {
+		if !username.Active {
+			continue
+		} else if firstUsername == "" {
+			firstUsername = username.Username
+		}
+		userInfo.Identifiers = append(userInfo.Identifiers, fmt.Sprintf("telegram:%s", username.Username))
+	}
+	slices.Sort(userInfo.Identifiers)
+	userInfo.Identifiers = slices.Compact(userInfo.Identifiers)
 	err = tc.main.Store.Username.Set(ctx, ids.PeerTypeUser, update.UserID, firstUsername)
 	if err != nil {
 		return fmt.Errorf("failed to store username: %w", err)
@@ -896,10 +950,6 @@ func (tc *TelegramClient) onUserName(ctx context.Context, e tg.Entities, update 
 
 	ghost.UpdateInfo(ctx, &userInfo)
 	if ghost.ID == tc.userID {
-		var firstUsername string
-		if len(update.Usernames) > 0 {
-			firstUsername = update.Usernames[0].Username
-		}
 		tc.updateRemoteProfile(ctx, &tg.User{
 			Self:      true,
 			ID:        update.UserID,
@@ -1103,21 +1153,23 @@ func (tc *TelegramClient) onUpdate(ctx context.Context, e tg.Entities, upd tg.Up
 	case *tg.UpdateBotMessageReaction:
 		return tc.onBotMessageReaction(ctx, update)
 	case *tg.UpdateUserTyping:
-		return tc.handleTyping(tc.makePortalKeyFromID(ids.PeerTypeUser, update.UserID, 0), tc.senderForUserID(update.UserID), update.Action)
+		return tc.handleTyping(ctx, tc.makePortalKeyFromID(ids.PeerTypeUser, update.UserID, 0), tc.senderForUserID(update.UserID), update.Action)
 	case *tg.UpdateChatUserTyping:
 		if update.FromID.TypeID() != tg.PeerUserTypeID {
 			zerolog.Ctx(ctx).Warn().Str("from_id_type", update.FromID.TypeName()).Msg("unsupported from_id type")
 			return nil
 		}
-		return tc.handleTyping(tc.makePortalKeyFromID(ids.PeerTypeChat, update.ChatID, 0), tc.getPeerSender(update.FromID), update.Action)
+		return tc.handleTyping(ctx, tc.makePortalKeyFromID(ids.PeerTypeChat, update.ChatID, 0), tc.getPeerSender(update.FromID), update.Action)
 	case *tg.UpdateChannelUserTyping:
-		return tc.handleTyping(tc.makePortalKeyFromID(ids.PeerTypeChannel, update.ChannelID, update.TopMsgID), tc.getPeerSender(update.FromID), update.Action)
+		return tc.handleTyping(ctx, tc.makePortalKeyFromID(ids.PeerTypeChannel, update.ChannelID, update.TopMsgID), tc.getPeerSender(update.FromID), update.Action)
 	case *tg.UpdateReadHistoryOutbox:
 		return tc.updateReadReceipt(ctx, e, update)
 	case *tg.UpdateReadHistoryInbox:
 		return tc.onOwnReadReceipt(tc.makePortalKeyFromPeer(update.Peer, update.TopMsgID), update.MaxID)
 	case *tg.UpdateReadChannelInbox:
 		return tc.onOwnReadReceipt(tc.makePortalKeyFromID(ids.PeerTypeChannel, update.ChannelID, 0), update.MaxID)
+	case *tg.UpdateReadChannelDiscussionInbox:
+		return tc.onReadChannelDiscussionInbox(ctx, update)
 	case *tg.UpdateNotifySettings:
 		return tc.onNotifySettings(ctx, e, update)
 	case *tg.UpdatePinnedDialogs:
@@ -1136,6 +1188,12 @@ func (tc *TelegramClient) onUpdate(ctx context.Context, e tg.Entities, upd tg.Up
 		return tc.onWebPage(ctx, update.Webpage)
 	case *tg.UpdateUserStatus:
 		// ignored
+		return nil
+	case *tg.UpdateConfig:
+		tc.appConfigLock.Lock()
+		tc.appConfig = nil
+		tc.appConfigHash = 0
+		tc.appConfigLock.Unlock()
 		return nil
 	default:
 		zerolog.Ctx(ctx).Debug().Type("update_type", update).Msg("Unhandled update type")
@@ -1222,6 +1280,15 @@ func (tc *TelegramClient) onBotMessageReaction(ctx context.Context, update *tg.U
 func (tc *TelegramClient) onMessageEdit(ctx context.Context, update IGetMessage) error {
 	msg, ok := update.GetMessage().(*tg.Message)
 	if !ok {
+		if svcMsg, ok := update.GetMessage().(*tg.MessageService); ok {
+			if _, isChannel := svcMsg.PeerID.(*tg.PeerChannel); !isChannel {
+				err := tc.handleTelegramReactions(ctx, svcMsg.PeerID, 0, svcMsg.ID, svcMsg.Reactions, "updateMessageEdit")
+				if err != nil {
+					zerolog.Ctx(ctx).Err(err).Msg("Failed to handle reactions on edited service message")
+				}
+				return nil
+			}
+		}
 		zerolog.Ctx(ctx).Warn().
 			Str("type_name", update.GetMessage().TypeName()).
 			Msg("edit message is not *tg.Message")
@@ -1356,8 +1423,13 @@ func (tc *TelegramClient) onWebPage(ctx context.Context, rawWebpage tg.WebPageCl
 	return nil
 }
 
-func (tc *TelegramClient) handleTyping(portal networkid.PortalKey, sender bridgev2.EventSender, action tg.SendMessageActionClass) error {
+func (tc *TelegramClient) handleTyping(ctx context.Context, portal networkid.PortalKey, sender bridgev2.EventSender, action tg.SendMessageActionClass) error {
 	if sender.IsFromMe || (sender.Sender == tc.userID && sender.SenderLogin == tc.userLogin.ID) {
+		return nil
+	}
+	if ghost, err := tc.main.Bridge.GetExistingGhostByID(ctx, sender.Sender); err != nil {
+		return err
+	} else if ghost == nil || ghost.Name == "" {
 		return nil
 	}
 	timeout := time.Duration(6) * time.Second
@@ -1412,6 +1484,24 @@ func (tc *TelegramClient) updateReadReceipt(ctx context.Context, e tg.Entities, 
 		ReadUpToStreamOrder: int64(update.MaxID),
 	})
 	return resultToError(res)
+}
+
+func (tc *TelegramClient) onReadChannelDiscussionInbox(ctx context.Context, update *tg.UpdateReadChannelDiscussionInbox) error {
+	if update.BroadcastID != 0 {
+		return nil
+	}
+	topicID := update.TopMsgID
+	if topicID == 1 {
+		topicID = 0
+	}
+	portalKey := tc.makePortalKeyFromID(ids.PeerTypeChannel, update.ChannelID, topicID)
+	portal, err := tc.main.Bridge.GetExistingPortalByKey(ctx, portalKey)
+	if err != nil {
+		return err
+	} else if portal == nil || portal.MXID == "" || (topicID == 0 && !portal.Metadata.(*PortalMetadata).IsForumGeneral) {
+		return nil
+	}
+	return tc.onOwnReadReceipt(portalKey, update.ReadMaxID)
 }
 
 func (tc *TelegramClient) onOwnReadReceipt(portalKey networkid.PortalKey, maxID int) error {

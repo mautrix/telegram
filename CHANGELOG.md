@@ -1,6 +1,7 @@
 # v26.11
 
 * Added support for bridging polls.
+  * Like other bridges, it's behind the `extev_polls` config option.
   * Note: votes are only bridged from Matrix to Telegram.
 * Added support for reaction permission in power level bridging.
 * Changed chat member sync to always include admins.
