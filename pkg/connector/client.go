@@ -126,6 +126,9 @@ type TelegramClient struct {
 	resolvePhoneLock sync.Mutex
 	lastResolvePhone time.Time
 
+	readReceiptResyncLock sync.Mutex
+	readReceiptResyncAt   map[networkid.PortalKey]time.Time
+
 	dcTransferLock sync.Mutex
 	checkingAuth   atomic.Bool
 

@@ -1270,6 +1270,9 @@ func (tc *TelegramClient) HandleMatrixReadReceipt(ctx context.Context, msg *brid
 	meta := msg.Portal.Metadata.(*PortalMetadata)
 	needsResync := peerType == ids.PeerTypeChannel && (((topicID == 0 || meta.IsForumGeneral) && !meta.FullSynced) || meta.LastSync.Add(24*time.Hour).Before(time.Now()))
 	if needsResync {
+		needsResync = tc.markReadReceiptResync(msg.Portal.PortalKey)
+	}
+	if needsResync {
 		log.Debug().
 			Bool("full_synced", meta.FullSynced).
 			Time("last_sync", meta.LastSync.Time).
@@ -1863,4 +1866,18 @@ func (tc *TelegramClient) HandleMatrixBlockUser(ctx context.Context, msg *bridge
 		}
 	}
 	return nil
+}
+
+func (tc *TelegramClient) markReadReceiptResync(portalKey networkid.PortalKey) bool {
+	tc.readReceiptResyncLock.Lock()
+	defer tc.readReceiptResyncLock.Unlock()
+	now := time.Now()
+	if last, ok := tc.readReceiptResyncAt[portalKey]; ok && now.Sub(last) < 24*time.Hour {
+		return false
+	}
+	if tc.readReceiptResyncAt == nil {
+		tc.readReceiptResyncAt = make(map[networkid.PortalKey]time.Time)
+	}
+	tc.readReceiptResyncAt[portalKey] = now
+	return true
 }
