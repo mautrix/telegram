@@ -727,6 +727,25 @@ func (tc *TelegramClient) handleServiceMessage(ctx context.Context, msg *tg.Mess
 			GetChatInfoFunc: tc.GetChatInfo,
 		})
 		return resultToError(res)
+	case *tg.MessageActionPinMessage:
+		var replyTo *networkid.MessageOptionalPartID
+		if header, ok := msg.ReplyTo.(*tg.MessageReplyHeader); ok && header.ReplyToMsgID != 0 {
+			replyTo = &networkid.MessageOptionalPartID{MessageID: ids.MakeMessageID(msg.PeerID, header.ReplyToMsgID)}
+		}
+		res := tc.main.Bridge.QueueRemoteEvent(tc.userLogin, &simplevent.Message[any]{
+			EventMeta: eventMeta.WithType(bridgev2.RemoteEventMessage),
+			ID:        ids.GetMessageIDFromMessage(msg),
+			ConvertMessageFunc: func(ctx context.Context, portal *bridgev2.Portal, intent bridgev2.MatrixAPI, data any) (*bridgev2.ConvertedMessage, error) {
+				return &bridgev2.ConvertedMessage{
+					ReplyTo: replyTo,
+					Parts: []*bridgev2.ConvertedMessagePart{{
+						Type:    event.EventMessage,
+						Content: &event.MessageEventContent{MsgType: event.MsgNotice, Body: "Pinned a message"},
+					}},
+				}, nil
+			},
+		})
+		return resultToError(res)
 	case *tg.MessageActionTopicEdit:
 		// TODO specific changes?
 		res := tc.main.Bridge.QueueRemoteEvent(tc.userLogin, &simplevent.ChatResync{
