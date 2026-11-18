@@ -405,7 +405,7 @@ func (tc *TelegramClient) onChannelTooLong(channelID int64) error {
 	})
 	if err = resultToError(res); err != nil {
 		return err
-	} else if lastMessageID == 0 {
+	} else if lastMessageID == 0 || tc.metadata.IsBot {
 		return nil
 	}
 	channel, err := tc.getSingleChannel(ctx, channelID)
