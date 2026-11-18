@@ -262,7 +262,6 @@ func (tc *TelegramClient) GetCapabilities(ctx context.Context, portal *bridgev2.
 			event.StateBeeperDisappearingTimer.Type: {Level: event.CapLevelFullySupported},
 		},
 	}
-	// TODO non-admins can only edit messages within 48 hours
 
 	reactions := portal.Metadata.(*PortalMetadata).AllowedReactions
 	if reactions == nil {
@@ -318,6 +317,10 @@ func (tc *TelegramClient) GetCapabilities(ctx context.Context, portal *bridgev2.
 		}
 		// Anyone can delete a non-topic channel for themselves by leaving it
 		feat.DeleteChat = topicID == 0
+		if !tc.metadata.IsBot && portalMetadata.HasEditTimeLimit {
+			baseID += "+edit_max_age"
+			feat.EditMaxAge = ptr.Ptr(jsontime.S(EditMaxAge))
+		}
 	case ids.PeerTypeUser:
 		baseID += "+dm"
 		if id == tc.telegramUserID || tc.isBotUser(ctx, id) {

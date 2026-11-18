@@ -59,6 +59,7 @@ type PortalMetadata struct {
 	IsSuperGroup      bool          `json:"is_supergroup,omitempty"`
 	IsForumGeneral    bool          `json:"is_forum_general,omitempty"`
 	IsCommunity       bool          `json:"is_community,omitempty"`
+	HasEditTimeLimit  bool          `json:"has_edit_time_limit,omitempty"`
 	ReadUpTo          int           `json:"read_up_to,omitempty"` // FIXME this shouldn't be here
 	AllowedReactions  []string      `json:"allowed_reactions"`
 	LastSync          jsontime.Unix `json:"last_sync,omitempty"`
@@ -83,6 +84,12 @@ func (pm *PortalMetadata) SetIsSuperGroup(isSupergroup bool) (changed bool) {
 func (pm *PortalMetadata) SetIsCommunity(isCommunity bool) (changed bool) {
 	changed = pm.IsCommunity != isCommunity
 	pm.IsCommunity = isCommunity
+	return changed
+}
+
+func (pm *PortalMetadata) SetHasEditTimeLimit(hasEditTimeLimit bool) (changed bool) {
+	changed = pm.HasEditTimeLimit != hasEditTimeLimit
+	pm.HasEditTimeLimit = hasEditTimeLimit
 	return changed
 }
 
