@@ -917,22 +917,19 @@ func (tc *TelegramClient) onUserName(ctx context.Context, e tg.Entities, update 
 
 	userInfo := bridgev2.UserInfo{Identifiers: []string{}}
 
-	var firstUsername string
 	for _, ident := range ghost.Identifiers {
 		if !strings.HasPrefix(ident, "telegram:") {
 			userInfo.Identifiers = append(userInfo.Identifiers, ident)
 		}
 	}
 	for _, username := range update.Usernames {
-		if !username.Active {
-			continue
-		} else if firstUsername == "" {
-			firstUsername = username.Username
+		if username.Active {
+			userInfo.Identifiers = append(userInfo.Identifiers, fmt.Sprintf("telegram:%s", username.Username))
 		}
-		userInfo.Identifiers = append(userInfo.Identifiers, fmt.Sprintf("telegram:%s", username.Username))
 	}
 	slices.Sort(userInfo.Identifiers)
 	userInfo.Identifiers = slices.Compact(userInfo.Identifiers)
+	firstUsername := primaryUsername("", update.Usernames)
 	err = tc.main.Store.Username.Set(ctx, ids.PeerTypeUser, update.UserID, firstUsername)
 	if err != nil {
 		return fmt.Errorf("failed to store username: %w", err)
