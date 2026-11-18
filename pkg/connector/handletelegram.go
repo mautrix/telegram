@@ -731,7 +731,6 @@ func (tc *TelegramClient) handleServiceMessage(ctx context.Context, msg *tg.Mess
 		// TODO specific changes?
 		res := tc.main.Bridge.QueueRemoteEvent(tc.userLogin, &simplevent.ChatResync{
 			EventMeta: eventMeta.
-				WithPortalKey(tc.makePortalKeyFromPeer(msg.PeerID, msg.ID)).
 				WithType(bridgev2.RemoteEventChatResync).
 				WithCreatePortal(true),
 			GetChatInfoFunc: tc.GetChatInfo,
