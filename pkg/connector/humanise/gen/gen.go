@@ -60,9 +60,15 @@ func main() {
 		errString = strings.ReplaceAll(errString, `"`, `\"`)
 		typeParts := strings.Split(errType, "_")
 		hasArgument := slices.Contains(typeParts, "X")
+		isDuration := strings.Contains(errString, "{seconds}")
 		if hasArgument {
 			errType = strings.Join(slices.DeleteFunc(typeParts, func(part string) bool { return part == "X" }), "_")
-			errString = placeholderRegex.ReplaceAllString(errString, "%d")
+			if isDuration {
+				errString = strings.ReplaceAll(errString, "{seconds} seconds", "%s")
+				errString = strings.ReplaceAll(errString, "{seconds}", "%s")
+			} else {
+				errString = placeholderRegex.ReplaceAllString(errString, "%d")
+			}
 		}
 
 		data.WriteString(`case tgerr.Is(err, "`)
@@ -70,7 +76,11 @@ func main() {
 		if hasArgument {
 			data.WriteString(`"): return fmt.Sprintf("`)
 			data.WriteString(errString)
-			data.WriteString(`", rpcErr.Argument)`)
+			if isDuration {
+				data.WriteString(`", waitDuration(rpcErr.Argument))`)
+			} else {
+				data.WriteString(`", rpcErr.Argument)`)
+			}
 		} else {
 			data.WriteString(`"): return "`)
 			data.WriteString(errString)
