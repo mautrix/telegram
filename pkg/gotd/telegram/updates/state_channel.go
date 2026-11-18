@@ -96,8 +96,13 @@ func newChannelState(ctx context.Context, cfg channelStateConfig) *channelState 
 
 var ErrRemoveChannelState = errors.New("remove channel state")
 
-func (s *channelState) Run(ctx context.Context) error {
+func (s *channelState) Run(ctx context.Context, resync bool) error {
 	defer s.stop(nil)
+	if resync {
+		if err := s.onTooLong(s.channelID); err != nil {
+			s.log.Error("Failed to resync channel without stored pts", zap.Error(err))
+		}
+	}
 	// Subscribe to channel updates.
 	if err := s.getDifference(s.runCtx); err != nil {
 		s.log.Error("Failed to subscribe to channel updates", zap.Error(err))
