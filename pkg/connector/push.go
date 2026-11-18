@@ -383,8 +383,8 @@ func (tc *TelegramClient) backfillPushedMessage(ctx context.Context, portalKey n
 				if latestMessage == nil {
 					return true, nil
 				}
-				_, latestMessageID, err := ids.ParseMessageID(latestMessage.ID)
-				return err == nil && msgID > latestMessageID, nil
+				latestMessageID, err := tc.getLastTelegramMessageID(ctx, latestMessage)
+				return err == nil && msgID > latestMessageID, err
 			},
 		}))
 	})

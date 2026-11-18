@@ -18,6 +18,8 @@ package store
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"time"
 
 	"go.mau.fi/util/dbutil"
@@ -53,6 +55,21 @@ func (c *Container) Upgrade(ctx context.Context) error {
 
 func (c *Container) GetScopedStore(telegramUserID int64) *ScopedStore {
 	return &ScopedStore{c.Database, telegramUserID}
+}
+
+const getLastTelegramMessageIDQuery = `
+	SELECT id FROM message
+	WHERE bridge_id=$1 AND room_id=$2 AND room_receiver=$3 AND timestamp<=$4 AND id NOT LIKE '%:%'
+	ORDER BY timestamp DESC, id DESC
+	LIMIT 1
+`
+
+func (c *Container) GetLastTelegramMessageID(ctx context.Context, bridgeID networkid.BridgeID, portalKey networkid.PortalKey, maxTS time.Time) (messageID networkid.MessageID, err error) {
+	err = c.QueryRow(ctx, getLastTelegramMessageIDQuery, bridgeID, portalKey.ID, portalKey.Receiver, maxTS.UnixNano()).Scan(&messageID)
+	if errors.Is(err, sql.ErrNoRows) {
+		err = nil
+	}
+	return
 }
 
 func (c *Container) NamespaceMigratedMessages(ctx context.Context, bridgeID networkid.BridgeID, portalKey networkid.PortalKey) (int64, error) {
