@@ -85,13 +85,14 @@ func (tc *TelegramClient) computeReactionsList(ctx context.Context, peer tg.Peer
 	for _, reaction := range reactionsList {
 		if e, ok := reaction.Reaction.(*tg.ReactionCustomEmoji); ok {
 			customEmojiIDs = append(customEmojiIDs, e.DocumentID)
-		} else if reaction.Reaction.TypeID() != tg.ReactionEmojiTypeID {
-			return nil, false, nil, fmt.Errorf("unsupported reaction type %T", reaction.Reaction)
 		}
 	}
 
 	customEmojis, err = tc.transferEmojisToMatrix(ctx, customEmojiIDs)
-	return reactionsList, len(reactionsList) == totalCount, customEmojis, err
+	if err != nil {
+		return nil, false, nil, err
+	}
+	return reactionsList, len(reactionsList) == totalCount, customEmojis, nil
 }
 
 func computeEmojiAndID(reaction tg.ReactionClass, customEmojis map[networkid.EmojiID]emojis.EmojiInfo) (emojiID networkid.EmojiID, emoji string, err error) {
