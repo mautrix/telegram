@@ -221,7 +221,18 @@ func (s *channelState) getDifference(ctx context.Context) error {
 		}
 	}
 
-	diff, err := s.getDifferenceWithRetry(ctx)
+	log := s.log.With(zap.Int("pts", s.pts.State()))
+	diff, err := retryDifference(ctx, log, nil, s.waitIgnoringUpdates, func() (tg.UpdatesChannelDifferenceClass, error) {
+		return s.client.UpdatesGetChannelDifference(ctx, &tg.UpdatesGetChannelDifferenceRequest{
+			Channel: &tg.InputChannel{
+				ChannelID:  s.channelID,
+				AccessHash: s.accessHash,
+			},
+			Filter: &tg.ChannelMessagesFilterEmpty{},
+			Pts:    s.pts.State(),
+			Limit:  s.diffLim,
+		})
+	})
 	if err != nil {
 		if tgerr.Is(err, tg.ErrChannelPrivate) || tgerr.Is(err, tg.ErrChannelInvalid) {
 			if err := s.storage.SetChannelPts(ctx, s.selfID, s.channelID, -1); err != nil {
@@ -306,38 +317,6 @@ func (s *channelState) getDifference(ctx context.Context) error {
 
 	default:
 		return errors.Errorf("unexpected channel diff type: %T", diff)
-	}
-}
-
-func (s *channelState) getDifferenceWithRetry(ctx context.Context) (diff tg.UpdatesChannelDifferenceClass, err error) {
-	for {
-		diff, err = s.client.UpdatesGetChannelDifference(ctx, &tg.UpdatesGetChannelDifferenceRequest{
-			Channel: &tg.InputChannel{
-				ChannelID:  s.channelID,
-				AccessHash: s.accessHash,
-			},
-			Filter: &tg.ChannelMessagesFilterEmpty{},
-			Pts:    s.pts.State(),
-			Limit:  s.diffLim,
-		})
-		if err == nil {
-			return diff, nil
-		}
-		dur, ok := tgerr.AsFloodWait(err)
-		if ok {
-			s.log.Warn("Flood wait error while getting channel difference", zap.Duration("wait", dur))
-		} else if rpcErr, ok := tgerr.As(err); ok && (rpcErr.Code >= 500 || rpcErr.Code < 0) {
-			s.log.Error("Failed to get channel difference, retrying in 5 seconds...",
-				zap.Error(err),
-				zap.Int("pts", s.pts.State()),
-			)
-			dur = 5 * time.Second
-		} else {
-			return nil, err
-		}
-		if err = s.waitIgnoringUpdates(ctx, dur); err != nil {
-			return nil, err
-		}
 	}
 }
 
