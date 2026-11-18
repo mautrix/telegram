@@ -373,32 +373,102 @@ func NewTelegramClient(ctx context.Context, tc *TelegramConnector, login *bridge
 }
 
 func (tc *TelegramClient) onChannelTooLong(channelID int64) error {
-	ctx := tc.userLogin.Log.WithContext(tc.main.Bridge.BackgroundCtx)
+	log := tc.userLogin.Log.With().Str("action", "resync channel after too long").Int64("channel_id", channelID).Logger()
+	ctx := log.WithContext(tc.clientCtx)
 	topics, err := tc.main.Store.Topic.GetAll(ctx, channelID)
 	if err != nil {
 		return fmt.Errorf("failed to get topics of channel: %w", err)
 	}
-	for _, topicID := range append([]int{0}, topics...) {
-		evt := &simplevent.ChatResync{
-			EventMeta: simplevent.EventMeta{
-				Type: bridgev2.RemoteEventChatResync,
-				LogContext: func(c zerolog.Context) zerolog.Context {
-					return c.Str("update", "channel_too_long").Int64("channel_id", channelID).Int("topic_id", topicID)
-				},
-				PortalKey: tc.makePortalKeyFromID(ids.PeerTypeChannel, channelID, topicID),
-			},
-			CheckNeedsBackfillFunc: func(ctx context.Context, latestMessage *database.Message) (bool, error) {
-				return true, nil
-			},
-		}
-		if topicID == 0 && len(topics) > 0 {
-			evt.GetChatInfoFunc = tc.GetChatInfo
-		}
-		if err = resultToError(tc.main.Bridge.QueueRemoteEvent(tc.userLogin, evt)); err != nil {
-			return err
+	var lastMessageID int
+	for _, topicID := range append(topics, 0) {
+		msg, err := tc.main.Bridge.DB.Message.GetLastPartAtOrBeforeTime(ctx, tc.makePortalKeyFromID(ids.PeerTypeChannel, channelID, topicID), time.Now())
+		if err != nil {
+			return fmt.Errorf("failed to get last message of topic %d: %w", topicID, err)
+		} else if msg == nil {
+			continue
+		} else if _, msgID, err := ids.ParseMessageID(msg.ID); err == nil {
+			lastMessageID = max(lastMessageID, msgID)
 		}
 	}
-	return nil
+	res := tc.main.Bridge.QueueRemoteEvent(tc.userLogin, &simplevent.ChatResync{
+		EventMeta: simplevent.EventMeta{
+			Type: bridgev2.RemoteEventChatResync,
+			LogContext: func(c zerolog.Context) zerolog.Context {
+				return c.Str("update", "channel_too_long").Int64("channel_id", channelID)
+			},
+			PortalKey: tc.makePortalKeyFromID(ids.PeerTypeChannel, channelID, 0),
+		},
+		GetChatInfoFunc: tc.GetChatInfo,
+		CheckNeedsBackfillFunc: func(ctx context.Context, latestMessage *database.Message) (bool, error) {
+			return true, nil
+		},
+	})
+	if err = resultToError(res); err != nil {
+		return err
+	} else if lastMessageID == 0 {
+		return nil
+	}
+	channel, err := tc.getSingleChannel(ctx, channelID)
+	if err != nil {
+		return fmt.Errorf("failed to get channel: %w", err)
+	} else if !channel.Forum {
+		return nil
+	}
+	req := tg.MessagesGetForumTopicsRequest{Peer: channel.AsInputPeer(), Limit: 100}
+	for {
+		resp, err := APICallWithUpdates(ctx, tc, func() (*tg.MessagesForumTopics, error) {
+			return tc.client.API().MessagesGetForumTopics(ctx, &req)
+		})
+		if err != nil {
+			return fmt.Errorf("failed to get forum topics: %w", err)
+		}
+		var lastTopic *tg.ForumTopic
+		hasNewer := false
+		for _, rawTopic := range resp.Topics {
+			topic, ok := rawTopic.(*tg.ForumTopic)
+			if !ok {
+				continue
+			}
+			lastTopic = topic
+			if topic.TopMessage <= lastMessageID {
+				continue
+			}
+			hasNewer = true
+			if topic.ID == 1 {
+				continue
+			}
+			if err = tc.main.Store.Topic.Add(ctx, channelID, topic.ID); err != nil {
+				return fmt.Errorf("failed to store topic: %w", err)
+			}
+			res = tc.main.Bridge.QueueRemoteEvent(tc.userLogin, &simplevent.ChatResync{
+				EventMeta: simplevent.EventMeta{
+					Type: bridgev2.RemoteEventChatResync,
+					LogContext: func(c zerolog.Context) zerolog.Context {
+						return c.Str("update", "channel_too_long").Int64("channel_id", channelID).Int("topic_id", topic.ID)
+					},
+					PortalKey:    tc.makePortalKeyFromID(ids.PeerTypeChannel, channelID, topic.ID),
+					CreatePortal: true,
+				},
+				CheckNeedsBackfillFunc: func(ctx context.Context, latestMessage *database.Message) (bool, error) {
+					return true, nil
+				},
+			})
+			if err = resultToError(res); err != nil {
+				return err
+			}
+		}
+		if lastTopic == nil || len(resp.Topics) < req.Limit || (!hasNewer && !resp.OrderByCreateDate) {
+			return nil
+		}
+		req.OffsetTopic, req.OffsetID, req.OffsetDate = lastTopic.ID, lastTopic.TopMessage, lastTopic.Date
+		if !resp.OrderByCreateDate {
+			for _, msg := range resp.Messages {
+				if notEmpty, ok := msg.AsNotEmpty(); ok && msg.GetID() == lastTopic.TopMessage {
+					req.OffsetDate = notEmpty.GetDate()
+				}
+			}
+		}
+	}
 }
 
 func (tc *TelegramClient) onDead() {
