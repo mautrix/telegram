@@ -3,6 +3,7 @@ package updates
 import (
 	"context"
 	"fmt"
+	"math/rand/v2"
 	"time"
 
 	"github.com/go-faster/errors"
@@ -67,7 +68,7 @@ func newChannelState(ctx context.Context, cfg channelStateConfig) *channelState 
 		updates: make(chan channelUpdate, 10),
 		out:     cfg.Out,
 
-		idleTimeout: time.NewTimer(idleTimeout),
+		idleTimeout: time.NewTimer(channelIdleTimeout()),
 
 		channelID:  cfg.ChannelID,
 		accessHash: cfg.AccessHash,
@@ -91,17 +92,6 @@ func newChannelState(ctx context.Context, cfg channelStateConfig) *channelState 
 	state.runCtx, state.stop = context.WithCancelCause(ctx)
 
 	return state
-}
-
-func (s *channelState) Push(ctx context.Context, u channelUpdate) error {
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	case <-s.runCtx.Done():
-		return nil
-	case s.updates <- u:
-		return nil
-	}
 }
 
 var ErrRemoveChannelState = errors.New("remove channel state")
@@ -383,5 +373,9 @@ func (s *channelState) resetIdleTimer() {
 		<-s.idleTimeout.C
 	}
 
-	_ = s.idleTimeout.Reset(idleTimeout)
+	_ = s.idleTimeout.Reset(channelIdleTimeout())
+}
+
+func channelIdleTimeout() time.Duration {
+	return idleTimeout/2 + rand.N(idleTimeout)
 }

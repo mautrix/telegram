@@ -20,19 +20,24 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
+	"net/http"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/rs/zerolog"
 	"go.mau.fi/util/ptr"
+	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/bridgev2"
 
 	"go.mau.fi/mautrix-telegram/pkg/connector/ids"
 	"go.mau.fi/mautrix-telegram/pkg/connector/store"
 	"go.mau.fi/mautrix-telegram/pkg/gotd/telegram/query/hasher"
 	"go.mau.fi/mautrix-telegram/pkg/gotd/tg"
+	"go.mau.fi/mautrix-telegram/pkg/gotd/tgerr"
 )
 
 var (
@@ -132,16 +137,58 @@ func (tc *TelegramClient) resolveUsername(ctx context.Context, username string, 
 	} else if err != nil {
 		return nil, wrapUnknownError(ctx, "failed to resolve username", err)
 	}
+	user, err := resolvedPeerUser(resolved)
+	if err != nil {
+		return nil, err
+	} else if expectedID != 0 && user.GetID() != expectedID {
+		return nil, fmt.Errorf("%w: resolving %s returned %d instead of %d", bridgev2.ErrResolveIdentifierTryNext, username, user.GetID(), expectedID)
+	}
+	return tc.resolveUser(ctx, user)
+}
+
+const resolvePhoneInterval = 3 * time.Second
+
+func (tc *TelegramClient) resolvePhone(ctx context.Context, phone string) (*bridgev2.ResolveIdentifierResponse, error) {
+	tc.resolvePhoneLock.Lock()
+	defer tc.resolvePhoneLock.Unlock()
+	if wait := resolvePhoneInterval - time.Since(tc.lastResolvePhone); wait > 0 {
+		return nil, resolvePhoneLimitExceeded(wait)
+	}
+	resolved, err := APICallWithUpdates(ctx, tc, func() (*tg.ContactsResolvedPeer, error) {
+		return tc.client.API().ContactsResolvePhone(ctx, phone)
+	})
+	tc.lastResolvePhone = time.Now()
+	if tg.IsPhoneNotOccupied(err) || tg.IsPhoneNumberInvalid(err) {
+		return nil, nil
+	} else if wait, ok := tgerr.AsFloodWait(err); ok {
+		return nil, resolvePhoneLimitExceeded(wait)
+	} else if err != nil {
+		return nil, wrapUnknownError(ctx, "failed to resolve phone number", err)
+	}
+	user, err := resolvedPeerUser(resolved)
+	if err != nil {
+		return nil, err
+	}
+	return tc.resolveUser(ctx, user)
+}
+
+func resolvePhoneLimitExceeded(wait time.Duration) error {
+	retryAfter := int(math.Ceil(wait.Seconds())) + 1
+	return bridgev2.RespError(mautrix.MLimitExceeded.
+		WithMessage("Too many phone number lookups, try again in %d seconds", retryAfter).
+		WithExtraField("retry_after_ms", retryAfter*1000).
+		WithExtraHeader("Retry-After", strconv.Itoa(retryAfter)).
+		WithStatus(http.StatusBadRequest))
+}
+
+func resolvedPeerUser(resolved *tg.ContactsResolvedPeer) (tg.UserClass, error) {
 	peer, ok := resolved.GetPeer().(*tg.PeerUser)
 	if !ok {
 		return nil, fmt.Errorf("unexpected peer type: %T", resolved.GetPeer())
 	}
-	if expectedID != 0 && peer.GetUserID() != expectedID {
-		return nil, fmt.Errorf("%w: resolving %s returned %d instead of %d", bridgev2.ErrResolveIdentifierTryNext, username, peer.GetUserID(), expectedID)
-	}
 	for _, user := range resolved.GetUsers() {
 		if user.GetID() == peer.GetUserID() {
-			return tc.resolveUser(ctx, user)
+			return user, nil
 		}
 	}
 	return nil, fmt.Errorf("peer user not found in contact resolved response")
@@ -167,12 +214,16 @@ func (tc *TelegramClient) ResolveIdentifier(ctx context.Context, identifier stri
 	}
 
 	if identifier[0] == '+' {
-		normalized := strings.TrimPrefix(identifier, "+")
+		cleaned, err := bridgev2.CleanPhoneNumber(identifier)
+		if err != nil {
+			return nil, nil
+		}
+		normalized := strings.TrimPrefix(cleaned, "+")
 		if userID, err := tc.main.Store.PhoneNumber.GetUserID(ctx, normalized); err != nil {
 			return nil, fmt.Errorf("failed to get user ID by phone number: %w", err)
 		} else if userID == 0 {
 			log.Info().Msg("Phone number not found in database")
-			return nil, nil
+			return tc.resolvePhone(ctx, normalized)
 		} else {
 			return tc.resolveUserID(ctx, userID)
 		}
@@ -237,49 +288,61 @@ func (tc *TelegramClient) SearchUsers(ctx context.Context, query string) (resp [
 func (tc *TelegramClient) GetContactList(ctx context.Context) (resp []*bridgev2.ResolveIdentifierResponse, err error) {
 	tc.contactsLock.Lock()
 	defer tc.contactsLock.Unlock()
-	var contacts *tg.ContactsContacts
+	var fresh bool
 	if time.Since(tc.lastContactReq) > 10*time.Minute {
-		contacts, err = APICallWithOnlyUserUpdates(ctx, tc, func() (*tg.ContactsContacts, error) {
+		_, err = APICallWithOnlyUserUpdates(ctx, tc, func() (*tg.ContactsContacts, error) {
 			c, err := tc.client.API().ContactsGetContacts(ctx, tc.cachedContactsHash)
 			if err != nil {
 				return nil, err
 			}
 			switch typedResp := c.(type) {
 			case *tg.ContactsContacts:
+				fresh = true
 				tc.cachedContacts = typedResp
+				userIDs := make([]int64, len(typedResp.Contacts))
+				for i, contact := range typedResp.Contacts {
+					userIDs[i] = contact.UserID
+				}
+				slices.Sort(userIDs)
 				var h hasher.Hasher
-				for _, contact := range tc.cachedContacts.Contacts {
-					h.Update(uint32(contact.UserID))
+				h.Update(uint64(typedResp.SavedCount))
+				for _, userID := range userIDs {
+					h.Update(uint64(userID))
 				}
 				tc.cachedContactsHash = h.Sum()
 			case *tg.ContactsContactsNotModified:
 				// No changes
+				return &tg.ContactsContacts{}, nil
 			default:
 				return nil, fmt.Errorf("unexpected contacts type: %T", c)
 			}
 			return tc.cachedContacts, nil
 		})
 		if err != nil {
+			tc.cachedContactsHash = 0
 			return nil, err
 		}
 		tc.lastContactReq = time.Now()
-	} else {
-		contacts = tc.cachedContacts
 	}
+	contacts := tc.cachedContacts
 	users := map[int64]tg.UserClass{}
 	for _, user := range contacts.GetUsers() {
 		users[user.GetID()] = user
 	}
 
 	for _, contact := range contacts.Contacts {
-		if user, ok := users[contact.UserID]; ok {
+		if user, ok := users[contact.UserID]; !ok {
+			return nil, fmt.Errorf("contact user not found in contact list response")
+		} else if fresh {
 			if r, err := tc.resolveUser(ctx, user); err != nil {
 				return nil, err
 			} else {
 				resp = append(resp, r)
 			}
+		} else if ghost, err := tc.main.Bridge.GetGhostByID(ctx, ids.MakeUserID(contact.UserID)); err != nil {
+			return nil, fmt.Errorf("failed to get ghost: %w", err)
 		} else {
-			return nil, fmt.Errorf("contact user not found in contact list response")
+			resp = append(resp, tc.makeResolveIdentifierResponse(ghost, user, nil))
 		}
 	}
 	return resp, nil
