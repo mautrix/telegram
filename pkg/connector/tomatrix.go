@@ -133,13 +133,32 @@ func (tc *TelegramClient) mediaToMatrix(
 		return convertDice(media), nil, nil
 	case tg.MessageMediaGameTypeID:
 		return convertGame(media), nil, nil
+	case tg.MessageMediaEmptyTypeID:
+		return nil, nil, nil
 	default:
+		var name string
+		switch media.TypeID() {
+		case tg.MessageMediaToDoTypeID:
+			name = "Checklists"
+		case tg.MessageMediaStoryTypeID:
+			name = "Stories"
+		case tg.MessageMediaInvoiceTypeID:
+			name = "Invoices"
+		case tg.MessageMediaPaidMediaTypeID:
+			name = "Paid media"
+		case tg.MessageMediaGiveawayTypeID, tg.MessageMediaGiveawayResultsTypeID:
+			name = "Giveaways"
+		case tg.MessageMediaVideoStreamTypeID:
+			name = "Live streams"
+		default:
+			name = media.TypeName()
+		}
 		// TODO: support these properly
 		return &bridgev2.ConvertedMessagePart{
 			Type: event.EventMessage,
 			Content: &event.MessageEventContent{
 				MsgType: event.MsgNotice,
-				Body:    fmt.Sprintf("%s are not yet supported. Open Telegram to view.", media.TypeName()),
+				Body:    fmt.Sprintf("%s are not yet supported. Open Telegram to view.", name),
 			},
 			Extra: map[string]any{
 				"fi.mau.telegram.unsupported": true,
@@ -580,8 +599,17 @@ func (tc *TelegramClient) convertMediaRequiringUpload(
 				if ttl == telegramViewOnceTTL {
 					if tc.main.Config.DisableViewOnce {
 						typeName := "photo"
-						if msgMedia.TypeID() == tg.MessageMediaDocumentTypeID {
-							typeName = "file"
+						if doc, ok := msgMedia.(*tg.MessageMediaDocument); ok {
+							switch {
+							case doc.Voice:
+								typeName = "voice message"
+							case doc.Round:
+								typeName = "video message"
+							case doc.Video:
+								typeName = "video"
+							default:
+								typeName = "file"
+							}
 						}
 						converted = &bridgev2.ConvertedMessagePart{
 							Type: event.EventMessage,

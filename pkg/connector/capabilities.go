@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/rs/zerolog"
+	"go.mau.fi/util/exslices"
 	"go.mau.fi/util/jsontime"
 	"go.mau.fi/util/ptr"
 	"go.mau.fi/util/variationselector"
@@ -64,14 +65,14 @@ func (tc *TelegramConnector) GetCapabilities() *bridgev2.NetworkGeneralCapabilit
 }
 
 func (tc *TelegramConnector) GetBridgeInfoVersion() (info, capabilities int) {
-	return 1, 18
+	return 1, 20
 }
 
 // TODO get these from getConfig instead of hardcoding?
 
 const MaxTextLength = 4096
 const MaxCaptionLength = 1024
-const MaxFileSize = 2 * 1024 * 1024 * 1024
+const MaxFileSize = 2000 * 1024 * 1024
 
 var formattingCaps = event.FormattingFeatureMap{
 	event.FmtBold:               event.CapLevelFullySupported,
@@ -110,7 +111,9 @@ var fileCaps = event.FileFeatureMap{
 	},
 	event.MsgVideo: {
 		MimeTypes: map[string]event.CapabilitySupportLevel{
-			"video/mp4": event.CapLevelFullySupported,
+			"video/mp4":       event.CapLevelFullySupported,
+			"video/quicktime": event.CapLevelFullySupported,
+			"video/*":         event.CapLevelPartialSupport,
 		},
 		Caption:          event.CapLevelFullySupported,
 		MaxCaptionLength: MaxCaptionLength,
@@ -120,7 +123,7 @@ var fileCaps = event.FileFeatureMap{
 		MimeTypes: map[string]event.CapabilitySupportLevel{
 			"audio/mpeg": event.CapLevelFullySupported,
 			"audio/mp4":  event.CapLevelFullySupported,
-			// TODO some other formats are probably supported too
+			"audio/*":    event.CapLevelPartialSupport,
 		},
 		Caption:          event.CapLevelFullySupported,
 		MaxCaptionLength: MaxCaptionLength,
@@ -228,7 +231,7 @@ func viewLimitedFileCaps(base event.FileFeatureMap) event.FileFeatureMap {
 var telegramTimers = makeTimerList()
 
 func (tc *TelegramClient) GetCapabilities(ctx context.Context, portal *bridgev2.Portal) *event.RoomFeatures {
-	baseID := "fi.mau.telegram.capabilities.2026_11_11"
+	baseID := "fi.mau.telegram.capabilities.2026_11_13"
 	feat := &event.RoomFeatures{
 		Formatting:          formattingCaps,
 		File:                fileCaps,
@@ -263,7 +266,9 @@ func (tc *TelegramClient) GetCapabilities(ctx context.Context, portal *bridgev2.
 	reactions := portal.Metadata.(*PortalMetadata).AllowedReactions
 	if reactions == nil {
 		baseID += "+reactions_any"
-		feat.AllowedReactions, feat.CustomEmojiReactions = tc.getAvailableReactionsForCapability(ctx)
+		var availableReactions []string
+		availableReactions, feat.CustomEmojiReactions = tc.getAvailableReactionsForCapability(ctx)
+		feat.AllowedReactions = exslices.CastFunc(availableReactions, variationselector.Add)
 		if len(feat.AllowedReactions) > 0 {
 			baseID += "+any_list_" + hashEmojiList(feat.AllowedReactions)
 		}
@@ -271,11 +276,8 @@ func (tc *TelegramClient) GetCapabilities(ctx context.Context, portal *bridgev2.
 		baseID += "+reactions_none"
 		feat.Reaction = event.CapLevelRejected
 	} else {
-		baseID += "+reactions_" + hashEmojiList(reactions)
-		feat.AllowedReactions = reactions
-	}
-	for i, react := range feat.AllowedReactions {
-		feat.AllowedReactions[i] = variationselector.Add(react)
+		feat.AllowedReactions = exslices.CastFunc(reactions, variationselector.Add)
+		baseID += "+reactions_" + hashEmojiList(feat.AllowedReactions)
 	}
 	if tc.isPremiumCache.Load() {
 		baseID += "+premium"

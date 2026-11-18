@@ -31,6 +31,7 @@ import (
 	"go.mau.fi/util/exmaps"
 	"go.mau.fi/util/jsontime"
 	"go.mau.fi/util/ptr"
+	"golang.org/x/net/html"
 	"maunium.net/go/mautrix/bridgev2"
 	"maunium.net/go/mautrix/bridgev2/database"
 	"maunium.net/go/mautrix/bridgev2/networkid"
@@ -598,32 +599,31 @@ func (tc *TelegramClient) handleServiceMessage(ctx context.Context, msg *tg.Mess
 		})
 		return resultToError(res)
 	case *tg.MessageActionInviteToGroupCall:
-		var body, html strings.Builder
+		var body, formatted strings.Builder
 		var mentions event.Mentions
 		body.WriteString("Invited ")
-		html.WriteString("Invited ")
+		formatted.WriteString("Invited ")
 		for i, userID := range action.Users {
 			if i > 0 {
 				body.WriteString(", ")
+				formatted.WriteString(", ")
 			}
 
 			if ghost, err := tc.main.Bridge.GetGhostByID(ctx, ids.MakeUserID(userID)); err != nil {
 				return err
 			} else {
-				var name string
-				if username, err := tc.main.Store.Username.Get(ctx, ids.PeerTypeUser, userID); err != nil {
+				name := ghost.Name
+				if username, err := tc.main.Store.Username.Get(ctx, ids.PeerTypeUser, userID); err == nil && username != "" {
 					name = "@" + username
-				} else {
-					name = ghost.Name
 				}
 
 				mentions.UserIDs = append(mentions.UserIDs, ghost.Intent.GetMXID())
 				body.WriteString(name)
-				html.WriteString(fmt.Sprintf(`<a href="%s">@%s</a>`, ghost.Intent.GetMXID().URI().MatrixToURL(), name))
+				formatted.WriteString(fmt.Sprintf(`<a href="%s">%s</a>`, ghost.Intent.GetMXID().URI().MatrixToURL(), html.EscapeString(name)))
 			}
 		}
 		body.WriteString(" to the video chat")
-		html.WriteString(" to the video chat")
+		formatted.WriteString(" to the video chat")
 		res := tc.main.Bridge.QueueRemoteEvent(tc.userLogin, &simplevent.Message[any]{
 			EventMeta: eventMeta.WithType(bridgev2.RemoteEventMessage),
 			ID:        ids.GetMessageIDFromMessage(msg),
@@ -635,7 +635,7 @@ func (tc *TelegramClient) handleServiceMessage(ctx context.Context, msg *tg.Mess
 							MsgType:       event.MsgNotice,
 							Body:          body.String(),
 							Format:        event.FormatHTML,
-							FormattedBody: html.String(),
+							FormattedBody: formatted.String(),
 							Mentions:      &mentions,
 						},
 					}},
@@ -725,6 +725,25 @@ func (tc *TelegramClient) handleServiceMessage(ctx context.Context, msg *tg.Mess
 				WithType(bridgev2.RemoteEventChatResync).
 				WithCreatePortal(true),
 			GetChatInfoFunc: tc.GetChatInfo,
+		})
+		return resultToError(res)
+	case *tg.MessageActionPinMessage:
+		var replyTo *networkid.MessageOptionalPartID
+		if header, ok := msg.ReplyTo.(*tg.MessageReplyHeader); ok && header.ReplyToMsgID != 0 {
+			replyTo = &networkid.MessageOptionalPartID{MessageID: ids.MakeMessageID(msg.PeerID, header.ReplyToMsgID)}
+		}
+		res := tc.main.Bridge.QueueRemoteEvent(tc.userLogin, &simplevent.Message[any]{
+			EventMeta: eventMeta.WithType(bridgev2.RemoteEventMessage),
+			ID:        ids.GetMessageIDFromMessage(msg),
+			ConvertMessageFunc: func(ctx context.Context, portal *bridgev2.Portal, intent bridgev2.MatrixAPI, data any) (*bridgev2.ConvertedMessage, error) {
+				return &bridgev2.ConvertedMessage{
+					ReplyTo: replyTo,
+					Parts: []*bridgev2.ConvertedMessagePart{{
+						Type:    event.EventMessage,
+						Content: &event.MessageEventContent{MsgType: event.MsgNotice, Body: "Pinned a message"},
+					}},
+				}, nil
+			},
 		})
 		return resultToError(res)
 	case *tg.MessageActionTopicEdit:
@@ -1133,15 +1152,15 @@ func (tc *TelegramClient) onUpdate(ctx context.Context, e tg.Entities, upd tg.Up
 	case *tg.UpdateBotMessageReaction:
 		return tc.onBotMessageReaction(ctx, update)
 	case *tg.UpdateUserTyping:
-		return tc.handleTyping(tc.makePortalKeyFromID(ids.PeerTypeUser, update.UserID, 0), tc.senderForUserID(update.UserID), update.Action)
+		return tc.handleTyping(ctx, tc.makePortalKeyFromID(ids.PeerTypeUser, update.UserID, 0), tc.senderForUserID(update.UserID), update.Action)
 	case *tg.UpdateChatUserTyping:
 		if update.FromID.TypeID() != tg.PeerUserTypeID {
 			zerolog.Ctx(ctx).Warn().Str("from_id_type", update.FromID.TypeName()).Msg("unsupported from_id type")
 			return nil
 		}
-		return tc.handleTyping(tc.makePortalKeyFromID(ids.PeerTypeChat, update.ChatID, 0), tc.getPeerSender(update.FromID), update.Action)
+		return tc.handleTyping(ctx, tc.makePortalKeyFromID(ids.PeerTypeChat, update.ChatID, 0), tc.getPeerSender(update.FromID), update.Action)
 	case *tg.UpdateChannelUserTyping:
-		return tc.handleTyping(tc.makePortalKeyFromID(ids.PeerTypeChannel, update.ChannelID, update.TopMsgID), tc.getPeerSender(update.FromID), update.Action)
+		return tc.handleTyping(ctx, tc.makePortalKeyFromID(ids.PeerTypeChannel, update.ChannelID, update.TopMsgID), tc.getPeerSender(update.FromID), update.Action)
 	case *tg.UpdateReadHistoryOutbox:
 		return tc.updateReadReceipt(ctx, e, update)
 	case *tg.UpdateReadHistoryInbox:
@@ -1164,6 +1183,12 @@ func (tc *TelegramClient) onUpdate(ctx context.Context, e tg.Entities, upd tg.Up
 		return tc.onPhoneCall(ctx, e, update)
 	case *tg.UpdateUserStatus:
 		// ignored
+		return nil
+	case *tg.UpdateConfig:
+		tc.appConfigLock.Lock()
+		tc.appConfig = nil
+		tc.appConfigHash = 0
+		tc.appConfigLock.Unlock()
 		return nil
 	default:
 		zerolog.Ctx(ctx).Debug().Type("update_type", update).Msg("Unhandled update type")
@@ -1250,6 +1275,15 @@ func (tc *TelegramClient) onBotMessageReaction(ctx context.Context, update *tg.U
 func (tc *TelegramClient) onMessageEdit(ctx context.Context, update IGetMessage) error {
 	msg, ok := update.GetMessage().(*tg.Message)
 	if !ok {
+		if svcMsg, ok := update.GetMessage().(*tg.MessageService); ok {
+			if _, isChannel := svcMsg.PeerID.(*tg.PeerChannel); !isChannel {
+				err := tc.handleTelegramReactions(ctx, svcMsg.PeerID, 0, svcMsg.ID, svcMsg.Reactions, "updateMessageEdit")
+				if err != nil {
+					zerolog.Ctx(ctx).Err(err).Msg("Failed to handle reactions on edited service message")
+				}
+				return nil
+			}
+		}
 		zerolog.Ctx(ctx).Warn().
 			Str("type_name", update.GetMessage().TypeName()).
 			Msg("edit message is not *tg.Message")
@@ -1338,8 +1372,13 @@ func (tc *TelegramClient) onMessageEdit(ctx context.Context, update IGetMessage)
 	return resultToError(res)
 }
 
-func (tc *TelegramClient) handleTyping(portal networkid.PortalKey, sender bridgev2.EventSender, action tg.SendMessageActionClass) error {
+func (tc *TelegramClient) handleTyping(ctx context.Context, portal networkid.PortalKey, sender bridgev2.EventSender, action tg.SendMessageActionClass) error {
 	if sender.IsFromMe || (sender.Sender == tc.userID && sender.SenderLogin == tc.userLogin.ID) {
+		return nil
+	}
+	if ghost, err := tc.main.Bridge.GetExistingGhostByID(ctx, sender.Sender); err != nil {
+		return err
+	} else if ghost == nil || ghost.Name == "" {
 		return nil
 	}
 	timeout := time.Duration(6) * time.Second
