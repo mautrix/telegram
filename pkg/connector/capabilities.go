@@ -64,7 +64,7 @@ func (tc *TelegramConnector) GetCapabilities() *bridgev2.NetworkGeneralCapabilit
 }
 
 func (tc *TelegramConnector) GetBridgeInfoVersion() (info, capabilities int) {
-	return 1, 17
+	return 1, 20
 }
 
 // TODO get these from getConfig instead of hardcoding?
@@ -230,7 +230,7 @@ func viewLimitedFileCaps(base event.FileFeatureMap) event.FileFeatureMap {
 var telegramTimers = makeTimerList()
 
 func (tc *TelegramClient) GetCapabilities(ctx context.Context, portal *bridgev2.Portal) *event.RoomFeatures {
-	baseID := "fi.mau.telegram.capabilities.2026_11_10"
+	baseID := "fi.mau.telegram.capabilities.2026_11_13"
 	feat := &event.RoomFeatures{
 		Formatting:          formattingCaps,
 		File:                fileCaps,
@@ -256,6 +256,7 @@ func (tc *TelegramClient) GetCapabilities(ctx context.Context, portal *bridgev2.
 		State: event.StateFeatureMap{
 			event.StateRoomName.Type:                {Level: event.CapLevelFullySupported},
 			event.StateRoomAvatar.Type:              {Level: event.CapLevelFullySupported},
+			event.StateTopic.Type:                   {Level: event.CapLevelFullySupported},
 			event.StateBeeperDisappearingTimer.Type: {Level: event.CapLevelFullySupported},
 		},
 	}
@@ -339,6 +340,7 @@ func (tc *TelegramClient) GetCapabilities(ctx context.Context, portal *bridgev2.
 		baseID += "+topic"
 		// TODO do topics have other changes?
 		delete(feat.State, event.StateRoomAvatar.Type)
+		delete(feat.State, event.StateTopic.Type)
 		delete(feat.State, event.StateBeeperDisappearingTimer.Type)
 		feat.DisappearingTimer = nil
 	} else if topicID == ids.TopicIDSpaceRoom {

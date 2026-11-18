@@ -28,6 +28,7 @@ type Config struct {
 	// recover channel gap (optional).
 	OnChannelTooLong   func(channelID int64) error
 	OnNotChannelMember func(ctx context.Context, channelID int64) error
+	OnDifferenceStuck  func(stuck bool, err error)
 	// State storage.
 	// In-mem used if not provided.
 	Storage StateStorage
@@ -55,6 +56,9 @@ func (cfg *Config) setDefaults() {
 	}
 	if cfg.Storage == nil {
 		cfg.Storage = newMemStorage()
+	}
+	if cfg.OnDifferenceStuck == nil {
+		cfg.OnDifferenceStuck = func(stuck bool, err error) {}
 	}
 	if cfg.OnChannelTooLong == nil {
 		cfg.OnChannelTooLong = func(channelID int64) error {

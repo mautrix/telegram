@@ -419,6 +419,8 @@ func (parser *HTMLParser) getGhostDetails(ctx context.Context, portal *bridgev2.
 		return "", "", 0, false
 	} else if username, err := parser.Store.Username.Get(ctx, peerType, telegramUserID); err != nil {
 		return "", "", 0, false
+	} else if username == "" && peerType != ids.PeerTypeUser {
+		return "", "", 0, false
 	} else {
 		return userID, username, accessHash, true
 	}
