@@ -111,14 +111,22 @@ var ErrRemoveChannelState = errors.New("remove channel state")
 
 func (s *channelState) Run(ctx context.Context) error {
 	defer s.stop(nil)
+	var pending []channelUpdate
 	if s.resyncOnStart {
-		if err := s.resync(s.runCtx); err != nil {
+		var err error
+		if pending, err = s.resync(s.runCtx); err != nil {
 			return err
 		}
 	}
 	// Subscribe to channel updates.
 	if err := s.getDifference(s.runCtx); err != nil {
 		s.log.Error("Failed to subscribe to channel updates", zap.Error(err))
+	}
+	for _, u := range pending {
+		ctx := trace.ContextWithSpanContext(s.runCtx, u.span)
+		if err := s.handleUpdate(ctx, u.update, u.entities); err != nil {
+			s.log.Error("Handle update error", zap.Error(err))
+		}
 	}
 
 	for {
@@ -144,7 +152,7 @@ func (s *channelState) Run(ctx context.Context) error {
 	}
 }
 
-func (s *channelState) resync(ctx context.Context) error {
+func (s *channelState) resync(ctx context.Context) (pending []channelUpdate, err error) {
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
@@ -155,10 +163,11 @@ func (s *channelState) resync(ctx context.Context) error {
 	for {
 		select {
 		case <-done:
-			return nil
-		case <-s.updates:
+			return pending, nil
+		case u := <-s.updates:
+			pending = append(pending, u)
 		case <-ctx.Done():
-			return context.Cause(ctx)
+			return nil, context.Cause(ctx)
 		}
 	}
 }
