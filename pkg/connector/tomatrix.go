@@ -81,6 +81,15 @@ func mediaHashID(ctx context.Context, m tg.MessageMediaClass) []byte {
 	return nil
 }
 
+func webPageHashURL(m tg.MessageMediaClass) []byte {
+	if mediaWebPage, ok := m.(*tg.MessageMediaWebPage); ok {
+		if webpage, ok := mediaWebPage.Webpage.(*tg.WebPage); ok {
+			return []byte(webpage.URL)
+		}
+	}
+	return nil
+}
+
 func (tc *TelegramClient) mediaToMatrix(
 	ctx context.Context,
 	portal *bridgev2.Portal,
@@ -124,13 +133,32 @@ func (tc *TelegramClient) mediaToMatrix(
 		return convertDice(media), nil, nil
 	case tg.MessageMediaGameTypeID:
 		return convertGame(media), nil, nil
+	case tg.MessageMediaEmptyTypeID:
+		return nil, nil, nil
 	default:
+		var name string
+		switch media.TypeID() {
+		case tg.MessageMediaToDoTypeID:
+			name = "Checklists"
+		case tg.MessageMediaStoryTypeID:
+			name = "Stories"
+		case tg.MessageMediaInvoiceTypeID:
+			name = "Invoices"
+		case tg.MessageMediaPaidMediaTypeID:
+			name = "Paid media"
+		case tg.MessageMediaGiveawayTypeID, tg.MessageMediaGiveawayResultsTypeID:
+			name = "Giveaways"
+		case tg.MessageMediaVideoStreamTypeID:
+			name = "Live streams"
+		default:
+			name = media.TypeName()
+		}
 		// TODO: support these properly
 		return &bridgev2.ConvertedMessagePart{
 			Type: event.EventMessage,
 			Content: &event.MessageEventContent{
 				MsgType: event.MsgNotice,
-				Body:    fmt.Sprintf("%s are not yet supported. Open Telegram to view.", media.TypeName()),
+				Body:    fmt.Sprintf("%s are not yet supported. Open Telegram to view.", name),
 			},
 			Extra: map[string]any{
 				"fi.mau.telegram.unsupported": true,
@@ -323,8 +351,6 @@ func (tc *TelegramClient) convertToMatrix(
 func getMessageLink(msg *tg.Message) string {
 	var chatID int64
 	switch peer := msg.PeerID.(type) {
-	case *tg.PeerChat:
-		chatID = peer.ChatID
 	case *tg.PeerChannel:
 		chatID = peer.ChannelID
 	default: // also PeerUser
@@ -573,8 +599,17 @@ func (tc *TelegramClient) convertMediaRequiringUpload(
 				if ttl == telegramViewOnceTTL {
 					if tc.main.Config.DisableViewOnce {
 						typeName := "photo"
-						if msgMedia.TypeID() == tg.MessageMediaDocumentTypeID {
-							typeName = "file"
+						if doc, ok := msgMedia.(*tg.MessageMediaDocument); ok {
+							switch {
+							case doc.Voice:
+								typeName = "voice message"
+							case doc.Round:
+								typeName = "video message"
+							case doc.Video:
+								typeName = "video"
+							default:
+								typeName = "file"
+							}
 						}
 						converted = &bridgev2.ConvertedMessagePart{
 							Type: event.EventMessage,
@@ -742,10 +777,11 @@ func (tc *TelegramClient) convertMediaRequiringUpload(
 			// Strip filename so that we never render the caption
 			content.FileName = ""
 
-			if tc.main.Config.AnimatedSticker.Target == "webm" || (isVideo && !tc.main.Config.AnimatedSticker.ConvertFromWebm) {
+			stickerCfg := &tc.main.Config.AnimatedSticker
+			if stickerCfg.TargetMime(document.MimeType) == "video/webm" || (isVideo && (!stickerCfg.ConvertFromWebm || stickerCfg.Target == "webm")) {
 				isVideoGif = true
+				content.MsgType = event.MsgVideo
 				extraInfo["fi.mau.telegram.animated_sticker"] = true
-				transferer.WithMIMEType("video/webm")
 			} else {
 				eventType = event.EventSticker
 				content.MsgType = "" // Strip the msgtype since that doesn't apply for stickers
@@ -1116,12 +1152,19 @@ func (tc *TelegramClient) convertUserProfilePhoto(ctx context.Context, user *tg.
 	}
 
 	if tc.main.useDirectMedia {
-		mediaID, err := ids.DirectMediaInfo{
+		info := ids.DirectMediaInfo{
 			PeerType: ids.PeerTypeUser,
 			PeerID:   user.ID,
 			UserID:   tc.telegramUserID,
 			ID:       photo.PhotoID,
-		}.AsMediaID()
+		}
+		if accessHash, ok := user.GetAccessHash(); ok && user.Min {
+			info.PeerType = ids.FakePeerTypeMinUser
+			if !tc.metadata.IsBot {
+				info.MessageID = accessHash
+			}
+		}
+		mediaID, err := info.AsMediaID()
 		if err != nil {
 			return nil, err
 		}

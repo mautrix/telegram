@@ -532,3 +532,9 @@ CHAT_SEND_PHOTOS_FORBIDDEN,403,You cannot send photos results in this chat
 CHAT_SEND_VIDEOS_FORBIDDEN,403,You cannot send videos results in this Chat
 CHAT_SEND_PLAIN_FORBIDDEN,403,You cannot send plain results in this chat
 CHAT_MEMBER_ADD_FAILED,400,Telegram refused to add one or more users to the chat
+CHAT_SEND_AUDIOS_FORBIDDEN,403,You can't send audio messages in this chat
+CHAT_SEND_DOCS_FORBIDDEN,403,You can't send documents in this chat
+CHAT_SEND_ROUNDVIDEOS_FORBIDDEN,403,You can't send round videos in this chat
+PRIVACY_PREMIUM_REQUIRED,406,You need a Telegram Premium subscription to send a message to this user
+ALLOW_PAYMENT_REQUIRED_X,403,"This chat charges {stars} Telegram Stars per message, which can only be paid from the Telegram app"
+TOPIC_CLOSED,406,"This topic was closed, you can't send messages to it anymore"
