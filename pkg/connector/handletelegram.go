@@ -44,6 +44,7 @@ import (
 	"go.mau.fi/mautrix-telegram/pkg/connector/media"
 	"go.mau.fi/mautrix-telegram/pkg/connector/store"
 	"go.mau.fi/mautrix-telegram/pkg/connector/tljson"
+	"go.mau.fi/mautrix-telegram/pkg/gotd/telegram/auth"
 	"go.mau.fi/mautrix-telegram/pkg/gotd/tg"
 	"go.mau.fi/mautrix-telegram/pkg/gotd/tgerr"
 )
@@ -1097,6 +1098,9 @@ func (tc *TelegramClient) onUpdateWrapper(ctx context.Context, e tg.Entities, up
 			}
 			if errors.Is(err, ErrChatInfoUnavailable) {
 				zerolog.Ctx(ctx).Warn().Err(err).Msg("Update handling failed due to chat info fetch error")
+				return nil
+			} else if tgErr, ok := tgerr.As(err); ok && tgErr.Code >= 400 && tgErr.Code < 500 && !auth.IsUnauthorized(err) {
+				zerolog.Ctx(ctx).Warn().Err(err).Msg("Update handling failed due to Telegram API error")
 				return nil
 			}
 			return err
