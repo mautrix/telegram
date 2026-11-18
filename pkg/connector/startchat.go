@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"net/http"
 	"regexp"
 	"strconv"
 	"strings"
@@ -175,7 +176,8 @@ func resolvePhoneLimitExceeded(wait time.Duration) error {
 	return bridgev2.RespError(mautrix.MLimitExceeded.
 		WithMessage("Too many phone number lookups, try again in %d seconds", retryAfter).
 		WithExtraField("retry_after_ms", retryAfter*1000).
-		WithExtraHeader("Retry-After", strconv.Itoa(retryAfter)))
+		WithExtraHeader("Retry-After", strconv.Itoa(retryAfter)).
+		WithStatus(http.StatusBadRequest))
 }
 
 func resolvedPeerUser(resolved *tg.ContactsResolvedPeer) (tg.UserClass, error) {
