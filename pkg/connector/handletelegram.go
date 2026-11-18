@@ -441,7 +441,7 @@ func (tc *TelegramClient) handleServiceMessage(ctx context.Context, msg *tg.Mess
 			ChatInfoChange: &bridgev2.ChatInfoChange{MemberChanges: memberChanges},
 		})
 		return resultToError(res)
-	case *tg.MessageActionChatJoinedByLink:
+	case *tg.MessageActionChatJoinedByLink, *tg.MessageActionChatJoinedByRequest:
 		res := tc.main.Bridge.QueueRemoteEvent(tc.userLogin, &simplevent.ChatInfoChange{
 			EventMeta: eventMeta.WithType(bridgev2.RemoteEventChatInfoChange),
 			ChatInfoChange: &bridgev2.ChatInfoChange{
@@ -731,7 +731,6 @@ func (tc *TelegramClient) handleServiceMessage(ctx context.Context, msg *tg.Mess
 		// TODO specific changes?
 		res := tc.main.Bridge.QueueRemoteEvent(tc.userLogin, &simplevent.ChatResync{
 			EventMeta: eventMeta.
-				WithPortalKey(tc.makePortalKeyFromPeer(msg.PeerID, msg.ID)).
 				WithType(bridgev2.RemoteEventChatResync).
 				WithCreatePortal(true),
 			GetChatInfoFunc: tc.GetChatInfo,
@@ -989,6 +988,28 @@ func (tc *TelegramClient) updateChannel(ctx context.Context, channel *tg.Channel
 }
 
 const updateHandlerStuck status.BridgeStateErrorCode = "tg-update-handler-stuck"
+const getDifferenceStuck status.BridgeStateErrorCode = "tg-get-difference-stuck"
+
+func (tc *TelegramClient) onDifferenceStuck(stuck bool, err error) {
+	if stuck {
+		tc.userLogin.Log.Warn().Err(err).Msg("Getting difference has been failing for a while, sending bridge state")
+		tc.userLogin.BridgeState.Send(status.BridgeState{
+			StateEvent: status.StateUnknownError,
+			Error:      getDifferenceStuck,
+			Message:    "Telegram is failing to send new messages",
+			Info: map[string]any{
+				"go_error": err.Error(),
+			},
+		})
+	} else if tc.userLogin.BridgeState.GetPrevUnsent().Error == getDifferenceStuck {
+		tc.userLogin.BridgeState.Send(status.BridgeState{
+			StateEvent: status.StateConnected,
+			Info: map[string]any{
+				"update_reason": "getting difference succeeded",
+			},
+		})
+	}
+}
 
 func (tc *TelegramClient) onUpdateWrapper(ctx context.Context, e tg.Entities, upd tg.UpdateClass) error {
 	doneChan := make(chan error, 1)
