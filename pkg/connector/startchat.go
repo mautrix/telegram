@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"regexp"
 	"strconv"
 	"strings"
@@ -27,12 +28,14 @@ import (
 
 	"github.com/rs/zerolog"
 	"go.mau.fi/util/ptr"
+	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/bridgev2"
 
 	"go.mau.fi/mautrix-telegram/pkg/connector/ids"
 	"go.mau.fi/mautrix-telegram/pkg/connector/store"
 	"go.mau.fi/mautrix-telegram/pkg/gotd/telegram/query/hasher"
 	"go.mau.fi/mautrix-telegram/pkg/gotd/tg"
+	"go.mau.fi/mautrix-telegram/pkg/gotd/tgerr"
 )
 
 var (
@@ -141,12 +144,22 @@ func (tc *TelegramClient) resolveUsername(ctx context.Context, username string, 
 	return tc.resolveUser(ctx, user)
 }
 
+const resolvePhoneInterval = 3 * time.Second
+
 func (tc *TelegramClient) resolvePhone(ctx context.Context, phone string) (*bridgev2.ResolveIdentifierResponse, error) {
+	tc.resolvePhoneLock.Lock()
+	defer tc.resolvePhoneLock.Unlock()
+	if wait := resolvePhoneInterval - time.Since(tc.lastResolvePhone); wait > 0 {
+		return nil, resolvePhoneLimitExceeded(wait)
+	}
 	resolved, err := APICallWithUpdates(ctx, tc, func() (*tg.ContactsResolvedPeer, error) {
 		return tc.client.API().ContactsResolvePhone(ctx, phone)
 	})
+	tc.lastResolvePhone = time.Now()
 	if tg.IsPhoneNotOccupied(err) || tg.IsPhoneNumberInvalid(err) {
 		return nil, nil
+	} else if wait, ok := tgerr.AsFloodWait(err); ok {
+		return nil, resolvePhoneLimitExceeded(wait)
 	} else if err != nil {
 		return nil, wrapUnknownError(ctx, "failed to resolve phone number", err)
 	}
@@ -155,6 +168,14 @@ func (tc *TelegramClient) resolvePhone(ctx context.Context, phone string) (*brid
 		return nil, err
 	}
 	return tc.resolveUser(ctx, user)
+}
+
+func resolvePhoneLimitExceeded(wait time.Duration) error {
+	retryAfter := int(math.Ceil(wait.Seconds())) + 1
+	return bridgev2.RespError(mautrix.MLimitExceeded.
+		WithMessage("Too many phone number lookups, try again in %d seconds", retryAfter).
+		WithExtraField("retry_after_ms", retryAfter*1000).
+		WithExtraHeader("Retry-After", strconv.Itoa(retryAfter)))
 }
 
 func resolvedPeerUser(resolved *tg.ContactsResolvedPeer) (tg.UserClass, error) {
@@ -190,15 +211,12 @@ func (tc *TelegramClient) ResolveIdentifier(ctx context.Context, identifier stri
 	}
 
 	if identifier[0] == '+' {
-		normalized := strings.Map(func(r rune) rune {
-			if r >= '0' && r <= '9' {
-				return r
-			}
-			return -1
-		}, identifier)
-		if normalized == "" {
+		cleaned, err := bridgev2.CleanPhoneNumber(identifier)
+		if err != nil {
 			return nil, nil
-		} else if userID, err := tc.main.Store.PhoneNumber.GetUserID(ctx, normalized); err != nil {
+		}
+		normalized := strings.TrimPrefix(cleaned, "+")
+		if userID, err := tc.main.Store.PhoneNumber.GetUserID(ctx, normalized); err != nil {
 			return nil, fmt.Errorf("failed to get user ID by phone number: %w", err)
 		} else if userID == 0 {
 			log.Info().Msg("Phone number not found in database")
