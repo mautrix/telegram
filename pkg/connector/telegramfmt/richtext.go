@@ -353,8 +353,8 @@ func (r *rtParser) parseList(ctx context.Context, v *tg.PageBlockList) {
 func (r *rtParser) parseOrderedList(ctx context.Context, v *tg.PageBlockOrderedList) {
 	var openAttrs []html.Attribute
 	// TODO type?
-	if v.Start != 1 {
-		openAttrs = append(openAttrs, html.Attribute{Key: "start", Val: fmt.Sprint(v.Start)})
+	if start, ok := v.GetStart(); ok && start != 1 {
+		openAttrs = append(openAttrs, html.Attribute{Key: "start", Val: fmt.Sprint(start)})
 	}
 	r.writeOpeningTag("ol", openAttrs...)
 	for _, item := range v.Items {

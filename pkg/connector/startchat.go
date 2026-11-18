@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -237,49 +238,61 @@ func (tc *TelegramClient) SearchUsers(ctx context.Context, query string) (resp [
 func (tc *TelegramClient) GetContactList(ctx context.Context) (resp []*bridgev2.ResolveIdentifierResponse, err error) {
 	tc.contactsLock.Lock()
 	defer tc.contactsLock.Unlock()
-	var contacts *tg.ContactsContacts
+	var fresh bool
 	if time.Since(tc.lastContactReq) > 10*time.Minute {
-		contacts, err = APICallWithOnlyUserUpdates(ctx, tc, func() (*tg.ContactsContacts, error) {
+		_, err = APICallWithOnlyUserUpdates(ctx, tc, func() (*tg.ContactsContacts, error) {
 			c, err := tc.client.API().ContactsGetContacts(ctx, tc.cachedContactsHash)
 			if err != nil {
 				return nil, err
 			}
 			switch typedResp := c.(type) {
 			case *tg.ContactsContacts:
+				fresh = true
 				tc.cachedContacts = typedResp
+				userIDs := make([]int64, len(typedResp.Contacts))
+				for i, contact := range typedResp.Contacts {
+					userIDs[i] = contact.UserID
+				}
+				slices.Sort(userIDs)
 				var h hasher.Hasher
-				for _, contact := range tc.cachedContacts.Contacts {
-					h.Update(uint32(contact.UserID))
+				h.Update(uint64(typedResp.SavedCount))
+				for _, userID := range userIDs {
+					h.Update(uint64(userID))
 				}
 				tc.cachedContactsHash = h.Sum()
 			case *tg.ContactsContactsNotModified:
 				// No changes
+				return &tg.ContactsContacts{}, nil
 			default:
 				return nil, fmt.Errorf("unexpected contacts type: %T", c)
 			}
 			return tc.cachedContacts, nil
 		})
 		if err != nil {
+			tc.cachedContactsHash = 0
 			return nil, err
 		}
 		tc.lastContactReq = time.Now()
-	} else {
-		contacts = tc.cachedContacts
 	}
+	contacts := tc.cachedContacts
 	users := map[int64]tg.UserClass{}
 	for _, user := range contacts.GetUsers() {
 		users[user.GetID()] = user
 	}
 
 	for _, contact := range contacts.Contacts {
-		if user, ok := users[contact.UserID]; ok {
+		if user, ok := users[contact.UserID]; !ok {
+			return nil, fmt.Errorf("contact user not found in contact list response")
+		} else if fresh {
 			if r, err := tc.resolveUser(ctx, user); err != nil {
 				return nil, err
 			} else {
 				resp = append(resp, r)
 			}
+		} else if ghost, err := tc.main.Bridge.GetGhostByID(ctx, ids.MakeUserID(contact.UserID)); err != nil {
+			return nil, fmt.Errorf("failed to get ghost: %w", err)
 		} else {
-			return nil, fmt.Errorf("contact user not found in contact list response")
+			resp = append(resp, tc.makeResolveIdentifierResponse(ghost, user, nil))
 		}
 	}
 	return resp, nil
