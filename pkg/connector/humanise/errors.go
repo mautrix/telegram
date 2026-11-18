@@ -15,7 +15,7 @@ func Error(err error) string {
 	}
 	switch {
 	case tgerr.Is(err, "2FA_CONFIRM_WAIT"):
-		return fmt.Sprintf("The account is 2FA protected so it will be deleted in a week. Otherwise it can be reset in %d", rpcErr.Argument)
+		return fmt.Sprintf("The account is 2FA protected so it will be deleted in a week. Otherwise it can be reset in %s", waitDuration(rpcErr.Argument))
 	case tgerr.Is(err, "ABOUT_TOO_LONG"):
 		return "The provided bio is too long"
 	case tgerr.Is(err, "ACCESS_TOKEN_EXPIRED"):
@@ -373,11 +373,11 @@ func Error(err error) string {
 	case tgerr.Is(err, "FIRSTNAME_INVALID"):
 		return "The first name is invalid"
 	case tgerr.Is(err, "FLOOD_TEST_PHONE_WAIT"):
-		return fmt.Sprintf("A wait of %d seconds is required in the test servers", rpcErr.Argument)
+		return fmt.Sprintf("A wait of %s is required in the test servers", waitDuration(rpcErr.Argument))
 	case tgerr.Is(err, "FLOOD_WAIT"):
-		return fmt.Sprintf("A wait of %d seconds is required", rpcErr.Argument)
+		return fmt.Sprintf("A wait of %s is required", waitDuration(rpcErr.Argument))
 	case tgerr.Is(err, "FLOOD_PREMIUM_WAIT"):
-		return fmt.Sprintf("A wait of %d seconds is required in non-premium accounts", rpcErr.Argument)
+		return fmt.Sprintf("A wait of %s is required in non-premium accounts", waitDuration(rpcErr.Argument))
 	case tgerr.Is(err, "FOLDER_ID_EMPTY"):
 		return "The folder you tried to delete was already empty"
 	case tgerr.Is(err, "FOLDER_ID_INVALID"):
@@ -615,7 +615,7 @@ func Error(err error) string {
 	case tgerr.Is(err, "PASSWORD_REQUIRED"):
 		return "The account must have 2-factor authentication enabled (a password) before this method can be used"
 	case tgerr.Is(err, "PASSWORD_TOO_FRESH"):
-		return fmt.Sprintf("The password was added too recently and %d seconds must pass before using the method", rpcErr.Argument)
+		return fmt.Sprintf("The password was added too recently and %s must pass before using the method", waitDuration(rpcErr.Argument))
 	case tgerr.Is(err, "PAYMENT_PROVIDER_INVALID"):
 		return "The payment provider was not recognised or its token was invalid"
 	case tgerr.Is(err, "PEER_FLOOD"):
@@ -825,7 +825,7 @@ func Error(err error) string {
 	case tgerr.Is(err, "SESSION_REVOKED"):
 		return "The authorization has been invalidated, because of the user terminating all sessions"
 	case tgerr.Is(err, "SESSION_TOO_FRESH"):
-		return fmt.Sprintf("The session logged in too recently and %d seconds must pass before calling the method", rpcErr.Argument)
+		return fmt.Sprintf("The session logged in too recently and %s must pass before calling the method", waitDuration(rpcErr.Argument))
 	case tgerr.Is(err, "SETTINGS_INVALID"):
 		return "Invalid settings were provided"
 	case tgerr.Is(err, "SHA256_HASH_INVALID"):
@@ -841,7 +841,7 @@ func Error(err error) string {
 	case tgerr.Is(err, "SLOWMODE_MULTI_MSGS_DISABLED"):
 		return "Slowmode is enabled, you cannot forward multiple messages to this group"
 	case tgerr.Is(err, "SLOWMODE_WAIT"):
-		return fmt.Sprintf("A wait of %d seconds is required before sending another message in this chat", rpcErr.Argument)
+		return fmt.Sprintf("A wait of %s is required before sending another message in this chat", waitDuration(rpcErr.Argument))
 	case tgerr.Is(err, "SMS_CODE_CREATE_FAILED"):
 		return "An error occurred while creating the SMS code"
 	case tgerr.Is(err, "SRP_ID_INVALID"):
@@ -905,7 +905,7 @@ func Error(err error) string {
 	case tgerr.Is(err, "SWITCH_PM_TEXT_EMPTY"):
 		return "The switch_pm.text field was empty"
 	case tgerr.Is(err, "TAKEOUT_INIT_DELAY"):
-		return fmt.Sprintf("A wait of %d seconds is required before being able to initiate the takeout", rpcErr.Argument)
+		return fmt.Sprintf("A wait of %s is required before being able to initiate the takeout", waitDuration(rpcErr.Argument))
 	case tgerr.Is(err, "TAKEOUT_INVALID"):
 		return "The takeout session has been invalidated by another data export session"
 	case tgerr.Is(err, "TAKEOUT_REQUIRED"):
