@@ -1661,6 +1661,16 @@ func (u UpdateDispatcher) OnEditEphemeralMessage(handler EditEphemeralMessageHan
 	}
 }
 
+// EphemeralBotCallbackQueryHandler is a EphemeralBotCallbackQuery event handler.
+type EphemeralBotCallbackQueryHandler func(ctx context.Context, e Entities, update *UpdateEphemeralBotCallbackQuery) error
+
+// OnEphemeralBotCallbackQuery sets EphemeralBotCallbackQuery handler.
+func (u UpdateDispatcher) OnEphemeralBotCallbackQuery(handler EphemeralBotCallbackQueryHandler) {
+	u.handlers[UpdateEphemeralBotCallbackQueryTypeID] = func(ctx context.Context, e Entities, update UpdateClass) error {
+		return handler(ctx, e, update.(*UpdateEphemeralBotCallbackQuery))
+	}
+}
+
 // BotStarsSubscriptionHandler is a BotStarsSubscription event handler.
 type BotStarsSubscriptionHandler func(ctx context.Context, e Entities, update *UpdateBotStarsSubscription) error
 
@@ -1668,6 +1678,116 @@ type BotStarsSubscriptionHandler func(ctx context.Context, e Entities, update *U
 func (u UpdateDispatcher) OnBotStarsSubscription(handler BotStarsSubscriptionHandler) {
 	u.handlers[UpdateBotStarsSubscriptionTypeID] = func(ctx context.Context, e Entities, update UpdateClass) error {
 		return handler(ctx, e, update.(*UpdateBotStarsSubscription))
+	}
+}
+
+// WalletStateHandler is a WalletState event handler.
+type WalletStateHandler func(ctx context.Context, e Entities, update *UpdateWalletState) error
+
+// OnWalletState sets WalletState handler.
+func (u UpdateDispatcher) OnWalletState(handler WalletStateHandler) {
+	u.handlers[UpdateWalletStateTypeID] = func(ctx context.Context, e Entities, update UpdateClass) error {
+		return handler(ctx, e, update.(*UpdateWalletState))
+	}
+}
+
+// SentWalletTransactionHandler is a SentWalletTransaction event handler.
+type SentWalletTransactionHandler func(ctx context.Context, e Entities, update *UpdateSentWalletTransaction) error
+
+// OnSentWalletTransaction sets SentWalletTransaction handler.
+func (u UpdateDispatcher) OnSentWalletTransaction(handler SentWalletTransactionHandler) {
+	u.handlers[UpdateSentWalletTransactionTypeID] = func(ctx context.Context, e Entities, update UpdateClass) error {
+		return handler(ctx, e, update.(*UpdateSentWalletTransaction))
+	}
+}
+
+// WalletGaslessInfoHandler is a WalletGaslessInfo event handler.
+type WalletGaslessInfoHandler func(ctx context.Context, e Entities, update *UpdateWalletGaslessInfo) error
+
+// OnWalletGaslessInfo sets WalletGaslessInfo handler.
+func (u UpdateDispatcher) OnWalletGaslessInfo(handler WalletGaslessInfoHandler) {
+	u.handlers[UpdateWalletGaslessInfoTypeID] = func(ctx context.Context, e Entities, update UpdateClass) error {
+		return handler(ctx, e, update.(*UpdateWalletGaslessInfo))
+	}
+}
+
+// WalletTonConnectSessionHandler is a WalletTonConnectSession event handler.
+type WalletTonConnectSessionHandler func(ctx context.Context, e Entities, update *UpdateWalletTonConnectSession) error
+
+// OnWalletTonConnectSession sets WalletTonConnectSession handler.
+func (u UpdateDispatcher) OnWalletTonConnectSession(handler WalletTonConnectSessionHandler) {
+	u.handlers[UpdateWalletTonConnectSessionTypeID] = func(ctx context.Context, e Entities, update UpdateClass) error {
+		return handler(ctx, e, update.(*UpdateWalletTonConnectSession))
+	}
+}
+
+// WalletTonConnectPendingDisconnectHandler is a WalletTonConnectPendingDisconnect event handler.
+type WalletTonConnectPendingDisconnectHandler func(ctx context.Context, e Entities, update *UpdateWalletTonConnectPendingDisconnect) error
+
+// OnWalletTonConnectPendingDisconnect sets WalletTonConnectPendingDisconnect handler.
+func (u UpdateDispatcher) OnWalletTonConnectPendingDisconnect(handler WalletTonConnectPendingDisconnectHandler) {
+	u.handlers[UpdateWalletTonConnectPendingDisconnectTypeID] = func(ctx context.Context, e Entities, update UpdateClass) error {
+		return handler(ctx, e, update.(*UpdateWalletTonConnectPendingDisconnect))
+	}
+}
+
+// EditForumTopicHandler is a EditForumTopic event handler.
+type EditForumTopicHandler func(ctx context.Context, e Entities, update *UpdateEditForumTopic) error
+
+// OnEditForumTopic sets EditForumTopic handler.
+func (u UpdateDispatcher) OnEditForumTopic(handler EditForumTopicHandler) {
+	u.handlers[UpdateEditForumTopicTypeID] = func(ctx context.Context, e Entities, update UpdateClass) error {
+		return handler(ctx, e, update.(*UpdateEditForumTopic))
+	}
+}
+
+// BotWidgetQueryHandler is a BotWidgetQuery event handler.
+type BotWidgetQueryHandler func(ctx context.Context, e Entities, update *UpdateBotWidgetQuery) error
+
+// OnBotWidgetQuery sets BotWidgetQuery handler.
+func (u UpdateDispatcher) OnBotWidgetQuery(handler BotWidgetQueryHandler) {
+	u.handlers[UpdateBotWidgetQueryTypeID] = func(ctx context.Context, e Entities, update UpdateClass) error {
+		return handler(ctx, e, update.(*UpdateBotWidgetQuery))
+	}
+}
+
+// InlineBotWidgetQueryHandler is a InlineBotWidgetQuery event handler.
+type InlineBotWidgetQueryHandler func(ctx context.Context, e Entities, update *UpdateInlineBotWidgetQuery) error
+
+// OnInlineBotWidgetQuery sets InlineBotWidgetQuery handler.
+func (u UpdateDispatcher) OnInlineBotWidgetQuery(handler InlineBotWidgetQueryHandler) {
+	u.handlers[UpdateInlineBotWidgetQueryTypeID] = func(ctx context.Context, e Entities, update UpdateClass) error {
+		return handler(ctx, e, update.(*UpdateInlineBotWidgetQuery))
+	}
+}
+
+// BotWidgetCopyQueryHandler is a BotWidgetCopyQuery event handler.
+type BotWidgetCopyQueryHandler func(ctx context.Context, e Entities, update *UpdateBotWidgetCopyQuery) error
+
+// OnBotWidgetCopyQuery sets BotWidgetCopyQuery handler.
+func (u UpdateDispatcher) OnBotWidgetCopyQuery(handler BotWidgetCopyQueryHandler) {
+	u.handlers[UpdateBotWidgetCopyQueryTypeID] = func(ctx context.Context, e Entities, update UpdateClass) error {
+		return handler(ctx, e, update.(*UpdateBotWidgetCopyQuery))
+	}
+}
+
+// MessageWidgetDataHandler is a MessageWidgetData event handler.
+type MessageWidgetDataHandler func(ctx context.Context, e Entities, update *UpdateMessageWidgetData) error
+
+// OnMessageWidgetData sets MessageWidgetData handler.
+func (u UpdateDispatcher) OnMessageWidgetData(handler MessageWidgetDataHandler) {
+	u.handlers[UpdateMessageWidgetDataTypeID] = func(ctx context.Context, e Entities, update UpdateClass) error {
+		return handler(ctx, e, update.(*UpdateMessageWidgetData))
+	}
+}
+
+// TranscribedAudioFileHandler is a TranscribedAudioFile event handler.
+type TranscribedAudioFileHandler func(ctx context.Context, e Entities, update *UpdateTranscribedAudioFile) error
+
+// OnTranscribedAudioFile sets TranscribedAudioFile handler.
+func (u UpdateDispatcher) OnTranscribedAudioFile(handler TranscribedAudioFileHandler) {
+	u.handlers[UpdateTranscribedAudioFileTypeID] = func(ctx context.Context, e Entities, update UpdateClass) error {
+		return handler(ctx, e, update.(*UpdateTranscribedAudioFile))
 	}
 }
 

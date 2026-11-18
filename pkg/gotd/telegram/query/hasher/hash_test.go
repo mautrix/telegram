@@ -11,8 +11,8 @@ func TestHasher(t *testing.T) {
 	data := []int{7, 5, 16, 8}
 
 	for i := range data {
-		hasher.Update(uint32(data[i]))
+		hasher.Update(uint64(data[i]))
 	}
 
-	require.Equal(t, int64(611477280), hasher.Sum())
+	require.Equal(t, int64(5165336670474863397), hasher.Sum())
 }
