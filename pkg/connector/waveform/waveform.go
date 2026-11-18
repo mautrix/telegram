@@ -37,12 +37,12 @@ import "math"
 // [0, 32] which is required for the encoding to work.
 func NormalizeWaveform(waveform []int) (normalized []byte) {
 	normalized = make([]byte, len(waveform))
-	var waveformMax int
+	waveformMax := 31
 	for _, v := range waveform {
 		waveformMax = max(waveformMax, v)
 	}
 	for i, v := range waveform {
-		normalized[i] = byte(math.Round(float64(v) / float64(max(waveformMax/256, 1))))
+		normalized[i] = byte(math.Round(float64(max(v, 0)) * 31 / float64(waveformMax)))
 	}
 	return
 }

@@ -82,7 +82,7 @@ func (m MessageType) String() string {
 // Time returns approximate time when MessageID were generated.
 func (id MessageID) Time() time.Time {
 	intPart := int64(id) >> 32
-	fracPart := int64(int32(id))
+	fracPart := int64(uint32(id)) * int64(time.Second) >> 32
 	return time.Unix(intPart, fracPart).UTC()
 }
 

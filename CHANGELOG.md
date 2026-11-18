@@ -1,3 +1,21 @@
+# v26.11
+
+* Added support for bridging polls.
+  * Like other bridges, it's behind the `extev_polls` config option.
+  * Note: votes are only bridged from Matrix to Telegram.
+* Added support for reaction permission in power level bridging.
+* Changed chat member sync to always include admins.
+* Changed reaction polling to ignore unknown messages instead of failing entirely.
+* Changed mass message deletions to be ignored, as handling them can take long.
+* Changed backfill to only have one in-flight request to ensure ratelimits are
+  handled properly.
+* Fixed extra newlines when bridging lists and some other formatting from Matrix.
+* Fixed error handling duplicate supergroup upgrade notifications.
+* Fixed Telegram update state not being saved correctly.
+* Fixed user info updating failing requests that return an empty user.
+* Fixed messages from Telegram in read-only groups failing if admin status
+  hadn't been synced.
+
 # v26.10
 
 * Removed legacy migration. Upgrading from the Python bridge directly to v26.10
