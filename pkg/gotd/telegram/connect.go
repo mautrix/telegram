@@ -11,6 +11,7 @@ import (
 	"go.uber.org/zap"
 
 	"go.mau.fi/mautrix-telegram/pkg/gotd/exchange"
+	"go.mau.fi/mautrix-telegram/pkg/gotd/proto/codec"
 	"go.mau.fi/mautrix-telegram/pkg/gotd/tdsync"
 	"go.mau.fi/mautrix-telegram/pkg/gotd/telegram/auth"
 	"go.mau.fi/mautrix-telegram/pkg/gotd/tgerr"
@@ -80,6 +81,8 @@ func (c *Client) isPermanentError(err error) bool {
 	return false
 }
 
+const authKeyNotFoundTimeout = time.Minute
+
 func (c *Client) reconnectUntilClosed(ctx context.Context) error {
 	// Note that we currently have no timeout on connection, so this is
 	// potentially eternal.
@@ -99,6 +102,17 @@ func (c *Client) reconnectUntilClosed(ctx context.Context) error {
 		c.log.Info("Restarting connection", zap.Error(err), zap.Duration("backoff", timeout))
 
 		c.connMux.Lock()
+		var protoErr *codec.ProtocolErr
+		if !errors.As(err, &protoErr) || protoErr.Code != codec.CodeAuthKeyNotFound {
+			c.authKeyNotFoundSince = time.Time{}
+		} else if c.authKeyNotFoundSince.IsZero() {
+			c.authKeyNotFoundSince = c.clock.Now()
+		} else if c.clock.Now().Sub(c.authKeyNotFoundSince) > authKeyNotFoundTimeout {
+			c.log.Warn("Server hasn't found our auth key for too long, dropping it",
+				zap.Time("since", c.authKeyNotFoundSince))
+			c.session.Migrate(c.session.Load().DC)
+			c.authKeyNotFoundSince = time.Time{}
+		}
 		c.conn = c.createPrimaryConn(nil)
 		c.connMux.Unlock()
 	})
@@ -106,6 +120,7 @@ func (c *Client) reconnectUntilClosed(ctx context.Context) error {
 
 func (c *Client) onReady() {
 	c.log.Debug("Ready")
+	c.authKeyNotFoundSince = time.Time{}
 	c.ready.Signal()
 
 	if b := c.connBackoff.Load(); b != nil {
