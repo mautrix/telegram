@@ -220,6 +220,9 @@ func (es *EntityString) Substring(end int) *EntityString {
 	if end >= len(es.String) {
 		return es
 	}
+	if end > 0 && es.String[end-1] >= 0xd800 && es.String[end-1] < 0xdc00 {
+		end--
+	}
 	DebugLog("SUBSTRING %d %q %+v\n", end, es.String, es.Entities)
 	newEntities := make(telegramfmt.BodyRangeList, 0, len(es.Entities))
 	for _, ent := range es.Entities {
