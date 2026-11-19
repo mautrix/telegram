@@ -770,6 +770,7 @@ func (tc *TelegramClient) HandleMatrixSendError(ctx context.Context, sendErr *br
 	}
 	member, ok := members[ghostID]
 	if !ok {
+		log.Debug().Msg("Forbidden sender not found in admin list, fetching single participant")
 		inputPeer, err := tc.getInputPeerUser(ctx, userID)
 		if err != nil {
 			log.Err(err).Msg("Failed to get input peer to check forbidden sender")
