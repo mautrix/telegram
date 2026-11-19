@@ -466,15 +466,12 @@ func (tc *TelegramConnector) userToRemoteProfile(
 	ghost *bridgev2.Ghost,
 	prevState *status.RemoteProfile,
 ) (profile status.RemoteProfile, name string) {
-	profile.Name = tc.Config.FormatDisplayname(self.FirstName, self.LastName, self.Username, self.Deleted, self.ID)
+	profile.Username = primaryUsername(self.Username, self.Usernames)
+	profile.Name = tc.Config.FormatDisplayname(self.FirstName, self.LastName, profile.Username, self.Deleted, self.ID)
 	if self.Phone != "" {
 		profile.Phone = "+" + strings.TrimPrefix(self.Phone, "+")
 	} else if prevState != nil {
 		profile.Phone = prevState.Phone
-	}
-	profile.Username = self.Username
-	if self.Username == "" && len(self.Usernames) > 0 {
-		profile.Username = self.Usernames[0].Username
 	}
 	if ghost != nil {
 		profile.Avatar = ghost.AvatarMXC
