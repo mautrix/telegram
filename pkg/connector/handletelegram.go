@@ -1099,7 +1099,7 @@ func (tc *TelegramClient) onUpdateWrapper(ctx context.Context, e tg.Entities, up
 			if errors.Is(err, ErrChatInfoUnavailable) {
 				zerolog.Ctx(ctx).Warn().Err(err).Msg("Update handling failed due to chat info fetch error")
 				return nil
-			} else if tgErr, ok := tgerr.As(err); ok && tgErr.Code >= 400 && tgErr.Code < 500 && !auth.IsUnauthorized(err) {
+			} else if tgErr, ok := tgerr.As(err); ok && tgErr.Code >= 400 && tgErr.Code < 500 && tgErr.Code != 420 && !auth.IsUnauthorized(err) {
 				zerolog.Ctx(ctx).Warn().Err(err).Msg("Update handling failed due to Telegram API error")
 				return nil
 			}
