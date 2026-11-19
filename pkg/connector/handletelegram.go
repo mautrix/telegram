@@ -1075,7 +1075,7 @@ func (tc *TelegramClient) onEntitiesWrapper(ctx context.Context, users []tg.User
 func (tc *TelegramClient) dispatchUpdates(ctx context.Context, updates tg.UpdatesClass) error {
 	if u, ok := updates.(*tg.Updates); ok {
 		if err := tc.onEntitiesWrapper(ctx, u.Users, u.Chats); err != nil {
-			zerolog.Ctx(ctx).Err(err).Msg("Failed to handle entities in updates")
+			return err
 		}
 	}
 	return tc.dispatcher.Handle(ctx, updates)
