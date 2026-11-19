@@ -761,11 +761,38 @@ func (tc *TelegramClient) HandleMatrixSendError(ctx context.Context, sendErr *br
 		log.Err(err).Msg("Failed to get channel access hash to check forbidden sender")
 		return false
 	}
-	admins := bridgev2.ChatMemberMap{}
-	err = tc.fillChannelAdmins(ctx, &tg.InputChannel{ChannelID: channelID, AccessHash: accessHash}, admins)
+	inputChannel := &tg.InputChannel{ChannelID: channelID, AccessHash: accessHash}
+	members := bridgev2.ChatMemberMap{}
+	err = tc.fillChannelAdmins(ctx, inputChannel, members)
 	if err != nil {
 		log.Err(err).Msg("Failed to get admins to check forbidden sender")
-		return false
+		members = bridgev2.ChatMemberMap{}
+	}
+	member, ok := members[ghostID]
+	if !ok {
+		inputPeer, err := tc.getInputPeerUser(ctx, userID)
+		if err != nil {
+			log.Err(err).Msg("Failed to get input peer to check forbidden sender")
+			return false
+		}
+		resp, err := APICallWithUpdates(ctx, tc, func() (*tg.ChannelsChannelParticipant, error) {
+			return tc.client.API().ChannelsGetParticipant(ctx, &tg.ChannelsGetParticipantRequest{
+				Channel:     inputChannel,
+				Participant: inputPeer,
+			})
+		})
+		if err != nil {
+			log.Err(err).Msg("Failed to get participant info for forbidden sender")
+			return false
+		}
+		for participant := range tc.filterChannelParticipants([]tg.ChannelParticipantClass{resp.Participant}, 1) {
+			member = participant
+			ok = true
+		}
+		if !ok {
+			return false
+		}
+		members.Set(member)
 	}
 	pl, err := tc.main.Bridge.Matrix.GetPowerLevels(ctx, sendErr.Portal.MXID)
 	if err != nil {
@@ -773,17 +800,16 @@ func (tc *TelegramClient) HandleMatrixSendError(ctx context.Context, sendErr *br
 		return false
 	}
 	requiredLevel := max(pl.GetEventLevel(sendErr.EventType), pl.GetEventLevel(event.EventEncrypted))
-	member, ok := admins[ghostID]
-	if !ok || member.PowerLevel == nil || *member.PowerLevel < requiredLevel ||
+	if member.PowerLevel == nil || *member.PowerLevel < requiredLevel ||
 		*member.PowerLevel <= pl.GetUserLevel(sendErr.Intent.GetMXID()) {
 		return false
 	}
 	log.Debug().
 		Int("power_level", *member.PowerLevel).
-		Int("admin_count", len(admins)).
-		Msg("Updating admin power levels after homeserver rejected message")
+		Int("member_count", len(members)).
+		Msg("Updating power levels after homeserver rejected message")
 	sendErr.Portal.UpdateInfo(ctx, &bridgev2.ChatInfo{
-		Members: &bridgev2.ChatMemberList{MemberMap: admins},
+		Members: &bridgev2.ChatMemberList{MemberMap: members},
 	}, tc.userLogin, nil, time.Time{})
 	pl, err = tc.main.Bridge.Matrix.GetPowerLevels(ctx, sendErr.Portal.MXID)
 	if err != nil || pl.GetUserLevel(sendErr.Intent.GetMXID()) < requiredLevel {
