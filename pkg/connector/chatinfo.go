@@ -265,7 +265,8 @@ func hasEditTimeLimit(chat *tg.Channel) bool {
 	}) {
 		return true
 	}
-	return chat.DefaultBannedRights.PinMessages || chat.BannedRights.PinMessages
+	ownPinRestricted := chat.BannedRights.PinMessages && (chat.BannedRights.UntilDate == 0 || int64(chat.BannedRights.UntilDate) > time.Now().Unix())
+	return chat.DefaultBannedRights.PinMessages || ownPinRestricted
 }
 
 func (tc *TelegramClient) overrideChatInfoWithTopic(info *bridgev2.ChatInfo, topic *tg.ForumTopic) {
