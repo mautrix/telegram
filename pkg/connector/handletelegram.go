@@ -1681,11 +1681,14 @@ func (tc *TelegramClient) onNotifySettings(ctx context.Context, e tg.Entities, u
 		}
 		return tc.queueMutedUntil(tc.makePortalKeyFromPeer(typedPeer.Peer, typedPeer.TopMsgID), tc.getMutedUntil(ctx, &tg.InputNotifyChats{}, settings...))
 	case *tg.NotifyUsers:
-		return tc.syncDefaultMutes(ctx, &tg.InputNotifyUsers{}, update.NotifySettings)
+		tc.setNotifyDefaults(ctx, &tg.InputNotifyUsers{}, update.NotifySettings)
+		return nil
 	case *tg.NotifyChats:
-		return tc.syncDefaultMutes(ctx, &tg.InputNotifyChats{}, update.NotifySettings)
+		tc.setNotifyDefaults(ctx, &tg.InputNotifyChats{}, update.NotifySettings)
+		return nil
 	case *tg.NotifyBroadcasts:
-		return tc.syncDefaultMutes(ctx, &tg.InputNotifyBroadcasts{}, update.NotifySettings)
+		tc.setNotifyDefaults(ctx, &tg.InputNotifyBroadcasts{}, update.NotifySettings)
+		return nil
 	default:
 		zerolog.Ctx(ctx).Debug().
 			Type("peer_type", update.Peer).
@@ -1695,12 +1698,19 @@ func (tc *TelegramClient) onNotifySettings(ctx context.Context, e tg.Entities, u
 	}
 }
 
-func (tc *TelegramClient) syncDefaultMutes(ctx context.Context, scope tg.InputNotifyPeerClass, settings tg.PeerNotifySettings) error {
+func (tc *TelegramClient) setNotifyDefaults(ctx context.Context, scope tg.InputNotifyPeerClass, settings tg.PeerNotifySettings) {
 	tc.notifyDefaultsLock.Lock()
 	tc.notifyDefaults[scope.TypeID()] = &settings
 	tc.notifyDefaultsLock.Unlock()
-	mutedUntil := tc.getMutedUntil(ctx, scope)
+	go func() {
+		ctx := zerolog.Ctx(ctx).WithContext(tc.clientCtx)
+		if err := tc.syncDefaultMutes(ctx, scope); err != nil {
+			zerolog.Ctx(ctx).Err(err).Str("scope", scope.TypeName()).Msg("Failed to sync default mute to portals")
+		}
+	}()
+}
 
+func (tc *TelegramClient) syncDefaultMutes(ctx context.Context, scope tg.InputNotifyPeerClass) error {
 	userPortals, err := tc.main.Bridge.DB.UserPortal.GetAllForLogin(ctx, tc.userLogin.UserLogin)
 	if err != nil {
 		return err
@@ -1747,7 +1757,7 @@ func (tc *TelegramClient) syncDefaultMutes(ctx context.Context, scope tg.InputNo
 			if notifyScopeForPeer(dialog.Peer, channel != nil && channel.Broadcast).TypeID() != scope.TypeID() {
 				continue
 			}
-			err = tc.queueMutedUntil(tc.makePortalKeyFromPeer(dialog.Peer, 0), mutedUntil)
+			err = tc.queueMutedUntil(tc.makePortalKeyFromPeer(dialog.Peer, 0), tc.getMutedUntil(ctx, scope))
 			if err != nil {
 				return err
 			} else if channel != nil && channel.Forum {
