@@ -510,7 +510,7 @@ func (s *internalState) createAndRunChannelState(ctx context.Context, channelID,
 
 func (s *internalState) getDifferenceWithRetry(ctx context.Context, date int) (tg.UpdatesDifferenceClass, error) {
 	log := s.log.With(zap.Int("pts", s.pts.State()), zap.Int("qts", s.qts.State()), zap.Int("date", date))
-	return retryDifference(ctx, log, s.onStuck, s.waitToRetryDifference, func() (tg.UpdatesDifferenceClass, error) {
+	return retryDifference(ctx, log, s.onStuck, isRetryableDifferenceError, s.waitToRetryDifference, func() (tg.UpdatesDifferenceClass, error) {
 		return s.client.UpdatesGetDifference(ctx, &tg.UpdatesGetDifferenceRequest{
 			Pts:  s.pts.State(),
 			Qts:  s.qts.State(),
@@ -523,6 +523,7 @@ func retryDifference[T any](
 	ctx context.Context,
 	log *zap.Logger,
 	onStuck func(stuck bool, err error),
+	retryable func(err error) bool,
 	wait func(ctx context.Context, dur time.Duration) error,
 	get func() (T, error),
 ) (diff T, err error) {
@@ -536,7 +537,7 @@ func retryDifference[T any](
 				onStuck(false, nil)
 			}
 			return diff, nil
-		} else if isFatalError(err) || tgerr.Is(err, tg.ErrChannelPrivate, tg.ErrChannelInvalid) {
+		} else if !retryable(err) {
 			return diff, err
 		}
 		if failingSince.IsZero() {
@@ -561,6 +562,19 @@ func retryDifference[T any](
 			return diff, err
 		}
 	}
+}
+
+func isRetryableDifferenceError(err error) bool {
+	return !isFatalError(err)
+}
+
+func isTransientError(err error) bool {
+	if _, ok := tgerr.AsFloodWait(err); ok {
+		return true
+	} else if rpcErr, ok := tgerr.As(err); ok {
+		return rpcErr.Code >= 500 || rpcErr.Code < 0
+	}
+	return !isFatalError(err)
 }
 
 func (s *internalState) waitToRetryDifference(ctx context.Context, dur time.Duration) error {
