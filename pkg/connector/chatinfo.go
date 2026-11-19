@@ -242,7 +242,7 @@ func (tc *TelegramClient) wrapChatInfo(portalID networkid.PortalID, rawChat tg.C
 		changed := meta.SetIsSuperGroup(isMegagroup)
 		changed = meta.SetIsCommunity(isCommunity) || changed
 		changed = meta.SetIsForumGeneral(isForumGeneral) || changed
-		changed = meta.SetHasEditTimeLimit(editTimeLimit) || changed
+		changed = meta.SetEditTimeLimit(tc.telegramUserID, editTimeLimit) || changed
 		if info.Members.TotalMemberCount != 0 && meta.ParticipantsCount != info.Members.TotalMemberCount {
 			meta.ParticipantsCount = info.Members.TotalMemberCount
 			changed = true

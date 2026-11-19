@@ -317,7 +317,7 @@ func (tc *TelegramClient) GetCapabilities(ctx context.Context, portal *bridgev2.
 		}
 		// Anyone can delete a non-topic channel for themselves by leaving it
 		feat.DeleteChat = topicID == 0
-		if !tc.metadata.IsBot && portalMetadata.HasEditTimeLimit {
+		if !tc.metadata.IsBot && portalMetadata.EditTimeLimit[tc.telegramUserID] {
 			baseID += "+edit_max_age"
 			feat.EditMaxAge = ptr.Ptr(jsontime.S(EditMaxAge))
 		}
