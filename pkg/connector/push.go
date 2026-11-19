@@ -343,7 +343,7 @@ func (tc *TelegramClient) ConnectBackground(ctx context.Context, params *bridgev
 		case <-time.After(20 * time.Second):
 		case <-ctx.Done():
 		}
-	} else if messageID != "" && relatedPortal.MXID != "" && tc.main.useDirectMedia && tc.metadata.Session.HasAuthKey() {
+	} else if messageID != "" && relatedPortal.MXID != "" && tc.main.useDirectMedia && tc.main.Bridge.Config.Backfill.Enabled && tc.metadata.Session.HasAuthKey() {
 		err := tc.backfillPushedMessage(ctx, relatedPortal.PortalKey, data.Custom.MessageID)
 		if err != nil {
 			zerolog.Ctx(ctx).Err(err).Msg("Failed to backfill chat from push notification")
@@ -353,6 +353,19 @@ func (tc *TelegramClient) ConnectBackground(ctx context.Context, params *bridgev
 }
 
 func (tc *TelegramClient) backfillPushedMessage(ctx context.Context, portalKey networkid.PortalKey, msgID int) error {
+	needsBackfill := func(ctx context.Context, latestMessage *database.Message) (bool, error) {
+		if latestMessage == nil {
+			return true, nil
+		}
+		latestMessageID, err := tc.getLastTelegramMessageID(ctx, latestMessage)
+		return err == nil && msgID > latestMessageID, err
+	}
+	latestMessage, err := tc.main.Bridge.DB.Message.GetLastPartAtOrBeforeTime(ctx, portalKey, time.Now().Add(10*time.Second))
+	if err != nil {
+		return err
+	} else if needed, err := needsBackfill(ctx, latestMessage); err != nil || !needed {
+		return err
+	}
 	resolver, err := GetProxyResolver(tc.main.Config.ProxyConfig)
 	if err != nil {
 		return err
@@ -379,13 +392,7 @@ func (tc *TelegramClient) backfillPushedMessage(ctx context.Context, portalKey n
 				},
 				PortalKey: portalKey,
 			},
-			CheckNeedsBackfillFunc: func(ctx context.Context, latestMessage *database.Message) (bool, error) {
-				if latestMessage == nil {
-					return true, nil
-				}
-				latestMessageID, err := tc.getLastTelegramMessageID(ctx, latestMessage)
-				return err == nil && msgID > latestMessageID, err
-			},
+			CheckNeedsBackfillFunc: needsBackfill,
 		}))
 	})
 }
