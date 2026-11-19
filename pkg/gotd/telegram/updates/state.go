@@ -510,7 +510,7 @@ func (s *internalState) createAndRunChannelState(ctx context.Context, channelID,
 
 func (s *internalState) getDifferenceWithRetry(ctx context.Context, date int) (tg.UpdatesDifferenceClass, error) {
 	log := s.log.With(zap.Int("pts", s.pts.State()), zap.Int("qts", s.qts.State()), zap.Int("date", date))
-	return retryDifference(ctx, log, s.onStuck, isRetryableDifferenceError, s.waitToRetryDifference, func() (tg.UpdatesDifferenceClass, error) {
+	return retryDifference(ctx, log, s.onStuck, isFatalError, s.waitToRetryDifference, func() (tg.UpdatesDifferenceClass, error) {
 		return s.client.UpdatesGetDifference(ctx, &tg.UpdatesGetDifferenceRequest{
 			Pts:  s.pts.State(),
 			Qts:  s.qts.State(),
@@ -523,7 +523,7 @@ func retryDifference[T any](
 	ctx context.Context,
 	log *zap.Logger,
 	onStuck func(stuck bool, err error),
-	retryable func(err error) bool,
+	isFatal func(err error) bool,
 	wait func(ctx context.Context, dur time.Duration) error,
 	get func() (T, error),
 ) (diff T, err error) {
@@ -537,12 +537,15 @@ func retryDifference[T any](
 				onStuck(false, nil)
 			}
 			return diff, nil
-		} else if !retryable(err) {
+		} else if isFatal(err) {
 			return diff, err
 		}
 		if failingSince.IsZero() {
 			failingSince = time.Now()
-		} else if !reportedStuck && onStuck != nil && time.Since(failingSince) > 3*time.Minute {
+		} else if !reportedStuck && time.Since(failingSince) > 3*time.Minute {
+			if onStuck == nil {
+				return diff, err
+			}
 			reportedStuck = true
 			onStuck(true, err)
 		}
@@ -564,17 +567,13 @@ func retryDifference[T any](
 	}
 }
 
-func isRetryableDifferenceError(err error) bool {
-	return !isFatalError(err)
-}
-
-func isTransientError(err error) bool {
+func isFatalChannelDifferenceError(err error) bool {
 	if _, ok := tgerr.AsFloodWait(err); ok {
+		return false
+	} else if rpcErr, ok := tgerr.As(err); ok && rpcErr.Code > 0 && rpcErr.Code < 500 {
 		return true
-	} else if rpcErr, ok := tgerr.As(err); ok {
-		return rpcErr.Code >= 500 || rpcErr.Code < 0
 	}
-	return !isFatalError(err)
+	return isFatalError(err)
 }
 
 func (s *internalState) waitToRetryDifference(ctx context.Context, dur time.Duration) error {
