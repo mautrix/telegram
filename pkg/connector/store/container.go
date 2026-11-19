@@ -60,7 +60,7 @@ func (c *Container) GetScopedStore(telegramUserID int64) *ScopedStore {
 const getLastTelegramMessageIDQuery = `
 	SELECT id FROM message
 	WHERE bridge_id=$1 AND room_id=$2 AND room_receiver=$3 AND timestamp<=$4 AND id NOT LIKE '%:%'
-	ORDER BY timestamp DESC, id DESC
+	ORDER BY timestamp DESC, LENGTH(id) DESC, id DESC
 	LIMIT 1
 `
 
