@@ -222,7 +222,7 @@ func (s *channelState) getDifference(ctx context.Context) error {
 	}
 
 	log := s.log.With(zap.Int("pts", s.pts.State()))
-	diff, err := retryDifference(ctx, log, nil, s.waitIgnoringUpdates, func() (tg.UpdatesChannelDifferenceClass, error) {
+	diff, err := retryDifference(ctx, log, nil, isTransientError, s.waitIgnoringUpdates, func() (tg.UpdatesChannelDifferenceClass, error) {
 		return s.client.UpdatesGetChannelDifference(ctx, &tg.UpdatesGetChannelDifferenceRequest{
 			Channel: &tg.InputChannel{
 				ChannelID:  s.channelID,
