@@ -100,7 +100,9 @@ func (s *channelState) Run(ctx context.Context, resync bool) error {
 	defer s.stop(nil)
 	if resync {
 		if err := s.onTooLong(s.channelID); err != nil {
-			s.log.Error("Failed to resync channel without stored pts", zap.Error(err))
+			return fmt.Errorf("%w: failed to resync channel without stored pts: %w", ErrRemoveChannelState, err)
+		} else if err = s.storage.SetChannelPts(s.runCtx, s.selfID, s.channelID, s.pts.State()); err != nil {
+			s.log.Error("SetChannelPts error", zap.Error(err))
 		}
 	}
 	// Subscribe to channel updates.

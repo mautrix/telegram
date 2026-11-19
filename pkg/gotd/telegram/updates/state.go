@@ -429,9 +429,6 @@ func (s *internalState) handleChannel(ctx context.Context, channelID int64, date
 
 		if !found {
 			localPts = pts - ptsCount
-			if err := s.storage.SetChannelPts(ctx, s.selfID, channelID, localPts); err != nil {
-				s.log.Error("SetChannelPts error", zap.Error(err))
-			}
 		}
 
 		s.log.Info("Adding new channel state", zap.Int64("channel_id", channelID), zap.Int("local_pts", localPts), zap.Int("remote_pts", pts))
