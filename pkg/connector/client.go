@@ -54,6 +54,7 @@ import (
 	"go.mau.fi/mautrix-telegram/pkg/gotd/telegram/auth"
 	"go.mau.fi/mautrix-telegram/pkg/gotd/telegram/updates"
 	"go.mau.fi/mautrix-telegram/pkg/gotd/tg"
+	"go.mau.fi/mautrix-telegram/pkg/gotd/tgerr"
 )
 
 var (
@@ -394,35 +395,45 @@ func (tc *TelegramClient) onChannelTooLong(channelID int64) error {
 			}
 		}
 	}
-	res := tc.main.Bridge.QueueRemoteEvent(tc.userLogin, &simplevent.ChatResync{
+	channel, err := tc.getSingleChannel(ctx, channelID)
+	if err != nil {
+		log.Err(err).Msg("Failed to get channel to check if it's a forum")
+	}
+	generalKey := tc.makePortalKeyFromID(ids.PeerTypeChannel, channelID, 0)
+	generalResync := &simplevent.ChatResync{
 		EventMeta: simplevent.EventMeta{
 			Type: bridgev2.RemoteEventChatResync,
 			LogContext: func(c zerolog.Context) zerolog.Context {
 				return c.Str("update", "channel_too_long").Int64("channel_id", channelID)
 			},
-			PortalKey: tc.makePortalKeyFromID(ids.PeerTypeChannel, channelID, 0),
+			PortalKey: generalKey,
 		},
-		GetChatInfoFunc: tc.GetChatInfo,
 		CheckNeedsBackfillFunc: func(ctx context.Context, latestMessage *database.Message) (bool, error) {
 			return true, nil
 		},
-	})
-	if err = resultToError(res); err != nil {
-		return err
-	} else if oldestLastMessageID == 0 || tc.metadata.IsBot {
-		return nil
 	}
-	channel, err := tc.getSingleChannel(ctx, channelID)
-	if err != nil {
-		return fmt.Errorf("failed to get channel: %w", err)
-	} else if !channel.Forum {
+	if channel != nil && channel.Forum {
+		generalResync.GetChatInfoFunc = tc.GetChatInfo
+	} else if portal, err := tc.main.Bridge.GetExistingPortalByKey(ctx, generalKey); err != nil {
+		return fmt.Errorf("failed to get #General portal: %w", err)
+	} else if portal != nil && portal.Metadata.(*PortalMetadata).IsForumGeneral {
+		generalResync.GetChatInfoFunc = tc.GetChatInfo
+	}
+	if err = resultToError(tc.main.Bridge.QueueRemoteEvent(tc.userLogin, generalResync)); err != nil {
+		return err
+	} else if channel == nil || !channel.Forum || oldestLastMessageID == 0 || tc.metadata.IsBot {
 		return nil
 	}
 	req := tg.MessagesGetForumTopicsRequest{Peer: channel.AsInputPeer(), Limit: 100}
 	for {
-		resp, err := APICallWithUpdates(ctx, tc, func() (*tg.MessagesForumTopics, error) {
-			return tc.client.API().MessagesGetForumTopics(ctx, &req)
-		})
+		var resp *tg.MessagesForumTopics
+		retry := true
+		for attempts := 0; retry && attempts < 5; attempts++ {
+			resp, err = APICallWithUpdates(ctx, tc, func() (*tg.MessagesForumTopics, error) {
+				return tc.client.API().MessagesGetForumTopics(ctx, &req)
+			})
+			retry, err = tgerr.FloodWait(ctx, err)
+		}
 		if err != nil {
 			return fmt.Errorf("failed to get forum topics: %w", err)
 		}
@@ -442,9 +453,10 @@ func (tc *TelegramClient) onChannelTooLong(channelID int64) error {
 				continue
 			}
 			if err = tc.main.Store.Topic.Add(ctx, channelID, topic.ID); err != nil {
-				return fmt.Errorf("failed to store topic: %w", err)
+				log.Err(err).Int("topic_id", topic.ID).Msg("Failed to store topic")
+				continue
 			}
-			res = tc.main.Bridge.QueueRemoteEvent(tc.userLogin, &simplevent.ChatResync{
+			res := tc.main.Bridge.QueueRemoteEvent(tc.userLogin, &simplevent.ChatResync{
 				EventMeta: simplevent.EventMeta{
 					Type: bridgev2.RemoteEventChatResync,
 					LogContext: func(c zerolog.Context) zerolog.Context {
@@ -453,12 +465,13 @@ func (tc *TelegramClient) onChannelTooLong(channelID int64) error {
 					PortalKey:    tc.makePortalKeyFromID(ids.PeerTypeChannel, channelID, topic.ID),
 					CreatePortal: true,
 				},
+				GetChatInfoFunc: tc.GetChatInfo,
 				CheckNeedsBackfillFunc: func(ctx context.Context, latestMessage *database.Message) (bool, error) {
 					return true, nil
 				},
 			})
 			if err = resultToError(res); err != nil {
-				return err
+				log.Err(err).Int("topic_id", topic.ID).Msg("Failed to resync topic")
 			}
 		}
 		if lastTopic == nil || len(resp.Topics) < req.Limit || (!hasNewer && !resp.OrderByCreateDate) {
