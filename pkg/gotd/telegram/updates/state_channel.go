@@ -294,6 +294,10 @@ func (s *channelState) getDifference(ctx context.Context) error {
 			s.diffTimeout = time.Now().Add(time.Second * time.Duration(seconds))
 		}
 
+		if err := s.onTooLong(s.channelID); err != nil {
+			return err
+		}
+
 		remotePts, err := getDialogPts(diff.Dialog)
 		if err != nil {
 			s.log.Warn("UpdatesChannelDifferenceTooLong invalid Dialog", zap.Error(err))
@@ -305,7 +309,7 @@ func (s *channelState) getDifference(ctx context.Context) error {
 			s.pts.SetState(remotePts, "updates.channelDifferenceTooLong dialog new pts")
 		}
 
-		return s.onTooLong(s.channelID)
+		return nil
 
 	default:
 		return errors.Errorf("unexpected channel diff type: %T", diff)
