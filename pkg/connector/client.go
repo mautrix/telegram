@@ -432,7 +432,7 @@ func (tc *TelegramClient) onChannelTooLong(channelID int64) error {
 			resp, err = APICallWithUpdates(ctx, tc, func() (*tg.MessagesForumTopics, error) {
 				return tc.client.API().MessagesGetForumTopics(ctx, &req)
 			})
-			retry, err = tgerr.FloodWait(ctx, err)
+			retry, err = tgerr.FloodWait(ctx, err, tgerr.FloodWaitWithMaxDuration(5*time.Second))
 		}
 		if err != nil {
 			return fmt.Errorf("failed to get forum topics: %w", err)
