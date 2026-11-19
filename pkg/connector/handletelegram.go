@@ -1664,7 +1664,7 @@ func (tc *TelegramClient) onNotifySettings(ctx context.Context, e tg.Entities, u
 			}
 		}
 		err := tc.queueMutedUntil(portalKey, tc.getMutedUntil(ctx, notifyScopeForPeer(typedPeer.Peer, broadcast), update.NotifySettings))
-		if err != nil || !isChannel {
+		if err != nil || !isChannel || tc.main.Bridge.Config.MuteOnlyOnCreate {
 			return err
 		}
 		return tc.syncTopicMutes(ctx, peerChannel.ChannelID, update.NotifySettings)
@@ -1693,7 +1693,9 @@ func (tc *TelegramClient) onNotifySettings(ctx context.Context, e tg.Entities, u
 func (tc *TelegramClient) setNotifyDefaults(scope tg.InputNotifyPeerClass, settings tg.PeerNotifySettings) {
 	tc.notifyDefaultsLock.Lock()
 	tc.notifyDefaults[scope.TypeID()] = &settings
-	tc.notifyDefaultsChanged[scope.TypeID()] = scope
+	if !tc.main.Bridge.Config.MuteOnlyOnCreate {
+		tc.notifyDefaultsChanged[scope.TypeID()] = scope
+	}
 	tc.notifyDefaultsLock.Unlock()
 	select {
 	case tc.notifyDefaultsWakeup <- struct{}{}:
