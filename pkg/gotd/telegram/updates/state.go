@@ -230,9 +230,7 @@ func (s *internalState) handleUpdates(ctx context.Context, u tg.UpdatesClass) er
 
 	switch u := u.(type) {
 	case *tg.Updates:
-		if err := s.handleEntities(ctx, u.Users, u.Chats); err != nil {
-			return err
-		}
+		s.handleEntities(ctx, u.Users, u.Chats)
 		return s.handleSeq(ctx, &tg.UpdatesCombined{
 			Updates:  u.Updates,
 			Users:    u.Users,
@@ -242,9 +240,7 @@ func (s *internalState) handleUpdates(ctx context.Context, u tg.UpdatesClass) er
 			SeqStart: u.Seq,
 		})
 	case *tg.UpdatesCombined:
-		if err := s.handleEntities(ctx, u.Users, u.Chats); err != nil {
-			return err
-		}
+		s.handleEntities(ctx, u.Users, u.Chats)
 		return s.handleSeq(ctx, u)
 	case *tg.UpdateShort:
 		return s.handleUpdates(ctx, &tg.UpdatesCombined{
@@ -300,10 +296,12 @@ func (s *internalState) handleUpdates(ctx context.Context, u tg.UpdatesClass) er
 	}
 }
 
-func (s *internalState) handleEntities(ctx context.Context, users []tg.UserClass, chats []tg.ChatClass) error {
+func (s *internalState) handleEntities(ctx context.Context, users []tg.UserClass, chats []tg.ChatClass) {
 	s.saveUserHashes(ctx, users)
 	s.saveChannelHashes(ctx, chats)
-	return s.onEntities(ctx, users, chats)
+	if err := s.onEntities(ctx, users, chats); err != nil {
+		s.log.Error("Handle entities error", zap.Error(err))
+	}
 }
 
 func (s *internalState) handleSeq(ctx context.Context, u *tg.UpdatesCombined) error {
@@ -613,9 +611,7 @@ func (s *internalState) getDifference(ctx context.Context) error {
 
 	switch diff := diff.(type) {
 	case *tg.UpdatesDifference:
-		if err := s.handleEntities(ctx, diff.Users, diff.Chats); err != nil {
-			return err
-		}
+		s.handleEntities(ctx, diff.Users, diff.Chats)
 		if len(diff.OtherUpdates) > 0 {
 			if err := s.handleSeq(ctx, &tg.UpdatesCombined{
 				Updates: diff.OtherUpdates,
@@ -654,9 +650,7 @@ func (s *internalState) getDifference(ctx context.Context) error {
 
 	// Incomplete list of occurred events.
 	case *tg.UpdatesDifferenceSlice:
-		if err := s.handleEntities(ctx, diff.Users, diff.Chats); err != nil {
-			return err
-		}
+		s.handleEntities(ctx, diff.Users, diff.Chats)
 		if len(diff.OtherUpdates) > 0 {
 			if err := s.handleSeq(ctx, &tg.UpdatesCombined{
 				Updates: diff.OtherUpdates,

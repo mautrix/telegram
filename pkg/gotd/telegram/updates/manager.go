@@ -64,15 +64,15 @@ func (m *Manager) Handle(ctx context.Context, u tg.UpdatesClass) error {
 
 	if state == nil {
 		m.lg.Debug("Handle (no internalState)")
+		var err error
 		switch u := u.(type) {
 		case *tg.Updates:
-			if err := m.cfg.OnEntities(ctx, u.Users, u.Chats); err != nil {
-				return err
-			}
+			err = m.cfg.OnEntities(ctx, u.Users, u.Chats)
 		case *tg.UpdatesCombined:
-			if err := m.cfg.OnEntities(ctx, u.Users, u.Chats); err != nil {
-				return err
-			}
+			err = m.cfg.OnEntities(ctx, u.Users, u.Chats)
+		}
+		if err != nil {
+			m.lg.Error("Handle entities error", zap.Error(err))
 		}
 		return m.cfg.Handler.Handle(ctx, u)
 	}
