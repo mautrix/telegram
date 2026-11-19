@@ -281,7 +281,7 @@ func (s *channelState) getDifference(ctx context.Context) error {
 
 		if len(diff.NewMessages) > 0 {
 			if err := s.onEntities(ctx, diff.Users, diff.Chats); err != nil {
-				return err
+				s.log.Error("Handle entities error (getDifference)", zap.Error(err))
 			}
 			if err := s.handler.Handle(ctx, &tg.Updates{
 				Updates: msgsToUpdates(diff.NewMessages, true),
