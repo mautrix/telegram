@@ -200,6 +200,7 @@ func (tc *TelegramClient) onDifferenceTooLong(ctx context.Context, date int) err
 	log := tc.userLogin.Log.With().Str("action", "resync chats after difference too long").Int("since", date).Logger()
 	ctx = log.WithContext(ctx)
 	req := tg.MessagesGetDialogsRequest{OffsetPeer: &tg.InputPeerEmpty{}, Limit: 100}
+	var prevCursor networkid.PortalID
 	for {
 		log.Debug().Stringer("request", &req).Msg("Fetching dialogs")
 		dialogs, err := tc.getDialogs(ctx, &req)
@@ -213,7 +214,7 @@ func (tc *TelegramClient) onDifferenceTooLong(ctx context.Context, date int) err
 			}
 		}
 		dialogList := dialogs.GetDialogs()
-		var changedDialogs []tg.DialogClass
+		var changedDialogs []*tg.Dialog
 		hasNewer := false
 		for _, rawDialog := range dialogList {
 			dialog, ok := rawDialog.(*tg.Dialog)
@@ -225,12 +226,20 @@ func (tc *TelegramClient) onDifferenceTooLong(ctx context.Context, date int) err
 				changedDialogs = append(changedDialogs, dialog)
 			}
 		}
-		if err = tc.handleDialogs(ctx, changedDialogs, dialogs, -1); err != nil {
-			return fmt.Errorf("failed to handle dialogs: %w", err)
-		} else if !hasNewer || len(dialogList) < req.Limit {
+		for _, dialog := range changedDialogs {
+			if err = tc.handleDialogs(ctx, []tg.DialogClass{dialog}, dialogs, -1); err != nil {
+				log.Err(err).Stringer("peer", dialog.Peer).Msg("Failed to resync dialog")
+			}
+		}
+		if !hasNewer || len(dialogList) == 0 {
 			return nil
 		}
-		req.OffsetPeer, _, err = tc.inputPeerForPortalID(ctx, tc.dialogToPortalKey(dialogList[len(dialogList)-1]).ID)
+		cursorPortalID := tc.dialogToPortalKey(dialogList[len(dialogList)-1]).ID
+		if cursorPortalID == prevCursor {
+			return nil
+		}
+		prevCursor = cursorPortalID
+		req.OffsetPeer, _, err = tc.inputPeerForPortalID(ctx, cursorPortalID)
 		if err != nil {
 			return fmt.Errorf("failed to get input peer for pagination: %w", err)
 		}

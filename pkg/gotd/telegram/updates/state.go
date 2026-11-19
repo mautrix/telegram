@@ -671,8 +671,19 @@ func (s *internalState) getDifference(ctx context.Context) error {
 
 	// The difference is too long, and the specified internalState must be used to refetch updates.
 	case *tg.UpdatesDifferenceTooLong:
-		if err := s.waitForDiffTooLong(ctx); err != nil {
-			return err
+		date, retryDelay := s.date, 5*time.Second
+		for {
+			err := s.waitForDiffTooLong(ctx, date)
+			if err == nil {
+				break
+			} else if ctx.Err() != nil {
+				return err
+			}
+			s.log.Error("OnDiffTooLong failed, retrying", zap.Error(err), zap.Duration("retry_in", retryDelay))
+			if err = s.waitToRetryDifference(ctx, retryDelay); err != nil {
+				return err
+			}
+			retryDelay = min(retryDelay*2, time.Minute)
 		}
 		if err := s.storage.SetPts(ctx, s.selfID, diff.Pts); err != nil {
 			s.log.Error("SetPts error", zap.Error(err))
@@ -685,8 +696,7 @@ func (s *internalState) getDifference(ctx context.Context) error {
 	}
 }
 
-func (s *internalState) waitForDiffTooLong(ctx context.Context) error {
-	date := s.date
+func (s *internalState) waitForDiffTooLong(ctx context.Context, date int) error {
 	done := make(chan error, 1)
 	go func() {
 		done <- s.onDiffTooLong(ctx, date)
@@ -694,10 +704,7 @@ func (s *internalState) waitForDiffTooLong(ctx context.Context) error {
 	for {
 		select {
 		case err := <-done:
-			if err != nil {
-				s.log.Error("OnDiffTooLong error", zap.Error(err))
-			}
-			return nil
+			return err
 		case u := <-s.externalQueue:
 			s.deferred = append(s.deferred, u)
 		case u := <-s.internalQueue:
