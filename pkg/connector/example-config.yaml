@@ -104,7 +104,7 @@ max_member_count: -1
 #
 # -1 means no limit. The default of 100 is the maximum number of messages a user
 # can manually select to delete on Telegram.
-max_telegram_delete: 100
+max_telegram_delete: 95
 # Should personal avatars (that are only visible to specific users) be allowed?
 contact_avatars: false
 # Should contact names be updated from any source even if a name is already set?

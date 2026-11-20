@@ -61,6 +61,7 @@ type internalState struct {
 	onTooLong     func(channelID int64) error
 	onStuck       func(stuck bool, err error)
 	onDiffTooLong func(ctx context.Context, date int) error
+	onEntities    func(ctx context.Context, users []tg.UserClass, chats []tg.ChatClass) error
 	storage       StateStorage
 	hasher        AccessHasher
 	selfID        int64
@@ -80,6 +81,7 @@ type stateConfig struct {
 	OnChannelTooLong func(channelID int64) error
 	OnDiffStuck      func(stuck bool, err error)
 	OnDiffTooLong    func(ctx context.Context, date int) error
+	OnEntities       func(ctx context.Context, users []tg.UserClass, chats []tg.ChatClass) error
 	Storage          StateStorage
 	Hasher           AccessHasher
 	SelfID           int64
@@ -105,6 +107,7 @@ func newState(ctx context.Context, cfg stateConfig) *internalState {
 		onTooLong:     cfg.OnChannelTooLong,
 		onStuck:       cfg.OnDiffStuck,
 		onDiffTooLong: cfg.OnDiffTooLong,
+		onEntities:    cfg.OnEntities,
 		storage:       cfg.Storage,
 		hasher:        cfg.Hasher,
 		selfID:        cfg.SelfID,
@@ -230,8 +233,7 @@ func (s *internalState) handleUpdates(ctx context.Context, u tg.UpdatesClass) er
 
 	switch u := u.(type) {
 	case *tg.Updates:
-		s.saveUserHashes(ctx, u.Users)
-		s.saveChannelHashes(ctx, u.Chats)
+		s.handleEntities(ctx, u.Users, u.Chats)
 		return s.handleSeq(ctx, &tg.UpdatesCombined{
 			Updates:  u.Updates,
 			Users:    u.Users,
@@ -241,8 +243,7 @@ func (s *internalState) handleUpdates(ctx context.Context, u tg.UpdatesClass) er
 			SeqStart: u.Seq,
 		})
 	case *tg.UpdatesCombined:
-		s.saveUserHashes(ctx, u.Users)
-		s.saveChannelHashes(ctx, u.Chats)
+		s.handleEntities(ctx, u.Users, u.Chats)
 		return s.handleSeq(ctx, u)
 	case *tg.UpdateShort:
 		return s.handleUpdates(ctx, &tg.UpdatesCombined{
@@ -295,6 +296,14 @@ func (s *internalState) handleUpdates(ctx context.Context, u tg.UpdatesClass) er
 		return nil
 	default:
 		panic(fmt.Sprintf("unexpected update type: %T", u))
+	}
+}
+
+func (s *internalState) handleEntities(ctx context.Context, users []tg.UserClass, chats []tg.ChatClass) {
+	s.saveUserHashes(ctx, users)
+	s.saveChannelHashes(ctx, chats)
+	if err := s.onEntities(ctx, users, chats); err != nil {
+		s.log.Error("Handle entities error", zap.Error(err))
 	}
 }
 
@@ -487,6 +496,7 @@ func (s *internalState) createAndRunChannelState(ctx context.Context, channelID,
 		RawClient:        s.client,
 		Handler:          s.handler,
 		OnChannelTooLong: s.onTooLong,
+		OnEntities:       s.onEntities,
 		Logger:           s.log.Named("channel").With(zap.Int64("channel_id", channelID)),
 		Tracer:           s.tracer,
 	})
@@ -604,8 +614,9 @@ func (s *internalState) getDifference(ctx context.Context) error {
 
 	switch diff := diff.(type) {
 	case *tg.UpdatesDifference:
+		s.handleEntities(ctx, diff.Users, diff.Chats)
 		if len(diff.OtherUpdates) > 0 {
-			if err := s.handleUpdates(ctx, &tg.UpdatesCombined{
+			if err := s.handleSeq(ctx, &tg.UpdatesCombined{
 				Updates: diff.OtherUpdates,
 				Users:   diff.Users,
 				Chats:   diff.Chats,
@@ -642,8 +653,9 @@ func (s *internalState) getDifference(ctx context.Context) error {
 
 	// Incomplete list of occurred events.
 	case *tg.UpdatesDifferenceSlice:
+		s.handleEntities(ctx, diff.Users, diff.Chats)
 		if len(diff.OtherUpdates) > 0 {
-			if err := s.handleUpdates(ctx, &tg.UpdatesCombined{
+			if err := s.handleSeq(ctx, &tg.UpdatesCombined{
 				Updates: diff.OtherUpdates,
 				Users:   diff.Users,
 				Chats:   diff.Chats,
