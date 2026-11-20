@@ -469,6 +469,20 @@ func (tc *TelegramClient) syncNormalDialog(
 	if err = resultToError(res); err != nil {
 		return err
 	}
+	if user, ok := dialog.Peer.(*tg.PeerUser); ok && user.UserID != tc.telegramUserID && dialog.ReadOutboxMaxID > 0 {
+		res = tc.main.Bridge.QueueRemoteEvent(tc.userLogin, &simplevent.Receipt{
+			EventMeta: simplevent.EventMeta{
+				Type:      bridgev2.RemoteEventReadReceipt,
+				PortalKey: portalKey,
+				Sender:    tc.senderForUserID(user.UserID),
+			},
+			LastTarget:          ids.MakeMessageID(portalKey, dialog.ReadOutboxMaxID),
+			ReadUpToStreamOrder: int64(dialog.ReadOutboxMaxID),
+		})
+		if err = resultToError(res); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
