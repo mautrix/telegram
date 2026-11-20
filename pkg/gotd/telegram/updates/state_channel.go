@@ -164,16 +164,8 @@ func (s *channelState) handleTooLong(ctx context.Context, long *tg.UpdateChannel
 	ctx, span := s.tracer.Start(ctx, "channelState.handleTooLong")
 	defer span.End()
 
-	remotePts, ok := long.GetPts()
-	if !ok {
+	if _, ok := long.GetPts(); !ok {
 		s.log.Warn("Got UpdateChannelTooLong without pts field")
-		return s.getDifference(ctx)
-	}
-
-	// Note: we still can fetch latest diffLim updates.
-	// Should we do?
-	if remotePts-s.pts.State() > s.diffLim {
-		return s.onTooLong(s.channelID)
 	}
 
 	return s.getDifference(ctx)
@@ -219,38 +211,22 @@ func (s *channelState) getDifference(ctx context.Context) error {
 	if now := time.Now(); now.Before(s.diffTimeout) {
 		dur := s.diffTimeout.Sub(now)
 		s.log.Debug("GetChannelDifference timeout", zap.Duration("duration", dur))
-		if err := func() error {
-			afterC := time.After(dur)
-			for {
-				select {
-				case <-afterC:
-					return nil
-				case _, ok := <-s.updates:
-					if !ok {
-						continue
-					}
-
-					// Ignoring updates to prevent *internalState worker from blocking.
-					// All ignored updates should be restored by future getChannelDifference call.
-					// At least I hope so...
-					s.log.Debug("Ignoring update due to getChannelDifference timeout") // , zap.Any("update", u.update))
-				case <-ctx.Done():
-					return ctx.Err()
-				}
-			}
-		}(); err != nil {
+		if err := s.waitIgnoringUpdates(ctx, dur); err != nil {
 			return err
 		}
 	}
 
-	diff, err := s.client.UpdatesGetChannelDifference(ctx, &tg.UpdatesGetChannelDifferenceRequest{
-		Channel: &tg.InputChannel{
-			ChannelID:  s.channelID,
-			AccessHash: s.accessHash,
-		},
-		Filter: &tg.ChannelMessagesFilterEmpty{},
-		Pts:    s.pts.State(),
-		Limit:  s.diffLim,
+	log := s.log.With(zap.Int("pts", s.pts.State()))
+	diff, err := retryDifference(ctx, log, nil, isFatalChannelDifferenceError, s.waitIgnoringUpdates, func() (tg.UpdatesChannelDifferenceClass, error) {
+		return s.client.UpdatesGetChannelDifference(ctx, &tg.UpdatesGetChannelDifferenceRequest{
+			Channel: &tg.InputChannel{
+				ChannelID:  s.channelID,
+				AccessHash: s.accessHash,
+			},
+			Filter: &tg.ChannelMessagesFilterEmpty{},
+			Pts:    s.pts.State(),
+			Limit:  s.diffLim,
+		})
 	})
 	if err != nil {
 		if tgerr.Is(err, tg.ErrChannelPrivate) || tgerr.Is(err, tg.ErrChannelInvalid) {
@@ -324,6 +300,10 @@ func (s *channelState) getDifference(ctx context.Context) error {
 			s.diffTimeout = time.Now().Add(time.Second * time.Duration(seconds))
 		}
 
+		if err := s.onTooLong(s.channelID); err != nil {
+			return err
+		}
+
 		remotePts, err := getDialogPts(diff.Dialog)
 		if err != nil {
 			s.log.Warn("UpdatesChannelDifferenceTooLong invalid Dialog", zap.Error(err))
@@ -335,10 +315,31 @@ func (s *channelState) getDifference(ctx context.Context) error {
 			s.pts.SetState(remotePts, "updates.channelDifferenceTooLong dialog new pts")
 		}
 
-		return s.onTooLong(s.channelID)
+		return nil
 
 	default:
 		return errors.Errorf("unexpected channel diff type: %T", diff)
+	}
+}
+
+func (s *channelState) waitIgnoringUpdates(ctx context.Context, dur time.Duration) error {
+	afterC := time.After(dur)
+	for {
+		select {
+		case <-afterC:
+			return nil
+		case _, ok := <-s.updates:
+			if !ok {
+				continue
+			}
+
+			// Ignoring updates to prevent *internalState worker from blocking.
+			// All ignored updates should be restored by future getChannelDifference call.
+			// At least I hope so...
+			s.log.Debug("Ignoring update due to getChannelDifference timeout") // , zap.Any("update", u.update))
+		case <-ctx.Done():
+			return ctx.Err()
+		}
 	}
 }
 
