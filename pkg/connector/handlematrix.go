@@ -1199,8 +1199,8 @@ func (tc *TelegramClient) HandleMatrixReadReceipt(ctx context.Context, msg *brid
 			}
 		}
 		var maxID int
-		_, maxID, readMessagesErr = ids.ParseMessageID(message.ID)
-		if readMessagesErr != nil {
+		maxID, readMessagesErr = tc.getLastTelegramMessageID(ctx, message)
+		if readMessagesErr != nil || maxID == 0 {
 			return
 		}
 

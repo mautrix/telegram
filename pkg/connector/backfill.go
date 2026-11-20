@@ -354,6 +354,18 @@ func (tc *TelegramClient) FetchMessages(ctx context.Context, fetchParams bridgev
 	}, nil
 }
 
+func (tc *TelegramClient) getLastTelegramMessageID(ctx context.Context, msg *database.Message) (int, error) {
+	if _, messageID, err := ids.ParseMessageID(msg.ID); err == nil {
+		return messageID, nil
+	}
+	lastID, err := tc.main.Store.GetLastTelegramMessageID(ctx, tc.main.Bridge.ID, msg.Room, msg.Timestamp)
+	if err != nil || lastID == "" {
+		return 0, err
+	}
+	_, messageID, err := ids.ParseMessageID(lastID)
+	return messageID, err
+}
+
 func (tc *TelegramClient) GetBackfillMaxBatchCount(ctx context.Context, portal *bridgev2.Portal, task *database.BackfillTask) int {
 	log := zerolog.Ctx(ctx).With().
 		Str("method", "GetBackfillMaxBatchCount").
