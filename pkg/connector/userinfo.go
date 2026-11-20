@@ -172,7 +172,7 @@ func (tc *TelegramClient) getSingleChannel(ctx context.Context, id int64) (*tg.C
 	} else if len(chats.GetChats()) == 0 {
 		return nil, fmt.Errorf("failed to get channel info for channel %d", id)
 	} else if channel, ok := chats.GetChats()[0].(*tg.Channel); !ok {
-		return nil, fmt.Errorf("unexpected channel type %T", chats.GetChats()[id])
+		return nil, fmt.Errorf("unexpected channel type %T", chats.GetChats()[0])
 	} else {
 		return channel, nil
 	}
