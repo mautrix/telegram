@@ -113,6 +113,7 @@ type TelegramClient struct {
 	reactionCapsStale         atomic.Bool
 
 	recentMessageRooms *exsync.RingBuffer[networkid.MessageID, networkid.PortalKey]
+	pendingWebPages    *exsync.RingBuffer[networkid.MessageID, *tg.Message]
 	chatMigrateSender  *exsync.Map[int64, bridgev2.EventSender]
 
 	telegramFmtParams *telegramfmt.FormatParams
@@ -211,6 +212,7 @@ func NewTelegramClient(ctx context.Context, tc *TelegramConnector, login *bridge
 		stickerPacksByID:   map[int64]*stickerPackCache{},
 
 		recentMessageRooms:    exsync.NewRingBuffer[networkid.MessageID, networkid.PortalKey](32),
+		pendingWebPages:       exsync.NewRingBuffer[networkid.MessageID, *tg.Message](32),
 		chatMigrateSender:     exsync.NewMap[int64, bridgev2.EventSender](),
 		forbiddenSenderChecks: exsync.NewMap[string, time.Time](),
 
