@@ -1678,27 +1678,181 @@ func (tc *TelegramClient) transferEmojisToMatrix(ctx context.Context, customEmoj
 }
 
 func (tc *TelegramClient) onNotifySettings(ctx context.Context, e tg.Entities, update *tg.UpdateNotifySettings) error {
-	var portalKey networkid.PortalKey
 	switch typedPeer := update.Peer.(type) {
 	case *tg.NotifyPeer:
-		portalKey = tc.makePortalKeyFromPeer(typedPeer.Peer, 0)
+		portalKey := tc.makePortalKeyFromPeer(typedPeer.Peer, 0)
+		peerChannel, isChannel := typedPeer.Peer.(*tg.PeerChannel)
+		var broadcast bool
+		if isChannel {
+			if channel, ok := e.Channels[peerChannel.ChannelID]; ok {
+				broadcast = channel.Broadcast
+			} else if portal, err := tc.main.Bridge.GetExistingPortalByKey(ctx, portalKey); err != nil {
+				return err
+			} else if portal != nil {
+				broadcast = !portal.Metadata.(*PortalMetadata).IsSuperGroup && !portal.Metadata.(*PortalMetadata).IsCommunity
+			}
+		}
+		err := tc.queueMutedUntil(portalKey, tc.getMutedUntil(ctx, notifyScopeForPeer(typedPeer.Peer, broadcast), update.NotifySettings))
+		if err != nil || !isChannel || tc.main.Bridge.Config.MuteOnlyOnCreate {
+			return err
+		}
+		return tc.syncTopicMutes(ctx, peerChannel.ChannelID, update.NotifySettings)
 	case *tg.NotifyForumTopic:
-		portalKey = tc.makePortalKeyFromPeer(typedPeer.Peer, typedPeer.TopMsgID)
+		inputPeer, _, err := tc.inputPeerForPortalID(ctx, tc.makePortalKeyFromPeer(typedPeer.Peer, 0).ID)
+		if err != nil {
+			return err
+		}
+		mutedUntil := tc.getMutedUntil(ctx, &tg.InputNotifyChats{}, update.NotifySettings, &tg.InputNotifyPeer{Peer: inputPeer})
+		return tc.queueMutedUntil(tc.makePortalKeyFromPeer(typedPeer.Peer, typedPeer.TopMsgID), mutedUntil)
+	case *tg.NotifyUsers:
+		tc.setNotifyDefaults(&tg.InputNotifyUsers{}, update.NotifySettings)
+	case *tg.NotifyChats:
+		tc.setNotifyDefaults(&tg.InputNotifyChats{}, update.NotifySettings)
+	case *tg.NotifyBroadcasts:
+		tc.setNotifyDefaults(&tg.InputNotifyBroadcasts{}, update.NotifySettings)
 	default:
 		zerolog.Ctx(ctx).Debug().
 			Type("peer_type", update.Peer).
 			Any("peer", update.Peer).
 			Msg("Ignoring unsupported notify settings peer type")
+	}
+	return nil
+}
+
+func (tc *TelegramClient) setNotifyDefaults(scope tg.InputNotifyPeerClass, settings tg.PeerNotifySettings) {
+	tc.notifyDefaultsLock.Lock()
+	tc.notifyDefaults[scope.TypeID()] = &settings
+	if !tc.main.Bridge.Config.MuteOnlyOnCreate {
+		tc.notifyDefaultsChanged[scope.TypeID()] = scope
+	}
+	tc.notifyDefaultsLock.Unlock()
+	select {
+	case tc.notifyDefaultsWakeup <- struct{}{}:
+	default:
+	}
+}
+
+func (tc *TelegramClient) syncDefaultMutesLoop(ctx context.Context) {
+	for {
+		tc.notifyDefaultsLock.Lock()
+		changed := tc.notifyDefaultsChanged
+		tc.notifyDefaultsChanged = map[uint32]tg.InputNotifyPeerClass{}
+		tc.notifyDefaultsLock.Unlock()
+		for typeID, scope := range changed {
+			if err := tc.syncDefaultMutes(ctx, scope); err != nil {
+				zerolog.Ctx(ctx).Err(err).Str("scope", scope.TypeName()).Msg("Failed to sync default mute to portals")
+				tc.notifyDefaultsLock.Lock()
+				tc.notifyDefaultsChanged[typeID] = scope
+				tc.notifyDefaultsLock.Unlock()
+			}
+		}
+		select {
+		case <-tc.notifyDefaultsWakeup:
+		case <-ctx.Done():
+			return
+		}
+	}
+}
+
+func (tc *TelegramClient) syncDefaultMutes(ctx context.Context, scope tg.InputNotifyPeerClass) error {
+	userPortals, err := tc.main.Bridge.DB.UserPortal.GetAllForLogin(ctx, tc.userLogin.UserLogin)
+	if err != nil {
+		return err
+	}
+	isUsers := scope.TypeID() == tg.InputNotifyUsersTypeID
+	var peers []tg.InputDialogPeerClass
+	for _, up := range userPortals {
+		peerType, _, topicID, err := ids.ParsePortalID(up.Portal.ID)
+		if err != nil || topicID != 0 || (peerType == ids.PeerTypeUser) != isUsers {
+			continue
+		}
+		inputPeer, _, err := tc.inputPeerForPortalID(ctx, up.Portal.ID)
+		if err != nil {
+			zerolog.Ctx(ctx).Err(err).Object("portal_key", up.Portal).Msg("Failed to get input peer to sync default mute")
+			continue
+		}
+		peers = append(peers, &tg.InputDialogPeer{Peer: inputPeer})
+	}
+	for chunk := range slices.Chunk(peers, 100) {
+		resp, err := APICallWithUpdates(ctx, tc, func() (*tg.MessagesPeerDialogs, error) {
+			return tc.client.API().MessagesGetPeerDialogs(ctx, chunk)
+		})
+		if err != nil {
+			zerolog.Ctx(ctx).Err(err).Msg("Failed to get dialogs to sync default mute")
+			continue
+		}
+		channels := map[int64]*tg.Channel{}
+		for _, chat := range resp.Chats {
+			if channel, ok := chat.(*tg.Channel); ok {
+				channels[channel.ID] = channel
+			}
+		}
+		for _, rawDialog := range resp.Dialogs {
+			dialog, ok := rawDialog.(*tg.Dialog)
+			if !ok {
+				continue
+			} else if _, hasOwn := dialog.NotifySettings.GetMuteUntil(); hasOwn {
+				continue
+			}
+			var channel *tg.Channel
+			if peer, ok := dialog.Peer.(*tg.PeerChannel); ok {
+				channel = channels[peer.ChannelID]
+			}
+			if notifyScopeForPeer(dialog.Peer, channel != nil && channel.Broadcast).TypeID() != scope.TypeID() {
+				continue
+			}
+			err = tc.queueMutedUntil(tc.makePortalKeyFromPeer(dialog.Peer, 0), tc.getMutedUntil(ctx, scope, dialog.NotifySettings))
+			if err != nil {
+				return err
+			} else if channel != nil && channel.Forum {
+				if err = tc.syncTopicMutes(ctx, channel.ID, dialog.NotifySettings); err != nil {
+					zerolog.Ctx(ctx).Err(err).Int64("channel_id", channel.ID).Msg("Failed to sync default mute to topics")
+				}
+			}
+		}
+	}
+	return ctx.Err()
+}
+
+func (tc *TelegramClient) syncTopicMutes(ctx context.Context, channelID int64, channelSettings tg.PeerNotifySettings) error {
+	topicIDs, err := tc.main.Store.Topic.GetAll(ctx, channelID)
+	if err != nil || len(topicIDs) == 0 {
+		return err
+	}
+	inputPeer, _, err := tc.inputPeerForPortalID(ctx, tc.makePortalKeyFromID(ids.PeerTypeChannel, channelID, 0).ID)
+	if err != nil {
+		return err
+	}
+	for chunk := range slices.Chunk(topicIDs, 100) {
+		resp, err := APICallWithUpdates(ctx, tc, func() (*tg.MessagesForumTopics, error) {
+			return tc.client.API().MessagesGetForumTopicsByID(ctx, &tg.MessagesGetForumTopicsByIDRequest{
+				Peer:   inputPeer,
+				Topics: chunk,
+			})
+		})
+		if err != nil {
+			return err
+		}
+		for _, rawTopic := range resp.Topics {
+			topic, ok := rawTopic.(*tg.ForumTopic)
+			if !ok {
+				continue
+			} else if _, hasOwn := topic.NotifySettings.GetMuteUntil(); hasOwn {
+				continue
+			}
+			err = tc.queueMutedUntil(tc.makePortalKeyFromID(ids.PeerTypeChannel, channelID, topic.ID), tc.getMutedUntil(ctx, &tg.InputNotifyChats{}, channelSettings))
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func (tc *TelegramClient) queueMutedUntil(portalKey networkid.PortalKey, mutedUntil *time.Time) error {
+	if mutedUntil == nil {
 		return nil
 	}
-
-	var mutedUntil *time.Time
-	if mu, ok := update.NotifySettings.GetMuteUntil(); ok {
-		mutedUntil = ptr.Ptr(time.Unix(int64(mu), 0))
-	} else {
-		mutedUntil = &bridgev2.Unmuted
-	}
-
 	res := tc.main.Bridge.QueueRemoteEvent(tc.userLogin, &simplevent.ChatInfoChange{
 		ChatInfoChange: &bridgev2.ChatInfoChange{
 			ChatInfo: &bridgev2.ChatInfo{

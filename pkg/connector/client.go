@@ -133,6 +133,12 @@ type TelegramClient struct {
 	topicMembersLock sync.Mutex
 	topicMembers     map[int64]cachedChannelMembers
 
+	notifyDefaultsLock    sync.Mutex
+	notifyDefaults        map[uint32]*tg.PeerNotifySettings
+	notifyDefaultsRetryAt time.Time
+	notifyDefaultsChanged map[uint32]tg.InputNotifyPeerClass
+	notifyDefaultsWakeup  chan struct{}
+
 	forbiddenSenderChecks *exsync.Map[string, time.Time]
 
 	takeoutLock        sync.Mutex
@@ -211,6 +217,9 @@ func NewTelegramClient(ctx context.Context, tc *TelegramConnector, login *bridge
 		stickerPacksByID:   map[int64]*stickerPackCache{},
 
 		recentMessageRooms:    exsync.NewRingBuffer[networkid.MessageID, networkid.PortalKey](32),
+		notifyDefaults:        map[uint32]*tg.PeerNotifySettings{},
+		notifyDefaultsChanged: map[uint32]tg.InputNotifyPeerClass{},
+		notifyDefaultsWakeup:  make(chan struct{}, 1),
 		chatMigrateSender:     exsync.NewMap[int64, bridgev2.EventSender](),
 		forbiddenSenderChecks: exsync.NewMap[string, time.Time](),
 
@@ -575,9 +584,16 @@ func (tc *TelegramClient) Connect(ctx context.Context) {
 func (tc *TelegramClient) runInBackground(ctx context.Context) {
 	log := zerolog.Ctx(ctx)
 	err := tc.client.Run(ctx, func(ctx context.Context) error {
+		tc.notifyDefaultsLock.Lock()
+		clear(tc.notifyDefaults)
+		tc.notifyDefaultsRetryAt = time.Time{}
+		tc.notifyDefaultsLock.Unlock()
 		tc.clientInitialized.Set()
 		if tc.reactionCapsStale.CompareAndSwap(true, false) {
 			go tc.resendCapabilities(ctx)
+		}
+		if !tc.metadata.IsBot {
+			go tc.syncDefaultMutesLoop(ctx)
 		}
 		// If takeout dialog sync is enabled, we assume it'll resume from a getTakeoutID call.
 		// If not, resume dialog sync manually here.

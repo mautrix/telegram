@@ -386,13 +386,72 @@ var (
 	_ userLocalDialog = (*tg.DialogCommunity)(nil)
 )
 
-func (tc *TelegramClient) fillUserLocalMeta(info *bridgev2.ChatInfo, dialog userLocalDialog) {
-	info.UserLocal = &bridgev2.UserLocalPortalInfo{}
-	notifySettings := dialog.GetNotifySettings()
-	if mu, ok := notifySettings.GetMuteUntil(); ok {
-		info.UserLocal.MutedUntil = ptr.Ptr(time.Unix(int64(mu), 0))
-	} else {
-		info.UserLocal.MutedUntil = &bridgev2.Unmuted
+func notifyScopeForPeer(peer tg.PeerClass, broadcast bool) tg.InputNotifyPeerClass {
+	switch peer.(type) {
+	case *tg.PeerUser:
+		return &tg.InputNotifyUsers{}
+	case *tg.PeerChannel:
+		if broadcast {
+			return &tg.InputNotifyBroadcasts{}
+		}
+	}
+	return &tg.InputNotifyChats{}
+}
+
+func (tc *TelegramClient) getNotifyDefaults(ctx context.Context, scope tg.InputNotifyPeerClass) *tg.PeerNotifySettings {
+	tc.notifyDefaultsLock.Lock()
+	settings, ok := tc.notifyDefaults[scope.TypeID()]
+	retryAt := tc.notifyDefaultsRetryAt
+	tc.notifyDefaultsLock.Unlock()
+	if ok {
+		return settings
+	} else if time.Now().Before(retryAt) {
+		return nil
+	}
+	settings, err := tc.client.API().AccountGetNotifySettings(ctx, scope)
+	tc.notifyDefaultsLock.Lock()
+	defer tc.notifyDefaultsLock.Unlock()
+	if err != nil {
+		zerolog.Ctx(ctx).Err(err).Str("scope", scope.TypeName()).Msg("Failed to get default notification settings")
+		wait, _ := tgerr.AsFloodWait(err)
+		tc.notifyDefaultsRetryAt = time.Now().Add(max(wait, time.Minute))
+		return nil
+	} else if existing, ok := tc.notifyDefaults[scope.TypeID()]; ok {
+		return existing
+	}
+	tc.notifyDefaults[scope.TypeID()] = settings
+	return settings
+}
+
+func (tc *TelegramClient) getMutedUntil(ctx context.Context, scope tg.InputNotifyPeerClass, settings tg.PeerNotifySettings, parents ...tg.InputNotifyPeerClass) *time.Time {
+	if tc.metadata.IsBot {
+		return nil
+	}
+	mu, ok := settings.GetMuteUntil()
+	for i := 0; !ok && i < len(parents); i++ {
+		parentSettings, err := tc.client.API().AccountGetNotifySettings(ctx, parents[i])
+		if err != nil {
+			zerolog.Ctx(ctx).Err(err).Msg("Failed to get notification settings")
+			return nil
+		}
+		mu, ok = parentSettings.GetMuteUntil()
+	}
+	if !ok {
+		defaults := tc.getNotifyDefaults(ctx, scope)
+		if defaults == nil {
+			return nil
+		}
+		mu, ok = defaults.GetMuteUntil()
+	}
+	if !ok {
+		return &bridgev2.Unmuted
+	}
+	return ptr.Ptr(time.Unix(int64(mu), 0))
+}
+
+func (tc *TelegramClient) fillUserLocalMeta(ctx context.Context, info *bridgev2.ChatInfo, dialog userLocalDialog, scope tg.InputNotifyPeerClass) {
+	info.UserLocal = &bridgev2.UserLocalPortalInfo{
+		MutedUntil: tc.getMutedUntil(ctx, scope, dialog.GetNotifySettings()),
 	}
 	if dialog.GetPinned() {
 		info.UserLocal.Tag = ptr.Ptr(event.RoomTagFavourite)
@@ -402,6 +461,7 @@ func (tc *TelegramClient) fillUserLocalMeta(info *bridgev2.ChatInfo, dialog user
 type realFullChat interface {
 	GetAvailableReactions() (value tg.ChatReactionsClass, ok bool)
 	GetTTLPeriod() (value int, ok bool)
+	GetNotifySettings() tg.PeerNotifySettings
 }
 
 var (
@@ -409,7 +469,7 @@ var (
 	_ realFullChat = (*tg.ChannelFull)(nil)
 )
 
-func (tc *TelegramClient) wrapFullChatInfo(portalID networkid.PortalID, fullChat *tg.MessagesChatFull) (*bridgev2.ChatInfo, *memberFetchMeta, error) {
+func (tc *TelegramClient) wrapFullChatInfo(ctx context.Context, portalID networkid.PortalID, fullChat *tg.MessagesChatFull) (*bridgev2.ChatInfo, *memberFetchMeta, error) {
 	var chat tg.ChatClass
 	for _, c := range fullChat.GetChats() {
 		if c.GetID() == fullChat.FullChat.GetID() {
@@ -429,6 +489,13 @@ func (tc *TelegramClient) wrapFullChatInfo(portalID networkid.PortalID, fullChat
 	var newAllowedReactions []string
 	rfc, ok := fullChat.FullChat.(realFullChat)
 	if ok {
+		var scope tg.InputNotifyPeerClass = &tg.InputNotifyChats{}
+		if channel, ok := chat.(*tg.Channel); ok && channel.Broadcast {
+			scope = &tg.InputNotifyBroadcasts{}
+		}
+		info.UserLocal = &bridgev2.UserLocalPortalInfo{
+			MutedUntil: tc.getMutedUntil(ctx, scope, rfc.GetNotifySettings()),
+		}
 		if reactions, ok := rfc.GetAvailableReactions(); ok {
 			switch typedReactions := reactions.(type) {
 			case *tg.ChatReactionsAll:
@@ -607,7 +674,18 @@ func (tc *TelegramClient) getChatInfo(ctx context.Context, portal *bridgev2.Port
 
 	switch peerType {
 	case ids.PeerTypeUser:
-		return tc.getDMChatInfo(id)
+		info, err := tc.getDMChatInfo(id)
+		if err != nil {
+			return nil, err
+		}
+		if inputPeer, _, err := tc.inputPeerForPortalID(ctx, portal.ID); err != nil {
+			zerolog.Ctx(ctx).Err(err).Msg("Failed to get input peer to get notification settings")
+		} else {
+			info.UserLocal = &bridgev2.UserLocalPortalInfo{
+				MutedUntil: tc.getMutedUntil(ctx, &tg.InputNotifyUsers{}, tg.PeerNotifySettings{}, &tg.InputNotifyPeer{Peer: inputPeer}),
+			}
+		}
+		return info, nil
 	case ids.PeerTypeChat:
 		fullChat, err := APICallWithUpdates(ctx, tc, func() (*tg.MessagesChatFull, error) {
 			return tc.client.API().MessagesGetFullChat(ctx, id)
@@ -615,7 +693,7 @@ func (tc *TelegramClient) getChatInfo(ctx context.Context, portal *bridgev2.Port
 		if err != nil {
 			return nil, err
 		}
-		info, _, err := tc.wrapFullChatInfo(portal.ID, fullChat)
+		info, _, err := tc.wrapFullChatInfo(ctx, portal.ID, fullChat)
 		return info, err
 	case ids.PeerTypeChannel:
 		accessHash, err := tc.ScopedStore.GetAccessHash(ctx, ids.PeerTypeChannel, id)
@@ -641,6 +719,9 @@ func (tc *TelegramClient) getChatInfo(ctx context.Context, portal *bridgev2.Port
 				return nil, err
 			}
 			tc.overrideChatInfoWithTopic(info, topic)
+			info.UserLocal = &bridgev2.UserLocalPortalInfo{
+				MutedUntil: tc.getMutedUntil(ctx, &tg.InputNotifyChats{}, topic.NotifySettings, &tg.InputNotifyPeer{Peer: channel.AsInputPeer()}),
+			}
 			err = tc.fillTopicMembers(ctx, id, mfm, info.Members)
 			if err != nil {
 				zerolog.Ctx(ctx).Err(err).Msg("Failed to get channel members")
@@ -653,7 +734,7 @@ func (tc *TelegramClient) getChatInfo(ctx context.Context, portal *bridgev2.Port
 		if err != nil {
 			return nil, err
 		}
-		info, mfm, err := tc.wrapFullChatInfo(portal.ID, fullChat)
+		info, mfm, err := tc.wrapFullChatInfo(ctx, portal.ID, fullChat)
 		if err != nil {
 			return nil, err
 		}
