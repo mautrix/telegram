@@ -193,7 +193,7 @@ func (tc *TelegramClient) wrapChannelGhostInfo(ctx context.Context, channel *tg.
 	}
 
 	// TODO store alternate usernames in database too
-	err = tc.main.Store.Username.Set(ctx, ids.PeerTypeChannel, channel.ID, channel.Username)
+	err = tc.main.Store.Username.Set(ctx, ids.PeerTypeChannel, channel.ID, primaryUsername(channel.Username, channel.Usernames))
 	if err != nil {
 		return nil, err
 	}
@@ -216,6 +216,18 @@ func (tc *TelegramClient) wrapChannelGhostInfo(ctx context.Context, channel *tg.
 	}, nil
 }
 
+func primaryUsername(username string, usernames []tg.Username) string {
+	if username != "" {
+		return username
+	}
+	for _, u := range usernames {
+		if u.Active {
+			return u.Username
+		}
+	}
+	return ""
+}
+
 func (tc *TelegramClient) wrapUserInfo(ctx context.Context, u tg.UserClass, ghost *bridgev2.Ghost) (*bridgev2.UserInfo, error) {
 	oldMeta := ghost.Metadata.(*GhostMetadata)
 	user, ok := u.(*tg.User)
@@ -231,7 +243,7 @@ func (tc *TelegramClient) wrapUserInfo(ctx context.Context, u tg.UserClass, ghos
 		}
 
 		// TODO store alternate usernames in database too
-		if err := tc.main.Store.Username.Set(ctx, ids.PeerTypeUser, user.ID, user.Username); err != nil {
+		if err := tc.main.Store.Username.Set(ctx, ids.PeerTypeUser, user.ID, primaryUsername(user.Username, user.Usernames)); err != nil {
 			return nil, err
 		}
 
@@ -268,7 +280,7 @@ func (tc *TelegramClient) wrapUserInfo(ctx context.Context, u tg.UserClass, ghos
 		}
 	}
 
-	name := tc.main.Config.FormatDisplayname(user.FirstName, user.LastName, user.Username, user.Deleted, user.ID)
+	name := tc.main.Config.FormatDisplayname(user.FirstName, user.LastName, primaryUsername(user.Username, user.Usernames), user.Deleted, user.ID)
 	namePtr := &name
 	if user.Contact && ghost.Name != "" && oldMeta.ContactSource != tc.telegramUserID && oldMeta.ContactSource != 0 && !tc.main.Config.ContactNames {
 		namePtr = nil

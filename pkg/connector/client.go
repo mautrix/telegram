@@ -43,7 +43,6 @@ import (
 	"maunium.net/go/mautrix/bridgev2/simplevent"
 	"maunium.net/go/mautrix/bridgev2/status"
 
-	"go.mau.fi/mautrix-telegram/pkg/connector/humanise"
 	"go.mau.fi/mautrix-telegram/pkg/connector/ids"
 	"go.mau.fi/mautrix-telegram/pkg/connector/matrixfmt"
 	"go.mau.fi/mautrix-telegram/pkg/connector/store"
@@ -68,6 +67,9 @@ func init() {
 		"tg-client-dead":        "Disconnected from Telegram, reconnecting",
 		"tg-connectivity-error": "Lost connection to Telegram, reconnecting",
 		"tg-unknown-error":      "The Telegram connection failed unexpectedly",
+		"tg-logged-out":         "You were logged out of Telegram. Relogin to continue using the bridge.",
+		"tg-not-logged-in":      "You're not logged into Telegram. Relogin to continue using the bridge.",
+		"tg-user-deactivated":   "Your Telegram account was deleted or banned.",
 	})
 }
 
@@ -226,6 +228,7 @@ func NewTelegramClient(ctx context.Context, tc *TelegramConnector, login *bridge
 	client.updatesManager = updates.New(updates.Config{
 		OnNotChannelMember: client.onNotChannelMember,
 		OnDifferenceStuck:  client.onDifferenceStuck,
+		OnEntities:         client.onEntitiesWrapper,
 		OnChannelTooLong:   client.onChannelTooLong,
 		Handler:            client.dispatcher,
 		Logger:             zaplog.Named("gaps"),
@@ -508,11 +511,20 @@ func (tc *TelegramClient) onDead() {
 }
 
 func (tc *TelegramClient) sendBadCredentialsOrUnknownError(err error) {
-	if auth.IsUnauthorized(err) || errors.Is(err, ErrNoAuthKey) {
+	if errors.Is(err, ErrNoAuthKey) {
 		tc.userLogin.BridgeState.Send(status.BridgeState{
 			StateEvent: status.StateBadCredentials,
-			Error:      "tg-no-auth",
-			Message:    humanise.Error(err),
+			Error:      "tg-not-logged-in",
+			UserAction: status.UserActionRelogin,
+		})
+	} else if auth.IsUnauthorized(err) {
+		errorCode := status.BridgeStateErrorCode("tg-logged-out")
+		if tgerr.Is(err, "USER_DEACTIVATED", "USER_DEACTIVATED_BAN") {
+			errorCode = "tg-user-deactivated"
+		}
+		tc.userLogin.BridgeState.Send(status.BridgeState{
+			StateEvent: status.StateBadCredentials,
+			Error:      errorCode,
 			UserAction: status.UserActionRelogin,
 			Info: map[string]any{
 				"go_error": err.Error(),
@@ -566,15 +578,12 @@ func (tc *TelegramConnector) userToRemoteProfile(
 	ghost *bridgev2.Ghost,
 	prevState *status.RemoteProfile,
 ) (profile status.RemoteProfile, name string) {
-	profile.Name = tc.Config.FormatDisplayname(self.FirstName, self.LastName, self.Username, self.Deleted, self.ID)
+	profile.Username = primaryUsername(self.Username, self.Usernames)
+	profile.Name = tc.Config.FormatDisplayname(self.FirstName, self.LastName, profile.Username, self.Deleted, self.ID)
 	if self.Phone != "" {
 		profile.Phone = "+" + strings.TrimPrefix(self.Phone, "+")
 	} else if prevState != nil {
 		profile.Phone = prevState.Phone
-	}
-	profile.Username = self.Username
-	if self.Username == "" && len(self.Usernames) > 0 {
-		profile.Username = self.Usernames[0].Username
 	}
 	if ghost != nil {
 		profile.Avatar = ghost.AvatarMXC
