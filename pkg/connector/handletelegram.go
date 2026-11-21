@@ -967,16 +967,29 @@ type deleteBucket struct {
 	lastUpdate time.Time
 }
 
-func (tc *TelegramClient) shouldBridgeDeletion(ctx context.Context, channelID int64, count int) bool {
+func (tc *TelegramClient) zeroDeleteBucket(portalKey networkid.PortalKey, now time.Time) {
+	tc.deleteLimitsLock.Lock()
+	defer tc.deleteLimitsLock.Unlock()
+
+	if tc.deleteLimits == nil {
+		tc.deleteLimits = map[networkid.PortalKey]*deleteBucket{}
+	}
+	if _, ok := tc.deleteLimits[portalKey]; !ok {
+		for key, b := range tc.deleteLimits {
+			if now.Sub(b.lastUpdate) >= deleteLimitWindow {
+				delete(tc.deleteLimits, key)
+			}
+		}
+	}
+	tc.deleteLimits[portalKey] = &deleteBucket{tokens: 0, lastUpdate: now}
+}
+
+func (tc *TelegramClient) allowPortalDeletion(ctx context.Context, portalKey networkid.PortalKey, count int) bool {
 	maxDelete := tc.main.Config.MaxTelegramDelete
 	if maxDelete < 0 || count <= 0 {
 		return true
 	}
 	if maxDelete == 0 {
-		zerolog.Ctx(ctx).Debug().
-			Int64("channel_id", channelID).
-			Int("deleted_message_count", count).
-			Msg("Ignoring delete message event with too many targets")
 		return false
 	}
 
@@ -984,33 +997,21 @@ func (tc *TelegramClient) shouldBridgeDeletion(ctx context.Context, channelID in
 	defer tc.deleteLimitsLock.Unlock()
 
 	if tc.deleteLimits == nil {
-		tc.deleteLimits = map[int64]*deleteBucket{}
+		tc.deleteLimits = map[networkid.PortalKey]*deleteBucket{}
 	}
 
 	now := time.Now()
 	limit := float64(maxDelete)
-	bucket, ok := tc.deleteLimits[channelID]
+	bucket, ok := tc.deleteLimits[portalKey]
 	if !ok {
-		for id, b := range tc.deleteLimits {
+		for key, b := range tc.deleteLimits {
 			if now.Sub(b.lastUpdate) >= deleteLimitWindow {
-				delete(tc.deleteLimits, id)
+				delete(tc.deleteLimits, key)
 			}
 		}
 		bucket = &deleteBucket{tokens: limit, lastUpdate: now}
-		tc.deleteLimits[channelID] = bucket
-	}
-
-	if !tc.main.Config.ShouldBridgeDeletion(count) {
-		bucket.tokens = 0
-		bucket.lastUpdate = now
-		zerolog.Ctx(ctx).Debug().
-			Int64("channel_id", channelID).
-			Int("deleted_message_count", count).
-			Msg("Ignoring delete message event with too many targets")
-		return false
-	}
-
-	if elapsed := now.Sub(bucket.lastUpdate); elapsed >= deleteLimitWindow {
+		tc.deleteLimits[portalKey] = bucket
+	} else if elapsed := now.Sub(bucket.lastUpdate); elapsed >= deleteLimitWindow {
 		bucket.tokens = limit
 		bucket.lastUpdate = now
 	} else if elapsed > 0 {
@@ -1022,7 +1023,7 @@ func (tc *TelegramClient) shouldBridgeDeletion(ctx context.Context, channelID in
 		remaining := bucket.tokens
 		bucket.tokens = 0
 		zerolog.Ctx(ctx).Debug().
-			Int64("channel_id", channelID).
+			Object("portal_key", portalKey).
 			Int("deleted_message_count", count).
 			Float64("remaining_tokens", remaining).
 			Msg("Ignoring delete message event due to too many recent deletions")
@@ -1032,38 +1033,113 @@ func (tc *TelegramClient) shouldBridgeDeletion(ctx context.Context, channelID in
 	return true
 }
 
+func (tc *TelegramClient) resolveMessagePortal(ctx context.Context, channelID int64, wrappedMessageID networkid.MessageID) (networkid.PortalKey, bool, error) {
+	if portalKey, ok := tc.recentMessageRooms.Get(wrappedMessageID); ok {
+		return portalKey, true, nil
+	} else if parts, err := tc.main.Bridge.DB.Message.GetAllPartsByID(ctx, tc.loginID, wrappedMessageID); err != nil {
+		return networkid.PortalKey{}, false, err
+	} else if len(parts) > 0 {
+		return parts[0].Room, true, nil
+	} else if channelID != 0 {
+		return tc.makePortalKeyFromPeer(&tg.PeerChannel{ChannelID: channelID}, 0), true, nil
+	}
+	return networkid.PortalKey{}, false, nil
+}
+
 func (tc *TelegramClient) onDeleteMessages(ctx context.Context, channelID int64, update IGetMessages) error {
 	messages := update.GetMessages()
-
-	if !tc.shouldBridgeDeletion(ctx, channelID, len(messages)) {
+	if len(messages) == 0 {
 		return nil
 	}
 
+	if !tc.main.Config.ShouldBridgeDeletion(len(messages)) {
+		if tc.main.Config.MaxTelegramDelete > 0 {
+			now := time.Now()
+			if channelID != 0 {
+				tc.zeroDeleteBucket(tc.makePortalKeyFromPeer(&tg.PeerChannel{ChannelID: channelID}, 0), now)
+			} else {
+				probeIDs := messages[:min(len(messages), 5)]
+				if len(messages) > 5 {
+					probeIDs = append(slices.Clone(probeIDs), messages[max(5, len(messages)-5):]...)
+				}
+				for _, messageID := range probeIDs {
+					portalKey, ok, err := tc.resolveMessagePortal(ctx, channelID, ids.MakeMessageID(channelID, messageID))
+					if err != nil {
+						zerolog.Ctx(ctx).Err(err).Msg("Failed to look up portal for oversized delete event")
+						break
+					} else if ok {
+						tc.zeroDeleteBucket(portalKey, now)
+						break
+					}
+				}
+			}
+		}
+		zerolog.Ctx(ctx).Debug().
+			Int64("channel_id", channelID).
+			Int("deleted_message_count", len(messages)).
+			Msg("Ignoring delete message event with too many targets")
+		return nil
+	}
+
+	if channelID != 0 {
+		if !tc.allowPortalDeletion(ctx, tc.makePortalKeyFromPeer(&tg.PeerChannel{ChannelID: channelID}, 0), len(messages)) {
+			return nil
+		}
+		for _, messageID := range messages {
+			wrappedMessageID := ids.MakeMessageID(channelID, messageID)
+			portalKey, _, err := tc.resolveMessagePortal(ctx, channelID, wrappedMessageID)
+			if err != nil {
+				return err
+			}
+			res := tc.main.Bridge.QueueRemoteEvent(tc.userLogin, &simplevent.MessageRemove{
+				EventMeta: simplevent.EventMeta{
+					Type:      bridgev2.RemoteEventMessageRemove,
+					PortalKey: portalKey,
+				},
+				TargetMessage:   wrappedMessageID,
+				HidePlaceholder: true,
+			})
+			if err := resultToError(res); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+
+	type deleteTarget struct {
+		portalKey networkid.PortalKey
+		messageID networkid.MessageID
+	}
+	targets := make([]deleteTarget, 0, len(messages))
+	counts := make(map[networkid.PortalKey]int, 1)
 	for _, messageID := range messages {
 		wrappedMessageID := ids.MakeMessageID(channelID, messageID)
-		var portalKey networkid.PortalKey
-		var ok bool
-		if portalKey, ok = tc.recentMessageRooms.Get(wrappedMessageID); ok {
-			// key found in cache
-		} else if parts, err := tc.main.Bridge.DB.Message.GetAllPartsByID(ctx, tc.loginID, wrappedMessageID); err != nil {
+		portalKey, ok, err := tc.resolveMessagePortal(ctx, channelID, wrappedMessageID)
+		if err != nil {
 			return err
-		} else if len(parts) > 0 {
-			portalKey = parts[0].Room
-		} else if channelID != 0 {
-			// This won't work for topics, but should work for any other channels
-			portalKey = tc.makePortalKeyFromPeer(&tg.PeerChannel{ChannelID: channelID}, 0)
-		} else {
+		} else if !ok {
 			zerolog.Ctx(ctx).Debug().
 				Int("message_id", messageID).
 				Msg("Ignoring delete of unknown message")
 			continue
 		}
+		targets = append(targets, deleteTarget{portalKey: portalKey, messageID: wrappedMessageID})
+		counts[portalKey]++
+	}
+	allowed := make(map[networkid.PortalKey]bool, len(counts))
+	for portalKey, count := range counts {
+		allowed[portalKey] = tc.allowPortalDeletion(ctx, portalKey, count)
+	}
+	for _, target := range targets {
+		if !allowed[target.portalKey] {
+			continue
+		}
 		res := tc.main.Bridge.QueueRemoteEvent(tc.userLogin, &simplevent.MessageRemove{
 			EventMeta: simplevent.EventMeta{
 				Type:      bridgev2.RemoteEventMessageRemove,
-				PortalKey: portalKey,
+				PortalKey: target.portalKey,
 			},
-			TargetMessage:   wrappedMessageID,
+			TargetMessage:   target.messageID,
 			HidePlaceholder: true,
 		})
 		if err := resultToError(res); err != nil {

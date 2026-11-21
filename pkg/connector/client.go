@@ -145,7 +145,7 @@ type TelegramClient struct {
 	prevReactionPoll     map[networkid.PortalKey]time.Time
 	prevReactionPollLock sync.Mutex
 
-	deleteLimits     map[int64]*deleteBucket
+	deleteLimits     map[networkid.PortalKey]*deleteBucket
 	deleteLimitsLock sync.Mutex
 
 	stickerPacksByName   map[string]*stickerPackCache
