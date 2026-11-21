@@ -96,7 +96,8 @@ takeout:
 #
 # -1 means no limit (which means all chats can be bridged)
 max_member_count: -1
-# The maximum number of Telegram message deletions to handle per minute.
+# The maximum number of Telegram message deletions to handle per channel
+# (or across DMs and basic groups) per minute.
 # When deleting an entire chat, Telegram sends message delete events deleting
 # messages in batches. Bridging those as individual redactions would be very slow
 # and there's no way to detect that the entire chat was deleted, so it's best to
