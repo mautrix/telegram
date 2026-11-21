@@ -960,14 +960,58 @@ func (tc *TelegramClient) onUserName(ctx context.Context, e tg.Entities, update 
 	return nil
 }
 
+const deleteLimitWindow = 1 * time.Minute
+
+func (tc *TelegramClient) shouldBridgeDeletion(ctx context.Context, channelID int64, count int) bool {
+	maxDelete := tc.main.Config.MaxTelegramDelete
+	if maxDelete < 0 || count <= 0 {
+		return true
+	}
+
+	tc.deleteLimitLock.Lock()
+	defer tc.deleteLimitLock.Unlock()
+
+	now := time.Now()
+	if !tc.main.Config.ShouldBridgeDeletion(count) {
+		tc.deleteTokens = 0
+		tc.deleteLastCheck = now
+		zerolog.Ctx(ctx).Debug().
+			Int64("channel_id", channelID).
+			Int("deleted_message_count", count).
+			Msg("Ignoring delete message event with too many targets")
+		return false
+	}
+
+	limit := float64(maxDelete)
+	if tc.deleteLastCheck.IsZero() {
+		tc.deleteTokens = limit
+		tc.deleteLastCheck = now
+	} else if elapsed := now.Sub(tc.deleteLastCheck); elapsed >= deleteLimitWindow {
+		tc.deleteTokens = limit
+		tc.deleteLastCheck = now
+	} else if elapsed > 0 {
+		tc.deleteTokens = min(limit, tc.deleteTokens+elapsed.Seconds()*limit/deleteLimitWindow.Seconds())
+		tc.deleteLastCheck = now
+	}
+
+	if float64(count) > tc.deleteTokens {
+		remaining := tc.deleteTokens
+		tc.deleteTokens = 0
+		zerolog.Ctx(ctx).Debug().
+			Int64("channel_id", channelID).
+			Int("deleted_message_count", count).
+			Float64("remaining_tokens", remaining).
+			Msg("Ignoring delete message event due to too many recent deletions")
+		return false
+	}
+	tc.deleteTokens -= float64(count)
+	return true
+}
+
 func (tc *TelegramClient) onDeleteMessages(ctx context.Context, channelID int64, update IGetMessages) error {
 	messages := update.GetMessages()
 
-	if !tc.main.Config.ShouldBridgeDeletion(len(messages)) {
-		zerolog.Ctx(ctx).Debug().
-			Int64("channel_id", channelID).
-			Int("deleted_message_count", len(messages)).
-			Msg("Ignoring delete message event with too many targets")
+	if !tc.shouldBridgeDeletion(ctx, channelID, len(messages)) {
 		return nil
 	}
 
