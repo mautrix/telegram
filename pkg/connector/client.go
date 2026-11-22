@@ -127,6 +127,7 @@ type TelegramClient struct {
 	lastResolvePhone time.Time
 
 	dcTransferLock sync.Mutex
+	checkingAuth   atomic.Bool
 
 	fetchMessagesSema *semaphore.Weighted
 
@@ -447,8 +448,17 @@ func (tc *TelegramClient) onPing() {
 	if prev.StateEvent == status.StateConnected || prev.Error == updateHandlerStuck || prev.Error == getDifferenceStuck {
 		return
 	}
-	ctx := tc.userLogin.Log.WithContext(tc.main.Bridge.BackgroundCtx)
+	if !tc.checkingAuth.CompareAndSwap(false, true) {
+		return
+	}
 	tc.userLogin.Log.Debug().Msg("Got ping while not connected, checking auth")
+	go tc.checkAuthAfterPing()
+}
+
+func (tc *TelegramClient) checkAuthAfterPing() {
+	defer tc.checkingAuth.Store(false)
+	ctx, cancel := context.WithTimeout(tc.userLogin.Log.WithContext(tc.main.Bridge.BackgroundCtx), 1*time.Minute)
+	defer cancel()
 
 	me, err := tc.client.Self(ctx)
 	if auth.IsUnauthorized(err) {
@@ -457,7 +467,8 @@ func (tc *TelegramClient) onPing() {
 		errors.Is(err, pool.ErrConnDead) ||
 		errors.Is(err, rpc.ErrEngineClosed) ||
 		errors.Is(err, &rpc.RetryLimitReachedErr{}) ||
-		errors.Is(err, context.Canceled) {
+		errors.Is(err, context.Canceled) ||
+		errors.Is(err, context.DeadlineExceeded) {
 		// Connectivity error — connection died during the Self() call.
 		// Keep as transient; gotd's backoff will reconnect.
 		tc.userLogin.BridgeState.Send(status.BridgeState{
