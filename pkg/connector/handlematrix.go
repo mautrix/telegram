@@ -97,6 +97,13 @@ func uploadPartSize(size int64) int {
 	return partSize
 }
 
+func cancelChatResyncIfAlreadyDone(ctx context.Context, portal *bridgev2.Portal) *bridgev2.EventHandlingResult {
+	if time.Since(portal.Metadata.(*PortalMetadata).LastSync.Time) < 24*time.Hour {
+		return new(bridgev2.EventHandlingResultIgnored)
+	}
+	return nil
+}
+
 func (tc *TelegramClient) HandleMatrixViewingChat(ctx context.Context, msg *bridgev2.MatrixViewingChat) error {
 	if msg.Portal == nil {
 		return nil
@@ -104,11 +111,13 @@ func (tc *TelegramClient) HandleMatrixViewingChat(ctx context.Context, msg *brid
 	_, _, topicID, _ := ids.ParsePortalID(msg.Portal.PortalKey.ID)
 	// TODO sync topic parent space
 	meta := msg.Portal.Metadata.(*PortalMetadata)
-	if (topicID == 0 && !meta.FullSynced) || meta.LastSync.Add(24*time.Hour).Before(time.Now()) {
+	if (topicID == 0 && !meta.FullSynced) || time.Since(meta.LastSync.Time) > 24*time.Hour {
 		tc.userLogin.QueueRemoteEvent(&simplevent.ChatResync{
 			EventMeta: simplevent.EventMeta{
 				Type:      bridgev2.RemoteEventChatResync,
 				PortalKey: msg.Portal.PortalKey,
+
+				PreHandleWithResultFunc: cancelChatResyncIfAlreadyDone,
 			},
 			GetChatInfoFunc: tc.GetChatInfo,
 		})
@@ -1279,12 +1288,16 @@ func (tc *TelegramClient) HandleMatrixReadReceipt(ctx context.Context, msg *brid
 		}
 	}()
 
-	if peerType == ids.PeerTypeChannel && (topicID == 0 || msg.Portal.Metadata.(*PortalMetadata).IsForumGeneral) && !msg.Portal.Metadata.(*PortalMetadata).FullSynced {
-		log.Debug().Msg("Scheduling chat resync on read receipt because channel has never got a full sync")
+	meta := msg.Portal.Metadata.(*PortalMetadata)
+	if (topicID == 0 || msg.Portal.Metadata.(*PortalMetadata).IsForumGeneral) &&
+		time.Since(meta.LastSync.Time) > 72*time.Hour {
+		log.Debug().Msg("Scheduling chat resync on read receipt")
 		go tc.userLogin.QueueRemoteEvent(&simplevent.ChatResync{
 			EventMeta: simplevent.EventMeta{
 				Type:      bridgev2.RemoteEventChatResync,
 				PortalKey: msg.Portal.PortalKey,
+
+				PreHandleWithResultFunc: cancelChatResyncIfAlreadyDone,
 			},
 			GetChatInfoFunc: tc.GetChatInfo,
 		})
