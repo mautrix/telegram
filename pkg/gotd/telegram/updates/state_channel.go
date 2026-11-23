@@ -99,6 +99,10 @@ func newChannelState(ctx context.Context, cfg channelStateConfig) *channelState 
 
 var ErrRemoveChannelState = errors.New("remove channel state")
 
+func (s *channelState) isRemoved() bool {
+	return errors.Is(context.Cause(s.runCtx), ErrRemoveChannelState)
+}
+
 func (s *channelState) Run(ctx context.Context) error {
 	defer s.stop(nil)
 	// Subscribe to channel updates.
@@ -287,9 +291,16 @@ func (s *channelState) getDifference(ctx context.Context) error {
 				Updates: msgsToUpdates(diff.NewMessages, true),
 				Users:   diff.Users,
 				Chats:   diff.Chats,
-			}); err != nil {
+			}); err != nil && !s.isRemoved() {
 				return err
 			}
+		}
+
+		if s.isRemoved() {
+			if err := s.storage.SetChannelPts(context.WithoutCancel(ctx), s.selfID, s.channelID, diff.Pts); err != nil {
+				s.log.Warn("SetChannelPts error (getDifference after remove)", zap.Error(err))
+			}
+			return nil
 		}
 
 		if err := s.storage.SetChannelPts(ctx, s.selfID, s.channelID, diff.Pts); err != nil {
