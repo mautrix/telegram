@@ -732,6 +732,10 @@ func (tc *TelegramClient) HandleMatrixSendError(ctx context.Context, sendErr *br
 	}
 	tc.forbiddenSenderChecks.Set(checkKey, time.Now())
 	log := zerolog.Ctx(ctx).With().Str("forbidden_sender_id", string(ghostID)).Logger()
+	if err = tc.clientInitialized.Wait(ctx); err != nil {
+		log.Err(err).Msg("Failed to wait for client to check forbidden sender")
+		return false
+	}
 	if senderType == ids.PeerTypeChannel {
 		pl, err := tc.main.Bridge.Matrix.GetPowerLevels(ctx, sendErr.Portal.MXID)
 		if err != nil {
