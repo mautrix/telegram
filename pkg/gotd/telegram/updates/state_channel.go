@@ -291,8 +291,11 @@ func (s *channelState) getDifference(ctx context.Context) error {
 				Updates: msgsToUpdates(diff.NewMessages, true),
 				Users:   diff.Users,
 				Chats:   diff.Chats,
-			}); err != nil && !s.isRemoved() {
-				return err
+			}); err != nil {
+				if !s.isRemoved() {
+					return err
+				}
+				s.log.Warn("Handle error after channel state removal (getDifference)", zap.Error(err))
 			}
 		}
 
