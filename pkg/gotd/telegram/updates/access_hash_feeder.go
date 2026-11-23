@@ -21,7 +21,10 @@ func (s *internalState) saveChannelHashes(ctx context.Context, chats []tg.ChatCl
 			}
 
 			if hash, ok := c.GetAccessHash(); ok {
-				if _, ok = s.channels[c.ID]; ok {
+				s.channelsLock.Lock()
+				_, ok = s.channels[c.ID]
+				s.channelsLock.Unlock()
+				if ok {
 					continue
 				}
 				s.log.Debug("New channel access hash",
@@ -33,7 +36,10 @@ func (s *internalState) saveChannelHashes(ctx context.Context, chats []tg.ChatCl
 				}
 			}
 		case *tg.ChannelForbidden:
-			if _, ok := s.channels[c.ID]; ok {
+			s.channelsLock.Lock()
+			_, ok := s.channels[c.ID]
+			s.channelsLock.Unlock()
+			if ok {
 				continue
 			}
 			s.log.Debug("New channel access hash",
