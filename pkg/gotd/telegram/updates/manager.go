@@ -64,6 +64,16 @@ func (m *Manager) Handle(ctx context.Context, u tg.UpdatesClass) error {
 
 	if state == nil {
 		m.lg.Debug("Handle (no internalState)")
+		var err error
+		switch u := u.(type) {
+		case *tg.Updates:
+			err = m.cfg.OnEntities(ctx, u.Users, u.Chats)
+		case *tg.UpdatesCombined:
+			err = m.cfg.OnEntities(ctx, u.Users, u.Chats)
+		}
+		if err != nil {
+			m.lg.Error("Handle entities error", zap.Error(err))
+		}
 		return m.cfg.Handler.Handle(ctx, u)
 	}
 
@@ -189,6 +199,7 @@ func (m *Manager) Run(ctx context.Context, api API, userID int64, opt AuthOption
 			Handler:          m.cfg.Handler,
 			OnChannelTooLong: m.cfg.OnChannelTooLong,
 			OnDiffStuck:      m.cfg.OnDifferenceStuck,
+			OnEntities:       m.cfg.OnEntities,
 			Storage:          m.cfg.Storage,
 			Hasher:           m.cfg.AccessHasher,
 			SelfID:           userID,
