@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/rs/zerolog"
+	"go.mau.fi/util/l10n"
 	"go.mau.fi/util/ptr"
 	"go.mau.fi/zerozap"
 	"go.uber.org/zap"
@@ -125,23 +126,23 @@ func loginContextError(ctx context.Context) error {
 func (tc *TelegramConnector) GetLoginFlows() []bridgev2.LoginFlow {
 	return []bridgev2.LoginFlow{
 		{
-			Name:        "Phone Number",
-			Description: "Login using your Telegram phone number",
+			Name:        msgFlowPhoneName.Message(),
+			Description: msgFlowPhoneDescription.Message(),
 			ID:          LoginFlowIDPhone,
 		},
 		{
-			Name:        "QR Code",
-			Description: "Login by scanning a QR code from your phone",
+			Name:        msgFlowQRName.Message(),
+			Description: msgFlowQRDescription.Message(),
 			ID:          LoginFlowIDQR,
 		},
 		{
-			Name:        "Bot token",
-			Description: "Log in as a bot using the bot token provided by BotFather",
+			Name:        msgFlowBotName.Message(),
+			Description: msgFlowBotDescription.Message(),
 			ID:          LoginFlowIDBotToken,
 		},
 		{
-			Name:        "Manual",
-			Description: "Log in using existing session credentials (advanced, do not use)",
+			Name:        msgFlowManualName.Message(),
+			Description: msgFlowManualDescription.Message(),
 			ID:          LoginFlowIDManual,
 		},
 	}
@@ -234,12 +235,12 @@ func (bl *baseLogin) makeClient(ctx context.Context, dispatcher *tg.UpdateDispat
 var passwordLoginStep = &bridgev2.LoginStep{
 	Type:         bridgev2.LoginStepTypeUserInput,
 	StepID:       LoginStepIDPassword,
-	Instructions: "You have two-factor authentication enabled.",
+	Instructions: msgStepPasswordInstructions.Message(),
 	UserInputParams: &bridgev2.LoginUserInputParams{
 		Fields: []bridgev2.LoginInputDataField{{
 			Type:           bridgev2.LoginInputFieldTypePassword,
 			ID:             LoginStepIDPassword,
-			Name:           "Password",
+			Name:           msgFieldPasswordName.Message(),
 			AutofillDomain: "telegram.org",
 		}},
 	},
@@ -248,12 +249,12 @@ var passwordLoginStep = &bridgev2.LoginStep{
 var passwordIncorrectLoginStep = &bridgev2.LoginStep{
 	Type:         bridgev2.LoginStepTypeUserInput,
 	StepID:       LoginStepIDPasswordIncorrect,
-	Instructions: "Incorrect password, please try again. Use the official Telegram app to reset your password if you've forgotten it.",
+	Instructions: msgStepPasswordIncorrectInstructions.Message(),
 	UserInputParams: &bridgev2.LoginUserInputParams{
 		Fields: []bridgev2.LoginInputDataField{{
 			Type:           bridgev2.LoginInputFieldTypePassword,
 			ID:             LoginStepIDPassword,
-			Name:           "Password",
+			Name:           msgFieldPasswordName.Message(),
 			AutofillDomain: "telegram.org",
 		}},
 	},
@@ -364,7 +365,7 @@ func (bl *baseLogin) finalizeLogin(
 	return &bridgev2.LoginStep{
 		Type:         bridgev2.LoginStepTypeComplete,
 		StepID:       LoginStepIDComplete,
-		Instructions: fmt.Sprintf("Successfully logged in as %s (`%d`)", ul.RemoteName, self.ID),
+		Instructions: msgStepCompleteInstructions.Render(l10n.Params{"name": ul.RemoteName, "id": self.ID}),
 		CompleteParams: &bridgev2.LoginCompleteParams{
 			UserLoginID: ul.ID,
 			UserLogin:   ul,

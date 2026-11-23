@@ -101,7 +101,7 @@ func (ql *QRLogin) Start(ctx context.Context) (*bridgev2.LoginStep, error) {
 		return &bridgev2.LoginStep{
 			Type:         bridgev2.LoginStepTypeDisplayAndWait,
 			StepID:       LoginStepIDShowQR,
-			Instructions: "Scan the QR code on your phone to log in",
+			Instructions: msgStepQRInstructions.Message(),
 			DisplayAndWaitParams: &bridgev2.LoginDisplayAndWaitParams{
 				Type: bridgev2.LoginDisplayTypeQR,
 				Data: token.URL(),
@@ -126,7 +126,7 @@ func (ql *QRLogin) Wait(ctx context.Context) (*bridgev2.LoginStep, error) {
 		return &bridgev2.LoginStep{
 			Type:         bridgev2.LoginStepTypeDisplayAndWait,
 			StepID:       LoginStepIDShowQR,
-			Instructions: "Scan the QR code on your phone to log in",
+			Instructions: msgStepQRInstructions.Message(),
 			DisplayAndWaitParams: &bridgev2.LoginDisplayAndWaitParams{
 				Type: bridgev2.LoginDisplayTypeQR,
 				Data: token.URL(),
