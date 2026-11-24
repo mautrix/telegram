@@ -64,7 +64,7 @@ func (tc *TelegramClient) selfLeaveChat(ctx context.Context, portalKey networkid
 	}
 	if peerType == ids.PeerTypeChannel {
 		tc.updatesManager.RemoveChannel(id, reason)
-		topics, err := tc.main.Store.Topic.GetAll(ctx, id)
+		topics, err := tc.main.Store.Topic.GetAll(context.WithoutCancel(ctx), id)
 		if err != nil {
 			return err
 		}
