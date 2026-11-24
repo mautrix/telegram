@@ -97,6 +97,13 @@ func uploadPartSize(size int64) int {
 	return partSize
 }
 
+func cancelChatResyncIfAlreadyDone(ctx context.Context, portal *bridgev2.Portal) *bridgev2.EventHandlingResult {
+	if time.Since(portal.Metadata.(*PortalMetadata).LastSync.Time) < 24*time.Hour {
+		return new(bridgev2.EventHandlingResultIgnored)
+	}
+	return nil
+}
+
 func (tc *TelegramClient) HandleMatrixViewingChat(ctx context.Context, msg *bridgev2.MatrixViewingChat) error {
 	if msg.Portal == nil {
 		return nil
@@ -104,11 +111,13 @@ func (tc *TelegramClient) HandleMatrixViewingChat(ctx context.Context, msg *brid
 	_, _, topicID, _ := ids.ParsePortalID(msg.Portal.PortalKey.ID)
 	// TODO sync topic parent space
 	meta := msg.Portal.Metadata.(*PortalMetadata)
-	if (topicID == 0 && !meta.FullSynced) || meta.LastSync.Add(24*time.Hour).Before(time.Now()) {
+	if (topicID == 0 && !meta.FullSynced) || time.Since(meta.LastSync.Time) > 24*time.Hour {
 		tc.userLogin.QueueRemoteEvent(&simplevent.ChatResync{
 			EventMeta: simplevent.EventMeta{
 				Type:      bridgev2.RemoteEventChatResync,
 				PortalKey: msg.Portal.PortalKey,
+
+				PreHandleWithResultFunc: cancelChatResyncIfAlreadyDone,
 			},
 			GetChatInfoFunc: tc.GetChatInfo,
 		})
@@ -829,6 +838,9 @@ func (tc *TelegramClient) HandleMatrixEdit(ctx context.Context, msg *bridgev2.Ma
 		Str("handler", "matrix_edit").
 		Logger()
 
+	if err := tc.clientInitialized.Wait(ctx); err != nil {
+		return err
+	}
 	peer, _, err := tc.inputPeerForPortalID(ctx, msg.Portal.ID)
 	if err != nil {
 		return err
@@ -940,6 +952,8 @@ func (tc *TelegramClient) HandleMatrixMessageRemove(ctx context.Context, msg *br
 		return fmt.Errorf("%w: poll votes can't be deleted", bridgev2.ErrUnsupportedMessageType)
 	} else if _, messageID, err := ids.ParseMessageID(dbMsg.ID); err != nil {
 		return err
+	} else if err := tc.clientInitialized.Wait(ctx); err != nil {
+		return err
 	} else if peer, _, err := tc.inputPeerForPortalID(ctx, msg.Portal.ID); err != nil {
 		return err
 	} else if ch, ok := peer.(*tg.InputPeerChannel); ok {
@@ -970,6 +984,9 @@ func (tc *TelegramClient) PreHandleMatrixReaction(ctx context.Context, msg *brid
 		Str("key", msg.Content.RelatesTo.Key).
 		Logger()
 	var resp bridgev2.MatrixReactionPreResponse
+	if err := tc.clientInitialized.Wait(ctx); err != nil {
+		return resp, err
+	}
 
 	var maxReactions int
 	maxReactions, err := tc.getReactionLimit(ctx, tc.userID)
@@ -1035,6 +1052,9 @@ func (tc *TelegramClient) appendEmojiID(reactionList []tg.ReactionClass, emojiID
 }
 
 func (tc *TelegramClient) HandleMatrixReaction(ctx context.Context, msg *bridgev2.MatrixReaction) (reaction *database.Reaction, err error) {
+	if err = tc.clientInitialized.Wait(ctx); err != nil {
+		return nil, err
+	}
 	peer, _, err := tc.inputPeerForPortalID(ctx, msg.Portal.ID)
 	if err != nil {
 		return nil, err
@@ -1077,6 +1097,9 @@ func (tc *TelegramClient) HandleMatrixReaction(ctx context.Context, msg *bridgev
 func (tc *TelegramClient) HandleMatrixReactionRemove(ctx context.Context, msg *bridgev2.MatrixReactionRemove) error {
 	if msg.Portal.RoomType == database.RoomTypeSpace {
 		return errSpacePortal
+	}
+	if err := tc.clientInitialized.Wait(ctx); err != nil {
+		return err
 	}
 	peer, _, err := tc.inputPeerForPortalID(ctx, msg.Portal.ID)
 	if err != nil {
@@ -1134,6 +1157,9 @@ func (tc *TelegramClient) HandleMatrixReadReceipt(ctx context.Context, msg *brid
 	if msg.Portal.Metadata.(*PortalMetadata).IsForumGeneral {
 		topicID = 1
 	}
+	if err := tc.clientInitialized.Wait(ctx); err != nil {
+		return err
+	}
 	inputPeer, _, parseErr := tc.inputPeerForPortalID(ctx, msg.Portal.ID)
 	if parseErr != nil {
 		return parseErr
@@ -1186,6 +1212,15 @@ func (tc *TelegramClient) HandleMatrixReadReceipt(ctx context.Context, msg *brid
 				return
 			} else if message == nil {
 				zerolog.Ctx(ctx).Warn().Msg("no message found to read")
+				return
+			}
+		}
+		for strings.HasPrefix(string(message.ID), "call:") {
+			message, readMessagesErr = tc.main.Bridge.DB.Message.GetLastNonFakePartAtOrBeforeTime(ctx, msg.Portal.PortalKey, message.Timestamp.Add(-time.Nanosecond))
+			if readMessagesErr != nil {
+				return
+			} else if message == nil {
+				zerolog.Ctx(ctx).Debug().Msg("no message before call notice to read")
 				return
 			}
 		}
@@ -1253,12 +1288,16 @@ func (tc *TelegramClient) HandleMatrixReadReceipt(ctx context.Context, msg *brid
 		}
 	}()
 
-	if peerType == ids.PeerTypeChannel && !msg.Portal.Metadata.(*PortalMetadata).FullSynced {
-		log.Debug().Msg("Scheduling chat resync on read receipt because channel has never got a full sync")
+	meta := msg.Portal.Metadata.(*PortalMetadata)
+	if (topicID == 0 || msg.Portal.Metadata.(*PortalMetadata).IsForumGeneral) &&
+		time.Since(meta.LastSync.Time) > 72*time.Hour {
+		log.Debug().Msg("Scheduling chat resync on read receipt")
 		go tc.userLogin.QueueRemoteEvent(&simplevent.ChatResync{
 			EventMeta: simplevent.EventMeta{
 				Type:      bridgev2.RemoteEventChatResync,
 				PortalKey: msg.Portal.PortalKey,
+
+				PreHandleWithResultFunc: cancelChatResyncIfAlreadyDone,
 			},
 			GetChatInfoFunc: tc.GetChatInfo,
 		})
@@ -1285,6 +1324,9 @@ func (tc *TelegramClient) HandleMatrixTyping(ctx context.Context, msg *bridgev2.
 		if !msg.Portal.Metadata.(*PortalMetadata).IsSuperGroup {
 			return nil
 		}
+	}
+	if err = tc.clientInitialized.Wait(ctx); err != nil {
+		return err
 	}
 	inputPeer, topicID, err := tc.inputPeerForPortalID(ctx, msg.Portal.ID)
 	if err != nil {
@@ -1315,6 +1357,9 @@ func (tc *TelegramClient) HandleMatrixTyping(ctx context.Context, msg *bridgev2.
 }
 
 func (tc *TelegramClient) HandleMatrixDisappearingTimer(ctx context.Context, msg *bridgev2.MatrixDisappearingTimer) (bool, error) {
+	if err := tc.clientInitialized.Wait(ctx); err != nil {
+		return false, err
+	}
 	inputPeer, topicID, err := tc.inputPeerForPortalID(ctx, msg.Portal.ID)
 	if err != nil {
 		return false, err
@@ -1336,6 +1381,9 @@ func (tc *TelegramClient) HandleMatrixDisappearingTimer(ctx context.Context, msg
 }
 
 func (tc *TelegramClient) HandleMute(ctx context.Context, msg *bridgev2.MatrixMute) error {
+	if err := tc.clientInitialized.Wait(ctx); err != nil {
+		return err
+	}
 	inputPeer, topicID, err := tc.inputPeerForPortalID(ctx, msg.Portal.ID)
 	if err != nil {
 		return err
@@ -1360,6 +1408,9 @@ func (tc *TelegramClient) HandleMute(ctx context.Context, msg *bridgev2.MatrixMu
 }
 
 func (tc *TelegramClient) HandleRoomTag(ctx context.Context, msg *bridgev2.MatrixRoomTag) error {
+	if err := tc.clientInitialized.Wait(ctx); err != nil {
+		return err
+	}
 	inputPeer, topicID, err := tc.inputPeerForPortalID(ctx, msg.Portal.ID)
 	if err != nil {
 		return err
@@ -1394,6 +1445,9 @@ func deleteAllHistory(ctx context.Context, deleteHistory func() (*tg.MessagesAff
 func (tc *TelegramClient) HandleMatrixDeleteChat(ctx context.Context, chat *bridgev2.MatrixDeleteChat) error {
 	peerType, id, topicID, err := ids.ParsePortalID(chat.Portal.ID)
 	if err != nil {
+		return err
+	}
+	if err = tc.clientInitialized.Wait(ctx); err != nil {
 		return err
 	}
 	switch peerType {
@@ -1476,6 +1530,9 @@ func (tc *TelegramClient) HandleMatrixRoomName(ctx context.Context, msg *bridgev
 	if err != nil {
 		return false, err
 	}
+	if err = tc.clientInitialized.Wait(ctx); err != nil {
+		return false, err
+	}
 
 	switch peerType {
 	case ids.PeerTypeChat:
@@ -1533,6 +1590,9 @@ func (tc *TelegramClient) HandleMatrixRoomTopic(ctx context.Context, msg *bridge
 			WithMessage("changing the topic of a forum topic is not supported")
 	}
 
+	if err = tc.clientInitialized.Wait(ctx); err != nil {
+		return false, err
+	}
 	peer, _, err := tc.inputPeerForPortalID(ctx, msg.Portal.ID)
 	if err != nil {
 		return false, err
@@ -1561,6 +1621,9 @@ func (tc *TelegramClient) HandleMatrixRoomAvatar(ctx context.Context, msg *bridg
 	} else if topicID > 0 {
 		return false, wrapUnsupportedError(errors.New("changing group topic avatar is not supported")).
 			WithMessage("changing the avatar of a topic is not supported")
+	}
+	if err = tc.clientInitialized.Wait(ctx); err != nil {
+		return false, err
 	}
 
 	var photo tg.InputChatPhotoClass
@@ -1680,6 +1743,9 @@ func (tc *TelegramClient) HandleMatrixMembership(ctx context.Context, msg *bridg
 	default:
 		return nil, wrapUnsupportedError(fmt.Errorf("unsupported target peer type %s for membership changes", targetPeerType))
 	}
+	if err = tc.clientInitialized.Wait(ctx); err != nil {
+		return nil, err
+	}
 	if chatPeerType == ids.PeerTypeChannel {
 		switch msg.Type {
 		case bridgev2.Kick, bridgev2.RejectKnock, bridgev2.RevokeInvite, bridgev2.BanLeft, bridgev2.BanJoined, bridgev2.BanInvited, bridgev2.BanKnocked:
@@ -1780,6 +1846,9 @@ func (tc *TelegramClient) HandleMatrixBlockUser(ctx context.Context, msg *bridge
 	}
 	if peerType != ids.PeerTypeUser {
 		return bridgev2.ErrNonDMBlockUser
+	}
+	if err = tc.clientInitialized.Wait(ctx); err != nil {
+		return err
 	}
 	peer, err := tc.getInputPeerUser(ctx, userID)
 	if err != nil {

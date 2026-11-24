@@ -269,7 +269,16 @@ func (tc *TelegramClient) getChannelParticipants(ctx context.Context, req *tg.Ch
 }
 
 func (tc *TelegramClient) fillChannelMembers(ctx context.Context, mfm *memberFetchMeta, info *bridgev2.ChatMemberList) error {
-	if mfm.Input == nil || mfm.ParticipantsHidden || (mfm.IsBroadcast && !tc.main.Config.MemberList.SyncBroadcastChannels) {
+	if mfm.Input == nil || (mfm.IsBroadcast && !tc.main.Config.MemberList.SyncBroadcastChannels) {
+		return nil
+	} else if mfm.ParticipantsHidden {
+		if mfm.IsBroadcast {
+			return nil
+		}
+		err := tc.fillChannelAdmins(ctx, mfm.Input, info.MemberMap)
+		if err != nil {
+			zerolog.Ctx(ctx).Warn().Err(err).Msg("Failed to get admins of channel with hidden participants")
+		}
 		return nil
 	}
 	memberSyncLimit := tc.main.Config.MemberList.NormalizedMaxInitialSync()
@@ -320,8 +329,12 @@ func (tc *TelegramClient) fillChannelMembers(ctx context.Context, mfm *memberFet
 	if info.IsFull {
 		return nil
 	}
+	return tc.fillChannelAdmins(ctx, mfm.Input, info.MemberMap)
+}
+
+func (tc *TelegramClient) fillChannelAdmins(ctx context.Context, input *tg.InputChannel, members bridgev2.ChatMemberMap) error {
 	admins, err := tc.getChannelParticipants(ctx, &tg.ChannelsGetParticipantsRequest{
-		Channel: mfm.Input,
+		Channel: input,
 		Filter:  &tg.ChannelParticipantsAdmins{},
 		Limit:   100,
 	})
@@ -329,7 +342,7 @@ func (tc *TelegramClient) fillChannelMembers(ctx context.Context, mfm *memberFet
 		return err
 	}
 	for participant := range tc.filterChannelParticipants(admins.Participants, len(admins.Participants)) {
-		info.MemberMap.Set(participant)
+		members.Set(participant)
 	}
 	return nil
 }
@@ -719,6 +732,10 @@ func (tc *TelegramClient) HandleMatrixSendError(ctx context.Context, sendErr *br
 	}
 	tc.forbiddenSenderChecks.Set(checkKey, time.Now())
 	log := zerolog.Ctx(ctx).With().Str("forbidden_sender_id", string(ghostID)).Logger()
+	if err = tc.clientInitialized.Wait(ctx); err != nil {
+		log.Err(err).Msg("Failed to wait for client to check forbidden sender")
+		return false
+	}
 	if senderType == ids.PeerTypeChannel {
 		pl, err := tc.main.Bridge.Matrix.GetPowerLevels(ctx, sendErr.Portal.MXID)
 		if err != nil {
@@ -748,44 +765,63 @@ func (tc *TelegramClient) HandleMatrixSendError(ctx context.Context, sendErr *br
 		log.Err(err).Msg("Failed to get channel access hash to check forbidden sender")
 		return false
 	}
-	inputPeer, err := tc.getInputPeerUser(ctx, userID)
+	inputChannel := &tg.InputChannel{ChannelID: channelID, AccessHash: accessHash}
+	members := bridgev2.ChatMemberMap{}
+	err = tc.fillChannelAdmins(ctx, inputChannel, members)
 	if err != nil {
-		log.Err(err).Msg("Failed to get input peer to check forbidden sender")
-		return false
+		log.Err(err).Msg("Failed to get admins to check forbidden sender")
+		members = bridgev2.ChatMemberMap{}
 	}
-	resp, err := APICallWithUpdates(ctx, tc, func() (*tg.ChannelsChannelParticipant, error) {
-		return tc.client.API().ChannelsGetParticipant(ctx, &tg.ChannelsGetParticipantRequest{
-			Channel:     &tg.InputChannel{ChannelID: channelID, AccessHash: accessHash},
-			Participant: inputPeer,
+	member, ok := members[ghostID]
+	if !ok {
+		log.Debug().Msg("Forbidden sender not found in admin list, fetching single participant")
+		inputPeer, err := tc.getInputPeerUser(ctx, userID)
+		if err != nil {
+			log.Err(err).Msg("Failed to get input peer to check forbidden sender")
+			return false
+		}
+		resp, err := APICallWithUpdates(ctx, tc, func() (*tg.ChannelsChannelParticipant, error) {
+			return tc.client.API().ChannelsGetParticipant(ctx, &tg.ChannelsGetParticipantRequest{
+				Channel:     inputChannel,
+				Participant: inputPeer,
+			})
 		})
-	})
-	if err != nil {
-		log.Err(err).Msg("Failed to get participant info for forbidden sender")
-		return false
+		if err != nil {
+			log.Err(err).Msg("Failed to get participant info for forbidden sender")
+			return false
+		}
+		for participant := range tc.filterChannelParticipants([]tg.ChannelParticipantClass{resp.Participant}, 1) {
+			member = participant
+			ok = true
+		}
+		if !ok {
+			return false
+		}
+		members.Set(member)
 	}
 	pl, err := tc.main.Bridge.Matrix.GetPowerLevels(ctx, sendErr.Portal.MXID)
 	if err != nil {
 		log.Err(err).Msg("Failed to get power levels to check forbidden sender")
 		return false
 	}
-	for member := range tc.filterChannelParticipants([]tg.ChannelParticipantClass{resp.Participant}, 1) {
-		requiredLevel := max(pl.GetEventLevel(sendErr.EventType), pl.GetEventLevel(event.EventEncrypted))
-		if member.PowerLevel == nil || *member.PowerLevel < requiredLevel ||
-			*member.PowerLevel <= pl.GetUserLevel(sendErr.Intent.GetMXID()) {
-			return false
-		}
-		log.Debug().Int("power_level", *member.PowerLevel).Msg("Updating power level of sender rejected by homeserver")
-		sendErr.Portal.UpdateInfo(ctx, &bridgev2.ChatInfo{
-			Members: &bridgev2.ChatMemberList{MemberMap: bridgev2.ChatMemberMap{}.Set(member)},
-		}, tc.userLogin, nil, time.Time{})
-		pl, err = tc.main.Bridge.Matrix.GetPowerLevels(ctx, sendErr.Portal.MXID)
-		if err != nil || pl.GetUserLevel(sendErr.Intent.GetMXID()) < requiredLevel {
-			return false
-		}
-		tc.forbiddenSenderChecks.Delete(checkKey)
-		return true
+	requiredLevel := max(pl.GetEventLevel(sendErr.EventType), pl.GetEventLevel(event.EventEncrypted))
+	if member.PowerLevel == nil || *member.PowerLevel < requiredLevel ||
+		*member.PowerLevel <= pl.GetUserLevel(sendErr.Intent.GetMXID()) {
+		return false
 	}
-	return false
+	log.Debug().
+		Int("power_level", *member.PowerLevel).
+		Int("member_count", len(members)).
+		Msg("Updating power levels after homeserver rejected message")
+	sendErr.Portal.UpdateInfo(ctx, &bridgev2.ChatInfo{
+		Members: &bridgev2.ChatMemberList{MemberMap: members},
+	}, tc.userLogin, nil, time.Time{})
+	pl, err = tc.main.Bridge.Matrix.GetPowerLevels(ctx, sendErr.Portal.MXID)
+	if err != nil || pl.GetUserLevel(sendErr.Intent.GetMXID()) < requiredLevel {
+		return false
+	}
+	tc.forbiddenSenderChecks.Delete(checkKey)
+	return true
 }
 
 func (tc *TelegramClient) getPowerLevelOverridesFromBannedRights(entity tg.ChatClass, dbr tg.ChatBannedRights) *bridgev2.PowerLevelOverrides {

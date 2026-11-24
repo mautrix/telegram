@@ -237,9 +237,10 @@ var passwordLoginStep = &bridgev2.LoginStep{
 	Instructions: "You have two-factor authentication enabled.",
 	UserInputParams: &bridgev2.LoginUserInputParams{
 		Fields: []bridgev2.LoginInputDataField{{
-			Type: bridgev2.LoginInputFieldTypePassword,
-			ID:   LoginStepIDPassword,
-			Name: "Password",
+			Type:           bridgev2.LoginInputFieldTypePassword,
+			ID:             LoginStepIDPassword,
+			Name:           "Password",
+			AutofillDomain: "telegram.org",
 		}},
 	},
 }
@@ -250,9 +251,10 @@ var passwordIncorrectLoginStep = &bridgev2.LoginStep{
 	Instructions: "Incorrect password, please try again. Use the official Telegram app to reset your password if you've forgotten it.",
 	UserInputParams: &bridgev2.LoginUserInputParams{
 		Fields: []bridgev2.LoginInputDataField{{
-			Type: bridgev2.LoginInputFieldTypePassword,
-			ID:   LoginStepIDPassword,
-			Name: "Password",
+			Type:           bridgev2.LoginInputFieldTypePassword,
+			ID:             LoginStepIDPassword,
+			Name:           "Password",
+			AutofillDomain: "telegram.org",
 		}},
 	},
 }

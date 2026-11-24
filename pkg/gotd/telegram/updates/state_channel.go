@@ -43,6 +43,7 @@ type channelState struct {
 	tracer     trace.Tracer
 	handler    telegram.UpdateHandler
 	onTooLong  func(channelID int64) error
+	onEntities func(ctx context.Context, users []tg.UserClass, chats []tg.ChatClass) error
 
 	runCtx context.Context
 	stop   context.CancelCauseFunc
@@ -59,6 +60,7 @@ type channelStateConfig struct {
 	Storage          StateStorage
 	Handler          telegram.UpdateHandler
 	OnChannelTooLong func(channelID int64) error
+	OnEntities       func(ctx context.Context, users []tg.UserClass, chats []tg.ChatClass) error
 	Logger           *zap.Logger
 	Tracer           trace.Tracer
 }
@@ -79,6 +81,7 @@ func newChannelState(ctx context.Context, cfg channelStateConfig) *channelState 
 		log:        cfg.Logger,
 		handler:    cfg.Handler,
 		onTooLong:  cfg.OnChannelTooLong,
+		onEntities: cfg.OnEntities,
 		tracer:     cfg.Tracer,
 	}
 
@@ -95,6 +98,10 @@ func newChannelState(ctx context.Context, cfg channelStateConfig) *channelState 
 }
 
 var ErrRemoveChannelState = errors.New("remove channel state")
+
+func (s *channelState) isRemoved() bool {
+	return errors.Is(context.Cause(s.runCtx), ErrRemoveChannelState)
+}
 
 func (s *channelState) Run(ctx context.Context) error {
 	defer s.stop(nil)
@@ -277,13 +284,26 @@ func (s *channelState) getDifference(ctx context.Context) error {
 		}
 
 		if len(diff.NewMessages) > 0 {
+			if err := s.onEntities(ctx, diff.Users, diff.Chats); err != nil {
+				s.log.Error("Handle entities error (getDifference)", zap.Error(err))
+			}
 			if err := s.handler.Handle(ctx, &tg.Updates{
 				Updates: msgsToUpdates(diff.NewMessages, true),
 				Users:   diff.Users,
 				Chats:   diff.Chats,
 			}); err != nil {
-				return err
+				if !s.isRemoved() {
+					return err
+				}
+				s.log.Warn("Handle error after channel state removal (getDifference)", zap.Error(err))
 			}
+		}
+
+		if s.isRemoved() {
+			if err := s.storage.SetChannelPts(context.WithoutCancel(ctx), s.selfID, s.channelID, diff.Pts); err != nil {
+				s.log.Warn("SetChannelPts error (getDifference after remove)", zap.Error(err))
+			}
+			return nil
 		}
 
 		if err := s.storage.SetChannelPts(ctx, s.selfID, s.channelID, diff.Pts); err != nil {
