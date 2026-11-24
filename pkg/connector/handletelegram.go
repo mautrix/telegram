@@ -971,6 +971,7 @@ func (tc *TelegramClient) onDeleteMessages(ctx context.Context, channelID int64,
 		return nil
 	}
 
+	start := time.Now()
 	for _, messageID := range messages {
 		wrappedMessageID := ids.MakeMessageID(channelID, messageID)
 		var portalKey networkid.PortalKey
@@ -1002,6 +1003,12 @@ func (tc *TelegramClient) onDeleteMessages(ctx context.Context, channelID int64,
 			return err
 		}
 	}
+	end := time.Since(start)
+	tc.userLogin.TrackAnalytics("Telegram Message Deletion", map[string]any{
+		"duration_ms": end.Milliseconds(),
+		"count":       len(messages),
+		"is_channel":  channelID != 0,
+	})
 	return nil
 }
 
