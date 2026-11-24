@@ -757,9 +757,11 @@ func (tc *TelegramClient) HandleMatrixSendError(ctx context.Context, sendErr *br
 		PowerLevel:  ptr.Ptr(requiredLevel),
 	}
 	if senderType == ids.PeerTypeUser {
-		adminLevel, err := tc.getForbiddenSenderAdminLevel(ctx, channelID, userID)
+		adminLevel, canSend, err := tc.getForbiddenSenderAdminLevel(ctx, channelID, userID)
 		if err != nil {
 			log.Debug().Err(err).Msg("Couldn't get participant info for forbidden sender, granting send level")
+		} else if !canSend {
+			return false
 		} else if adminLevel > requiredLevel {
 			member.PowerLevel = ptr.Ptr(adminLevel)
 		}
@@ -776,14 +778,14 @@ func (tc *TelegramClient) HandleMatrixSendError(ctx context.Context, sendErr *br
 	return true
 }
 
-func (tc *TelegramClient) getForbiddenSenderAdminLevel(ctx context.Context, channelID, userID int64) (int, error) {
+func (tc *TelegramClient) getForbiddenSenderAdminLevel(ctx context.Context, channelID, userID int64) (int, bool, error) {
 	accessHash, err := tc.ScopedStore.GetAccessHash(ctx, ids.PeerTypeChannel, channelID)
 	if err != nil {
-		return 0, fmt.Errorf("failed to get channel access hash: %w", err)
+		return 0, false, fmt.Errorf("failed to get channel access hash: %w", err)
 	}
 	inputPeer, err := tc.getInputPeerUser(ctx, userID)
 	if err != nil {
-		return 0, fmt.Errorf("failed to get input peer: %w", err)
+		return 0, false, fmt.Errorf("failed to get input peer: %w", err)
 	}
 	resp, err := APICallWithUpdates(ctx, tc, func() (*tg.ChannelsChannelParticipant, error) {
 		return tc.client.API().ChannelsGetParticipant(ctx, &tg.ChannelsGetParticipantRequest{
@@ -792,15 +794,17 @@ func (tc *TelegramClient) getForbiddenSenderAdminLevel(ctx context.Context, chan
 		})
 	})
 	if err != nil {
-		return 0, fmt.Errorf("failed to get participant: %w", err)
+		return 0, false, fmt.Errorf("failed to get participant: %w", err)
 	}
 	switch participant := resp.Participant.(type) {
 	case *tg.ChannelParticipantCreator:
-		return *creatorPowerLevel, nil
+		return *creatorPowerLevel, true, nil
 	case *tg.ChannelParticipantAdmin:
-		return *adminRightsToPowerLevel(participant.AdminRights), nil
+		return *adminRightsToPowerLevel(participant.AdminRights), true, nil
+	case *tg.ChannelParticipant, *tg.ChannelParticipantSelf:
+		return 0, true, nil
 	default:
-		return 0, nil
+		return 0, false, nil
 	}
 }
 
