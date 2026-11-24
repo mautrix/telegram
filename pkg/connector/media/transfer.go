@@ -141,7 +141,6 @@ func (t *Transferer) WithFilename(filename string) *Transferer {
 // WithStickerConfig sets the animated sticker config for the [Transferer].
 func (t *Transferer) WithStickerConfig(cfg AnimatedStickerConfig) *Transferer {
 	t.animatedStickerConfig = &cfg
-	t.adjustStickerSize()
 	return t
 }
 
@@ -158,27 +157,6 @@ func (t *Transferer) WithForceWebmStickerConvert(force bool) *Transferer {
 		}
 	}
 	return t
-}
-
-func adjustStickerSize(info *event.FileInfo) {
-	if info.Width <= 256 && info.Height <= 256 {
-		return
-	}
-	if info.Width == info.Height {
-		info.Width, info.Height = 256, 256
-	} else if info.Width > info.Height {
-		info.Height = info.Height * 256 / info.Width
-		info.Width = 256
-	} else {
-		info.Width = info.Width * 256 / info.Height
-		info.Height = 256
-	}
-}
-
-func (t *Transferer) adjustStickerSize() {
-	if t.animatedStickerConfig != nil {
-		adjustStickerSize(&t.fileInfo)
-	}
 }
 
 func (t *Transferer) WithMIMEType(mimeType string) *Transferer {
@@ -199,6 +177,7 @@ func (t *Transferer) WithThumbnail(uri id.ContentURIString, file *event.Encrypte
 
 func (t *Transferer) WithVideo(attr *tg.DocumentAttributeVideo) *Transferer {
 	t.fileInfo.Width, t.fileInfo.Height = attr.W, attr.H
+	t.fitStickerDisplay()
 	t.fileInfo.Duration = int(attr.Duration * 1000)
 	return t
 }
@@ -210,8 +189,18 @@ func (t *Transferer) WithAudio(attr *tg.DocumentAttributeAudio) *Transferer {
 
 func (t *Transferer) WithImageSize(attr *tg.DocumentAttributeImageSize) *Transferer {
 	t.fileInfo.Width, t.fileInfo.Height = attr.W, attr.H
-	t.adjustStickerSize()
+	t.fitStickerDisplay()
 	return t
+}
+
+func (t *Transferer) fitStickerDisplay() {
+	if t.animatedStickerConfig == nil {
+		return
+	}
+	t.fileInfo.Width, t.fileInfo.Height = displaySize(
+		t.fileInfo.Width, t.fileInfo.Height,
+		t.animatedStickerConfig.Args.Width, t.animatedStickerConfig.Args.Height,
+	)
 }
 
 // WithDocument transforms a [Transferer] to a [ReadyTransferer] by setting the
@@ -358,7 +347,7 @@ func (t *ReadyTransferer) Transfer(ctx context.Context, db *store.Container, int
 			} else {
 				t.inner.fileInfo.Width = cfg.Width
 				t.inner.fileInfo.Height = cfg.Height
-				t.inner.adjustStickerSize()
+				t.inner.fitStickerDisplay()
 			}
 		}
 		if needStickerConvert {
@@ -380,7 +369,7 @@ func (t *ReadyTransferer) Transfer(ctx context.Context, db *store.Container, int
 				if converted.Width > 0 && converted.Height > 0 {
 					t.inner.fileInfo.Width = converted.Width
 					t.inner.fileInfo.Height = converted.Height
-					t.inner.adjustStickerSize()
+					t.inner.fitStickerDisplay()
 				}
 				t.inner.fileInfo.Size = converted.Size
 				thumbnailData = converted.ThumbnailData
