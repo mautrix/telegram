@@ -44,6 +44,7 @@ import (
 	"go.mau.fi/mautrix-telegram/pkg/connector/media"
 	"go.mau.fi/mautrix-telegram/pkg/connector/store"
 	"go.mau.fi/mautrix-telegram/pkg/connector/tljson"
+	"go.mau.fi/mautrix-telegram/pkg/gotd/telegram/auth"
 	"go.mau.fi/mautrix-telegram/pkg/gotd/tg"
 	"go.mau.fi/mautrix-telegram/pkg/gotd/tgerr"
 )
@@ -946,22 +947,19 @@ func (tc *TelegramClient) onUserName(ctx context.Context, e tg.Entities, update 
 
 	userInfo := bridgev2.UserInfo{Identifiers: []string{}}
 
-	var firstUsername string
 	for _, ident := range ghost.Identifiers {
 		if !strings.HasPrefix(ident, "telegram:") {
 			userInfo.Identifiers = append(userInfo.Identifiers, ident)
 		}
 	}
 	for _, username := range update.Usernames {
-		if !username.Active {
-			continue
-		} else if firstUsername == "" {
-			firstUsername = username.Username
+		if username.Active {
+			userInfo.Identifiers = append(userInfo.Identifiers, fmt.Sprintf("telegram:%s", username.Username))
 		}
-		userInfo.Identifiers = append(userInfo.Identifiers, fmt.Sprintf("telegram:%s", username.Username))
 	}
 	slices.Sort(userInfo.Identifiers)
 	userInfo.Identifiers = slices.Compact(userInfo.Identifiers)
+	firstUsername := primaryUsername("", update.Usernames)
 	err = tc.main.Store.Username.Set(ctx, ids.PeerTypeUser, update.UserID, firstUsername)
 	if err != nil {
 		return fmt.Errorf("failed to store username: %w", err)
@@ -1092,10 +1090,34 @@ func (tc *TelegramClient) onDifferenceStuck(stuck bool, err error) {
 	}
 }
 
+func (tc *TelegramClient) onEntitiesWrapper(ctx context.Context, users []tg.UserClass, chats []tg.ChatClass) error {
+	if len(users) == 0 && len(chats) == 0 {
+		return nil
+	}
+	return tc.runWithStuckCheck(ctx, func() error {
+		return tc.onEntities(ctx, users, chats)
+	})
+}
+
+func (tc *TelegramClient) dispatchUpdates(ctx context.Context, updates tg.UpdatesClass) error {
+	if u, ok := updates.(*tg.Updates); ok {
+		if err := tc.onEntitiesWrapper(ctx, u.Users, u.Chats); err != nil {
+			zerolog.Ctx(ctx).Err(err).Msg("Failed to handle entities in updates")
+		}
+	}
+	return tc.dispatcher.Handle(ctx, updates)
+}
+
 func (tc *TelegramClient) onUpdateWrapper(ctx context.Context, e tg.Entities, upd tg.UpdateClass) error {
+	return tc.runWithStuckCheck(ctx, func() error {
+		return tc.onUpdate(ctx, e, upd)
+	})
+}
+
+func (tc *TelegramClient) runWithStuckCheck(ctx context.Context, fn func() error) error {
 	doneChan := make(chan error, 1)
 	go func() {
-		doneChan <- tc.onUpdate(ctx, e, upd)
+		doneChan <- fn()
 	}()
 	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
@@ -1127,28 +1149,30 @@ func (tc *TelegramClient) onUpdateWrapper(ctx context.Context, e tg.Entities, up
 			if errors.Is(err, ErrChatInfoUnavailable) {
 				zerolog.Ctx(ctx).Warn().Err(err).Msg("Update handling failed due to chat info fetch error")
 				return nil
+			} else if tgErr, ok := tgerr.As(err); ok && tgErr.Code >= 400 && tgErr.Code < 500 && tgErr.Code != 420 && !auth.IsUnauthorized(err) {
+				zerolog.Ctx(ctx).Warn().Err(err).Msg("Update handling failed due to Telegram API error")
+				return nil
 			}
 			return err
 		}
 	}
 }
 
-func (tc *TelegramClient) onUpdate(ctx context.Context, e tg.Entities, upd tg.UpdateClass) error {
-	zerolog.Ctx(ctx).Trace().Stringer("update", upd).Msg("Raw update")
-	for userID, user := range e.Users {
+func (tc *TelegramClient) onEntities(ctx context.Context, users []tg.UserClass, chats []tg.ChatClass) error {
+	for userID, user := range tg.UserClassArray(users).NotEmptyToMap() {
 		zerolog.Ctx(ctx).Trace().Stringer("user", user).Msg("Raw user info in update")
 		if _, err := tc.updateGhost(ctx, userID, user); err != nil {
 			return err
 		}
 	}
-	for chatID, chat := range e.Chats {
+	for chatID, chat := range tg.ChatClassArray(chats).ChatToMap() {
 		zerolog.Ctx(ctx).Trace().Stringer("chat", chat).Msg("Raw chat info in update")
 		if chat.GetLeft() {
 			// TODO don't ignore errors
 			tc.selfLeaveChat(ctx, tc.makePortalKeyFromID(ids.PeerTypeChat, chatID, 0), fmt.Errorf("left flag in entity update"))
 		}
 	}
-	for _, channel := range e.Channels {
+	for _, channel := range tg.ChatClassArray(chats).ChannelToMap() {
 		zerolog.Ctx(ctx).Trace().Stringer("channel", channel).Msg("Raw channel info in update")
 		if channel.GetLeft() {
 			tc.selfLeaveChat(ctx, tc.makePortalKeyFromID(ids.PeerTypeChannel, channel.ID, 0), fmt.Errorf("left flag in entity update"))
@@ -1157,6 +1181,11 @@ func (tc *TelegramClient) onUpdate(ctx context.Context, e tg.Entities, upd tg.Up
 			return err
 		}
 	}
+	return nil
+}
+
+func (tc *TelegramClient) onUpdate(ctx context.Context, e tg.Entities, upd tg.UpdateClass) error {
+	zerolog.Ctx(ctx).Trace().Stringer("update", upd).Msg("Raw update")
 	switch update := upd.(type) {
 	case *tg.UpdateNewMessage:
 		return tc.onUpdateNewMessage(ctx, e, update)

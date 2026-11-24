@@ -29,6 +29,7 @@ type Config struct {
 	OnChannelTooLong   func(channelID int64) error
 	OnNotChannelMember func(ctx context.Context, channelID int64) error
 	OnDifferenceStuck  func(stuck bool, err error)
+	OnEntities         func(ctx context.Context, users []tg.UserClass, chats []tg.ChatClass) error
 	// State storage.
 	// In-mem used if not provided.
 	Storage StateStorage
@@ -59,6 +60,9 @@ func (cfg *Config) setDefaults() {
 	}
 	if cfg.OnDifferenceStuck == nil {
 		cfg.OnDifferenceStuck = func(stuck bool, err error) {}
+	}
+	if cfg.OnEntities == nil {
+		cfg.OnEntities = func(ctx context.Context, users []tg.UserClass, chats []tg.ChatClass) error { return nil }
 	}
 	if cfg.OnChannelTooLong == nil {
 		cfg.OnChannelTooLong = func(channelID int64) error {

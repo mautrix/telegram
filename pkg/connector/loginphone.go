@@ -71,10 +71,11 @@ func (pl *PhoneLogin) Start(ctx context.Context) (*bridgev2.LoginStep, error) {
 		StepID: LoginStepIDPhoneNumber,
 		UserInputParams: &bridgev2.LoginUserInputParams{
 			Fields: []bridgev2.LoginInputDataField{{
-				Type:        bridgev2.LoginInputFieldTypePhoneNumber,
-				ID:          LoginStepIDPhoneNumber,
-				Name:        "Phone number",
-				Description: "Include the country code with +",
+				Type:           bridgev2.LoginInputFieldTypePhoneNumber,
+				ID:             LoginStepIDPhoneNumber,
+				Name:           "Phone number",
+				Description:    "Include the country code with +",
+				AutofillDomain: "telegram.org",
 			}},
 		},
 	}, nil
@@ -86,10 +87,11 @@ var phoneNumberInvalidStep = &bridgev2.LoginStep{
 	Instructions: "Invalid phone number, please try again",
 	UserInputParams: &bridgev2.LoginUserInputParams{
 		Fields: []bridgev2.LoginInputDataField{{
-			Type:        bridgev2.LoginInputFieldTypePhoneNumber,
-			ID:          LoginStepIDPhoneNumber,
-			Name:        "Phone number",
-			Description: "Include the country code with +",
+			Type:           bridgev2.LoginInputFieldTypePhoneNumber,
+			ID:             LoginStepIDPhoneNumber,
+			Name:           "Phone number",
+			Description:    "Include the country code with +",
+			AutofillDomain: "telegram.org",
 		}},
 	},
 }
