@@ -752,10 +752,7 @@ func (tc *TelegramClient) HandleMatrixSendError(ctx context.Context, sendErr *br
 	if pl.GetUserLevel(sendErr.Intent.GetMXID()) >= requiredLevel {
 		return false
 	}
-	member := bridgev2.ChatMember{
-		EventSender: bridgev2.EventSender{Sender: ghostID},
-		PowerLevel:  ptr.Ptr(requiredLevel),
-	}
+	grantLevel := requiredLevel
 	if senderType == ids.PeerTypeUser {
 		adminLevel, canSend, err := tc.getForbiddenSenderAdminLevel(ctx, channelID, userID)
 		if err != nil {
@@ -763,12 +760,17 @@ func (tc *TelegramClient) HandleMatrixSendError(ctx context.Context, sendErr *br
 		} else if !canSend {
 			return false
 		} else if adminLevel > requiredLevel {
-			member.PowerLevel = ptr.Ptr(adminLevel)
+			grantLevel = adminLevel
 		}
 	}
-	log.Debug().Int("power_level", *member.PowerLevel).Msg("Updating power level of sender rejected by homeserver")
+	log.Debug().Int("power_level", grantLevel).Msg("Updating power level of sender rejected by homeserver")
+	senderMXID := sendErr.Intent.GetMXID()
 	sendErr.Portal.UpdateInfo(ctx, &bridgev2.ChatInfo{
-		Members: &bridgev2.ChatMemberList{MemberMap: bridgev2.ChatMemberMap{}.Set(member)},
+		Members: &bridgev2.ChatMemberList{PowerLevels: &bridgev2.PowerLevelOverrides{
+			Custom: func(content *event.PowerLevelsEventContent) bool {
+				return content.EnsureUserLevel(senderMXID, grantLevel)
+			},
+		}},
 	}, tc.userLogin, nil, time.Time{})
 	pl, err = tc.main.Bridge.Matrix.GetPowerLevels(ctx, sendErr.Portal.MXID)
 	if err != nil || pl.GetUserLevel(sendErr.Intent.GetMXID()) < requiredLevel {
