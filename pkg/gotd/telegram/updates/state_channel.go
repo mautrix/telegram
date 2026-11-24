@@ -200,6 +200,10 @@ func (s *channelState) applyPts(ctx context.Context, state int, updates []update
 		ents.Merge(update.Entities)
 	}
 
+	if s.isRemoved() {
+		return nil
+	}
+
 	if err := s.handler.Handle(ctx, &tg.Updates{
 		Updates: converted,
 		Users:   ents.Users,

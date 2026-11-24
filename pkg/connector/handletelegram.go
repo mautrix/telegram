@@ -1147,6 +1147,7 @@ func (tc *TelegramClient) onEntities(ctx context.Context, users []tg.UserClass, 
 		zerolog.Ctx(ctx).Trace().Stringer("channel", channel).Msg("Raw channel info in update")
 		if channel.GetLeft() {
 			tc.selfLeaveChat(ctx, tc.makePortalKeyFromID(ids.PeerTypeChannel, channel.ID, 0), fmt.Errorf("left flag in entity update"))
+			ctx = context.WithoutCancel(ctx)
 		}
 		if _, err := tc.updateChannel(ctx, channel); err != nil {
 			return err
