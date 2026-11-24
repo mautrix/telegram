@@ -83,11 +83,7 @@ var (
 		Err:        "Password not provided",
 		StatusCode: http.StatusBadRequest,
 	}
-	ErrLoginTimedOut = bridgev2.RespError{
-		ErrCode:    "FI.MAU.TELEGRAM.LOGIN_TIMED_OUT",
-		Err:        "The login process timed out, please start over",
-		StatusCode: http.StatusGone,
-	}
+	ErrLoginTimedOut = bridgev2.ErrLoginTimedOut.WithMessage("The login process timed out, please start over")
 )
 
 func loginRespError(ctx context.Context, err error) error {
