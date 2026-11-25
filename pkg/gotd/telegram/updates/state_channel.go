@@ -113,6 +113,9 @@ func (s *channelState) Run(ctx context.Context) error {
 	for {
 		select {
 		case u := <-s.updates:
+			if s.runCtx.Err() != nil {
+				continue
+			}
 			ctx := trace.ContextWithSpanContext(s.runCtx, u.span)
 			if err := s.handleUpdate(ctx, u.update, u.entities); err != nil {
 				s.log.Error("Handle update error", zap.Error(err))
@@ -195,6 +198,10 @@ func (s *channelState) applyPts(ctx context.Context, state int, updates []update
 	for _, update := range updates {
 		converted = append(converted, update.Value.(tg.UpdateClass))
 		ents.Merge(update.Entities)
+	}
+
+	if s.isRemoved() {
+		return nil
 	}
 
 	if err := s.handler.Handle(ctx, &tg.Updates{
