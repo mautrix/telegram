@@ -272,7 +272,7 @@ func hasEditTimeLimit(chat *tg.Channel) bool {
 func (tc *TelegramClient) overrideChatInfoWithTopic(info *bridgev2.ChatInfo, topic *tg.ForumTopic) {
 	info.Name = ptr.Ptr(topic.Title + " - " + *info.Name)
 	if topic.Closed {
-		info.Members.PowerLevels.EventsDefault = nobodyPowerLevel
+		info.Members.PowerLevels.EventsDefault = manageTopicsPowerLevel
 	}
 }
 
@@ -733,7 +733,7 @@ func (tc *TelegramClient) HandleMatrixSendError(ctx context.Context, sendErr *br
 	if !errors.Is(sendErr.Err, mautrix.MForbidden) || !sendErr.Portal.Metadata.(*PortalMetadata).IsSuperGroup {
 		return false
 	}
-	peerType, channelID, _, err := ids.ParsePortalID(sendErr.Portal.ID)
+	peerType, channelID, topicID, err := ids.ParsePortalID(sendErr.Portal.ID)
 	if err != nil || peerType != ids.PeerTypeChannel {
 		return false
 	}
@@ -824,8 +824,21 @@ func (tc *TelegramClient) HandleMatrixSendError(ctx context.Context, sendErr *br
 		return false
 	}
 	requiredLevel := max(pl.GetEventLevel(sendErr.EventType), pl.GetEventLevel(event.EventEncrypted))
-	if member.PowerLevel == nil || *member.PowerLevel < requiredLevel ||
-		*member.PowerLevel <= pl.GetUserLevel(sendErr.Intent.GetMXID()) {
+	if member.PowerLevel == nil {
+		return false
+	}
+	var powerLevels *bridgev2.PowerLevelOverrides
+	if *member.PowerLevel < requiredLevel {
+		if topicID <= 0 {
+			return false
+		}
+		info, err := tc.getChatInfo(ctx, sendErr.Portal)
+		if err != nil {
+			log.Err(err).Msg("Failed to get chat info to check forbidden sender")
+			return false
+		}
+		powerLevels = info.Members.PowerLevels
+	} else if *member.PowerLevel <= pl.GetUserLevel(sendErr.Intent.GetMXID()) {
 		return false
 	}
 	log.Debug().
@@ -833,10 +846,10 @@ func (tc *TelegramClient) HandleMatrixSendError(ctx context.Context, sendErr *br
 		Int("member_count", len(members)).
 		Msg("Updating power levels after homeserver rejected message")
 	sendErr.Portal.UpdateInfo(ctx, &bridgev2.ChatInfo{
-		Members: &bridgev2.ChatMemberList{MemberMap: members},
+		Members: &bridgev2.ChatMemberList{MemberMap: members, PowerLevels: powerLevels},
 	}, tc.userLogin, nil, time.Time{})
 	pl, err = tc.main.Bridge.Matrix.GetPowerLevels(ctx, sendErr.Portal.MXID)
-	if err != nil || pl.GetUserLevel(sendErr.Intent.GetMXID()) < requiredLevel {
+	if err != nil || pl.GetUserLevel(sendErr.Intent.GetMXID()) < max(pl.GetEventLevel(sendErr.EventType), pl.GetEventLevel(event.EventEncrypted)) {
 		return false
 	}
 	tc.forbiddenSenderChecks.Delete(checkKey)
