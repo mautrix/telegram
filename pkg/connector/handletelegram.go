@@ -199,7 +199,36 @@ func (tc *TelegramClient) onUpdateChannel(ctx context.Context, e tg.Entities, up
 			return chatInfo, nil
 		},
 	})
-	return resultToError(res)
+	if err := resultToError(res); err != nil || channel == nil || !channel.Forum {
+		return err
+	}
+	editTimeLimit := hasEditTimeLimit(channel)
+	topics, err := tc.main.Store.Topic.GetAll(ctx, update.ChannelID)
+	if err != nil {
+		return err
+	}
+	for _, topicID := range topics {
+		res = tc.main.Bridge.QueueRemoteEvent(tc.userLogin, &simplevent.ChatInfoChange{
+			EventMeta: simplevent.EventMeta{
+				Type:      bridgev2.RemoteEventChatInfoChange,
+				PortalKey: tc.makePortalKeyFromID(ids.PeerTypeChannel, update.ChannelID, topicID),
+				LogContext: func(c zerolog.Context) zerolog.Context {
+					return c.Str("tg_event", "updateChannel").Int("topic_id", topicID)
+				},
+			},
+			ChatInfoChange: &bridgev2.ChatInfoChange{
+				ChatInfo: &bridgev2.ChatInfo{
+					ExtraUpdates: func(ctx context.Context, portal *bridgev2.Portal) bool {
+						return portal.Metadata.(*PortalMetadata).SetEditTimeLimit(tc.telegramUserID, editTimeLimit)
+					},
+				},
+			},
+		})
+		if err = resultToError(res); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func telegramViewLimit(ttl int) *event.BeeperViewLimitedMedia {

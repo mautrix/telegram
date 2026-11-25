@@ -141,7 +141,7 @@ func (tc *TelegramClient) wrapChatInfo(portalID networkid.PortalID, rawChat tg.C
 		ExcludeChangesFromTimeline: true,
 	}
 	var mfm memberFetchMeta
-	var isMegagroup, isForumGeneral, isCommunity, left bool
+	var isMegagroup, isForumGeneral, isCommunity, editTimeLimit, left bool
 	var avatarErr error
 	var ownPL *int
 	switch chat := rawChat.(type) {
@@ -164,6 +164,7 @@ func (tc *TelegramClient) wrapChatInfo(portalID networkid.PortalID, rawChat tg.C
 		info.Name = &chat.Title
 		info.Members.TotalMemberCount = chat.ParticipantsCount
 		isMegagroup = chat.Megagroup
+		editTimeLimit = hasEditTimeLimit(chat)
 		info.Avatar, avatarErr = tc.convertChatPhoto(chat.AsInputPeer(), chat.Photo)
 		info.Members.PowerLevels = tc.getPowerLevelOverridesFromBannedRights(chat, chat.DefaultBannedRights)
 		if chat.Creator {
@@ -241,6 +242,7 @@ func (tc *TelegramClient) wrapChatInfo(portalID networkid.PortalID, rawChat tg.C
 		changed := meta.SetIsSuperGroup(isMegagroup)
 		changed = meta.SetIsCommunity(isCommunity) || changed
 		changed = meta.SetIsForumGeneral(isForumGeneral) || changed
+		changed = meta.SetEditTimeLimit(tc.telegramUserID, editTimeLimit) || changed
 		if info.Members.TotalMemberCount != 0 && meta.ParticipantsCount != info.Members.TotalMemberCount {
 			meta.ParticipantsCount = info.Members.TotalMemberCount
 			changed = true
@@ -248,6 +250,23 @@ func (tc *TelegramClient) wrapChatInfo(portalID networkid.PortalID, rawChat tg.C
 		return changed
 	}
 	return &info, &mfm, nil
+}
+
+func hasEditTimeLimit(chat *tg.Channel) bool {
+	adminRights, _ := chat.GetAdminRights()
+	if chat.Creator {
+		return false
+	} else if chat.Broadcast {
+		return !adminRights.EditMessages
+	} else if adminRights.PinMessages {
+		return false
+	} else if chat.Username != "" || chat.HasGeo || slices.ContainsFunc(chat.Usernames, func(username tg.Username) bool {
+		return username.Active
+	}) {
+		return true
+	}
+	ownPinRestricted := chat.BannedRights.PinMessages && (chat.BannedRights.UntilDate == 0 || int64(chat.BannedRights.UntilDate) > time.Now().Unix())
+	return chat.DefaultBannedRights.PinMessages || ownPinRestricted
 }
 
 func (tc *TelegramClient) overrideChatInfoWithTopic(info *bridgev2.ChatInfo, topic *tg.ForumTopic) {
