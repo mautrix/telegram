@@ -371,7 +371,9 @@ func (s *channelState) getDifference(ctx context.Context) error {
 }
 
 func (s *channelState) getDifferenceLogger(ctx context.Context) {
-	if err := s.getDifference(ctx); err != nil {
+	if err := s.getDifference(ctx); errors.Is(err, context.Canceled) {
+		s.log.Warn("get channel difference error", zap.Error(err))
+	} else if err != nil {
 		s.log.Error("get channel difference error", zap.Error(err))
 	}
 }
