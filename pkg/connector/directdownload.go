@@ -18,6 +18,7 @@ package connector
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -31,11 +32,14 @@ import (
 
 	"go.mau.fi/mautrix-telegram/pkg/connector/ids"
 	"go.mau.fi/mautrix-telegram/pkg/connector/media"
+	"go.mau.fi/mautrix-telegram/pkg/connector/store"
 	"go.mau.fi/mautrix-telegram/pkg/gotd/tg"
 	"go.mau.fi/mautrix-telegram/pkg/gotd/tgerr"
 )
 
 var _ bridgev2.DirectMediableNetwork = (*TelegramConnector)(nil)
+
+var errMediaNotAvailable = mautrix.MNotFound.WithMessage("Media is no longer available on Telegram")
 
 func (tc *TelegramClient) refetchMedia(ctx context.Context, peerType ids.PeerType, peerID int64, msgID int) (tg.MessageMediaClass, error) {
 	var messages tg.ModifiedMessagesMessages
@@ -84,6 +88,8 @@ func (tc *TelegramClient) refetchMedia(ctx context.Context, peerType ids.PeerTyp
 
 	if len(messages.GetMessages()) != 1 {
 		return nil, fmt.Errorf("wrong number of messages retrieved %d", len(messages.GetMessages()))
+	} else if _, ok := messages.GetMessages()[0].(*tg.MessageEmpty); ok {
+		return nil, fmt.Errorf("%w: message %d was deleted", errMediaNotAvailable, msgID)
 	} else if msg, ok := messages.GetMessages()[0].(*tg.Message); !ok {
 		return nil, fmt.Errorf("message was of the wrong type %s", messages.GetMessages()[0].TypeName())
 	} else if msg.ID != msgID {
@@ -171,7 +177,7 @@ func (tc *TelegramConnector) Download(ctx context.Context, mediaID networkid.Med
 			} else {
 				photo, ok := msgMedia.Photo.(*tg.Photo)
 				if !ok {
-					return nil, mautrix.MNotFound.WithMessage("Media is no longer available on Telegram")
+					return nil, errMediaNotAvailable
 				}
 				log.Debug().
 					Int64("photo_id", photo.GetID()).
@@ -220,7 +226,9 @@ func (tc *TelegramConnector) Download(ctx context.Context, mediaID networkid.Med
 		}
 	} else if info.PeerType == ids.PeerTypeUser {
 		readyTransferer, err = transferer.WithUserPhoto(ctx, client.ScopedStore, info.PeerID, info.ID)
-		if err != nil {
+		if errors.Is(err, store.ErrNoAccessHash) {
+			return nil, fmt.Errorf("%w: %w", errMediaNotAvailable, err)
+		} else if err != nil {
 			return nil, fmt.Errorf("failed to create user photo transferer: %w", err)
 		}
 	} else if info.PeerType == ids.PeerTypeChat {
@@ -269,7 +277,7 @@ func directMediaError(err error) error {
 	case tgErr.Code == http.StatusUnauthorized || tgErr.Code == http.StatusForbidden:
 		mapped = mautrix.MForbidden.WithMessage("Telegram denied access to the media")
 	case tgErr.Code == http.StatusBadRequest || tgErr.Code == http.StatusNotFound || tgErr.Code == http.StatusNotAcceptable:
-		mapped = mautrix.MNotFound.WithMessage("Media is no longer available on Telegram")
+		mapped = errMediaNotAvailable
 	default:
 		mapped = mautrix.MUnknown.WithMessage("Telegram failed to provide the media").WithStatus(http.StatusBadGateway).WithCanRetry(true)
 	}
