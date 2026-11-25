@@ -23,6 +23,7 @@ import (
 	"net/http"
 
 	"github.com/rs/zerolog"
+	"go.mau.fi/util/l10n"
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/bridgev2"
 )
@@ -52,10 +53,11 @@ func (bl *BotLogin) Start(ctx context.Context) (*bridgev2.LoginStep, error) {
 		Instructions: msgStepBotTokenInstructions.Message(),
 		UserInputParams: &bridgev2.LoginUserInputParams{
 			Fields: []bridgev2.LoginInputDataField{{
-				Type:    bridgev2.LoginInputFieldTypeToken,
-				ID:      LoginStepIDBotToken,
-				Name:    msgFieldBotTokenName.Message(),
-				Pattern: `^\d+:[A-Za-z0-9_-]{35}$`,
+				Type:        bridgev2.LoginInputFieldTypeToken,
+				ID:          LoginStepIDBotToken,
+				Name:        msgFieldBotTokenName.Message(),
+				Pattern:     `^\d+:[A-Za-z0-9_-]{35}$`,
+				Placeholder: l10n.Unlocalized("123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11"),
 			}},
 		},
 	}, nil
