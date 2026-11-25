@@ -49,12 +49,12 @@ func (bl *BotLogin) Start(ctx context.Context) (*bridgev2.LoginStep, error) {
 	return &bridgev2.LoginStep{
 		Type:         bridgev2.LoginStepTypeUserInput,
 		StepID:       LoginStepIDBotToken,
-		Instructions: "Please enter the bot token you want to log in as",
+		Instructions: msgStepBotTokenInstructions.Message(),
 		UserInputParams: &bridgev2.LoginUserInputParams{
 			Fields: []bridgev2.LoginInputDataField{{
 				Type:    bridgev2.LoginInputFieldTypeToken,
 				ID:      LoginStepIDBotToken,
-				Name:    "Bot token",
+				Name:    msgFieldBotTokenName.Message(),
 				Pattern: `^\d+:[A-Za-z0-9_-]{35}$`,
 			}},
 		},

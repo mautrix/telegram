@@ -102,8 +102,8 @@ max_member_count: -1
 # there's no way to detect that the entire chat was deleted, so it's best to
 # ignore the deletion event entirely instead.
 #
-# -1 means no limit. The default of 100 is the maximum number of messages a user
-# can manually select to delete on Telegram.
+# -1 means no limit. Telegram sometimes sends mass deletions in batches of 100,
+# so the default of 95 is slightly below that to avoid handling those.
 max_telegram_delete: 95
 # Should personal avatars (that are only visible to specific users) be allowed?
 contact_avatars: false

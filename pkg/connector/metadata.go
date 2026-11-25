@@ -18,6 +18,7 @@ package connector
 
 import (
 	"context"
+	"maps"
 	"sync"
 
 	"go.mau.fi/util/exsync"
@@ -61,11 +62,13 @@ type PortalMetadata struct {
 	IsCommunity       bool          `json:"is_community,omitempty"`
 	ReadUpTo          int           `json:"read_up_to,omitempty"` // FIXME this shouldn't be here
 	AllowedReactions  []string      `json:"allowed_reactions"`
-	LastSync          jsontime.Unix `json:"last_sync,omitempty"`
+	LastSync          jsontime.Unix `json:"last_sync,omitzero"`
 	FullSynced        bool          `json:"full_synced,omitempty"`
 	ParticipantsCount int           `json:"member_count,omitempty"`
 
-	SponsoredMessagePollTS    jsontime.Unix       `json:"sponsored_message_poll_ts,omitempty"`
+	EditTimeLimit map[int64]bool `json:"edit_time_limit,omitempty"`
+
+	SponsoredMessagePollTS    jsontime.Unix       `json:"sponsored_message_poll_ts,omitzero"`
 	SponsoredMessageEventID   id.EventID          `json:"sponsored_message_event_id,omitempty"`
 	SponsoredMessageRandomID  []byte              `json:"sponsored_message_random_id,omitempty"`
 	LastMessageOnSponsorFetch networkid.MessageID `json:"last_message_on_sponsor_fetch,omitempty"`
@@ -84,6 +87,23 @@ func (pm *PortalMetadata) SetIsCommunity(isCommunity bool) (changed bool) {
 	changed = pm.IsCommunity != isCommunity
 	pm.IsCommunity = isCommunity
 	return changed
+}
+
+func (pm *PortalMetadata) SetEditTimeLimit(userID int64, hasEditTimeLimit bool) (changed bool) {
+	if pm.EditTimeLimit[userID] == hasEditTimeLimit {
+		return false
+	}
+	editTimeLimit := maps.Clone(pm.EditTimeLimit)
+	if hasEditTimeLimit {
+		if editTimeLimit == nil {
+			editTimeLimit = make(map[int64]bool)
+		}
+		editTimeLimit[userID] = true
+	} else {
+		delete(editTimeLimit, userID)
+	}
+	pm.EditTimeLimit = editTimeLimit
+	return true
 }
 
 func (pm *PortalMetadata) SetIsForumGeneral(isForumGeneral bool) (changed bool) {

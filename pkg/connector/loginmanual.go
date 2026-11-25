@@ -37,14 +37,13 @@ var _ bridgev2.LoginProcessUserInput = (*ManualLogin)(nil)
 
 func (ml *ManualLogin) Start(ctx context.Context) (*bridgev2.LoginStep, error) {
 	return &bridgev2.LoginStep{
-		Type:         bridgev2.LoginStepTypeUserInput,
-		StepID:       LoginStepIDManualSession,
-		Instructions: "",
+		Type:   bridgev2.LoginStepTypeUserInput,
+		StepID: LoginStepIDManualSession,
 		UserInputParams: &bridgev2.LoginUserInputParams{
 			Fields: []bridgev2.LoginInputDataField{{
 				Type:    bridgev2.LoginInputFieldTypeToken,
 				ID:      LoginStepIDManualSession,
-				Name:    "Session data JSON",
+				Name:    msgFieldSessionDataName.Message(),
 				Pattern: `^\{[a-zA-Z0-9/+=":,._ ]+\}$`,
 			}},
 		},
