@@ -76,6 +76,12 @@ sync:
     login_sync_limit: 15
     # Whether or not to sync and create portals for direct chats at startup.
     direct_chats: true
+    # Number of most recently active topics to check when syncing a forum.
+    # Set to -1 to remove limit.
+    topic_update_limit: 100
+    # Number of most recently active topics to create portals for when syncing a forum.
+    # Set to -1 to remove limit.
+    topic_create_limit: 15
 
 takeout:
     # Should the bridge use the data export mode for syncing the full chat list?

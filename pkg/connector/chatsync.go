@@ -506,10 +506,15 @@ func (tc *TelegramClient) syncNormalDialog(
 }
 
 func (tc *TelegramClient) syncForumTopics(ctx context.Context, channel *tg.Channel) error {
-	createLimit := tc.main.Config.Sync.CreateLimit
-	req := tg.MessagesGetForumTopicsRequest{Peer: channel.AsInputPeer(), Limit: 100}
+	updateLimit := tc.main.Config.Sync.TopicUpdateLimit
+	createLimit := tc.main.Config.Sync.TopicCreateLimit
+	req := tg.MessagesGetForumTopicsRequest{Peer: channel.AsInputPeer()}
 	fetched := 0
-	for {
+	for updateLimit != 0 {
+		req.Limit = 100
+		if updateLimit > 0 {
+			req.Limit = min(100, updateLimit)
+		}
 		resp, err := APICallWithUpdates(ctx, tc, func() (resp *tg.MessagesForumTopics, err error) {
 			retry := true
 			for attempts := 0; retry && attempts < 5; attempts++ {
@@ -531,21 +536,16 @@ func (tc *TelegramClient) syncForumTopics(ctx context.Context, channel *tg.Chann
 			lastTopic = topic
 			if topic.ID == 1 {
 				continue
+			} else if updateLimit == 0 {
+				return nil
 			}
+			updateLimit = subtractLimit(updateLimit, 1)
+			allowCreate := createLimit != 0
+			createLimit = subtractLimit(createLimit, 1)
 			if err = tc.main.Store.Topic.Add(ctx, channel.ID, topic.ID); err != nil {
 				return fmt.Errorf("failed to store topic %d: %w", topic.ID, err)
 			}
 			portalKey := tc.makePortalKeyFromID(ids.PeerTypeChannel, channel.ID, topic.ID)
-			portal, err := tc.main.Bridge.GetExistingPortalByKey(ctx, portalKey)
-			if err != nil {
-				return err
-			}
-			exists := portal != nil && portal.MXID != ""
-			if !exists && createLimit == 0 {
-				continue
-			} else if !exists {
-				createLimit = subtractLimit(createLimit, 1)
-			}
 			res := tc.main.Bridge.QueueRemoteEvent(tc.userLogin, &simplevent.ChatResync{
 				EventMeta: simplevent.EventMeta{
 					Type: bridgev2.RemoteEventChatResync,
@@ -553,7 +553,7 @@ func (tc *TelegramClient) syncForumTopics(ctx context.Context, channel *tg.Chann
 						return c.Str("update", "sync").Int("topic_id", topic.ID)
 					},
 					PortalKey:    portalKey,
-					CreatePortal: true,
+					CreatePortal: allowCreate,
 				},
 				GetChatInfoFunc: func(ctx context.Context, portal *bridgev2.Portal) (*bridgev2.ChatInfo, error) {
 					info, mfm, err := tc.wrapChatInfo(portal.ID, channel)
@@ -593,6 +593,7 @@ func (tc *TelegramClient) syncForumTopics(ctx context.Context, channel *tg.Chann
 			}
 		}
 	}
+	return nil
 }
 
 func (tc *TelegramClient) syncForumTopicsInBackground(ctx context.Context, channelID int64) {

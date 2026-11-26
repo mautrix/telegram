@@ -1299,7 +1299,7 @@ func (tc *TelegramClient) HandleMatrixReadReceipt(ctx context.Context, msg *brid
 
 				PreHandleWithResultFunc: cancelChatResyncIfAlreadyDone,
 			},
-			GetChatInfoFunc: tc.getChatInfoAndSyncForumTopics,
+			GetChatInfoFunc: tc.GetChatInfo,
 		})
 	}
 

@@ -78,10 +78,12 @@ type TelegramConfig struct {
 	ProxyConfig ProxyConfig `yaml:"proxy"`
 
 	Sync struct {
-		UpdateLimit int  `yaml:"update_limit"`
-		CreateLimit int  `yaml:"create_limit"`
-		LoginLimit  int  `yaml:"login_sync_limit"`
-		DirectChats bool `yaml:"direct_chats"`
+		UpdateLimit      int  `yaml:"update_limit"`
+		CreateLimit      int  `yaml:"create_limit"`
+		LoginLimit       int  `yaml:"login_sync_limit"`
+		DirectChats      bool `yaml:"direct_chats"`
+		TopicUpdateLimit int  `yaml:"topic_update_limit"`
+		TopicCreateLimit int  `yaml:"topic_create_limit"`
 	} `yaml:"sync"`
 
 	Takeout struct {
@@ -186,6 +188,8 @@ func upgradeConfig(helper up.Helper) {
 	helper.Copy(up.Int, "sync", "create_limit")
 	helper.Copy(up.Int, "sync", "login_sync_limit")
 	helper.Copy(up.Bool, "sync", "direct_chats")
+	helper.Copy(up.Int, "sync", "topic_update_limit")
+	helper.Copy(up.Int, "sync", "topic_create_limit")
 	helper.Copy(up.Bool, "takeout", "dialog_sync")
 	helper.Copy(up.Bool, "takeout", "forward_backfill")
 	helper.Copy(up.Bool, "takeout", "backward_backfill")
