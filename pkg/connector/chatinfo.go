@@ -508,6 +508,14 @@ func (tc *TelegramClient) wrapFullChatInfo(portalID networkid.PortalID, fullChat
 		}
 	case *tg.ChannelFull:
 		mfm.ParticipantsHidden = !typedFullChat.CanViewParticipants || typedFullChat.ParticipantsHidden
+		if linkedChatID, ok := typedFullChat.GetLinkedChatID(); ok && !mfm.IsBroadcast && info.Members.PowerLevels != nil {
+			linkedChannelMXID := tc.main.Bridge.Matrix.FormatGhostMXID(ids.MakeChannelUserID(linkedChatID))
+			customPL := info.Members.PowerLevels.Custom
+			info.Members.PowerLevels.Custom = func(content *event.PowerLevelsEventContent) bool {
+				changed := customPL != nil && customPL(content)
+				return content.EnsureUserLevel(linkedChannelMXID, *postMessagesPowerLevel) || changed
+			}
+		}
 	case *tg.CommunityFull:
 	}
 
@@ -742,7 +750,7 @@ func (tc *TelegramClient) HandleMatrixSendError(ctx context.Context, sendErr *br
 		return false
 	}
 	senderType, userID, err := ids.ParseUserID(ghostID)
-	if err != nil || (senderType == ids.PeerTypeChannel && userID != channelID) {
+	if err != nil {
 		return false
 	}
 	checkKey := fmt.Sprintf("%s/%s", sendErr.Portal.ID, ghostID)
@@ -768,7 +776,7 @@ func (tc *TelegramClient) HandleMatrixSendError(ctx context.Context, sendErr *br
 			log.Err(err).Msg("Failed to get chat info to check forbidden sender")
 			return false
 		}
-		log.Debug().Msg("Updating power levels after homeserver rejected anonymous admin message")
+		log.Debug().Msg("Updating power levels after homeserver rejected channel message")
 		sendErr.Portal.UpdateInfo(ctx, &bridgev2.ChatInfo{
 			Members: &bridgev2.ChatMemberList{PowerLevels: info.Members.PowerLevels},
 		}, tc.userLogin, nil, time.Time{})
