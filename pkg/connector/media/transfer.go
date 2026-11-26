@@ -473,7 +473,6 @@ func (t *ReadyTransferer) ToDirectMediaResponse(ctx context.Context) (mediaproxy
 	log := zerolog.Ctx(ctx)
 	r, mimeType, size, err := t.Stream(ctx)
 	if err != nil {
-		log.Err(err).Msg("Failed to download media")
 		return nil, err
 	}
 	log.Debug().
