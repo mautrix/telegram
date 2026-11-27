@@ -560,6 +560,10 @@ func unwrapWebPage(msgMedia tg.MessageMediaClass) *tg.MessageMediaDocument {
 	}
 }
 
+func telegramMediaFileName(mediaType string, date int) string {
+	return "TG_" + mediaType + "_" + time.Unix(int64(date), 0).Format("20060102_150405")
+}
+
 func (tc *TelegramClient) convertMediaRequiringUpload(
 	ctx context.Context,
 	portal *bridgev2.Portal,
@@ -639,7 +643,7 @@ func (tc *TelegramClient) convertMediaRequiringUpload(
 		if content.BeeperViewLimited != nil {
 			content.Body = "disappearing_image"
 		} else {
-			content.Body = "image"
+			content.Body = telegramMediaFileName("IMG", msg.Date)
 		}
 		photo, ok := msgMedia.Photo.(*tg.Photo)
 		if !ok {
@@ -654,7 +658,11 @@ func (tc *TelegramClient) convertMediaRequiringUpload(
 		}
 		if video, ok := msgMedia.Video.(*tg.Document); ok {
 			content.MsgType = event.MsgVideo
-			content.Body = strings.Replace(content.Body, "image", "live_photo", 1)
+			if content.BeeperViewLimited != nil {
+				content.Body = "disappearing_live_photo"
+			} else {
+				content.Body = telegramMediaFileName("VID", msg.Date)
+			}
 			telegramMediaID = video.GetID()
 			extraInfo["fi.mau.telegram.live_photo"] = true
 
@@ -702,7 +710,7 @@ func (tc *TelegramClient) convertMediaRequiringUpload(
 		telegramMediaID = document.GetID()
 
 		content.MsgType = event.MsgFile
-		defaultFileName := "file_document"
+		defaultFileName := telegramMediaFileName("FILE", msg.Date)
 
 		for _, attr := range document.GetAttributes() {
 			switch a := attr.(type) {
@@ -713,7 +721,11 @@ func (tc *TelegramClient) convertMediaRequiringUpload(
 					content.FileName = a.GetFileName()
 				}
 			case *tg.DocumentAttributeVideo:
-				defaultFileName = "video_document"
+				if a.RoundMessage {
+					defaultFileName = telegramMediaFileName("ROUND", msg.Date)
+				} else if !isVideoGif { // gifs also have the video attribute
+					defaultFileName = telegramMediaFileName("VID", msg.Date)
+				}
 				isVideo = true
 				content.MsgType = event.MsgVideo
 				transferer = transferer.WithVideo(a)
@@ -738,14 +750,14 @@ func (tc *TelegramClient) convertMediaRequiringUpload(
 					defaultFileName = "Voice message"
 					content.MSC3245Voice = &event.MSC3245Voice{}
 				} else {
-					defaultFileName = "audio_document"
+					defaultFileName = telegramMediaFileName("AUD", msg.Date)
 				}
 			case *tg.DocumentAttributeImageSize:
 				transferer = transferer.WithImageSize(a)
 				if content.MsgType == event.MsgFile && !isSticker {
 					content.MsgType = event.MsgImage
 					extra["fi.mau.telegram.force_document"] = true
-					defaultFileName = "image_document"
+					defaultFileName = telegramMediaFileName("IMG", msg.Date)
 				}
 			case *tg.DocumentAttributeSticker:
 				isSticker = true
@@ -761,7 +773,7 @@ func (tc *TelegramClient) convertMediaRequiringUpload(
 			case *tg.DocumentAttributeAnimated:
 				isVideoGif = true
 				extraInfo["fi.mau.telegram.gif"] = true
-				defaultFileName = "gif"
+				defaultFileName = telegramMediaFileName("GIF", msg.Date)
 			}
 		}
 
