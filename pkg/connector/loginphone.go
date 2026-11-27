@@ -23,6 +23,7 @@ import (
 	"fmt"
 
 	"github.com/rs/zerolog"
+	"go.mau.fi/util/l10n"
 	"maunium.net/go/mautrix/bridgev2"
 
 	"go.mau.fi/mautrix-telegram/pkg/gotd/telegram/auth"
@@ -73,8 +74,8 @@ func (pl *PhoneLogin) Start(ctx context.Context) (*bridgev2.LoginStep, error) {
 			Fields: []bridgev2.LoginInputDataField{{
 				Type:           bridgev2.LoginInputFieldTypePhoneNumber,
 				ID:             LoginStepIDPhoneNumber,
-				Name:           "Phone number",
-				Description:    "Include the country code with +",
+				Name:           msgFieldPhoneName.Message(),
+				Description:    msgFieldPhoneDescription.Message(),
 				AutofillDomain: "telegram.org",
 			}},
 		},
@@ -84,13 +85,13 @@ func (pl *PhoneLogin) Start(ctx context.Context) (*bridgev2.LoginStep, error) {
 var phoneNumberInvalidStep = &bridgev2.LoginStep{
 	Type:         bridgev2.LoginStepTypeUserInput,
 	StepID:       LoginStepIDPhoneNumberInvalid,
-	Instructions: "Invalid phone number, please try again",
+	Instructions: msgStepPhoneInvalidInstructions.Message(),
 	UserInputParams: &bridgev2.LoginUserInputParams{
 		Fields: []bridgev2.LoginInputDataField{{
 			Type:           bridgev2.LoginInputFieldTypePhoneNumber,
 			ID:             LoginStepIDPhoneNumber,
-			Name:           "Phone number",
-			Description:    "Include the country code with +",
+			Name:           msgFieldPhoneName.Message(),
+			Description:    msgFieldPhoneDescription.Message(),
 			AutofillDomain: "telegram.org",
 		}},
 	},
@@ -107,28 +108,28 @@ func (pl *PhoneLogin) SubmitUserInput(ctx context.Context, input map[string]stri
 }
 
 func phoneCodeStep(codeType tg.AuthSentCodeTypeClass) (*bridgev2.LoginStep, error) {
-	description := "The code was sent to the Telegram app on your phone"
+	description := msgFieldCodeDescriptionApp.Message()
 	switch typedCodeType := codeType.(type) {
 	case *tg.AuthSentCodeTypeSMS, *tg.AuthSentCodeTypeSMSWord, *tg.AuthSentCodeTypeSMSPhrase:
-		description = "The code was sent to your phone via SMS"
+		description = msgFieldCodeDescriptionSMS.Message()
 	case *tg.AuthSentCodeTypeCall:
-		description = "The code will be read to you in a phone call"
+		description = msgFieldCodeDescriptionCall.Message()
 	case *tg.AuthSentCodeTypeEmailCode:
-		description = fmt.Sprintf("The code was sent to your email (%s)", typedCodeType.EmailPattern)
+		description = msgFieldCodeDescriptionEmail.Render(l10n.Params{"email": typedCodeType.EmailPattern})
 	case *tg.AuthSentCodeTypeFragmentSMS:
-		description = fmt.Sprintf("The code was sent to your Fragment account (%s)", typedCodeType.URL)
+		description = msgFieldCodeDescriptionFragment.Render(l10n.Params{"url": typedCodeType.URL})
 	case *tg.AuthSentCodeTypeSetUpEmailRequired:
 		return nil, ErrLoginEmailRequired
 	}
 	return &bridgev2.LoginStep{
 		Type:         bridgev2.LoginStepTypeUserInput,
 		StepID:       LoginStepIDCode,
-		Instructions: "Enter the login code Telegram sent you",
+		Instructions: msgStepCodeInstructions.Message(),
 		UserInputParams: &bridgev2.LoginUserInputParams{
 			Fields: []bridgev2.LoginInputDataField{{
 				Type:        bridgev2.LoginInputFieldType2FACode,
 				ID:          LoginStepIDCode,
-				Name:        "Code",
+				Name:        msgFieldCodeName.Message(),
 				Description: description,
 			}},
 		},
@@ -138,12 +139,12 @@ func phoneCodeStep(codeType tg.AuthSentCodeTypeClass) (*bridgev2.LoginStep, erro
 var phoneCodeIncorrectStep = &bridgev2.LoginStep{
 	Type:         bridgev2.LoginStepTypeUserInput,
 	StepID:       LoginStepIDCodeIncorrect,
-	Instructions: "Incorrect code",
+	Instructions: msgStepCodeIncorrectInstructions.Message(),
 	UserInputParams: &bridgev2.LoginUserInputParams{
 		Fields: []bridgev2.LoginInputDataField{{
 			Type: bridgev2.LoginInputFieldType2FACode,
 			ID:   LoginStepIDCode,
-			Name: "Code",
+			Name: msgFieldCodeName.Message(),
 		}},
 	},
 }

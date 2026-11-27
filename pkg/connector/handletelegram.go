@@ -64,7 +64,7 @@ func (tc *TelegramClient) selfLeaveChat(ctx context.Context, portalKey networkid
 	}
 	if peerType == ids.PeerTypeChannel {
 		tc.updatesManager.RemoveChannel(id, reason)
-		topics, err := tc.main.Store.Topic.GetAll(ctx, id)
+		topics, err := tc.main.Store.Topic.GetAll(context.WithoutCancel(ctx), id)
 		if err != nil {
 			return err
 		}
@@ -199,7 +199,36 @@ func (tc *TelegramClient) onUpdateChannel(ctx context.Context, e tg.Entities, up
 			return chatInfo, nil
 		},
 	})
-	return resultToError(res)
+	if err := resultToError(res); err != nil || channel == nil || !channel.Forum {
+		return err
+	}
+	editTimeLimit := hasEditTimeLimit(channel)
+	topics, err := tc.main.Store.Topic.GetAll(ctx, update.ChannelID)
+	if err != nil {
+		return err
+	}
+	for _, topicID := range topics {
+		res = tc.main.Bridge.QueueRemoteEvent(tc.userLogin, &simplevent.ChatInfoChange{
+			EventMeta: simplevent.EventMeta{
+				Type:      bridgev2.RemoteEventChatInfoChange,
+				PortalKey: tc.makePortalKeyFromID(ids.PeerTypeChannel, update.ChannelID, topicID),
+				LogContext: func(c zerolog.Context) zerolog.Context {
+					return c.Str("tg_event", "updateChannel").Int("topic_id", topicID)
+				},
+			},
+			ChatInfoChange: &bridgev2.ChatInfoChange{
+				ChatInfo: &bridgev2.ChatInfo{
+					ExtraUpdates: func(ctx context.Context, portal *bridgev2.Portal) bool {
+						return portal.Metadata.(*PortalMetadata).SetEditTimeLimit(tc.telegramUserID, editTimeLimit)
+					},
+				},
+			},
+		})
+		if err = resultToError(res); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func telegramViewLimit(ttl int) *event.BeeperViewLimitedMedia {
@@ -971,6 +1000,7 @@ func (tc *TelegramClient) onDeleteMessages(ctx context.Context, channelID int64,
 		return nil
 	}
 
+	start := time.Now()
 	for _, messageID := range messages {
 		wrappedMessageID := ids.MakeMessageID(channelID, messageID)
 		var portalKey networkid.PortalKey
@@ -1002,6 +1032,12 @@ func (tc *TelegramClient) onDeleteMessages(ctx context.Context, channelID int64,
 			return err
 		}
 	}
+	end := time.Since(start)
+	tc.userLogin.TrackAnalytics("Telegram Message Deletion", map[string]any{
+		"duration_ms": end.Milliseconds(),
+		"count":       len(messages),
+		"is_channel":  channelID != 0,
+	})
 	return nil
 }
 
@@ -1147,6 +1183,7 @@ func (tc *TelegramClient) onEntities(ctx context.Context, users []tg.UserClass, 
 		zerolog.Ctx(ctx).Trace().Stringer("channel", channel).Msg("Raw channel info in update")
 		if channel.GetLeft() {
 			tc.selfLeaveChat(ctx, tc.makePortalKeyFromID(ids.PeerTypeChannel, channel.ID, 0), fmt.Errorf("left flag in entity update"))
+			ctx = context.WithoutCancel(ctx)
 		}
 		if _, err := tc.updateChannel(ctx, channel); err != nil {
 			return err

@@ -458,6 +458,16 @@ func (tc *TelegramClient) syncNormalDialog(
 		return err
 	}
 
+	if peer, ok := dialog.Peer.(*tg.PeerChannel); ok && dialog.Pts > 0 {
+		if pts, found, err := tc.ScopedStore.GetChannelPts(ctx, tc.telegramUserID, peer.ChannelID); err != nil {
+			log.Err(err).Msg("Failed to get stored channel pts")
+		} else if !found || pts == -1 {
+			if err = tc.ScopedStore.SetChannelPts(ctx, tc.telegramUserID, peer.ChannelID, dialog.Pts); err != nil {
+				log.Err(err).Msg("Failed to store channel pts from dialog")
+			}
+		}
+	}
+
 	// Generate a read receipt from the last known read message id
 	res = tc.main.Bridge.QueueRemoteEvent(tc.userLogin, &simplevent.Receipt{
 		EventMeta: simplevent.EventMeta{
@@ -470,6 +480,20 @@ func (tc *TelegramClient) syncNormalDialog(
 	})
 	if err = resultToError(res); err != nil {
 		return err
+	}
+	if user, ok := dialog.Peer.(*tg.PeerUser); ok && user.UserID != tc.telegramUserID && dialog.ReadOutboxMaxID > 0 {
+		res = tc.main.Bridge.QueueRemoteEvent(tc.userLogin, &simplevent.Receipt{
+			EventMeta: simplevent.EventMeta{
+				Type:      bridgev2.RemoteEventReadReceipt,
+				PortalKey: portalKey,
+				Sender:    tc.senderForUserID(user.UserID),
+			},
+			LastTarget:          ids.MakeMessageID(portalKey, dialog.ReadOutboxMaxID),
+			ReadUpToStreamOrder: int64(dialog.ReadOutboxMaxID),
+		})
+		if err = resultToError(res); err != nil {
+			return err
+		}
 	}
 	return nil
 }
