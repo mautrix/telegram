@@ -171,6 +171,10 @@ func (tc *TelegramClient) onUpdateChannel(ctx context.Context, e tg.Entities, up
 		log.Debug().Msg("Update was for a left channel. Leaving the channel.")
 		return tc.selfLeaveChat(ctx, portalKey, fmt.Errorf("channel has left=true after UpdateChannel"))
 	}
+	existingPortal, err := tc.main.Bridge.GetExistingPortalByKey(ctx, portalKey)
+	if err != nil {
+		return err
+	}
 	res := tc.main.Bridge.QueueRemoteEvent(tc.userLogin, &simplevent.ChatResync{
 		EventMeta: simplevent.EventMeta{
 			Type:         bridgev2.RemoteEventChatResync,
@@ -199,8 +203,11 @@ func (tc *TelegramClient) onUpdateChannel(ctx context.Context, e tg.Entities, up
 			return chatInfo, nil
 		},
 	})
-	if err := resultToError(res); err != nil || channel == nil || !channel.Forum {
+	if err = resultToError(res); err != nil || channel == nil || !channel.Forum {
 		return err
+	}
+	if (existingPortal == nil || existingPortal.MXID == "") && !tc.metadata.IsBot {
+		tc.syncForumTopicsInBackground(ctx, update.ChannelID)
 	}
 	editTimeLimit := hasEditTimeLimit(channel)
 	topics, err := tc.main.Store.Topic.GetAll(ctx, update.ChannelID)

@@ -119,7 +119,7 @@ func (tc *TelegramClient) HandleMatrixViewingChat(ctx context.Context, msg *brid
 
 				PreHandleWithResultFunc: cancelChatResyncIfAlreadyDone,
 			},
-			GetChatInfoFunc: tc.GetChatInfo,
+			GetChatInfoFunc: tc.getChatInfoAndSyncForumTopics,
 		})
 	}
 	err := tc.maybePollForReactions(ctx, msg.Portal)

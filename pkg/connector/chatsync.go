@@ -332,6 +332,7 @@ func (tc *TelegramClient) syncNormalDialog(
 	}
 
 	var chatInfo *bridgev2.ChatInfo
+	var forum *tg.Channel
 	switch peer := dialog.Peer.(type) {
 	case *tg.PeerUser:
 		switch user := users[peer.UserID].(type) {
@@ -384,6 +385,9 @@ func (tc *TelegramClient) syncNormalDialog(
 			err = tc.fillChannelMembers(ctx, mfm, chatInfo.Members)
 			if err != nil {
 				log.Err(err).Msg("Failed to get channel members")
+			}
+			if channel.Forum {
+				forum = channel
 			}
 		case *tg.ChannelForbidden:
 			log.Debug().
@@ -495,7 +499,117 @@ func (tc *TelegramClient) syncNormalDialog(
 			return err
 		}
 	}
+	if forum != nil && !tc.metadata.IsBot {
+		if err = tc.syncForumTopics(ctx, forum); err != nil {
+			log.Err(err).Msg("Failed to sync forum topics")
+		}
+	}
 	return nil
+}
+
+func (tc *TelegramClient) syncForumTopics(ctx context.Context, channel *tg.Channel) error {
+	updateLimit := tc.main.Config.Sync.TopicUpdateLimit
+	createLimit := tc.main.Config.Sync.TopicCreateLimit
+	req := tg.MessagesGetForumTopicsRequest{Peer: channel.AsInputPeer()}
+	fetched := 0
+	for updateLimit != 0 {
+		req.Limit = 100
+		if updateLimit > 0 {
+			req.Limit = min(100, updateLimit)
+		}
+		resp, err := APICallWithUpdates(ctx, tc, func() (resp *tg.MessagesForumTopics, err error) {
+			retry := true
+			for attempts := 0; retry && attempts < 5; attempts++ {
+				resp, err = tc.client.API().MessagesGetForumTopics(ctx, &req)
+				retry, err = tgerr.FloodWait(ctx, err)
+			}
+			return
+		})
+		if err != nil {
+			return fmt.Errorf("failed to get forum topics: %w", err)
+		}
+		fetched += len(resp.Topics)
+		var lastTopic *tg.ForumTopic
+		for _, rawTopic := range resp.Topics {
+			topic, ok := rawTopic.(*tg.ForumTopic)
+			if !ok {
+				continue
+			}
+			lastTopic = topic
+			if topic.ID == 1 {
+				continue
+			} else if updateLimit == 0 {
+				return nil
+			}
+			updateLimit = subtractLimit(updateLimit, 1)
+			allowCreate := createLimit != 0
+			createLimit = subtractLimit(createLimit, 1)
+			if err = tc.main.Store.Topic.Add(ctx, channel.ID, topic.ID); err != nil {
+				return fmt.Errorf("failed to store topic %d: %w", topic.ID, err)
+			}
+			portalKey := tc.makePortalKeyFromID(ids.PeerTypeChannel, channel.ID, topic.ID)
+			res := tc.main.Bridge.QueueRemoteEvent(tc.userLogin, &simplevent.ChatResync{
+				EventMeta: simplevent.EventMeta{
+					Type: bridgev2.RemoteEventChatResync,
+					LogContext: func(c zerolog.Context) zerolog.Context {
+						return c.Str("update", "sync").Int("topic_id", topic.ID)
+					},
+					PortalKey:    portalKey,
+					CreatePortal: allowCreate,
+				},
+				GetChatInfoFunc: func(ctx context.Context, portal *bridgev2.Portal) (*bridgev2.ChatInfo, error) {
+					info, mfm, err := tc.wrapChatInfo(portal.ID, channel)
+					if err != nil {
+						return nil, fmt.Errorf("%w: %w", ErrChatInfoUnavailable, err)
+					}
+					tc.overrideChatInfoWithTopic(info, topic)
+					if err = tc.fillTopicMembers(ctx, channel.ID, mfm, info.Members); err != nil {
+						zerolog.Ctx(ctx).Err(err).Msg("Failed to get channel members")
+					}
+					return info, nil
+				},
+				CheckNeedsBackfillFunc: func(ctx context.Context, latestMessage *database.Message) (bool, error) {
+					if latestMessage == nil {
+						return true, nil
+					}
+					_, latestMessageID, err := ids.ParseMessageID(latestMessage.ID)
+					return err != nil || topic.TopMessage > latestMessageID, nil
+				},
+			})
+			if err = resultToError(res); err != nil {
+				return err
+			}
+			if err = tc.onOwnReadReceipt(portalKey, topic.ReadInboxMaxID); err != nil {
+				return err
+			}
+		}
+		if lastTopic == nil || fetched >= resp.Count {
+			return nil
+		}
+		req.OffsetTopic, req.OffsetID, req.OffsetDate = lastTopic.ID, lastTopic.TopMessage, lastTopic.Date
+		if !resp.OrderByCreateDate {
+			for _, msg := range resp.Messages {
+				if notEmpty, ok := msg.AsNotEmpty(); ok && msg.GetID() == lastTopic.TopMessage {
+					req.OffsetDate = notEmpty.GetDate()
+				}
+			}
+		}
+	}
+	return nil
+}
+
+func (tc *TelegramClient) syncForumTopicsInBackground(ctx context.Context, channelID int64) {
+	log := zerolog.Ctx(ctx).With().Int64("channel_id", channelID).Logger()
+	ctx = log.WithContext(tc.clientCtx)
+	go func() {
+		if channel, err := tc.getSingleChannel(ctx, channelID); err != nil {
+			log.Err(err).Msg("Failed to get channel to sync forum topics")
+		} else if channel.Forum && !channel.Left {
+			if err = tc.syncForumTopics(ctx, channel); err != nil {
+				log.Err(err).Msg("Failed to sync forum topics")
+			}
+		}
+	}()
 }
 
 func (tc *TelegramClient) syncCommunityDialog(ctx context.Context, dialog *tg.DialogCommunity, chats map[int64]tg.ChatClass) error {
@@ -542,4 +656,13 @@ func (tc *TelegramClient) syncCommunityDialog(ctx context.Context, dialog *tg.Di
 		},
 	})
 	return resultToError(res)
+}
+
+func (tc *TelegramClient) getChatInfoAndSyncForumTopics(ctx context.Context, portal *bridgev2.Portal) (*bridgev2.ChatInfo, error) {
+	info, err := tc.GetChatInfo(ctx, portal)
+	if err == nil && portal.Metadata.(*PortalMetadata).IsForumGeneral && !tc.metadata.IsBot {
+		_, channelID, _, _ := ids.ParsePortalID(portal.ID)
+		tc.syncForumTopicsInBackground(ctx, channelID)
+	}
+	return info, err
 }
