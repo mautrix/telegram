@@ -146,6 +146,9 @@ func JoinEntityString(with string, strings ...*EntityString) *EntityString {
 	totalLen := 0
 	totalEntities := 0
 	for _, s := range strings {
+		if s == nil {
+			continue
+		}
 		totalLen += len(s.String)
 		totalEntities += len(s.Entities)
 	}
@@ -434,7 +437,7 @@ func (parser *HTMLParser) getGhostDetails(ctx context.Context, portal *bridgev2.
 func (parser *HTMLParser) linkToString(node *html.Node, ctx Context) *EntityString {
 	str := parser.nodeToTagAwareString(node.FirstChild, ctx)
 	href := parser.getAttribute(node, "href")
-	if len(href) == 0 {
+	if str == nil || len(href) == 0 {
 		return str
 	}
 	linkText := str.String.String()
