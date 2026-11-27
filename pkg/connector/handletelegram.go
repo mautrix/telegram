@@ -1535,6 +1535,42 @@ func (tc *TelegramClient) onOwnReadReceipt(portalKey networkid.PortalKey, maxID 
 	return resultToError(res)
 }
 
+func (tc *TelegramClient) syncChannelReadState(ctx context.Context, channelID int64) error {
+	portalKey := tc.makePortalKeyFromID(ids.PeerTypeChannel, channelID, 0)
+	if tc.metadata.IsBot {
+		return nil
+	} else if portal, err := tc.main.Bridge.GetExistingPortalByKey(ctx, portalKey); err != nil {
+		return err
+	} else if portal == nil || portal.MXID == "" {
+		return nil
+	}
+	peer, _, err := tc.inputPeerForPortalID(ctx, portalKey.ID)
+	if err != nil {
+		return err
+	}
+	var dialogs *tg.MessagesPeerDialogs
+	retry := true
+	for attempts := 0; retry && attempts < 5; attempts++ {
+		dialogs, err = APICallWithUpdates(ctx, tc, func() (*tg.MessagesPeerDialogs, error) {
+			return tc.client.API().MessagesGetPeerDialogs(ctx, []tg.InputDialogPeerClass{&tg.InputDialogPeer{Peer: peer}})
+		})
+		retry, err = tgerr.FloodWait(ctx, err, tgerr.FloodWaitWithMaxDuration(5*time.Second))
+	}
+	if err != nil {
+		return err
+	}
+	for _, d := range dialogs.Dialogs {
+		if dialog, ok := d.(*tg.Dialog); ok {
+			readUpTo := dialog.ReadInboxMaxID
+			if dialog.UnreadCount == 0 && !dialog.UnreadMark {
+				readUpTo = dialog.TopMessage
+			}
+			return tc.onOwnReadReceipt(portalKey, readUpTo)
+		}
+	}
+	return nil
+}
+
 func (tc *TelegramClient) inputPeerForPortalID(ctx context.Context, portalID networkid.PortalID) (tg.InputPeerClass, int, error) {
 	peerType, id, topicID, err := ids.ParsePortalID(portalID)
 	if err != nil {
