@@ -434,7 +434,7 @@ func (parser *HTMLParser) getGhostDetails(ctx context.Context, portal *bridgev2.
 func (parser *HTMLParser) linkToString(node *html.Node, ctx Context) *EntityString {
 	str := parser.nodeToTagAwareString(node.FirstChild, ctx)
 	href := parser.getAttribute(node, "href")
-	if len(href) == 0 {
+	if str == nil || len(href) == 0 {
 		return str
 	}
 	linkText := str.String.String()
