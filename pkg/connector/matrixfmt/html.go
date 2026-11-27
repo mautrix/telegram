@@ -146,6 +146,9 @@ func JoinEntityString(with string, strings ...*EntityString) *EntityString {
 	totalLen := 0
 	totalEntities := 0
 	for _, s := range strings {
+		if s == nil {
+			continue
+		}
 		totalLen += len(s.String)
 		totalEntities += len(s.Entities)
 	}
