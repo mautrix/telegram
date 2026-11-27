@@ -244,8 +244,14 @@ func NewTelegramClient(ctx context.Context, tc *TelegramConnector, login *bridge
 					return true, nil
 				},
 			})
-
-			return resultToError(res)
+			if err := resultToError(res); err != nil {
+				return err
+			}
+			ctx := login.Log.With().Int64("channel_id", channelID).Logger().WithContext(tc.Bridge.BackgroundCtx)
+			if err := client.syncChannelReadState(ctx, channelID); err != nil {
+				zerolog.Ctx(ctx).Err(err).Msg("Failed to sync channel read state after too long")
+			}
+			return nil
 		},
 		Handler:      client.dispatcher,
 		Logger:       zaplog.Named("gaps"),
