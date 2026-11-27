@@ -437,8 +437,10 @@ func (tc *TelegramClient) syncNormalDialog(
 			if latestMessage == nil {
 				return true, nil
 			}
-			_, latestMessageID, err := ids.ParseMessageID(latestMessage.ID)
+			latestMessageID, err := tc.getLastTelegramMessageID(ctx, latestMessage)
 			if err != nil {
+				return false, err
+			} else if latestMessageID == 0 {
 				// The latest bridged message is a call log or pre-supergroup-migration message
 				if topMessage == nil {
 					return false, nil

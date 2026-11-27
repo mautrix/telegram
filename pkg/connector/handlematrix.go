@@ -1215,18 +1215,9 @@ func (tc *TelegramClient) HandleMatrixReadReceipt(ctx context.Context, msg *brid
 				return
 			}
 		}
-		for strings.HasPrefix(string(message.ID), "call:") {
-			message, readMessagesErr = tc.main.Bridge.DB.Message.GetLastNonFakePartAtOrBeforeTime(ctx, msg.Portal.PortalKey, message.Timestamp.Add(-time.Nanosecond))
-			if readMessagesErr != nil {
-				return
-			} else if message == nil {
-				zerolog.Ctx(ctx).Debug().Msg("no message before call notice to read")
-				return
-			}
-		}
 		var maxID int
-		_, maxID, readMessagesErr = ids.ParseMessageID(message.ID)
-		if readMessagesErr != nil {
+		maxID, readMessagesErr = tc.getLastTelegramMessageID(ctx, message)
+		if readMessagesErr != nil || maxID == 0 {
 			return
 		}
 
