@@ -20,6 +20,8 @@ import (
 	"context"
 	"fmt"
 	"image"
+	_ "image/gif"
+	_ "image/png"
 	"io"
 	"os"
 	"strconv"
@@ -28,6 +30,8 @@ import (
 	"github.com/rs/zerolog"
 	"go.mau.fi/util/ffmpeg"
 	"go.mau.fi/util/lottie"
+
+	_ "golang.org/x/image/webp"
 )
 
 type AnimatedStickerConfig struct {
@@ -162,15 +166,13 @@ func (c *AnimatedStickerConfig) convertWebm(ctx context.Context, src *os.File) *
 	} else {
 		outputSize = stat.Size()
 	}
-	var outputConfig image.Config
-	if outputFile, err := os.Open(newPath); err != nil {
-		log.Err(err).Msg("Failed to open converted sticker")
+	width, height := imageSize(newPath)
+	if width == 0 || height == 0 {
+		width, height = c.Args.Width, c.Args.Height
 	} else {
-		outputConfig, _, err = image.DecodeConfig(outputFile)
-		_ = outputFile.Close()
-		if err != nil {
-			log.Err(err).Msg("Failed to decode converted sticker dimensions")
-		}
+		// Matrix info is the display size. The file stays at its real pixel size,
+		// which the spec wants to be twice this for sharp high-DPI rendering.
+		width, height = displaySize(width, height, c.Args.Width, c.Args.Height)
 	}
 
 	_ = src.Close()
@@ -178,10 +180,41 @@ func (c *AnimatedStickerConfig) convertWebm(ctx context.Context, src *os.File) *
 		Success:  true,
 		NewPath:  newPath,
 		MIMEType: "image/" + c.Target,
-		Width:    outputConfig.Width,
-		Height:   outputConfig.Height,
+		Width:    width,
+		Height:   height,
 		Size:     int(outputSize),
 	}
+}
+
+func displaySize(fileW, fileH, maxW, maxH int) (int, int) {
+	if fileW <= 0 || fileH <= 0 || maxW <= 0 || maxH <= 0 || (fileW <= maxW && fileH <= maxH) {
+		return fileW, fileH
+	}
+	if fileW*maxH >= fileH*maxW {
+		h := fileH * maxW / fileW
+		if h < 1 {
+			h = 1
+		}
+		return maxW, h
+	}
+	w := fileW * maxH / fileH
+	if w < 1 {
+		w = 1
+	}
+	return w, maxH
+}
+
+func imageSize(path string) (int, int) {
+	f, err := os.Open(path)
+	if err != nil {
+		return 0, 0
+	}
+	defer f.Close()
+	cfg, _, err := image.DecodeConfig(f)
+	if err != nil {
+		return 0, 0
+	}
+	return cfg.Width, cfg.Height
 }
 
 func CompressGZip(src *os.File) (replPath string, err error) {
