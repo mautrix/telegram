@@ -52,18 +52,22 @@ func (s *internalState) applyCombined(ctx context.Context, comb *tg.UpdatesCombi
 			ptsChanged = true
 			continue
 		case *tg.UpdateChannelTooLong:
-			s.channelsLock.Lock()
-			st, ok := s.channels[u.ChannelID]
-			s.channelsLock.Unlock()
-			if !ok {
-				s.log.Info("ChannelTooLong for channel that is not in the internalState, update ignored", zap.Int64("channel_id", u.ChannelID))
-				continue
-			}
-			if err := s.pushToChannel(ctx, st, channelUpdate{
+			cu := channelUpdate{
 				update:   u,
 				entities: ents,
 				span:     trace.SpanContextFromContext(ctx),
-			}); err != nil {
+			}
+			s.channelsLock.Lock()
+			st, ok := s.channels[u.ChannelID]
+			s.channelsLock.Unlock()
+			if ok {
+				err = s.pushToChannel(ctx, st, cu)
+			} else if pts, hasPts := u.GetPts(); hasPts {
+				err = s.handleChannel(ctx, u.ChannelID, comb.Date, pts, 0, cu)
+			} else {
+				s.log.Info("ChannelTooLong without pts for channel that is not in the internalState, update ignored", zap.Int64("channel_id", u.ChannelID))
+			}
+			if err != nil {
 				return false, err
 			}
 			continue
