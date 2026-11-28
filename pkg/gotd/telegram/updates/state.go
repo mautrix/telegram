@@ -515,49 +515,72 @@ func (s *internalState) createAndRunChannelState(ctx context.Context, channelID,
 	return state
 }
 
-func (s *internalState) getDifferenceWithRetry(ctx context.Context, date int) (diff tg.UpdatesDifferenceClass, err error) {
-	var failingSince time.Time
-	reportedStuck := false
-	retryDelay := 5 * time.Second
-	for {
-		diff, err = s.client.UpdatesGetDifference(ctx, &tg.UpdatesGetDifferenceRequest{
+func (s *internalState) getDifferenceWithRetry(ctx context.Context, date int) (tg.UpdatesDifferenceClass, error) {
+	log := s.log.With(zap.Int("pts", s.pts.State()), zap.Int("qts", s.qts.State()), zap.Int("date", date))
+	return retryDifference(ctx, log, s.onStuck, isFatalError, s.waitToRetryDifference, func() (tg.UpdatesDifferenceClass, error) {
+		return s.client.UpdatesGetDifference(ctx, &tg.UpdatesGetDifferenceRequest{
 			Pts:  s.pts.State(),
 			Qts:  s.qts.State(),
 			Date: date,
 		})
+	})
+}
+
+func retryDifference[T any](
+	ctx context.Context,
+	log *zap.Logger,
+	onStuck func(stuck bool, err error),
+	isFatal func(err error) bool,
+	wait func(ctx context.Context, dur time.Duration) error,
+	get func() (T, error),
+) (diff T, err error) {
+	var failingSince time.Time
+	reportedStuck := false
+	retryDelay := 5 * time.Second
+	for {
+		diff, err = get()
 		if err == nil {
 			if reportedStuck {
-				s.onStuck(false, nil)
+				onStuck(false, nil)
 			}
 			return diff, nil
-		} else if isFatalError(err) {
-			return nil, err
+		} else if isFatal(err) {
+			return diff, err
 		}
 		if failingSince.IsZero() {
 			failingSince = time.Now()
 		} else if !reportedStuck && time.Since(failingSince) > 3*time.Minute {
+			if onStuck == nil {
+				return diff, err
+			}
 			reportedStuck = true
-			s.onStuck(true, err)
+			onStuck(true, err)
 		}
 		dur, ok := tgerr.AsFloodWait(err)
 		if ok {
-			s.log.Warn("Flood wait error while getting difference", zap.Duration("wait", dur))
+			log.Warn("Flood wait error while getting difference", zap.Duration("wait", dur))
 		} else {
 			dur = retryDelay
 			retryDelay = min(retryDelay*2, time.Minute)
-			s.log.Error("Failed to get difference, retrying",
+			log.Error("Failed to get difference, retrying",
 				zap.Error(err),
 				zap.Duration("retry_in", dur),
 				zap.Time("failing_since", failingSince),
-				zap.Int("pts", s.pts.State()),
-				zap.Int("qts", s.qts.State()),
-				zap.Int("date", date),
 			)
 		}
-		if err = s.waitToRetryDifference(ctx, dur); err != nil {
-			return nil, err
+		if err = wait(ctx, dur); err != nil {
+			return diff, err
 		}
 	}
+}
+
+func isFatalChannelDifferenceError(err error) bool {
+	if _, ok := tgerr.AsFloodWait(err); ok {
+		return false
+	} else if rpcErr, ok := tgerr.As(err); ok && rpcErr.Code > 0 && rpcErr.Code < 500 {
+		return true
+	}
+	return isFatalError(err)
 }
 
 func (s *internalState) waitToRetryDifference(ctx context.Context, dur time.Duration) error {
