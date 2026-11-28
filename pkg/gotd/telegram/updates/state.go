@@ -55,18 +55,19 @@ type internalState struct {
 	savedCommunities     exmaps.Set[int64]
 
 	// Immutable fields.
-	client     API
-	log        *zap.Logger
-	handler    telegram.UpdateHandler
-	onTooLong  func(channelID int64) error
-	onStuck    func(stuck bool, err error)
-	onEntities func(ctx context.Context, users []tg.UserClass, chats []tg.ChatClass) error
-	storage    StateStorage
-	hasher     AccessHasher
-	selfID     int64
-	diffLim    int
-	wg         *errgroup.Group
-	tracer     trace.Tracer
+	client        API
+	log           *zap.Logger
+	handler       telegram.UpdateHandler
+	onTooLong     func(channelID int64) error
+	onStuck       func(stuck bool, err error)
+	onDiffTooLong func(ctx context.Context, date int) error
+	onEntities    func(ctx context.Context, users []tg.UserClass, chats []tg.ChatClass) error
+	storage       StateStorage
+	hasher        AccessHasher
+	selfID        int64
+	diffLim       int
+	wg            *errgroup.Group
+	tracer        trace.Tracer
 }
 
 type stateConfig struct {
@@ -79,6 +80,7 @@ type stateConfig struct {
 	Handler          telegram.UpdateHandler
 	OnChannelTooLong func(channelID int64) error
 	OnDiffStuck      func(stuck bool, err error)
+	OnDiffTooLong    func(ctx context.Context, date int) error
 	OnEntities       func(ctx context.Context, users []tg.UserClass, chats []tg.ChatClass) error
 	Storage          StateStorage
 	Hasher           AccessHasher
@@ -99,18 +101,19 @@ func newState(ctx context.Context, cfg stateConfig) *internalState {
 		recentlyLeftChannels: exsync.NewSetWithItems(cfg.LeftChannels),
 		savedCommunities:     make(exmaps.Set[int64]),
 
-		client:     cfg.RawClient,
-		log:        cfg.Logger,
-		handler:    cfg.Handler,
-		onTooLong:  cfg.OnChannelTooLong,
-		onStuck:    cfg.OnDiffStuck,
-		onEntities: cfg.OnEntities,
-		storage:    cfg.Storage,
-		hasher:     cfg.Hasher,
-		selfID:     cfg.SelfID,
-		diffLim:    cfg.DiffLimit,
-		wg:         cfg.WorkGroup,
-		tracer:     cfg.Tracer,
+		client:        cfg.RawClient,
+		log:           cfg.Logger,
+		handler:       cfg.Handler,
+		onTooLong:     cfg.OnChannelTooLong,
+		onStuck:       cfg.OnDiffStuck,
+		onDiffTooLong: cfg.OnDiffTooLong,
+		onEntities:    cfg.OnEntities,
+		storage:       cfg.Storage,
+		hasher:        cfg.Hasher,
+		selfID:        cfg.SelfID,
+		diffLim:       cfg.DiffLimit,
+		wg:            cfg.WorkGroup,
+		tracer:        cfg.Tracer,
 	}
 	s.pts = newSequenceBox(sequenceConfig{
 		InitialState: cfg.State.Pts,
@@ -677,6 +680,20 @@ func (s *internalState) getDifference(ctx context.Context) error {
 
 	// The difference is too long, and the specified internalState must be used to refetch updates.
 	case *tg.UpdatesDifferenceTooLong:
+		date, retryDelay := s.date, 5*time.Second
+		for {
+			err := s.waitForDiffTooLong(ctx, date)
+			if err == nil {
+				break
+			} else if ctx.Err() != nil {
+				return err
+			}
+			s.log.Error("OnDiffTooLong failed, retrying", zap.Error(err), zap.Duration("retry_in", retryDelay))
+			if err = s.waitToRetryDifference(ctx, retryDelay); err != nil {
+				return err
+			}
+			retryDelay = min(retryDelay*2, time.Minute)
+		}
 		if err := s.storage.SetPts(ctx, s.selfID, diff.Pts); err != nil {
 			s.log.Error("SetPts error", zap.Error(err))
 		}
@@ -685,6 +702,25 @@ func (s *internalState) getDifference(ctx context.Context) error {
 
 	default:
 		return errors.Errorf("unexpected diff type: %T", diff)
+	}
+}
+
+func (s *internalState) waitForDiffTooLong(ctx context.Context, date int) error {
+	done := make(chan error, 1)
+	go func() {
+		done <- s.onDiffTooLong(ctx, date)
+	}()
+	for {
+		select {
+		case err := <-done:
+			return err
+		case u := <-s.externalQueue:
+			s.deferred = append(s.deferred, u)
+		case u := <-s.internalQueue:
+			s.deferred = append(s.deferred, u)
+		case <-ctx.Done():
+			return fmt.Errorf("context canceled while waiting for difference too long callback: %w", ctx.Err())
+		}
 	}
 }
 

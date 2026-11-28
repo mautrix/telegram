@@ -228,6 +228,7 @@ func NewTelegramClient(ctx context.Context, tc *TelegramConnector, login *bridge
 
 	client.updatesManager = updates.New(updates.Config{
 		OnNotChannelMember: client.onNotChannelMember,
+		OnDiffTooLong:      client.onDifferenceTooLong,
 		OnDifferenceStuck:  client.onDifferenceStuck,
 		OnEntities:         client.onEntitiesWrapper,
 		OnChannelTooLong: func(channelID int64) error {

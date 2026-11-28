@@ -29,6 +29,7 @@ type Config struct {
 	OnChannelTooLong   func(channelID int64) error
 	OnNotChannelMember func(ctx context.Context, channelID int64) error
 	OnDifferenceStuck  func(stuck bool, err error)
+	OnDiffTooLong      func(ctx context.Context, date int) error
 	OnEntities         func(ctx context.Context, users []tg.UserClass, chats []tg.ChatClass) error
 	// State storage.
 	// In-mem used if not provided.
@@ -67,6 +68,12 @@ func (cfg *Config) setDefaults() {
 	if cfg.OnChannelTooLong == nil {
 		cfg.OnChannelTooLong = func(channelID int64) error {
 			cfg.Logger.Error("Difference too long", zap.Int64("channel_id", channelID))
+			return nil
+		}
+	}
+	if cfg.OnDiffTooLong == nil {
+		cfg.OnDiffTooLong = func(ctx context.Context, date int) error {
+			cfg.Logger.Error("Difference too long", zap.Int("date", date))
 			return nil
 		}
 	}
